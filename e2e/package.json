@@ -1,0 +1,19 @@
+{
+  "name": "e2e",
+  "version": "1.0.0",
+  "description": "An open-source multi-agent AI framework that automates your job search — from finding positions to writing tailored CVs and cover letters.",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test 06-full-flow --grep 'smoke test'",
+    "test:auth": "playwright test 01-auth",
+    "test:report": "playwright show-report reports/playwright"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

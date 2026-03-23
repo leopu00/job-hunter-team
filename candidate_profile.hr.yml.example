@@ -1,0 +1,211 @@
+# ============================================================
+# candidate_profile.hr.yml.example
+# Esempio per profilo HR / International Relations
+# ============================================================
+#
+# Questo file mostra come configurare il profilo per un candidato
+# con background non-tecnico (Relazioni Internazionali, HR Recruiting).
+#
+# Per usarlo:
+#   cp candidate_profile.hr.yml.example candidate_profile.yml
+#
+# Il file candidate_profile.yml è gitignored — i tuoi dati restano locali.
+
+# ── DATI BASE ──────────────────────────────────────────────
+
+name: "Nome Cognome"
+target_role: "HR Specialist"
+location: "Remote EU"
+# birth_year: 1998
+nationality: "italiana"
+
+work_authorization:
+  - "EU"
+
+experience_years: 2
+
+has_degree: true
+
+seniority_target: "junior"
+
+# ── SKILLS ─────────────────────────────────────────────────
+
+# Competenze rilevanti per HR e Relazioni Internazionali
+skills:
+  - "Talent Acquisition"
+  - "Recruiting"
+  - "HR Administration"
+  - "ATS"
+  - "International Relations"
+  - "Cross-cultural Communication"
+  - "LinkedIn Recruiter"
+  - "Excel"
+  - "Google Workspace"
+
+# ── LINGUE ─────────────────────────────────────────────────
+
+languages:
+  - lingua: italiano
+    livello: madrelingua
+  - lingua: inglese
+    livello: C1
+  - lingua: francese
+    livello: B2
+
+# ── PREFERENZE LOCATION ───────────────────────────────────
+
+location_preferences:
+  - "Remote EU"
+  - "Hybrid Milano"
+  - "Hybrid Roma"
+
+# ── RUOLI TARGET (in ordine di priorita') ──────────────────
+
+target_roles_priority:
+  - "HR Specialist"
+  - "HR Recruiter"
+  - "Talent Acquisition Specialist"
+  - "People Operations"
+  - "International HR"
+
+# ── FILTRI DI ESCLUSIONE ──────────────────────────────────
+
+filters:
+  max_experience_required: 4
+  exclude_experience_years_min: 5
+
+  min_score_for_writing: 45
+  min_score_threshold: 25
+
+  # Per profili non-dev: skill overlap puo' essere 1
+  required_stack_overlap: 1
+
+  exclude_geo:
+    - "US-only"
+    - "UK work auth required"
+
+  exclude_seniority:
+    - "VP"
+    - "Director"
+    - "Chief"
+
+  exclude_languages:
+    - "mandarino"
+    - "giapponese"
+    - "arabo"
+
+# ── PESI SCORING ───────────────────────────────────────────
+# Per profili HR: piu' peso su company e growth, meno su stack
+
+scoring_weights:
+  stack_match: 20
+  remote_fit: 25
+  seniority_fit: 25
+  growth: 15
+  company: 15
+
+# ── SALARY TARGET ──────────────────────────────────────────
+
+salary_target:
+  currency: "EUR"
+  min: 25000
+  max: 40000
+
+# ── POSIZIONAMENTO ─────────────────────────────────────────
+
+positioning:
+  headline: "HR Specialist | Talent Acquisition | International Relations"
+  strengths_vs_market:
+    - "Background internazionale e multilingue (IT/EN/FR)"
+    - "Esperienza in recruiting end-to-end"
+    - "Forte capacità di comunicazione cross-culturale"
+  target_sectors:
+    - "Multinazionali"
+    - "NGO / Organizzazioni internazionali"
+    - "Startup EU"
+    - "Consulting"
+
+# ── PROFILO COMPLETO CANDIDATO ─────────────────────────────
+
+candidate:
+  name: "Nome Cognome"
+  target_role: "HR Specialist"
+
+  contacts:
+    email: "nome.cognome@example.com"
+    phone: "+39 000 000 0000"
+    linkedin: "https://linkedin.com/in/nome-cognome"
+    github: ""
+    website: ""
+
+  # Competenze organizzate per categoria (non-dev)
+  skills:
+    recruiting:
+      - "Talent Acquisition"
+      - "Screening & Colloqui"
+      - "LinkedIn Recruiter"
+      - "ATS (Greenhouse, Workday)"
+    hr:
+      - "HR Administration"
+      - "Onboarding"
+      - "Performance Management"
+      - "Labour Law (Italia)"
+    soft_skills:
+      - "Cross-cultural Communication"
+      - "Negoziazione"
+      - "Gestione priorità"
+    tools:
+      - "Excel / Google Sheets"
+      - "Google Workspace"
+      - "Notion"
+      - "Slack"
+
+  experience:
+    - role: "HR Recruiter"
+      company: "Nome Azienda"
+      period: "2024-presente"
+      description: "Gestione del ciclo completo di recruiting per profili tech e non-tech. Screening CV, colloqui, offerte."
+      highlights:
+        - "Chiuse X posizioni in Y mesi con time-to-hire medio di Z giorni"
+        - "Gestito pipeline di N candidati simultanei"
+    - role: "Stage HR"
+      company: "Altra Azienda"
+      period: "2023-2024"
+      description: "Supporto al team HR per attività di selezione e amministrazione del personale."
+      highlights:
+        - "Supporto a processi di selezione per N ruoli"
+        - "Gestione documentazione contrattuale"
+
+  education:
+    - title: "Laurea Magistrale in Relazioni Internazionali"
+      institution: "Università degli Studi di ..."
+      year: 2023
+      notes: "Tesi su: mobilità internazionale del lavoro e politiche HR"
+    - title: "Laurea Triennale in Scienze Politiche"
+      institution: "Università degli Studi di ..."
+      year: 2021
+      notes: ""
+
+  certifications:
+    # - name: "SHRM-CP"
+    #   issuer: "Society for Human Resource Management"
+    #   year: 2024
+    #   credential_id: ""
+
+  projects: []
+
+  languages:
+    - lingua: italiano
+      livello: madrelingua
+    - lingua: inglese
+      livello: C1
+    - lingua: francese
+      livello: B2
+
+  strengths:
+    - "Multilingue (IT/EN/FR) — gestione candidati internazionali"
+    - "Esperienza recruiting end-to-end"
+    - "Background accademico in Relazioni Internazionali"
+
+  gaps_to_avoid:
+    - "Nessuna esperienza tecnica in sviluppo software"

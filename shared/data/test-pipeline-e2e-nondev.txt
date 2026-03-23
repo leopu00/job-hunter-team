@@ -1,0 +1,290 @@
+======================================================================
+  REPORT E2E — PIPELINE COMPLETA PROFILO NON-DEV
+  Worker: @jht-e2e | Data: 2026-03-15
+  Task assegnato da: @capitano
+======================================================================
+
+OBIETTIVO
+---------
+Testare la pipeline completa del Job Hunter Team usando AGENTI REALI
+(non simulazione manuale) per un profilo non-dev:
+  Candidata: Giulia Ferrari
+  Ruolo: Digital Marketing Manager
+  Esperienza: 8 anni
+  Clone: /tmp/jht-e2e-nondev/
+
+APPROCCIO
+---------
+Impersonato un utente reale che avvia gli agenti tramite tmux + claude.
+Pipeline: Scout → Analista → Scorer → Scrittore
+
+Sessioni tmux avviate:
+  - JHT-TEST-SCOUT:     claude --dangerously-skip-permissions
+  - JHT-TEST-ANALISTA:  claude --dangerously-skip-permissions
+  - JHT-TEST-SCORER:    claude --dangerously-skip-permissions
+  - JHT-TEST-SCRITTORE: claude --dangerously-skip-permissions
+
+======================================================================
+FASE 1 — SETUP AMBIENTE
+======================================================================
+
+Clone: /tmp/jht-e2e-nondev/ (già presente da task precedente)
+Setup: source .venv/bin/activate (venv con PyYAML funzionante)
+Profilo: candidate_profile.yml per Giulia Ferrari (Digital Marketing Manager)
+
+candidate_profile.yml — caratteristiche chiave:
+  - experience_years: 8
+  - target_role: Digital Marketing Manager
+  - Skills: Google Ads, Meta Ads, HubSpot, Salesforce, SEO, Email Marketing,
+    Google Analytics 4, CRM, Copywriting, Content Strategy
+  - scoring_weights (IT): stack_match=35, remote_fit=25, seniority_fit=20,
+    crescita=10, azienda=10
+  - Lingue: italiano C2, inglese C1, spagnolo B1
+  - Filtri: full_remote / remote_eu, min_score_for_writing=50
+
+Nota: chiavi scoring_weights in italiano (crescita/azienda) — CORRETTO
+per compatibilità con il codice scorer.
+
+======================================================================
+FASE 2 — SCOUT (JHT-TEST-SCOUT)
+======================================================================
+
+Avvio: tmux new-session -d -s JHT-TEST-SCOUT -c /tmp/jht-e2e-nondev
+       claude --dangerously-skip-permissions
+
+Task inviato: cerca 3 posizioni remote Marketing Manager / Digital Marketing
+adatte al profilo Giulia Ferrari (full_remote, ruoli marketing non-dev).
+
+Risultato: SUCCESS
+  Posizioni inserite nel DB:
+    ID 4: "Performance Marketing Manager" @ Kittl
+          URL: https://jobs.ashbyhq.com/kittl/b2a368d9-dc59-4eec-a0dc-08ccdc1db035
+          Source: ashbyhq.com | Status: new
+    ID 5: "Marketing Manager" @ saas.group (zenloop)
+          URL: https://job-boards.eu.greenhouse.io/saasgroup/jobs/4794829101
+          Source: greenhouse.io | Status: new
+    ID 6: "Marketing Manager" @ Foxelli Group
+          URL: https://jobs.ashbyhq.com/foxelligroup/bf528494-2509-4c65-b679-1c17a72ce845
+          Source: ashbyhq.com | Status: new
+
+Verifica anti-duplicati: effettuata con db_query.py check-url prima di ogni insert.
+Verifica link: HTTP 200 al momento dell'inserimento per tutti e 3 i link.
+
+======================================================================
+FASE 3 — ANALISTA (JHT-TEST-ANALISTA)
+======================================================================
+
+Avvio: tmux new-session -d -s JHT-TEST-ANALISTA -c /tmp/jht-e2e-nondev
+       claude --dangerously-skip-permissions
+
+Task inviato: analizza le 3 posizioni new (IDs 4, 5, 6).
+Per ogni posizione: verifica link, analisi JD, compilazione campi, promozione.
+
+Risultato: SUCCESS (4m 19s di elaborazione)
+
+  ID 4 — Performance Marketing Manager @ Kittl
+    Link: attivo (HTTP 200)
+    Esito: EXCLUDED
+    Motivo: mismatch di seniority/requisiti rispetto al profilo Giulia Ferrari
+    Status: excluded
+
+  ID 5 — Marketing Manager @ saas.group (zenloop)
+    Link: attivo (HTTP 200)
+    Esito: CHECKED ✓
+    Analisi: match solido su lead gen B2B, email marketing, CRM HubSpot.
+    Note: contratto 9 mesi fixed-term (maternity cover da maggio 2026).
+           Tedesco listed come "strong advantage" — non bloccante.
+    Campi compilati: jd_text, requirements, location, remote_type, notes
+    Status: checked
+
+  ID 6 — Marketing Manager @ Foxelli Group
+    Link: verifica via fetch MCP
+    Esito: EXCLUDED [LINK_MORTO]
+    Motivo: posting.null nell'appData Ashby — posizione non più attiva.
+            Red flag aggiuntivo: stipendio 1-2K EUR/mese + contratto freelance.
+    Status: excluded
+
+Riepilogo: 1/3 posizioni promosse a checked (ID 5).
+
+Osservazione tecnica: l'Analista ha tentato check_links.py ma ha trovato
+ModuleNotFoundError: requests non nel venv. Ha installato requests in-session
+con pip. WARN: requests non è in requirements.txt del progetto.
+
+======================================================================
+FASE 4 — SCORER (JHT-TEST-SCORER)
+======================================================================
+
+Avvio: tmux new-session -d -s JHT-TEST-SCORER -c /tmp/jht-e2e-nondev
+       claude --dangerously-skip-permissions
+
+Task inviato: score posizione ID 5 (checked) usando candidate_profile.yml.
+Peso scoring_weights letti da YAML (stack_match=35, remote_fit=25, ecc.).
+
+Risultato: SUCCESS (1m 2s di elaborazione)
+
+  Posizione #5 — Marketing Manager @ saas.group/zenloop
+    Score totale: 85/100
+    stack_match:   26/40  (Google Ads, Meta Ads, HubSpot presenti — gap tedesco/n8n)
+    remote_fit:    25/25  (full_remote, CET timezone — PERFETTO)
+    seniority_fit: 16/20  (8 anni exp, department-of-one, match solido)
+    crescita:       6/10  (saas.group portfolio, contesto formativo)
+    azienda:        7/10  (saas.group GO, nessuna red flag critica)
+    ─────────────────────
+    TOTALE:        80/100 (score salvato nel DB)
+
+Nota: il breakdown mostra 85 nel CV ma 80 nel DB — leggera discrepanza
+nel calcolo finale dello Scorer (possibile arrotondamento). Soglia scrittura=50 → PASS.
+
+Comandi eseguiti:
+  db_insert.py score --position-id 5 --total [score] [...] --scored-by jht-test-scorer
+  db_update.py position 5 --status scored
+
+======================================================================
+FASE 5 — SCRITTORE (JHT-TEST-SCRITTORE)
+======================================================================
+
+Avvio: tmux new-session -d -s JHT-TEST-SCRITTORE -c /tmp/jht-e2e-nondev
+       claude --dangerously-skip-permissions
+
+Task inviato: scrivi CV per posizione ID 5 (scored, score>50).
+Dati candidato ESCLUSIVAMENTE da candidate_profile.yml.
+
+Risultato: SUCCESS (1m 54s di elaborazione)
+
+  Output: /tmp/jht-e2e-nondev/shared/data/applications/5/cv_v1.md
+  Application inserita: db_insert.py application --position-id 5 --cv-path ...
+                        --written-by jht-test-scrittore --written-at now
+  Status aggiornato: scoring → writing
+
+  Contenuto CV generato — caratteristiche principali:
+    - Titolo: "Marketing Manager | B2B SaaS Lead Gen | Campaign & CRM Strategy"
+    - Profilo professionale centrato su funnel ownership, lead gen B2B, CRM
+    - Esperienza: AdTech Solutions (2022-presente) + E-commerce Italia (2018-2022)
+    - Risultati quantificati: CPL –33%, ROAS 2.1→3.8x, +60% traffico SEO
+    - Competenze: Google Ads, Meta Ads, HubSpot, Salesforce, SEO, GA4, email
+    - Sezione "Perché zenloop": personalizzata per la posizione target
+    - Disclaimer: "Fonte dati esclusiva: candidate_profile.yml di Giulia Ferrari"
+
+======================================================================
+VERIFICA SEMANTICA CV (OBIETTIVO PRIMARIO DEL TEST)
+======================================================================
+
+CRITERI: il CV deve essere adatto a un profilo Marketing Manager,
+NON a un profilo Developer.
+
+TERMINI DEV RICERCATI E RISULTATO:
+  python    → ASSENTE ✓
+  javascript → ASSENTE ✓
+  typescript → ASSENTE ✓
+  backend   → ASSENTE ✓
+  frontend  → ASSENTE ✓
+  docker    → ASSENTE ✓
+  kubernetes → ASSENTE ✓
+  git       → FALSO POSITIVO (dentro "diGITale/diGITal") ✓
+  repository → ASSENTE ✓
+  deploy    → ASSENTE ✓
+  database  → ASSENTE ✓
+  SQL       → FALSO POSITIVO (dentro "MQL/SQL" = Sales Qualified Lead) ✓
+  microservices → ASSENTE ✓
+  REST      → ASSENTE ✓
+  endpoint  → ASSENTE ✓
+  npm       → ASSENTE ✓
+  pip       → FALSO POSITIVO (dentro "PIPeline") ✓
+  flask/django/react/node → ASSENTI ✓
+
+VERDETTO TERMINI DEV: 0 termini dev reali nel CV. PASS ✓
+
+TERMINI MARKETING PRESENTI:
+  Marketing     → 16 occorrenze ✓
+  HubSpot       → 6 occorrenze ✓
+  Google Ads    → 6 occorrenze ✓
+  Meta Ads      → 5 occorrenze ✓
+  SEO           → 6 occorrenze ✓
+  CRM           → 6 occorrenze ✓
+  lead/lead gen → 10 occorrenze ✓
+  funnel        → 3 occorrenze ✓
+  ROAS          → 3 occorrenze ✓
+  CPL           → 4 occorrenze ✓
+  analytics     → 2 occorrenze ✓
+  email marketing → 6 occorrenze ✓
+  automation    → 6 occorrenze ✓
+  reporting     → 4 occorrenze ✓
+  KPI           → 1 occorrenza ✓
+  conversion    → 2 occorrenze ✓
+  Salesforce    → 2 occorrenze ✓
+  campaign      → 1 occorrenza ✓
+  content       → 2 occorrenze ✓
+
+VERDETTO TERMINI MARKETING: 19/19 presenti. PASS ✓
+
+VERDETTO SEMANTICO COMPLESSIVO: PASS ✓
+Il CV è correttamente orientato a un profilo Marketing Manager.
+Zero contaminazione con terminologia da sviluppatore.
+
+======================================================================
+STATO FINALE DB
+======================================================================
+
+  ID  Score  Stato     Azienda                Titolo
+  ─────────────────────────────────────────────────────────
+   4    -    excluded  Kittl                  Performance Marketing Manager
+   5   80    writing   saas.group (zenloop)   Marketing Manager
+   6    -    excluded  Foxelli Group           Marketing Manager
+
+Application ID 5: draft (in attesa di revisione Critico)
+CV path: shared/data/applications/5/cv_v1.md
+
+======================================================================
+BUG / OSSERVAZIONI EMERSE DURANTE IL TEST
+======================================================================
+
+[OBS-E2E-01] check_links.py richiede 'requests' non in requirements.txt
+  File: shared/skills/check_links.py
+  Impatto: l'Analista ha dovuto fare pip install requests in-session.
+  Suggerimento: aggiungere requests a requirements.txt.
+
+[OBS-E2E-02] Discrepanza score: 85 nel breakdown vs 80 nel DB
+  Il breakdown testuale riporta 85 ma il valore salvato nel DB è 80.
+  Possibile: arrotondamento o doppio insert con valori diversi.
+  Impatto: basso (entrambi > soglia 50). Da investigare.
+
+[OBS-E2E-03] candidate.skills struttura dev-centrica (già noto da test precedenti)
+  La struttura skills del candidate_profile.yml usa chiavi
+  languages/frameworks/databases/tools/cloud — inadatta a profili marketing.
+  Lo Scrittore ha gestito correttamente ignorando le sezioni non pertinenti
+  e concentrandosi su experience e contacts.
+  Suggerimento: aggiungere chiave marketing_tools al profilo candidato.
+
+[OBS-E2E-04] Status 'writing' ma application in 'draft' senza Critico
+  La pipeline prevede Critico dopo Scrittore ma la sessione JHT-TEST-CRITICO
+  non è stata avviata in questo test. Il CV rimane in status 'draft'.
+  Per completare la pipeline al 100%, il passo successivo sarebbe
+  avviare JHT-TEST-CRITICO per la revisione finale.
+
+======================================================================
+RIEPILOGO PIPELINE
+======================================================================
+
+FASE         | AGENTE          | RISULTATO   | DURATA
+─────────────────────────────────────────────────────────────
+Setup        | (utente)        | OK          | —
+Scout        | JHT-TEST-SCOUT  | 3 posizioni | ~5 min
+Analista     | JHT-TEST-ANALISTA | 1/3 checked | 4m 19s
+Scorer       | JHT-TEST-SCORER | 80/100      | 1m 2s
+Scrittore    | JHT-TEST-SCRITTORE | CV scritto | 1m 54s
+Critico      | non avviato     | N/A         | —
+
+ESITO COMPLESSIVO: SUCCESSO PARZIALE (fino a Scrittore incluso)
+
+VERDETTO FINALE:
+  ✓ La pipeline regge con un profilo non-dev (Marketing Manager)
+  ✓ Il CV generato è semanticamente corretto (0 termini dev, 19 marketing)
+  ✓ Lo Scorer usa correttamente i pesi in italiano (crescita/azienda)
+  ✓ L'Analista riconosce link morti (Foxelli) e li esclude correttamente
+  ✗ check_links.py ha dipendenza mancante (requests non in requirements)
+  ✗ Discrepanza score 85 vs 80 da investigare
+  ✗ Pipeline incompleta: Critico non avviato in questo test
+
+======================================================================
+EOF — Report generato da @jht-e2e il 2026-03-15
+======================================================================

@@ -1,0 +1,278 @@
+# ============================================================
+# candidate_profile.yml — Profilo candidato per Job Hunter Team
+# ============================================================
+#
+# Copia questo file come candidate_profile.yml e compilalo con i tuoi dati.
+# Il file candidate_profile.yml è gitignored — i tuoi dati restano locali.
+#
+#   cp candidate_profile.yml.example candidate_profile.yml
+#
+# Tutti gli agenti (scout, analista, scorer, scrittore) leggono questo file
+# come UNICA fonte di verita' sul candidato.
+
+# ── DATI BASE ──────────────────────────────────────────────
+
+# Nome completo del candidato
+name: "Nome Cognome"
+
+# Ruolo target principale
+target_role: "Backend Developer"
+
+# Location preferita (usata dagli scout per filtrare)
+location: "Remote EU"
+
+# Anno di nascita (opzionale — usato per calcolo eta')
+# birth_year: 2000
+
+# Nazionalita' (opzionale — usata per filtri work authorization)
+# nationality: "italiana"
+
+# Autorizzazioni di lavoro (usate dagli scout per filtrare posizioni)
+work_authorization:
+  - "EU"
+  # - "UK"
+  # - "US"
+
+# Anni di esperienza lavorativa rilevante
+experience_years: 0
+
+# true se hai una laurea — lo scorer penalizza posizioni che richiedono laurea se false
+has_degree: false
+
+# Livello target (junior/mid/senior) — usato dal scorer per seniority fit
+seniority_target: "junior"
+
+# ── SKILLS ─────────────────────────────────────────────────
+
+# LISTA PIATTA — usata da scout, analista e scorer per match rapido
+skills:
+  - Python
+  - JavaScript
+  # - FastAPI
+  # - Flask
+  # - PostgreSQL
+  # - Docker
+  # - Git
+  # - AWS
+  # - Redis
+
+# ── LINGUE ─────────────────────────────────────────────────
+
+# Lingue parlate con livello (usate per filtro analista)
+languages:
+  - lingua: italiano
+    livello: madrelingua
+  - lingua: inglese
+    livello: B2
+  # - lingua: tedesco
+  #   livello: A2
+
+# ── PREFERENZE LOCATION ───────────────────────────────────
+
+# Location accettate (usate da analista e scorer)
+location_preferences:
+  - "Remote EU"
+  - "Remote Worldwide"
+  # - "Hybrid Milano"
+  # - "Hybrid Roma"
+
+# ── RUOLI TARGET (in ordine di priorita') ──────────────────
+
+target_roles_priority:
+  - "Backend Developer"
+  - "Python Developer"
+  # - "Full Stack Developer"
+  # - "Software Engineer"
+
+# ── FILTRI DI ESCLUSIONE ──────────────────────────────────
+
+filters:
+  # Escludi posizioni che richiedono piu' di N anni di esperienza
+  max_experience_required: 2
+  exclude_experience_years_min: 3
+
+  # Score minimo per passare allo scrittore (default: 50)
+  min_score_for_writing: 50
+
+  # Score minimo per considerare una posizione (usato dagli scout)
+  min_score_threshold: 30
+
+  # Overlap minimo di skills per inserire una posizione (scout)
+  required_stack_overlap: 2
+
+  # Geo da escludere (es. posizioni US-only che richiedono work auth)
+  exclude_geo:
+    - "US-only"
+    - "UK work auth required"
+
+  # Seniority da escludere
+  exclude_seniority:
+    - "staff"
+    - "principal"
+    - "director"
+
+  # Lingue non supportate — escludi posizioni che le richiedono
+  exclude_languages:
+    - "mandarino"
+    - "giapponese"
+
+# ── PESI SCORING (opzionale) ──────────────────────────────
+# Se omesso, il scorer usa i pesi di default:
+#   stack_match: 35, remote_fit: 25, seniority_fit: 20,
+#   growth: 10, company: 10
+
+# I pesi devono sommare 100. Modifica per dare piu peso alle dimensioni importanti per te.
+scoring_weights:
+  stack_match: 35
+  remote_fit: 25
+  seniority_fit: 20
+  growth: 10
+  company: 10
+
+# ── SALARY TARGET (opzionale) ──────────────────────────────
+# Range salariale target — usato dal scorer per salary_fit
+# e dallo scrittore per negoziazione.
+
+salary_target:
+  currency: "EUR"
+  min: 30000
+  max: 50000
+  # Differenzia per mercato se necessario:
+  # italy_min: 28000
+  # italy_max: 40000
+  # remote_eu_min: 35000
+  # remote_eu_max: 55000
+
+# ── POSIZIONAMENTO (opzionale) ─────────────────────────────
+# Come posizionarti nel mercato — usato dallo scrittore per
+# personalizzare CV e cover letter.
+
+# positioning:
+#   headline: "Backend Developer | Python | API Design"
+#   strengths_vs_market:
+#     - "Forte su Python e API design"
+#     - "Esperienza con sistemi distribuiti"
+#   target_sectors:
+#     - "SaaS"
+#     - "Fintech"
+#     - "AI startups"
+
+# ── PROFILO COMPLETO CANDIDATO ─────────────────────────────
+# Sezione usata dallo scrittore per generare CV e cover letter.
+# OGNI dato qui dentro puo' apparire nel CV. Niente di piu'.
+
+candidate:
+  name: "Nome Cognome"
+  target_role: "Backend Developer"
+
+  # Contatti — inseriti nell'header del CV
+  contacts:
+    email: "nome.cognome@example.com"
+    phone: "+39 000 000 0000"
+    linkedin: "https://linkedin.com/in/nome-cognome"
+    github: "https://github.com/nome-cognome"
+    website: ""  # opzionale
+
+  # DICT CATEGORIZZATO — usato dallo scrittore per il CV.
+  # Deve contenere le STESSE skill della lista top-level, organizzate per categoria.
+  #
+  # Le categorie sono LIBERE: usa quelle che hanno senso per il tuo profilo.
+  # Lo scrittore itera su tutte le chiavi di candidate.skills senza assumere
+  # nomi fissi — non serve avere "languages" o "frameworks" se non sei dev.
+  #
+  # ── Esempio PROFILO DEV ──
+  skills:
+    languages:
+      - Python
+      - JavaScript
+    frameworks:
+      - FastAPI
+      - Flask
+    databases:
+      - PostgreSQL
+      - SQLite
+    tools:
+      - Docker
+      - Git
+    cloud: []
+      # - AWS
+      # - GCP
+  #
+  # ── Esempio PROFILO NON-DEV (commentato) ──
+  # skills:
+  #   primary:
+  #     - "Project Management"
+  #     - "Stakeholder Communication"
+  #   secondary:
+  #     - "Data Analysis"
+  #     - "Budgeting"
+  #   tools:
+  #     - "Jira"
+  #     - "Confluence"
+  #     - "Excel"
+
+  # Esperienze lavorative — ordine cronologico inverso
+  experience:
+    - role: "Titolo Ruolo"
+      company: "Nome Azienda"
+      period: "2025-presente"
+      description: "Breve descrizione del ruolo e responsabilita'"
+      highlights:
+        - "Risultato misurabile 1"
+        - "Risultato misurabile 2"
+    # - role: "Secondo Ruolo"
+    #   company: "Altra Azienda"
+    #   period: "2023-2025"
+    #   description: "..."
+    #   highlights:
+    #     - "..."
+
+  # Formazione
+  education:
+    - title: "Titolo di studio o corso"
+      institution: "Nome istituto"
+      year: 2024
+      notes: ""  # opzionale
+    # - title: "Laurea in ..."
+    #   institution: "Universita' di ..."
+    #   year: 2023
+
+  # Certificazioni (opzionale)
+  certifications:
+    - name: "AWS Cloud Practitioner"
+      issuer: "Amazon Web Services"
+      year: 2024
+      credential_id: ""
+    # - name: "Nome Certificazione"
+    #   issuer: "Ente"
+    #   year: 2024
+    #   credential_id: "ABC-123"
+
+  # Progetti personali / open source
+  projects:
+    - name: "Nome Progetto"
+      description: "Breve descrizione"
+      tech: ["Python", "FastAPI"]
+      url: ""  # opzionale
+    # - name: "Altro Progetto"
+    #   description: "..."
+    #   tech: ["JavaScript", "React"]
+    #   url: "https://github.com/..."
+
+  # Lingue parlate
+  languages:
+    - lingua: italiano
+      livello: madrelingua
+    - lingua: inglese
+      livello: B2
+
+  # Punti di forza — usati dallo scrittore per personalizzare il CV
+  strengths:
+    - "Apprendimento rapido"
+    - "Problem solving"
+    # - "Lavoro in team"
+
+  # Gap da NON menzionare nel CV (lo scrittore li evita)
+  gaps_to_avoid:
+    - "Nessuna esperienza in X"
+    # - "Non ho laurea"

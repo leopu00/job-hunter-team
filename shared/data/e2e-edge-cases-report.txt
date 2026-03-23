@@ -1,0 +1,372 @@
+======================================================================
+  REPORT E2E — EDGE CASES & ROBUSTEZZA
+  Worker: @jht-e2e | Data: 2026-03-14
+======================================================================
+
+NOTE PRELIMINARI
+----------------
+I test sono stati eseguiti dalla directory:
+  ./
+DB usato: main/shared/data/jobs.db (user_version=0, schema V2 via ensure_schema)
+
+OSSERVAZIONE CRITICA: durante l'esecuzione dei test il DB e i file del
+progetto sono stati modificati da altri agenti del team in parallelo.
+Questo ha causato inconsistenze tra i risultati osservati in sequenza.
+Il DB che al TEST 1 conteneva la posizione #1 risultava svuotato al TEST 7.
+Il file candidate_profile.yml, presente all'avvio della sessione, era
+scomparso al momento del TEST 6.
+
+======================================================================
+TEST 1 — DUPLICATI (check-url + insert duplicato)
+======================================================================
+Comando:
+  python3 shared/skills/db_query.py check-url \
+    'https://techstartup.example.com/jobs/python-junior'
+
+Output atteso: messaggio che indica se l'URL è presente o meno
+Output reale:  TROVATA: #1 TechStartup GmbH — Junior Python Developer [writing]
+
+Analisi codice db_insert.py (check_duplicate):
+  - check_duplicate() controlla per LinkedIn job ID (regex su URL) e per
+    company+title (case-insensitive)
+  - NON controlla match esatto per URL non-LinkedIn
+  - URL 'https://techstartup.example.com/jobs/python-junior' non è LinkedIn,
+    quindi il check del job ID numerico non si attiva
+  - Se si tenta di inserire con lo stesso title+company, il duplicato
+    verrebbe rilevato (check 2)
+  - Se si inserisce con title diverso ma stesso URL, il duplicato NON
+    viene rilevato dal codice
+
+Risultato: PARZIALE PASS
+  - PASS: db_query.py check-url trova correttamente la posizione esistente
+  - WARN: il sistema di deduplicazione in db_insert.py non controlla
+    l'URL esatto per posizioni non-LinkedIn
+  - WARN: URL non-LinkedIn con stesso URL ma titolo diverso passa il check
+
+Suggerimento:
+  Aggiungere al check_duplicate() un terzo check basato sull'URL esatto:
+    existing = conn.execute(
+        "SELECT id FROM positions WHERE url = ? AND status != 'excluded'",
+        (url,)
+    ).fetchone()
+
+======================================================================
+TEST 2 — CAMPI MANCANTI (senza --url e senza --jd-text)
+======================================================================
+
+--- Comando A (senza --url, campo REQUIRED) ---
+  python3 shared/skills/db_insert.py position \
+    --title 'Test No JD' --company 'Test Corp'
+
+Output atteso: errore per campo mancante
+Output reale:
+  usage: db_insert.py position [-h] --title TITLE --company COMPANY [...]
+                                --url URL [...]
+  db_insert.py position: error: the following arguments are required: --url
+  EXIT_CODE: 2
+
+Risultato: PASS
+  argparse blocca correttamente l'inserimento senza --url obbligatorio.
+
+--- Comando B (con --url ma senza --jd-text) ---
+  python3 shared/skills/db_insert.py position \
+    --title 'Test No JD' --company 'Test Corp' \
+    --url 'https://dummy.example.com/test-no-jd-unique-e2e'
+
+Output atteso: warning o errore per jd_text mancante
+Output reale:
+  Posizione inserita con ID: 5 (company_id=NULL — azienda non in DB)
+  EXIT_CODE: 0
+
+Risultato: COMPORTAMENTO DA VALUTARE
+  jd_text non è obbligatorio: il sistema inserisce la posizione senza
+  job description. Questo è intenzionale nel design (campo opzionale),
+  ma significa che altri agenti (scorer, analista) che dipendono da
+  jd_text potrebbero ricevere NULL e fallire silenziosamente.
+
+Suggerimento:
+  Considerare --jd-text come required OPPURE emettere un WARNING
+  quando viene omesso, per evitare che posizioni senza JD entrino
+  nel flusso senza essere flaggate.
+
+======================================================================
+TEST 3 — SCORE INVALID (total > 100)
+======================================================================
+Comando:
+  python3 shared/skills/db_insert.py score \
+    --position-id 1 --total 150 --scored-by e2e-test
+
+Output atteso: errore di validazione "total > 100 non consentito"
+Output reale:
+  Traceback (most recent call last):
+    File "shared/skills/db_insert.py", line 237, in <module>
+    ...
+  sqlite3.IntegrityError: FOREIGN KEY constraint failed
+  EXIT_CODE: 1
+
+Analisi:
+  - Il sistema NON valida il range 0-100 per total_score.
+    SQLite non ha CHECK constraint su questo campo (schema V2 non include
+    CHECK (total_score BETWEEN 0 AND 100)).
+  - L'errore FK è dovuto al fatto che la posizione con ID 1 non esiste
+    nel DB al momento del test (DB modificato da altri agenti in parallelo).
+  - Il valore 150 avrebbe superato silenziosamente se la posizione
+    esistesse.
+
+Risultato: FAIL — BUG CONFERMATO
+  Il sistema accetta score arbitrari > 100. Nessuna validazione applicativa
+  né a livello DB. Un score di 150/100 verrebbe salvato senza errori.
+
+Suggerimento ALTA PRIORITÀ:
+  1. Aggiungere validazione applicativa in insert_score():
+       if not (0 <= args.total <= 100):
+           print(f"ERRORE: total_score={args.total} fuori range [0,100]")
+           sys.exit(1)
+  2. Aggiungere CHECK constraint nel DDL:
+       total_score INTEGER NOT NULL CHECK(total_score BETWEEN 0 AND 100)
+  3. Stesso ragionamento per i sotto-score (stack_match 0-40,
+     remote_fit 0-25, salary_fit 0-20, strategic_fit 0-15).
+
+======================================================================
+TEST 4 — UPDATE INESISTENTE (position_id 9999)
+======================================================================
+Comando:
+  python3 shared/skills/db_update.py position 9999 --status checked
+
+Output atteso: errore "Posizione 9999 non trovata"
+Output reale:
+  Posizione 9999 aggiornata: status = ?
+  EXIT_CODE: 0
+
+Analisi codice db_update.py update_position():
+  La funzione esegue UPDATE senza verificare cursor.rowcount.
+  Se rowcount == 0 (posizione non esiste), il codice stampa comunque
+  "Posizione {id} aggiornata: ..." senza distinguere il caso 0 righe.
+  Il controllo rowcount esiste SOLO per update_application() (righe 229-234)
+  ma NON per update_position().
+
+Risultato: FAIL — BUG CONFERMATO
+  Falso positivo: il sistema riporta successo anche per ID inesistenti.
+  Questo può portare a confusione negli agenti che assumono che l'update
+  sia avvenuto.
+
+Suggerimento ALTA PRIORITÀ:
+  In update_position(), dopo la execute(), aggiungere:
+    if cursor.rowcount == 0:
+        print(f"ERRORE: posizione {args.id} non trovata nel DB!")
+        conn.close()
+        sys.exit(1)
+  (Stesso pattern già usato correttamente in update_application())
+
+======================================================================
+TEST 5 — QUERY NEXT-FOR-* (coerenza risultati)
+======================================================================
+
+--- next-for-scorer ---
+Comando: python3 shared/skills/db_query.py next-for-scorer
+Output:  Posizioni checked senza score: nessuna.
+Atteso:  Lista posizioni con status='checked' e senza score
+
+--- next-for-scrittore ---
+Comando: python3 shared/skills/db_query.py next-for-scrittore
+Output:  Posizioni scored >= 50 senza application: nessuna.
+Atteso:  Lista posizioni con score >= 50 e senza application
+
+--- next-for-critico ---
+Comando: python3 shared/skills/db_query.py next-for-critico
+Output:  Application in review senza verdict: nessuna.
+Atteso:  Lista applicazioni in status='review' senza critic_verdict
+
+Risultato: PASS (condizionale)
+  I tre comandi restituiscono output coerente e privo di errori.
+  Il risultato "nessuna" è coerente con lo stato del DB al momento del test
+  (DB svuotato da attività parallele di altri agenti).
+  La logica SQL è corretta e i comandi non crashano con DB vuoto.
+
+Osservazione:
+  Le query sono corrette ma next-for-scrittore esclude posizioni con
+  status='excluded' dalla join, mentre next-for-scorer filtra
+  status='checked'. La catena di stati (new→checked→scored→writing→review)
+  è implementata correttamente.
+
+======================================================================
+TEST 6 — candidate_profile.yml
+======================================================================
+
+--- Snippet scorer (chiavi top-level) ---
+Comando: python3 -c "import yaml; p = yaml.safe_load(open('candidate_profile.yml')); ..."
+
+Output reale (Python 3.14.2 Homebrew):
+  ModuleNotFoundError: No module named 'yaml'
+  EXIT_CODE: 1
+
+Output reale (Python 3.12.4 Anaconda):
+  N/A — candidate_profile.yml non trovato nel repository
+
+--- Snippet scrittore (chiave 'candidate') ---
+Stessa situazione: ModuleNotFoundError + file non trovato.
+
+Risultato: FAIL — DUE PROBLEMI DISTINTI
+
+Problema 1: DIPENDENZA yaml NON SODDISFATTA
+  Il Python di sistema (/opt/homebrew/bin/python3, v3.14.2) non ha il
+  modulo 'yaml' (PyYAML) installato.
+  Il Python Anaconda (/opt/anaconda3/bin/python3, v3.12.4) ha yaml.
+  Gli agenti che usano 'import yaml' devono specificare o assicurare
+  quale interprete Python usare.
+
+Problema 2: candidate_profile.yml NON ESISTE NEL REPO
+  Il file era presente all'inizio della sessione e2e come:
+    ./candidate_profile.yml
+  Ma al momento dell'esecuzione del TEST 6, il file non esiste più
+  in nessuna delle worktrees del repo.
+  Questo indica che un altro agente del team ha rimosso o spostato
+  il file durante la sessione e2e.
+
+Suggerimento ALTA PRIORITÀ:
+  1. Aggiungere PyYAML ai requirements di sistema / documentare
+     che gli script richiedono python3 con PyYAML installato.
+  2. Verificare e ripristinare candidate_profile.yml nel branch main.
+  3. Aggiungere il file al .gitignore OPPURE committarlo nel repo.
+  4. Gli agenti che dipendono dal profilo devono avere un fallback
+     esplicito se il file non esiste.
+
+======================================================================
+TEST 7 — VERIFICA SCHEMA DB (db_migrate_v2.py --verify)
+======================================================================
+Comando:
+  python3 shared/skills/db_migrate_v2.py --verify
+
+Output reale:
+  === VERIFICA INTEGRITÀ ===
+  FK check: OK
+  Integrity check: OK
+  User version: 0
+    ATTENZIONE: versione non è 2!
+  Nessuna URL duplicata: OK
+  Scores tutti collegati a posizioni: OK
+  Applications tutte collegate a posizioni: OK
+
+  Statistiche post-migrazione:
+    positions: 0       ← DB vuoto in quel momento
+    companies: 0
+    scores: 0
+    applications: 0
+    position_highlights: 0
+
+  ZeroDivisionError: division by zero   ← BUG nel codice verify()
+  EXIT_CODE: 1
+
+Analisi:
+  - user_version = 0: il DB usa schema V2 (creato da ensure_schema) ma
+    PRAGMA user_version non viene mai settato a 2 da ensure_schema().
+    Solo db_migrate_v2.py (migrazione da V1) setta user_version=2.
+    Un DB creato ex-novo da ensure_schema() rimane a user_version=0.
+  - ZeroDivisionError in verify() riga 428:
+      print(f"Company ID popolati: {with_cid}/{total} ({100*with_cid//total}%)")
+    Se total == 0, la divisione per zero causa crash.
+  - Il verify() non completa correttamente con DB vuoto.
+
+Risultato: FAIL — DUE BUG CONFERMATI
+
+Bug 1: user_version non aggiornato da ensure_schema()
+  Schema creato ex-novo ha user_version=0, ingannando il verify che
+  si aspetta user_version=2.
+
+Bug 2: ZeroDivisionError in verify() con DB vuoto
+  La funzione non gestisce il caso total=0.
+
+Suggerimento:
+  1. In ensure_schema(), dopo il commit, aggiungere:
+       conn.execute("PRAGMA user_version = 2")
+  2. In verify(), riga 428, usare divisione sicura:
+       pct = (100 * with_cid // total) if total > 0 else 0
+       print(f"Company ID popolati: {with_cid}/{total} ({pct}%)")
+
+======================================================================
+RIEPILOGO RISULTATI
+======================================================================
+
+TEST | DESCRIZIONE                        | RISULTATO
+-----|------------------------------------|-----------
+  1  | Duplicati (check-url)              | PASS parziale (check URL non-LI mancante)
+  2a | Campi mancanti (senza --url)       | PASS (argparse blocca correttamente)
+  2b | Campi mancanti (senza --jd-text)   | WARN (accetta senza JD)
+  3  | Score invalid (total=150)          | FAIL — nessuna validazione range 0-100
+  4  | Update inesistente (ID 9999)       | FAIL — falso positivo (dice "aggiornato")
+  5  | Query next-for-* commands          | PASS (output coerente, no crash)
+  6  | candidate_profile.yml              | FAIL — file mancante + yaml non installato
+  7  | Schema DB verify                   | FAIL — ZeroDivisionError + user_version=0
+
+======================================================================
+BUG CRITICI (priorità alta)
+======================================================================
+
+[BUG-01] MANCANZA VALIDAZIONE SCORE RANGE
+  File: shared/skills/db_insert.py, funzione insert_score()
+  Impatto: score > 100 (o < 0) vengono accettati silenziosamente
+  Fix: validazione applicativa + CHECK constraint in DDL
+
+[BUG-02] FALSO POSITIVO UPDATE POSITION INESISTENTE
+  File: shared/skills/db_update.py, funzione update_position()
+  Impatto: agenti credono di aver aggiornato una posizione che non esiste
+  Fix: controllo cursor.rowcount == 0 (pattern già usato in update_application)
+
+[BUG-03] ZERODIVISIONERROR IN VERIFY CON DB VUOTO
+  File: shared/skills/db_migrate_v2.py, funzione verify(), riga 428
+  Impatto: verify() crasha con DB vuoto invece di gestire il caso
+  Fix: if total > 0 else 0
+
+[BUG-04] user_version=0 PER DB CREATI EX-NOVO
+  File: shared/skills/_db.py, funzione ensure_schema()
+  Impatto: verify() segnala "ATTENZIONE versione non è 2" per DB validi
+  Fix: settare PRAGMA user_version = 2 in ensure_schema()
+
+======================================================================
+WARN NON CRITICI
+======================================================================
+
+[WARN-01] CHECK DUPLICATI INCOMPLETO
+  File: shared/skills/db_insert.py, funzione check_duplicate()
+  Il controllo URL esatto manca per URL non-LinkedIn.
+
+[WARN-02] jd_text NON OBBLIGATORIO
+  File: shared/skills/db_insert.py
+  Posizioni senza JD entrano nel flusso senza warning.
+
+[WARN-03] PyYAML NON INSTALLATO SU Python 3.14 (Homebrew)
+  Gli agenti devono usare /opt/anaconda3/bin/python3 o pip install pyyaml.
+
+[WARN-04] candidate_profile.yml NON NEL REPO
+  File critico per scorer, scrittore, analista — non disponibile.
+
+[WARN-05] DB INSTABILE DURANTE TEST PARALLELI
+  Il DB è stato modificato da altri agenti durante i test e2e.
+  Non esiste lock o isolamento per i test. I test e2e non sono isolati
+  dall'ambiente di produzione del team.
+
+======================================================================
+RACCOMANDAZIONI ARCHITETTURALI
+======================================================================
+
+1. DB DI TEST SEPARATO
+   I test e2e dovrebbero usare un DB isolato (es. shared/data/jobs-test.db)
+   per evitare interferenze con l'ambiente di lavoro reale del team.
+
+2. VALIDAZIONE INPUT CENTRALIZZATA
+   Creare un modulo validators.py in shared/skills/ con funzioni:
+     - validate_score(total, stack_match, remote_fit, ...)
+     - validate_position(title, company, url, ...)
+   per centralizzare la validazione anziché duplicarla in ogni script.
+
+3. EXIT CODE COERENTI
+   Tutti gli script dovrebbero restituire exit code 1 in caso di errore
+   logico (0 righe aggiornate = errore).
+
+4. GESTIONE YAML ROBUSTA
+   Documentare la dipendenza da PyYAML o usare il modulo json come
+   alternativa per la configurazione.
+
+======================================================================
+EOF — Report generato da @jht-e2e il 2026-03-14
+======================================================================
