@@ -1,0 +1,84 @@
+# ══════════════════════════════════════════════════════════════
+# .gitignore — Job Hunter Team
+# REGOLA: se non sei sicuro, NON committare. Chiedi prima.
+# ══════════════════════════════════════════════════════════════
+
+# ── SECRETS E CONFIG LOCALI ──────────────────────────────────
+.env
+.env.local
+.env.*.local
+.mcp.json
+*.mcp.json
+CLAUDE.md
+auth-state.json
+google-oauth-*.json
+google-service-account.json
+linkedin-cookies.json
+.secrets-patterns
+
+# ── DATI PERSONALI — MAI committare ─────────────────────────
+# PDF: CV, cover letter, documenti personali
+*.pdf
+
+# Database SQLite (dati candidature)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Applications: CV e lettere generate
+shared/data/applications/
+
+# LinkedIn: alerts, job data
+shared/data/linkedin-alerts/
+shared/data/incoming/
+
+# Telegram: bot, reader IMAP
+shared/telegram/
+
+# Screenshot con dati personali
+*.png
+!web/public/**/*.png
+!web/app/**/*.png
+
+# Gap report e dati analisi personali
+shared/data/gap-report.json
+
+# Candidate profile (dati personali)
+candidate_profile.yml
+candidate_profile.example.yml
+
+# ── CHIAVI E CERTIFICATI ─────────────────────────────────────
+shared/secrets/*
+!shared/secrets/.gitkeep
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── BUILD E DIPENDENZE ──────────────────────────────────────
+node_modules/
+.next/
+__pycache__/
+*.pyc
+*.pyo
+.vercel/
+dist/
+build/
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ── IDE ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── CLAUDE CODE ──────────────────────────────────────────────
+.claude/
+
+# ── PLAYWRIGHT MCP ───────────────────────────────────────────
+.playwright-mcp/

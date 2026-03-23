@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Pre-commit hook — Job Hunter Team
+# WHITELIST approach: solo estensioni esplicitamente permesse.
+# Questo file e' protetto: non puo' essere rimosso o svuotato via commit.
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+# ── SELF-PROTECTION ──────────────────────────────────────────
+# Blocca commit che rimuovono o svuotano questo hook
+HOOK_PATH=".githooks/pre-commit"
+if git diff --cached --name-only --diff-filter=D | grep -qx "$HOOK_PATH"; then
+    echo -e "${RED}BLOCCATO: non puoi rimuovere il pre-commit hook.${NC}"
+    exit 1
+fi
+if git diff --cached --name-only | grep -qx "$HOOK_PATH"; then
+    NEW_SIZE=$(git show :"$HOOK_PATH" 2>/dev/null | wc -c || echo 0)
+    if [ "$NEW_SIZE" -lt 100 ]; then
+        echo -e "${RED}BLOCCATO: non puoi svuotare il pre-commit hook.${NC}"
+        exit 1
+    fi
+fi
+
+# ── CLAUDE.md PROTECTION ─────────────────────────────────────
+if git diff --cached --name-only | grep -qiE '(^|/)CLAUDE\.md$'; then
+    echo -e "${RED}BLOCCATO: CLAUDE.md non deve essere committato.${NC}"
+    exit 1
+fi
+
+# ── WHITELIST ESTENSIONI ─────────────────────────────────────
+# Solo queste estensioni sono permesse. Tutto il resto e' bloccato.
+ALLOWED_EXTENSIONS="ts|tsx|js|jsx|json|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|txt|example|gitkeep|gitignore|mjs|cjs|html"
+
+BLOCKED_FILES=""
+while IFS= read -r file; do
+    # Permetti file senza estensione nella root (LICENSE, Makefile, etc.)
+    basename=$(basename "$file")
+    if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" ]]; then
+        continue
+    fi
+
+    # Estrai estensione
+    ext="${basename##*.}"
+    if [[ "$ext" == "$basename" ]]; then
+        # Nessuna estensione — blocca (tranne file noti sopra)
+        BLOCKED_FILES="$BLOCKED_FILES\n  $file"
+        continue
+    fi
+
+    # Controlla whitelist
+    if ! echo "$ext" | grep -qiE "^($ALLOWED_EXTENSIONS)$"; then
+        BLOCKED_FILES="$BLOCKED_FILES\n  $file"
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -n "$BLOCKED_FILES" ]; then
+    echo -e "${RED}BLOCCATO: file con estensione non permessa:${NC}"
+    echo -e "$BLOCKED_FILES"
+    echo ""
+    echo -e "${YELLOW}Estensioni permesse: ${ALLOWED_EXTENSIONS}${NC}"
+    echo -e "${YELLOW}Se serve aggiungere un'estensione, modifica .githooks/pre-commit${NC}"
+    exit 1
+fi
+
+# ── BLOCCO PATTERN SENSIBILI NEI NOMI FILE ───────────────────
+SENSITIVE_PATTERNS="CV_|CoverLetter_|curriculum|lettera_|resume_"
+SENSITIVE_FILES=""
+while IFS= read -r file; do
+    if echo "$file" | grep -qiE "$SENSITIVE_PATTERNS"; then
+        SENSITIVE_FILES="$SENSITIVE_FILES\n  $file"
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -n "$SENSITIVE_FILES" ]; then
+    echo -e "${RED}BLOCCATO: file con nome che sembra un documento personale:${NC}"
+    echo -e "$SENSITIVE_FILES"
+    exit 1
+fi
+
+# ── BLOCCO DIRECTORY SENSIBILI ────────────────────────────────
+SENSITIVE_DIRS="shared/data/applications|shared/data/linkedin|shared/telegram|__pycache__"
+SENSITIVE_DIR_FILES=""
+while IFS= read -r file; do
+    if echo "$file" | grep -qiE "^($SENSITIVE_DIRS)"; then
+        SENSITIVE_DIR_FILES="$SENSITIVE_DIR_FILES\n  $file"
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -n "$SENSITIVE_DIR_FILES" ]; then
+    echo -e "${RED}BLOCCATO: file in directory sensibile:${NC}"
+    echo -e "$SENSITIVE_DIR_FILES"
+    exit 1
+fi
+
+# ── BLOCCO SECRETS NEL CONTENUTO ──────────────────────────────
+SECRET_PATTERNS='(sbp_[a-zA-Z0-9]{30,}|ghp_[a-zA-Z0-9]{30,}|gho_[a-zA-Z0-9]{30,}|sk-[a-zA-Z0-9]{30,}|eyJhbG[a-zA-Z0-9]{50,}|AKIA[A-Z0-9]{16}|AIza[a-zA-Z0-9_-]{35}|GOCSPX-[a-zA-Z0-9_-]{20,})'
+
+if git diff --cached -U0 --diff-filter=ACM | grep -qE "^\+" | head -1 >/dev/null 2>&1; then
+    SECRETS_FOUND=$(git diff --cached -U0 --diff-filter=ACM | grep -E "^\+" | grep -oE "$SECRET_PATTERNS" | head -3)
+    if [ -n "$SECRETS_FOUND" ]; then
+        echo -e "${RED}BLOCCATO: possibili secrets nel contenuto:${NC}"
+        echo "$SECRETS_FOUND" | while read -r s; do
+            echo "  ${s:0:15}..."
+        done
+        exit 1
+    fi
+fi
+
+exit 0
