@@ -1,0 +1,8 @@
+node_modules/
+reports/
+test-results/
+playwright-report/
+auth-state.json
+# File pytest legacy (non appartengono alla suite Playwright)
+*.py
+__pycache__/

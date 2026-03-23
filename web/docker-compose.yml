@@ -1,0 +1,19 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Monta il codice sorgente per hot reload
+      - .:/app
+      # Preserva node_modules del container (non sovrascrivere con host)
+      - /app/node_modules
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      # Necessario per Next.js hot reload dentro Docker
+      - WATCHPACK_POLLING=true
+    restart: unless-stopped
