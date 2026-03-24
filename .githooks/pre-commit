@@ -36,9 +36,12 @@ ALLOWED_EXTENSIONS="ts|tsx|js|jsx|json|css|scss|md|py|sh|sql|yml|yaml|toml|lock|
 
 BLOCKED_FILES=""
 while IFS= read -r file; do
-    # Permetti file senza estensione nella root (LICENSE, Makefile, etc.)
+    # Permetti file senza estensione noti + file in .githooks/
     basename=$(basename "$file")
     if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" ]]; then
+        continue
+    fi
+    if [[ "$file" == .githooks/* ]]; then
         continue
     fi
 
@@ -98,15 +101,13 @@ fi
 # ── BLOCCO SECRETS NEL CONTENUTO ──────────────────────────────
 SECRET_PATTERNS='(sbp_[a-zA-Z0-9]{30,}|ghp_[a-zA-Z0-9]{30,}|gho_[a-zA-Z0-9]{30,}|sk-[a-zA-Z0-9]{30,}|eyJhbG[a-zA-Z0-9]{50,}|AKIA[A-Z0-9]{16}|AIza[a-zA-Z0-9_-]{35}|GOCSPX-[a-zA-Z0-9_-]{20,})'
 
-if git diff --cached -U0 --diff-filter=ACM | grep -qE "^\+" | head -1 >/dev/null 2>&1; then
-    SECRETS_FOUND=$(git diff --cached -U0 --diff-filter=ACM | grep -E "^\+" | grep -oE "$SECRET_PATTERNS" | head -3)
-    if [ -n "$SECRETS_FOUND" ]; then
-        echo -e "${RED}BLOCCATO: possibili secrets nel contenuto:${NC}"
-        echo "$SECRETS_FOUND" | while read -r s; do
-            echo "  ${s:0:15}..."
-        done
-        exit 1
-    fi
+SECRETS_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null | grep -E "^\+" | grep -oE "$SECRET_PATTERNS" | head -3 || true)
+if [ -n "$SECRETS_FOUND" ]; then
+    echo -e "${RED}BLOCCATO: possibili secrets nel contenuto:${NC}"
+    echo "$SECRETS_FOUND" | while read -r s; do
+        echo "  ${s:0:15}..."
+    done
+    exit 1
 fi
 
 exit 0
