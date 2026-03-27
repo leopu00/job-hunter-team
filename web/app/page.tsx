@@ -1,12 +1,25 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { Suspense, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+
+const supabaseConfigured = !!(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 function LandingContent() {
   const params = useSearchParams()
+  const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
+
+  // Se Supabase non è configurato, vai direttamente alla dashboard
+  useEffect(() => {
+    if (!supabaseConfigured) {
+      router.replace('/dashboard')
+    }
+  }, [router])
 
   const handleGoogleLogin = async () => {
     const supabase = createClient()

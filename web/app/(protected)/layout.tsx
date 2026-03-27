@@ -10,7 +10,8 @@ export default async function ProtectedLayout({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
+  // Se Supabase è configurato e non c'è utente, redirect al login
+  if (!user && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     redirect('/')
   }
 

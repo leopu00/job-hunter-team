@@ -18,7 +18,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .select('status')
 
   if (error || !data) {
-    console.error('[getDashboardStats] error:', error?.message, error?.code)
+    if (error?.code !== 'NOT_CONFIGURED') {
+      console.error('[getDashboardStats] error:', error?.message, error?.code)
+    }
     return { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0 }
   }
 

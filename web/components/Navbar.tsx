@@ -4,16 +4,16 @@ import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 
 interface NavbarProps {
-  user: User
+  user: User | null
 }
 
 export default function Navbar({ user }: NavbarProps) {
-  const avatarUrl = user.user_metadata?.avatar_url as string | undefined
-  const fullName  = user.user_metadata?.full_name as string | undefined
-  const email     = user.email ?? ''
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
+  const fullName  = user?.user_metadata?.full_name as string | undefined
+  const email     = user?.email ?? ''
   const initials  = fullName
     ? fullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
-    : email.slice(0, 2).toUpperCase()
+    : email ? email.slice(0, 2).toUpperCase() : 'JH'
 
   return (
     <header
