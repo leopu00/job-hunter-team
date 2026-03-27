@@ -14,12 +14,14 @@ function LandingContent() {
   const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
 
-  // Se Supabase non è configurato, vai direttamente alla dashboard
+  const wantsLogin = params.get('login') === 'true'
+
+  // Se Supabase non è configurato e non ha cliccato Login, vai alla dashboard
   useEffect(() => {
-    if (!supabaseConfigured) {
+    if (!supabaseConfigured && !wantsLogin) {
       router.replace('/dashboard')
     }
-  }, [router])
+  }, [router, wantsLogin])
 
   const handleGoogleLogin = async () => {
     const supabase = createClient()
@@ -78,13 +80,23 @@ function LandingContent() {
 
           {/* Card body */}
           <div className="px-6 py-8 flex flex-col gap-4">
+            {!supabaseConfigured && (
+              <div className="px-3 py-2 rounded border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
+                Supabase non configurato. Per abilitare il login, imposta
+                <code className="mx-1 text-[10px]">NEXT_PUBLIC_SUPABASE_URL</code> e
+                <code className="mx-1 text-[10px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
+                in <code className="mx-1 text-[10px]">web/.env.local</code>
+              </div>
+            )}
             {authError && (
               <div className="px-3 py-2 rounded border border-[var(--color-red)] bg-[var(--color-red)10] text-[11px]" style={{ color: 'var(--color-red)' }}>
                 Autenticazione fallita. Verifica di usare un account autorizzato.
               </div>
             )}
             <p className="text-[var(--color-muted)] text-[11px]">
-              Accesso riservato ai membri del team. Usa il tuo account Google.
+              {supabaseConfigured
+                ? 'Accesso riservato ai membri del team. Usa il tuo account Google.'
+                : 'Il login salva i dati sul cloud. Senza, funziona tutto in locale.'}
             </p>
 
             {/* Google Login Button */}
