@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
+import LoginButton from './LoginButton'
 
 interface NavbarProps {
   user: User | null
@@ -13,7 +14,7 @@ export default function Navbar({ user }: NavbarProps) {
   const email     = user?.email ?? ''
   const initials  = fullName
     ? fullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
-    : email ? email.slice(0, 2).toUpperCase() : 'JH'
+    : email ? email.slice(0, 2).toUpperCase() : '?'
 
   return (
     <header
@@ -52,36 +53,43 @@ export default function Navbar({ user }: NavbarProps) {
           <NavLink href="/profile">Profilo</NavLink>
         </div>
 
-        {/* User */}
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end">
-            <span className="text-[11px] text-[var(--color-bright)] leading-none font-medium">
-              {fullName ?? email.split('@')[0]}
-            </span>
-            <span className="text-[10px] text-[var(--color-dim)] leading-none mt-0.5">
-              {email}
-            </span>
-          </div>
-
-          {/* Avatar */}
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--color-border)] flex-shrink-0 bg-[var(--color-card)] flex items-center justify-center">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={fullName ?? 'avatar'}
-                width={32}
-                height={32}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-[11px] font-bold text-[var(--color-green)]">
-                {initials}
+        {/* User / Login */}
+        {user ? (
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-[11px] text-[var(--color-bright)] leading-none font-medium">
+                {fullName ?? email.split('@')[0]}
               </span>
-            )}
-          </div>
+              <span className="text-[10px] text-[var(--color-dim)] leading-none mt-0.5">
+                {email}
+              </span>
+            </div>
 
-          <LogoutButton />
-        </div>
+            {/* Avatar */}
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--color-border)] flex-shrink-0 bg-[var(--color-card)] flex items-center justify-center">
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt={fullName ?? 'avatar'}
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-[11px] font-bold text-[var(--color-green)]">
+                  {initials}
+                </span>
+              )}
+            </div>
+
+            <LogoutButton />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--color-dim)] hidden sm:block">locale</span>
+            <LoginButton />
+          </div>
+        )}
       </nav>
     </header>
   )
