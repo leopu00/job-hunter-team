@@ -50,6 +50,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/** DELETE — pulisci la chat */
+export async function DELETE() {
+  const chatFile = getChatFile()
+  if (chatFile && fs.existsSync(chatFile)) {
+    fs.writeFileSync(chatFile, '', 'utf-8')
+  }
+  return NextResponse.json({ ok: true })
+}
+
 /** POST — invia messaggio utente */
 export async function POST(req: NextRequest) {
   const { text } = await req.json()
