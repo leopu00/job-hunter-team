@@ -1,11 +1,38 @@
 'use client'
 
 import Link from 'next/link'
+import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 type Status = { active: boolean; output: string }
 type Check = { id: string; label: string; ok: boolean; detail?: string; hint?: string }
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
+
+/** Render markdown leggero: **bold**, *italic*, `code`, \n */
+function renderMarkdown(text: string) {
+  // Split per blocchi di codice inline
+  const parts = text.split(/(`[^`]+`)/)
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: '3px', fontSize: '11px' }}>{part.slice(1, -1)}</code>
+    }
+    // Bold **text**
+    const boldParts = part.split(/(\*\*[^*]+\*\*)/)
+    return boldParts.map((bp, j) => {
+      if (bp.startsWith('**') && bp.endsWith('**')) {
+        return <strong key={`${i}-${j}`}>{bp.slice(2, -2)}</strong>
+      }
+      // Italic *text*
+      const italicParts = bp.split(/(\*[^*]+\*)/)
+      return italicParts.map((ip, k) => {
+        if (ip.startsWith('*') && ip.endsWith('*')) {
+          return <em key={`${i}-${j}-${k}`}>{ip.slice(1, -1)}</em>
+        }
+        return <span key={`${i}-${j}-${k}`}>{ip}</span>
+      })
+    })
+  })
+}
 
 export default function AssistentePage() {
   const [status, setStatus] = useState<Status | null>(null)
@@ -19,6 +46,15 @@ export default function AssistentePage() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
+  const [chatFullscreen, setChatFullscreen] = useState(false)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const toggle = (id: string) => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
+
+  // Blocca scroll del body quando chat è fullscreen
+  useEffect(() => {
+    document.body.style.overflow = chatFullscreen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [chatFullscreen])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -68,9 +104,16 @@ export default function AssistentePage() {
     return () => { clearInterval(statusId); clearInterval(chatId) }
   }, [fetchStatus, fetchChecks, fetchChat])
 
-  // Scroll chat in fondo
+  // Scroll chat in fondo solo quando arrivano nuovi messaggi
+  const prevMsgCountRef = useRef(0)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messages.length > prevMsgCountRef.current) {
+      const container = chatEndRef.current?.parentElement
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
+    }
+    prevMsgCountRef.current = messages.length
   }, [messages])
 
   // Scroll terminale in fondo
@@ -155,13 +198,18 @@ export default function AssistentePage() {
 
       {/* Step 1: Workspace */}
       <div className="mb-8">
-        <div className="section-label mb-3">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-            style={{ background: hasWorkspace ? 'var(--color-green)' : 'var(--color-border)', color: hasWorkspace ? '#000' : 'var(--color-dim)' }}>
-            1
-          </span>
-          Seleziona cartella di lavoro
+        <div className="section-label mb-3 cursor-pointer select-none flex items-center justify-between" onClick={() => toggle('step1')}>
+          <div>
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
+              style={{ background: hasWorkspace ? 'var(--color-green)' : 'var(--color-border)', color: hasWorkspace ? '#000' : 'var(--color-dim)' }}>
+              1
+            </span>
+            Seleziona cartella di lavoro
+            {hasWorkspace && collapsed.step1 && <span className="ml-2 text-[10px] text-[var(--color-dim)] font-mono font-normal">{workspace}</span>}
+          </div>
+          <span className="text-[10px] text-[var(--color-dim)]">{collapsed.step1 ? '▶' : '▼'}</span>
         </div>
+        {!collapsed.step1 && <>
         <p className="text-[10px] text-[var(--color-dim)] mb-3">
           Gli agenti lavoreranno in questa cartella. Il repo del framework resta intatto.
         </p>
@@ -178,6 +226,7 @@ export default function AssistentePage() {
             </div>
           )}
         </div>
+        </>}
       </div>
 
       {hasWorkspace && (
@@ -185,7 +234,7 @@ export default function AssistentePage() {
 
           {/* Step 2: Checklist */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step2')}>
               <div className="section-label">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
                   style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>2</span>
@@ -196,12 +245,17 @@ export default function AssistentePage() {
                   </span>
                 )}
               </div>
-              <button onClick={fetchChecks} disabled={checking}
-                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                {checking ? 'verifica…' : 'verifica tutto'}
-              </button>
+              <div className="flex items-center gap-3">
+                {!collapsed.step2 && (
+                  <button onClick={(e) => { e.stopPropagation(); fetchChecks() }} disabled={checking}
+                    className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
+                    {checking ? 'verifica…' : 'verifica tutto'}
+                  </button>
+                )}
+                <span className="text-[10px] text-[var(--color-dim)]">{collapsed.step2 ? '▶' : '▼'}</span>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {!collapsed.step2 && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {checks.map(c => (
                 <div key={c.id} className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
@@ -214,34 +268,35 @@ export default function AssistentePage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
 
           {/* Step 3: Assistente */}
           <div className="mb-6 pb-6 border-t border-[var(--color-border)] pt-6">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')}>
               <div className="section-label">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
                   style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>3</span>
                 Assistente
               </div>
-              {isActive && (
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setShowTerminal(v => !v)}
-                    className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
-                    {showTerminal ? 'nascondi terminale' : 'mostra terminale'}
-                  </button>
-                  <button onClick={async () => {
-                      await fetch('/api/assistente/terminal', { method: 'POST' })
-                    }}
-                    className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                    apri powershell
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {isActive && !collapsed.step3 && (
+                  <>
+                    <button onClick={(e) => { e.stopPropagation(); setShowTerminal(v => !v) }}
+                      className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
+                      {showTerminal ? 'nascondi terminale' : 'mostra terminale'}
+                    </button>
+                    <button onClick={async (e) => { e.stopPropagation(); await fetch('/api/assistente/terminal', { method: 'POST' }) }}
+                      className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
+                      apri powershell
+                    </button>
+                  </>
+                )}
+                <span className="text-[10px] text-[var(--color-dim)]">{collapsed.step3 ? '▶' : '▼'}</span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-4 mb-4">
+            {!collapsed.step3 && <><div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-2 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-2.5">
                 <div className="w-2 h-2 rounded-full flex-shrink-0"
                   style={{
@@ -265,26 +320,63 @@ export default function AssistentePage() {
                   {starting ? 'Avvio in corso…' : 'Avvia Assistente'}
                 </button>
               )}
+              {isActive && (
+                <button onClick={async () => {
+                    await fetch('/api/assistente/stop', { method: 'POST' })
+                    await fetchStatus()
+                  }}
+                  className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
+                  style={{ color: 'var(--color-red)', cursor: 'pointer' }}>
+                  Ferma
+                </button>
+              )}
               {startMsg && <span className="text-[11px] text-[var(--color-muted)]">{startMsg}</span>}
             </div>
-          </div>
 
           {/* Chat */}
-          {isActive && (
-            <div style={{ animation: 'fade-in 0.25s ease both' }}>
+          {isActive && (() => {
+            const chatContent = (
+            <div style={{
+              ...(chatFullscreen ? {
+                position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+                background: '#0d1117',
+                display: 'flex', flexDirection: 'column' as const,
+              } : { animation: 'fade-in 0.25s ease both' }),
+            }}>
 
               {/* Chat area */}
-              <div className="border border-[var(--color-border)] rounded-t-xl overflow-hidden"
-                style={{ background: 'var(--color-card)' }}>
-                <div className="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[var(--color-green)]"
-                    style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-                    chat · assistente
-                  </span>
+              <div className="border border-[var(--color-border)] overflow-hidden"
+                style={{
+                  background: 'var(--color-card)',
+                  borderRadius: chatFullscreen ? '0' : '12px 12px 0 0',
+                  ...(chatFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column' as const } : {}),
+                }}>
+                <div className="px-4 py-2.5 border-b border-[var(--color-border)] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-[var(--color-green)]"
+                      style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+                    <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
+                      chat · assistente
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {messages.length > 0 && (
+                      <button onClick={async () => {
+                          await fetch('/api/assistente/chat', { method: 'DELETE' })
+                          setMessages([])
+                        }}
+                        className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer">
+                        pulisci
+                      </button>
+                    )}
+                    <button onClick={() => setChatFullscreen(v => !v)}
+                      className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
+                      {chatFullscreen ? 'esci' : 'espandi'}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="px-4 py-4 overflow-auto" style={{ height: '45vh' }}>
+                <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
                   {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-center">
                       <div className="text-3xl mb-3 opacity-30">🤖</div>
@@ -304,21 +396,35 @@ export default function AssistentePage() {
                           borderBottomRightRadius: msg.role === 'user' ? '4px' : undefined,
                           borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : undefined,
                         }}>
-                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderMarkdown(msg.text)}</div>
                         <div className="text-[9px] mt-1 opacity-50 text-right">
                           {new Date(msg.ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
                     </div>
                   ))}
+
+                  {/* Indicatore "sta pensando" */}
+                  {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+                    <div className="flex justify-start mb-3">
+                      <div className="px-4 py-3 rounded-lg text-[12px]" style={{ background: '#1c2333', borderBottomLeftRadius: '4px' }}>
+                        <div className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.2s infinite' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.4s infinite' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div ref={chatEndRef} />
                 </div>
               </div>
 
               {/* Input chat */}
               <form onSubmit={(e) => { e.preventDefault(); handleSend() }}
-                className="flex items-center border border-t-0 border-[var(--color-border)] rounded-b-xl overflow-hidden"
-                style={{ background: '#0d1117' }}>
+                className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
+                style={{ background: '#0d1117', borderRadius: chatFullscreen ? '0' : '0 0 12px 12px', margin: chatFullscreen ? '0 16px 16px 16px' : undefined }}>
                 <input ref={inputRef} type="text" value={input}
                   onChange={e => setInput(e.target.value)}
                   placeholder="Scrivi un messaggio..."
@@ -335,8 +441,8 @@ export default function AssistentePage() {
                 </button>
               </form>
 
-              {/* Terminale (toggle) */}
-              {showTerminal && (
+              {/* Terminale (toggle) — nascosto in fullscreen */}
+              {showTerminal && !chatFullscreen && (
                 <div className="mt-4" style={{ animation: 'fade-in 0.25s ease both' }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="section-label">Terminale</div>
@@ -355,7 +461,13 @@ export default function AssistentePage() {
                 </div>
               )}
             </div>
-          )}
+            )
+            return chatFullscreen
+              ? createPortal(chatContent, document.body)
+              : chatContent
+          })()}
+          </>}
+          </div>
 
           {/* Empty state */}
           {!isActive && status != null && !startMsg && (
