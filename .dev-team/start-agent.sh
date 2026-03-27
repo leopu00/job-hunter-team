@@ -129,8 +129,21 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
-tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
-tmux send-keys -t "$SESSION" "unset CLAUDECODE && claude --dangerously-skip-permissions --effort $effort" C-m
+# Rileva se siamo in WSL — Claude CLI è un binario Windows, va lanciato via PowerShell
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
+  tmux new-session -d -s "$SESSION" powershell.exe
+  sleep 2
+  tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
+  sleep 1
+  tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" Enter
+  # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
+  sleep 8
+  tmux send-keys -t "$SESSION" Enter
+else
+  tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
+  tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" C-m
+fi
 
 echo "✓ $SESSION avviato (effort: $effort, mode: $MODE)"
 echo "  Workspace: $AGENT_DIR"

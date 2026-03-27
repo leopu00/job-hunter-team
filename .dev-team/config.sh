@@ -12,3 +12,8 @@ if [ -z "${JHT_WORKSPACE:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
 fi
 # Espandi ~ se presente
 JHT_WORKSPACE="${JHT_WORKSPACE/#\~/$HOME}"
+
+# Converti path Windows (C:/... o C:\...) in WSL path (/mnt/c/...) se in WSL
+if grep -qi microsoft /proc/version 2>/dev/null && [[ "${JHT_WORKSPACE:-}" =~ ^[A-Za-z]:[/\\] ]]; then
+  JHT_WORKSPACE=$(wslpath "$JHT_WORKSPACE")
+fi
