@@ -43,6 +43,12 @@ if [ ! -f "$ENV_FILE" ]; then
   warn ".env non trovato. Esegui prima: ./setup.sh"
 fi
 
+# ── Verifica workspace ───────────────────────────────────────────────────────
+if [ -z "${JHT_WORKSPACE:-}" ]; then
+  fail "JHT_WORKSPACE non configurato nel .env. Esempio: JHT_WORKSPACE=~/job-hunter-workspace"
+fi
+ok "Workspace: $JHT_WORKSPACE"
+
 # ── Avvia Job Hunter Team (configurazione dal legacy) ─────────────────────────
 # Ordine: prima ALFA (coordinatore), poi agenti operativi
 # Configurazione di default: ALFA + SCOUT-1 + ANALISTA-1 + SCORER-1
