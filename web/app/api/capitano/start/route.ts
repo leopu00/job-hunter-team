@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import path from 'path'
-
-const execAsync = promisify(exec)
+import { runBash, runScript, toWslPath } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
     // Controlla se ALFA è già attivo
-    const { stdout: sessions } = await execAsync(
+    const { stdout: sessions } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""'
     )
     const already = sessions.trim().split('\n').some(s => s.trim() === 'ALFA')
@@ -19,11 +16,12 @@ export async function POST() {
       return NextResponse.json({ ok: true, message: 'Capitano già attivo' })
     }
 
-    // Avvia tramite lo script del team
-    const home = process.env.HOME ?? '/Users/leoneemanuelpuglisi'
-    const script = path.join(home, 'Repos/job-hunter-team/main/.dev-team/start-agent.sh')
+    // Rileva la root del repo (web/ è una dir sotto la root)
+    const repoRoot = path.resolve(process.cwd(), '..')
+    const script = path.join(repoRoot, '.dev-team', 'start-agent.sh')
+    const scriptPath = toWslPath(script)
 
-    await execAsync(`bash "${script}" alfa`)
+    await runScript(scriptPath, 'alfa')
 
     return NextResponse.json({ ok: true, message: 'Capitano avviato' })
   } catch (err: any) {
