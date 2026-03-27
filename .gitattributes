@@ -1,0 +1,2 @@
+# Shell scripts — sempre LF, anche su Windows
+*.sh text eol=lf
