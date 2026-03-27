@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { runBash } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    // Controlla se la sessione ALFA è attiva
-    const { stdout: sessions } = await execAsync(
+    const { stdout: sessions } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""'
     )
     const active = sessions.trim().split('\n').some(s => s.trim() === 'ALFA')
@@ -18,8 +14,7 @@ export async function GET() {
       return NextResponse.json({ active: false, output: '' })
     }
 
-    // Cattura output terminale (ultime 200 righe)
-    const { stdout: output } = await execAsync(
+    const { stdout: output } = await runBash(
       'tmux capture-pane -t "ALFA" -p -S -200 2>/dev/null || echo ""'
     )
 

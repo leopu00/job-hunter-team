@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { runBash } from '@/lib/shell'
 
 // Job Hunter agent definitions (session prefix → display info)
 const JH_AGENTS: Record<string, { role: string; emoji: string; color: string; maxInstances: number }> = {
@@ -27,7 +24,7 @@ function getAgentInfo(session: string) {
 
 export async function GET() {
   try {
-    const { stdout } = await execAsync('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
+    const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
     const sessions = stdout.trim().split('\n').filter(Boolean)
 
     const agents = sessions

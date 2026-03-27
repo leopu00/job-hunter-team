@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { runBash } from '@/lib/shell'
 
 const VALID_SESSION = /^[A-Z][A-Z0-9_-]*$/i
 
@@ -17,8 +14,8 @@ export async function POST(req: NextRequest) {
 
   const escaped = message.replace(/'/g, "'\\''")
   try {
-    await execAsync(`tmux send-keys -t "${session}" '${escaped}'`)
-    await execAsync(`tmux send-keys -t "${session}" Enter`)
+    await runBash(`tmux send-keys -t "${session}" '${escaped}'`)
+    await runBash(`tmux send-keys -t "${session}" Enter`)
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'send failed' }, { status: 500 })

@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { runBash } from '@/lib/shell'
 
 const VALID_SESSION = /^[A-Z][A-Z0-9_-]*$/i
 
@@ -13,7 +10,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await runBash(
       `tmux capture-pane -t "${session}" -p -S -200 2>/dev/null || echo ""`
     )
     return NextResponse.json({ output: stdout })
