@@ -84,7 +84,7 @@ export async function GET() {
 
     // Avg score today
     const avg_score_today = scoredTodayData.length > 0
-      ? Math.round((scoredTodayData.reduce((sum, s) => sum + s.total_score, 0) / scoredTodayData.length) * 10) / 10
+      ? Math.round((scoredTodayData.reduce((sum: number, s: { total_score: number }) => sum + s.total_score, 0) / scoredTodayData.length) * 10) / 10
       : 0
 
     return NextResponse.json({

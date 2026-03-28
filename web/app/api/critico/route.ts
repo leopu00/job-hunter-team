@@ -21,15 +21,16 @@ export async function GET() {
   }
 
   // Stats globali
-  const allReviewed = apps.filter(a => a.critic_verdict != null)
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const allReviewed = (apps as any[]).filter(a => a.critic_verdict != null)
   const pass        = allReviewed.filter(a => a.critic_verdict === 'PASS').length
   const needsWork   = allReviewed.filter(a => a.critic_verdict === 'NEEDS_WORK').length
   const reject      = allReviewed.filter(a => a.critic_verdict === 'REJECT').length
-  const scores      = allReviewed.map(a => a.critic_score).filter((s): s is number => s != null)
-  const avgScore    = scores.length > 0 ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : null
+  const scores      = allReviewed.map(a => a.critic_score).filter((s: any): s is number => s != null)
+  const avgScore    = scores.length > 0 ? +(scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1) : null
 
   // Coda: status='review' AND critic_score IS NULL
-  const queue = apps
+  const queue = (apps as any[])
     .filter(a => a.status === 'review' && a.critic_score == null)
     .map(a => ({
       id:         a.id,

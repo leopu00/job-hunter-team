@@ -49,12 +49,12 @@ export async function GET() {
         .gte('scored_at', todayISO),
     ])
 
-  const todayScores = (todayScoredRes.data ?? []).map(s => s.total_score as number)
+  const todayScores = (todayScoredRes.data as any[] ?? []).map((s: any) => s.total_score as number)
   const scoredToday = todayScores.length
-  const excludedToday = todayScores.filter(s => s < 40).length
+  const excludedToday = todayScores.filter((s: number) => s < 40).length
   const avgToday =
     scoredToday > 0
-      ? +(todayScores.reduce((a, b) => a + b, 0) / scoredToday).toFixed(1)
+      ? +(todayScores.reduce((a: number, b: number) => a + b, 0) / scoredToday).toFixed(1)
       : null
 
   const mapScore = (s: any) => ({
@@ -76,7 +76,7 @@ export async function GET() {
       excluded_today: excludedToday,
       avg_score_today: avgToday,
     },
-    queue: (queueRes.data ?? []).map(p => ({
+    queue: (queueRes.data as any[] ?? []).map((p: any) => ({
       id: p.id,
       title: p.title,
       company: p.company,

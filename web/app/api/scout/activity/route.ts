@@ -50,7 +50,7 @@ export async function GET() {
       found_today: foundTodayRes.count ?? 0,
       total_new: totalNewRes.count ?? 0,
     },
-    queue: (queueRes.data ?? []).map(p => ({
+    queue: (queueRes.data as any[] ?? []).map((p: any) => ({
       id: p.id,
       title: p.title,
       company: p.company,
@@ -59,7 +59,7 @@ export async function GET() {
       found_at: p.found_at,
       found_by: p.found_by,
     })),
-    recent: (recentRes.data ?? []).map(p => ({
+    recent: (recentRes.data as any[] ?? []).map((p: any) => ({
       id: p.id,
       title: p.title,
       company: p.company,
@@ -69,7 +69,7 @@ export async function GET() {
       found_by: p.found_by,
       status: p.status,
     })),
-    excluded_today: (excludedTodayRes.data ?? []).map(p => ({
+    excluded_today: (excludedTodayRes.data as any[] ?? []).map((p: any) => ({
       id: p.id,
       title: p.title,
       company: p.company,

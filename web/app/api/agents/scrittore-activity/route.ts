@@ -89,10 +89,10 @@ export async function GET() {
     const completed_today = completedTodayData.length
 
     const criticScores = completedTodayData
-      .map(r => r.critic_score)
-      .filter((s): s is number => s != null)
+      .map((r: { critic_score: number | null }) => r.critic_score)
+      .filter((s: number | null): s is number => s != null)
     const avg_critic_score = criticScores.length > 0
-      ? Math.round((criticScores.reduce((sum, s) => sum + s, 0) / criticScores.length) * 10) / 10
+      ? Math.round((criticScores.reduce((sum: number, s: number) => sum + s, 0) / criticScores.length) * 10) / 10
       : 0
 
     return NextResponse.json({
