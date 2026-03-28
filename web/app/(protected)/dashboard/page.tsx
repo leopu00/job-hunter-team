@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
+import { getWorkspacePath, workspaceHasProfile, isSupabaseConfigured } from '@/lib/workspace'
+import { readProfile } from '@/lib/profile-reader'
 import type { PositionWithScore } from '@/lib/types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -38,6 +40,20 @@ export default async function DashboardPage() {
 
   const activeTotal = stats.total - stats.excluded
 
+  // Check if profile exists for onboarding status
+  let hasProfile = false
+  if (isSupabaseConfigured) {
+    // Cloud mode: check via supabase (profile page handles this)
+    hasProfile = false // will be refined when supabase profile check is available
+  } else {
+    const workspace = await getWorkspacePath()
+    if (workspace) {
+      hasProfile = workspaceHasProfile(workspace)
+    }
+  }
+
+  const isEmpty = stats.total === 0
+
   const pipeline = [
     { key: 'new',     label: 'New',     count: stats.new,     color: STATUS_COLORS.new },
     { key: 'checked', label: 'Checked', count: stats.checked, color: STATUS_COLORS.checked },
@@ -69,6 +85,116 @@ export default async function DashboardPage() {
           {stats.total} posizioni totali · {stats.excluded} escluse · {activeTotal} attive
         </p>
       </div>
+
+      {/* ── Onboarding (empty state) ──────────────────────────── */}
+      {isEmpty && (
+        <div className="mb-10">
+          <div className="section-label mb-5">Inizia da qui</div>
+          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
+            <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
+              La dashboard è vuota perché il team non ha ancora iniziato a lavorare.
+              <br />
+              Segui questi passaggi per configurare tutto e avviare la ricerca.
+            </p>
+
+            <div className="flex flex-col gap-4">
+
+              {/* Step 1 — Avvia l'Assistente */}
+              <Link
+                href="/assistente"
+                className="group flex items-start gap-4 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[#00e87a55] transition-colors no-underline"
+              >
+                <div className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-green)] text-[var(--color-green)] text-[13px] font-bold shrink-0 mt-0.5">
+                  1
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-bold text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors mb-1">
+                    Avvia l'Assistente
+                  </div>
+                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
+                    L'assistente ti guiderà nella configurazione iniziale. Avvialo e parla con lui per impostare il tuo profilo.
+                  </p>
+                </div>
+                <span className="text-[var(--color-dim)] group-hover:text-[var(--color-green)] text-[14px] transition-colors shrink-0 mt-1">
+                  →
+                </span>
+              </Link>
+
+              {/* Step 2 — Configura il Profilo */}
+              <div
+                className={`flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] ${
+                  hasProfile
+                    ? 'border-[var(--color-green)]/30'
+                    : 'border-[var(--color-border)]'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
+                    hasProfile
+                      ? 'border-[var(--color-green)] text-[var(--color-green)] bg-[var(--color-green)]/10'
+                      : 'border-[var(--color-dim)] text-[var(--color-dim)]'
+                  }`}
+                >
+                  {hasProfile ? '✓' : '2'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-green)]' : 'text-[var(--color-bright)]'}`}>
+                    Configura il tuo Profilo
+                    {hasProfile && (
+                      <span className="ml-2 text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)] bg-[var(--color-green)]/10 px-2 py-0.5 rounded-full border border-[var(--color-green)]/20">
+                        completato
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
+                    {hasProfile
+                      ? 'Il profilo è stato configurato. Il team userà queste informazioni per personalizzare la ricerca.'
+                      : 'Chiedi all\'assistente di aiutarti a compilare il profilo candidato: ruolo target, skills, preferenze di lavoro e salary range.'
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 — Avvia il Team */}
+              <Link
+                href="/team"
+                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
+                  hasProfile
+                    ? 'border-[var(--color-border)] hover:border-[#ffc10755]'
+                    : 'border-[var(--color-border)] opacity-50 pointer-events-none'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
+                    hasProfile
+                      ? 'border-[var(--color-yellow)] text-[var(--color-yellow)]'
+                      : 'border-[var(--color-dim)] text-[var(--color-dim)]'
+                  }`}
+                >
+                  3
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-bright)] group-hover:text-[var(--color-yellow)]' : 'text-[var(--color-dim)]'} transition-colors`}>
+                    Avvia il Team
+                  </div>
+                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
+                    {hasProfile
+                      ? 'Il profilo è pronto. Avvia il team di agenti per iniziare la ricerca automatizzata di posizioni lavorative.'
+                      : 'Prima configura il profilo. Il team ha bisogno delle tue informazioni per cercare posizioni aderenti.'
+                    }
+                  </p>
+                </div>
+                {hasProfile && (
+                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-yellow)] text-[14px] transition-colors shrink-0 mt-1">
+                    →
+                  </span>
+                )}
+              </Link>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Stats ───────────────────────────────────────────────── */}
       <div className="section-label mb-4">Overview</div>
