@@ -15,6 +15,7 @@ function LandingContent() {
   const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
   const wantsLogin = params.get('login') === 'true'
+  const wantsChange = params.get('change') === 'true'
 
   // --- Workspace state (modalita' locale) ---
   const [workspace, setWs] = useState('')
@@ -37,14 +38,15 @@ function LandingContent() {
         .then(data => {
           if (data.path) {
             setWs(data.path)
+            setInputPath(data.path)
             setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
-            // Se ha gia' un DB, vai alla dashboard
-            if (data.hasDb) router.replace('/dashboard')
+            // Se ha gia' un DB e l'utente NON ha cliccato "cambia", vai alla dashboard
+            if (data.hasDb && !wantsChange) router.replace('/dashboard')
           }
         })
         .catch(() => {})
     }
-  }, [router, wantsLogin])
+  }, [router, wantsLogin, wantsChange])
 
   const handleBrowse = async () => {
     setBrowsing(true)

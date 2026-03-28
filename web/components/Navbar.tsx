@@ -87,15 +87,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
             <LogoutButton />
           </div>
         ) : workspace ? (
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-[10px] text-[var(--color-dim)]">workspace</span>
-              <span className="text-[10px] text-[var(--color-muted)] font-mono max-w-[200px] truncate">{workspace.split('/').pop()}</span>
-            </div>
-            <Link href="/" className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline">
-              cambia
-            </Link>
-          </div>
+          <WorkspacePath path={workspace} />
         ) : (
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[var(--color-dim)] hidden sm:block">locale</span>
@@ -115,6 +107,38 @@ function NavLink({ href, children, accent }: { href: string; children: React.Rea
       style={{ color: accent ?? 'var(--color-muted)' } as React.CSSProperties}
     >
       {children}
+    </Link>
+  )
+}
+
+function WorkspacePath({ path }: { path: string }) {
+  const segments = path.split('/').filter(Boolean)
+  // Rimuovi i segmenti "Users" e username per un path piu' pulito
+  const homeIdx = segments.indexOf('Users')
+  const display = homeIdx !== -1 && homeIdx + 2 < segments.length
+    ? segments.slice(homeIdx + 2)
+    : segments.slice(-3)
+
+  return (
+    <Link
+      href="/?change=true"
+      className="hidden sm:flex items-center gap-1.5 max-w-[320px] no-underline hover:opacity-75 transition-opacity cursor-pointer"
+    >
+      <span className="text-[11px] flex-shrink-0" role="img" aria-label="cartella">📁</span>
+      {display.map((seg, i) => (
+        <span key={i} className="flex items-center gap-1.5 min-w-0">
+          {i > 0 && <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">›</span>}
+          <span
+            className="text-[10px] font-medium truncate"
+            style={{
+              color: i === display.length - 1 ? 'var(--color-bright)' : 'var(--color-dim)',
+              maxWidth: i === display.length - 1 ? '140px' : '80px',
+            }}
+          >
+            {seg}
+          </span>
+        </span>
+      ))}
     </Link>
   )
 }
