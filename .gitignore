@@ -10,6 +10,7 @@
 .mcp.json
 *.mcp.json
 CLAUDE.md
+.agents/
 auth-state.json
 google-oauth-*.json
 google-service-account.json
