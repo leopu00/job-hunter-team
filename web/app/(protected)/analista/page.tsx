@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import AgentInteraction from '@/components/AgentInteraction'
 
 type Position = {
   id: number
@@ -283,6 +284,8 @@ export default function AnalistaPage() {
           <DonutChart categories={data.exclusion_categories} />
         </div>
       )}
+
+      <AgentInteraction sessionPrefix="ANALISTA" color="#00e676" label="Analista" />
 
     </div>
   )

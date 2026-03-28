@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getScoutStats } from '@/lib/queries'
 import ScoutLiveSection from './_components/ScoutLiveSection'
+import AgentInteraction from '@/components/AgentInteraction'
 
 export default async function ScoutPage() {
   const stats = await getScoutStats()
@@ -91,6 +92,8 @@ export default async function ScoutPage() {
       )}
 
       <ScoutLiveSection />
+
+      <AgentInteraction sessionPrefix="SCOUT" color="#2196f3" label="Scout" />
 
     </div>
   )
