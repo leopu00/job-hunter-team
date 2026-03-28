@@ -47,7 +47,7 @@ export async function GET() {
     'Copia .env.example in .env e inserisci la tua API key')
 
   await check('workspace', 'JHT_WORKSPACE configurato',
-    `grep -oP "^JHT_WORKSPACE=\\K.*" "${repoPath}/.env" 2>/dev/null | grep -v "^$"`,
+    `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' | grep -v "^$"`,
     'Imposta JHT_WORKSPACE nel .env')
 
   await check('profile', 'candidate_profile.yml',
@@ -71,7 +71,7 @@ export async function GET() {
   let workspace = ''
   try {
     const { stdout } = await runBash(
-      `grep -oP "^JHT_WORKSPACE=\\K.*" "${repoPath}/.env" 2>/dev/null || echo ""`
+      `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' || echo ""`
     )
     workspace = stdout.trim()
   } catch { /* ignore */ }
