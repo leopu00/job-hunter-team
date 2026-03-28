@@ -6,9 +6,10 @@ import LoginButton from './LoginButton'
 
 interface NavbarProps {
   user: User | null
+  workspace?: string | null
 }
 
-export default function Navbar({ user }: NavbarProps) {
+export default function Navbar({ user, workspace }: NavbarProps) {
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
   const fullName  = user?.user_metadata?.full_name as string | undefined
   const email     = user?.email ?? ''
@@ -84,6 +85,16 @@ export default function Navbar({ user }: NavbarProps) {
             </div>
 
             <LogoutButton />
+          </div>
+        ) : workspace ? (
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-[10px] text-[var(--color-dim)]">workspace</span>
+              <span className="text-[10px] text-[var(--color-muted)] font-mono max-w-[200px] truncate">{workspace.split('/').pop()}</span>
+            </div>
+            <Link href="/" className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline">
+              cambia
+            </Link>
           </div>
         ) : (
           <div className="flex items-center gap-2">

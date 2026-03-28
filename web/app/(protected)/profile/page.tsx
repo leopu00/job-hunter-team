@@ -1,24 +1,34 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { readProfile } from '@/lib/profile-reader'
 import type { CandidateProfile } from '@/lib/types'
 
 export default async function ProfilePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  let profile: CandidateProfile | null = null
 
-  if (!user) {
-    return (
-      <div className="p-12 text-center text-[var(--color-muted)]">
-        Sessione scaduta. <a href="/" className="text-[var(--color-green)]">Accedi di nuovo</a>
-      </div>
-    )
+  if (isSupabaseConfigured) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return (
+        <div className="p-12 text-center text-[var(--color-muted)]">
+          Sessione scaduta. <a href="/" className="text-[var(--color-green)]">Accedi di nuovo</a>
+        </div>
+      )
+    }
+    const { data } = await supabase
+      .from('candidate_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single() as { data: CandidateProfile | null }
+    profile = data
+  } else {
+    const workspace = await getWorkspacePath()
+    if (workspace) {
+      profile = readProfile(workspace)
+    }
   }
-
-  const { data: profile } = await supabase
-    .from('candidate_profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .single() as { data: CandidateProfile | null }
 
   if (!profile) {
     return (
