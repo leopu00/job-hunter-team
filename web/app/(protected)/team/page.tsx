@@ -14,7 +14,7 @@ type AgentDef = {
 }
 
 type AgentStatus = 'idle' | 'spawning' | 'active'
-type TeamState = 'idle' | 'starting' | 'ready'
+type TeamState = 'idle' | 'starting' | 'ready' | 'stopping'
 
 /* ── Definizioni agenti ───────────────────────────────────────────── */
 
@@ -105,16 +105,16 @@ export default function TeamPage() {
       setStatuses(prev => {
         const next = { ...prev }
         ALL_AGENTS.forEach(a => {
-          if (activeSessions.has(a.session)) {
-            next[a.session] = 'active'
-          }
+          next[a.session] = activeSessions.has(a.session) ? 'active' : 'idle'
         })
         return next
       })
 
       const allActive = ALL_AGENTS.every(a => activeSessions.has(a.session))
+      const noneActive = ALL_AGENTS.every(a => !activeSessions.has(a.session))
       if (allActive) setTeamState('ready')
-      return allActive
+      if (noneActive) setTeamState(prev => prev === 'stopping' ? 'idle' : prev)
+      return { allActive, noneActive }
     } catch {
       return false
     }
@@ -153,6 +153,25 @@ export default function TeamPage() {
     }
   }
 
+  /* ── Stop team ────────────────────────────────────────────────── */
+
+  const stopTeam = async () => {
+    setTeamState('stopping')
+    setError(null)
+
+    try {
+      const res = await fetch('/api/team/stop-all', { method: 'POST' })
+      const data = await res.json()
+      if (!data.ok) {
+        setError(data.error ?? 'Stop fallito')
+        setTeamState('ready')
+      }
+    } catch {
+      setError('Errore di rete')
+      setTeamState('ready')
+    }
+  }
+
   /* ── Polling ─────────────────────────────────────────────────── */
 
   useEffect(() => {
@@ -160,10 +179,12 @@ export default function TeamPage() {
   }, [fetchStatus])
 
   useEffect(() => {
-    if (teamState !== 'starting') return
+    if (teamState !== 'starting' && teamState !== 'stopping') return
     const interval = setInterval(async () => {
-      const allReady = await fetchStatus()
-      if (allReady) clearInterval(interval)
+      const result = await fetchStatus()
+      if (!result) return
+      if (teamState === 'starting' && result.allActive) clearInterval(interval)
+      if (teamState === 'stopping' && result.noneActive) clearInterval(interval)
     }, 3000)
     return () => clearInterval(interval)
   }, [teamState, fetchStatus])
@@ -296,7 +317,7 @@ export default function TeamPage() {
             <p className="text-[var(--color-muted)] text-[11px] mt-1">Pipeline e comunicazione tra agenti</p>
           </div>
           <div className="flex items-center gap-3">
-            {teamState === 'starting' && (
+            {(teamState === 'starting' || teamState === 'stopping') && (
               <span className="text-[10px] text-[var(--color-muted)] tabular-nums">
                 {activeCount}/{ALL_AGENTS.length} attivi
               </span>
@@ -342,7 +363,51 @@ export default function TeamPage() {
               {teamState === 'idle' && '\u25B6 Avvia Team'}
               {teamState === 'starting' && '\u21BB Avvio in corso...'}
               {teamState === 'ready' && '\u2713 Team Pronto'}
+              {teamState === 'stopping' && '\u21BB Avvio in corso...'}
             </button>
+            {(teamState === 'ready' || activeCount > 0) && teamState !== 'stopping' && (
+              <button
+                onClick={stopTeam}
+                style={{
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-muted)',
+                  background: 'transparent',
+                  fontFamily: 'inherit',
+                  fontSize: '11px',
+                  padding: '6px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  letterSpacing: '0.05em',
+                  transition: 'all 0.25s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#f44336'
+                  e.currentTarget.style.color = '#f44336'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'var(--color-border)'
+                  e.currentTarget.style.color = 'var(--color-muted)'
+                }}
+              >
+                {'\u25A0'} Spegni Team
+              </button>
+            )}
+            {teamState === 'stopping' && (
+              <span
+                style={{
+                  border: '1px solid #f44336',
+                  color: '#f44336',
+                  background: 'rgba(244,67,54,0.05)',
+                  fontFamily: 'inherit',
+                  fontSize: '11px',
+                  padding: '6px 16px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {'\u21BB'} Spegnimento...
+              </span>
+            )}
           </div>
         </div>
         {error && (
