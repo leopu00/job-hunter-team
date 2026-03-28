@@ -93,6 +93,11 @@ export async function POST() {
         await runBash(
           `tmux send-keys -t "${agent.session}" "claude --dangerously-skip-permissions --effort ${agent.effort}" C-m`
         )
+        // Auto-accept: invia Enter in background per accettare "Do you trust this folder?"
+        // L'Enter extra e' innocuo se Claude e' gia' partito (input vuoto = ignorato)
+        runBash(
+          `(sleep 4 && tmux send-keys -t "${agent.session}" Enter && sleep 3 && tmux send-keys -t "${agent.session}" Enter) &>/dev/null &`
+        ).catch(() => {})
         results.push({ session: agent.session, role: agent.role, status: 'started' })
       } catch (err: any) {
         results.push({ session: agent.session, role: agent.role, status: 'error', error: err?.message })

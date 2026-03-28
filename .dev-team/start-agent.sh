@@ -143,6 +143,9 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 else
   tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
   tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" C-m
+  # Auto-accept workspace trust dialog (Enter in background dopo qualche secondo)
+  # L'Enter extra e' innocuo se Claude e' gia' partito (input vuoto = ignorato)
+  (sleep 4 && tmux send-keys -t "$SESSION" Enter && sleep 3 && tmux send-keys -t "$SESSION" Enter) &>/dev/null &
 fi
 
 echo "✓ $SESSION avviato (effort: $effort, mode: $MODE)"
