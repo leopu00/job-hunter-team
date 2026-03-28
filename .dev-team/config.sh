@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$DEV_TEAM_DIR/.." && pwd)"
 
 # Workspace dove lavorano gli agenti (configurabile via env o .env)
 if [ -z "${JHT_WORKSPACE:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
-  JHT_WORKSPACE=$(grep '^JHT_WORKSPACE=' "$REPO_ROOT/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' || echo "")
+  JHT_WORKSPACE=$(sed -n 's/^JHT_WORKSPACE=//p' "$REPO_ROOT/.env" 2>/dev/null || echo "")
 fi
 # Espandi ~ se presente
 JHT_WORKSPACE="${JHT_WORKSPACE/#\~/$HOME}"

@@ -86,11 +86,9 @@ export default function Navbar({ user, workspace }: NavbarProps) {
 
             <LogoutButton />
           </div>
-        ) : workspace ? (
-          <WorkspacePath path={workspace} />
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[var(--color-dim)] hidden sm:block">locale</span>
+          <div className="flex items-center gap-3">
+            {workspace && <WorkspacePath path={workspace} />}
             <LoginButton />
           </div>
         )}
