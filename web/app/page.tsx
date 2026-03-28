@@ -1,8 +1,9 @@
 'use client'
 
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getWorkspace, setWorkspace } from '@/lib/workspace-client'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -13,137 +14,242 @@ function LandingContent() {
   const params = useSearchParams()
   const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
-
   const wantsLogin = params.get('login') === 'true'
 
-  // Se Supabase non è configurato e non ha cliccato Login, vai alla dashboard
+  // --- Workspace state (modalita' locale) ---
+  const [workspace, setWs] = useState('')
+  const [wsStatus, setWsStatus] = useState<{ hasDb: boolean; hasProfile: boolean } | null>(null)
+  const [browsing, setBrowsing] = useState(false)
+  const [initializing, setInitializing] = useState(false)
+  const [inputPath, setInputPath] = useState('')
+
+  // Al mount: check se c'e' gia' un workspace nel cookie
   useEffect(() => {
-    if (!supabaseConfigured && !wantsLogin) {
-      router.replace('/dashboard')
+    if (supabaseConfigured) {
+      if (!wantsLogin) router.replace('/dashboard')
+      return
+    }
+    const saved = getWorkspace()
+    if (saved) {
+      // Verifica che sia ancora valido
+      fetch('/api/workspace')
+        .then(r => r.json())
+        .then(data => {
+          if (data.path) {
+            setWs(data.path)
+            setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
+            // Se ha gia' un DB, vai alla dashboard
+            if (data.hasDb) router.replace('/dashboard')
+          }
+        })
+        .catch(() => {})
     }
   }, [router, wantsLogin])
 
-  const handleGoogleLogin = async () => {
-    const supabase = createClient()
-    const origin = window.location.origin
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${origin}/auth/callback`,
-        queryParams: { prompt: 'select_account' },
-      },
-    })
+  const handleBrowse = async () => {
+    setBrowsing(true)
+    try {
+      const res = await fetch('/api/workspace/browse', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok && data.folder) {
+        setInputPath(data.folder)
+        await selectWorkspace(data.folder)
+      }
+    } catch { /* ignore */ }
+    setBrowsing(false)
   }
 
-  return (
-    <main
-      style={{ position: 'relative', zIndex: 1 }}
-      className="min-h-screen flex items-center justify-center px-5"
-    >
-      <div className="w-full max-w-md" style={{ animation: 'fade-in 0.5s ease both' }}>
+  const handleManualPath = async () => {
+    if (!inputPath.trim()) return
+    await selectWorkspace(inputPath.trim())
+  }
 
-        {/* Logo / Brand */}
+  const selectWorkspace = async (path: string) => {
+    const res = await fetch('/api/workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    const data = await res.json()
+    if (data.ok) {
+      setWorkspace(path)
+      setWs(path)
+      setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
+    }
+  }
+
+  const handleInit = async () => {
+    setInitializing(true)
+    try {
+      const res = await fetch('/api/workspace/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: workspace }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setWsStatus({ hasDb: true, hasProfile: data.created?.profile ?? true })
+      }
+    } catch { /* ignore */ }
+    setInitializing(false)
+  }
+
+  const handleEnter = () => {
+    router.push('/dashboard')
+  }
+
+  // --- Cloud mode: login Google ---
+  if (supabaseConfigured || wantsLogin) {
+    const handleGoogleLogin = async () => {
+      const supabase = createClient()
+      const origin = window.location.origin
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${origin}/auth/callback`,
+          queryParams: { prompt: 'select_account' },
+        },
+      })
+    }
+
+    return (
+      <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex items-center justify-center px-5">
+        <div className="w-full max-w-md" style={{ animation: 'fade-in 0.5s ease both' }}>
+          <div className="mb-10 text-center">
+            <div className="inline-flex items-center gap-2 mb-6">
+              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">sistema attivo</span>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
+              Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
+            </h1>
+            <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-xs mx-auto">
+              Sistema multi-agente per ricerca e candidatura automatizzata.
+            </p>
+          </div>
+          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center gap-2">
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">auth</span>
+              <span className="text-[var(--color-dim)] text-[10px]">/</span>
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">accesso</span>
+            </div>
+            <div className="px-6 py-8 flex flex-col gap-4">
+              {authError && (
+                <div className="px-3 py-2 rounded border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
+                  Autenticazione fallita. Verifica di usare un account autorizzato.
+                </div>
+              )}
+              <p className="text-[var(--color-muted)] text-[11px]">Accesso riservato ai membri del team. Usa il tuo account Google.</p>
+              <button onClick={handleGoogleLogin}
+                className="w-full flex items-center justify-center gap-3 px-5 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded text-[var(--color-bright)] text-[12px] font-semibold tracking-wider hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer">
+                <GoogleIcon />
+                Login with Google
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  // --- Modalita' locale: workspace selector ---
+  const hasWorkspace = workspace.length > 0
+
+  return (
+    <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex items-center justify-center px-5">
+      <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.5s ease both' }}>
+
+        {/* Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 mb-6">
-            <div
-              className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]"
-              style={{ animation: 'pulse-dot 2s ease-in-out infinite' }}
-            />
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">
-              sistema attivo
-            </span>
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">modalita locale</span>
           </div>
-
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-            Job Hunter<br />
-            <span className="text-[var(--color-green)]">Team</span>
+            Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
           </h1>
-
           <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-xs mx-auto">
-            Sistema multi-agente per ricerca e candidatura automatizzata.
-            Accedi per monitorare la tua pipeline.
+            Seleziona la tua cartella di lavoro per iniziare.
+            I tuoi dati restano sul tuo computer.
           </p>
         </div>
 
-        {/* Login card */}
+        {/* Workspace selector card */}
         <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden">
-          {/* Card header */}
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center gap-2">
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-              auth
-            </span>
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">setup</span>
             <span className="text-[var(--color-dim)] text-[10px]">/</span>
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-              accesso
-            </span>
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">workspace</span>
           </div>
 
-          {/* Card body */}
-          <div className="px-6 py-8 flex flex-col gap-4">
-            {!supabaseConfigured && (
-              <div className="px-3 py-2 rounded border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
-                Supabase non configurato. Per abilitare il login, imposta
-                <code className="mx-1 text-[10px]">NEXT_PUBLIC_SUPABASE_URL</code> e
-                <code className="mx-1 text-[10px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
-                in <code className="mx-1 text-[10px]">web/.env.local</code>
-              </div>
-            )}
-            {authError && (
-              <div className="px-3 py-2 rounded border border-[var(--color-red)] bg-[var(--color-red)10] text-[11px]" style={{ color: 'var(--color-red)' }}>
-                Autenticazione fallita. Verifica di usare un account autorizzato.
-              </div>
-            )}
+          <div className="px-6 py-6 flex flex-col gap-4">
             <p className="text-[var(--color-muted)] text-[11px]">
-              {supabaseConfigured
-                ? 'Accesso riservato ai membri del team. Usa il tuo account Google.'
-                : 'Il login salva i dati sul cloud. Senza, funziona tutto in locale.'}
+              Scegli la cartella dove il team lavorera. Database, CV generati e dati degli agenti finiranno qui.
+              La repo resta intatta.
             </p>
 
-            {/* Google Login Button */}
-            <button
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 px-5 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded text-[var(--color-bright)] text-[12px] font-semibold tracking-wider hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer group"
-            >
-              <GoogleIcon />
-              Login with Google
-            </button>
-
-            <div className="flex items-center gap-3 my-1">
-              <div className="flex-1 h-px bg-[var(--color-border)]" />
-              <span className="text-[10px] text-[var(--color-dim)]">OAuth 2.0 via Supabase</span>
-              <div className="flex-1 h-px bg-[var(--color-border)]" />
+            {/* Browse button + manual input */}
+            <div className="flex gap-2">
+              <button onClick={handleBrowse} disabled={browsing}
+                className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all flex-shrink-0"
+                style={{
+                  background: browsing ? 'var(--color-border)' : 'var(--color-green)',
+                  color: browsing ? 'var(--color-dim)' : '#000',
+                  cursor: browsing ? 'not-allowed' : 'pointer',
+                }}>
+                {browsing ? 'Seleziona...' : 'Sfoglia'}
+              </button>
+              <input
+                type="text"
+                value={inputPath}
+                onChange={e => setInputPath(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleManualPath()}
+                placeholder="/percorso/alla/cartella"
+                className="flex-1 px-3 py-2 rounded-lg text-[12px] bg-[var(--color-card)] border border-[var(--color-border)] outline-none font-mono"
+                style={{ color: 'var(--color-bright)' }}
+              />
             </div>
 
-            <p className="text-[10px] text-[var(--color-dim)] text-center leading-relaxed">
-              Verrai reindirizzato a Google per l&apos;autenticazione.<br />
-              Nessuna password memorizzata.
-            </p>
+            {/* Workspace status */}
+            {hasWorkspace && (
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3" style={{ animation: 'fade-in 0.25s ease both' }}>
+                <div className="font-mono text-[11px] text-[var(--color-bright)] mb-3 truncate">{workspace}</div>
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ background: wsStatus?.hasDb ? 'var(--color-green)' : 'var(--color-dim)' }} />
+                    <span className="text-[10px] text-[var(--color-muted)]">Database</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ background: wsStatus?.hasProfile ? 'var(--color-green)' : 'var(--color-dim)' }} />
+                    <span className="text-[10px] text-[var(--color-muted)]">Profilo</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            {hasWorkspace && wsStatus && !wsStatus.hasDb && (
+              <button onClick={handleInit} disabled={initializing}
+                className="w-full px-5 py-3 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-yellow)]"
+                style={{
+                  color: initializing ? 'var(--color-dim)' : 'var(--color-yellow)',
+                  cursor: initializing ? 'not-allowed' : 'pointer',
+                }}>
+                {initializing ? 'Inizializzazione...' : 'Inizializza workspace'}
+              </button>
+            )}
+
+            {hasWorkspace && wsStatus?.hasDb && (
+              <button onClick={handleEnter}
+                className="w-full px-5 py-3 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                style={{ background: 'var(--color-green)', color: '#000', cursor: 'pointer' }}>
+                Entra nella dashboard
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Pipeline stats strip */}
-        <div className="mt-6 grid grid-cols-4 gap-2">
-          {[
-            { label: 'scout',    color: 'var(--color-blue)' },
-            { label: 'analisi',  color: 'var(--color-purple)' },
-            { label: 'scoring',  color: 'var(--color-yellow)' },
-            { label: 'scrittura', color: 'var(--color-orange)' },
-          ].map(({ label, color }) => (
-            <div
-              key={label}
-              className="border border-[var(--color-border)] rounded bg-[var(--color-panel)] px-3 py-2 text-center"
-            >
-              <div
-                className="w-1.5 h-1.5 rounded-full mx-auto mb-1.5"
-                style={{ background: color, boxShadow: `0 0 4px ${color}` }}
-              />
-              <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
-
+        {/* Footer */}
         <p className="mt-6 text-center text-[10px] text-[var(--color-dim)]">
           v0.1.0-alpha · Job Hunter Team
         </p>
