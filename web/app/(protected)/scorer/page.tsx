@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getScorerStats } from '@/lib/queries'
 import ScorerLiveSection from './_components/ScorerLiveSection'
+import AgentInteraction from '@/components/AgentInteraction'
 
 export default async function ScorerCompany() {
   const stats = await getScorerStats()
@@ -96,6 +97,8 @@ export default async function ScorerCompany() {
       )}
 
       <ScorerLiveSection />
+
+      <AgentInteraction sessionPrefix="SCORER" color="#b388ff" label="Scorer" />
 
     </div>
   )
