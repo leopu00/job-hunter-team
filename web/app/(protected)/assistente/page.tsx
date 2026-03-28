@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { getWorkspace } from '@/lib/workspace-client'
 
 type Status = { active: boolean; output: string }
 type Check = { id: string; label: string; ok: boolean; detail?: string; hint?: string }
@@ -41,7 +42,6 @@ export default function AssistentePage() {
   const [starting, setStarting] = useState(false)
   const [startMsg, setStartMsg] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
-  const [browsing, setBrowsing] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -59,7 +59,6 @@ export default function AssistentePage() {
   const termRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const hasWorkspace = workspace.trim().length > 0
   const isActive = status?.active ?? false
 
   // Fetch stato agente
@@ -96,6 +95,12 @@ export default function AssistentePage() {
     } catch { /* ignore */ }
   }, [])
 
+  // Carica workspace dal cookie (già selezionato dal workspace-first flow)
+  useEffect(() => {
+    const ws = getWorkspace()
+    if (ws) setWorkspace(ws)
+  }, [])
+
   useEffect(() => {
     fetchStatus()
     fetchChecks()
@@ -120,17 +125,6 @@ export default function AssistentePage() {
   useEffect(() => {
     if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
   }, [status?.output, showTerminal])
-
-  // Apri file picker
-  const handleBrowse = async () => {
-    setBrowsing(true)
-    try {
-      const res = await fetch('/api/assistente/browse', { method: 'POST' })
-      const data = await res.json()
-      if (data.ok && data.folder) setWorkspace(data.folder)
-    } catch { /* ignore */ }
-    setBrowsing(false)
-  }
 
   const handleStart = async () => {
     setStarting(true)
@@ -196,48 +190,21 @@ export default function AssistentePage() {
         </div>
       </div>
 
-      {/* Step 1: Workspace */}
-      <div className="mb-8">
-        <div className="section-label mb-3 cursor-pointer select-none flex items-center justify-between" onClick={() => toggle('step1')}>
-          <div>
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-              style={{ background: hasWorkspace ? 'var(--color-green)' : 'var(--color-border)', color: hasWorkspace ? '#000' : 'var(--color-dim)' }}>
-              1
-            </span>
-            Seleziona cartella di lavoro
-            {hasWorkspace && collapsed.step1 && <span className="ml-2 text-[10px] text-[var(--color-dim)] font-mono font-normal">{workspace}</span>}
-          </div>
-          <span className="text-[10px] text-[var(--color-dim)]">{collapsed.step1 ? '▶' : '▼'}</span>
+      {/* Workspace info */}
+      {workspace && (
+        <div className="mb-6 flex items-center gap-2 px-3 py-2 rounded border font-mono text-[11px]"
+          style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-dim)' }}>
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] font-sans">Workspace</span>
+          <span className="truncate" style={{ color: 'var(--color-bright)' }}>{workspace}</span>
         </div>
-        {!collapsed.step1 && <>
-        <p className="text-[10px] text-[var(--color-dim)] mb-3">
-          Gli agenti lavoreranno in questa cartella. Il repo del framework resta intatto.
-        </p>
-        <div className="flex items-center gap-3">
-          <button onClick={handleBrowse} disabled={browsing}
-            className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all flex-shrink-0"
-            style={{ background: browsing ? 'var(--color-border)' : 'var(--color-green)', color: browsing ? 'var(--color-dim)' : '#000', cursor: browsing ? 'not-allowed' : 'pointer' }}>
-            {browsing ? 'Seleziona…' : 'Seleziona cartella'}
-          </button>
-          {hasWorkspace && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded border font-mono text-[11px] min-w-0"
-              style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-bright)' }}>
-              <span className="truncate">{workspace}</span>
-            </div>
-          )}
-        </div>
-        </>}
-      </div>
+      )}
 
-      {hasWorkspace && (
-        <div style={{ animation: 'fade-in 0.25s ease both' }}>
-
-          {/* Step 2: Checklist */}
+          {/* Step 1: Checklist */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step2')}>
               <div className="section-label">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>2</span>
+                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>1</span>
                 Prerequisiti
                 {totalCount > 0 && (
                   <span className="ml-2 text-[10px]" style={{ color: okCount === totalCount ? 'var(--color-green)' : 'var(--color-yellow)' }}>
@@ -271,12 +238,12 @@ export default function AssistentePage() {
             </div>}
           </div>
 
-          {/* Step 3: Assistente */}
+          {/* Step 2: Assistente */}
           <div className="mb-6 pb-6 border-t border-[var(--color-border)] pt-6">
             <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')}>
               <div className="section-label">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>3</span>
+                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>2</span>
                 Assistente
               </div>
               <div className="flex items-center gap-3">
@@ -469,26 +436,13 @@ export default function AssistentePage() {
           </>}
           </div>
 
-          {/* Empty state */}
-          {!isActive && status != null && !startMsg && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="text-4xl mb-4 opacity-30">🤖</div>
-              <p className="text-[var(--color-muted)] text-[13px]">L&apos;Assistente non è attivo.</p>
-              <p className="text-[var(--color-dim)] text-[11px] mt-1">
-                Premi <span style={{ color: 'var(--color-green)' }}>Avvia Assistente</span> per iniziare.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Empty state senza workspace */}
-      {!hasWorkspace && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="text-4xl mb-4 opacity-30">📁</div>
-          <p className="text-[var(--color-muted)] text-[13px]">Seleziona una cartella di lavoro per iniziare.</p>
+      {/* Empty state */}
+      {!isActive && status != null && !startMsg && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="text-4xl mb-4 opacity-30">🤖</div>
+          <p className="text-[var(--color-muted)] text-[13px]">L&apos;Assistente non è attivo.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">
-            Gli agenti lavoreranno in sottocartelle separate dentro la cartella scelta.
+            Premi <span style={{ color: 'var(--color-green)' }}>Avvia Assistente</span> per iniziare.
           </p>
         </div>
       )}
