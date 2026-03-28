@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import AgentInteraction from '@/components/AgentInteraction'
 
 type PositionItem = {
   id: number
@@ -264,6 +265,8 @@ export default function ScrittorePage() {
           </div>
         )}
       </div>
+
+      <AgentInteraction sessionPrefix="SCRITTORE" color="#ffd600" label="Scrittore" />
 
     </div>
   )

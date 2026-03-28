@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import AgentInteraction from '@/components/AgentInteraction'
 
 // ── Types ──────────────────────────────────────────────────────────
 interface LiveStats {
@@ -365,6 +366,8 @@ export default function CriticoPage() {
           </div>
         </>
       )}
+
+      <AgentInteraction sessionPrefix="CRITICO" color="#f44336" label="Critico" />
 
     </div>
   )

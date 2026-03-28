@@ -51,6 +51,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/scorer">Scorer</NavLink>
           <NavLink href="/scrittore">Scrittore</NavLink>
           <NavLink href="/critico">Critico</NavLink>
+          <NavLink href="/capitano" accent="#ff9100">Capitano</NavLink>
           <NavLink href="/profile">Profilo</NavLink>
           <NavLink href="/assistente" accent="#00e676">Assistente</NavLink>
         </div>
