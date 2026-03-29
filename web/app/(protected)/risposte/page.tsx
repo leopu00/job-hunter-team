@@ -58,7 +58,7 @@ function RispostaCard({ app }: { app: ApplicationWithPosition }) {
       <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <Link href={`/positions/${pos?.id}`} className="font-semibold text-[var(--color-bright)] hover:text-[#58a6ff] no-underline transition-colors">
+            <Link href={pos?.id ? `/positions/${pos.id}` : '#'} className="font-semibold text-[var(--color-bright)] hover:text-[#58a6ff] no-underline transition-colors">
               {pos?.title ?? '—'}
             </Link>
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border" style={{ color: '#58a6ff', borderColor: '#58a6ff', background: '#58a6ff18' }}>
