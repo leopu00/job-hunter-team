@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import AgentInteraction from '@/components/AgentInteraction'
 
 type Status = { active: boolean; output: string }
 
@@ -165,6 +166,9 @@ export default function CapitanoPage() {
           </p>
         </div>
       )}
+
+      {/* Pannello messaggistica */}
+      <AgentInteraction sessionPrefix="ALFA" color="#ff9100" label="Capitano" />
 
     </div>
   )

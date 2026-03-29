@@ -1,31 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
+import { getWorkspacePath } from '@/lib/workspace'
 import fs from 'fs'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-/** Leggi JHT_WORKSPACE dal .env (lato Node, no bash) */
-function getWorkspace(): string | null {
-  try {
-    const envFile = path.resolve(process.cwd(), '..', '.env')
-    const content = fs.readFileSync(envFile, 'utf-8')
-    const match = content.match(/^JHT_WORKSPACE=(.+)$/m)
-    return match?.[1]?.trim() || null
-  } catch {
-    return null
-  }
-}
-
-function getChatFile(): string | null {
-  const ws = getWorkspace()
+async function getChatFile(): Promise<string | null> {
+  const ws = await getWorkspacePath()
   if (!ws) return null
   return path.join(ws, 'assistente', 'chat.jsonl')
 }
 
 /** GET — leggi messaggi */
 export async function GET(req: NextRequest) {
-  const chatFile = getChatFile()
+  const chatFile = await getChatFile()
   if (!chatFile) return NextResponse.json({ messages: [] })
 
   const after = parseFloat(req.nextUrl.searchParams.get('after') ?? '0')
@@ -52,7 +41,7 @@ export async function GET(req: NextRequest) {
 
 /** DELETE — pulisci la chat */
 export async function DELETE() {
-  const chatFile = getChatFile()
+  const chatFile = await getChatFile()
   if (chatFile && fs.existsSync(chatFile)) {
     fs.writeFileSync(chatFile, '', 'utf-8')
   }
@@ -66,7 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'empty message' }, { status: 400 })
   }
 
-  const chatFile = getChatFile()
+  const chatFile = await getChatFile()
   if (!chatFile) {
     return NextResponse.json({ error: 'workspace not configured' }, { status: 500 })
   }
