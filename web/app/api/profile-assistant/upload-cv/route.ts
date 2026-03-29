@@ -104,9 +104,21 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  // Verifica magic bytes PDF (%PDF)
+  if (buffer.length < 4 || buffer.toString('ascii', 0, 4) !== '%PDF') {
+    return NextResponse.json(
+      { error: 'il file non sembra un PDF valido' },
+      { status: 400 }
+    )
+  }
+
   const base64 = buffer.toString('base64')
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 120_000)
+
     const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
@@ -114,6 +126,7 @@ export async function POST(req: NextRequest) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
@@ -138,6 +151,8 @@ export async function POST(req: NextRequest) {
         ],
       }),
     })
+
+    clearTimeout(timeout)
 
     if (!response.ok) {
       const status = response.status

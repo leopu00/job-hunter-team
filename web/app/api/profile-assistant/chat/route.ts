@@ -91,6 +91,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+
     const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
@@ -98,6 +101,7 @@ export async function POST(req: NextRequest) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
@@ -108,6 +112,8 @@ export async function POST(req: NextRequest) {
         })),
       }),
     })
+
+    clearTimeout(timeout)
 
     if (!response.ok) {
       const status = response.status

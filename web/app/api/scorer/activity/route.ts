@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  try {
   const supabase = await createClient()
 
   const todayStart = new Date()
@@ -88,4 +89,11 @@ export async function GET() {
     recent_scored: (recentScoredRes.data ?? []).map(mapScore),
     recent_excluded: (recentExcludedRes.data ?? []).map(mapScore),
   })
+  } catch (err) {
+    console.error('[scorer/activity]', err)
+    return NextResponse.json({
+      stats: { queue_size: 0, scored_total: 0, scored_today: 0, excluded_today: 0, avg_score_today: null },
+      queue: [], recent_scored: [], recent_excluded: [],
+    })
+  }
 }
