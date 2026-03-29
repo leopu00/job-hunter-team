@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { CandidateProfile } from '@/lib/types'
 
@@ -55,6 +55,7 @@ export default function ProfileAssistant({ profile }: Props) {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -62,8 +63,15 @@ export default function ProfileAssistant({ profile }: Props) {
     }
   }, [messages, open])
 
-  const appendAssistantMessage = (text: string) =>
-    setMessages(prev => [...prev, { role: 'assistant', text }])
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [])
+
+  const appendAssistantMessage = useCallback((text: string) =>
+    setMessages(prev => [...prev, { role: 'assistant', text }]), [])
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
@@ -80,9 +88,13 @@ export default function ProfileAssistant({ profile }: Props) {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      if (data.reply) appendAssistantMessage(data.reply)
-      if (data.proposed_changes && Object.keys(data.proposed_changes).length > 0) {
-        setProposedChanges(prev => ({ ...prev, ...data.proposed_changes }))
+      if (data.error) {
+        appendAssistantMessage(`Errore: ${data.error}`)
+      } else {
+        if (data.reply) appendAssistantMessage(data.reply)
+        if (data.proposed_changes && Object.keys(data.proposed_changes).length > 0) {
+          setProposedChanges(prev => ({ ...prev, ...data.proposed_changes }))
+        }
       }
     } catch {
       appendAssistantMessage('Servizio non disponibile al momento. Riprova tra poco.')
@@ -92,8 +104,12 @@ export default function ProfileAssistant({ profile }: Props) {
   }
 
   const uploadCV = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      appendAssistantMessage('Per favore carica un file PDF.')
+    if (!file.name.toLowerCase().endsWith('.pdf') || file.type !== 'application/pdf') {
+      appendAssistantMessage('Per favore carica un file PDF valido.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      appendAssistantMessage('File troppo grande. Massimo 10MB.')
       return
     }
     setLoading(true)
@@ -151,7 +167,7 @@ export default function ProfileAssistant({ profile }: Props) {
       setSaveSuccess(true)
       setProposedChanges(null)
       appendAssistantMessage('Modifiche salvate. Il profilo è stato aggiornato.')
-      setTimeout(() => {
+      saveTimeoutRef.current = setTimeout(() => {
         setSaveSuccess(false)
         window.location.reload()
       }, 1500)
@@ -268,7 +284,10 @@ export default function ProfileAssistant({ profile }: Props) {
                   {saving ? 'Salvataggio...' : saveSuccess ? 'Salvato!' : 'Salva modifiche'}
                 </button>
                 <button
-                  onClick={() => setProposedChanges(null)}
+                  onClick={() => {
+                    setProposedChanges(null)
+                    setSaveSuccess(false)
+                  }}
                   className="px-3 py-2 border border-[var(--color-border)] text-[10px] text-[var(--color-muted)] rounded hover:border-[var(--color-red)] hover:text-[var(--color-red)] transition-colors cursor-pointer bg-transparent"
                 >
                   Scarta
@@ -305,7 +324,12 @@ export default function ProfileAssistant({ profile }: Props) {
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  sendMessage()
+                }
+              }}
               placeholder="Scrivi un messaggio..."
               disabled={loading}
               className="flex-1 bg-[var(--color-panel)] border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] focus:outline-none focus:border-[var(--color-green)] transition-colors disabled:opacity-50"

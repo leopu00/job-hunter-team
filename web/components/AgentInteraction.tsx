@@ -117,7 +117,9 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
       })
       // Refresh terminale per mostrare la risposta
       setTimeout(fetchTerminal, 500)
-    } catch { /* ignore */ }
+    } catch {
+      setMessages(prev => [...prev, { role: 'system', text: 'Errore: messaggio non inviato.', ts: Date.now() / 1000 }])
+    }
     setSending(false)
     inputRef.current?.focus()
   }
@@ -182,7 +184,8 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
           <div className="flex items-center gap-3">
             {mode === 'chat' && messages.length > 0 && (
               <button onClick={() => setMessages([])}
-                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer">
+                disabled={sending}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                 pulisci
               </button>
             )}
