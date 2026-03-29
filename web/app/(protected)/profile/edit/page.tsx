@@ -264,7 +264,8 @@ export default function ProfileEditPage() {
           </FormRow>
           <button
             type="button" onClick={addLanguage}
-            className="mt-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-0 p-0"
+            disabled={!form.lang_language.trim()}
+            className="mt-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-0 p-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             + Aggiungi lingua
           </button>
