@@ -47,7 +47,7 @@ cd job-hunter-team
 # Edit web/.env.local — add your Supabase URL and anon key
 
 # 5. Launch the agent team
-./.dev-team/start.sh
+./.launcher/start.sh
 
 # 6. Launch the web app
 cd web && npm install && npm run dev

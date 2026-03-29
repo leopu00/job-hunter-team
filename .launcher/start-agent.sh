@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .dev-team/start-agent.sh — Avvia un singolo agente del Job Hunter Team
+# .launcher/start-agent.sh — Avvia un singolo agente del Job Hunter Team
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
 # Ruoli: alfa, scout, analista, scorer, scrittore, critico, sentinella, assistente

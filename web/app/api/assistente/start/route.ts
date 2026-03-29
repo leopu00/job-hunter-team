@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const workspace = body.workspace as string | undefined
 
     const repoRoot = path.resolve(process.cwd(), '..')
-    const script = path.join(repoRoot, '.dev-team', 'start-agent.sh')
+    const script = path.join(repoRoot, '.launcher', 'start-agent.sh')
     const scriptPath = toWslPath(script)
 
     // Se il workspace è passato, lo setta come env var per lo script

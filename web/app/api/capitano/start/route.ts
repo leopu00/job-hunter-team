@@ -18,7 +18,7 @@ export async function POST() {
 
     // Rileva la root del repo (web/ è una dir sotto la root)
     const repoRoot = path.resolve(process.cwd(), '..')
-    const script = path.join(repoRoot, '.dev-team', 'start-agent.sh')
+    const script = path.join(repoRoot, '.launcher', 'start-agent.sh')
     const scriptPath = toWslPath(script)
 
     await runScript(scriptPath, 'alfa')

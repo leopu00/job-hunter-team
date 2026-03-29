@@ -211,7 +211,7 @@ echo -e "${BOLD}Prossimi step:${RESET}"
 echo ""
 
 REPO_ROOT="$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null || echo "$REPO_DIR")"
-START_SCRIPT="$REPO_ROOT/.dev-team/start.sh"
+START_SCRIPT="$REPO_ROOT/.launcher/start.sh"
 
 if [ -f "$START_SCRIPT" ]; then
   echo -e "  ${GREEN}▶${RESET} Attiva il virtualenv:"
@@ -227,7 +227,7 @@ else
   echo -e "      ${BOLD}source .venv/bin/activate${RESET}"
   echo ""
   echo -e "  ${GREEN}▶${RESET} Avvia il team:"
-  echo -e "      ${BOLD}.dev-team/start.sh${RESET}  (dalla root del repo)"
+  echo -e "      ${BOLD}.launcher/start.sh${RESET}  (dalla root del repo)"
   echo ""
   echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
   echo -e "      ${BOLD}tmux attach -t ALFA${RESET}"

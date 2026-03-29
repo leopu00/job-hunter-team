@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .dev-team/config.sh — Configurazione path per il team Job Hunter
+# .launcher/config.sh — Configurazione path per il team Job Hunter
 # Rilevamento automatico della root del repo + workspace.
 
 # Root del repo (dove risiede questo script)
