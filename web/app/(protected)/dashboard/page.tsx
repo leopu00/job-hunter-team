@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
-import { getWorkspacePath, workspaceHasProfile, isSupabaseConfigured } from '@/lib/workspace'
+import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readProfile } from '@/lib/profile-reader'
 import type { PositionWithScore } from '@/lib/types'
 
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   } else {
     const workspace = await getWorkspacePath()
     if (workspace) {
-      hasProfile = workspaceHasProfile(workspace)
+      hasProfile = readProfile(workspace) !== null
     }
   }
 
