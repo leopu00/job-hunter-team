@@ -216,13 +216,13 @@ class TestSetupIntegrity:
 
     def test_dev_team_start_sh_exists(self):
         """
-        .dev-team/start.sh deve esistere — referenziato da setup.sh nel riepilogo.
-        GAP CONFERMATO: directory .dev-team/ mancante.
+        .launcher/start.sh deve esistere — referenziato da setup.sh nel riepilogo.
+        GAP CONFERMATO: directory .launcher/ mancante.
         Fix atteso: INFRA.
         """
-        path = os.path.join(REPO_ROOT, '.dev-team', 'start.sh')
+        path = os.path.join(REPO_ROOT, '.launcher', 'start.sh')
         assert os.path.isfile(path), \
-            ".dev-team/start.sh mancante — setup.sh non mostra il comando di avvio (fix: INFRA)"
+            ".launcher/start.sh mancante — setup.sh non mostra il comando di avvio (fix: INFRA)"
 
     def test_web_env_example_exists(self):
         """web/.env.example deve esistere — setup.sh linea 205 lo richiede."""

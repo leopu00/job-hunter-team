@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# .dev-team/start.sh — Avvia il Job Hunter Team in locale
+# .launcher/start.sh — Avvia il Job Hunter Team in locale
 #
 # Prerequisiti: tmux, Claude CLI (claude), node/npm o Docker
-# Uso: ./.dev-team/start.sh [mode]
+# Uso: ./.launcher/start.sh [mode]
 # Mode: default (bilanciato) | fast (token ridotti)
 #
 # Avvia: Coordinatore + agenti principali (Scout, Analista, Scorer, Scrittore)
