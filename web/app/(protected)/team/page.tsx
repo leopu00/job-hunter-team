@@ -363,7 +363,7 @@ export default function TeamPage() {
               {teamState === 'idle' && '\u25B6 Avvia Team'}
               {teamState === 'starting' && '\u21BB Avvio in corso...'}
               {teamState === 'ready' && '\u2713 Team Pronto'}
-              {teamState === 'stopping' && '\u21BB Avvio in corso...'}
+              {teamState === 'stopping' && '\u21BB Spegnimento...'}
             </button>
             {(teamState === 'ready' || activeCount > 0) && teamState !== 'stopping' && (
               <button
