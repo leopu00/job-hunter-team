@@ -63,7 +63,9 @@ function LandingContent() {
 
   const handleManualPath = async () => {
     if (!inputPath.trim()) return
-    await selectWorkspace(inputPath.trim())
+    try {
+      await selectWorkspace(inputPath.trim())
+    } catch { /* ignore */ }
   }
 
   const selectWorkspace = async (path: string) => {
