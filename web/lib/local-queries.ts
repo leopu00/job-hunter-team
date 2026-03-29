@@ -264,7 +264,7 @@ export function getScorerStatsLocal(ws: string) {
   return Object.entries(grouped).map(([scorer, scores]) => ({
     scorer,
     total: scores.length,
-    avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    avgScore: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0,
     high: scores.filter(s => s >= 70).length,
     mid: scores.filter(s => s >= 40 && s < 70).length,
     low: scores.filter(s => s < 40).length,

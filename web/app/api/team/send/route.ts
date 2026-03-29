@@ -12,9 +12,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid message' }, { status: 400 })
   }
 
-  const escaped = message.replace(/'/g, "'\\''")
+  const escaped = message.replace(/'/g, "'\\''").replace(/\$/g, '\\$').replace(/`/g, '\\`')
   try {
-    await runBash(`tmux send-keys -t "${session}" '${escaped}'`)
+    await runBash(`tmux send-keys -t "${session}" -- '${escaped}'`)
     await runBash(`tmux send-keys -t "${session}" Enter`)
     return NextResponse.json({ ok: true })
   } catch {

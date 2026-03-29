@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
+import fs from 'fs'
 import { runBash, runScript, toWslPath } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
@@ -24,16 +25,18 @@ export async function POST(req: Request) {
     const script = path.join(repoRoot, '.launcher', 'start-agent.sh')
     const scriptPath = toWslPath(script)
 
-    // Se il workspace è passato, lo setta come env var per lo script
-    if (workspace) {
+    // Se il workspace è passato, lo setta nel .env via Node fs (no shell injection)
+    if (workspace && typeof workspace === 'string' && !workspace.includes('..')) {
       const envFile = path.join(repoRoot, '.env')
-      const envPath = toWslPath(envFile)
-      // Aggiorna o crea JHT_WORKSPACE nel .env
-      await runBash(
-        `grep -q '^JHT_WORKSPACE=' "${envPath}" 2>/dev/null && ` +
-        `sed -i 's|^JHT_WORKSPACE=.*|JHT_WORKSPACE=${workspace}|' "${envPath}" || ` +
-        `echo 'JHT_WORKSPACE=${workspace}' >> "${envPath}"`
-      )
+      try {
+        let content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf-8') : ''
+        if (content.match(/^JHT_WORKSPACE=/m)) {
+          content = content.replace(/^JHT_WORKSPACE=.*/m, `JHT_WORKSPACE=${workspace}`)
+        } else {
+          content += `\nJHT_WORKSPACE=${workspace}\n`
+        }
+        fs.writeFileSync(envFile, content, 'utf-8')
+      } catch { /* non critico — lo script leggerà dal .env esistente */ }
     }
 
     await runScript(scriptPath, 'assistente')

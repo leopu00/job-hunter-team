@@ -30,7 +30,9 @@ export async function GET(req: NextRequest) {
           return JSON.parse(clean)
         } catch { return null }
       })
-      .filter((m): m is { role: string; text: string; ts: number } => m !== null)
+      .filter((m): m is { role: string; text: string; ts: number } =>
+        m !== null && typeof m.role === 'string' && typeof m.text === 'string' && typeof m.ts === 'number'
+      )
       .filter(m => m.ts > after)
 
     return NextResponse.json({ messages })
@@ -66,9 +68,10 @@ export async function POST(req: NextRequest) {
     fs.mkdirSync(path.dirname(chatFile), { recursive: true })
     fs.appendFileSync(chatFile, msg + '\n', 'utf-8')
 
-    // Manda via tmux
-    const safe = text.trim().replace(/'/g, "'\\''")
-    await runBash(`tmux send-keys -t ASSISTENTE '${safe}' Enter`)
+    // Manda via tmux — uso literale tmux per evitare shell injection
+    const safe = text.trim().replace(/'/g, "'\\''").replace(/\$/g, '\\$').replace(/`/g, '\\`')
+    await runBash(`tmux send-keys -t ASSISTENTE -- '${safe}'`)
+    await runBash(`tmux send-keys -t ASSISTENTE Enter`)
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {

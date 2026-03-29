@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  try {
   const supabase = await createClient()
 
   const todayStart = new Date()
@@ -79,4 +80,11 @@ export async function GET() {
       notes: p.notes,
     })),
   })
+  } catch (err) {
+    console.error('[scout/activity]', err)
+    return NextResponse.json({
+      stats: { found_today: 0, total_new: 0 },
+      queue: [], recent: [], excluded_today: [],
+    })
+  }
 }
