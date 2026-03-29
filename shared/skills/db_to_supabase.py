@@ -221,7 +221,9 @@ def sync_companies(conn, sb_url, sb_key, user_id, dry_run=False):
                     uuid = result[0]["id"]
                     id_map[r["id"]] = uuid
                     name_to_uuid[name.lower()] = uuid
-            inserted += 1
+                    inserted += 1
+            else:
+                inserted += 1
 
     print(f"  Companies: {inserted} inserite, {updated} aggiornate")
     return id_map
@@ -310,7 +312,9 @@ def sync_positions(conn, sb_url, sb_key, user_id, company_map, dry_run=False):
                 if result:
                     uuid = result[0]["id"]
                     id_map[sqlite_id] = uuid
-            inserted += 1
+                    inserted += 1
+            else:
+                inserted += 1
 
     print(f"  Positions: {inserted} inserite, {updated} aggiornate")
     return id_map
@@ -363,8 +367,11 @@ def sync_scores(conn, sb_url, sb_key, user_id, position_map, dry_run=False):
             updated += 1
         else:
             if not dry_run:
-                sb_post(sb_url, sb_key, "scores", data)
-            inserted += 1
+                result = sb_post(sb_url, sb_key, "scores", data)
+                if result:
+                    inserted += 1
+            else:
+                inserted += 1
 
     print(f"  Scores: {inserted} inseriti, {updated} aggiornati, {skipped} skippati (no position)")
 
@@ -426,8 +433,11 @@ def sync_applications(conn, sb_url, sb_key, user_id, position_map, dry_run=False
             updated += 1
         else:
             if not dry_run:
-                sb_post(sb_url, sb_key, "applications", data)
-            inserted += 1
+                result = sb_post(sb_url, sb_key, "applications", data)
+                if result:
+                    inserted += 1
+            else:
+                inserted += 1
 
     print(f"  Applications: {inserted} inserite, {updated} aggiornate, {skipped} skippate")
 
