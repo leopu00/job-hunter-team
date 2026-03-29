@@ -152,7 +152,7 @@ function ApplicationCard({ app, highlight }: { app: ApplicationWithPosition; hig
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <Link
-              href={`/positions/${pos?.id}`}
+              href={pos?.id ? `/positions/${pos.id}` : '#'}
               className="font-semibold text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
             >
               {pos?.title ?? '—'}
