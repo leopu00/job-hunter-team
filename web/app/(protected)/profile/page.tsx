@@ -61,10 +61,27 @@ export default async function ProfilePage() {
     )
   }
 
-  // Flatten skills object into tag list
+  const pos = profile.positioning ?? {}
+  const contacts = (pos.contacts ?? {}) as Record<string, string>
+  const experience = (pos.experience ?? []) as { role?: string; company?: string; period?: string; description?: string }[]
+  const education = (pos.education ?? []) as { title?: string; institution?: string; year?: string | number }[]
+  const certifications = (pos.certifications ?? []) as string[]
+  const projects = (pos.projects ?? []) as { name?: string; description?: string; url?: string }[]
+  const strengths = (pos.strengths ?? []) as string[]
+  const careerGoals = (pos.career_goals ?? {}) as { direction?: string; specializations?: string[]; target_job?: string; desired_courses?: string[] }
+  const aspirations = (pos.aspirations ?? {}) as { short_term?: string; long_term?: string; ambitious?: string }
+  const freeNotes = (pos.free_notes ?? '') as string
+
   const allSkills: string[] = profile.skills
     ? Object.values(profile.skills).flat()
     : []
+
+  const hasContacts = contacts.phone || contacts.linkedin || contacts.github || contacts.website
+  const hasExperience = experience.length > 0
+  const hasEducation = education.length > 0 || certifications.length > 0
+  const hasProjects = projects.length > 0
+  const hasCareerGoals = careerGoals.direction || (careerGoals.specializations?.length ?? 0) > 0 || careerGoals.target_job || (careerGoals.desired_courses?.length ?? 0) > 0
+  const hasAspirations = aspirations.short_term || aspirations.long_term || aspirations.ambitious
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -89,15 +106,26 @@ export default async function ProfilePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* Info base */}
+        {/* Info Base */}
         <ProfileSection title="Info Base">
           <ProfileField label="Nome" value={profile.name} />
           <ProfileField label="Ruolo target" value={profile.target_role} />
           <ProfileField label="Location" value={profile.location} />
-          <ProfileField label="Esperienza" value={profile.experience_years != null ? `${profile.experience_years} anni (${profile.experience_months ?? 0} mesi)` : null} />
+          <ProfileField label="Esperienza" value={profile.experience_years != null ? `${profile.experience_years} anni` : null} />
           <ProfileField label="Laurea" value={profile.has_degree ? 'Sì' : 'No'} />
           <ProfileField label="Email" value={profile.email} />
         </ProfileSection>
+
+        {/* Contatti */}
+        {(profile.email || hasContacts) && (
+          <ProfileSection title="Contatti">
+            <ProfileField label="Email" value={profile.email} />
+            <ProfileField label="Telefono" value={contacts.phone || null} />
+            <ProfileField label="LinkedIn" value={contacts.linkedin || null} />
+            <ProfileField label="GitHub" value={contacts.github || null} />
+            <ProfileField label="Website" value={contacts.website || null} />
+          </ProfileSection>
+        )}
 
         {/* Lingue */}
         <ProfileSection title="Lingue">
@@ -115,7 +143,7 @@ export default async function ProfilePage() {
           )}
         </ProfileSection>
 
-        {/* Skills per categoria */}
+        {/* Skills */}
         <ProfileSection title="Skills">
           {allSkills.length > 0 ? (
             <div className="flex flex-col gap-3">
@@ -126,12 +154,7 @@ export default async function ProfilePage() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {(items as string[]).map(s => (
-                      <span
-                        key={s}
-                        className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-blue)]/10 text-[var(--color-blue)] border border-[var(--color-blue)]/20"
-                      >
-                        {s}
-                      </span>
+                      <span key={s} className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-blue)]/10 text-[var(--color-blue)] border border-[var(--color-blue)]/20">{s}</span>
                     ))}
                   </div>
                 </div>
@@ -142,26 +165,73 @@ export default async function ProfilePage() {
           )}
         </ProfileSection>
 
-        {/* Location preferences */}
-        <ProfileSection title="Location preferite">
-          {profile.location_preferences && profile.location_preferences.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {profile.location_preferences.map((lp, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-green)]/10 text-[var(--color-green)] border border-[var(--color-green)]/20">
-                    {(lp.type ?? '').replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-[11px] text-[var(--color-muted)]">
-                    {lp.region && lp.region}
-                    {lp.cities && lp.cities.join(', ')}
-                    {lp.max_days != null && ` (max ${lp.max_days}gg/sett)`}
-                    {lp.note && lp.note}
-                  </span>
+        {/* Esperienza lavorativa */}
+        <ProfileSection title="Esperienza Lavorativa">
+          {hasExperience ? (
+            <div className="flex flex-col gap-4">
+              {experience.map((e, i) => (
+                <div key={i} className="pb-3 border-b border-[var(--color-border)] last:border-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-[12px] font-semibold text-[var(--color-bright)]">{e.role || '—'}</span>
+                    {e.period && <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0 font-mono">{e.period}</span>}
+                  </div>
+                  {e.company && <span className="text-[11px] text-[var(--color-muted)]">{e.company}</span>}
+                  {e.description && <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">{e.description}</p>}
                 </div>
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna preferenza</span>
+            <span className="text-[var(--color-dim)] text-[11px]">Nessuna esperienza inserita</span>
+          )}
+        </ProfileSection>
+
+        {/* Formazione */}
+        <ProfileSection title="Formazione & Certificazioni">
+          {hasEducation ? (
+            <div className="flex flex-col gap-3">
+              {education.map((e, i) => (
+                <div key={i} className="flex items-start justify-between gap-2 pb-2 border-b border-[var(--color-border)] last:border-0 last:pb-0">
+                  <div>
+                    <span className="text-[12px] text-[var(--color-bright)]">{e.title || '—'}</span>
+                    {e.institution && <div className="text-[10px] text-[var(--color-muted)]">{e.institution}</div>}
+                  </div>
+                  {e.year && <span className="text-[10px] text-[var(--color-dim)] font-mono flex-shrink-0">{e.year}</span>}
+                </div>
+              ))}
+              {certifications.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Certificazioni</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {certifications.map((c, i) => (
+                      <span key={i} className="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-yellow)]/10 text-[var(--color-yellow)] border border-[var(--color-yellow)]/20">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">Nessuna formazione inserita</span>
+          )}
+        </ProfileSection>
+
+        {/* Progetti personali */}
+        <ProfileSection title="Progetti Personali">
+          {hasProjects ? (
+            <div className="flex flex-col gap-3">
+              {projects.map((p, i) => (
+                <div key={i} className="pb-2 border-b border-[var(--color-border)] last:border-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-2 mb-0.5">
+                    <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name || '—'}</span>
+                    {p.url && (
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--color-blue)] hover:underline font-mono flex-shrink-0">link</a>
+                    )}
+                  </div>
+                  {p.description && <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">{p.description}</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">Nessun progetto inserito</span>
           )}
         </ProfileSection>
 
@@ -181,16 +251,118 @@ export default async function ProfilePage() {
           )}
         </ProfileSection>
 
-        {/* Salary target */}
-        {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
-          <ProfileSection title="Salary target">
-            {profile.salary_target.italy_min != null && (
-              <ProfileField label="Italia" value={`€${profile.salary_target.italy_min.toLocaleString()}–${(profile.salary_target.italy_max ?? profile.salary_target.italy_min).toLocaleString()}`} />
-            )}
-            {profile.salary_target.remote_eu_min != null && (
-              <ProfileField label="Remote EU" value={`€${profile.salary_target.remote_eu_min.toLocaleString()}–${(profile.salary_target.remote_eu_max ?? profile.salary_target.remote_eu_min).toLocaleString()}`} />
-            )}
+        {/* Preferenze lavoro */}
+        <ProfileSection title="Preferenze Lavoro">
+          {profile.location_preferences && profile.location_preferences.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {profile.location_preferences.map((lp, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-green)]/10 text-[var(--color-green)] border border-[var(--color-green)]/20">
+                    {(lp.type ?? '').replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-[11px] text-[var(--color-muted)]">
+                    {lp.region && lp.region}
+                    {lp.cities && lp.cities.join(', ')}
+                    {lp.max_days != null && ` (max ${lp.max_days}gg/sett)`}
+                    {lp.note && lp.note}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">Nessuna preferenza</span>
+          )}
+          {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
+            <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Salary target</div>
+              {profile.salary_target.italy_min != null && (
+                <ProfileField label="Italia" value={`€${profile.salary_target.italy_min.toLocaleString()}–${(profile.salary_target.italy_max ?? profile.salary_target.italy_min).toLocaleString()}`} />
+              )}
+              {profile.salary_target.remote_eu_min != null && (
+                <ProfileField label="Remote EU" value={`€${profile.salary_target.remote_eu_min.toLocaleString()}–${(profile.salary_target.remote_eu_max ?? profile.salary_target.remote_eu_min).toLocaleString()}`} />
+              )}
+            </div>
+          )}
+        </ProfileSection>
+
+        {/* Obiettivi di carriera */}
+        <ProfileSection title="Obiettivi di Carriera">
+          {hasCareerGoals ? (
+            <div className="flex flex-col gap-2">
+              <ProfileField label="Direzione" value={careerGoals.direction || null} />
+              <ProfileField label="Job target" value={careerGoals.target_job || null} />
+              {(careerGoals.specializations?.length ?? 0) > 0 && (
+                <div className="py-1.5 border-b border-[var(--color-border)]">
+                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Specializzazioni</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {careerGoals.specializations!.map((s, i) => (
+                      <span key={i} className="px-2 py-0.5 text-[10px] rounded bg-[var(--color-purple)]/10 text-[var(--color-purple)] border border-[var(--color-purple)]/20 font-semibold">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(careerGoals.desired_courses?.length ?? 0) > 0 && (
+                <div className="py-1.5">
+                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Corsi desiderati</div>
+                  <div className="flex flex-col gap-1">
+                    {careerGoals.desired_courses!.map((c, i) => (
+                      <span key={i} className="text-[11px] text-[var(--color-muted)]">· {c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">Nessun obiettivo inserito</span>
+          )}
+        </ProfileSection>
+
+        {/* Desideri e aspirazioni */}
+        <ProfileSection title="Desideri & Aspirazioni">
+          {hasAspirations ? (
+            <div className="flex flex-col gap-3">
+              {aspirations.short_term && (
+                <div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Breve termine</div>
+                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.short_term}</p>
+                </div>
+              )}
+              {aspirations.long_term && (
+                <div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Lungo termine</div>
+                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.long_term}</p>
+                </div>
+              )}
+              {aspirations.ambitious && (
+                <div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Aspirazioni ambiziose</div>
+                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed italic">{aspirations.ambitious}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">Nessuna aspirazione inserita</span>
+          )}
+        </ProfileSection>
+
+        {/* Strengths */}
+        {strengths.length > 0 && (
+          <ProfileSection title="Punti di forza">
+            <div className="flex flex-wrap gap-1.5">
+              {strengths.map((s, i) => (
+                <span key={i} className="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-green)]/10 text-[var(--color-green)] border border-[var(--color-green)]/20">{s}</span>
+              ))}
+            </div>
           </ProfileSection>
+        )}
+
+        {/* Note libere — full width */}
+        {freeNotes && (
+          <div className="md:col-span-2">
+            <ProfileSection title="Note Libere">
+              <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">{freeNotes}</p>
+            </ProfileSection>
+          </div>
         )}
 
       </div>
