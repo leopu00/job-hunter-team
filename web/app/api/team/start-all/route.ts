@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWorkspacePath } from '@/lib/workspace'
 import { runBash } from '@/lib/shell'
+import { requireAuth, isValidPath } from '@/lib/auth'
 import path from 'path'
 import fs from 'fs'
 
@@ -45,11 +46,21 @@ ${DESCRIPTIONS[role] ?? ''}
 }
 
 export async function POST() {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   try {
     const workspace = await getWorkspacePath()
     if (!workspace) {
       return NextResponse.json(
         { ok: false, error: 'Workspace non configurato. Seleziona una cartella dalla pagina principale.' },
+        { status: 400 }
+      )
+    }
+
+    if (!isValidPath(workspace)) {
+      return NextResponse.json(
+        { ok: false, error: 'Path workspace non valido' },
         { status: 400 }
       )
     }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { runBash } from '@/lib/shell'
+import { requireAuth } from '@/lib/auth'
 
 const execAsync = promisify(exec)
 
@@ -9,6 +10,9 @@ export const dynamic = 'force-dynamic'
 
 /** Apre una finestra terminale con tmux attach alla sessione ASSISTENTE */
 export async function POST() {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   try {
     // Verifica che la sessione ASSISTENTE esista
     const { stdout: sessions } = await runBash(
