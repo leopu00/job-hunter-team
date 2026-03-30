@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     path: '/',
     maxAge: 60 * 60 * 24 * 365,
     sameSite: 'lax',
-    httpOnly: false,
+    httpOnly: true,
   })
 
   // Aggiorna anche JHT_WORKSPACE nel .env del repo

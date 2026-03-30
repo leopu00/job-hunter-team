@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
+import { requireAuth } from '@/lib/auth'
 
 const VALID_SESSION = /^[A-Z][A-Z0-9_-]*$/i
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const { session, message } = await req.json()
   if (!VALID_SESSION.test(session ?? '')) {
     return NextResponse.json({ error: 'invalid session' }, { status: 400 })
