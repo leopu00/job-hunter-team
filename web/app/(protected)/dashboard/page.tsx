@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
-import { readProfile } from '@/lib/profile-reader'
+import { readWorkspaceProfile } from '@/lib/profile-reader'
 import type { PositionWithScore } from '@/lib/types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   } else {
     const workspace = await getWorkspacePath()
     if (workspace) {
-      hasProfile = readProfile(workspace) !== null
+      hasProfile = readWorkspaceProfile(workspace) !== null
     }
   }
 
