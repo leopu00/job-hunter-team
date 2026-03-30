@@ -255,7 +255,7 @@ export default function AssistentePage() {
                     </button>
                     <button onClick={async (e) => { e.stopPropagation(); await fetch('/api/assistente/terminal', { method: 'POST' }) }}
                       className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                      apri powershell
+                      {/Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
                     </button>
                   </>
                 )}
