@@ -58,9 +58,9 @@ export async function POST(req: NextRequest) {
     fs.mkdirSync(path.dirname(chatFile), { recursive: true })
     fs.appendFileSync(chatFile, msg + '\n', 'utf-8')
 
-    // Manda via tmux — uso literale tmux per evitare shell injection
+    // Invia via tmux con prefisso protocollo chat
     const safe = text.trim().replace(/'/g, "'\\''").replace(/\$/g, '\\$').replace(/`/g, '\\`')
-    await runBash(`tmux send-keys -t ASSISTENTE -- '${safe}'`)
+    await runBash(`tmux send-keys -t ASSISTENTE -- '[@utente -> @assistente] [CHAT] ${safe}'`)
     await runBash(`tmux send-keys -t ASSISTENTE Enter`)
 
     return NextResponse.json({ ok: true })
