@@ -37,6 +37,8 @@ export function readWorkspaceProfile(workspacePath: string): CandidateProfile | 
     if (!raw) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null
+    // Rigetta il file template non compilato (valori placeholder dell'esempio)
+    if (profile.name === 'Nome Cognome' || profile.email === 'nome.cognome@example.com') return null
     return profile
   } catch {
     return null

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
-import { readProfile } from '@/lib/profile-reader'
+import { readWorkspaceProfile } from '@/lib/profile-reader'
 import type { CandidateProfile } from '@/lib/types'
 import ProfileAssistant from '@/components/ProfileAssistant'
 
@@ -27,7 +27,7 @@ export default async function ProfilePage() {
   } else {
     const workspace = await getWorkspacePath()
     if (workspace) {
-      profile = readProfile(workspace)
+      profile = readWorkspaceProfile(workspace)
     }
   }
 
