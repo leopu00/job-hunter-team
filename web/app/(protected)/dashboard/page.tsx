@@ -117,46 +117,53 @@ export default async function DashboardPage() {
 
             <div className="flex flex-col gap-4">
 
-              {/* Step 1 — Avvia l'Assistente */}
+              {/* Step 1 — Avvia l'Assistente (opzionale) */}
               <Link
                 href="/assistente"
-                className="group flex items-start gap-4 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[#00e87a55] transition-colors no-underline"
+                className="group flex items-start gap-4 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[#ffffff22] transition-colors no-underline"
               >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-green)] text-[var(--color-green)] text-[13px] font-bold shrink-0 mt-0.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-dim)] text-[var(--color-dim)] text-[13px] font-bold shrink-0 mt-0.5">
                   1
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-bold text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors mb-1">
-                    Avvia l'Assistente
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[12px] font-bold text-[var(--color-muted)] group-hover:text-[var(--color-bright)] transition-colors">
+                      Avvia l'Assistente
+                    </span>
+                    <span className="text-[9px] font-semibold tracking-[0.12em] uppercase px-1.5 py-0.5 rounded border"
+                      style={{ color: 'var(--color-dim)', borderColor: 'var(--color-border)', background: 'transparent' }}>
+                      opzionale
+                    </span>
                   </div>
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
-                    L'assistente ti guiderà nella configurazione iniziale. Avvialo e parla con lui per impostare il tuo profilo.
+                  <p className="text-[11px] text-[var(--color-dim)] leading-relaxed m-0">
+                    L'assistente può aiutarti a configurare il profilo più velocemente, ma non è obbligatorio.
                   </p>
                 </div>
-                <span className="text-[var(--color-dim)] group-hover:text-[var(--color-green)] text-[14px] transition-colors shrink-0 mt-1">
+                <span className="text-[var(--color-border)] group-hover:text-[var(--color-dim)] text-[14px] transition-colors shrink-0 mt-1">
                   →
                 </span>
               </Link>
 
               {/* Step 2 — Configura il Profilo */}
-              <div
-                className={`flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] ${
+              <Link
+                href="/profile"
+                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
                   hasProfile
                     ? 'border-[var(--color-green)]/30'
-                    : 'border-[var(--color-border)]'
+                    : 'border-[var(--color-border)] hover:border-[#00e87a55]'
                 }`}
               >
                 <div
                   className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
                     hasProfile
                       ? 'border-[var(--color-green)] text-[var(--color-green)] bg-[var(--color-green)]/10'
-                      : 'border-[var(--color-dim)] text-[var(--color-dim)]'
+                      : 'border-[var(--color-green)] text-[var(--color-green)]'
                   }`}
                 >
                   {hasProfile ? '✓' : '2'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-green)]' : 'text-[var(--color-bright)]'}`}>
+                  <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-green)]' : 'text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors'}`}>
                     Configura il tuo Profilo
                     {hasProfile && (
                       <span className="ml-2 text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)] bg-[var(--color-green)]/10 px-2 py-0.5 rounded-full border border-[var(--color-green)]/20">
@@ -167,11 +174,16 @@ export default async function DashboardPage() {
                   <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
                     {hasProfile
                       ? 'Il profilo è stato configurato. Il team userà queste informazioni per personalizzare la ricerca.'
-                      : 'Chiedi all\'assistente di aiutarti a compilare il profilo candidato: ruolo target, skills, preferenze di lavoro e salary range.'
+                      : 'Configura il tuo profilo: ruolo target, skills, preferenze e salary range. Il team userà queste informazioni per la ricerca.'
                     }
                   </p>
                 </div>
-              </div>
+                {!hasProfile && (
+                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-green)] text-[14px] transition-colors shrink-0 mt-1">
+                    →
+                  </span>
+                )}
+              </Link>
 
               {/* Step 3 — Avvia il Team */}
               <Link
