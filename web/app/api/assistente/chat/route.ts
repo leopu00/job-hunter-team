@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
 import { getWorkspacePath } from '@/lib/workspace'
+import { parseJsonl } from '@/lib/agent-chat'
 import fs from 'fs'
 import path from 'path'
 
@@ -22,18 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     if (!fs.existsSync(chatFile)) return NextResponse.json({ messages: [] })
     const content = fs.readFileSync(chatFile, 'utf-8')
-    const messages = content.trim().split('\n').filter(Boolean)
-      .map(line => {
-        try {
-          // Rimuovi escape invalidi tipo \! \' etc che Claude mette
-          const clean = line.replace(/\\([^"\\\/bfnrtu])/g, '$1')
-          return JSON.parse(clean)
-        } catch { return null }
-      })
-      .filter((m): m is { role: string; text: string; ts: number } =>
-        m !== null && typeof m.role === 'string' && typeof m.text === 'string' && typeof m.ts === 'number'
-      )
-      .filter(m => m.ts > after)
+    const messages = parseJsonl(content).filter(m => m.ts > after)
 
     return NextResponse.json({ messages })
   } catch {
