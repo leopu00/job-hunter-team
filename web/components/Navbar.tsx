@@ -3,6 +3,7 @@ import Image from 'next/image'
 import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
+import TeamDropdown from './TeamDropdown'
 
 interface NavbarProps {
   user: User | null
@@ -45,15 +46,8 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/ready" accent="#7fffb2">Pronte</NavLink>
           <NavLink href="/risposte" accent="#58a6ff">Risposte</NavLink>
           <NavLink href="/crescita">Crescita</NavLink>
-          <NavLink href="/team" accent="#ffc107">Team</NavLink>
-          <NavLink href="/scout">Scout</NavLink>
-          <NavLink href="/analista">Analista</NavLink>
-          <NavLink href="/scorer">Scorer</NavLink>
-          <NavLink href="/scrittore">Scrittore</NavLink>
-          <NavLink href="/critico">Critico</NavLink>
-          <NavLink href="/capitano" accent="#ff9100">Capitano</NavLink>
+          <TeamDropdown />
           <NavLink href="/profile">Profilo</NavLink>
-          <NavLink href="/assistente" accent="#00e676">Assistente</NavLink>
         </div>
 
         {/* User / Login */}
