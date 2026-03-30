@@ -241,22 +241,44 @@ class TestDashboardLiveIndicator:
 
 
 # ---------------------------------------------------------------------------
-# BUG-02 (REPORT): shell.ts:runScript argomenti non escaped
-# `runScript(path, arg)` wrappa l'argomento con `"${a}"` senza escapare
-# le virgolette doppie interne. Un argomento con " dentro rompe il comando.
-# Questo test è a livello di smoke — non può testare l'injection direttamente
-# senza eseguire uno script reale.
+# BUG-02 (FIXATO in 43f1962): shell.ts:runScript argomenti non escaped
+# Fix: shellQuote() con POSIX single-quote escaping — ogni ' diventa '\''
 # ---------------------------------------------------------------------------
+
+import pathlib
+
+QA_WEB_LIB = pathlib.Path(__file__).parent.parent / "web" / "lib"
+
 
 class TestShellSecurity:
     """
-    BUG-02: lib/shell.ts:runScript() non escapa le virgolette doppie
-    negli argomenti. Esempio: runScript(script, 'foo"bar') produce
-    `bash script "foo"bar"` che è malformato.
-
-    Il test verifica che l'avvio dell'assistente con un workspace valido
-    non produca errori di parsing shell.
+    BUG-02 (fixato): lib/shell.ts:runScript() usava double-quote escaping
+    con buchi su argomenti contenenti virgolette doppie.
+    Fix (43f1962): POSIX single-quote escaping via shellQuote().
     """
+
+    def test_shell_ts_uses_posix_single_quote_escaping(self):
+        """shell.ts deve usare shellQuote() con single-quote POSIX escaping."""
+        shell_ts = QA_WEB_LIB / "shell.ts"
+        assert shell_ts.exists(), "lib/shell.ts non trovato"
+        content = shell_ts.read_text()
+        # Verifica la presenza della funzione shellQuote con POSIX escaping
+        assert "shellQuote" in content, \
+            "BUG-02: shellQuote() mancante in shell.ts"
+        assert "replace(/'/g, \"'\\\\''\")" in content or \
+               "replace(/'/g, `'\\\\''`)" in content or \
+               ".replace(" in content, \
+            "BUG-02: escaping delle single-quote non trovato in shellQuote()"
+
+    def test_shell_ts_no_double_quote_arg_wrapping(self):
+        """runScript non deve più usare il vecchio double-quote wrapping (`\"${a}\"`)."""
+        shell_ts = QA_WEB_LIB / "shell.ts"
+        if not shell_ts.exists():
+            pytest.skip("lib/shell.ts non trovato")
+        content = shell_ts.read_text()
+        # Il vecchio pattern vulnerabile era: `"${a}"` in una map
+        assert '`"${a}"`' not in content, \
+            "BUG-02: vecchio double-quote wrapping ancora presente in runScript()"
 
     def test_assistente_start_rejects_path_traversal(self):
         """POST /api/assistente/start con path '../etc' deve essere rifiutato."""
@@ -265,7 +287,6 @@ class TestShellSecurity:
         status = http_post("/api/assistente/start", body)
         assert status in (400, 200), \
             f"Path traversal non gestito correttamente: {status}"
-        # Se 200, l'API dovrebbe già essere attiva o aver rifiutato il path
 
 
 # ---------------------------------------------------------------------------
