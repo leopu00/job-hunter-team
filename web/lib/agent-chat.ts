@@ -1,52 +1,56 @@
 /**
- * Parser JSONL robusto per le chat degli agenti.
- *
- * Problema: gli agenti Claude a volte scrivono newline reali (0x0a)
- * dentro i valori JSON anziché usare \n escape. Questo spezza il formato
- * JSONL (una riga = un oggetto). Il parser ricostruisce gli oggetti
- * accumulando righe finché non ottiene un JSON valido.
+ * Parser JSONL robusto per file chat agenti.
+ * Gestisce risposte multi-riga e escape invalidi prodotti dai modelli AI.
  */
 
-export type ChatMessage = { role: string; text: string; ts: number }
+export type ChatEntry = { role: string; text: string; ts: number }
 
-export function parseJsonl(content: string): ChatMessage[] {
-  const results: ChatMessage[] = []
+function tryParse(chunk: string): ChatEntry | null {
+  try {
+    // Sostituisci newline reali con escape \n per JSON valido
+    // poi rimuovi escape invalidi tipo \! \' etc che i modelli AI producono
+    const clean = chunk
+      .replace(/\n/g, '\\n')
+      .replace(/\\([^"\\\/bfnrtu])/g, '$1')
+    const obj = JSON.parse(clean)
+    if (
+      obj !== null &&
+      typeof obj.role === 'string' &&
+      typeof obj.text === 'string' &&
+      typeof obj.ts === 'number'
+    ) {
+      return obj as ChatEntry
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Parsa contenuto JSONL gestendo entry che si estendono su più righe.
+ * Ogni entry è un oggetto JSON che inizia con '{'.
+ */
+export function parseJsonl(content: string): ChatEntry[] {
+  const results: ChatEntry[] = []
   const lines = content.split('\n')
   let buffer = ''
 
   for (const line of lines) {
-    if (!buffer) {
-      if (!line.trim()) continue
-      // Fast path: singola riga JSONL valida
-      try {
-        const clean = line.replace(/\\([^"\\\/bfnrtu])/g, '$1')
-        const obj = JSON.parse(clean)
-        if (obj && typeof obj.role === 'string' && typeof obj.text === 'string' && typeof obj.ts === 'number') {
-          results.push(obj)
-          continue
-        }
-      } catch { /* fallthrough: accumula multi-riga */ }
+    // Nuova entry: riga che inizia con '{' mentre c'è già un buffer pendente
+    if (line.trimStart().startsWith('{') && buffer.trim()) {
+      const parsed = tryParse(buffer.trim())
+      if (parsed) results.push(parsed)
+      buffer = line
+    } else {
+      buffer = buffer ? buffer + '\n' + line : line
     }
+  }
 
-    buffer += (buffer ? '\n' : '') + line
-
-    // Tenta il parse quando il buffer sembra un oggetto JSON completo
-    const trimmed = buffer.trim()
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-      try {
-        // Sostituisci newline reali con escape \n per JSON valido
-        const clean = trimmed
-          .replace(/\n/g, '\\n')
-          .replace(/\\([^"\\\/bfnrtu])/g, '$1')
-        const obj = JSON.parse(clean)
-        if (obj && typeof obj.role === 'string' && typeof obj.text === 'string' && typeof obj.ts === 'number') {
-          results.push(obj)
-        }
-        buffer = ''
-      } catch {
-        // Non ancora completo, continua ad accumulare
-      }
-    }
+  // Flush ultima entry
+  if (buffer.trim()) {
+    const parsed = tryParse(buffer.trim())
+    if (parsed) results.push(parsed)
   }
 
   return results
