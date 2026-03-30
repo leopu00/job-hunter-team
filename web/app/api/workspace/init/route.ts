@@ -33,15 +33,5 @@ export async function POST(req: Request) {
     }
   }
 
-  // Copia template profilo se non esiste
-  const profilePath = path.join(wsPath, 'candidate_profile.yml')
-  if (!fs.existsSync(profilePath)) {
-    const templatePath = path.resolve(process.cwd(), '..', 'candidate_profile.yml.example')
-    if (fs.existsSync(templatePath)) {
-      fs.copyFileSync(templatePath, profilePath)
-      created.profile = true
-    }
-  }
-
   return NextResponse.json({ ok: true, created })
 }
