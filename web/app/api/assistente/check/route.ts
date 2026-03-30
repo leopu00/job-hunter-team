@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
 import { runBash, toWslPath } from '@/lib/shell'
+import { getWorkspacePath } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,14 +68,19 @@ export async function GET() {
     `test -f "${repoPath}/agents/alfa/alfa.md" && echo "ok"`,
     'Crea agents/alfa/alfa.md — identità del Capitano')
 
-  // Leggi workspace corrente
+  // Leggi workspace corrente: prima dal cookie (fonte di verità), poi dal .env
   let workspace = ''
   try {
-    const { stdout } = await runBash(
-      `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' || echo ""`
-    )
-    workspace = stdout.trim()
+    workspace = (await getWorkspacePath()) ?? ''
   } catch { /* ignore */ }
+  if (!workspace) {
+    try {
+      const { stdout } = await runBash(
+        `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' || echo ""`
+      )
+      workspace = stdout.trim()
+    } catch { /* ignore */ }
+  }
 
   return NextResponse.json({ checks, workspace })
 }
