@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+
+function getAnthropicKey(): string | null {
+  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY
+  try {
+    const envFile = path.resolve(process.cwd(), '..', '.env')
+    const content = fs.readFileSync(envFile, 'utf-8')
+    const match = content.match(/^ANTHROPIC_API_KEY=(.+)$/m)
+    return match?.[1]?.trim() || null
+  } catch {
+    return null
+  }
+}
 
 const PARSE_PROMPT = `Analizza questo CV/documento PDF e estrai tutte le informazioni del candidato in formato JSON strutturato.
 
@@ -66,7 +80,7 @@ REGOLE:
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = getAnthropicKey()
   if (!apiKey) {
     return NextResponse.json(
       { error: 'ANTHROPIC_API_KEY non configurata' },
