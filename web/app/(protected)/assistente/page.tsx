@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { getWorkspace } from '@/lib/workspace-client'
 
 type Status = { active: boolean; output: string }
-type Check = { id: string; label: string; ok: boolean; detail?: string; hint?: string }
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
 
 /** Render markdown leggero: **bold**, *italic*, `code`, \n */
@@ -37,11 +36,9 @@ function renderMarkdown(text: string) {
 
 export default function AssistentePage() {
   const [status, setStatus] = useState<Status | null>(null)
-  const [checks, setChecks] = useState<Check[]>([])
   const [workspace, setWorkspace] = useState('')
   const [starting, setStarting] = useState(false)
   const [startMsg, setStartMsg] = useState<string | null>(null)
-  const [checking, setChecking] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -72,18 +69,6 @@ export default function AssistentePage() {
     }
   }, [])
 
-  // Fetch check prerequisiti
-  const fetchChecks = useCallback(async () => {
-    setChecking(true)
-    try {
-      const res = await fetch('/api/assistente/check')
-      const data = await res.json()
-      setChecks(data.checks ?? [])
-      if (data.workspace) setWorkspace(data.workspace)
-    } catch { /* ignore */ }
-    setChecking(false)
-  }, [])
-
   // Fetch chat messages — il file è la source of truth
   const fetchChat = useCallback(async () => {
     try {
@@ -103,11 +88,11 @@ export default function AssistentePage() {
 
   useEffect(() => {
     fetchStatus()
-    fetchChecks()
+    fetchChat()
     const statusId = setInterval(fetchStatus, 5000)
     const chatId = setInterval(fetchChat, 3000)
     return () => { clearInterval(statusId); clearInterval(chatId) }
-  }, [fetchStatus, fetchChecks, fetchChat])
+  }, [fetchStatus, fetchChat])
 
   // Scroll chat in fondo solo quando arrivano nuovi messaggi
   const prevMsgCountRef = useRef(0)
@@ -138,7 +123,6 @@ export default function AssistentePage() {
       const data = await res.json()
       setStartMsg(data.message ?? (data.ok ? 'Avviato' : data.error))
       await fetchStatus()
-      setTimeout(fetchChecks, 2000)
     } catch {
       setStartMsg('Errore di rete')
     } finally {
@@ -163,9 +147,6 @@ export default function AssistentePage() {
     setSending(false)
     inputRef.current?.focus()
   }
-
-  const okCount = checks.filter(c => c.ok).length
-  const totalCount = checks.length
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -199,53 +180,10 @@ export default function AssistentePage() {
         </div>
       )}
 
-          {/* Step 1: Checklist */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step2')}>
-              <div className="section-label">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>1</span>
-                Prerequisiti
-                {totalCount > 0 && (
-                  <span className="ml-2 text-[10px]" style={{ color: okCount === totalCount ? 'var(--color-green)' : 'var(--color-yellow)' }}>
-                    {okCount}/{totalCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {!collapsed.step2 && (
-                  <button onClick={(e) => { e.stopPropagation(); fetchChecks() }} disabled={checking}
-                    className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                    {checking ? 'verifica…' : 'verifica tutto'}
-                  </button>
-                )}
-                <span className="text-[10px] text-[var(--color-dim)]">{collapsed.step2 ? '▶' : '▼'}</span>
-              </div>
-            </div>
-            {!collapsed.step2 && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {checks.map(c => (
-                <div key={c.id} className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
-                  <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0"
-                    style={{ background: c.ok ? 'var(--color-green)' : 'var(--color-red)' }} />
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-[var(--color-bright)]">{c.label}</div>
-                    {c.ok && c.detail && <div className="text-[10px] text-[var(--color-dim)] truncate">{c.detail}</div>}
-                    {!c.ok && c.hint && <div className="text-[10px] text-[var(--color-red)]">{c.hint}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>}
-          </div>
-
-          {/* Step 2: Assistente */}
-          <div className="mb-6 pb-6 border-t border-[var(--color-border)] pt-6">
+          {/* Assistente */}
+          <div className="mb-6">
             <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')}>
-              <div className="section-label">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-2"
-                  style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>2</span>
-                Assistente
-              </div>
+              <div className="section-label">Assistente</div>
               <div className="flex items-center gap-3">
                 {isActive && !collapsed.step3 && (
                   <>
