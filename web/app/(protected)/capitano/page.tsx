@@ -308,6 +308,20 @@ export default function CapitanoPage() {
           </button>
         )}
 
+        {/* Bottone Ferma */}
+        {isActive && (
+          <button
+            onClick={async () => {
+              await fetch('/api/capitano/stop', { method: 'POST' })
+              await fetchStatus()
+            }}
+            className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
+            style={{ color: 'var(--color-red)', cursor: 'pointer' }}
+          >
+            Ferma
+          </button>
+        )}
+
         {isActive && (
           <button onClick={() => setShowTerminal(v => !v)}
             className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
