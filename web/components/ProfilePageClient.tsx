@@ -8,7 +8,8 @@ interface Props {
   profile: CandidateProfile | null
 }
 
-type UploadedFile = { name: string; size: number; uploadedAt: string }
+type UploadedFile = { name: string; size: number; modified: number }
+type ExtractStatus = 'idle' | 'sending' | 'running' | 'completed' | 'error'
 
 type FormState = {
   name: string
@@ -73,13 +74,19 @@ const ACCEPTED_TYPES = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
 ]
+const ACCEPTED_EXT = '.pdf,.doc,.docx,.txt,.md'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+const POLL_INTERVAL_MS = 2000
+const POLL_TIMEOUT_MS = 90000
 
 export default function ProfilePageClient({ profile }: Props) {
   const [form, setForm] = useState<FormState>(() => profileToForm(profile))
@@ -94,32 +101,73 @@ export default function ProfilePageClient({ profile }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Extract state
-  const [extracting, setExtracting] = useState(false)
-  const [extractError, setExtractError] = useState<string | null>(null)
-  const [extractDone, setExtractDone] = useState(false)
+  const [extractStatus, setExtractStatus] = useState<ExtractStatus>('idle')
+  const [extractMessage, setExtractMessage] = useState<string | null>(null)
+  const [extractFields, setExtractFields] = useState<string[]>([])
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Save state
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // Load already uploaded files on mount
+  // Load uploaded files on mount
   useEffect(() => {
-    fetch('/api/profile-assistant/uploads')
+    fetch('/api/profile/files')
       .then(r => r.json())
       .then(data => { if (Array.isArray(data.files)) setUploadedFiles(data.files) })
       .catch(() => {})
   }, [])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+      if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
+    }
+  }, [])
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null }
+    if (pollingTimeoutRef.current) { clearTimeout(pollingTimeoutRef.current); pollingTimeoutRef.current = null }
+  }, [])
+
+  const startPolling = useCallback(() => {
+    stopPolling()
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/profile-assistant/extraction-status')
+        if (!res.ok) return // endpoint non ancora pronto, continua a fare polling
+        const data = await res.json()
+        if (data.status === 'completed') {
+          stopPolling()
+          setExtractFields(data.proposed_changes ? Object.keys(data.proposed_changes) : (data.fields_updated ?? []))
+          setExtractStatus('completed')
+          setTimeout(() => window.location.reload(), 1800)
+        } else if (data.status === 'error') {
+          stopPolling()
+          setExtractMessage(data.message ?? 'Errore durante l\'estrazione.')
+          setExtractStatus('error')
+        }
+        // 'running' o 'idle' → continua polling
+      } catch { /* ignora errori rete */ }
+    }, POLL_INTERVAL_MS)
+
+    pollingTimeoutRef.current = setTimeout(() => {
+      stopPolling()
+      setExtractStatus('idle')
+      setExtractMessage('L\'elaborazione richiede più tempo del previsto. Controlla la chat dell\'assistente.')
+    }, POLL_TIMEOUT_MS)
+  }, [stopPolling])
 
   const set = useCallback((key: keyof FormState, value: string | boolean | Language[]) =>
     setForm(prev => ({ ...prev, [key]: value })), [])
 
   const addLanguage = () => {
     if (!form.lang_language.trim()) return
-    set('languages', [...form.languages, {
-      language: form.lang_language.trim(),
-      level: form.lang_level || 'n/a',
-    }])
+    set('languages', [...form.languages, { language: form.lang_language.trim(), level: form.lang_level || 'n/a' }])
     set('lang_language', '')
     set('lang_level', '')
   }
@@ -127,10 +175,11 @@ export default function ProfilePageClient({ profile }: Props) {
   const removeLanguage = (idx: number) =>
     set('languages', form.languages.filter((_, i) => i !== idx))
 
-  // File selection validation
   const handleFile = useCallback((file: File) => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setUploadError('Formato non supportato. Usa PDF, DOC o DOCX.')
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const validExts = ['pdf', 'doc', 'docx', 'txt', 'md']
+    if (!ACCEPTED_TYPES.includes(file.type) && !validExts.includes(ext)) {
+      setUploadError('Formato non supportato. Usa PDF, DOC, DOCX, TXT o MD.')
       return
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -148,25 +197,24 @@ export default function ProfilePageClient({ profile }: Props) {
     if (file) handleFile(file)
   }, [handleFile])
 
-  // Upload file to workspace
   const handleUpload = async () => {
     if (!selectedFile) return
     setUploading(true)
     setUploadError(null)
-
     const formData = new FormData()
-    formData.append('file', selectedFile)
-
+    formData.append('files', selectedFile)
     try {
-      const res = await fetch('/api/profile-assistant/uploads', {
-        method: 'POST',
-        body: formData,
-      })
+      const res = await fetch('/api/profile/upload', { method: 'POST', body: formData })
       const data = await res.json()
       if (!res.ok || data.error) {
         setUploadError(data.error ?? `Errore HTTP ${res.status}`)
+      } else if (data.errors?.length) {
+        setUploadError(data.errors[0])
       } else {
-        setUploadedFiles(prev => [data.file, ...prev])
+        // Ricarica lista
+        const filesRes = await fetch('/api/profile/files')
+        const filesData = await filesRes.json()
+        if (Array.isArray(filesData.files)) setUploadedFiles(filesData.files)
         setSelectedFile(null)
       }
     } catch {
@@ -176,32 +224,30 @@ export default function ProfilePageClient({ profile }: Props) {
     }
   }
 
-  // Trigger async extraction via assistente
   const handleExtract = async () => {
-    setExtracting(true)
-    setExtractError(null)
-    setExtractDone(false)
-
+    setExtractStatus('sending')
+    setExtractMessage(null)
+    setExtractFields([])
     try {
       const res = await fetch('/api/profile-assistant/extract', { method: 'POST' })
       const data = await res.json()
       if (!res.ok || data.error) {
-        if (res.status === 404) {
-          setExtractError("L'assistente non è attivo. Avvialo dalla pagina Assistente e riprova.")
-        } else {
-          setExtractError(data.error ?? `Errore HTTP ${res.status}`)
-        }
+        setExtractMessage(
+          res.status === 404
+            ? "L'assistente non è attivo. Avvialo dalla pagina Assistente e riprova."
+            : (data.error ?? `Errore HTTP ${res.status}`)
+        )
+        setExtractStatus('error')
       } else {
-        setExtractDone(true)
+        setExtractStatus('running')
+        startPolling()
       }
     } catch {
-      setExtractError('Impossibile raggiungere il server.')
-    } finally {
-      setExtracting(false)
+      setExtractMessage('Impossibile raggiungere il server.')
+      setExtractStatus('error')
     }
   }
 
-  // Save profile manually
   const handleSave = async () => {
     if (!form.name.trim() && !form.target_role.trim()) {
       setSaveError('Compila almeno Nome o Ruolo target prima di salvare.')
@@ -209,7 +255,6 @@ export default function ProfilePageClient({ profile }: Props) {
     }
     setSaving(true)
     setSaveError(null)
-
     try {
       const res = await fetch('/api/profile-assistant/save', {
         method: 'POST',
@@ -240,15 +285,13 @@ export default function ProfilePageClient({ profile }: Props) {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
-            Vuoi compilare il profilo in modo guidato?{' '}
-            <Link href="/assistente" className="text-[var(--color-green)] font-semibold hover:underline">
-              Chatta con l&apos;Assistente →
-            </Link>{' '}
-            ti farà domande sulla tua storia professionale e completerà il profilo al 100%.
-          </p>
-        </div>
+        <p className="text-[11px] text-[var(--color-base)] leading-relaxed flex-1">
+          Vuoi compilare il profilo in modo guidato?{' '}
+          <Link href="/assistente" className="text-[var(--color-green)] font-semibold hover:underline">
+            Chatta con l&apos;Assistente →
+          </Link>{' '}
+          ti farà domande sulla tua storia professionale e completerà il profilo al 100%.
+        </p>
       </div>
 
       {/* ── Upload CV ───────────────────────────────────────────── */}
@@ -260,7 +303,7 @@ export default function ProfilePageClient({ profile }: Props) {
         </div>
         <div className="p-5 space-y-4">
           <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-            Carica il tuo CV (PDF, DOC, DOCX). Dopo il caricamento, usa &quot;Estrai informazioni&quot; per far compilare il profilo all&apos;assistente.
+            Carica il tuo CV. Dopo il caricamento, usa &quot;Estrai informazioni&quot; per far compilare il profilo all&apos;assistente automaticamente.
           </p>
 
           {/* Drop zone */}
@@ -275,13 +318,8 @@ export default function ProfilePageClient({ profile }: Props) {
               background: dragOver ? 'rgba(0,232,122,0.04)' : 'var(--color-panel)',
             }}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
-            />
+            <input ref={fileInputRef} type="file" accept={ACCEPTED_EXT} className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
             <div className="flex flex-col items-center gap-2">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                 style={{ color: selectedFile ? 'var(--color-green)' : 'var(--color-dim)' }}>
@@ -293,37 +331,29 @@ export default function ProfilePageClient({ profile }: Props) {
               ) : (
                 <span className="text-[11px] text-[var(--color-muted)]">
                   Trascina qui o <span className="text-[var(--color-bright)]">clicca per sfogliare</span>
-                  <br />
-                  <span className="text-[10px] text-[var(--color-dim)]">PDF, DOC, DOCX · max 10 MB</span>
+                  <br /><span className="text-[10px] text-[var(--color-dim)]">PDF, DOC, DOCX, TXT · max 10 MB</span>
                 </span>
               )}
             </div>
           </div>
 
-          {/* Upload button */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={handleUpload}
-              disabled={!selectedFile || uploading}
+          <div className="flex items-center gap-3">
+            <button onClick={handleUpload} disabled={!selectedFile || uploading}
               className="px-5 py-2 rounded text-[11px] font-bold tracking-wide transition-all border-0"
               style={{
                 background: selectedFile && !uploading ? 'var(--color-green)' : 'var(--color-border)',
                 color: selectedFile && !uploading ? '#000' : 'var(--color-dim)',
                 cursor: selectedFile && !uploading ? 'pointer' : 'not-allowed',
-              }}
-            >
+              }}>
               {uploading ? 'Caricamento...' : 'Carica documento'}
             </button>
           </div>
+          {uploadError && <p className="text-[10px] text-[var(--color-red)]">{uploadError}</p>}
 
-          {uploadError && (
-            <p className="text-[10px] text-[var(--color-red)]">{uploadError}</p>
-          )}
-
-          {/* Uploaded files list */}
+          {/* File list + extract */}
           {uploadedFiles.length > 0 && (
-            <div>
-              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
+            <div className="space-y-3">
+              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)]">
                 Documenti caricati
               </div>
               <div className="flex flex-col gap-1.5">
@@ -340,41 +370,53 @@ export default function ProfilePageClient({ profile }: Props) {
                 ))}
               </div>
 
-              {/* Extract button */}
-              <div className="mt-3">
-                {extractDone ? (
-                  <div className="flex items-start gap-3 px-4 py-3 rounded border border-[var(--color-green)]/30 bg-[var(--color-green)]/5">
-                    <span className="text-[var(--color-green)] font-bold text-[13px] flex-shrink-0">✓</span>
-                    <div>
-                      <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
-                        L&apos;assistente sta elaborando i tuoi documenti e compilerà il profilo automaticamente.
+              {/* Extraction UI */}
+              {extractStatus === 'completed' ? (
+                <div className="flex items-start gap-3 px-4 py-3 rounded border border-[var(--color-green)]/30 bg-[var(--color-green)]/5">
+                  <span className="text-[var(--color-green)] font-bold text-[13px] flex-shrink-0">✓</span>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[var(--color-green)] mb-1">Profilo aggiornato con successo!</p>
+                    {extractFields.length > 0 && (
+                      <p className="text-[10px] text-[var(--color-muted)]">
+                        Campi aggiornati: {extractFields.join(', ')}
                       </p>
-                      <Link href="/assistente" className="text-[10px] font-semibold text-[var(--color-green)] hover:underline">
-                        Vai all&apos;Assistente per seguire l&apos;avanzamento →
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleExtract}
-                      disabled={extracting}
-                      className="px-5 py-2 rounded text-[11px] font-bold tracking-wide transition-all border-0"
-                      style={{
-                        background: extracting ? 'var(--color-border)' : 'var(--color-panel)',
-                        color: extracting ? 'var(--color-dim)' : 'var(--color-bright)',
-                        border: '1px solid var(--color-border)',
-                        cursor: extracting ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      {extracting ? 'Invio in corso...' : 'Estrai informazioni'}
-                    </button>
-                    {extractError && (
-                      <p className="mt-2 text-[10px] text-[var(--color-red)]">{extractError}</p>
                     )}
-                  </>
-                )}
-              </div>
+                    <p className="text-[10px] text-[var(--color-dim)] mt-1">Ricarico la pagina...</p>
+                  </div>
+                </div>
+              ) : extractStatus === 'running' ? (
+                <div className="flex items-center gap-3 px-4 py-3 rounded border border-[var(--color-border)] bg-[var(--color-panel)]">
+                  <span className="text-[var(--color-green)] animate-pulse text-[16px]">⟳</span>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[var(--color-bright)]">Estrazione in corso...</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">
+                      L&apos;assistente sta elaborando i tuoi documenti.{' '}
+                      <Link href="/assistente" className="text-[var(--color-green)] hover:underline">
+                        Segui in chat →
+                      </Link>
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button onClick={handleExtract} disabled={extractStatus === 'sending'}
+                    className="px-5 py-2 rounded text-[11px] font-bold tracking-wide transition-all"
+                    style={{
+                      background: 'var(--color-panel)',
+                      color: extractStatus === 'sending' ? 'var(--color-dim)' : 'var(--color-bright)',
+                      border: '1px solid var(--color-border)',
+                      cursor: extractStatus === 'sending' ? 'not-allowed' : 'pointer',
+                    }}>
+                    {extractStatus === 'sending' ? 'Invio in corso...' : 'Estrai informazioni'}
+                  </button>
+                  {extractStatus === 'error' && extractMessage && (
+                    <p className="text-[10px] text-[var(--color-red)]">{extractMessage}</p>
+                  )}
+                  {extractStatus === 'idle' && extractMessage && (
+                    <p className="text-[10px] text-[var(--color-muted)]">{extractMessage}</p>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -391,18 +433,14 @@ export default function ProfilePageClient({ profile }: Props) {
             </span>
           </div>
           {!editing && (
-            <button
-              onClick={() => setEditing(true)}
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
+            <button onClick={() => setEditing(true)}
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0 p-0">
               Modifica
             </button>
           )}
           {editing && profile && (
-            <button
-              onClick={() => { setForm(profileToForm(profile)); setEditing(false); setSaveError(null) }}
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
+            <button onClick={() => { setForm(profileToForm(profile)); setEditing(false); setSaveError(null) }}
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer bg-transparent border-0 p-0">
               Annulla
             </button>
           )}
@@ -518,16 +556,13 @@ export default function ProfilePageClient({ profile }: Props) {
                 </div>
               )}
               <div className="flex gap-3 pb-2">
-                <button
-                  onClick={handleSave}
-                  disabled={saving || saveSuccess}
+                <button onClick={handleSave} disabled={saving || saveSuccess}
                   className="px-6 py-2.5 text-[11px] font-bold tracking-widest uppercase rounded transition-all border-0"
                   style={{
                     background: saving || saveSuccess ? 'var(--color-border)' : 'var(--color-green)',
                     color: saving || saveSuccess ? 'var(--color-dim)' : '#000',
                     cursor: saving || saveSuccess ? 'not-allowed' : 'pointer',
-                  }}
-                >
+                  }}>
                   {saving ? 'Salvataggio...' : saveSuccess ? 'Salvato!' : 'Salva profilo'}
                 </button>
                 {profile && (
@@ -576,17 +611,13 @@ export default function ProfilePageClient({ profile }: Props) {
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {(items as string[]).map(s => (
-                              <span key={s} className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-blue)]/10 text-[var(--color-blue)] border border-[var(--color-blue)]/20">
-                                {s}
-                              </span>
+                              <span key={s} className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-blue)]/10 text-[var(--color-blue)] border border-[var(--color-blue)]/20">{s}</span>
                             ))}
                           </div>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <span className="text-[var(--color-dim)] text-[11px]">Nessuna skill inserita</span>
-                  )}
+                  ) : <span className="text-[var(--color-dim)] text-[11px]">Nessuna skill inserita</span>}
                 </ViewSection>
 
                 <ViewSection title="Ruoli target">
@@ -599,9 +630,7 @@ export default function ProfilePageClient({ profile }: Props) {
                         </li>
                       ))}
                     </ol>
-                  ) : (
-                    <span className="text-[var(--color-dim)] text-[11px]">Nessun ruolo inserito</span>
-                  )}
+                  ) : <span className="text-[var(--color-dim)] text-[11px]">Nessun ruolo inserito</span>}
                 </ViewSection>
 
                 <ViewSection title="Location preferite">
@@ -614,9 +643,7 @@ export default function ProfilePageClient({ profile }: Props) {
                         </span>
                       ))}
                     </div>
-                  ) : (
-                    <span className="text-[var(--color-dim)] text-[11px]">Nessuna preferenza</span>
-                  )}
+                  ) : <span className="text-[var(--color-dim)] text-[11px]">Nessuna preferenza</span>}
                 </ViewSection>
 
                 {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
@@ -636,10 +663,8 @@ export default function ProfilePageClient({ profile }: Props) {
                 <p className="text-[11px] text-[var(--color-muted)] mb-4">
                   Nessun profilo configurato. Carica il CV sopra oppure compila i campi manualmente.
                 </p>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="px-5 py-2 bg-[var(--color-green)] text-black text-[11px] font-bold tracking-widest uppercase rounded cursor-pointer border-0 hover:opacity-90 transition-opacity"
-                >
+                <button onClick={() => setEditing(true)}
+                  className="px-5 py-2 bg-[var(--color-green)] text-black text-[11px] font-bold tracking-widest uppercase rounded cursor-pointer border-0 hover:opacity-90 transition-opacity">
                   Compila manualmente
                 </button>
               </div>
@@ -663,9 +688,7 @@ function FieldGroup({ title, children }: { title: string; children: ReactNode })
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <label className="block text-[9.5px] font-semibold tracking-[0.12em] uppercase text-[var(--color-dim)] mb-1.5">
-        {label}
-      </label>
+      <label className="block text-[9.5px] font-semibold tracking-[0.12em] uppercase text-[var(--color-dim)] mb-1.5">{label}</label>
       {children}
     </div>
   )
@@ -683,9 +706,7 @@ function ViewSection({ title, children }: { title: string; children: ReactNode }
 function ViewField({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex items-start justify-between gap-3 py-1.5 border-b border-[var(--color-border)] last:border-0">
-      <span className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] flex-shrink-0 pt-0.5">
-        {label}
-      </span>
+      <span className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] flex-shrink-0 pt-0.5">{label}</span>
       <span className="text-[12px] text-[var(--color-bright)] text-right">
         {value ?? <span className="text-[var(--color-dim)]">—</span>}
       </span>
