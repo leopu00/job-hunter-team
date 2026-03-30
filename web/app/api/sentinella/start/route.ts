@@ -24,8 +24,9 @@ export async function POST() {
 
     return NextResponse.json({ ok: true, message: 'Sentinella avviata' })
   } catch (err: any) {
+    console.error('[sentinella/start]', err)
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Avvio fallito' },
+      { ok: false, error: 'Errore nell\'avvio della Sentinella, riprova' },
       { status: 500 }
     )
   }
