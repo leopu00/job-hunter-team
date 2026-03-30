@@ -10,6 +10,7 @@ const AGENTS = [
   { label: 'Lo Scorer',     href: '/scorer',    color: '#b388ff', emoji: '👨‍💻' },
   { label: 'Lo Scrittore',  href: '/scrittore', color: '#ffd600', emoji: '👨‍🏫' },
   { label: 'Il Critico',    href: '/critico',   color: '#f44336', emoji: '👨‍⚖️' },
+  { label: 'La Sentinella', href: '/sentinella',color: '#607d8b', emoji: '💂' },
   { label: "L'Assistente",  href: '/assistente',color: '#00e676', emoji: '🤖' },
 ]
 
