@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, useTransition, type FormEvent } from 'react'
+import { useState, useEffect, useTransition, useRef, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CandidateProfile, Language } from '@/lib/types'
+
+type UploadedFile = { name: string; size: number; modified: number }
 
 type Experience = { role: string; company: string; period: string; description: string }
 type Education = { title: string; institution: string; year: string }
@@ -85,6 +87,10 @@ export default function ProfileEditPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -155,7 +161,46 @@ export default function ProfileEditPage() {
       setLoading(false)
     }
     load()
+    loadFiles()
   }, [])
+
+  const loadFiles = async () => {
+    try {
+      const res = await fetch('/api/profile/files')
+      const data = await res.json()
+      setUploadedFiles(data.files ?? [])
+    } catch { /* ignore */ }
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploading(true)
+    setUploadError(null)
+    const fd = new FormData()
+    Array.from(files).forEach(f => fd.append('files', f))
+    try {
+      const res = await fetch('/api/profile/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.errors?.length) setUploadError(data.errors.join(', '))
+      await loadFiles()
+    } catch {
+      setUploadError('Errore durante l\'upload')
+    }
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDeleteFile = async (name: string) => {
+    try {
+      await fetch('/api/profile/files', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      await loadFiles()
+    } catch { /* ignore */ }
+  }
 
   const set = (key: keyof FormData, value: string | boolean) =>
     setForm(prev => ({ ...prev, [key]: value }))
@@ -632,6 +677,40 @@ export default function ProfileEditPage() {
               placeholder="Vincoli particolari, preferenze di settore, disponibilità, note per gli agenti..."
               onChange={e => set('free_notes', e.target.value)} />
           </FormField>
+        </FormSection>
+
+        {/* ── Upload file ── */}
+        <FormSection title="File allegati">
+          <p className="text-[10px] text-[var(--color-dim)] -mt-2 mb-2">
+            Allega CV, cover letter o altri documenti. Formati: PDF, DOC, DOCX, TXT, MD, PNG, JPG (max 10MB ciascuno).
+          </p>
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-col gap-1.5 mb-4">
+              {uploadedFiles.map(f => (
+                <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[12px] text-[var(--color-bright)] truncate">{f.name}</span>
+                    <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                  </div>
+                  <button type="button" onClick={() => handleDeleteFile(f.name)}
+                    className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0 ml-3">
+                    × elimina
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg"
+              onChange={handleUpload} className="hidden" id="file-upload" />
+            <label htmlFor="file-upload"
+              className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--color-border)] rounded text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
+              {uploading ? 'Upload in corso…' : '+ Aggiungi file'}
+            </label>
+          </div>
+          {uploadError && (
+            <p className="text-[10px] text-[var(--color-red)] mt-2">{uploadError}</p>
+          )}
         </FormSection>
 
         {/* ── Submit ── */}
