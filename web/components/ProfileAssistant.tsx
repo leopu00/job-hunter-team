@@ -86,10 +86,10 @@ export default function ProfileAssistant({ profile }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, profile }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Leggi il JSON prima di controllare lo status: così data.error è sempre disponibile
       const data = await res.json()
-      if (data.error) {
-        appendAssistantMessage(`Errore: ${data.error}`)
+      if (!res.ok || data.error) {
+        appendAssistantMessage(`Errore: ${data.error ?? `HTTP ${res.status}`}`)
       } else {
         if (data.reply) appendAssistantMessage(data.reply)
         if (data.proposed_changes && Object.keys(data.proposed_changes).length > 0) {
@@ -97,7 +97,7 @@ export default function ProfileAssistant({ profile }: Props) {
         }
       }
     } catch {
-      appendAssistantMessage('Servizio non disponibile al momento. Riprova tra poco.')
+      appendAssistantMessage('Impossibile raggiungere il server. Verifica la connessione.')
     } finally {
       setLoading(false)
     }
@@ -123,9 +123,10 @@ export default function ProfileAssistant({ profile }: Props) {
         method: 'POST',
         body: formData,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      if (data.proposed_changes && Object.keys(data.proposed_changes).length > 0) {
+      if (!res.ok || data.error) {
+        appendAssistantMessage(`Errore nell'analisi del CV: ${data.error ?? `HTTP ${res.status}`}`)
+      } else if (data.proposed_changes && Object.keys(data.proposed_changes).length > 0) {
         setProposedChanges(prev => ({ ...prev, ...data.proposed_changes }))
         appendAssistantMessage(
           'Ho estratto le informazioni dal CV. Controlla le modifiche proposte qui sotto e salva se sono corrette.'
@@ -134,7 +135,7 @@ export default function ProfileAssistant({ profile }: Props) {
         appendAssistantMessage('Ho analizzato il CV ma non ho trovato nuove informazioni da aggiungere.')
       }
     } catch {
-      appendAssistantMessage('Errore nel caricamento del CV. Riprova.')
+      appendAssistantMessage('Impossibile raggiungere il server. Verifica la connessione.')
     } finally {
       setLoading(false)
     }
