@@ -87,7 +87,7 @@ function LandingContent() {
           body: JSON.stringify({ path: pendingPath }),
         })
       }
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } catch { /* ignore */ }
     setConfirming(false)
   }
