@@ -52,8 +52,12 @@ export async function runBash(cmd: string) {
  */
 export async function runScript(scriptPath: string, ...args: string[]) {
   const prefix = await wslPrefix()
-  const escapedArgs = args.map(a => `"${a}"`).join(' ')
-  return execAsync(`${prefix}bash ${scriptPath} ${escapedArgs}`)
+  // Single-quote POSIX escaping: ogni arg viene wrappato in '' con le ' interne
+  // trasformate in '\'' — unico metodo sicuro contro command injection via args
+  const shellQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
+  const quotedScript = shellQuote(scriptPath)
+  const escapedArgs = args.map(shellQuote).join(' ')
+  return execAsync(`${prefix}bash ${quotedScript} ${escapedArgs}`)
 }
 
 /** Converti path Windows → WSL (/mnt/c/...). No-op su Linux/Mac. */
