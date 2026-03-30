@@ -25,8 +25,9 @@ export async function POST() {
 
     return NextResponse.json({ ok: true, message: 'Capitano avviato' })
   } catch (err: any) {
+    console.error('[capitano/start]', err)
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Avvio fallito' },
+      { ok: false, error: 'Errore nell\'avvio del Capitano, riprova' },
       { status: 500 }
     )
   }
