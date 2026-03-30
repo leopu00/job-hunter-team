@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 async function getChatFile(): Promise<string | null> {
   const ws = await getWorkspacePath()
   if (!ws) return null
-  return path.join(ws, 'capitano', 'chat.jsonl')
+  return path.join(ws, 'alfa', 'chat.jsonl')
 }
 
 /** GET — leggi messaggi */
