@@ -42,7 +42,7 @@ function LandingContent() {
             setInputPath(data.path)
             setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
             // Se ha gia' un DB e l'utente NON ha cliccato "cambia", vai alla dashboard
-            if (data.hasDb && !wantsChange) router.replace('/dashboard')
+            if (data.hasDb && !wantsChange && !wantsLogin) router.replace('/dashboard')
           }
         })
         .catch(() => {})
