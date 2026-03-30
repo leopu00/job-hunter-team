@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'path richiesto' }, { status: 400 })
   }
 
+  // Sanitizza: rifiuta path con newline/CR/null (previene injection nel .env)
+  if (/[\n\r\0]/.test(wsPath)) {
+    return NextResponse.json({ error: 'path contiene caratteri non validi' }, { status: 400 })
+  }
+
   // Verifica che esista ed e' una directory
   try {
     const stat = fs.statSync(wsPath)
