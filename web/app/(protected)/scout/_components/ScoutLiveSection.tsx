@@ -88,17 +88,34 @@ export default function ScoutLiveSection() {
   const [data, setData] = useState<ScoutData | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [error, setError] = useState(false)
+  const [isAgentActive, setIsAgentActive] = useState(false)
 
   const fetch_ = useCallback(async () => {
-    try {
-      const res = await fetch('/api/scout/activity')
-      if (!res.ok) throw new Error()
-      const json = await res.json()
+    const [activityResult, statusResult] = await Promise.allSettled([
+      fetch('/api/scout/activity'),
+      fetch('/api/team/status'),
+    ])
+
+    // Activity data
+    if (activityResult.status === 'fulfilled' && activityResult.value.ok) {
+      const json = await activityResult.value.json()
       setData(json)
       setLastUpdate(new Date())
       setError(false)
-    } catch {
+    } else {
       setError(true)
+    }
+
+    // Team status — controlla se SCOUT è attivo
+    if (statusResult.status === 'fulfilled' && statusResult.value.ok) {
+      const statusJson = await statusResult.value.json()
+      const scoutActive = (statusJson.agents ?? []).some(
+        (a: { session: string }) => {
+          const s = a.session.toUpperCase()
+          return s === 'SCOUT' || s.startsWith('SCOUT-')
+        }
+      )
+      setIsAgentActive(scoutActive)
     }
   }, [])
 
@@ -132,9 +149,14 @@ export default function ScoutLiveSection() {
       <div className="flex items-center gap-1 flex-wrap">
         <div
           className="w-1.5 h-1.5 rounded-full mr-1"
-          style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }}
+          style={{
+            background: isAgentActive ? 'var(--color-green)' : 'var(--color-dim)',
+            animation: isAgentActive ? 'pulse-dot 2s ease-in-out infinite' : undefined,
+          }}
         />
-        <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mr-3">Live</span>
+        <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mr-3">
+          {isAgentActive ? 'Live' : 'Offline'}
+        </span>
 
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded px-3 py-1.5 flex flex-col items-center min-w-[72px]">
           <span className="text-[18px] font-bold leading-none" style={{ color: 'var(--color-green)' }}>{stats.found_today}</span>
