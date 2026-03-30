@@ -50,7 +50,8 @@ export default async function ProfilePage() {
           </p>
           <Link
             href="/profile/edit"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-green)] text-[var(--color-void)] text-[11px] font-bold tracking-widest uppercase rounded hover:opacity-90 transition-opacity no-underline"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-green)] text-[11px] font-bold tracking-widest uppercase rounded hover:opacity-90 transition-opacity no-underline"
+            style={{ color: '#060608' }}
           >
             + Crea profilo
           </Link>
