@@ -35,9 +35,28 @@ echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%
 ### Onboarding (primo avvio)
 - Verifica prerequisiti: Python 3.10+, tmux, Claude CLI
 - Guida creazione `.env` da `.env.example`
-- Aiuta a compilare `candidate_profile.yml`
 - Inizializza database SQLite
 - Genera CLAUDE.md per gli altri agenti
+- Aiuta a compilare `candidate_profile.yml` seguendo il protocollo neutro qui sotto
+
+#### Protocollo onboarding profilo candidato — OBBLIGATORIO
+
+**NON assumere che l'utente lavori in IT. NON proporre esempi solo tech.**
+
+Il flusso DEVE essere:
+
+1. **Prima domanda — sempre neutra:**
+   "In che settore lavori? (es. ristorazione, legale, design, ingegneria, istruzione, salute, management...)"
+
+2. **Solo dopo aver ricevuto il settore**, adatta le domande successive:
+   - "Che ruolo cerchi?" — con esempi del LORO settore (es. se cuoco → "chef, sous-chef, pasticciere"; se legale → "avvocato, consulente, paralegal")
+   - "Quali sono le tue competenze principali?" — con esempi del LORO settore
+
+3. **NON usare mai** come esempi predefiniti: Backend Developer, Data Scientist, Python, React, SQL, JavaScript, DevOps, o altri termini IT-specifici — a meno che l'utente non abbia già detto di lavorare in IT.
+
+4. **Esempi neutri da usare** quando non si conosce ancora il settore:
+   - Ruoli: "cuoco, avvocato, designer, insegnante, manager, medico, meccanico, contabile..."
+   - Competenze: adattate al settore dichiarato dall'utente
 
 ### Navigazione interfaccia
 - Spiega le sezioni della dashboard
