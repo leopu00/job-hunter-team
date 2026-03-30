@@ -308,3 +308,56 @@ class TestDeprecatedAPIs:
         """Smoke: la pagina assistente deve caricare senza 500."""
         status = http_get("/assistente")
         assert status not in (404, 500), f"/assistente → {status}"
+
+
+# ---------------------------------------------------------------------------
+# FIX c7a6d48: security fix — auth API routes, validazione path, cookie httpOnly
+# Copre: BUG-08 (httpOnly cookie), BUG-path-injection (newline nel path)
+# ---------------------------------------------------------------------------
+
+QA_WEB_API = pathlib.Path(__file__).parent.parent / "web" / "app" / "api"
+
+
+class TestWorkspaceSecurityFix:
+    """
+    Regression test per fix c7a6d48:
+    - Cookie jht_workspace ora ha httpOnly: true
+    - POST /api/workspace rifiuta path con caratteri di controllo (\n \r \0)
+    """
+
+    def test_workspace_route_cookie_is_httponly(self):
+        """workspace/route.ts deve impostare httpOnly: true sul cookie."""
+        ws_route = QA_WEB_API / "workspace" / "route.ts"
+        assert ws_route.exists(), "workspace/route.ts non trovato"
+        content = ws_route.read_text()
+        # Verifica httpOnly: true nel set del cookie
+        assert "httpOnly: true" in content, \
+            "BUG-08: cookie jht_workspace non è httpOnly"
+        assert "httpOnly: false" not in content, \
+            "BUG-08: httpOnly: false ancora presente"
+
+    def test_workspace_route_rejects_newline_in_path(self):
+        """workspace/route.ts deve rifiutare path con \n (prevenzione .env injection)."""
+        ws_route = QA_WEB_API / "workspace" / "route.ts"
+        if not ws_route.exists():
+            pytest.skip("workspace/route.ts non trovato")
+        content = ws_route.read_text()
+        # Verifica regex di sanitizzazione per \n \r \0
+        assert r"[\n\r\0]" in content or r"\n" in content, \
+            "BUG-path-injection: validazione newline/CR/null mancante"
+
+    def test_workspace_post_rejects_newline_path_live(self):
+        """POST /api/workspace con path contenente newline deve rispondere 400."""
+        import json
+        body = json.dumps({"path": "/tmp/legit\nevil=injection"}).encode()
+        status = http_post("/api/workspace", body)
+        assert status == 400, \
+            f"Path con newline non rifiutato: {status} (atteso 400)"
+
+    def test_workspace_post_rejects_null_byte_path_live(self):
+        """POST /api/workspace con path contenente null byte deve rispondere 400."""
+        import json
+        body = json.dumps({"path": "/tmp/legit\x00evil"}).encode()
+        status = http_post("/api/workspace", body)
+        assert status == 400, \
+            f"Path con null byte non rifiutato: {status} (atteso 400)"
