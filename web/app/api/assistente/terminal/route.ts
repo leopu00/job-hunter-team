@@ -21,11 +21,22 @@ export async function POST() {
           { timeout: 5000 }
         )
       })
-    } else {
-      // Linux/Mac: apri terminale di default
+    } else if (process.platform === 'darwin') {
+      // Mac: apri Terminal.app con tmux attach tramite AppleScript
       await execAsync(
-        `tmux attach -t ASSISTENTE`,
+        `osascript -e 'tell application "Terminal" to do script "tmux attach -t ASSISTENTE"'`,
         { timeout: 5000 }
+      )
+    } else {
+      // Linux: prova x-terminal-emulator, fallback gnome-terminal
+      await execAsync(
+        `x-terminal-emulator -e "tmux attach -t ASSISTENTE"`,
+        { timeout: 5000 }
+      ).catch(() =>
+        execAsync(
+          `gnome-terminal -- bash -c "tmux attach -t ASSISTENTE; exec bash"`,
+          { timeout: 5000 }
+        )
       ).catch(() => {})
     }
 
