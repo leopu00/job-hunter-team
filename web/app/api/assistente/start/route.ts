@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import path from 'path'
 import fs from 'fs'
 import { runBash, runScript, toWslPath } from '@/lib/shell'
+import { getWorkspacePath } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,27 +18,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, message: 'Assistente già attivo' })
     }
 
-    // Workspace dal body (opzionale — lo script lo legge da .env se non passato)
+    // Workspace: prima dal body, poi dal cookie, mai hardcoded
     const body = await req.json().catch(() => ({}))
-    const workspace = body.workspace as string | undefined
+    let workspace = body.workspace as string | undefined
+    if (!workspace) {
+      workspace = (await getWorkspacePath()) ?? undefined
+    }
+
+    if (!workspace) {
+      return NextResponse.json(
+        { ok: false, error: 'Nessun workspace configurato. Seleziona una cartella workspace.' },
+        { status: 400 }
+      )
+    }
+
+    if (workspace.includes('..')) {
+      return NextResponse.json(
+        { ok: false, error: 'Path workspace non valido' },
+        { status: 400 }
+      )
+    }
 
     const repoRoot = path.resolve(process.cwd(), '..')
     const script = path.join(repoRoot, '.launcher', 'start-agent.sh')
     const scriptPath = toWslPath(script)
 
-    // Se il workspace è passato, lo setta nel .env via Node fs (no shell injection)
-    if (workspace && typeof workspace === 'string' && !workspace.includes('..')) {
-      const envFile = path.join(repoRoot, '.env')
-      try {
-        let content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf-8') : ''
-        if (content.match(/^JHT_WORKSPACE=/m)) {
-          content = content.replace(/^JHT_WORKSPACE=.*/m, `JHT_WORKSPACE=${workspace}`)
-        } else {
-          content += `\nJHT_WORKSPACE=${workspace}\n`
-        }
-        fs.writeFileSync(envFile, content, 'utf-8')
-      } catch { /* non critico — lo script leggerà dal .env esistente */ }
-    }
+    // Aggiorna SEMPRE il .env con il workspace corrente prima di avviare
+    const envFile = path.join(repoRoot, '.env')
+    try {
+      let content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf-8') : ''
+      if (content.match(/^JHT_WORKSPACE=/m)) {
+        content = content.replace(/^JHT_WORKSPACE=.*/m, `JHT_WORKSPACE=${workspace}`)
+      } else {
+        content += `\nJHT_WORKSPACE=${workspace}\n`
+      }
+      fs.writeFileSync(envFile, content, 'utf-8')
+    } catch { /* non critico — lo script leggerà dal .env esistente */ }
 
     await runScript(scriptPath, 'assistente')
 
