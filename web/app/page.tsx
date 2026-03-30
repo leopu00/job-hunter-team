@@ -21,7 +21,8 @@ function LandingContent() {
   const [workspace, setWs] = useState('')
   const [wsStatus, setWsStatus] = useState<{ hasDb: boolean; hasProfile: boolean } | null>(null)
   const [browsing, setBrowsing] = useState(false)
-  const [initializing, setInitializing] = useState(false)
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const [inputPath, setInputPath] = useState('')
 
   // Al mount: check se c'e' gia' un workspace nel cookie
@@ -55,48 +56,43 @@ function LandingContent() {
       const data = await res.json()
       if (data.ok && data.folder) {
         setInputPath(data.folder)
-        await selectWorkspace(data.folder)
+        setPendingPath(data.folder)
       }
     } catch { /* ignore */ }
     setBrowsing(false)
   }
 
-  const handleManualPath = async () => {
+  const handleManualPath = () => {
     if (!inputPath.trim()) return
-    try {
-      await selectWorkspace(inputPath.trim())
-    } catch { /* ignore */ }
+    setPendingPath(inputPath.trim())
   }
 
-  const selectWorkspace = async (path: string) => {
-    const res = await fetch('/api/workspace', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    })
-    const data = await res.json()
-    if (data.ok) {
-      setWorkspace(path)
-      setWs(path)
-      setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
-    }
-  }
-
-  const handleInit = async () => {
-    setInitializing(true)
+  const handleConfirm = async () => {
+    if (!pendingPath) return
+    setConfirming(true)
     try {
-      const res = await fetch('/api/workspace/init', {
+      const res = await fetch('/api/workspace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: workspace }),
+        body: JSON.stringify({ path: pendingPath }),
       })
       const data = await res.json()
-      if (data.ok) {
-        setWsStatus({ hasDb: true, hasProfile: data.created?.profile ?? true })
+      if (!data.ok) { setConfirming(false); return }
+      setWorkspace(pendingPath)
+      setWs(pendingPath)
+      if (!data.hasDb) {
+        await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: pendingPath }),
+        })
       }
+      router.push('/dashboard')
     } catch { /* ignore */ }
-    setInitializing(false)
+    setConfirming(false)
   }
+
+  const handleDismiss = () => setPendingPath(null)
 
   const handleEnter = () => {
     router.push('/dashboard')
@@ -211,17 +207,6 @@ function LandingContent() {
             </div>
 
             {/* Actions */}
-            {hasWorkspace && wsStatus && !wsStatus.hasDb && (
-              <button onClick={handleInit} disabled={initializing}
-                className="w-full px-5 py-3 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-yellow)]"
-                style={{
-                  color: initializing ? 'var(--color-dim)' : 'var(--color-yellow)',
-                  cursor: initializing ? 'not-allowed' : 'pointer',
-                }}>
-                {initializing ? 'Inizializzazione...' : 'Inizializza workspace'}
-              </button>
-            )}
-
             {hasWorkspace && wsStatus?.hasDb && (
               <button onClick={handleEnter}
                 className="w-full px-5 py-3 rounded-lg text-[12px] font-bold tracking-wide transition-all"
@@ -237,6 +222,43 @@ function LandingContent() {
           v0.1.0-alpha · Job Hunter Team
         </p>
       </div>
+
+      {/* Modal conferma workspace */}
+      {pendingPath && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 px-5"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', animation: 'fade-in 0.15s ease both' }}
+        >
+          <div className="w-full max-w-md bg-[var(--color-panel)] border border-[var(--color-border)] rounded-xl p-6" style={{ animation: 'fade-in 0.2s ease both' }}>
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <h2 className="text-[14px] font-bold text-[var(--color-white)]">Conferma cartella di lavoro</h2>
+              <button onClick={handleDismiss} className="text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors text-[20px] leading-none" style={{ cursor: 'pointer' }}>×</button>
+            </div>
+            <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mb-4">
+              Tutti i dati (database, PDF, documenti) e gli agenti lavoreranno esclusivamente in questa cartella:
+            </p>
+            <div className="font-mono text-[11px] text-[var(--color-bright)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-3 py-2 mb-6 break-all">
+              {pendingPath}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleDismiss}
+                className="flex-1 px-4 py-2.5 rounded-lg text-[12px] font-semibold border border-[var(--color-border)] transition-colors hover:border-[var(--color-muted)]"
+                style={{ color: 'var(--color-muted)', cursor: 'pointer' }}>
+                Annulla
+              </button>
+              <button onClick={handleConfirm} disabled={confirming}
+                className="flex-1 px-4 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                style={{
+                  background: confirming ? 'var(--color-border)' : 'var(--color-green)',
+                  color: confirming ? 'var(--color-dim)' : '#000',
+                  cursor: confirming ? 'not-allowed' : 'pointer',
+                }}>
+                {confirming ? 'Attendi…' : 'OK, usa questa cartella'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
