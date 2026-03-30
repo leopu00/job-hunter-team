@@ -110,41 +110,12 @@ export default async function DashboardPage() {
           <div className="section-label mb-5">Inizia da qui</div>
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
             <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
-              La dashboard è vuota perché il team non ha ancora iniziato a lavorare.
-              <br />
-              Segui questi passaggi per configurare tutto e avviare la ricerca.
+              Configura il tuo profilo per avviare la ricerca.
             </p>
 
             <div className="flex flex-col gap-4">
 
-              {/* Step 1 — Avvia l'Assistente (opzionale) */}
-              <Link
-                href="/assistente"
-                className="group flex items-start gap-4 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[#ffffff22] transition-colors no-underline"
-              >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-dim)] text-[var(--color-dim)] text-[13px] font-bold shrink-0 mt-0.5">
-                  1
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[12px] font-bold text-[var(--color-muted)] group-hover:text-[var(--color-bright)] transition-colors">
-                      Avvia l'Assistente
-                    </span>
-                    <span className="text-[9px] font-semibold tracking-[0.12em] uppercase px-1.5 py-0.5 rounded border"
-                      style={{ color: 'var(--color-dim)', borderColor: 'var(--color-border)', background: 'transparent' }}>
-                      opzionale
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-dim)] leading-relaxed m-0">
-                    L'assistente può aiutarti a configurare il profilo più velocemente, ma non è obbligatorio.
-                  </p>
-                </div>
-                <span className="text-[var(--color-border)] group-hover:text-[var(--color-dim)] text-[14px] transition-colors shrink-0 mt-1">
-                  →
-                </span>
-              </Link>
-
-              {/* Step 2 — Configura il Profilo */}
+              {/* Step 1 — Configura il Profilo (obbligatorio) */}
               <Link
                 href="/profile"
                 className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
@@ -160,7 +131,7 @@ export default async function DashboardPage() {
                       : 'border-[var(--color-green)] text-[var(--color-green)]'
                   }`}
                 >
-                  {hasProfile ? '✓' : '2'}
+                  {hasProfile ? '✓' : '1'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-green)]' : 'text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors'}`}>
@@ -174,7 +145,7 @@ export default async function DashboardPage() {
                   <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
                     {hasProfile
                       ? 'Il profilo è stato configurato. Il team userà queste informazioni per personalizzare la ricerca.'
-                      : 'Configura il tuo profilo: ruolo target, skills, preferenze e salary range. Il team userà queste informazioni per la ricerca.'
+                      : 'Ruolo target, skills, preferenze e salary range. Il team userà queste informazioni per la ricerca.'
                     }
                   </p>
                 </div>
@@ -185,7 +156,7 @@ export default async function DashboardPage() {
                 )}
               </Link>
 
-              {/* Step 3 — Avvia il Team */}
+              {/* Step 2 — Avvia il Team */}
               <Link
                 href="/team"
                 className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
@@ -201,7 +172,7 @@ export default async function DashboardPage() {
                       : 'border-[var(--color-dim)] text-[var(--color-dim)]'
                   }`}
                 >
-                  3
+                  2
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-bright)] group-hover:text-[var(--color-yellow)]' : 'text-[var(--color-dim)]'} transition-colors`}>
@@ -222,6 +193,22 @@ export default async function DashboardPage() {
               </Link>
 
             </div>
+
+            {/* Assistente — helper opzionale, fuori dal flusso obbligatorio */}
+            <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
+              <Link
+                href="/assistente"
+                className="group flex items-center gap-3 no-underline"
+              >
+                <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
+                  Hai bisogno di aiuto? L'assistente può guidarti nella compilazione del profilo.
+                </span>
+                <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
+                  Apri assistente →
+                </span>
+              </Link>
+            </div>
+
           </div>
         </div>
       )}
