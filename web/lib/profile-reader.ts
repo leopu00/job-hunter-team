@@ -24,6 +24,25 @@ export function readProfile(workspacePath: string): CandidateProfile | null {
   return null
 }
 
+/**
+ * Legge il profilo SOLO dalla cartella workspace (nessun fallback globale).
+ * Restituisce null se il file non esiste, è vuoto, o mancano i campi chiave.
+ * Usare questa funzione per il check "profilo configurato" in dashboard.
+ */
+export function readWorkspaceProfile(workspacePath: string): CandidateProfile | null {
+  const p = path.join(workspacePath, 'candidate_profile.yml')
+  if (!fs.existsSync(p)) return null
+  try {
+    const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
+    if (!raw) return null
+    const profile = mapYamlToProfile(raw)
+    if (!profile.name && !profile.target_role) return null
+    return profile
+  } catch {
+    return null
+  }
+}
+
 function mapYamlToProfile(raw: any): CandidateProfile {
   const candidate = raw.candidate ?? {}
 
