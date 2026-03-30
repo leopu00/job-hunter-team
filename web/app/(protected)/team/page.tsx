@@ -28,7 +28,7 @@ const PIPELINE: AgentDef[] = [
   { emoji: '\u{1F468}\u200D\u2696\uFE0F', role: 'Critico',   color: '#f44336', link: '/critico',   session: 'CRITICO' },
 ]
 
-const SENTINELLA: AgentDef = { emoji: '\uD83D\uDC82', role: 'Sentinella', color: '#607d8b', link: null, session: 'SENTINELLA' }
+const SENTINELLA: AgentDef = { emoji: '\uD83D\uDC82', role: 'Sentinella', color: '#607d8b', link: '/sentinella', session: 'SENTINELLA' }
 
 const ALL_AGENTS: AgentDef[] = [CAPITANO, ...PIPELINE, SENTINELLA]
 
