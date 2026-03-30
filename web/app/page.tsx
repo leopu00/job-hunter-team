@@ -187,10 +187,6 @@ function LandingContent() {
           </div>
 
           <div className="px-6 py-6 flex flex-col gap-4">
-            <p className="text-[var(--color-muted)] text-[11px]">
-              Scegli la cartella dove il team lavorera. Database, CV generati e dati degli agenti finiranno qui.
-              La repo resta intatta.
-            </p>
 
             {/* Browse button + manual input */}
             <div className="flex gap-2">
@@ -213,23 +209,6 @@ function LandingContent() {
                 style={{ color: 'var(--color-bright)' }}
               />
             </div>
-
-            {/* Workspace status */}
-            {hasWorkspace && (
-              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3" style={{ animation: 'fade-in 0.25s ease both' }}>
-                <div className="font-mono text-[11px] text-[var(--color-bright)] mb-3 truncate">{workspace}</div>
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: wsStatus?.hasDb ? 'var(--color-green)' : 'var(--color-dim)' }} />
-                    <span className="text-[10px] text-[var(--color-muted)]">Database</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: wsStatus?.hasProfile ? 'var(--color-green)' : 'var(--color-dim)' }} />
-                    <span className="text-[10px] text-[var(--color-muted)]">Profilo</span>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Actions */}
             {hasWorkspace && wsStatus && !wsStatus.hasDb && (
