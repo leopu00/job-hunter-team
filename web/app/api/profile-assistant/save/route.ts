@@ -73,6 +73,9 @@ async function saveToSupabase(profile: Record<string, unknown>) {
       certifications: positioning.certifications ?? [],
       projects: positioning.projects ?? [],
       contacts: positioning.contacts ?? {},
+      career_goals: positioning.career_goals ?? {},
+      aspirations: positioning.aspirations ?? {},
+      free_notes: positioning.free_notes ?? '',
     },
     updated_at: new Date().toISOString(),
   }
@@ -171,6 +174,9 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
         }))
       : [],
     strengths: positioning.strengths ?? [],
+    career_goals: positioning.career_goals ?? {},
+    aspirations: positioning.aspirations ?? {},
+    free_notes: positioning.free_notes ?? '',
   }
 
   try {
