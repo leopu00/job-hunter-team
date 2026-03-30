@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
+import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,6 +53,17 @@ export default async function DashboardPage() {
     }
   }
 
+  // Verifica se il team è attivo (sessioni tmux JHT)
+  let teamActive = false
+  try {
+    const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
+    const sessions = stdout.trim().split('\n').filter(Boolean)
+    const JH_PREFIXES = ['ALFA', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']
+    teamActive = sessions.some(s =>
+      JH_PREFIXES.some(p => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`))
+    )
+  } catch {}
+
   const isEmpty = stats.total === 0
 
   const pipeline = [
@@ -71,11 +83,17 @@ export default async function DashboardPage() {
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
           <div
-            className="w-2 h-2 rounded-full bg-[var(--color-green)]"
-            style={{ animation: 'pulse-dot 2s ease-in-out infinite' }}
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: teamActive ? 'var(--color-green)' : 'var(--color-dim)',
+              animation: teamActive ? 'pulse-dot 2s ease-in-out infinite' : undefined,
+            }}
           />
-          <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-green)]">
-            live · dati aggiornati
+          <span
+            className="text-[10px] font-semibold tracking-[0.18em] uppercase"
+            style={{ color: teamActive ? 'var(--color-green)' : 'var(--color-dim)' }}
+          >
+            {teamActive ? 'live · team attivo' : 'dati aggiornati'}
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
