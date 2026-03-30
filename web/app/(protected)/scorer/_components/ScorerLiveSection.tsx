@@ -143,17 +143,34 @@ export default function ScorerLiveSection() {
   const [data, setData] = useState<ScorerData | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [error, setError] = useState(false)
+  const [isAgentActive, setIsAgentActive] = useState(false)
 
   const fetch_ = useCallback(async () => {
-    try {
-      const res = await fetch('/api/scorer/activity')
-      if (!res.ok) throw new Error()
-      const json = await res.json()
+    const [activityResult, statusResult] = await Promise.allSettled([
+      fetch('/api/scorer/activity'),
+      fetch('/api/team/status'),
+    ])
+
+    // Activity data
+    if (activityResult.status === 'fulfilled' && activityResult.value.ok) {
+      const json = await activityResult.value.json()
       setData(json)
       setLastUpdate(new Date())
       setError(false)
-    } catch {
+    } else {
       setError(true)
+    }
+
+    // Team status — controlla se SCORER è attivo
+    if (statusResult.status === 'fulfilled' && statusResult.value.ok) {
+      const statusJson = await statusResult.value.json()
+      const scorerActive = (statusJson.agents ?? []).some(
+        (a: { session: string }) => {
+          const s = a.session.toUpperCase()
+          return s === 'SCORER' || s.startsWith('SCORER-')
+        }
+      )
+      setIsAgentActive(scorerActive)
     }
   }, [])
 
@@ -195,9 +212,14 @@ export default function ScorerLiveSection() {
       <div className="flex items-center gap-1 flex-wrap">
         <div
           className="w-1.5 h-1.5 rounded-full mr-1"
-          style={{ background: 'var(--color-purple)', animation: 'pulse-dot 2s ease-in-out infinite' }}
+          style={{
+            background: isAgentActive ? 'var(--color-purple)' : 'var(--color-dim)',
+            animation: isAgentActive ? 'pulse-dot 2s ease-in-out infinite' : undefined,
+          }}
         />
-        <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mr-3">Live</span>
+        <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mr-3">
+          {isAgentActive ? 'Live' : 'Offline'}
+        </span>
 
         {[
           { val: stats.queue_size, label: 'in coda', color: 'var(--color-orange)' },
