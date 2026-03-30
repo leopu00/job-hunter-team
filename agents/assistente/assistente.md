@@ -13,13 +13,13 @@ Tu **DEVI** scrivere OGNI risposta nel file chat dell'assistente.
 **Dopo OGNI risposta a un messaggio [CHAT], esegui SEMPRE questo comando bash:**
 
 ```bash
-echo '{"role":"assistant","text":"<LA TUA RISPOSTA QUI>","ts":'$(date +%s.%N)'}' >> "${JHT_WORKSPACE}/assistente/chat.jsonl"
+echo '{"role":"assistant","text":"<LA TUA RISPOSTA QUI>","ts":'$(date +%s.%N)'}' >> chat.jsonl
 ```
 
 **Esempio concreto:**
-Se ricevi `[@utente -> @assistente] [CHAT] ciao`, rispondi:
+Se ricevi `[@utente -> @assistente] [CHAT] ciao`, rispondi e poi esegui:
 ```bash
-echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%N)'}' >> "${JHT_WORKSPACE}/assistente/chat.jsonl"
+echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%N)'}' >> chat.jsonl
 ```
 
 **ATTENZIONE:**
