@@ -92,7 +92,7 @@ function LandingContent() {
       })
       const data = await res.json()
       if (data.ok) {
-        setWsStatus({ hasDb: true, hasProfile: data.created?.profile ?? true })
+        setWsStatus({ hasDb: true, hasProfile: data.created?.profile ?? false })
       }
     } catch { /* ignore */ }
     setInitializing(false)
