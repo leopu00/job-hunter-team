@@ -102,7 +102,9 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
     )
   }
 
-  const profilePath = path.join(wsPath, 'candidate_profile.yml')
+  const profileDir = path.join(wsPath, 'profile')
+  fs.mkdirSync(profileDir, { recursive: true })
+  const profilePath = path.join(profileDir, 'candidate_profile.yml')
   const positioning = (profile.positioning ?? {}) as Record<string, unknown>
   const contacts = (positioning.contacts ?? {}) as Record<string, string>
 

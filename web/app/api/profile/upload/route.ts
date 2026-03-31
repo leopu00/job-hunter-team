@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'nessun file ricevuto' }, { status: 400 })
   }
 
-  const uploadsDir = path.join(workspace, 'uploads')
+  const uploadsDir = path.join(workspace, 'profile', 'uploads')
   fs.mkdirSync(uploadsDir, { recursive: true })
 
   const saved: string[] = []

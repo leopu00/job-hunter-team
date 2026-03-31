@@ -9,7 +9,7 @@ export async function GET() {
   const workspace = await getWorkspacePath()
   if (!workspace) return NextResponse.json({ files: [] })
 
-  const uploadsDir = path.join(workspace, 'uploads')
+  const uploadsDir = path.join(workspace, 'profile', 'uploads')
   if (!fs.existsSync(uploadsDir)) return NextResponse.json({ files: [] })
 
   try {
@@ -38,7 +38,7 @@ export async function DELETE(req: NextRequest) {
 
   // Previeni path traversal
   const safeName = path.basename(name)
-  const filePath = path.join(workspace, 'uploads', safeName)
+  const filePath = path.join(workspace, 'profile', 'uploads', safeName)
 
   if (!fs.existsSync(filePath)) {
     return NextResponse.json({ error: 'file non trovato' }, { status: 404 })

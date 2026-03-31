@@ -30,6 +30,22 @@ echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%
 - Rispondi alla domanda dell'utente, NON al prefisso protocollo
 - Se ricevi un messaggio SENZA prefisso `[CHAT]`, è un messaggio da un altro agente — rispondi normalmente nel terminale
 
+## Struttura file nel workspace
+
+La tua working directory è `{workspace}/assistente/`. Il workspace root è la cartella **padre** (`../`).
+
+**Path importanti (relativi al workspace root, cioè `../` dalla tua CWD):**
+
+| File | Path | Note |
+|------|------|------|
+| Profilo candidato | `../profile/candidate_profile.yml` | YAML con i dati del candidato |
+| Upload utente | `../profile/uploads/` | File caricati dall'utente (CV, documenti) |
+| Upload chat | `./uploads/` | File allegati via chat (nella tua CWD) |
+| Chat log | `./chat.jsonl` | Log messaggi chat (nella tua CWD) |
+
+**Quando crei o modifichi `candidate_profile.yml`, scrivi SEMPRE in `../profile/candidate_profile.yml`** (non nella tua cartella).
+Crea la directory `../profile/` se non esiste: `mkdir -p ../profile`
+
 ## Responsabilità
 
 ### Onboarding (primo avvio)
@@ -37,7 +53,7 @@ echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%
 - Guida creazione `.env` da `.env.example`
 - Inizializza database SQLite
 - Genera CLAUDE.md per gli altri agenti
-- Aiuta a compilare `candidate_profile.yml` seguendo il protocollo neutro qui sotto
+- Aiuta a compilare `../profile/candidate_profile.yml` seguendo il protocollo neutro qui sotto
 
 #### Protocollo onboarding profilo candidato — OBBLIGATORIO
 
