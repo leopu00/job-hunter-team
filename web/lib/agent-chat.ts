@@ -6,19 +6,21 @@
 export type ChatEntry = { role: string; text: string; ts: number }
 
 function tryParse(chunk: string): ChatEntry | null {
+  // Prima prova il parse diretto (gestisce correttamente backslash nei path Windows)
   try {
-    // Sostituisci newline reali con escape \n per JSON valido
-    // poi rimuovi escape invalidi tipo \! \' etc che i modelli AI producono
+    const obj = JSON.parse(chunk)
+    if (obj && typeof obj.role === 'string' && typeof obj.text === 'string' && typeof obj.ts === 'number') {
+      return obj as ChatEntry
+    }
+  } catch { /* fallthrough to cleaned parse */ }
+
+  // Fallback: pulisci newline reali e escape invalidi (per output AI malformato)
+  try {
     const clean = chunk
       .replace(/\n/g, '\\n')
       .replace(/\\([^"\\\/bfnrtu])/g, '$1')
     const obj = JSON.parse(clean)
-    if (
-      obj !== null &&
-      typeof obj.role === 'string' &&
-      typeof obj.text === 'string' &&
-      typeof obj.ts === 'number'
-    ) {
+    if (obj && typeof obj.role === 'string' && typeof obj.text === 'string' && typeof obj.ts === 'number') {
       return obj as ChatEntry
     }
     return null
