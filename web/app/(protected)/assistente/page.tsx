@@ -42,6 +42,7 @@ export default function AssistentePage() {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [showTerminal, setShowTerminal] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -55,6 +56,7 @@ export default function AssistentePage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isActive = status?.active ?? false
 
@@ -131,21 +133,55 @@ export default function AssistentePage() {
   }
 
   const handleSend = async () => {
-    if (!input.trim() || sending) return
+    if ((!input.trim() && attachedFiles.length === 0) || sending) return
     setSending(true)
     const text = input.trim()
+    const filesToSend = [...attachedFiles]
     setInput('')
+    setAttachedFiles([])
     try {
-      await fetch('/api/assistente/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
-      // Refresh immediato per mostrare il messaggio user dal file
+      let filePaths: string[] = []
+      // Upload file se presenti
+      if (filesToSend.length > 0) {
+        const formData = new FormData()
+        filesToSend.forEach(f => formData.append('files', f))
+        const uploadRes = await fetch('/api/assistente/upload', { method: 'POST', body: formData })
+        const uploadData = await uploadRes.json()
+        if (uploadData.saved) {
+          filePaths = uploadData.saved.map((f: { name: string; path: string }) => f.path)
+        }
+      }
+      // Componi messaggio con path allegati
+      let fullText = text
+      if (filePaths.length > 0) {
+        const fileList = filePaths.map(p => `📎 ${p}`).join('\n')
+        fullText = fullText
+          ? `${fullText}\n\n[FILE ALLEGATI]\n${fileList}`
+          : `[FILE ALLEGATI]\n${fileList}`
+      }
+      if (fullText) {
+        await fetch('/api/assistente/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: fullText }),
+        })
+      }
       await fetchChat()
     } catch { /* ignore */ }
     setSending(false)
     inputRef.current?.focus()
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length > 0) {
+      setAttachedFiles(prev => [...prev, ...files])
+    }
+    e.target.value = ''
+  }
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   return (
@@ -326,21 +362,55 @@ export default function AssistentePage() {
                 </div>
               </div>
 
+              {/* Allegati preview */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-4 py-2 border border-t-0 border-[var(--color-border)]"
+                  style={{ background: '#0d1117' }}>
+                  {attachedFiles.map((file, i) => (
+                    <div key={`${file.name}-${i}`}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px]"
+                      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                      </svg>
+                      <span className="max-w-[150px] truncate">{file.name}</span>
+                      <button type="button" onClick={() => removeAttachedFile(i)}
+                        className="ml-0.5 hover:text-[var(--color-red)] transition-colors cursor-pointer"
+                        style={{ color: 'var(--color-dim)', fontSize: '12px', lineHeight: 1 }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Input chat */}
               <form onSubmit={(e) => { e.preventDefault(); handleSend() }}
                 className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
                 style={{ background: '#0d1117', borderRadius: chatFullscreen ? '0' : '0 0 12px 12px', margin: chatFullscreen ? '0 16px 16px 16px' : undefined }}>
+                <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.csv,.xlsx,.xls,.json,.yaml,.yml" />
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  disabled={sending}
+                  className="pl-3 pr-1 py-3 transition-colors cursor-pointer"
+                  title="Allega file"
+                  style={{ color: attachedFiles.length > 0 ? 'var(--color-green)' : 'var(--color-dim)' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
                 <input ref={inputRef} type="text" value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder="Scrivi un messaggio..."
+                  placeholder={attachedFiles.length > 0 ? `${attachedFiles.length} file allegat${attachedFiles.length === 1 ? 'o' : 'i'} — scrivi un messaggio...` : 'Scrivi un messaggio...'}
                   disabled={sending}
-                  className="flex-1 px-4 py-3 text-[12px] bg-transparent outline-none"
+                  className="flex-1 px-3 py-3 text-[12px] bg-transparent outline-none"
                   style={{ color: 'var(--color-bright)' }} />
-                <button type="submit" disabled={!input.trim() || sending}
+                <button type="submit" disabled={(!input.trim() && attachedFiles.length === 0) || sending}
                   className="px-5 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors"
                   style={{
-                    color: !input.trim() || sending ? 'var(--color-dim)' : 'var(--color-green)',
-                    cursor: !input.trim() || sending ? 'default' : 'pointer',
+                    color: (!input.trim() && attachedFiles.length === 0) || sending ? 'var(--color-dim)' : 'var(--color-green)',
+                    cursor: (!input.trim() && attachedFiles.length === 0) || sending ? 'default' : 'pointer',
                   }}>
                   {sending ? '…' : 'invia'}
                 </button>
