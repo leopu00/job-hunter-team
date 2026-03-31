@@ -6,6 +6,7 @@ import type { CandidateProfile } from './types'
 export function readProfile(workspacePath: string): CandidateProfile | null {
   // Cerca: 1) workspace, 2) repo root
   const paths = [
+    path.join(workspacePath, 'profile', 'candidate_profile.yml'),
     path.join(workspacePath, 'candidate_profile.yml'),
     path.resolve(process.cwd(), '..', 'candidate_profile.yml'),
   ]
@@ -30,7 +31,11 @@ export function readProfile(workspacePath: string): CandidateProfile | null {
  * Usare questa funzione per il check "profilo configurato" in dashboard.
  */
 export function readWorkspaceProfile(workspacePath: string): CandidateProfile | null {
-  const p = path.join(workspacePath, 'candidate_profile.yml')
+  // Cerca prima in profile/, poi fallback alla root per compatibilita'
+  let p = path.join(workspacePath, 'profile', 'candidate_profile.yml')
+  if (!fs.existsSync(p)) {
+    p = path.join(workspacePath, 'candidate_profile.yml')
+  }
   if (!fs.existsSync(p)) return null
   try {
     const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
@@ -47,13 +52,15 @@ export function readWorkspaceProfile(workspacePath: string): CandidateProfile | 
 
 function mapYamlToProfile(raw: any): CandidateProfile {
   const candidate = raw.candidate ?? {}
+  const personal = raw.personal ?? {}
 
-  // Skills: se c'e' candidate.skills (dict), usalo; altrimenti converti la lista piatta
+  // Skills: cerca in candidate.skills, raw.skills (dict o lista)
   let skills: Record<string, string[]> | null = null
-  if (candidate.skills && typeof candidate.skills === 'object' && !Array.isArray(candidate.skills)) {
-    skills = candidate.skills
-  } else if (Array.isArray(raw.skills)) {
-    skills = { primary: raw.skills }
+  const rawSkills = candidate.skills ?? raw.skills
+  if (rawSkills && typeof rawSkills === 'object' && !Array.isArray(rawSkills)) {
+    skills = rawSkills
+  } else if (Array.isArray(rawSkills)) {
+    skills = { primary: rawSkills }
   }
 
   // Languages: normalizza lingua/livello -> language/level
@@ -86,32 +93,41 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       }
     : null
 
+  // Contacts: cerca in candidate.contacts o personal
+  const contacts = candidate.contacts ?? {
+    email: personal.email,
+    phone: personal.phone,
+    linkedin: personal.linkedin,
+    github: personal.github,
+    website: personal.website,
+  }
+
   return {
     id: 'local',
     user_id: 'local',
-    name: candidate.name ?? raw.name ?? null,
-    email: candidate.contacts?.email ?? null,
-    target_role: candidate.target_role ?? raw.target_role ?? null,
-    location: raw.location ?? null,
+    name: candidate.name ?? personal.name ?? raw.name ?? null,
+    email: contacts.email ?? personal.email ?? null,
+    target_role: candidate.target_role ?? raw.target_role ?? (raw.target_roles?.[0]) ?? null,
+    location: raw.location ?? personal.location ?? null,
     experience_years: raw.experience_years ?? null,
     experience_months: null,
     has_degree: raw.has_degree ?? false,
     skills,
     languages,
     location_preferences,
-    job_titles: raw.target_roles_priority ?? null,
+    job_titles: raw.target_roles_priority ?? raw.target_roles ?? null,
     salary_target,
     positioning: {
       seniority_target: raw.seniority_target,
-      strengths: candidate.strengths,
-      experience: candidate.experience,
-      education: candidate.education,
+      strengths: candidate.strengths ?? raw.domain_expertise,
+      experience: candidate.experience ?? raw.experience,
+      education: candidate.education ?? raw.education,
       certifications: candidate.certifications,
       projects: candidate.projects,
-      contacts: candidate.contacts,
+      contacts,
       career_goals: candidate.career_goals,
       aspirations: candidate.aspirations,
-      free_notes: candidate.free_notes,
+      free_notes: candidate.free_notes ?? (typeof raw.notes === 'string' ? raw.notes : raw.notes ? Object.entries(raw.notes).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined),
     },
     created_at: '',
     updated_at: '',

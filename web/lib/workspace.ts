@@ -19,7 +19,7 @@ export function getDbPath(workspacePath: string): string {
 }
 
 export function getProfilePath(workspacePath: string): string {
-  return path.join(workspacePath, 'candidate_profile.yml')
+  return path.join(workspacePath, 'profile', 'candidate_profile.yml')
 }
 
 export function workspaceExists(workspacePath: string): boolean {
