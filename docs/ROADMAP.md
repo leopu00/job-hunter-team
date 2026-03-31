@@ -170,7 +170,7 @@ Job Hunter Team e' un framework multi-agente per automatizzare la ricerca lavoro
 - [x] 🤖 Pipeline: scout → analista → scorer → scrittore → critico
 - [x] 🗄️ Database SQLite V2
 - [x] 🔒 Anti-collisione tra agenti
-- [x] 📦 Setup automatizzato (`setup.sh`)
+- [x] 📦 Setup automatizzato (`setup.sh` + `setup.ps1` per Windows)
 - [x] 🧪 Test suite (33 test)
 - [x] 👥 Supporto profili non-dev
 - [x] 🖥️ Cross-platform (macOS, Linux, WSL)

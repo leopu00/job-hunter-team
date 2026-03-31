@@ -24,20 +24,23 @@ Point it at your profile, let the team run, and review only the applications tha
 
 - Python 3.10+
 - [Claude CLI](https://claude.ai/download) — Claude Max subscription **or** Anthropic API key
-- tmux
 - Node.js 18+ and npm (for the web app)
+- tmux (Linux/macOS — for multi-agent orchestration)
+- WSL2 with Ubuntu + tmux (Windows — for multi-agent orchestration)
 - pandoc + typst (for PDF generation)
 
 ---
 
 ## Quick Start
 
+### Linux / macOS
+
 ```bash
 # 1. Clone the repo
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Run setup (creates .env, web/.env.local, virtualenv, database)
+# 2. Run setup (creates .env, web/.env.local, virtualenv, npm install, database)
 ./setup.sh
 
 # 3. Fill in your candidate profile
@@ -50,7 +53,28 @@ cd job-hunter-team
 ./.launcher/start.sh
 
 # 6. Launch the web app
-cd web && npm install && npm run dev
+cd web && npm run dev
+# → http://localhost:3000
+```
+
+### Windows (PowerShell)
+
+```powershell
+# 1. Clone the repo
+git clone https://github.com/leopu00/job-hunter-team.git
+cd job-hunter-team
+
+# 2. Run setup
+powershell -ExecutionPolicy Bypass -File setup.ps1
+
+# 3. Fill in your candidate profile
+# Edit candidate_profile.yml
+
+# 4. Fill in web credentials
+# Edit web\.env.local
+
+# 5. Launch the web app
+cd web; npm run dev
 # → http://localhost:3000
 ```
 
