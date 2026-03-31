@@ -5,7 +5,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-STEPS=9
+STEPS=10
 
 # ── Colori ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -134,8 +134,23 @@ else
   fi
 fi
 
-# ── 6. Directory di dati ──────────────────────────────────────────────────────
-step 6 "Creazione directory necessarie"
+# ── 6. Web App — npm install ────────────────────────────────────────────────
+step 6 "Installazione dipendenze web (npm install)"
+
+WEB_DIR="$REPO_DIR/web"
+if [ -f "$WEB_DIR/node_modules/.package-lock.json" ]; then
+  ok "node_modules/ già presente"
+else
+  if command -v npm &>/dev/null; then
+    (cd "$WEB_DIR" && npm install --silent)
+    ok "npm install completato"
+  else
+    warn "npm non trovato — installa Node.js da https://nodejs.org"
+  fi
+fi
+
+# ── 7. Directory di dati ──────────────────────────────────────────────────────
+step 7 "Creazione directory necessarie"
 
 mkdir -p "$REPO_DIR/shared/data/applications"
 mkdir -p "$REPO_DIR/shared/secrets"
@@ -143,8 +158,8 @@ ok "shared/data/ OK"
 ok "shared/data/applications/ OK"
 ok "shared/secrets/ OK (gitignored — metti qui le credenziali OAuth/LinkedIn)"
 
-# ── 7. Git hooks ──────────────────────────────────────────────────────────────
-step 7 "Installazione git hooks (pre-commit sicurezza)"
+# ── 8. Git hooks ──────────────────────────────────────────────────────────────
+step 8 "Installazione git hooks (pre-commit sicurezza)"
 
 if [ -d "$REPO_DIR/.githooks" ]; then
   git -C "$REPO_DIR" config core.hooksPath .githooks
@@ -154,8 +169,8 @@ else
   warn ".githooks/ non trovato — hook di sicurezza non installati"
 fi
 
-# ── 8. Inizializzazione DB ────────────────────────────────────────────────────
-step 8 "Inizializzazione database"
+# ── 9. Inizializzazione DB ────────────────────────────────────────────────────
+step 9 "Inizializzazione database"
 
 DB_INIT="$REPO_DIR/shared/skills/db_init.py"
 
@@ -166,8 +181,8 @@ fi
 python3 "$DB_INIT"
 ok "Database inizializzato"
 
-# ── 9. Verifica integrità DB ──────────────────────────────────────────────────
-step 9 "Verifica integrità database"
+# ── 10. Verifica integrità DB ─────────────────────────────────────────────────
+step 10 "Verifica integrità database"
 
 DB_MIGRATE="$REPO_DIR/shared/skills/db_migrate_v2.py"
 
