@@ -1,6 +1,7 @@
 /**
  * JHT Setup Wizard — Step Telegram, workspace, salvataggio, riepilogo
  */
+import os from 'node:os';
 import path from 'node:path';
 import {
   JHT_CONFIG_PATH,
@@ -9,6 +10,8 @@ import {
   validateChatId,
   validateWorkspacePath,
 } from './setup-helpers.js';
+
+const DEFAULT_WORKSPACE = path.join(os.homedir(), 'jht');
 
 /**
  * Step Telegram: chiede bot token e chat ID (opzionale).
@@ -55,11 +58,11 @@ export async function promptTelegram(prompter, baseChannels) {
 export async function promptWorkspace(prompter, flow, baseWorkspace) {
   let workspace;
   if (flow === 'quickstart') {
-    workspace = baseWorkspace || path.resolve(process.cwd());
+    workspace = baseWorkspace || DEFAULT_WORKSPACE;
   } else {
     workspace = await prompter.text({
       message: 'Path workspace JHT',
-      initialValue: baseWorkspace || path.resolve(process.cwd()),
+      initialValue: baseWorkspace || DEFAULT_WORKSPACE,
       validate: validateWorkspacePath,
     });
     workspace = workspace.trim();

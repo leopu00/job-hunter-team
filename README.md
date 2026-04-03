@@ -97,10 +97,14 @@ Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Wizard di setup interattivo
+# 2. Installa le dipendenze
+npm install
+npm install --prefix shared/cron
+
+# 3. Wizard di setup interattivo
 jht setup
 
-# 3. Compila il tuo profilo candidato
+# 4. Compila il tuo profilo candidato
 # Modifica candidate_profile.yml — skills, esperienza, ruoli target
 ```
 
