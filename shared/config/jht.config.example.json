@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "active_provider": "claude",
+  "providers": {
+    "claude": {
+      "name": "claude",
+      "auth_method": "api_key",
+      "api_key": "sk-ant-xxxxx",
+      "model": "claude-opus-4-6"
+    },
+    "openai": {
+      "name": "openai",
+      "auth_method": "api_key",
+      "api_key": "sk-xxxxx",
+      "model": "gpt-4o"
+    },
+    "minimax": {
+      "name": "minimax",
+      "auth_method": "subscription",
+      "subscription": {
+        "email": "user@example.com"
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "bot_token": "123456:ABC-xxxxx",
+      "chat_id": "123456789"
+    }
+  },
+  "workspace": "~/.jht"
+}
