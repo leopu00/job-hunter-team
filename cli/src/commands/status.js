@@ -1,9 +1,10 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
-const CONFIG_DIR = join(process.env.HOME || '', '.jht');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+const CONFIG_DIR = join(homedir(), '.jht');
+const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
 
 async function fileExists(path) {
   try {
@@ -34,9 +35,16 @@ async function handleStatus() {
   if (hasConfig) {
     const raw = await readFile(CONFIG_FILE, 'utf-8');
     const config = JSON.parse(raw);
+    const activeProvider = config.active_provider || 'non impostato';
+    const provConfig = config.providers?.[config.active_provider];
+    const model = provConfig?.model || 'non impostato';
+    const auth = provConfig?.auth_method || 'non impostato';
     console.log(`  Config:    ${CONFIG_FILE}`);
-    console.log(`  Provider:  ${config.provider || 'non impostato'}`);
-    console.log(`  Modello:   ${config.model || 'non impostato'}`);
+    console.log(`  Provider:  ${activeProvider}`);
+    console.log(`  Modello:   ${model}`);
+    console.log(`  Auth:      ${auth}`);
+    if (config.workspace) console.log(`  Workspace: ${config.workspace}`);
+    if (config.channels?.telegram) console.log('  Telegram:  configurato');
   } else {
     console.log('  Config:    non trovata (esegui: jht setup)');
   }
