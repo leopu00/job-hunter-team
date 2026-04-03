@@ -17,6 +17,8 @@ import {
   assembleAndSaveConfig,
   showSummary,
 } from './setup-steps.js';
+import { hasBrowserSupport } from '../src/auth/browser-open.js';
+import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 
 /**
  * Esegue il setup wizard JHT.
@@ -100,25 +102,52 @@ export async function runSetupWizard(prompter) {
   }
 
   if (authMethod === 'subscription') {
-    await prompter.note(
-      'Inserisci l\'email del tuo account.\nIl session token e\' opzionale.',
-      'Subscription',
-    );
-    const email = await prompter.text({
-      message: 'Email account',
-      placeholder: 'utente@esempio.com',
-      validate: validateEmail,
+    // Offri scelta: login via browser (OAuth) o inserimento manuale
+    const browserAvailable = hasBrowserSupport();
+    const subMethod = await prompter.select({
+      message: 'Come vuoi effettuare il login?',
+      options: [
+        {
+          value: 'browser',
+          label: 'Apri browser per login',
+          hint: browserAvailable ? 'consigliato — login automatico' : 'browser non disponibile (SSH?)',
+        },
+        { value: 'manual', label: 'Inserisci email e token manualmente' },
+      ],
+      initialValue: browserAvailable ? 'browser' : 'manual',
     });
-    const wantsToken = flow === 'advanced'
-      ? await prompter.confirm({ message: 'Hai un session token?', initialValue: false })
-      : false;
-    let sessionToken = undefined;
-    if (wantsToken) {
-      sessionToken = await prompter.text({ message: 'Session token', placeholder: 'incolla il token...' });
-      sessionToken = sessionToken?.trim() || undefined;
+
+    if (subMethod === 'browser') {
+      // OAuth PKCE flow via browser
+      const providerOAuth = selectedProvider.oauthUrl || `https://${providerChoice}.ai/authorize`;
+      const clientId = selectedProvider.oauthClientId || `jht-${providerChoice}`;
+      await prompter.note(
+        'Si aprira\' il browser per il login.\nDopo l\'autorizzazione verrai reindirizzato automaticamente.',
+        'Login via browser',
+      );
+      const spinner = prompter.spinner?.();
+      spinner?.start('In attesa del login nel browser...');
+      const result = await startSubscriptionLogin({
+        authorizeUrl: providerOAuth,
+        clientId,
+        scopes: ['read', 'write'],
+        prompter,
+      });
+      spinner?.stop(result ? 'Login completato!' : 'Login fallito.');
+
+      if (result) {
+        subscriptionConfig = {
+          email: `oauth-${providerChoice}`,
+          session_token: result.code,
+          oauth_verifier: result.verifier,
+        };
+      } else {
+        await prompter.note('Login via browser fallito. Inserisci i dati manualmente.', 'Fallback');
+        subscriptionConfig = await promptManualSubscription(prompter, flow);
+      }
+    } else {
+      subscriptionConfig = await promptManualSubscription(prompter, flow);
     }
-    subscriptionConfig = { email: email.trim() };
-    if (sessionToken) subscriptionConfig.session_token = sessionToken;
   }
 
   // --- Modello AI ---
@@ -141,4 +170,32 @@ export async function runSetupWizard(prompter) {
     selectedProvider, authMethod, apiKey, subscriptionConfig,
     model, telegramChannel, workspace,
   });
+}
+
+/**
+ * Prompt manuale per subscription: email + session token opzionale.
+ * @param {import('./prompts.js').WizardPrompter} prompter
+ * @param {string} flow - 'quickstart' | 'advanced'
+ */
+async function promptManualSubscription(prompter, flow) {
+  await prompter.note(
+    'Inserisci l\'email del tuo account.\nIl session token e\' opzionale.',
+    'Subscription manuale',
+  );
+  const email = await prompter.text({
+    message: 'Email account',
+    placeholder: 'utente@esempio.com',
+    validate: validateEmail,
+  });
+  const wantsToken = flow === 'advanced'
+    ? await prompter.confirm({ message: 'Hai un session token?', initialValue: false })
+    : false;
+  let sessionToken = undefined;
+  if (wantsToken) {
+    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'incolla il token...' });
+    sessionToken = sessionToken?.trim() || undefined;
+  }
+  const config = { email: email.trim() };
+  if (sessionToken) config.session_token = sessionToken;
+  return config;
 }
