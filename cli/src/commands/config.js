@@ -1,8 +1,9 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 
-const CONFIG_DIR = join(process.env.HOME || '', '.jht');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+const CONFIG_DIR = join(homedir(), '.jht');
+const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
 
 async function loadConfig() {
   try {
