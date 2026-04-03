@@ -50,3 +50,57 @@ export type JhtTuiState = {
   lastCtrlCAt: number;
   isConnected: boolean;
 };
+
+// --- Tipi per il layer chat/event (tui-event-handlers, tui-command-handlers) ---
+
+export type ChatOptions = {
+  session?: string;
+  deliver?: boolean;
+  thinking?: string;
+  timeoutMs?: number;
+  historyLimit?: number;
+  message?: string;
+};
+
+export type SessionInfo = {
+  model?: string;
+  modelProvider?: string;
+  verboseLevel?: string;
+  contextTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+};
+
+export type ChatEvent = {
+  runId: string;
+  sessionKey: string;
+  state: "delta" | "final" | "aborted" | "error";
+  message?: unknown;
+  errorMessage?: string;
+};
+
+export type AgentEvent = {
+  runId: string;
+  stream: string;
+  data?: Record<string, unknown>;
+};
+
+export type BtwEvent = {
+  kind: "btw";
+  runId?: string;
+  sessionKey?: string;
+  question: string;
+  text: string;
+  isError?: boolean;
+};
+
+export type TuiStateAccess = JhtTuiState & {
+  currentAgentId: string;
+  currentSessionKey: string;
+  activeChatRunId: string | null;
+  pendingOptimisticUserMessage: boolean;
+  historyLoaded: boolean;
+  sessionInfo: SessionInfo;
+  showThinking: boolean;
+};
