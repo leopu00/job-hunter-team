@@ -166,3 +166,68 @@ describe("Stats combinate queue + cache", () => {
   });
 });
 
+describe("Pipeline completa: enqueue → cache → dedup → invalidate", () => {
+  it("pipeline end-to-end con dedup e invalidazione", async () => {
+    const processed: string[] = [];
+    queue.registerHandler("pipeline", async (p: { id: string }) => {
+      processed.push(p.id);
+      return `result-${p.id}`;
+    });
+    queue.on((e) => {
+      if (e.kind === "succeeded") cache.set(`pipe:${e.job.payload.id}`, e.job.result);
+    });
+    queue.enqueue("pipeline", { id: "x" });
+    await wait();
+    expect(processed).toEqual(["x"]);
+    expect(cache.get("pipe:x")).toBe("result-x");
+    if (!cache.has("pipe:x")) queue.enqueue("pipeline", { id: "x" });
+    expect(processed).toEqual(["x"]);
+    cache.delete("pipe:x");
+    if (!cache.has("pipe:x")) queue.enqueue("pipeline", { id: "x" });
+    await wait();
+    expect(processed).toEqual(["x", "x"]);
+  });
+
+  it("invalidateByPattern dopo errore batch ripulisce cache", () => {
+    cache.set("batch:run-1:a", "r1");
+    cache.set("batch:run-1:b", "r2");
+    cache.set("batch:run-2:a", "r3");
+    const removed = cache.invalidateByPattern(/^batch:run-1:/);
+    expect(removed).toBe(2);
+    expect(cache.size).toBe(1);
+    expect(cache.get("batch:run-2:a")).toBe("r3");
+  });
+
+  it("onEvict traccia invalidazioni da eventi queue", async () => {
+    const evicted: string[] = [];
+    const tracked = new LRUCache<string>({
+      maxEntries: 10, defaultTTL: 0,
+      onEvict: (key) => evicted.push(key),
+    });
+    tracked.set("job:fail", "stale");
+    queue.registerHandler("tracked", async () => { throw new Error("err"); });
+    queue.on((e) => {
+      if (e.kind === "dead") tracked.delete(`job:${e.job.payload.type}`);
+    });
+    queue.enqueue("tracked", { type: "fail" });
+    await wait(100);
+    expect(evicted).toContain("job:fail");
+  });
+
+  it("job priorita' critical cachato prima di job low", async () => {
+    const order: string[] = [];
+    const q = new JobQueue({ concurrency: 1, retryPolicy: { maxAttempts: 1, initialDelayMs: 1, maxDelayMs: 1, factor: 1, jitter: 0 } });
+    q.registerHandler("pri", async (p: { id: string }) => {
+      order.push(p.id);
+      return p.id;
+    });
+    q.on((e) => {
+      if (e.kind === "succeeded") cache.set(`pri:${e.job.payload.id}`, e.job.result);
+    });
+    q.enqueue("pri", { id: "low" }, "low");
+    q.enqueue("pri", { id: "crit" }, "critical");
+    await wait(50);
+    expect(cache.has("pri:crit")).toBe(true);
+    expect(cache.has("pri:low")).toBe(true);
+  });
+});
