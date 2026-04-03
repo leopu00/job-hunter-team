@@ -186,3 +186,42 @@ def test_openai_list_models():
 # ── MINIMAX — error wrapping API ────────────────────────────────
 
 
+def test_minimax_complete_http_error():
+    from shared.llm.providers.minimax_provider import MinimaxProvider
+    import requests
+
+    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test"}):
+        with patch("shared.llm.providers.minimax_provider.requests.post",
+                    side_effect=requests.ConnectionError("DNS resolve failed")):
+            p = MinimaxProvider()
+            with pytest.raises(ProviderError, match="DNS resolve failed"):
+                p.complete("test")
+
+
+def test_minimax_list_models():
+    from shared.llm.providers.minimax_provider import MinimaxProvider
+
+    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test"}):
+        p = MinimaxProvider()
+        models = p.list_models()
+    assert len(models) == 2
+    assert any(m.id == "abab6.5-chat" for m in models)
+
+
+# ── SDK NON INSTALLATO ──────────────────────────────────────────
+
+
+def test_anthropic_sdk_not_installed():
+    from shared.llm.providers.anthropic_provider import AnthropicProvider
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}):
+        with patch("shared.llm.providers.anthropic_provider.anthropic", None):
+            with pytest.raises(ProviderError, match="SDK anthropic non installato"):
+                AnthropicProvider()
+
+
+def test_openai_sdk_not_installed():
+    from shared.llm.providers.openai_provider import OpenAIProvider
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "test"}):
+        with patch("shared.llm.providers.openai_provider.openai", None):
+            with pytest.raises(ProviderError, match="SDK openai non installato"):
+                OpenAIProvider()
