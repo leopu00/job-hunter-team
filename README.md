@@ -1,129 +1,191 @@
-# job-hunter-team
+# 🎯 Job Hunter Team
 
-An open-source multi-agent AI framework that automates your job search — from finding positions to writing tailored CVs and cover letters.
+> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.
 
-Point it at your profile, let the team run, and review only the applications that pass the quality bar.
+Punta il sistema al tuo profilo, avvia il team e revisiona solo le candidature che superano il quality bar.
 
----
-
-## Features
-
-- **Scout agents** — continuously search job boards across EU and remote markets
-- **Analyst agents** — verify job descriptions, check links, analyze company culture
-- **Scorer agents** — rank positions 0-100 against your profile with configurable weights
-- **Writer agents** — generate tailored CVs and cover letters per position
-- **Critic agents** — blind review of every document (3 mandatory rounds before submission)
-- **Captain agent** — coordinates the full pipeline, handles anti-collision, reports progress
-- **Monitor agent** — tracks Claude API token usage in real-time, throttles the team before hitting rate limits
-- **Anti-collision system** — distributed claim mechanism prevents duplicate work across agents
-- **SQLite → PostgreSQL** — local-first by default, PostgreSQL-ready for multi-user deployments
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## Prerequisites
+## ✨ Cosa fa
 
-- Python 3.10+
-- [Claude CLI](https://claude.ai/download) — Claude Max subscription **or** Anthropic API key
-- Node.js 18+ and npm (for the web app)
-- tmux (Linux/macOS — for multi-agent orchestration)
-- WSL2 with Ubuntu + tmux (Windows — for multi-agent orchestration)
-- pandoc + typst (for PDF generation)
+| Agente | Ruolo |
+|--------|-------|
+| 🕵️ **Scout** | Cerca posizioni su job board EU e remote |
+| 🔬 **Analista** | Verifica JD, aziende, cultura aziendale |
+| 📊 **Scorer** | Assegna punteggio 0-100 vs il tuo profilo |
+| ✍️ **Scrittore** | Genera CV e cover letter personalizzati |
+| ⚖️ **Critico** | Blind review (3 round obbligatori) |
+| 👨‍✈️ **Capitano** | Coordina la pipeline, gestisce anti-collision |
+| 🛡️ **Sentinella** | Monitora token, rate limit e stato del team |
 
 ---
 
-## Quick Start
+## 🏗️ Architettura
 
-### Linux / macOS
+```
+                        👨‍✈️  Capitano (alfa)
+                            │
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+       🕵️ Scout         📊 Scorer        🛡️ Sentinella
+          │                 │
+       🔬 Analista       ✍️ Scrittore
+                            │
+                         ⚖️ Critico
+                            │
+                     ✅ Pronto per invio
+```
+
+Ogni agente è una sessione Claude Code con un file `CLAUDE.md` dedicato.
+Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
+
+### Interfacce disponibili
+
+```
+🖥️  Web Dashboard   →  http://localhost:3000      (Next.js)
+💻  CLI             →  jht setup / team / status  (Node.js)
+📟  TUI             →  jht tui                    (Terminal UI)
+```
+
+---
+
+## 📦 Moduli
+
+### `shared/` — Librerie condivise
+
+| Modulo | Descrizione |
+|--------|-------------|
+| `config/` | Config centralizzata `jht.config.json` — schema Zod, I/O, tipi |
+| `cron/` | Scheduler task ricorrenti con espressioni cron |
+| `llm/` | Astrazione provider AI — Claude, OpenAI, Minimax con factory |
+| `gateway/` | Gateway HTTP multi-agente con router e middleware |
+| `channels/` | Canali di comunicazione — Web, CLI, Telegram |
+| `telegram/` | Bridge bidirezionale Telegram con bot Grammy |
+| `credentials/` | Gestione credenziali cifrate AES-256 — API key e OAuth |
+| `memory/` | Gestione identità, anima e memoria agenti (SOUL/IDENTITY/MEMORY) |
+| `tools/` | Tool registry — bash, heartbeat, tool custom per agenti |
+| `logger/` | Logger strutturato JSON con rolling file e output colorato |
+| `deploy/` | Script deploy, health-check e monitor produzione |
+| `daemon/` | Script installazione/disinstallazione daemon di sistema |
+
+### Interfacce
+
+| Modulo | Descrizione |
+|--------|-------------|
+| `cli/` | CLI `jht` — setup, config, status, team, cron |
+| `tui/` | Terminal UI multi-agente — lista agenti, chat, status bar |
+| `web/` | Dashboard Next.js — agenti, impostazioni, cron, profilo |
+
+---
+
+## 🚀 Installazione
+
+### Prerequisiti
+
+- **Node.js** 18+ e npm
+- **Python** 3.10+
+- **tmux** (Linux/macOS) — WSL2 + tmux su Windows
+- **Claude CLI** — Claude Max subscription o Anthropic API key
+- **pandoc + typst** (opzionale, per generazione PDF)
+
+### Setup
 
 ```bash
-# 1. Clone the repo
+# 1. Clona il repo
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Run setup (creates .env, web/.env.local, virtualenv, npm install, database)
-./setup.sh
+# 2. Wizard di setup interattivo
+jht setup
 
-# 3. Fill in your candidate profile
-# Edit candidate_profile.yml — skills, experience, target roles
+# 3. Compila il tuo profilo candidato
+# Modifica candidate_profile.yml — skills, esperienza, ruoli target
+```
 
-# 4. Fill in web credentials
-# Edit web/.env.local — add your Supabase URL and anon key
+> **Claude Max:** nessuna API key necessaria — il CLI usa la tua subscription.
+> **API key:** aggiungi `ANTHROPIC_API_KEY` a `.env`.
 
-# 5. Launch the agent team
-./.launcher/start.sh
+---
 
-# 6. Launch the web app
+## 🖥️ Utilizzo
+
+### CLI
+
+```bash
+jht setup          # Wizard configurazione guidata
+jht config show    # Mostra configurazione corrente
+jht status         # Stato agenti e sistema
+jht team start     # Avvia tutto il team
+jht team stop      # Ferma tutto il team
+jht cron list      # Lista task schedulati
+```
+
+### TUI (Terminal UI)
+
+```bash
+jht tui
+# Tab / ↑↓  — naviga tra gli agenti
+# Ctrl+C×2  — esci
+```
+
+```
+┌─ JHT TUI ─ agente: scout ─ connected ──────────────────┐
+│ AGENTI         │  [chat / log agente selezionato]       │
+│ ────────────   │                                        │
+│ > ● scout      │                                        │
+│   ◐ analista   │                                        │
+│   ✗ critico    │                                        │
+├────────────────┴────────────────────────────────────────┤
+│ connected │ 1/7 attivi │ tok 12k  │  Tab  Ctrl+C  esci  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Web Dashboard
+
+```bash
 cd web && npm run dev
 # → http://localhost:3000
 ```
 
-### Windows (PowerShell)
-
-```powershell
-# 1. Clone the repo
-git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team
-
-# 2. Run setup
-powershell -ExecutionPolicy Bypass -File setup.ps1
-
-# 3. Fill in your candidate profile
-# Edit candidate_profile.yml
-
-# 4. Fill in web credentials
-# Edit web\.env.local
-
-# 5. Launch the web app
-cd web; npm run dev
-# → http://localhost:3000
-```
-
-> **Claude Max users:** no API key needed — the CLI uses your subscription automatically.
-> **API key users:** add `ANTHROPIC_API_KEY` to `.env`.
-
-### Alternative: Docker (hot reload)
+Oppure con Docker:
 
 ```bash
 cd web && docker compose up
-# → http://localhost:3000
 ```
 
----
-
-## Architecture
-
-```
-scout/ → analista/ → scorer/ → scrittore/ → critico/ → you click send
-```
-
-Each agent is a Claude Code session with a dedicated `CLAUDE.md` instruction file. The Captain (`alfa/`) coordinates the full pipeline via tmux and a shared SQLite database.
-
-See [`shared/docs/architettura.md`](shared/docs/architettura.md) for the full flow diagram.
+Pagine disponibili: `/dashboard` · `/agents` · `/settings` · `/cron` · `/team`
 
 ---
 
-## Team
+## 🗺️ Roadmap
 
-| Agent | Role | Model |
-|-------|------|-------|
-| `scout` | Finds job postings | Sonnet |
-| `analista` | Verifies JDs and companies | Sonnet |
-| `scorer` | Scores positions 0-100 | Sonnet |
-| `scrittore` | Writes CV + cover letter | Opus |
-| `critico` | Blind CV review | Sonnet |
-| `capitano` | Coordinates pipeline | Opus |
-| `monitor` | Tracks API usage | Haiku |
-| `mentor` | Gap analysis | Sonnet |
-| `archi-1/2` | Infrastructure | Opus |
+- [x] Pipeline multi-agente (scout → analista → scorer → scrittore → critico)
+- [x] CLI `jht` con setup wizard interattivo
+- [x] TUI multi-agente con navigazione agenti
+- [x] Web dashboard (agenti, cron, impostazioni)
+- [x] Astrazione provider LLM (Claude / OpenAI / Minimax)
+- [x] Gateway HTTP multi-agente
+- [x] Canali di comunicazione (Web, CLI, Telegram)
+- [x] Credenziali cifrate AES-256
+- [x] Memoria agenti (SOUL / IDENTITY / MEMORY)
+- [x] Logger strutturato con rolling file
+- [x] Script deploy e health-check produzione
+- [ ] Supporto multi-workspace
+- [ ] Notifiche Telegram in tempo reale
+- [ ] Export candidature in formato ATS-ready
+- [ ] Dashboard analytics avanzate
+- [ ] Supporto modelli locali (Ollama)
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Pull requests welcome. Please read [`shared/docs/add-agent.md`](shared/docs/add-agent.md) before adding new agents.
+Pull request benvenute. Prima di aggiungere nuovi agenti leggi [`shared/docs/add-agent.md`](shared/docs/add-agent.md).
 
 ---
 
-## License
+## 📄 Licenza
 
-MIT — see [LICENSE](LICENSE).
+MIT — vedi [LICENSE](LICENSE).
