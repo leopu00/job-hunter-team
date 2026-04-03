@@ -53,7 +53,7 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
 
   const chatPanelSlot = new Container();
   const chatPlaceholder = new Text(
-    theme.dim("  [pannello chat — gestito da Pip]"),
+    theme.dim("  [pannello chat]"),
     0,
     0,
   );
@@ -77,13 +77,12 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
 
   const updateStatusBar = (state: JhtTuiState) => {
     const selectedAgent = state.agents.find((a) => a.id === state.selectedAgentId) ?? null;
-    const workingAgents = state.agents.filter((a) => a.status === "working").length;
     statusBar.update({
       connectionStatus: state.connectionStatus,
       activityStatus: state.activityStatus,
       selectedAgent,
       totalAgents: state.agents.length,
-      workingAgents,
+      workingAgents: state.activeTmuxCount,
     });
   };
 

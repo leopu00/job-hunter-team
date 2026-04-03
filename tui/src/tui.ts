@@ -17,9 +17,27 @@
  *   └─────────────────────────────────────────────────────────┘
  */
 
+import { spawnSync } from "node:child_process";
 import { Key, matchesKey, ProcessTerminal, TUI } from "@mariozechner/pi-tui";
 import { createJhtLayout } from "./tui-layout.js";
 import type { JhtAgent, JhtTuiState, TuiOptions } from "./tui-types.js";
+
+/** Conta le sessioni tmux il cui nome inizia con JHT- */
+function countActiveTmuxSessions(): number {
+  try {
+    const result = spawnSync("tmux", ["list-sessions", "-F", "#{session_name}"], {
+      encoding: "utf-8",
+      timeout: 1000,
+    });
+    if (result.status !== 0 || !result.stdout) return 0;
+    return result.stdout
+      .split("\n")
+      .filter((s) => s.startsWith("JHT-"))
+      .length;
+  } catch {
+    return 0;
+  }
+}
 
 // Agenti di default — in produzione arriveranno dal backend
 const KNOWN_AGENTS: JhtAgent[] = [
@@ -43,6 +61,7 @@ export async function runJhtTui(opts: TuiOptions = {}) {
     toolsExpanded: false,
     lastCtrlCAt: 0,
     isConnected: false,
+    activeTmuxCount: countActiveTmuxSessions(),
   };
 
   const tui = new TUI(new ProcessTerminal());
@@ -141,8 +160,20 @@ export async function runJhtTui(opts: TuiOptions = {}) {
 
   tui.start();
 
+  // Polling sessioni tmux ogni 5 secondi per aggiornare il contatore agenti attivi
+  const tmuxPollInterval = setInterval(() => {
+    const count = countActiveTmuxSessions();
+    if (count !== state.activeTmuxCount) {
+      state.activeTmuxCount = count;
+      layout.updateStatusBar(state);
+      tui.requestRender();
+    }
+  }, 5_000);
+  if (tmuxPollInterval.unref) tmuxPollInterval.unref();
+
   await new Promise<void>((resolve) => {
     process.once("exit", () => {
+      clearInterval(tmuxPollInterval);
       process.removeListener("SIGINT", sigintHandler);
       process.removeListener("SIGTERM", sigtermHandler);
       resolve();
