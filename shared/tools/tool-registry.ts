@@ -11,7 +11,7 @@ import type {
   ToolProfileId,
   ToolProfilePolicy,
   ToolSection,
-} from "./types";
+} from "./types.js";
 
 // --- Sezioni catalogo ---
 

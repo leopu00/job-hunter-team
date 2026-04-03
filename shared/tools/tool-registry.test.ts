@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import type { Tool, ToolDefinition } from "./types";
+import type { Tool, ToolDefinition } from "./types.js";
 import {
   registerTool,
   getTool,
@@ -10,7 +10,7 @@ import {
   resolveProfilePolicy,
   listSections,
   isKnownToolId,
-} from "./tool-registry";
+} from "./tool-registry.js";
 
 // Helper: crea un tool fake
 function fakeTool(name: string): Tool {
