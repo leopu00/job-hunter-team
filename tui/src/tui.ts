@@ -41,7 +41,6 @@ export async function runJhtTui(opts: TuiOptions = {}) {
     connectionStatus: opts.url ? "connecting" : "standalone",
     activityStatus: "idle",
     toolsExpanded: false,
-    lastCtrlCAt: 0,
     isConnected: false,
   };
 
@@ -57,7 +56,6 @@ export async function runJhtTui(opts: TuiOptions = {}) {
   layout.updateStatusBar(state);
 
   let exitRequested = false;
-  let lastCtrlCAt = 0;
 
   const requestExit = () => {
     if (exitRequested) return;
@@ -108,17 +106,9 @@ export async function runJhtTui(opts: TuiOptions = {}) {
       return { consume: true };
     }
 
-    // Ctrl+C — esci (doppio per conferma)
+    // Ctrl+C — esci
     if (matchesKey(data, Key.ctrl("c"))) {
-      const now = Date.now();
-      if (now - lastCtrlCAt <= 1000) {
-        requestExit();
-      } else {
-        lastCtrlCAt = now;
-        state.activityStatus = "premi Ctrl+C ancora per uscire";
-        layout.updateStatusBar(state);
-        tui.requestRender();
-      }
+      requestExit();
       return { consume: true };
     }
 
