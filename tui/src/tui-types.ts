@@ -49,6 +49,8 @@ export type JhtTuiState = {
   toolsExpanded: boolean;
   lastCtrlCAt: number;
   isConnected: boolean;
+  /** Numero di sessioni JHT-* attive lette da tmux list-sessions */
+  activeTmuxCount: number;
 };
 
 // --- Tipi per il layer chat/event (tui-event-handlers, tui-command-handlers) ---
