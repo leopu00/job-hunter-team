@@ -58,14 +58,28 @@ Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
 | Modulo | Descrizione |
 |--------|-------------|
 | `config/` | Config centralizzata `jht.config.json` — schema Zod, I/O, tipi |
-| `cron/` | Scheduler task ricorrenti con espressioni cron |
+| `agents/` | Agent scope, runner con tool loop, config e sessioni agente |
+| `sessions/` | Gestione sessioni agente — creazione, persistenza, registry |
+| `hooks/` | Hook system — registry, loader, frontmatter, source precedence |
+| `events/` | Event bus pub/sub tipizzato — canali agente, sistema, messaggi |
+| `plugins/` | Sistema plugin — discovery, caricamento, lifecycle |
+| `context-engine/` | Motore contesto — raccolta e prioritizzazione info per LLM |
+| `tools/` | Tool registry — bash executor, heartbeat, tool custom per agenti |
 | `llm/` | Astrazione provider AI — Claude, OpenAI, Minimax con factory |
+| `rate-limiter/` | Rate limiting fixed-window, retry backoff, provider runner |
+| `retry/` | Retry con backoff esponenziale e circuit breaker 3 stati |
+| `queue/` | Job queue con priorita', retry, dead-letter, concorrenza |
+| `templates/` | Template .md con frontmatter, variabili, composizione prompt |
+| `notifications/` | Sistema notifiche — registry, notifier, canali multipli |
+| `analytics/` | Tracking chiamate API, token usage, latenza p95, costi |
+| `validators/` | Schema Zod per config, credentials, tasks, snapshot |
+| `history/` | Buffer storico conversazioni e azioni agente |
 | `gateway/` | Gateway HTTP multi-agente con router e middleware |
 | `channels/` | Canali di comunicazione — Web, CLI, Telegram |
 | `telegram/` | Bridge bidirezionale Telegram con bot Grammy |
 | `credentials/` | Gestione credenziali cifrate AES-256 — API key e OAuth |
-| `memory/` | Gestione identità, anima e memoria agenti (SOUL/IDENTITY/MEMORY) |
-| `tools/` | Tool registry — bash, heartbeat, tool custom per agenti |
+| `memory/` | Gestione identita', anima e memoria agenti (SOUL/IDENTITY/MEMORY) |
+| `cron/` | Scheduler task ricorrenti con espressioni cron |
 | `logger/` | Logger strutturato JSON con rolling file e output colorato |
 | `deploy/` | Script deploy, health-check e monitor produzione |
 | `daemon/` | Script installazione/disinstallazione daemon di sistema |
@@ -176,10 +190,18 @@ Pagine disponibili: `/dashboard` · `/agents` · `/settings` · `/cron` · `/tea
 - [x] Memoria agenti (SOUL / IDENTITY / MEMORY)
 - [x] Logger strutturato con rolling file
 - [x] Script deploy e health-check produzione
+- [x] Agent runner con tool loop e abort
+- [x] Hook system con source precedence
+- [x] Event bus pub/sub tipizzato
+- [x] Plugin system con lifecycle
+- [x] Context engine per LLM
+- [x] Rate limiter e retry con circuit breaker
+- [x] Job queue con dead-letter
+- [x] Template engine con composizione prompt
+- [x] Sistema notifiche multi-canale
+- [x] Analytics token usage e costi
 - [ ] Supporto multi-workspace
-- [ ] Notifiche Telegram in tempo reale
 - [ ] Export candidature in formato ATS-ready
-- [ ] Dashboard analytics avanzate
 - [ ] Supporto modelli locali (Ollama)
 
 ---
