@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['config/**/*.test.ts', 'wizard/**/*.test.js', 'telegram/**/*.test.ts', 'deploy/**/*.test.ts', 'assistant/**/*.test.ts', 'context-engine/**/*.test.ts'],
+    include: ['config/**/*.test.ts', 'wizard/**/*.test.js', 'telegram/**/*.test.ts', 'deploy/**/*.test.ts', 'assistant/**/*.test.ts', 'context-engine/**/*.test.ts', 'tasks/**/*.test.ts'],
     environment: 'node',
   },
 });
