@@ -84,7 +84,7 @@ if [ -n "$SENSITIVE_FILES" ]; then
 fi
 
 # ── BLOCCO DIRECTORY SENSIBILI ────────────────────────────────
-SENSITIVE_DIRS="shared/data/applications|shared/data/linkedin|shared/telegram|__pycache__"
+SENSITIVE_DIRS="shared/data/applications|shared/data/linkedin|shared/telegram/sessions|__pycache__"
 SENSITIVE_DIR_FILES=""
 while IFS= read -r file; do
     if echo "$file" | grep -qiE "^($SENSITIVE_DIRS)"; then
