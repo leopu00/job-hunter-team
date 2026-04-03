@@ -21,7 +21,7 @@ export type {
   HeartbeatEvent,
   HeartbeatRunResult,
   HeartbeatHandler,
-} from "./types";
+} from "./types.js";
 
 export {
   registerTool,
@@ -32,9 +32,9 @@ export {
   resolveProfilePolicy,
   listSections,
   isKnownToolId,
-} from "./tool-registry";
+} from "./tool-registry.js";
 
-export { createExecTool } from "./bash-tool";
+export { createExecTool } from "./bash-tool.js";
 
 export {
   resolveIndicatorType,
@@ -48,4 +48,4 @@ export {
   startHeartbeat,
   stopHeartbeat,
   resetHeartbeatForTest,
-} from "./heartbeat";
+} from "./heartbeat.js";

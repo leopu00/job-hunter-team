@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process";
-import type { Tool, ToolResult, ExecToolDefaults, ExecToolDetails } from "./types";
+import type { Tool, ToolResult, ExecToolDefaults, ExecToolDetails } from "./types.js";
 
 const DEFAULT_TIMEOUT_SEC = 120;
 const DEFAULT_MAX_OUTPUT = 64 * 1024; // 64KB

@@ -46,7 +46,7 @@ export class CLIChannel implements Channel {
       prompt: this.#prompt,
     });
 
-    this.#rl.on('line', (line: string) => {
+    this.#rl.on('line', async (line: string) => {
       const trimmed = line.trim();
       if (!trimmed) return;
 
@@ -56,9 +56,11 @@ export class CLIChannel implements Channel {
       });
 
       for (const handler of this.#handlers) {
-        handler(message).catch((err) => {
-          console.error('[cli-channel] Errore handler:', err.message);
-        });
+        try {
+          await handler(message);
+        } catch (err) {
+          console.error('[cli-channel] Errore handler:', (err as Error).message);
+        }
       }
     });
 

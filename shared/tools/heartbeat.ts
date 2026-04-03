@@ -11,7 +11,7 @@ import type {
   HeartbeatIndicatorType,
   HeartbeatRunResult,
   HeartbeatStatus,
-} from "./types";
+} from "./types.js";
 
 // --- Stato globale ---
 
