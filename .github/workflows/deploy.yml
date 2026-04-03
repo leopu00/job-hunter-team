@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - "web/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 jobs:
@@ -41,18 +42,21 @@ jobs:
         run: npm install --global vercel@50.37.3
 
       - name: Pull Vercel environment
+        working-directory: web
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Build project
+        working-directory: web
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Deploy to Vercel
+        working-directory: web
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
