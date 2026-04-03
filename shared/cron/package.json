@@ -1,0 +1,10 @@
+{
+  "name": "jht-cron",
+  "version": "1.0.0",
+  "description": "JHT scheduling system per task ricorrenti",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "croner": "^9.0.0"
+  }
+}
