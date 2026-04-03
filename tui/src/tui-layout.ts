@@ -53,7 +53,7 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
 
   const chatPanelSlot = new Container();
   const chatPlaceholder = new Text(
-    theme.dim("  [pannello chat — gestito da Pip]"),
+    theme.dim("  [pannello chat]"),
     0,
     0,
   );
