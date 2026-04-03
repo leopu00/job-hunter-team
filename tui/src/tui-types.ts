@@ -47,7 +47,6 @@ export type JhtTuiState = {
   connectionStatus: string;
   activityStatus: string;
   toolsExpanded: boolean;
-  lastCtrlCAt: number;
   isConnected: boolean;
 };
 
