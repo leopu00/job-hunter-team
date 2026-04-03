@@ -12,7 +12,7 @@ const validConfig = {
     claude: { name: 'claude' as const, auth_method: 'api_key' as const, api_key: 'sk-ant-key123' },
   },
   channels: {},
-  workspace: '/home/user/.jht',
+  workspace: '/tmp/test-jht',
 };
 
 beforeEach(() => {
@@ -67,7 +67,7 @@ describe('readConfig', () => {
     if (r.success) {
       expect(r.data.active_provider).toBe('claude');
       expect(r.data.version).toBe(1);
-      expect(r.data.workspace).toBe('/home/user/.jht');
+      expect(r.data.workspace).toBe('/tmp/test-jht');
     }
   });
 });

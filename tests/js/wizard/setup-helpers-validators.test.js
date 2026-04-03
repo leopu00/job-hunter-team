@@ -111,6 +111,6 @@ describe('validateWorkspacePath', () => {
 
   it('accetta path con directory padre esistente', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    expect(validateWorkspacePath('/home/user/.jht')).toBeUndefined();
+    expect(validateWorkspacePath('/tmp/test-jht')).toBeUndefined();
   });
 });
