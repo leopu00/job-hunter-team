@@ -185,12 +185,155 @@ function registerTeamCommand(program) {
     .description('Mostra agenti attualmente attivi')
     .action(statusAction);
 
+  team
+    .command('start [agente]')
+    .description('Avvia un agente o il team default (es: jht team start scout:1)')
+    .option('-m, --mode <mode>', 'Modalita: default o fast', 'default')
+    .action(startAction);
+
+  team
+    .command('stop [agente]')
+    .description('Ferma un agente o tutti gli agenti')
+    .option('-a, --all', 'Ferma tutti gli agenti')
+    .action(stopAction);
+
   program.addCommand(team);
 }
 
-module.exports = {
-  AGENTS, DEFAULT_TEAM, c,
-  tmuxAvailable, claudeAvailable, getActiveSessions,
-  sessionName, isSessionActive, resolveConfig, getWorkspace, parseAgentArg,
-  registerTeamCommand,
-};
+// ── Comando: team start ─────────────────────────────────────────────────────
+
+function startAction(agentArg, options) {
+  if (!tmuxAvailable()) {
+    console.error(c.red('Errore: tmux non trovato. Installa con: brew install tmux'));
+    process.exit(1);
+  }
+  if (!claudeAvailable()) {
+    console.error(c.red('Errore: Claude CLI non trovato. Scarica da https://claude.ai/download'));
+    process.exit(1);
+  }
+
+  const workspace = getWorkspace();
+  if (!workspace) {
+    console.error(c.red('Errore: JHT_WORKSPACE non configurato.'));
+    console.error('  Impostalo in .env o come variabile d\'ambiente.');
+    process.exit(1);
+  }
+
+  const { repoRoot } = resolveConfig();
+  const mode = options.mode || 'default';
+  const targets = agentArg ? [agentArg] : DEFAULT_TEAM;
+
+  console.log('');
+  console.log(c.bold('Avvio agenti...'));
+  console.log(c.dim(`  Mode: ${mode} | Workspace: ${workspace}`));
+  console.log('');
+
+  let started = 0;
+  let skipped = 0;
+
+  for (const target of targets) {
+    const parsed = parseAgentArg(target);
+    if (!parsed) {
+      console.log(`  ${c.red('✗')} ${target} — ruolo non riconosciuto`);
+      continue;
+    }
+
+    const { role, instance } = parsed;
+    const agent = AGENTS.find((a) => a.role === role);
+    const sName = sessionName(role, instance);
+
+    if (isSessionActive(sName)) {
+      console.log(`  ${c.yellow('⏭')} ${sName} — gia attivo`);
+      skipped++;
+      continue;
+    }
+
+    let effort = agent.effort;
+    if (mode === 'fast') effort = 'low';
+
+    const agentDir = agent.multi ? path.join(workspace, `${role}-${instance}`) : path.join(workspace, role);
+    if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+
+    if (repoRoot) {
+      const template = path.join(repoRoot, 'agents', role, `${role}.md`);
+      const dest = path.join(agentDir, 'CLAUDE.md');
+      if (!fs.existsSync(dest) && fs.existsSync(template)) fs.copyFileSync(template, dest);
+    }
+
+    try {
+      execSync(`tmux new-session -d -s "${sName}" -c "${agentDir}"`, { stdio: 'ignore' });
+      execSync(`tmux send-keys -t "${sName}" "claude --dangerously-skip-permissions --effort ${effort}" C-m`, { stdio: 'ignore' });
+      spawn('bash', ['-c', `sleep 4 && tmux send-keys -t "${sName}" Enter && sleep 3 && tmux send-keys -t "${sName}" Enter`], {
+        detached: true, stdio: 'ignore',
+      }).unref();
+      console.log(`  ${c.green('✓')} ${sName} avviato (effort: ${effort})`);
+      started++;
+    } catch (err) {
+      console.log(`  ${c.red('✗')} ${sName} — errore avvio: ${err.message}`);
+    }
+  }
+
+  console.log('');
+  console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}`);
+  console.log('');
+}
+
+// ── Comando: team stop ──────────────────────────────────────────────────────
+
+function stopAction(agentArg, options) {
+  if (!tmuxAvailable()) {
+    console.error(c.red('Errore: tmux non trovato.'));
+    process.exit(1);
+  }
+
+  const sessions = getActiveSessions();
+  let targets;
+
+  if (options.all || !agentArg) {
+    targets = sessions.filter((s) =>
+      AGENTS.some((a) => s === a.prefix || s.startsWith(a.prefix + '-'))
+    );
+    if (targets.length === 0) {
+      console.log(c.yellow('Nessun agente attivo da fermare.'));
+      return;
+    }
+  } else {
+    const parsed = parseAgentArg(agentArg);
+    if (!parsed) {
+      console.error(c.red(`Ruolo "${agentArg}" non riconosciuto.`));
+      console.error('Ruoli validi: ' + AGENTS.map((a) => a.role).join(', '));
+      process.exit(1);
+    }
+    const sName = sessionName(parsed.role, parsed.instance);
+    if (!isSessionActive(sName)) {
+      console.log(c.yellow(`${sName} non e attivo.`));
+      return;
+    }
+    targets = [sName];
+  }
+
+  console.log('');
+  console.log(c.bold('Fermo agenti...'));
+  console.log('');
+
+  let stopped = 0;
+  for (const s of targets.sort()) {
+    try {
+      execSync(`tmux send-keys -t "${s}" "/exit" C-m`, { stdio: 'ignore' });
+    } catch { /* sessione gia chiusa */ }
+
+    try {
+      execSync(`sleep 1 && tmux kill-session -t "${s}"`, { stdio: 'ignore' });
+      console.log(`  ${c.green('✓')} ${s} fermato`);
+      stopped++;
+    } catch {
+      console.log(`  ${c.yellow('⚠')} ${s} — non trovato (gia chiuso?)`);
+    }
+  }
+
+  console.log('');
+  console.log(`${c.green(stopped + ' agenti fermati')}`);
+  console.log('');
+}
+
+module.exports = { registerTeamCommand };
