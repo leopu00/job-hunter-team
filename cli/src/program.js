@@ -3,6 +3,7 @@ import { registerSetupCommand } from './commands/setup.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerTeamCommand } from './commands/team/index.js';
+import { registerCronCommand } from './commands/cron.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -16,6 +17,7 @@ export function buildProgram() {
   registerConfigCommand(program);
   registerStatusCommand(program);
   registerTeamCommand(program);
+  registerCronCommand(program);
 
   return program;
 }
