@@ -35,8 +35,9 @@ shared/data/applications/
 shared/data/linkedin-alerts/
 shared/data/incoming/
 
-# Telegram: bot, reader IMAP
-shared/telegram/
+# Telegram: sessioni e dati personali (il bridge code e' versionato)
+shared/telegram/sessions/
+shared/telegram/*.session
 
 # Screenshot con dati personali
 *.png
