@@ -66,5 +66,62 @@ class ToolMessage extends Container {
   setPartialResult(text: string) { this.output.setText(dim(text)); }
 }
 
-// ChatPanel aggiunto nel prossimo commit
+export class ChatPanel extends Container {
+  private readonly max: number;
+  private assistantRuns = new Map<string, AssistantMessage>();
+  private toolsById = new Map<string, ToolMessage>();
+
+  constructor(max = 180) { super(); this.max = Math.max(20, max); }
+
+  private append(c: Container) {
+    this.addChild(c);
+    while (this.children.length > this.max) {
+      const old = this.children[0];
+      if (!old) break;
+      this.removeChild(old);
+      for (const [k, v] of this.assistantRuns) { if (v === old) { this.assistantRuns.delete(k); break; } }
+      for (const [k, v] of this.toolsById) { if (v === old) { this.toolsById.delete(k); break; } }
+    }
+  }
+
+  clearAll() { this.clear(); this.assistantRuns.clear(); this.toolsById.clear(); }
+
+  addSystem(text: string) {
+    const e = new Container();
+    e.addChild(new Spacer(1)); e.addChild(new Text(systemFg(text), 1, 0)); this.append(e);
+  }
+
+  addUser(text: string) { this.append(new UserMessage(text)); }
+
+  updateAssistant(text: string, runId: string) {
+    const e = this.assistantRuns.get(runId);
+    if (e) { e.setText(text); return; }
+    const msg = new AssistantMessage(text); this.assistantRuns.set(runId, msg); this.append(msg);
+  }
+
+  finalizeAssistant(text: string, runId: string) {
+    const e = this.assistantRuns.get(runId);
+    if (e) { e.setText(text); this.assistantRuns.delete(runId); return; }
+    this.append(new AssistantMessage(text));
+  }
+
+  dropAssistant(runId: string) {
+    const e = this.assistantRuns.get(runId);
+    if (!e) return; this.removeChild(e); this.assistantRuns.delete(runId);
+  }
+
+  startTool(toolCallId: string, toolName: string, _args: unknown) {
+    if (this.toolsById.has(toolCallId)) return this.toolsById.get(toolCallId)!;
+    const t = new ToolMessage(toolName); this.toolsById.set(toolCallId, t); this.append(t); return t;
+  }
+
+  updateToolResult(id: string, result: unknown, opts?: { partial?: boolean; isError?: boolean }) {
+    const t = this.toolsById.get(id); if (!t) return;
+    const text = typeof result === "string" ? result : JSON.stringify(result ?? "");
+    if (opts?.partial) t.setPartialResult(text); else t.setResult(text, { isError: opts?.isError });
+  }
+
+  setToolsExpanded(_expanded: boolean) { /* future: collapse/expand tool output */ }
+}
+
 export { UserMessage, AssistantMessage, ToolMessage };
