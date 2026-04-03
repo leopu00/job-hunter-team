@@ -13,6 +13,9 @@ export class ChannelRegistry {
   /** Registra un canale. Sovrascrive se gia' presente. */
   register(channel: Channel): void {
     this.#channels.set(channel.id, channel);
+    for (const handler of this.#globalHandlers) {
+      channel.onMessage(handler);
+    }
   }
 
   /** Rimuove un canale dal registro. */
