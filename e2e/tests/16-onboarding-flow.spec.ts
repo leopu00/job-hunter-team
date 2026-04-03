@@ -11,8 +11,9 @@ const BASE = process.env.BASE_URL || 'https://job-hunter-team.vercel.app';
 
 test.describe('Onboarding — Setup Wizard Web', () => {
 
-  test('pagina /setup carica correttamente', async ({ page }) => {
+  test('pagina /setup carica correttamente (non 404)', async ({ page }) => {
     const res = await page.goto(`${BASE}/setup`);
+    expect(res?.status()).not.toBe(404);
     expect(res?.status()).toBeLessThan(500);
     await expect(page).toHaveTitle(/.+/);
   });
