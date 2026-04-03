@@ -1,0 +1,15 @@
+{
+  "name": "jht-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jht": "./bin/jht.js"
+  },
+  "scripts": {
+    "start": "node bin/jht.js"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  }
+}
