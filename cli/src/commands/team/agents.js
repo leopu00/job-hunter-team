@@ -48,8 +48,8 @@ export function getActiveSessions() {
 export function sessionName(role, instance) {
   const agent = AGENTS.find((a) => a.role === role);
   if (!agent) return null;
-  if (agent.multi && instance) return `${agent.prefix}-${instance}`;
-  return agent.prefix;
+  if (agent.multi && instance) return `JHT-${agent.prefix}-${instance}`;
+  return `JHT-${agent.prefix}`;
 }
 
 export function isSessionActive(name) {

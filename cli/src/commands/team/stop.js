@@ -16,7 +16,7 @@ export function stopAction(agentArg, options) {
 
   if (options.all || !agentArg) {
     targets = sessions.filter((s) =>
-      AGENTS.some((a) => s === a.prefix || s.startsWith(a.prefix + '-'))
+      AGENTS.some((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`))
     );
     if (targets.length === 0) {
       console.log(c.yellow('Nessun agente attivo da fermare.'));
