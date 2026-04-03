@@ -1,0 +1,19 @@
+{
+  "name": "@jht/deploy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "health": "tsx health-check.ts",
+    "health:json": "tsx health-check.ts --json",
+    "monitor": "tsx monitor.ts",
+    "deploy": "bash deploy.sh",
+    "deploy:build": "bash deploy.sh --build-only",
+    "deploy:restart": "bash deploy.sh --restart-only",
+    "deploy:health": "bash deploy.sh --health"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}
