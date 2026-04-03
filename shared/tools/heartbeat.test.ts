@@ -10,8 +10,8 @@ import {
   areHeartbeatsEnabled,
   requestHeartbeatNow,
   resetHeartbeatForTest,
-} from "./heartbeat";
-import type { HeartbeatEvent } from "./types";
+} from "./heartbeat.js";
+import type { HeartbeatEvent } from "./types.js";
 
 describe("heartbeat", () => {
   beforeEach(() => {
