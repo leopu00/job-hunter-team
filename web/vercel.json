@@ -3,5 +3,6 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": ".next",
-  "regions": ["cdg1"]
+  "regions": ["cdg1"],
+  "cleanUrls": true
 }
