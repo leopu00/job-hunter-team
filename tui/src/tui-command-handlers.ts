@@ -75,7 +75,54 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     requestRender();
   };
 
-  const handleCommand = async (raw: string) => { /* implementato nel prossimo commit */ void raw; };
+  const HELP = `commands:\n  /status  — gateway status\n  /stop    — interrompi run attivo\n  /new     — nuova sessione\n  /agent [id] — mostra o cambia agente\n  /agents  — lista agenti\n  /help    — mostra aiuto`.trim();
+
+  const handleCommand = async (raw: string) => {
+    const { name, args } = parseCommand(raw);
+    if (!name) return;
+    switch (name) {
+      case "help":
+        chatLog.addSystem(HELP); break;
+
+      case "status":
+        try { const s = await client.getStatus(); for (const l of formatStatus(s)) chatLog.addSystem(l); }
+        catch (err) { chatLog.addSystem(`status fallito: ${String(err)}`); }
+        break;
+
+      case "stop": case "abort":
+        if (!state.activeChatRunId) { chatLog.addSystem("nessun run attivo"); break; }
+        try { await client.abortRun(state.currentSessionKey); chatLog.addSystem("run interrotto"); }
+        catch (err) { chatLog.addSystem(`stop fallito: ${String(err)}`); }
+        break;
+
+      case "new":
+        try {
+          const key = `jht-${randomUUID()}`;
+          state.currentSessionKey = key; chatLog.addSystem(`nuova sessione: ${key}`);
+        } catch (err) { chatLog.addSystem(`nuova sessione fallita: ${String(err)}`); }
+        break;
+
+      case "agent":
+        if (!args) { chatLog.addSystem(`agente attivo: ${state.currentAgentId}`); }
+        else { state.currentAgentId = args.trim().toLowerCase(); chatLog.addSystem(`agente: ${state.currentAgentId}`); }
+        break;
+
+      case "agents":
+        try {
+          await refreshAgents();
+          if (state.agents.length === 0) { chatLog.addSystem("nessun agente"); break; }
+          for (const a of state.agents) {
+            const marker = a.id === state.currentAgentId ? " ◀" : "";
+            chatLog.addSystem(`  ${a.id} (${a.name})${marker}`);
+          }
+        } catch (err) { chatLog.addSystem(`agenti fallito: ${String(err)}`); }
+        break;
+
+      default:
+        await sendMessage(raw); return;
+    }
+    requestRender();
+  };
 
   return { handleCommand, sendMessage };
 }
