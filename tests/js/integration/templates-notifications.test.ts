@@ -194,3 +194,87 @@ describe("Broadcast con Template", () => {
   });
 });
 
+describe("Subscription + Template Notification", () => {
+  it("subscribe canale → send notifica con template body", async () => {
+    registerAdapter(spyAdapter("desktop"));
+    subscribe("desktop", "user-leo", { userId: "leo" });
+    const subs = listSubscriptionsByChannel("desktop");
+    expect(subs).toHaveLength(1);
+    const body = renderTemplate("Ciao {nome}, hai {n} nuovi job", { nome: "Leo", n: "7" });
+    const n = createNotification("desktop", "Aggiornamento", body, { sessionId: "s-1" });
+    const result = await send(n);
+    expect(result.success).toBe(true);
+    expect(sentPayloads[0].body).toBe("Ciao Leo, hai 7 nuovi job");
+  });
+
+  it("one-shot subscription + template → pruneOneShot dopo invio", async () => {
+    registerAdapter(spyAdapter("telegram"));
+    subscribe("telegram", "chat-99", { mode: "once", userId: "guest" });
+    expect(subscriptionCount("telegram")).toBe(1);
+    const body = renderTemplate("Benvenuto {nome}!", { nome: "Guest" });
+    const n = createNotification("telegram", "Welcome", body);
+    await send(n);
+    expect(sentPayloads[0].body).toBe("Benvenuto Guest!");
+    const removed = pruneOneShot();
+    expect(removed).toBe(1);
+    expect(subscriptionCount("telegram")).toBe(0);
+  });
+
+  it("subscribe multi-canale + broadcast template a tutti", async () => {
+    registerAdapter(spyAdapter("desktop"));
+    registerAdapter(spyAdapter("telegram"));
+    subscribe("desktop", "user-a", { userId: "a" });
+    subscribe("telegram", "chat-a", { userId: "a" });
+    const body = renderTemplate("Job {id} aggiornato: {stato}", { id: "J-100", stato: "intervista" });
+    const results = await broadcast("Update", body);
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(sentPayloads.every((p) => p.body.includes("J-100"))).toBe(true);
+  });
+
+  it("composePrompt mode none → body vuoto, notifica inviata comunque", async () => {
+    registerAdapter(spyAdapter("desktop"));
+    const composed = composePrompt({ mode: "none", sections: [createSection("x", "testo", 90)] });
+    expect(composed.text).toBe("");
+    const n = createNotification("desktop", "Vuoto", composed.text);
+    const result = await send(n);
+    expect(result.success).toBe(true);
+    expect(sentPayloads[0].body).toBe("");
+  });
+
+  it("renderTemplate con variabili agente popola notifica completa", async () => {
+    registerAdapter(spyAdapter("telegram"));
+    subscribe("telegram", "chat-ops", { userId: "ops" });
+    const vars = { agente: "scout", sessione: "s-42", azione: "ricerca completata" };
+    const body = renderTemplate("[{agente}] sessione {sessione}: {azione}", vars);
+    const n = createNotification("telegram", "Agent Event", body, {
+      agentId: vars.agente, sessionId: vars.sessione, meta: { action: vars.azione },
+    });
+    const result = await send(n);
+    expect(result.success).toBe(true);
+    expect(sentPayloads[0].body).toBe("[scout] sessione s-42: ricerca completata");
+    expect(sentPayloads[0].agentId).toBe("scout");
+    expect(sentPayloads[0].sessionId).toBe("s-42");
+  });
+
+  it("pipeline completa: compose → subscribe → broadcast → prune", async () => {
+    registerAdapter(spyAdapter("desktop"));
+    registerAdapter(spyAdapter("web"));
+    subscribe("desktop", "u1", { mode: "persistent" });
+    subscribe("web", "endpoint-1", { mode: "once" });
+    const composed = composePrompt({
+      sections: [
+        createSection("title", "Report giornaliero {data}", 90),
+        createSection("body", "{n} candidature, {m} risposte", 50),
+      ],
+      variables: { data: "2026-04-04", n: "12", m: "3" },
+    });
+    const results = await broadcast("Daily", composed.text);
+    expect(results).toHaveLength(2);
+    expect(sentPayloads[0].body).toContain("Report giornaliero 2026-04-04");
+    expect(sentPayloads[0].body).toContain("12 candidature, 3 risposte");
+    const pruned = pruneOneShot();
+    expect(pruned).toBe(1);
+    expect(subscriptionCount()).toBe(1);
+  });
+});
