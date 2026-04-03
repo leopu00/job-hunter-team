@@ -13,9 +13,9 @@ export function listAction() {
   console.log(`  ${'─'.repeat(14)} ${'─'.repeat(16)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(40)}`);
 
   for (const agent of AGENTS) {
-    const sName = agent.multi ? `${agent.prefix}-N` : agent.prefix;
+    const sName = agent.multi ? `JHT-${agent.prefix}-N` : `JHT-${agent.prefix}`;
     const tipo = agent.multi ? 'multiplo' : 'singolo';
-    const active = sessions.some((s) => s.startsWith(agent.prefix));
+    const active = sessions.some((s) => s.startsWith(`JHT-${agent.prefix}`));
     const status = active ? c.green('●') : c.dim('○');
     console.log(
       `  ${status} ${agent.role.padEnd(12)} ${sName.padEnd(16)} ${tipo.padEnd(10)} ${agent.effort.padEnd(8)} ${agent.desc}`
@@ -35,7 +35,7 @@ export function statusAction() {
 
   const sessions = getActiveSessions();
   const agentSessions = sessions.filter((s) =>
-    AGENTS.some((a) => s === a.prefix || s.startsWith(a.prefix + '-'))
+    AGENTS.some((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`))
   );
 
   if (agentSessions.length === 0) {
@@ -51,7 +51,7 @@ export function statusAction() {
   console.log('');
 
   for (const s of agentSessions.sort()) {
-    const agent = AGENTS.find((a) => s === a.prefix || s.startsWith(a.prefix + '-'));
+    const agent = AGENTS.find((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`));
     const desc = agent ? c.dim(agent.desc) : '';
     console.log(`  ${c.green('●')} ${s.padEnd(20)} ${desc}`);
   }
