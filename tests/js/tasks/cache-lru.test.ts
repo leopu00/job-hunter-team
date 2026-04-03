@@ -187,3 +187,61 @@ describe("LRUCache — invalidazione", () => {
   });
 });
 
+describe("LRUCache — stats e callback", () => {
+  it("stats traccia hits, misses, hitRate", () => {
+    const cache = new LRUCache<string>({ maxEntries: 10, defaultTTL: 0 });
+    cache.set("a", "1");
+    cache.get("a"); // hit
+    cache.get("a"); // hit
+    cache.get("b"); // miss
+    const s = cache.stats();
+    expect(s.hits).toBe(2);
+    expect(s.misses).toBe(1);
+    expect(s.hitRate).toBeCloseTo(2 / 3);
+  });
+
+  it("evictions conteggiate nelle stats", () => {
+    const cache = new LRUCache<string>({ maxEntries: 2, defaultTTL: 0 });
+    cache.set("a", "1");
+    cache.set("b", "2");
+    cache.set("c", "3"); // evict a
+    expect(cache.stats().evictions).toBe(1);
+  });
+
+  it("resetStats azzera contatori", () => {
+    const cache = new LRUCache<string>({ maxEntries: 10, defaultTTL: 0 });
+    cache.set("a", "1");
+    cache.get("a");
+    cache.get("z");
+    cache.resetStats();
+    const s = cache.stats();
+    expect(s.hits).toBe(0);
+    expect(s.misses).toBe(0);
+    expect(s.hitRate).toBe(0);
+  });
+
+  it("onEvict callback invocata con reason corretta", () => {
+    const evicted: Array<{ key: string; reason: EvictReason }> = [];
+    const cache = new LRUCache<string>({
+      maxEntries: 2, defaultTTL: 0,
+      onEvict: (key, reason) => evicted.push({ key, reason }),
+    });
+    cache.set("a", "1");
+    cache.set("b", "2");
+    cache.set("c", "3"); // evict "a" -> lru
+    cache.delete("b");   // manual
+    cache.clear();        // clear "c"
+    expect(evicted).toEqual([
+      { key: "a", reason: "lru" },
+      { key: "b", reason: "manual" },
+      { key: "c", reason: "clear" },
+    ]);
+  });
+
+  it("set con size option memorizza dimensione", () => {
+    const cache = new LRUCache<string>({ defaultTTL: 0 });
+    cache.set("big", "data", { size: 1024 });
+    cache.get("big");
+    expect(cache.size).toBe(1);
+  });
+});
