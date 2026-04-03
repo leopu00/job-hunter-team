@@ -156,7 +156,7 @@ describe('runSetupWizard — config esistente', () => {
         active_provider: 'claude',
         providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-old' } },
         channels: {},
-        workspace: '/home/user',
+        workspace: '/tmp/test-jht',
       },
     });
 
@@ -180,7 +180,7 @@ describe('runSetupWizard — config esistente', () => {
         active_provider: 'claude',
         providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-old' } },
         channels: {},
-        workspace: '/home/user',
+        workspace: '/tmp/test-jht',
       },
     });
 

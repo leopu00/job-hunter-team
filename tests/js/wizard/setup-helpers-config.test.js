@@ -47,7 +47,7 @@ const validCfg = {
   active_provider: 'claude',
   providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-key' } },
   channels: {},
-  workspace: '/home/user',
+  workspace: '/tmp/test-jht',
 };
 
 describe('validateConfigBeforeWrite', () => {
@@ -110,12 +110,12 @@ describe('summarizeExistingConfig', () => {
     const summary = summarizeExistingConfig({
       active_provider: 'claude',
       providers: { claude: { model: 'claude-sonnet-4-6', auth_method: 'api_key' } },
-      workspace: '/home/user',
+      workspace: '/tmp/test-jht',
     });
     expect(summary).toMatch(/Claude/i);
     expect(summary).toMatch(/claude-sonnet-4-6/);
     expect(summary).toMatch(/api_key/);
-    expect(summary).toMatch(/\/home\/user/);
+    expect(summary).toMatch(/\/tmp\/test-jht/);
   });
 
   it('mostra Telegram configurato se presente', () => {

@@ -93,7 +93,7 @@ const validClaudeConfig = {
     claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-key' },
   },
   channels: {},
-  workspace: '/home/user/.jht',
+  workspace: '/tmp/test-jht',
 };
 
 const validOpenAIConfig = {
@@ -102,7 +102,7 @@ const validOpenAIConfig = {
     openai: { name: 'openai', auth_method: 'api_key', api_key: 'sk-projkey' },
   },
   channels: {},
-  workspace: '/home/user/.jht',
+  workspace: '/tmp/test-jht',
 };
 
 const validMinimaxConfig = {
@@ -115,7 +115,7 @@ const validMinimaxConfig = {
     },
   },
   channels: {},
-  workspace: '/home/user/.jht',
+  workspace: '/tmp/test-jht',
 };
 
 describe('validateConfig — config valide', () => {
@@ -188,7 +188,7 @@ describe('validateConfig — errori schema', () => {
         },
       },
       channels: {},
-      workspace: '/home/user',
+      workspace: '/tmp/test-jht',
     });
     expect(r.success).toBe(false);
   });
