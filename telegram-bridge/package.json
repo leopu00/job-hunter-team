@@ -1,0 +1,18 @@
+{
+  "name": "@jht/telegram-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telegram bridge bidirezionale per Job Hunter Team",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/bridge.ts",
+    "dev": "tsx watch src/bridge.ts"
+  },
+  "dependencies": {
+    "grammy": "^1.41.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
