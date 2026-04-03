@@ -20,8 +20,6 @@ const IV_LENGTH = 16;         // 128 bit
 const AUTH_TAG_LENGTH = 16;   // 128 bit
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_DIGEST = "sha512";
-const SALT_PATH = ".jht-key-salt";
-
 /**
  * Deriva una chiave AES-256 dalla passphrase con PBKDF2.
  * Il salt viene generato al primo uso e salvato in ~/.jht/credentials/.

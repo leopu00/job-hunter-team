@@ -84,7 +84,7 @@ export function loadBootstrapFiles(workspaceDir: string): BootstrapFile[] {
   // MEMORY.md: preferisci maiuscolo, fallback a minuscolo
   const memoryFile =
     loadBootstrapFile(workspaceDir, 'MEMORY.md') ??
-    loadBootstrapFile(workspaceDir, 'MEMORY.md');
+    loadBootstrapFile(workspaceDir, 'memory.md');
 
   for (const name of BOOTSTRAP_FILES) {
     if (name === 'MEMORY.md') {

@@ -5,7 +5,7 @@
  * restrittivi (0600). Gestisce salt PBKDF2 e key derivation.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { decrypt, deriveKey, encrypt, generateSalt, isValidPayload } from "./crypto.js";
@@ -104,7 +104,6 @@ export function deleteCredential(provider: string): boolean {
 export function listStoredProviders(): string[] {
   ensureDir();
   try {
-    const { readdirSync } = require("node:fs") as typeof import("node:fs");
     return readdirSync(CREDENTIALS_DIR)
       .filter((f: string) => f.endsWith(".enc.json"))
       .map((f: string) => f.replace(".enc.json", ""));
