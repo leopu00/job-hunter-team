@@ -4,18 +4,25 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getWorkspace, setWorkspace } from '@/lib/workspace-client'
+import LandingNav from './components/landing/LandingNav'
+import LandingHero from './components/landing/LandingHero'
+import LandingFeatures from './components/landing/LandingFeatures'
+import LandingSteps from './components/landing/LandingSteps'
+import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-function LandingContent() {
+function PageContent() {
   const params = useSearchParams()
   const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
   const wantsLogin = params.get('login') === 'true'
   const wantsChange = params.get('change') === 'true'
+
+  const [loading, setLoading] = useState(true)
 
   // --- Workspace state (modalita' locale) ---
   const [workspace, setWs] = useState('')
@@ -25,15 +32,27 @@ function LandingContent() {
   const [confirming, setConfirming] = useState(false)
   const [inputPath, setInputPath] = useState('')
 
-  // Al mount: check se c'e' gia' un workspace nel cookie
   useEffect(() => {
     if (supabaseConfigured) {
-      if (!wantsLogin) router.replace('/dashboard')
+      // Cloud mode: check se l'utente e' gia' autenticato
+      if (wantsLogin) {
+        setLoading(false)
+        return
+      }
+      const supabase = createClient()
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          router.replace('/dashboard')
+        } else {
+          setLoading(false)
+        }
+      })
       return
     }
+
+    // Modalita' locale
     const saved = getWorkspace()
     if (saved) {
-      // Verifica che sia ancora valido
       fetch('/api/workspace')
         .then(r => r.json())
         .then(data => {
@@ -41,23 +60,140 @@ function LandingContent() {
             setWs(data.path)
             setInputPath(data.path)
             setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
-            // Se ha gia' un DB e l'utente NON ha cliccato "cambia", vai alla dashboard
-            if (data.hasDb && !wantsChange && !wantsLogin) router.replace('/dashboard')
+            if (data.hasDb && !wantsChange && !wantsLogin) {
+              router.replace('/dashboard')
+            } else {
+              setLoading(false)
+            }
+          } else {
+            setLoading(false)
           }
         })
-        .catch(() => {})
+        .catch(() => setLoading(false))
+    } else {
+      setLoading(false)
     }
   }, [router, wantsLogin, wantsChange])
 
+  if (loading) return null
+
+  // --- Cloud mode: login Google ---
+  if (supabaseConfigured && wantsLogin) {
+    return <LoginView authError={authError} />
+  }
+
+  // --- Cloud mode: landing page ---
+  if (supabaseConfigured) {
+    return (
+      <main style={{ position: 'relative', zIndex: 1 }}>
+        <LandingNav />
+        <LandingHero />
+        <LandingFeatures />
+        <LandingSteps />
+        <LandingCTA />
+        <LandingFooter />
+      </main>
+    )
+  }
+
+  // --- Modalita' locale: workspace selector ---
+  return (
+    <WorkspaceView
+      workspace={workspace} wsStatus={wsStatus}
+      browsing={browsing} setBrowsing={setBrowsing}
+      pendingPath={pendingPath} setPendingPath={setPendingPath}
+      confirming={confirming} setConfirming={setConfirming}
+      inputPath={inputPath} setInputPath={setInputPath}
+      setWs={setWs} router={router}
+    />
+  )
+}
+
+export default function LandingPage() {
+  return (
+    <Suspense>
+      <PageContent />
+    </Suspense>
+  )
+}
+
+// ── Login view (cloud) ──────────────────────────────────────────────
+
+function LoginView({ authError }: { authError: boolean }) {
+  const handleGoogleLogin = async () => {
+    const supabase = createClient()
+    const origin = window.location.origin
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+        queryParams: { prompt: 'select_account' },
+      },
+    })
+  }
+
+  return (
+    <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex items-center justify-center px-5">
+      <div className="w-full max-w-md" style={{ animation: 'fade-in 0.5s ease both' }}>
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center gap-2 mb-6">
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">sistema attivo</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
+            Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
+          </h1>
+          <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-xs mx-auto">
+            Sistema multi-agente per ricerca e candidatura automatizzata.
+          </p>
+        </div>
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center gap-2">
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">auth</span>
+            <span className="text-[var(--color-dim)] text-[10px]">/</span>
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">accesso</span>
+          </div>
+          <div className="px-6 py-8 flex flex-col gap-4">
+            {authError && (
+              <div className="px-3 py-2 rounded border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
+                Autenticazione fallita. Verifica di usare un account autorizzato.
+              </div>
+            )}
+            <p className="text-[var(--color-muted)] text-[11px]">Accesso riservato ai membri del team. Usa il tuo account Google.</p>
+            <button onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-3 px-5 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded text-[var(--color-bright)] text-[12px] font-semibold tracking-wider hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer">
+              <GoogleIcon />
+              Login with Google
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+// ── Workspace view (locale) ─────────────────────────────────────────
+
+function WorkspaceView({
+  workspace, wsStatus, browsing, setBrowsing,
+  pendingPath, setPendingPath, confirming, setConfirming,
+  inputPath, setInputPath, setWs, router,
+}: {
+  workspace: string
+  wsStatus: { hasDb: boolean; hasProfile: boolean } | null
+  browsing: boolean; setBrowsing: (v: boolean) => void
+  pendingPath: string | null; setPendingPath: (v: string | null) => void
+  confirming: boolean; setConfirming: (v: boolean) => void
+  inputPath: string; setInputPath: (v: string) => void
+  setWs: (v: string) => void
+  router: ReturnType<typeof useRouter>
+}) {
   const handleBrowse = async () => {
     setBrowsing(true)
     try {
       const res = await fetch('/api/workspace/browse', { method: 'POST' })
       const data = await res.json()
-      if (data.ok && data.folder) {
-        setInputPath(data.folder)
-        setPendingPath(data.folder)
-      }
+      if (data.ok && data.folder) { setInputPath(data.folder); setPendingPath(data.folder) }
     } catch { /* ignore */ }
     setBrowsing(false)
   }
@@ -92,74 +228,11 @@ function LandingContent() {
     setConfirming(false)
   }
 
-  const handleDismiss = () => setPendingPath(null)
-
-  const handleEnter = () => {
-    router.push('/dashboard')
-  }
-
-  // --- Cloud mode: login Google ---
-  if (supabaseConfigured || wantsLogin) {
-    const handleGoogleLogin = async () => {
-      const supabase = createClient()
-      const origin = window.location.origin
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${origin}/auth/callback`,
-          queryParams: { prompt: 'select_account' },
-        },
-      })
-    }
-
-    return (
-      <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex items-center justify-center px-5">
-        <div className="w-full max-w-md" style={{ animation: 'fade-in 0.5s ease both' }}>
-          <div className="mb-10 text-center">
-            <div className="inline-flex items-center gap-2 mb-6">
-              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">sistema attivo</span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-              Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
-            </h1>
-            <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-xs mx-auto">
-              Sistema multi-agente per ricerca e candidatura automatizzata.
-            </p>
-          </div>
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center gap-2">
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">auth</span>
-              <span className="text-[var(--color-dim)] text-[10px]">/</span>
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">accesso</span>
-            </div>
-            <div className="px-6 py-8 flex flex-col gap-4">
-              {authError && (
-                <div className="px-3 py-2 rounded border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
-                  Autenticazione fallita. Verifica di usare un account autorizzato.
-                </div>
-              )}
-              <p className="text-[var(--color-muted)] text-[11px]">Accesso riservato ai membri del team. Usa il tuo account Google.</p>
-              <button onClick={handleGoogleLogin}
-                className="w-full flex items-center justify-center gap-3 px-5 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded text-[var(--color-bright)] text-[12px] font-semibold tracking-wider hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer">
-                <GoogleIcon />
-                Login with Google
-              </button>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
-  // --- Modalita' locale: workspace selector ---
   const hasWorkspace = workspace.length > 0
 
   return (
     <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex items-center justify-center px-5">
       <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.5s ease both' }}>
-
-        {/* Header */}
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 mb-6">
             <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
@@ -169,22 +242,17 @@ function LandingContent() {
             Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
           </h1>
           <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-xs mx-auto">
-            Seleziona la tua cartella di lavoro per iniziare.
-            I tuoi dati restano sul tuo computer.
+            Seleziona la tua cartella di lavoro per iniziare. I tuoi dati restano sul tuo computer.
           </p>
         </div>
 
-        {/* Workspace selector card */}
         <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center gap-2">
             <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">setup</span>
             <span className="text-[var(--color-dim)] text-[10px]">/</span>
             <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">workspace</span>
           </div>
-
           <div className="px-6 py-6 flex flex-col gap-4">
-
-            {/* Browse button + manual input */}
             <div className="flex gap-2">
               <button onClick={handleBrowse} disabled={browsing}
                 className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all flex-shrink-0"
@@ -195,9 +263,7 @@ function LandingContent() {
                 }}>
                 {browsing ? 'Seleziona...' : 'Sfoglia'}
               </button>
-              <input
-                type="text"
-                value={inputPath}
+              <input type="text" value={inputPath}
                 onChange={e => setInputPath(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleManualPath()}
                 placeholder="/percorso/alla/cartella"
@@ -205,10 +271,8 @@ function LandingContent() {
                 style={{ color: 'var(--color-bright)' }}
               />
             </div>
-
-            {/* Actions */}
             {hasWorkspace && wsStatus?.hasDb && (
-              <button onClick={handleEnter}
+              <button onClick={() => router.push('/dashboard')}
                 className="w-full px-5 py-3 rounded-lg text-[12px] font-bold tracking-wide transition-all"
                 style={{ background: 'var(--color-green)', color: '#000', cursor: 'pointer' }}>
                 Entra nella dashboard
@@ -217,22 +281,16 @@ function LandingContent() {
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-[10px] text-[var(--color-dim)]">
-          v0.1.0-alpha · Job Hunter Team
-        </p>
+        <p className="mt-6 text-center text-[10px] text-[var(--color-dim)]">v0.1.0-alpha · Job Hunter Team</p>
       </div>
 
-      {/* Modal conferma workspace */}
       {pendingPath && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 px-5"
-          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', animation: 'fade-in 0.15s ease both' }}
-        >
+        <div className="fixed inset-0 flex items-center justify-center z-50 px-5"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', animation: 'fade-in 0.15s ease both' }}>
           <div className="w-full max-w-md bg-[var(--color-panel)] border border-[var(--color-border)] rounded-xl p-6" style={{ animation: 'fade-in 0.2s ease both' }}>
             <div className="flex items-start justify-between gap-4 mb-4">
               <h2 className="text-[14px] font-bold text-[var(--color-white)]">Conferma cartella di lavoro</h2>
-              <button onClick={handleDismiss} className="text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors text-[20px] leading-none" style={{ cursor: 'pointer' }}>×</button>
+              <button onClick={() => setPendingPath(null)} className="text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors text-[20px] leading-none" style={{ cursor: 'pointer' }}>×</button>
             </div>
             <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mb-4">
               Tutti i dati (database, PDF, documenti) e gli agenti lavoreranno esclusivamente in questa cartella:
@@ -241,7 +299,7 @@ function LandingContent() {
               {pendingPath}
             </div>
             <div className="flex gap-3">
-              <button onClick={handleDismiss}
+              <button onClick={() => setPendingPath(null)}
                 className="flex-1 px-4 py-2.5 rounded-lg text-[12px] font-semibold border border-[var(--color-border)] transition-colors hover:border-[var(--color-muted)]"
                 style={{ color: 'var(--color-muted)', cursor: 'pointer' }}>
                 Annulla
@@ -263,13 +321,7 @@ function LandingContent() {
   )
 }
 
-export default function LandingPage() {
-  return (
-    <Suspense>
-      <LandingContent />
-    </Suspense>
-  )
-}
+// ── Icons ───────────────────────────────────────────────────────────
 
 function GoogleIcon() {
   return (
