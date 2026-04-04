@@ -1,78 +1,68 @@
+/**
+ * Layout TUI — struttura ispirata a OpenClaw.
+ * Header → mainSlot (view switching) → statusBar.
+ * Supporta viste multiple: team, chat, tasks, ai.
+ */
 import { Container, Text, TUI } from "@mariozechner/pi-tui";
-import { AgentList } from "./components/agent-list.js";
 import { StatusBar } from "./components/status-bar.js";
 import { theme } from "./tui-theme.js";
-import type { JhtAgent, JhtTuiState } from "./tui-types.js";
+import type { JhtTuiState, TuiView } from "./tui-types.js";
 
-export type ChatPanel = {
-  getNode(): Text | Container;
-  setAgent(agent: JhtAgent | null): void;
+const VIEW_LABELS: Record<TuiView, string> = {
+  team: "Team",
+  chat: "Chat",
+  tasks: "Tasks",
+  ai: "AI",
 };
 
 export type JhtLayout = {
   root: Container;
-  agentList: AgentList;
+  mainSlot: Container;
   statusBar: StatusBar;
-  chatPanelSlot: Container;
   updateHeader(state: JhtTuiState): void;
   updateStatusBar(state: JhtTuiState): void;
 };
 
-function buildHeader(): Text {
-  const header = new Text("", 1, 0);
-  header.setText(theme.header(" JHT — Job Hunter Team TUI"));
-  return header;
-}
-
-function buildDivider(char = "─", width = 0): Text {
-  const line = width > 0 ? char.repeat(width) : char.repeat(80);
-  return new Text(theme.border(line), 1, 0);
-}
-
-/**
- * Crea il layout a 3 zone:
- *   [header]
- *   [agentList (sinistra) | chatPanel (destra)]
- *   [statusBar (basso)]
- */
 export function createJhtLayout(_tui: TUI): JhtLayout {
   const root = new Container();
 
   // Header
-  const header = buildHeader();
+  const header = new Text("", 1, 0);
   root.addChild(header);
-  root.addChild(buildDivider());
 
-  // Zona centrale: lista agenti + pannello chat (affiancati)
-  // pi-tui usa layout verticale nativo — simuliamo il pannello affiancato
-  // con un Container che wrappa entrambi i blocchi di testo.
-  const centerRow = new Container();
+  // Divider + tab bar
+  const tabBar = new Text("", 1, 0);
+  root.addChild(tabBar);
 
-  const agentList = new AgentList();
-  centerRow.addChild(agentList.getNode());
+  // Main content area (swapped based on view)
+  const mainSlot = new Container();
+  root.addChild(mainSlot);
 
-  const chatPanelSlot = new Container();
-  const chatPlaceholder = new Text(
-    theme.dim("  [pannello chat]"),
-    0,
-    0,
-  );
-  chatPanelSlot.addChild(chatPlaceholder);
-  centerRow.addChild(chatPanelSlot);
+  // Bottom divider
+  const divider = new Text(theme.border("\u2500".repeat(80)), 1, 0);
+  root.addChild(divider);
 
-  root.addChild(centerRow);
-  root.addChild(buildDivider());
-
-  // Barra inferiore
+  // Status bar
   const statusBar = new StatusBar();
   root.addChild(statusBar.getNode());
 
   const updateHeader = (state: JhtTuiState) => {
-    const sel = state.agents.find((a) => a.id === state.selectedAgentId);
-    const agentLabel = sel ? `${sel.name} (${sel.role})` : "—";
+    const activeCount = state.activeTmuxCount;
+    const connLabel = state.isConnected ? theme.success("API") : theme.dim("no API");
     header.setText(
-      theme.header(` JHT TUI  │  agente: ${agentLabel}  │  ${state.connectionStatus}`),
+      theme.header(` JHT Control Panel`) +
+      theme.dim(` \u2502 `) +
+      connLabel +
+      theme.dim(` \u2502 ${activeCount} agenti attivi`),
     );
+
+    // Tab bar: evidenzia la vista corrente
+    const tabs = (Object.keys(VIEW_LABELS) as TuiView[]).map((v) => {
+      const label = VIEW_LABELS[v];
+      if (v === state.currentView) return theme.accent(`[${label}]`);
+      return theme.dim(` ${label} `);
+    });
+    tabBar.setText(theme.border("  ") + tabs.join(theme.dim(" \u2502 ")));
   };
 
   const updateStatusBar = (state: JhtTuiState) => {
@@ -86,12 +76,5 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
     });
   };
 
-  return {
-    root,
-    agentList,
-    statusBar,
-    chatPanelSlot,
-    updateHeader,
-    updateStatusBar,
-  };
+  return { root, mainSlot, statusBar, updateHeader, updateStatusBar };
 }

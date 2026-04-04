@@ -1,3 +1,5 @@
+export type TuiView = "team" | "chat" | "tasks" | "ai";
+
 export type AgentRole =
   | "alfa"
   | "analista"
@@ -50,6 +52,10 @@ export type JhtTuiState = {
   isConnected: boolean;
   /** Numero di sessioni JHT-* attive lette da tmux list-sessions */
   activeTmuxCount: number;
+  /** Vista attiva della TUI */
+  currentView: TuiView;
+  /** Nome sessione tmux con cui si sta chattando (/chat) */
+  chatTargetSession: string | null;
 };
 
 // --- Tipi per il layer chat/event (tui-event-handlers, tui-command-handlers) ---
