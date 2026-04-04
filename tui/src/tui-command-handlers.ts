@@ -251,12 +251,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         chatLog.addSystem(`vista: ${state.currentView}`);
         break;
 
-      case "stop": case "abort":
-        if (!state.activeChatRunId) { chatLog.addSystem("nessun run attivo"); break; }
+      case "abort":
+        if (!state.activeChatRunId) { chatLog.addSystem("nessun run AI attivo"); break; }
         try {
           await context.client.abortRun(state.currentSessionKey);
-          chatLog.addSystem("run interrotto");
-        } catch (err) { chatLog.addSystem(`stop fallito: ${String(err)}`); }
+          chatLog.addSystem("run AI interrotto");
+        } catch (err) { chatLog.addSystem(`abort fallito: ${String(err)}`); }
         break;
 
       case "new":
