@@ -94,8 +94,9 @@ export class TeamPanel extends Container {
 
     this.add("");
     this.add(theme.border("  " + "\u2500".repeat(60)));
+    const totalActive = activeCount + extra.length;
     this.add(
-      `  ${theme.accent(String(activeCount + extra.length))} agenti attivi` +
+      `  ${theme.accent(String(totalActive))} agenti attivi` +
       theme.dim(" \u2502 ") +
       `${theme.warning(String(inProgress))} task in corso` +
       theme.dim(" \u2502 ") +
