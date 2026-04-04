@@ -41,6 +41,12 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
+  manifest: '/manifest.json',
+  other: {
+    'theme-color': '#060608',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+  },
 }
 
 export default function RootLayout({
