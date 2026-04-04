@@ -28,22 +28,39 @@ function ToastItem({ t, onRemove }: { t: Toast; onRemove: (id: string) => void }
     return () => clearTimeout(timer)
   }, [t.id, dur, onRemove])
 
+  const dismiss = () => { setVisible(false); setTimeout(() => onRemove(t.id), 300) }
+
   return (
-    <div className="flex items-start gap-3 px-4 py-3 rounded-lg border text-[11px] max-w-sm w-full"
+    <div className="flex flex-col rounded-lg overflow-hidden max-w-sm w-full text-[11px]"
       style={{
-        borderColor: cfg.border, background: 'var(--color-panel)',
+        background: 'var(--color-panel)',
+        border: `1px solid ${cfg.border}`,
         borderLeft: `3px solid ${cfg.color}`,
         transform: visible ? 'translateX(0)' : 'translateX(120%)',
         opacity: visible ? 1 : 0,
         transition: 'transform 0.3s ease, opacity 0.3s ease',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
       }}>
-      <span className="flex-shrink-0 font-bold text-[13px]" style={{ color: cfg.color }}>{cfg.icon}</span>
-      <span className="flex-1" style={{ color: 'var(--color-bright)' }}>{t.message}</span>
-      <button onClick={() => { setVisible(false); setTimeout(() => onRemove(t.id), 300) }}
-        className="flex-shrink-0 text-[14px] leading-none cursor-pointer"
-        style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
-        onMouseEnter={e => e.currentTarget.style.color = 'var(--color-muted)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>
+      {/* Content */}
+      <div className="flex items-start gap-3 px-4 py-3">
+        <span className="flex-shrink-0 font-bold text-[13px]" style={{ color: cfg.color }}>{cfg.icon}</span>
+        <span className="flex-1" style={{ color: 'var(--color-bright)' }}>{t.message}</span>
+        <button onClick={dismiss}
+          className="flex-shrink-0 text-[14px] leading-none cursor-pointer"
+          style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--color-muted)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>
+      </div>
+      {/* Progress bar */}
+      {visible && (
+        <div className="h-0.5 w-full" style={{ background: 'var(--color-border)' }}>
+          <div className="h-full" style={{
+            background: cfg.color,
+            animation: `toast-pb ${dur}ms linear forwards`,
+          }} />
+        </div>
+      )}
+      <style>{`@keyframes toast-pb { from { width: 100% } to { width: 0% } }`}</style>
     </div>
   )
 }
