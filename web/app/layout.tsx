@@ -8,6 +8,7 @@ import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
+import { GlobalSearch } from './components/GlobalSearch'
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -33,6 +34,7 @@ export default function RootLayout({
           <AccessibilityProvider>
           <ToastProvider>
             <KeyboardShortcutsProvider>
+              <GlobalSearch />
               <Sidebar />
               <MainContent>
                 <Breadcrumb />
