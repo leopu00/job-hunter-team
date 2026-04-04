@@ -151,7 +151,7 @@ function FaqAccordion({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boole
       </button>
       {isOpen && (
         <div
-          className="pb-4 px-1 text-[12px] text-[var(--color-muted)] leading-relaxed"
+          className="pb-4 px-1 text-[12px] text-[var(--color-muted)] leading-relaxed [&_code]:break-all [&_code]:text-[10px] sm:[&_code]:text-[11px]"
           style={{ animation: 'fade-in 0.15s ease both' }}
         >
           {item.a}

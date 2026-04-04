@@ -105,59 +105,116 @@ function LangDropdown() {
 
 export default function LandingNav() {
   const { t } = useLandingI18n()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4"
+      className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: 'linear-gradient(180deg, var(--color-void) 60%, transparent)',
         backdropFilter: 'blur(12px)',
       }}
     >
-      <Link href="/" className="flex items-center gap-2.5 no-underline">
+      <div className="flex items-center justify-between px-5 sm:px-6 py-4">
+        <Link href="/" className="flex items-center gap-2.5 no-underline">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
+          />
+          <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
+            JHT
+          </span>
+        </Link>
+
+        <div className="hidden md:flex items-center gap-6">
+          <a href="#features" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_features')}
+          </a>
+          <a href="#how" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_how')}
+          </a>
+          <a
+            href="https://github.com/leopu00/job-hunter-team"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+          >
+            {t('nav_github')}
+          </a>
+          <Link href="/download" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_download')}
+          </Link>
+          <Link href="/guide" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            Guida
+          </Link>
+          <Link href="/faq" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            FAQ
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <LangDropdown />
+
+          <Link
+            href="/?login=true"
+            className="hidden sm:inline-flex px-4 py-2 rounded text-[11px] font-semibold tracking-wider no-underline transition-all"
+            style={{
+              border: '1px solid var(--color-green)',
+              color: 'var(--color-green)',
+            }}
+          >
+            {t('nav_login')}
+          </Link>
+
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen(v => !v)}
+            className="md:hidden flex flex-col gap-1 p-1.5 rounded"
+            style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+            aria-label="Menu"
+          >
+            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
+            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
+            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
         <div
-          className="w-2 h-2 rounded-full"
-          style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
-        />
-        <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
-          JHT
-        </span>
-      </Link>
-
-      <div className="hidden md:flex items-center gap-6">
-        <a href="#features" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-          {t('nav_features')}
-        </a>
-        <a href="#how" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-          {t('nav_how')}
-        </a>
-        <a
-          href="https://github.com/leopu00/job-hunter-team"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+          className="md:hidden px-5 pb-4 flex flex-col gap-3"
+          style={{ background: 'var(--color-void)', animation: 'fade-in 0.15s ease both' }}
         >
-          {t('nav_github')}
-        </a>
-        <Link href="/download" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-          {t('nav_download')}
-        </Link>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <LangDropdown />
-
-        <Link
-          href="/?login=true"
-          className="px-4 py-2 rounded text-[11px] font-semibold tracking-wider no-underline transition-all"
-          style={{
-            border: '1px solid var(--color-green)',
-            color: 'var(--color-green)',
-          }}
-        >
-          {t('nav_login')}
-        </Link>
-      </div>
+          <a href="#features" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_features')}
+          </a>
+          <a href="#how" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_how')}
+          </a>
+          <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"
+            className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_github')}
+          </a>
+          <Link href="/download" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_download')}
+          </Link>
+          <Link href="/guide" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            Guida
+          </Link>
+          <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            FAQ
+          </Link>
+          <Link
+            href="/?login=true"
+            onClick={() => setMobileOpen(false)}
+            className="text-center py-2.5 rounded text-[12px] font-semibold tracking-wider no-underline transition-all"
+            style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
+          >
+            {t('nav_login')}
+          </Link>
+        </div>
+      )}
     </nav>
   )
 }

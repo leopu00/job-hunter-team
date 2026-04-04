@@ -3,6 +3,8 @@
  * Ispirato a OpenClaw tui-command-handlers.ts con adattamenti per JHT.
  */
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import path from "node:path";
 import * as readline from "node:readline";
 import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
 import { sendToSession, resolveSessionName, startSession, stopSession, listJhtSessions } from "./tui-tmux.js";
@@ -126,6 +128,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /status          — stato connessione",
     "  /abort           — interrompi run AI attivo",
     "  /new             — nuova sessione AI",
+    "  /deploy          — deploy web su Vercel (produzione)",
     "  /help            — mostra aiuto",
     "",
     "  Tab / frecce     — naviga viste",
@@ -314,6 +317,58 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         saveProfile(profile);
         chatLog.addSystem("profilo aggiornato:");
         for (const line of formatProfile(profile)) chatLog.addSystem(line);
+        break;
+      }
+
+      case "deploy": {
+        sysLog.addSystem("deploy Vercel in corso...");
+        setActivityStatus("deploying");
+        requestRender();
+
+        // Trova la cartella web/ risalendo dalla cwd
+        const webDir = path.resolve(process.cwd(), "web");
+        const child = spawn("npx", ["vercel", "--prod", "--yes"], {
+          cwd: webDir,
+          shell: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        let output = "";
+        const onData = (chunk: Buffer) => {
+          const text = chunk.toString().trim();
+          if (text) {
+            output += text + "\n";
+            // Mostra le righe significative
+            for (const line of text.split("\n")) {
+              const trimmed = line.trim();
+              if (trimmed && !trimmed.startsWith("Vercel CLI")) {
+                sysLog.addSystem(`  ${trimmed}`);
+              }
+            }
+            requestRender();
+          }
+        };
+        child.stdout?.on("data", onData);
+        child.stderr?.on("data", onData);
+
+        child.on("close", (code) => {
+          if (code === 0) {
+            // Estrai URL dal output
+            const urlMatch = output.match(/https:\/\/[^\s]+\.vercel\.app/);
+            sysLog.addSystem(urlMatch ? `deploy completato: ${urlMatch[0]}` : "deploy completato");
+            setActivityStatus("deployed");
+          } else {
+            sysLog.addSystem(`deploy fallito (exit ${code})`);
+            setActivityStatus("deploy error");
+          }
+          requestRender();
+        });
+
+        child.on("error", (err) => {
+          sysLog.addSystem(`errore deploy: ${err.message}`);
+          setActivityStatus("deploy error");
+          requestRender();
+        });
         break;
       }
 

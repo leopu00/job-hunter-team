@@ -131,30 +131,32 @@ function DownloadContent() {
                     boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
                   }}>
                   {/* Card header */}
-                  <div className="px-5 py-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-                      <Icon />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
-                        {isDetected && (
-                          <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
-                            style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
-                            {t('dl_detected')}
-                          </span>
-                        )}
+                  <div className="px-4 sm:px-5 py-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
+                        <Icon />
                       </div>
-                      <span className="text-[10px] text-[var(--color-dim)]">
-                        {platform.file}
-                        {platform.size && <> &middot; {platform.size}</>}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
+                          {isDetected && (
+                            <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
+                              style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
+                              {t('dl_detected')}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-[var(--color-dim)] break-all">
+                          {platform.file}
+                          {platform.size && <> &middot; {platform.size}</>}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 mt-3">
                       <button
                         onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
-                        className="px-3 py-2 rounded text-[11px] font-semibold transition-colors"
+                        className="flex-1 sm:flex-none px-3 py-2 rounded text-[11px] font-semibold transition-colors"
                         style={{
                           background: 'var(--color-card)',
                           color: 'var(--color-muted)',
@@ -164,7 +166,7 @@ function DownloadContent() {
                         {isExpanded ? t('dl_close') : t('dl_instructions')}
                       </button>
                       <a href={`${downloadBaseUrl}/${platform.file}`}
-                        className="px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
+                        className="flex-1 sm:flex-none text-center px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                         style={{
                           background: isDetected ? 'var(--color-green)' : 'var(--color-card)',
                           color: isDetected ? '#000' : 'var(--color-green)',
