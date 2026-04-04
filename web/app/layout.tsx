@@ -6,6 +6,7 @@ import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
 import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
+import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -29,11 +30,13 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <ToastProvider>
-            <Sidebar />
-            <MainContent>
-              <Breadcrumb />
-              {children}
-            </MainContent>
+            <KeyboardShortcutsProvider>
+              <Sidebar />
+              <MainContent>
+                <Breadcrumb />
+                {children}
+              </MainContent>
+            </KeyboardShortcutsProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>
