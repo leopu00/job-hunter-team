@@ -62,6 +62,8 @@ export default function Sidebar() {
 
   return (
     <aside
+      role="navigation"
+      aria-label="Navigazione principale"
       className="fixed left-0 top-0 h-screen flex flex-col overflow-y-auto"
       style={{ width: 200, background: 'var(--color-deep)', borderRight: '1px solid var(--color-border)', zIndex: 50 }}>
 
@@ -82,6 +84,7 @@ export default function Sidebar() {
                 return (
                   <li key={href}>
                     <Link href={href}
+                      aria-current={active ? 'page' : undefined}
                       className="block px-2 py-1.5 rounded text-[11px] no-underline transition-colors"
                       style={{
                         color: active ? 'var(--color-green)' : 'var(--color-muted)',
