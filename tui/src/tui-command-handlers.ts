@@ -109,6 +109,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /team            — vista panoramica team",
     "  /chat <agente>   — chat diretta con agente (tmux)",
     "  /tasks           — dashboard task",
+    "  /dashboard       — panoramica budget, deploy, task",
     "  /ai              — chat AI (Anthropic)",
     "  /send <msg>      — invia messaggio all'agente selezionato",
     "  /setup <key>     — configura API key Anthropic",
@@ -137,6 +138,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
       case "tasks":
         context.switchView("tasks");
+        break;
+
+      case "dashboard": case "dash":
+        context.switchView("dashboard");
         break;
 
       case "ai":

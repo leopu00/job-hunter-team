@@ -12,6 +12,7 @@ const VIEW_LABELS: Record<TuiView, string> = {
   team: "Team",
   chat: "Chat",
   tasks: "Tasks",
+  dashboard: "Dashboard",
   ai: "AI",
 };
 
