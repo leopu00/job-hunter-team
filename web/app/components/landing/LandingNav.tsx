@@ -144,6 +144,12 @@ export default function LandingNav() {
           <Link href="/download" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_download')}
           </Link>
+          <Link href="/guide" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            Guida
+          </Link>
+          <Link href="/faq" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            FAQ
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -192,6 +198,12 @@ export default function LandingNav() {
           </a>
           <Link href="/download" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_download')}
+          </Link>
+          <Link href="/guide" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            Guida
+          </Link>
+          <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            FAQ
           </Link>
           <Link
             href="/?login=true"
