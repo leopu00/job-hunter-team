@@ -111,7 +111,7 @@ export async function runJhtTui() {
     layout.mainSlot.clear();
     switch (view) {
       case "team":
-        teamPanel.refresh(listJhtSessions());
+        teamPanel.refresh(listJhtSessions(), loadTasks());
         layout.mainSlot.addChild(teamPanel);
         break;
       case "chat":
