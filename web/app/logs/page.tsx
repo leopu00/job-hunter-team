@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 type LogEntry = { time: string; level: LogLevel; subsystem: string; message: string; data?: Record<string, unknown> }
@@ -49,30 +49,53 @@ export default function LogsPage() {
   const [subsystem, setSubsystem] = useState('')
   const [search, setSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const PAGE_SIZE = 50
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (append = false) => {
     const params = new URLSearchParams()
     if (date) params.set('date', date)
     if (level !== 'all') params.set('level', level)
     if (subsystem) params.set('subsystem', subsystem)
     if (search) params.set('search', search)
-    params.set('limit', '500')
+    params.set('limit', String(PAGE_SIZE))
+    if (append) params.set('offset', String(entries.length))
     const res = await fetch(`/api/logs?${params}`).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
-    setEntries(data.entries ?? [])
+    if (append) setEntries(prev => [...prev, ...(data.entries ?? [])])
+    else setEntries(data.entries ?? [])
     setTotal(data.total ?? 0)
+    setHasMore(data.hasMore ?? false)
     setDates(data.dates ?? [])
     setSubsystems(data.subsystems ?? [])
     if (!date && data.date) setDate(data.date)
-  }, [date, level, subsystem, search])
+  }, [date, level, subsystem, search, entries.length])
 
-  useEffect(() => { fetchLogs() }, [fetchLogs])
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return
+    setLoading(true)
+    await fetchLogs(true)
+    setLoading(false)
+  }, [fetchLogs, loading, hasMore])
+
+  useEffect(() => { fetchLogs() }, [date, level, subsystem, search]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(fetchLogs, 3000)
+    const id = setInterval(() => fetchLogs(), 5000)
     return () => clearInterval(id)
-  }, [fetchLogs, autoRefresh])
+  }, [date, level, subsystem, search, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // IntersectionObserver per scroll infinito
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) loadMore() }, { threshold: 0.1 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loadMore])
 
   const LEVELS: Array<{ key: FilterLevel; label: string }> = [
     { key: 'all', label: 'tutti' }, { key: 'error', label: 'error' }, { key: 'warn', label: 'warn' },
@@ -128,6 +151,11 @@ export default function LogsPage() {
           ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun log trovato.</p></div>
           : entries.map((e, i) => <LogRow key={`${e.time}-${i}`} entry={e} />)
         }
+        {hasMore && (
+          <div ref={sentinelRef} className="flex items-center justify-center py-3">
+            <span className="text-[10px] text-[var(--color-dim)]">{loading ? 'Caricamento...' : 'Scorri per altri log'}</span>
+          </div>
+        )}
       </div>
     </div>
   )
