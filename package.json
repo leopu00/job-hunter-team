@@ -1,6 +1,6 @@
 {
   "name": "backend-3",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.",
   "main": "index.js",
   "directories": {
