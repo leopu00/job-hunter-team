@@ -4,69 +4,74 @@ import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
+type NType = 'info' | 'warning' | 'success' | 'error'
 type Channel = 'desktop' | 'telegram' | 'web'
-type Notif = { id: string; channel: Channel; title: string; body: string; priority: Priority; timestamp: number; read: boolean; agentId?: string }
+type Notif = { id: string; type: NType; channel: Channel; title: string; body: string; priority: Priority; timestamp: number; read: boolean; agentId?: string }
 
-const PRIO_CFG: Record<Priority, { label: string; color: string; bg: string; border: string }> = {
-  low:    { label: 'bassa',   color: 'var(--color-dim)',    bg: 'transparent',            border: 'var(--color-border)' },
-  normal: { label: 'normale', color: 'var(--color-muted)',  bg: 'transparent',            border: 'var(--color-border)' },
-  high:   { label: 'alta',    color: 'var(--color-yellow)', bg: 'rgba(245,197,24,0.08)',  border: 'rgba(245,197,24,0.3)' },
-  urgent: { label: 'urgente', color: 'var(--color-red)',    bg: 'rgba(255,69,96,0.08)',   border: 'rgba(255,69,96,0.3)' },
+const TYPE_CFG: Record<NType, { label: string; color: string; icon: string }> = {
+  info:    { label: 'info',    color: '#61affe', icon: 'ℹ' },
+  warning: { label: 'avviso',  color: 'var(--color-yellow)', icon: '⚠' },
+  success: { label: 'ok',      color: 'var(--color-green)', icon: '✓' },
+  error:   { label: 'errore',  color: 'var(--color-red)', icon: '✗' },
 }
 
-const CH_LABEL: Record<Channel, string> = { desktop: 'Desktop', telegram: 'Telegram', web: 'Web' }
-
-function PrioBadge({ priority }: { priority: Priority }) {
-  const c = PRIO_CFG[priority]
-  return <span className="badge" style={{ color: c.color, background: c.bg, border: `1px solid ${c.border}`, fontSize: 9 }}>{c.label}</span>
+const PRIO_CFG: Record<Priority, { label: string; color: string }> = {
+  low: { label: 'bassa', color: 'var(--color-dim)' }, normal: { label: 'normale', color: 'var(--color-muted)' },
+  high: { label: 'alta', color: 'var(--color-yellow)' }, urgent: { label: 'urgente', color: 'var(--color-red)' },
 }
 
-function NotifRow({ n, onRead }: { n: Notif; onRead: (id: string) => void }) {
+function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => void; onDelete: (id: string) => void }) {
   const age = Math.floor((Date.now() - n.timestamp) / 60000)
-  const ageLabel = age < 1 ? 'adesso' : age < 60 ? `${age}m fa` : `${Math.floor(age / 60)}h fa`
+  const ageLabel = age < 1 ? 'adesso' : age < 60 ? `${age}m fa` : age < 1440 ? `${Math.floor(age / 60)}h fa` : `${Math.floor(age / 1440)}g fa`
+  const t = TYPE_CFG[n.type] ?? TYPE_CFG.info
   return (
-    <div className="flex items-start gap-4 px-5 py-3.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+    <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
       style={{ opacity: n.read ? 0.5 : 1 }}>
-      {!n.read && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-green)', marginTop: 6, flexShrink: 0 }} />}
+      <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold"
+        style={{ background: `${t.color}18`, color: t.color }}>{t.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          {!n.read && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-green)', flexShrink: 0 }} />}
           <span className="text-[12px] font-semibold text-[var(--color-bright)]">{n.title}</span>
-          <PrioBadge priority={n.priority} />
-          <span className="text-[9px] font-mono text-[var(--color-dim)]">{CH_LABEL[n.channel]}</span>
-          {n.agentId && <span className="text-[9px] font-mono text-[var(--color-dim)]">{n.agentId}</span>}
+          <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
+            style={{ color: t.color, background: `${t.color}12`, border: `1px solid ${t.color}30` }}>{t.label}</span>
+          <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
+            style={{ color: PRIO_CFG[n.priority].color, border: `1px solid var(--color-border)` }}>{PRIO_CFG[n.priority].label}</span>
         </div>
         <p className="text-[11px] text-[var(--color-muted)] truncate">{n.body}</p>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="text-[10px] text-[var(--color-dim)]">{ageLabel}</span>
-        {!n.read && (
-          <button onClick={() => onRead(n.id)}
-            className="text-[10px] font-semibold tracking-wide transition-colors cursor-pointer"
-            style={{ color: 'var(--color-dim)' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--color-green)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>
-            letto
-          </button>
-        )}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-[9px] text-[var(--color-dim)]">{ageLabel}</span>
+        {!n.read && <Btn label="letto" color="var(--color-green)" onClick={() => onRead(n.id)} />}
+        <Btn label="×" color="var(--color-red)" onClick={() => onDelete(n.id)} />
       </div>
     </div>
   )
 }
 
-type FilterPrio = 'all' | Priority
+function Btn({ label, color, onClick }: { label: string; color: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="text-[10px] font-bold transition-colors cursor-pointer"
+      style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
+      onMouseEnter={e => e.currentTarget.style.color = color}
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>{label}</button>
+  )
+}
+
+type FilterType = 'all' | NType
 type FilterRead = 'all' | 'unread' | 'read'
 
 export default function NotificationsPage() {
   const [items, setItems] = useState<Notif[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const [filterPrio, setFilterPrio] = useState<FilterPrio>('all')
+  const [filterType, setFilterType] = useState<FilterType>('all')
   const [filterRead, setFilterRead] = useState<FilterRead>('all')
 
   const fetchNotifs = useCallback(async () => {
-    const params = new URLSearchParams()
-    if (filterPrio !== 'all') params.set('priority', filterPrio)
-    if (filterRead === 'unread') params.set('unread', 'true')
-    const q = params.toString() ? `?${params}` : ''
+    const p = new URLSearchParams()
+    if (filterType !== 'all') p.set('type', filterType)
+    if (filterRead === 'unread') p.set('unread', 'true')
+    const q = p.toString() ? `?${p}` : ''
     const res = await fetch(`/api/notifications${q}`).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
@@ -74,40 +79,28 @@ export default function NotificationsPage() {
     if (filterRead === 'read') notifs = notifs.filter((n: Notif) => n.read)
     setItems(notifs)
     setUnreadCount(data.unreadCount ?? 0)
-  }, [filterPrio, filterRead])
+  }, [filterType, filterRead])
 
   useEffect(() => { fetchNotifs() }, [fetchNotifs])
   useEffect(() => { const id = setInterval(fetchNotifs, 5000); return () => clearInterval(id) }, [fetchNotifs])
 
-  const markRead = async (id: string) => {
-    await fetch(`/api/notifications?id=${id}`, { method: 'PATCH' }).catch(() => null)
-    fetchNotifs()
-  }
+  const markRead = async (id: string) => { await fetch(`/api/notifications?id=${id}`, { method: 'PATCH' }); fetchNotifs() }
+  const markAllRead = async () => { await fetch('/api/notifications?all=true', { method: 'PATCH' }); fetchNotifs() }
+  const deleteOne = async (id: string) => { await fetch(`/api/notifications?id=${id}`, { method: 'DELETE' }); fetchNotifs() }
+  const deleteRead = async () => { await fetch('/api/notifications?read=true', { method: 'DELETE' }); fetchNotifs() }
 
-  const markAllRead = async () => {
-    await fetch('/api/notifications?all=true', { method: 'PATCH' }).catch(() => null)
-    fetchNotifs()
-  }
-
-  const PRIO_FILTERS: Array<{ key: FilterPrio; label: string }> = [
-    { key: 'all', label: 'tutte' }, { key: 'urgent', label: 'urgenti' }, { key: 'high', label: 'alte' },
-    { key: 'normal', label: 'normali' }, { key: 'low', label: 'basse' },
+  const TYPE_FILTERS: Array<{ key: FilterType; label: string; color?: string }> = [
+    { key: 'all', label: 'tutte' },
+    { key: 'info', label: 'info', color: TYPE_CFG.info.color },
+    { key: 'success', label: 'ok', color: TYPE_CFG.success.color },
+    { key: 'warning', label: 'avvisi', color: TYPE_CFG.warning.color },
+    { key: 'error', label: 'errori', color: TYPE_CFG.error.color },
   ]
   const READ_FILTERS: Array<{ key: FilterRead; label: string }> = [
     { key: 'all', label: 'tutte' }, { key: 'unread', label: 'non lette' }, { key: 'read', label: 'lette' },
   ]
 
-  const FilterBar = ({ filters, active, onChange }: { filters: Array<{ key: string; label: string }>; active: string; onChange: (k: any) => void }) => (
-    <div className="flex gap-1">
-      {filters.map(f => (
-        <button key={f.key} onClick={() => onChange(f.key)}
-          className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer"
-          style={{ background: active === f.key ? 'var(--color-row)' : 'transparent', color: active === f.key ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${active === f.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
-          {f.label}
-        </button>
-      ))}
-    </div>
-  )
+  const readCount = items.filter(n => n.read).length
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -122,25 +115,52 @@ export default function NotificationsPage() {
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Notifiche</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">{unreadCount} non lette · {items.length} totali</p>
           </div>
-          {unreadCount > 0 && (
-            <button onClick={markAllRead}
-              className="px-4 py-2 rounded-lg text-[11px] font-bold tracking-wide transition-all cursor-pointer"
-              style={{ background: 'var(--color-green)', color: '#000' }}>
-              segna tutte lette
-            </button>
-          )}
+          <div className="flex gap-2">
+            {readCount > 0 && (
+              <button onClick={deleteRead} className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wide cursor-pointer transition-all"
+                style={{ border: '1px solid rgba(255,69,96,0.3)', color: 'var(--color-red)', background: 'transparent' }}>
+                elimina lette ({readCount})
+              </button>
+            )}
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wide cursor-pointer transition-all"
+                style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>
+                segna tutte lette
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-4">
-        <FilterBar filters={PRIO_FILTERS} active={filterPrio} onChange={setFilterPrio} />
-        <FilterBar filters={READ_FILTERS} active={filterRead} onChange={setFilterRead} />
+        <div className="flex gap-1">
+          {TYPE_FILTERS.map(f => (
+            <button key={f.key} onClick={() => setFilterType(f.key)}
+              className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer"
+              style={{ background: filterType === f.key ? 'var(--color-row)' : 'transparent',
+                color: filterType === f.key ? (f.color ?? 'var(--color-bright)') : 'var(--color-dim)',
+                border: `1px solid ${filterType === f.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {READ_FILTERS.map(f => (
+            <button key={f.key} onClick={() => setFilterRead(f.key)}
+              className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer"
+              style={{ background: filterRead === f.key ? 'var(--color-row)' : 'transparent',
+                color: filterRead === f.key ? 'var(--color-bright)' : 'var(--color-dim)',
+                border: `1px solid ${filterRead === f.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {items.length === 0
-          ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna notifica trovata.</p></div>
-          : items.map(n => <NotifRow key={n.id} n={n} onRead={markRead} />)
+          ? <div className="flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessuna notifica trovata.</p></div>
+          : items.map(n => <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteOne} />)
         }
       </div>
     </div>
