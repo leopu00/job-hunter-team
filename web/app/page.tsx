@@ -12,6 +12,7 @@ import LandingSteps from './components/landing/LandingSteps'
 import LandingGetStarted from './components/landing/LandingGetStarted'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
+import FadeInSection from './components/landing/FadeInSection'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -81,10 +82,10 @@ function PageContent() {
       <main style={{ position: 'relative', zIndex: 1 }}>
         <LandingNav />
         <LandingHero />
-        <LandingFeatures />
-        <LandingSteps />
-        <LandingGetStarted />
-        <LandingCTA />
+        <FadeInSection><LandingFeatures /></FadeInSection>
+        <FadeInSection delay={100}><LandingSteps /></FadeInSection>
+        <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
+        <FadeInSection delay={100}><LandingCTA /></FadeInSection>
         <LandingFooter />
       </main>
     </LandingI18nProvider>
