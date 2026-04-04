@@ -13,6 +13,7 @@ import { createTuiClient, loadApiKey } from "./tui-client.js";
 import { runSetupWizard, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
+import { DashboardPanel } from "./components/dashboard-panel.js";
 import { listJhtSessions, capturePane } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
 import type { JhtAgent, JhtTuiState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
@@ -28,7 +29,7 @@ const KNOWN_AGENTS: JhtAgent[] = [
   { id: "alfa", name: "alfa", role: "alfa", status: "idle" },
 ];
 
-const VIEWS: TuiView[] = ["team", "chat", "tasks", "ai"];
+const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "ai"];
 
 export async function runJhtTui() {
   // Setup wizard se API key non configurata
@@ -66,6 +67,7 @@ export async function runJhtTui() {
   const teamPanel = new TeamPanel();
   const chatPanel = new ChatPanel();
   const taskPanel = new TaskPanel();
+  const dashboardPanel = new DashboardPanel();
   const aiChatPanel = new ChatPanel();
 
   // Chat tmux: container per output catturato
@@ -119,6 +121,10 @@ export async function runJhtTui() {
       case "tasks":
         taskPanel.refresh(loadTasks());
         layout.mainSlot.addChild(taskPanel);
+        break;
+      case "dashboard":
+        dashboardPanel.refresh();
+        layout.mainSlot.addChild(dashboardPanel);
         break;
       case "ai":
         layout.mainSlot.addChild(aiChatPanel);
@@ -283,6 +289,10 @@ export async function runJhtTui() {
     // Auto-refresh chat tmux
     if (state.currentView === "chat" && state.chatTargetSession) {
       refreshTmuxChat();
+    }
+    // Auto-refresh dashboard
+    if (state.currentView === "dashboard") {
+      dashboardPanel.refresh();
     }
     tui.requestRender();
   }, 3000);

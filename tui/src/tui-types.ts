@@ -1,4 +1,4 @@
-export type TuiView = "team" | "chat" | "tasks" | "ai";
+export type TuiView = "team" | "chat" | "tasks" | "ai" | "dashboard";
 
 export type AgentRole =
   | "alfa"
