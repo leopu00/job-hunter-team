@@ -25,7 +25,7 @@ function applyTheme(theme: Theme) {
 }
 
 /** Rileva preferenza di sistema */
-function getSystemTheme(): Theme {
+function getSystemTheme(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
@@ -37,7 +37,8 @@ function resolveInitialTheme(): Theme {
 }
 
 function resolveActual(t: Theme): 'dark' | 'light' {
-  return t === 'system' ? getSystemTheme() : t
+  if (t === 'system') return getSystemTheme()
+  return t
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

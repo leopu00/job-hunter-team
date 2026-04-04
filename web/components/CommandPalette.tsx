@@ -45,7 +45,7 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { registerEscape } = useShortcuts()
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const close = useCallback(() => { setOpen(false); setQuery(''); setExtra([]) }, [])
 
