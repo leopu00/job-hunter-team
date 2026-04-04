@@ -236,6 +236,97 @@ const translations = {
     it: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
     en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
   },
+
+  // About page
+  about_badge:       { it: 'chi siamo',           en: 'about us' },
+  about_title_1:     { it: 'Un team di agenti AI',  en: 'An AI agent team' },
+  about_title_2:     { it: 'al tuo servizio',       en: 'at your service' },
+  about_intro:       {
+    it: 'Job Hunter Team e un progetto open-source che automatizza la ricerca di lavoro con un sistema multi-agente. Ogni agente ha un ruolo preciso, e insieme formano una pipeline completa: dalla scoperta delle offerte alla candidatura finale.',
+    en: 'Job Hunter Team is an open-source project that automates job hunting with a multi-agent system. Each agent has a precise role, and together they form a complete pipeline: from discovering listings to the final application.',
+  },
+
+  about_story_label: { it: 'la storia',            en: 'the story' },
+  about_story_title: { it: 'Come e nato il progetto', en: 'How the project started' },
+  about_story_desc:  {
+    it: 'Job Hunter Team e nato dall\'idea che cercare lavoro non dovrebbe essere un lavoro a tempo pieno. Candidarsi richiede ore di ricerca, personalizzazione di CV e cover letter, tracking delle candidature. Abbiamo pensato: e se un team di agenti AI potesse fare tutto questo per te?',
+    en: 'Job Hunter Team was born from the idea that job hunting shouldn\'t be a full-time job. Applying requires hours of research, CV and cover letter customization, application tracking. We thought: what if a team of AI agents could do all of this for you?',
+  },
+  about_tl_0:       { it: 'Idea iniziale — sistema multi-agente per job hunting',    en: 'Initial idea — multi-agent system for job hunting' },
+  about_tl_1:       { it: 'Primo prototipo con pipeline Scout → Analista → Scorer',  en: 'First prototype with Scout → Analyst → Scorer pipeline' },
+  about_tl_2:       { it: 'Aggiunta TUI terminale e interfaccia web',                en: 'Added terminal TUI and web interface' },
+  about_tl_3:       { it: 'Beta pubblica — team completo di 8 agenti',               en: 'Public beta — complete team of 8 agents' },
+
+  about_agents_label:  { it: 'il team',            en: 'the team' },
+  about_agents_title:  { it: 'Gli agenti',         en: 'The agents' },
+  about_agents_desc:   {
+    it: 'Ogni agente e un\'istanza Claude specializzata con personalita\', competenze e obiettivi unici. Comunicano tra loro via tmux e collaborano in una pipeline coordinata.',
+    en: 'Each agent is a specialized Claude instance with unique personality, skills and goals. They communicate via tmux and collaborate in a coordinated pipeline.',
+  },
+
+  about_agent_alfa_name:  { it: 'Alfa (Capitano)',     en: 'Alfa (Captain)' },
+  about_agent_alfa_desc:  {
+    it: 'Il coordinatore del team. Riceve le direttive dall\'utente, assegna i task agli agenti, monitora il progresso e garantisce che la pipeline funzioni senza intoppi. E il punto di contatto tra te e il team.',
+    en: 'The team coordinator. Receives directives from the user, assigns tasks to agents, monitors progress and ensures the pipeline runs smoothly. He\'s the point of contact between you and the team.',
+  },
+  about_agent_scout_name:  { it: 'Scout',              en: 'Scout' },
+  about_agent_scout_desc:  {
+    it: 'L\'esploratore. Scansiona job board, LinkedIn, canali Telegram e altre fonti alla ricerca di offerte rilevanti. Filtra il rumore e porta al team solo le opportunita\' che corrispondono al tuo profilo.',
+    en: 'The explorer. Scans job boards, LinkedIn, Telegram channels and other sources looking for relevant listings. Filters noise and brings the team only opportunities that match your profile.',
+  },
+  about_agent_analista_name:  { it: 'Analista',        en: 'Analyst' },
+  about_agent_analista_desc:  {
+    it: 'Lo stratega. Analizza ogni offerta in profondita\': requisiti, cultura aziendale, tecnologie, seniority. Produce un report strutturato per ogni posizione, evidenziando punti di forza e rischi.',
+    en: 'The strategist. Analyzes each listing in depth: requirements, company culture, technologies, seniority. Produces a structured report for each position, highlighting strengths and risks.',
+  },
+  about_agent_scorer_name:  { it: 'Scorer',            en: 'Scorer' },
+  about_agent_scorer_desc:  {
+    it: 'Il valutatore. Calcola un match score tra il tuo profilo e ogni offerta analizzata. Considera competenze tecniche, esperienza, localita\', stipendio e preferenze personali. Le offerte migliori salgono in cima.',
+    en: 'The evaluator. Computes a match score between your profile and each analyzed listing. Considers technical skills, experience, location, salary and personal preferences. Top matches rise to the top.',
+  },
+  about_agent_scrittore_name:  { it: 'Scrittore',      en: 'Writer' },
+  about_agent_scrittore_desc:  {
+    it: 'Il copywriter. Per ogni candidatura approvata, genera un CV personalizzato e una cover letter su misura. Adatta tono, keyword e struttura ai requisiti specifici della posizione e dell\'azienda.',
+    en: 'The copywriter. For each approved application, generates a personalized CV and tailored cover letter. Adapts tone, keywords and structure to the specific requirements of the position and company.',
+  },
+  about_agent_critico_name:  { it: 'Critico',          en: 'Critic' },
+  about_agent_critico_desc:  {
+    it: 'Il revisore. Esamina ogni documento prodotto dallo Scrittore con occhio critico: coerenza, errori, keyword mancanti, tono inadeguato. Se necessario, rimanda il lavoro allo Scrittore con feedback preciso.',
+    en: 'The reviewer. Examines every document produced by the Writer with a critical eye: coherence, errors, missing keywords, inadequate tone. If needed, sends work back to the Writer with precise feedback.',
+  },
+  about_agent_sentinella_name:  { it: 'Sentinella',    en: 'Sentinel' },
+  about_agent_sentinella_desc:  {
+    it: 'Il guardiano. Monitora i costi API, il consumo di token, la latenza e la salute del sistema. Ti avvisa se qualcosa non va e garantisce che il team operi entro i limiti di budget impostati.',
+    en: 'The guardian. Monitors API costs, token consumption, latency and system health. Alerts you if something goes wrong and ensures the team operates within your budget limits.',
+  },
+  about_agent_assistente_name:  { it: 'Assistente',    en: 'Assistant' },
+  about_agent_assistente_desc:  {
+    it: 'Il supporto. Risponde alle tue domande, ti guida nella configurazione, spiega le decisioni degli altri agenti. E il tuo punto di riferimento quando hai bisogno di aiuto o vuoi capire cosa sta succedendo.',
+    en: 'The support. Answers your questions, guides you through configuration, explains other agents\' decisions. He\'s your go-to when you need help or want to understand what\'s happening.',
+  },
+
+  about_how_label:   { it: 'architettura',         en: 'architecture' },
+  about_how_title:   { it: 'Come funziona il sistema', en: 'How the system works' },
+  about_how_desc:    {
+    it: 'Job Hunter Team usa un\'architettura multi-agente dove ogni agente e un processo indipendente che gira in una sessione tmux. Gli agenti comunicano tra loro attraverso messaggi strutturati e un file system condiviso.',
+    en: 'Job Hunter Team uses a multi-agent architecture where each agent is an independent process running in a tmux session. Agents communicate through structured messages and a shared file system.',
+  },
+  about_how_0:       { it: 'Ogni agente gira in una sessione tmux isolata',          en: 'Each agent runs in an isolated tmux session' },
+  about_how_1:       { it: 'Comunicazione via messaggi strutturati [@agent -> @agent]', en: 'Communication via structured messages [@agent -> @agent]' },
+  about_how_2:       { it: 'Pipeline coordinata: Scout → Analista → Scorer → Scrittore → Critico', en: 'Coordinated pipeline: Scout → Analyst → Scorer → Writer → Critic' },
+  about_how_3:       { it: 'Task system con stato (pending → in-progress → done)',   en: 'Task system with state (pending → in-progress → done)' },
+  about_how_4:       { it: 'Sentinella monitora costi e salute in tempo reale',      en: 'Sentinel monitors costs and health in real-time' },
+
+  about_vision_label:  { it: 'visione',            en: 'vision' },
+  about_vision_title:  { it: 'Il futuro',          en: 'The future' },
+  about_vision_desc:   {
+    it: 'Stiamo costruendo il futuro della ricerca di lavoro automatizzata. La nostra visione e un sistema che impara dalle tue preferenze, migliora ad ogni candidatura, e ti permette di concentrarti su cio\' che conta: prepararti per i colloqui.',
+    en: 'We\'re building the future of automated job hunting. Our vision is a system that learns from your preferences, improves with every application, and lets you focus on what matters: preparing for interviews.',
+  },
+  about_vision_0:    { it: 'Apprendimento continuo dal feedback dell\'utente',       en: 'Continuous learning from user feedback' },
+  about_vision_1:    { it: 'Integrazione diretta con portali di candidatura',        en: 'Direct integration with application portals' },
+  about_vision_2:    { it: 'Preparazione automatica ai colloqui con mock interview', en: 'Automatic interview preparation with mock interviews' },
+  about_vision_3:    { it: 'Networking assistito e follow-up automatizzati',         en: 'Assisted networking and automated follow-ups' },
 } as const
 
 type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
