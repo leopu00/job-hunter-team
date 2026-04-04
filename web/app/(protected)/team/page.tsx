@@ -71,6 +71,82 @@ function AgentNode({ agent, size = 'md', status = 'idle' }: { agent: AgentDef; s
   return node
 }
 
+/* ── Setup Guide ──────────────────────────────────────────────────── */
+
+function SetupGuide({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div
+      className="mb-6 rounded-lg p-5"
+      style={{
+        background: 'rgba(0,232,122,0.04)',
+        border: '1px solid rgba(0,232,122,0.15)',
+      }}
+    >
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <h3 className="text-[13px] font-semibold text-[var(--color-white)]">
+          Come avviare gli agenti
+        </h3>
+        <button
+          onClick={onDismiss}
+          className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] cursor-pointer transition-colors"
+          style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
+        >
+          nascondi
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+          Gli agenti AI girano sul tuo computer in sessioni terminale (tmux). Servono tre cose:
+        </p>
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-start gap-2.5">
+            <span className="text-[11px] font-mono text-[var(--color-green)] mt-px flex-shrink-0">1.</span>
+            <div>
+              <span className="text-[11px] font-semibold text-[var(--color-bright)]">Cartella di lavoro</span>
+              <span className="text-[11px] text-[var(--color-muted)]"> &mdash; Selezionala dalla </span>
+              <Link href="/dashboard" className="text-[11px] text-[var(--color-green)] hover:underline no-underline">dashboard</Link>
+              <span className="text-[11px] text-[var(--color-muted)]"> al primo avvio. I dati degli agenti vengono salvati qui.</span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5">
+            <span className="text-[11px] font-mono text-[var(--color-green)] mt-px flex-shrink-0">2.</span>
+            <div>
+              <span className="text-[11px] font-semibold text-[var(--color-bright)]">tmux</span>
+              <span className="text-[11px] text-[var(--color-muted)]"> &mdash; Ogni agente gira in una sessione tmux separata. </span>
+              <span className="text-[11px] text-[var(--color-dim)]">Installalo con </span>
+              <code className="text-[10px] text-[var(--color-green)]">brew install tmux</code>
+              <span className="text-[11px] text-[var(--color-dim)]"> (macOS) o </span>
+              <code className="text-[10px] text-[var(--color-green)]">apt install tmux</code>
+              <span className="text-[11px] text-[var(--color-dim)]"> (Linux).</span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5">
+            <span className="text-[11px] font-mono text-[var(--color-green)] mt-px flex-shrink-0">3.</span>
+            <div>
+              <span className="text-[11px] font-semibold text-[var(--color-bright)]">Claude CLI + API Key</span>
+              <span className="text-[11px] text-[var(--color-muted)]"> &mdash; Gli agenti usano Claude Code. Installa con </span>
+              <code className="text-[10px] text-[var(--color-green)]">npm i -g @anthropic-ai/claude-code</code>
+              <span className="text-[11px] text-[var(--color-muted)]"> e configura la tua chiave API Anthropic (</span>
+              <code className="text-[10px] text-[var(--color-green)]">sk-ant-...</code>
+              <span className="text-[11px] text-[var(--color-muted)]">) nelle </span>
+              <Link href="/settings" className="text-[11px] text-[var(--color-green)] hover:underline no-underline">impostazioni</Link>
+              <span className="text-[11px] text-[var(--color-muted)]">.</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-[var(--color-dim)] leading-relaxed mt-1">
+          Quando tutto e pronto, premi <strong className="text-[var(--color-muted)]">Avvia Team</strong> per lanciare tutti gli agenti. Ogni agente apre una sessione Claude CLI nella propria cartella di lavoro.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /* ── Pagina ────────────────────────────────────────────────────────── */
 
 export default function TeamPage() {
@@ -89,6 +165,7 @@ export default function TeamPage() {
   })
   const [teamState, setTeamState] = useState<TeamState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [showGuide, setShowGuide] = useState(true)
 
   const activeCount = ALL_AGENTS.filter(a => statuses[a.session] === 'active').length
   const allOffline = activeCount === 0 && teamState === 'idle'
@@ -519,6 +596,11 @@ export default function TeamPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Setup guide — visibile quando nessun agente attivo */}
+      {showGuide && activeCount === 0 && teamState === 'idle' && (
+        <SetupGuide onDismiss={() => setShowGuide(false)} />
       )}
 
       {/* Desktop: Pyramid layout */}

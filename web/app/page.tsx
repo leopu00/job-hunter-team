@@ -9,6 +9,7 @@ import LandingNav from './components/landing/LandingNav'
 import LandingHero from './components/landing/LandingHero'
 import LandingFeatures from './components/landing/LandingFeatures'
 import LandingSteps from './components/landing/LandingSteps'
+import LandingGetStarted from './components/landing/LandingGetStarted'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 
@@ -82,6 +83,7 @@ function PageContent() {
         <LandingHero />
         <LandingFeatures />
         <LandingSteps />
+        <LandingGetStarted />
         <LandingCTA />
         <LandingFooter />
       </main>
@@ -204,15 +206,20 @@ function WorkspaceView({
       setWorkspace(pendingPath)
       setWs(pendingPath)
       if (!data.hasDb) {
-        await fetch('/api/workspace/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: pendingPath }),
-        })
+        try {
+          await fetch('/api/workspace/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: pendingPath }),
+          })
+        } catch { /* init non critico — il db verra' creato dopo */ }
       }
+      // Redirect alla dashboard — usa location.href per full reload con cookie
       window.location.href = '/dashboard'
-    } catch { /* ignore */ }
-    setConfirming(false)
+      return
+    } catch {
+      setConfirming(false)
+    }
   }
 
   const hasWorkspace = workspace.length > 0
