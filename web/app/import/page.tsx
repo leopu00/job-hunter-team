@@ -3,17 +3,32 @@
 import Link from 'next/link'
 import { useState, useCallback, useRef } from 'react'
 
-type ImportTarget = 'sessions' | 'tasks' | 'config'
+type ImportTarget = 'sessions' | 'tasks' | 'config' | 'jobs' | 'contacts' | 'companies'
 type ImportMode = 'merge' | 'replace'
 
-const TARGETS: { id: ImportTarget; label: string; color: string }[] = [
-  { id: 'sessions', label: 'Sessioni', color: 'var(--color-green)' },
-  { id: 'tasks',    label: 'Task',     color: 'var(--color-blue)' },
-  { id: 'config',   label: 'Config',   color: 'var(--color-yellow)' },
+const TARGETS: { id: ImportTarget; label: string; color: string; group: string }[] = [
+  { id: 'jobs',      label: 'Offerte',   color: '#61affe',             group: 'Job Hunting' },
+  { id: 'contacts',  label: 'Contatti',  color: '#9b59b6',             group: 'Job Hunting' },
+  { id: 'companies', label: 'Aziende',   color: '#fca130',             group: 'Job Hunting' },
+  { id: 'sessions',  label: 'Sessioni',  color: 'var(--color-green)',  group: 'Sistema' },
+  { id: 'tasks',     label: 'Task',      color: 'var(--color-blue)',   group: 'Sistema' },
+  { id: 'config',    label: 'Config',    color: 'var(--color-yellow)', group: 'Sistema' },
 ]
 
+function parseCsv(text: string): Record<string, string>[] {
+  const lines = text.trim().split('\n')
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+    const obj: Record<string, string> = {}
+    headers.forEach((h, i) => { obj[h] = vals[i] ?? '' })
+    return obj
+  })
+}
+
 export default function ImportPage() {
-  const [target, setTarget] = useState<ImportTarget>('tasks')
+  const [target, setTarget] = useState<ImportTarget>('jobs')
   const [mode, setMode] = useState<ImportMode>('merge')
   const [fileData, setFileData] = useState<unknown>(null)
   const [fileName, setFileName] = useState<string | null>(null)
@@ -27,7 +42,7 @@ export default function ImportPage() {
     setResult(null); setPreview(null)
     try {
       const text = await file.text()
-      const data = JSON.parse(text)
+      const data = file.name.endsWith('.csv') ? parseCsv(text) : JSON.parse(text)
       setFileData(data); setFileName(file.name)
       // Dry run per preview
       const res = await fetch('/api/import', {
@@ -78,20 +93,27 @@ export default function ImportPage() {
           <span className="text-[10px] text-[var(--color-muted)]">Importa</span>
         </div>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Importa Dati</h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">Importa sessioni, task o config da file JSON</p>
+        <p className="text-[var(--color-muted)] text-[11px] mt-1">Importa dati job hunting e sistema da file JSON o CSV</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-5">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-2">Destinazione</p>
-            <div className="flex gap-2">
-              {TARGETS.map(t => (
-                <button key={t.id} onClick={() => { setTarget(t.id); reset() }}
-                  className="flex-1 px-3 py-2 rounded text-[11px] font-semibold cursor-pointer transition-all"
-                  style={{ border: `1px solid ${target === t.id ? t.color : 'var(--color-border)'}`, color: target === t.id ? t.color : 'var(--color-dim)', background: target === t.id ? `${t.color}0d` : 'transparent' }}>
-                  {t.label}
-                </button>
+            <div className="space-y-2">
+              {['Job Hunting', 'Sistema'].map(group => (
+                <div key={group}>
+                  <p className="text-[8px] font-bold tracking-widest text-[var(--color-dim)] mb-1">{group.toUpperCase()}</p>
+                  <div className="flex gap-1">
+                    {TARGETS.filter(t => t.group === group).map(t => (
+                      <button key={t.id} onClick={() => { setTarget(t.id); reset() }}
+                        className="flex-1 px-2 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
+                        style={{ border: `1px solid ${target === t.id ? t.color : 'var(--color-border)'}`, color: target === t.id ? t.color : 'var(--color-dim)', background: target === t.id ? `${t.color}0d` : 'transparent' }}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -117,7 +139,7 @@ export default function ImportPage() {
               onDragLeave={() => setDragging(false)}
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}>
-              <input ref={inputRef} type="file" accept=".json" className="hidden" onChange={handleFileInput} />
+              <input ref={inputRef} type="file" accept=".json,.csv" className="hidden" onChange={handleFileInput} />
               {fileName ? (
                 <div>
                   <p className="text-[12px] text-[var(--color-bright)] font-mono">{fileName}</p>
@@ -125,7 +147,7 @@ export default function ImportPage() {
                 </div>
               ) : (
                 <div>
-                  <p className="text-[12px] text-[var(--color-muted)]">Trascina un file JSON qui</p>
+                  <p className="text-[12px] text-[var(--color-muted)]">Trascina un file JSON o CSV qui</p>
                   <p className="text-[9px] text-[var(--color-dim)] mt-1">oppure clicca per selezionare</p>
                 </div>
               )}
