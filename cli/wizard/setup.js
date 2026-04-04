@@ -1,24 +1,26 @@
 /**
  * JHT Setup Wizard — Main orchestration
  *
- * Flusso: provider AI, auth, modello, Telegram, workspace.
- * Output conforme a shared/config/ schema.
+ * Flusso: prerequisiti → provider AI → auth (SecretRef) → modello →
+ *         Telegram → workspace → health check → salva config.
+ *
+ * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
 import {
   AI_PROVIDERS,
   readConfigFileSnapshot,
   validateApiKey,
-  validateEmail,
   summarizeExistingConfig,
 } from './setup-helpers.js';
 import {
   promptTelegram,
   promptWorkspace,
+  promptSubscription,
   assembleAndSaveConfig,
   showSummary,
 } from './setup-steps.js';
-import { hasBrowserSupport } from '../src/auth/browser-open.js';
-import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
+import { formatSecretForConfig } from './secret-ref.js';
+import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 
 /**
  * Esegue il setup wizard JHT.
@@ -27,6 +29,14 @@ import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 export async function runSetupWizard(prompter) {
   await prompter.intro('Job Hunter Team — Setup');
 
+  // --- Step 1: Prerequisiti ---
+  const prereqOk = await checkPrerequisites(prompter);
+  if (!prereqOk) {
+    await prompter.outro('Setup annullato — prerequisiti mancanti.');
+    return;
+  }
+
+  // --- Config snapshot ---
   const snapshot = readConfigFileSnapshot();
   let baseConfig = snapshot.exists && snapshot.config ? snapshot.config : {};
 
@@ -38,7 +48,7 @@ export async function runSetupWizard(prompter) {
     baseConfig = {};
   }
 
-  // --- Setup mode: quickstart vs advanced ---
+  // --- Setup mode ---
   const flow = await prompter.select({
     message: 'Modalita\' di setup',
     options: [
@@ -48,7 +58,7 @@ export async function runSetupWizard(prompter) {
     initialValue: 'quickstart',
   });
 
-  // --- Gestione config esistente ---
+  // --- Config esistente ---
   if (snapshot.exists && snapshot.config) {
     await prompter.note(summarizeExistingConfig(baseConfig), 'Config esistente');
     const action = await prompter.select({
@@ -66,7 +76,7 @@ export async function runSetupWizard(prompter) {
     if (action === 'reset') baseConfig = {};
   }
 
-  // --- Provider AI ---
+  // --- Step 2: Provider AI ---
   const providerChoice = await prompter.select({
     message: 'Provider AI',
     options: AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label, hint: p.hint })),
@@ -84,70 +94,54 @@ export async function runSetupWizard(prompter) {
     initialValue: baseConfig.providers?.[providerChoice]?.auth_method || 'api_key',
   });
 
-  // --- Credenziali ---
-  let apiKey = undefined;
-  let subscriptionConfig = undefined;
+  // --- Step 3: Credenziali con SecretRef ---
+  let apiKeySecret;
+  let subscriptionConfig;
 
   if (authMethod === 'api_key') {
-    await prompter.note(
-      `Per ottenere una API key per ${selectedProvider.label}:\n${selectedProvider.docsUrl}`,
-      'API Key',
-    );
-    apiKey = await prompter.text({
-      message: `${selectedProvider.label} API key`,
-      placeholder: selectedProvider.keyPlaceholder,
-      validate: (value) => validateApiKey(selectedProvider, value),
-    });
-    apiKey = apiKey.trim();
+    // Chiedi come salvare la key (SecretRef pattern)
+    const secretMode = flow === 'advanced'
+      ? await prompter.select({
+          message: 'Come salvare la API key?',
+          options: [
+            { value: 'env', label: 'Variabile d\'ambiente', hint: 'consigliato — niente plaintext nel config' },
+            { value: 'plaintext', label: 'Nel file config', hint: 'piu\' semplice ma meno sicuro' },
+            { value: 'file', label: 'File esterno', hint: 'per Docker/secrets manager' },
+          ],
+          initialValue: 'env',
+        })
+      : 'plaintext'; // quickstart usa plaintext per semplicita'
+
+    if (secretMode === 'env') {
+      const envName = await prompter.text({
+        message: 'Nome variabile d\'ambiente',
+        initialValue: providerChoice === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerChoice.toUpperCase()}_API_KEY`,
+        placeholder: 'ANTHROPIC_API_KEY',
+      });
+      apiKeySecret = formatSecretForConfig('env', envName.trim());
+      await prompter.note(`Assicurati che ${envName.trim()} sia impostata nel tuo shell profile.`, 'Nota');
+    } else if (secretMode === 'file') {
+      const filePath = await prompter.text({
+        message: 'Path del file con la API key',
+        placeholder: '/run/secrets/anthropic-key',
+      });
+      apiKeySecret = formatSecretForConfig('file', filePath.trim());
+    } else {
+      await prompter.note(
+        `Per ottenere una API key per ${selectedProvider.label}:\n${selectedProvider.docsUrl}`,
+        'API Key',
+      );
+      const rawKey = await prompter.text({
+        message: `${selectedProvider.label} API key`,
+        placeholder: selectedProvider.keyPlaceholder,
+        validate: (value) => validateApiKey(selectedProvider, value),
+      });
+      apiKeySecret = formatSecretForConfig('plaintext', rawKey.trim());
+    }
   }
 
   if (authMethod === 'subscription') {
-    // Offri scelta: login via browser (OAuth) o inserimento manuale
-    const browserAvailable = hasBrowserSupport();
-    const subMethod = await prompter.select({
-      message: 'Come vuoi effettuare il login?',
-      options: [
-        {
-          value: 'browser',
-          label: 'Apri browser per login',
-          hint: browserAvailable ? 'consigliato — login automatico' : 'browser non disponibile (SSH?)',
-        },
-        { value: 'manual', label: 'Inserisci email e token manualmente' },
-      ],
-      initialValue: browserAvailable ? 'browser' : 'manual',
-    });
-
-    if (subMethod === 'browser') {
-      // OAuth PKCE flow via browser
-      const providerOAuth = selectedProvider.oauthUrl || `https://${providerChoice}.ai/authorize`;
-      const clientId = selectedProvider.oauthClientId || `jht-${providerChoice}`;
-      await prompter.note(
-        'Si aprira\' il browser per il login.\nDopo l\'autorizzazione verrai reindirizzato automaticamente.',
-        'Login via browser',
-      );
-      const spinner = prompter.spinner?.();
-      spinner?.start('In attesa del login nel browser...');
-      const result = await startSubscriptionLogin({
-        authorizeUrl: providerOAuth,
-        clientId,
-        scopes: ['read', 'write'],
-        prompter,
-      });
-      spinner?.stop(result ? 'Login completato!' : 'Login fallito.');
-
-      if (result) {
-        subscriptionConfig = {
-          email: `oauth-${providerChoice}`,
-          session_token: result.code,
-          oauth_verifier: result.verifier,
-        };
-      } else {
-        await prompter.note('Login via browser fallito. Inserisci i dati manualmente.', 'Fallback');
-        subscriptionConfig = await promptManualSubscription(prompter, flow);
-      }
-    } else {
-      subscriptionConfig = await promptManualSubscription(prompter, flow);
-    }
+    subscriptionConfig = await promptSubscription(prompter, selectedProvider, flow);
   }
 
   // --- Modello AI ---
@@ -157,45 +151,33 @@ export async function runSetupWizard(prompter) {
     initialValue: baseConfig.providers?.[providerChoice]?.model || selectedProvider.models[0].value,
   });
 
-  // --- Telegram, workspace, salvataggio, riepilogo ---
+  // --- Telegram, workspace ---
   const telegramChannel = await promptTelegram(prompter, baseConfig.channels);
   const workspace = await promptWorkspace(prompter, flow, baseConfig.workspace);
 
+  // --- Step 5: Health check ---
+  if (authMethod === 'api_key') {
+    const healthy = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
+    if (!healthy) {
+      const cont = await prompter.confirm({
+        message: 'API key non verificata. Continuare e salvare comunque?',
+        initialValue: true,
+      });
+      if (!cont) {
+        await prompter.outro('Setup annullato.');
+        return;
+      }
+    }
+  }
+
+  // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
-    providerChoice, authMethod, apiKey, subscriptionConfig, model,
+    providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
     telegramChannel, workspace, baseProviders: baseConfig.providers || {},
   });
 
   await showSummary(prompter, {
-    selectedProvider, authMethod, apiKey, subscriptionConfig,
+    selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
     model, telegramChannel, workspace,
   });
-}
-
-/**
- * Prompt manuale per subscription: email + session token opzionale.
- * @param {import('./prompts.js').WizardPrompter} prompter
- * @param {string} flow - 'quickstart' | 'advanced'
- */
-async function promptManualSubscription(prompter, flow) {
-  await prompter.note(
-    'Inserisci l\'email del tuo account.\nIl session token e\' opzionale.',
-    'Subscription manuale',
-  );
-  const email = await prompter.text({
-    message: 'Email account',
-    placeholder: 'utente@esempio.com',
-    validate: validateEmail,
-  });
-  const wantsToken = flow === 'advanced'
-    ? await prompter.confirm({ message: 'Hai un session token?', initialValue: false })
-    : false;
-  let sessionToken = undefined;
-  if (wantsToken) {
-    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'incolla il token...' });
-    sessionToken = sessionToken?.trim() || undefined;
-  }
-  const config = { email: email.trim() };
-  if (sessionToken) config.session_token = sessionToken;
-  return config;
 }
