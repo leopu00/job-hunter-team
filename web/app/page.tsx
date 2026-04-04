@@ -11,6 +11,7 @@ import LandingFeatures from './components/landing/LandingFeatures'
 import LandingSteps from './components/landing/LandingSteps'
 import LandingGetStarted from './components/landing/LandingGetStarted'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
+import LandingStats from './components/landing/LandingStats'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
 
@@ -82,6 +83,7 @@ function PageContent() {
       <main style={{ position: 'relative', zIndex: 1 }}>
         <LandingNav />
         <LandingHero />
+        <FadeInSection><LandingStats /></FadeInSection>
         <FadeInSection><LandingFeatures /></FadeInSection>
         <FadeInSection delay={100}><LandingSteps /></FadeInSection>
         <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
