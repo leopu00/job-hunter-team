@@ -204,3 +204,34 @@ label {
 ::-webkit-scrollbar-track { background: var(--color-void); }
 ::-webkit-scrollbar-thumb { background: var(--color-border-glow); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+
+/* ── Landing page ───────────────────────────────────────────────── */
+@keyframes landing-type {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes landing-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+.landing-term-line {
+  opacity: 0;
+  animation: landing-type 0.3s ease forwards;
+}
+
+.landing-cursor {
+  opacity: 0;
+  color: var(--color-green);
+  animation: landing-type 0.2s ease forwards, landing-blink 0.8s step-end infinite 4.2s;
+}
+
+.landing-feature-card {
+  position: relative;
+}
+
+.landing-feature-card:hover {
+  border-color: var(--color-border-glow);
+  transform: translateY(-2px);
+}
