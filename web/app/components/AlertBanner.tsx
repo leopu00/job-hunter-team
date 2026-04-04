@@ -14,6 +14,7 @@ export interface AlertBannerProps {
   icon?:        boolean       // mostra icona tipo (default true)
   position?:    'fixed' | 'inline'
   onDismiss?:   () => void
+  style?:       React.CSSProperties
 }
 
 // ── Style maps ─────────────────────────────────────────────────────────────
