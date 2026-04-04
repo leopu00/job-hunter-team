@@ -1,5 +1,5 @@
 /**
- * JHT Setup Wizard — Step Telegram, workspace, salvataggio, riepilogo
+ * JHT Setup Wizard — Step Telegram, workspace, subscription, salvataggio, riepilogo
  */
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,11 @@ import {
   validateTelegramToken,
   validateChatId,
   validateWorkspacePath,
+  validateEmail,
 } from './setup-helpers.js';
+import { describeSecret } from './secret-ref.js';
+import { hasBrowserSupport } from '../src/auth/browser-open.js';
+import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 
 const DEFAULT_WORKSPACE = path.join(os.homedir(), 'jht');
 
@@ -72,6 +76,7 @@ export async function promptWorkspace(prompter, flow, baseWorkspace) {
 
 /**
  * Assembla e salva la config finale conforme a shared/config/ schema.
+ * apiKey puo' essere un SecretInput (oggetto) o una stringa plaintext legacy.
  */
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
@@ -80,7 +85,16 @@ export async function assembleAndSaveConfig(prompter, params) {
   const progress = prompter.progress('Salvataggio configurazione...');
 
   const providerConfig = { name: providerChoice, auth_method: authMethod };
-  if (authMethod === 'api_key') providerConfig.api_key = apiKey;
+  if (authMethod === 'api_key' && apiKey) {
+    // SecretRef: salva l'oggetto intero o estrai il plaintext per retrocompatibilita'
+    if (typeof apiKey === 'object' && apiKey.type === 'plaintext') {
+      providerConfig.api_key = apiKey.value;
+    } else if (typeof apiKey === 'object') {
+      providerConfig.api_key_ref = apiKey; // SecretRef nel config
+    } else {
+      providerConfig.api_key = apiKey;
+    }
+  }
   if (authMethod === 'subscription') providerConfig.subscription = subscriptionConfig;
   providerConfig.model = model;
 
@@ -103,12 +117,12 @@ export async function assembleAndSaveConfig(prompter, params) {
  * Mostra riepilogo finale.
  */
 export async function showSummary(prompter, params) {
-  const { selectedProvider, authMethod, apiKey, subscriptionConfig,
+  const { selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
           model, telegramChannel, workspace } = params;
 
   const authDisplay = authMethod === 'api_key'
-    ? `API Key (${apiKey.slice(0, 8)}${'*'.repeat(8)})`
-    : `Subscription (${subscriptionConfig.email})`;
+    ? `API Key (${describeSecret(apiKeySecret)})`
+    : `Subscription (${subscriptionConfig?.email ?? 'n/a'})`;
 
   const summary = [
     `Provider:   ${selectedProvider.label}`,
@@ -122,4 +136,57 @@ export async function showSummary(prompter, params) {
 
   await prompter.note(summary, 'Riepilogo');
   await prompter.outro('Setup completato! Esegui jht start per avviare il team.');
+}
+
+/**
+ * Prompt subscription: browser OAuth o manuale.
+ */
+export async function promptSubscription(prompter, selectedProvider, flow) {
+  const browserAvailable = hasBrowserSupport();
+  const subMethod = await prompter.select({
+    message: 'Come vuoi effettuare il login?',
+    options: [
+      { value: 'browser', label: 'Apri browser per login',
+        hint: browserAvailable ? 'consigliato' : 'browser non disponibile (SSH?)' },
+      { value: 'manual', label: 'Inserisci email e token manualmente' },
+    ],
+    initialValue: browserAvailable ? 'browser' : 'manual',
+  });
+
+  if (subMethod === 'browser') {
+    const providerOAuth = selectedProvider.oauthUrl || `https://${selectedProvider.value}.ai/authorize`;
+    const clientId = selectedProvider.oauthClientId || `jht-${selectedProvider.value}`;
+    await prompter.note('Si aprira\' il browser per il login.', 'Login via browser');
+    const spin = prompter.progress('In attesa del login nel browser...');
+    const result = await startSubscriptionLogin({
+      authorizeUrl: providerOAuth, clientId, scopes: ['read', 'write'], prompter,
+    });
+    spin.stop(result ? 'Login completato!' : 'Login fallito.');
+    if (result) {
+      return { email: `oauth-${selectedProvider.value}`, session_token: result.code, oauth_verifier: result.verifier };
+    }
+    await prompter.note('Login via browser fallito. Inserisci i dati manualmente.', 'Fallback');
+  }
+  return promptManualSubscription(prompter, flow);
+}
+
+/**
+ * Prompt manuale per subscription: email + session token opzionale.
+ */
+async function promptManualSubscription(prompter, flow) {
+  await prompter.note('Inserisci l\'email del tuo account.', 'Subscription manuale');
+  const email = await prompter.text({
+    message: 'Email account', placeholder: 'utente@esempio.com', validate: validateEmail,
+  });
+  const wantsToken = flow === 'advanced'
+    ? await prompter.confirm({ message: 'Hai un session token?', initialValue: false })
+    : false;
+  let sessionToken;
+  if (wantsToken) {
+    sessionToken = await prompter.text({ message: 'Session token', placeholder: 'incolla il token...' });
+    sessionToken = sessionToken?.trim() || undefined;
+  }
+  const config = { email: email.trim() };
+  if (sessionToken) config.session_token = sessionToken;
+  return config;
 }
