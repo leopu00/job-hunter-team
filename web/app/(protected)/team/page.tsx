@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useToast } from '../../components/Toast'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -168,9 +169,11 @@ export default function TeamPage() {
   const [showGuide, setShowGuide] = useState(true)
 
   const activeCount = ALL_AGENTS.filter(a => statuses[a.session] === 'active').length
+  const { toast } = useToast()
+  const prevStatusesRef = useRef<Record<string, AgentStatus> | null>(null)
   const allOffline = activeCount === 0 && teamState === 'idle'
 
-  /* ── System diagnostics (when all offline) ───────────────────── */
+  /* ── System diagnostics (when all offline) ─��──────────��──────── */
 
   type DiagCheck = { label: string; ok: boolean; hint: string }
   const [diag, setDiag] = useState<DiagCheck[] | null>(null)
@@ -243,6 +246,23 @@ export default function TeamPage() {
         ALL_AGENTS.forEach(a => {
           next[a.session] = activeSessions.has(a.session) ? 'active' : 'idle'
         })
+
+        // Toast per cambi di stato
+        const prevRef = prevStatusesRef.current
+        if (prevRef) {
+          ALL_AGENTS.forEach(a => {
+            const was = prevRef[a.session]
+            const now = next[a.session]
+            if (was === now) return
+            if (was !== 'active' && now === 'active') {
+              toast(`${a.role} è online`, 'success', 3000)
+            } else if (was === 'active' && now !== 'active') {
+              toast(`${a.role} si è fermato`, 'warning', 3000)
+            }
+          })
+        }
+        prevStatusesRef.current = { ...next }
+
         return next
       })
 
@@ -254,7 +274,7 @@ export default function TeamPage() {
     } catch {
       return false
     }
-  }, [])
+  }, [toast])
 
   /* ── Avvio team ──────────────────────────────────────────────── */
 
@@ -314,14 +334,15 @@ export default function TeamPage() {
     fetchStatus()
   }, [fetchStatus])
 
+  // Polling veloce durante transizioni, polling regolare altrimenti
   useEffect(() => {
-    if (teamState !== 'starting' && teamState !== 'stopping') return
+    const isTransitioning = teamState === 'starting' || teamState === 'stopping'
     const interval = setInterval(async () => {
       const result = await fetchStatus()
-      if (!result) return
+      if (!result || !isTransitioning) return
       if (teamState === 'starting' && result.allActive) clearInterval(interval)
       if (teamState === 'stopping' && result.noneActive) clearInterval(interval)
-    }, 3000)
+    }, isTransitioning ? 3000 : 5000)
     return () => clearInterval(interval)
   }, [teamState, fetchStatus])
 
