@@ -1,8 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useLandingI18n } from './LandingI18n'
 
 export default function LandingCTA() {
+  const { t } = useLandingI18n()
+
   return (
     <section id="cta" className="px-6 py-24 relative">
       <div
@@ -19,11 +22,10 @@ export default function LandingCTA() {
 
         <div className="relative z-10">
           <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-white)] tracking-tight mb-4">
-            Pronto a rivoluzionare<br />la tua ricerca lavoro?
+            {t('cta_title_1')}<br />{t('cta_title_2')}
           </h2>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-md mx-auto mb-8">
-            Smetti di inviare candidature generiche. Lascia che un team di agenti AI
-            lavori per te, in modo intelligente e personalizzato.
+            {t('cta_desc')}
           </p>
           <Link
             href="/?login=true"
@@ -34,10 +36,10 @@ export default function LandingCTA() {
               boxShadow: '0 0 30px rgba(0,232,122,0.3)',
             }}
           >
-            Inizia ora — è gratis
+            {t('cta_button')}
           </Link>
           <p className="mt-4 text-[10px] text-[var(--color-dim)]">
-            Nessuna carta di credito richiesta · Beta pubblica
+            {t('cta_note')}
           </p>
         </div>
       </div>

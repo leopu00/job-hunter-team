@@ -10,6 +10,7 @@ import LandingHero from './components/landing/LandingHero'
 import LandingFeatures from './components/landing/LandingFeatures'
 import LandingSteps from './components/landing/LandingSteps'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
+import { LandingI18nProvider } from './components/landing/LandingI18n'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -75,14 +76,16 @@ function PageContent() {
 
   // --- Landing page (default per tutti gli utenti non autenticati) ---
   return (
-    <main style={{ position: 'relative', zIndex: 1 }}>
-      <LandingNav />
-      <LandingHero />
-      <LandingFeatures />
-      <LandingSteps />
-      <LandingCTA />
-      <LandingFooter />
-    </main>
+    <LandingI18nProvider>
+      <main style={{ position: 'relative', zIndex: 1 }}>
+        <LandingNav />
+        <LandingHero />
+        <LandingFeatures />
+        <LandingSteps />
+        <LandingCTA />
+        <LandingFooter />
+      </main>
+    </LandingI18nProvider>
   )
 }
 
