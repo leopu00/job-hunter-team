@@ -32,6 +32,22 @@
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
 }
 
+/* ── Light theme overrides ───────────────────────────────────────── */
+html[data-theme="light"] {
+  --color-void:         #f0f0f7;
+  --color-deep:         #e8e8f2;
+  --color-panel:        #ededf5;
+  --color-card:         #e4e4ef;
+  --color-row:          #dcdcea;
+  --color-border:       #c8c8dc;
+  --color-border-glow:  #b8b8d0;
+  --color-dim:          #8080a8;
+  --color-muted:        #505070;
+  --color-base:         #282848;
+  --color-bright:       #18183a;
+  --color-white:        #0a0a20;
+}
+
 /* ── Base ────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
