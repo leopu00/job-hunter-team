@@ -5,6 +5,7 @@ import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
 import TeamDropdown from './TeamDropdown'
 import { NotificationCenter } from '@/app/components/NotificationCenter'
+import NavbarMobile from './NavbarMobile'
 
 interface NavbarProps {
   user: User | null
@@ -39,8 +40,8 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           </span>
         </Link>
 
-        {/* Nav links */}
-        <div className="flex items-center gap-1 flex-1 justify-center sm:justify-start sm:ml-8 flex-wrap">
+        {/* Nav links (desktop) */}
+        <div className="hidden md:flex items-center gap-1 flex-1 justify-start ml-8">
           <NavLink href="/dashboard">Dashboard</NavLink>
           <NavLink href="/positions">Posizioni</NavLink>
           <NavLink href="/applications">Candidature</NavLink>
@@ -50,6 +51,9 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <TeamDropdown />
           <NavLink href="/profile">Profilo</NavLink>
         </div>
+
+        {/* Mobile hamburger */}
+        <NavbarMobile />
 
         {/* Notifications + User / Login */}
         {user ? (
