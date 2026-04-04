@@ -43,6 +43,7 @@ shared/telegram/*.session
 *.png
 !web/public/**/*.png
 !web/app/**/*.png
+!assets/banner.png
 
 # Gap report e dati analisi personali
 shared/data/gap-report.json
