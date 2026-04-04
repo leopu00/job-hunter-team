@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { EmptyState } from './components/EmptyState'
 
 type SessionState = 'active' | 'paused' | 'ended'
 type Session = {
@@ -103,7 +104,7 @@ export default function SessionsPage() {
       {!loading && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {sorted.length === 0
-            ? <p className="px-5 py-8 text-center text-[11px] text-[var(--color-dim)]">Nessuna sessione</p>
+            ? <EmptyState icon="💬" title="Nessuna sessione" description="Le conversazioni con gli agenti appariranno qui." size="md" />
             : sorted.map(s => <SessionRow key={s.id} s={s} onPatch={patchState} />)
           }
         </div>
