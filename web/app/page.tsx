@@ -33,72 +33,64 @@ function PageContent() {
   const [inputPath, setInputPath] = useState('')
 
   useEffect(() => {
-    if (supabaseConfigured) {
-      // Cloud mode: check se l'utente e' gia' autenticato
-      if (wantsLogin) {
-        setLoading(false)
-        return
-      }
-      const supabase = createClient()
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user) {
-          router.replace('/dashboard')
-        } else {
-          setLoading(false)
+    // Se l'utente vuole il login/workspace selector, mostra subito
+    if (wantsLogin) {
+      if (!supabaseConfigured) {
+        // Modalita' locale: carica workspace se esiste
+        const saved = getWorkspace()
+        if (saved) {
+          fetch('/api/workspace')
+            .then(r => r.json())
+            .then(data => {
+              if (data.path) {
+                setWs(data.path)
+                setInputPath(data.path)
+                setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
+              }
+            })
+            .catch(() => {})
         }
-      })
+      }
+      setLoading(false)
       return
     }
 
-    // Modalita' locale
-    const saved = getWorkspace()
-    if (saved) {
-      fetch('/api/workspace')
-        .then(r => r.json())
-        .then(data => {
-          if (data.path) {
-            setWs(data.path)
-            setInputPath(data.path)
-            setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
-            if (data.hasDb && !wantsChange && !wantsLogin) {
+    // Check se utente gia' autenticato → redirect a dashboard
+    if (supabaseConfigured) {
+      const supabase = createClient()
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) router.replace('/dashboard')
+        else setLoading(false)
+      })
+    } else {
+      // Modalita' locale: se ha workspace con DB, redirect a dashboard
+      const saved = getWorkspace()
+      if (saved) {
+        fetch('/api/workspace')
+          .then(r => r.json())
+          .then(data => {
+            if (data.path && data.hasDb && !wantsChange) {
               router.replace('/dashboard')
             } else {
               setLoading(false)
             }
-          } else {
-            setLoading(false)
-          }
-        })
-        .catch(() => setLoading(false))
-    } else {
-      setLoading(false)
+          })
+          .catch(() => setLoading(false))
+      } else {
+        setLoading(false)
+      }
     }
   }, [router, wantsLogin, wantsChange])
 
   if (loading) return null
 
-  // --- Cloud mode: login Google ---
-  if (supabaseConfigured && wantsLogin) {
-    return <LoginView authError={authError} />
-  }
-
-  // --- Cloud mode: landing page ---
-  if (supabaseConfigured) {
+  // --- Login / workspace selector (quando ?login=true) ---
+  if (wantsLogin) {
+    if (supabaseConfigured) {
+      return <LoginView authError={authError} />
+    }
     return (
-      <main style={{ position: 'relative', zIndex: 1 }}>
-        <LandingNav />
-        <LandingHero />
-        <LandingFeatures />
-        <LandingSteps />
-        <LandingCTA />
-        <LandingFooter />
-      </main>
-    )
-  }
-
-  // --- Modalita' locale: workspace selector ---
-  return (
-    <WorkspaceView
+      <WorkspaceView
       workspace={workspace} wsStatus={wsStatus}
       browsing={browsing} setBrowsing={setBrowsing}
       pendingPath={pendingPath} setPendingPath={setPendingPath}
@@ -106,6 +98,19 @@ function PageContent() {
       inputPath={inputPath} setInputPath={setInputPath}
       setWs={setWs} router={router}
     />
+    )
+  }
+
+  // --- Landing page (default per tutti gli utenti non autenticati) ---
+  return (
+    <main style={{ position: 'relative', zIndex: 1 }}>
+      <LandingNav />
+      <LandingHero />
+      <LandingFeatures />
+      <LandingSteps />
+      <LandingCTA />
+      <LandingFooter />
+    </main>
   )
 }
 
