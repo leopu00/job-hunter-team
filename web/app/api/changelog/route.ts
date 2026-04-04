@@ -1,85 +1,66 @@
 import { NextResponse } from 'next/server'
-import * as fs from 'node:fs'
-import * as path from 'node:path'
+import { execSync } from 'child_process'
+import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-const CHANGELOG_PATH = path.join(process.cwd(), '..', 'CHANGELOG.md')
+export type CommitType = 'feat' | 'fix' | 'merge' | 'test' | 'other'
 
-export type VersionType = 'major' | 'minor' | 'patch'
-
-export interface ChangeCategory {
-  name: string
-  entries: string[]
-}
-
-export interface Release {
-  version: string
+export interface CommitEntry {
+  hash: string
   date: string
-  type: VersionType
-  categories: ChangeCategory[]
-  totalEntries: number
+  message: string
+  type: CommitType
 }
 
-function versionType(v: string): VersionType {
-  const [major, minor, patch] = v.split('.').map(Number)
-  if (patch === 0 && minor === 0) return 'major'
-  if (patch === 0) return 'minor'
-  return 'patch'
+export interface DayGroup {
+  date: string
+  commits: CommitEntry[]
 }
 
-/**
- * Parsa CHANGELOG.md — formato Keep a Changelog:
- * ## [x.y.z] — YYYY-MM-DD
- * ### Categoria
- * - entry
- */
-function parseChangelog(raw: string): Release[] {
-  const releases: Release[] = []
-  const releaseBlocks = raw.split(/^## /m).slice(1)
-
-  for (const block of releaseBlocks) {
-    const lines = block.split('\n')
-    const header = lines[0] ?? ''
-
-    // Parsa "[1.0.0] — 2026-04-04" oppure "1.0.0 — 2026-04-04"
-    const vMatch = header.match(/\[?(\d+\.\d+\.\d+)\]?/)
-    const dMatch = header.match(/(\d{4}-\d{2}-\d{2})/)
-    if (!vMatch) continue
-
-    const version = vMatch[1]!
-    const date    = dMatch?.[1] ?? ''
-    const categories: ChangeCategory[] = []
-    let current: ChangeCategory | null = null
-
-    for (const line of lines.slice(1)) {
-      const catMatch = line.match(/^### (.+)/)
-      if (catMatch) {
-        if (current) categories.push(current)
-        current = { name: catMatch[1]!.trim(), entries: [] }
-        continue
-      }
-      const entryMatch = line.match(/^- (.+)/)
-      if (entryMatch && current) {
-        current.entries.push(entryMatch[1]!.trim())
-      }
-    }
-    if (current) categories.push(current)
-
-    const totalEntries = categories.reduce((s, c) => s + c.entries.length, 0)
-    releases.push({ version: version!, date, type: versionType(version!), categories, totalEntries })
-  }
-
-  return releases
+function classifyCommit(message: string): CommitType {
+  const lower = message.toLowerCase()
+  if (lower.startsWith('merge:') || lower.startsWith('merge(')) return 'merge'
+  if (lower.startsWith('feat')) return 'feat'
+  if (lower.startsWith('fix')) return 'fix'
+  if (lower.startsWith('test')) return 'test'
+  return 'other'
 }
 
-/** GET — releases parsate da CHANGELOG.md */
+/** GET — ultime modifiche da git log, raggruppate per data */
 export async function GET() {
   try {
-    const raw = fs.readFileSync(CHANGELOG_PATH, 'utf-8')
-    const releases = parseChangelog(raw)
-    return NextResponse.json({ releases, total: releases.length })
+    const repoRoot = path.resolve(process.cwd(), '..')
+    const raw = execSync(
+      'git log origin/master --pretty=format:"%h|%as|%s" -80',
+      { cwd: repoRoot, encoding: 'utf-8', timeout: 5000 },
+    )
+
+    const commits: CommitEntry[] = raw
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [hash = '', date = '', ...rest] = line.split('|')
+        const message = rest.join('|')
+        return { hash, date, message, type: classifyCommit(message) }
+      })
+      .filter((c) =>
+        !c.message.startsWith('Merge remote-tracking') &&
+        !c.message.startsWith('Merge branch'),
+      )
+
+    // Raggruppa per data
+    const groupMap = new Map<string, CommitEntry[]>()
+    for (const c of commits) {
+      const arr = groupMap.get(c.date) ?? []
+      arr.push(c)
+      groupMap.set(c.date, arr)
+    }
+    const days: DayGroup[] = [...groupMap.entries()].map(([date, entries]) => ({ date, commits: entries }))
+
+    return NextResponse.json({ ok: true, days, total: commits.length })
   } catch {
-    return NextResponse.json({ releases: [], total: 0, error: 'CHANGELOG.md non trovato' })
+    return NextResponse.json({ ok: false, days: [], total: 0, error: 'Git log non disponibile' })
   }
 }
