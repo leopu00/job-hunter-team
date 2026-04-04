@@ -3,24 +3,19 @@
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 
-type LatencyStats = { count: number; avgMs: number; minMs: number; maxMs: number; p95Ms: number }
-type ProviderStat = { provider: string; calls: number; tokens: number; costUsd: number; errors: number; latency: LatencyStats }
-type ModelStat = { provider: string; model: string; calls: number; tokens: number; costUsd: number; latency: LatencyStats }
-type DailyStat = { date: string; calls: number; tokens: number; costUsd: number; errors: number }
-type Summary = {
-  totalCalls: number; totalTokens: number; totalCostUsd: number; totalErrors: number
-  latency: LatencyStats; byProvider: ProviderStat[]; byModel: ModelStat[]; daily: DailyStat[]
-  days: number; updatedAt: number
+type KPI = { totalApplications: number; responseRate: number; avgResponseDays: number; interviewsScheduled: number }
+type TimelinePoint = { date: string; count: number }
+type StatusItem = { status: string; count: number }
+type CompanyItem = { company: string; count: number }
+type RateTrend = { date: string; rate: number }
+type Data = { jobHunting: { kpi: KPI; timeline: TimelinePoint[]; statusBreakdown: StatusItem[]; topCompanies: CompanyItem[]; responseRateTrend: RateTrend[] } }
+
+const STATUS_COLORS: Record<string, string> = {
+  applied: '#61affe', screening: '#fca130', interview: 'var(--color-yellow)',
+  offer: 'var(--color-green)', rejected: 'var(--color-red)', withdrawn: 'var(--color-dim)',
 }
 
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`
-  return String(Math.round(n))
-}
-function usd(n: number): string { return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}` }
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+function KPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
     <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
       <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">{label}</p>
@@ -30,66 +25,87 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
   )
 }
 
-function BarChart({ data, maxVal }: { data: DailyStat[]; maxVal: number }) {
-  if (data.length === 0) return <p className="text-[var(--color-dim)] text-[11px] text-center py-8">Nessun dato</p>
+function LineChart({ data }: { data: TimelinePoint[] }) {
+  if (data.length < 2) return <p className="text-[var(--color-dim)] text-center py-8 text-[11px]">Dati insufficienti</p>
+  const max = Math.max(...data.map(d => d.count), 1)
+  const W = 500, H = 120, pad = 20
+  const points = data.map((d, i) => ({ x: pad + (i / (data.length - 1)) * (W - 2 * pad), y: H - pad - (d.count / max) * (H - 2 * pad) }))
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   return (
-    <div className="flex items-end gap-1 h-28">
-      {data.map(d => {
-        const h = maxVal > 0 ? Math.max(2, (d.calls / maxVal) * 100) : 2
-        return (
-          <div key={d.date} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: ${d.calls} chiamate, ${fmt(d.tokens)} token, ${usd(d.costUsd)}`}>
-            <div className="w-full rounded-t" style={{ height: `${h}%`, background: d.errors > 0 ? 'var(--color-red)' : 'var(--color-green)', opacity: 0.8, minHeight: 2 }} />
-            {data.length <= 14 && <span className="text-[8px] text-[var(--color-dim)] whitespace-nowrap">{d.date.slice(5)}</span>}
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }}>
+      {points.map((p, i) => i % Math.ceil(data.length / 6) === 0 && (
+        <text key={i} x={p.x} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--color-dim)">{data[i].date.slice(5)}</text>
+      ))}
+      <path d={path} fill="none" stroke="var(--color-green)" strokeWidth="2" />
+      {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="var(--color-green)" />)}
+    </svg>
+  )
+}
+
+function PieChart({ data }: { data: StatusItem[] }) {
+  const total = data.reduce((s, d) => s + d.count, 0)
+  if (total === 0) return null
+  const CX = 70, CY = 70, R = 60
+  let angle = -Math.PI / 2
+  const slices = data.map(d => {
+    const pct = d.count / total
+    const start = angle
+    angle += pct * 2 * Math.PI
+    const end = angle
+    const large = pct > 0.5 ? 1 : 0
+    const x1 = CX + R * Math.cos(start), y1 = CY + R * Math.sin(start)
+    const x2 = CX + R * Math.cos(end), y2 = CY + R * Math.sin(end)
+    return { ...d, pct, path: `M${CX},${CY} L${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} Z` }
+  })
+  return (
+    <div className="flex items-center gap-6">
+      <svg viewBox="0 0 140 140" style={{ width: 140, height: 140 }}>
+        {slices.map(s => <path key={s.status} d={s.path} fill={STATUS_COLORS[s.status] ?? 'var(--color-dim)'} opacity="0.85" />)}
+      </svg>
+      <div className="space-y-1.5">
+        {slices.map(s => (
+          <div key={s.status} className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: STATUS_COLORS[s.status] ?? 'var(--color-dim)' }} />
+            <span className="text-[10px] text-[var(--color-muted)] w-16">{s.status}</span>
+            <span className="text-[10px] font-bold text-[var(--color-bright)]">{s.count}</span>
+            <span className="text-[9px] text-[var(--color-dim)]">({(s.pct * 100).toFixed(0)}%)</span>
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }
 
-function ProviderRow({ s }: { s: ProviderStat }) {
-  const errRate = s.calls > 0 ? ((s.errors / s.calls) * 100).toFixed(1) : '0'
+function BarChartH({ data }: { data: CompanyItem[] }) {
+  const max = Math.max(...data.map(d => d.count), 1)
   return (
-    <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors text-[11px]">
-      <span className="font-semibold text-[var(--color-bright)] w-20">{s.provider}</span>
-      <span className="text-[var(--color-muted)] w-16 text-right">{fmt(s.calls)}</span>
-      <span className="text-[var(--color-muted)] w-20 text-right">{fmt(s.tokens)}</span>
-      <span className="text-[var(--color-green)] w-16 text-right">{usd(s.costUsd)}</span>
-      <span className="text-[var(--color-muted)] w-16 text-right">{s.latency.avgMs}ms</span>
-      <span className="w-16 text-right" style={{ color: s.errors > 0 ? 'var(--color-red)' : 'var(--color-dim)' }}>{errRate}%</span>
-    </div>
-  )
-}
-
-function ModelRow({ s }: { s: ModelStat }) {
-  return (
-    <div className="flex items-center gap-4 px-4 py-2.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors text-[11px]">
-      <span className="text-[var(--color-dim)] w-20">{s.provider}</span>
-      <span className="font-semibold text-[var(--color-bright)] flex-1 truncate">{s.model}</span>
-      <span className="text-[var(--color-muted)] w-16 text-right">{fmt(s.calls)}</span>
-      <span className="text-[var(--color-green)] w-16 text-right">{usd(s.costUsd)}</span>
-      <span className="text-[var(--color-muted)] w-16 text-right">{s.latency.p95Ms}ms</span>
+    <div className="space-y-2">
+      {data.map(d => (
+        <div key={d.company} className="flex items-center gap-3">
+          <span className="text-[10px] text-[var(--color-muted)] w-20 text-right truncate">{d.company}</span>
+          <div className="flex-1 h-4 rounded-sm overflow-hidden bg-[var(--color-border)]">
+            <div className="h-full rounded-sm" style={{ width: `${(d.count / max) * 100}%`, background: '#61affe', opacity: 0.8 }} />
+          </div>
+          <span className="text-[10px] font-bold text-[var(--color-bright)] w-6 text-right">{d.count}</span>
+        </div>
+      ))}
     </div>
   )
 }
 
 export default function AnalyticsPage() {
-  const [data, setData] = useState<Summary | null>(null)
-  const [days, setDays] = useState(7)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<Data | null>(null)
+  const [days, setDays] = useState(30)
 
   const fetchData = useCallback(async () => {
-    setLoading(true)
     const res = await fetch(`/api/analytics?days=${days}`).catch(() => null)
     if (res?.ok) setData(await res.json())
-    setLoading(false)
   }, [days])
 
   useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { const id = setInterval(fetchData, 15000); return () => clearInterval(id) }, [fetchData])
 
-  const PERIODS = [{ v: 1, l: '24h' }, { v: 7, l: '7g' }, { v: 30, l: '30g' }]
-  const maxCalls = data ? Math.max(...data.daily.map(d => d.calls), 1) : 1
+  const jh = data?.jobHunting
+  const PERIODS = [{ v: 7, l: '7g' }, { v: 30, l: '30g' }, { v: 90, l: '90g' }]
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -102,7 +118,7 @@ export default function AnalyticsPage() {
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Analytics</h1>
-            <p className="text-[var(--color-muted)] text-[11px] mt-1">Metriche API — chiamate, token, latenza, costo</p>
+            <p className="text-[var(--color-muted)] text-[11px] mt-1">Dashboard candidature — ultimi {days} giorni</p>
           </div>
           <div className="flex gap-1">
             {PERIODS.map(p => (
@@ -116,40 +132,30 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {loading && !data ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
-      ) : !data || data.totalCalls === 0 ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun dato per il periodo selezionato.</p>
-      ) : (
+      {!jh ? <p className="text-[var(--color-dim)] text-center py-16 text-[12px]">Caricamento...</p> : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Chiamate" value={fmt(data.totalCalls)} color="var(--color-bright)" />
-            <StatCard label="Token" value={fmt(data.totalTokens)} color="var(--color-blue)" />
-            <StatCard label="Costo" value={usd(data.totalCostUsd)} color="var(--color-green)" />
-            <StatCard label="Latenza p95" value={`${data.latency.p95Ms}ms`} sub={`avg ${data.latency.avgMs}ms`} color="var(--color-yellow)" />
+            <KPICard label="Candidature" value={String(jh.kpi.totalApplications)} color="var(--color-bright)" />
+            <KPICard label="Response Rate" value={`${jh.kpi.responseRate}%`} color="var(--color-green)" />
+            <KPICard label="Tempo Risposta" value={`${jh.kpi.avgResponseDays}g`} sub="media giorni" color="var(--color-yellow)" />
+            <KPICard label="Colloqui" value={String(jh.kpi.interviewsScheduled)} color="#61affe" />
           </div>
 
           <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-            <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Chiamate giornaliere</p>
-            <BarChart data={data.daily} maxVal={maxCalls} />
+            <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Candidature nel tempo</p>
+            <LineChart data={jh.timeline} />
           </div>
 
           <div className="grid md:grid-cols-2 gap-4 mb-6">
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] px-4 py-3 border-b border-[var(--color-border)]">Per provider</p>
-              {data.byProvider.map(s => <ProviderRow key={s.provider} s={s} />)}
+            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Per stato</p>
+              <PieChart data={jh.statusBreakdown} />
             </div>
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] px-4 py-3 border-b border-[var(--color-border)]">Per modello</p>
-              {data.byModel.map(s => <ModelRow key={`${s.provider}:${s.model}`} s={s} />)}
+            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Top aziende</p>
+              <BarChartH data={jh.topCompanies} />
             </div>
           </div>
-
-          {data.totalErrors > 0 && (
-            <div className="p-3 rounded-lg border border-[rgba(255,69,96,0.3)] bg-[rgba(255,69,96,0.05)]">
-              <p className="text-[11px] text-[var(--color-red)]">{data.totalErrors} errori nel periodo ({((data.totalErrors / data.totalCalls) * 100).toFixed(1)}%)</p>
-            </div>
-          )}
         </>
       )}
     </div>
