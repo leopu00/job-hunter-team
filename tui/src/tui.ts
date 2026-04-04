@@ -7,7 +7,8 @@ import { spawnSync } from "node:child_process";
 import { Key, matchesKey, ProcessTerminal, Text, TUI } from "@mariozechner/pi-tui";
 import { createJhtLayout } from "./tui-layout.js";
 import { ChatPanel } from "./components/chat-panel.js";
-import { createTuiClient } from "./tui-client.js";
+import { createTuiClient, loadApiKey } from "./tui-client.js";
+import { runSetupWizard } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import type { JhtAgent, JhtTuiState, TuiStateAccess, SessionInfo } from "./tui-types.js";
@@ -32,6 +33,12 @@ const KNOWN_AGENTS: JhtAgent[] = [
 ];
 
 export async function runJhtTui() {
+  // Setup wizard se API key non configurata
+  let resolvedApiKey = loadApiKey();
+  if (!resolvedApiKey) {
+    resolvedApiKey = await runSetupWizard();
+  }
+
   // Stato completo (TuiStateAccess)
   const sessionInfo: SessionInfo = { model: "claude-sonnet-4" };
   const state: JhtTuiState & TuiStateAccess = {
@@ -78,16 +85,23 @@ export async function runJhtTui() {
 
   // Crea client Anthropic
   let client: ReturnType<typeof createTuiClient>;
-  try {
-    client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt));
-    chatPanel.addSystem("Connesso ad Anthropic API. Scrivi un messaggio e premi Enter.");
-  } catch (err) {
-    chatPanel.addSystem(`Errore: ${String((err as Error).message)}`);
-    chatPanel.addSystem("Imposta ANTHROPIC_API_KEY per utilizzare la chat.");
+  if (resolvedApiKey) {
+    try {
+      client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt), resolvedApiKey);
+      chatPanel.addSystem("Connesso ad Anthropic API. Scrivi un messaggio e premi Enter.");
+    } catch (err) {
+      chatPanel.addSystem(`Errore: ${String((err as Error).message)}`);
+      state.isConnected = false;
+      state.connectionStatus = "disconnected";
+      layout.updateHeader(state);
+      client = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
+    }
+  } else {
+    chatPanel.addSystem("API key non configurata — la chat AI non è disponibile.");
+    chatPanel.addSystem("Usa /setup per configurare la chiave o riavvia la TUI.");
     state.isConnected = false;
     state.connectionStatus = "disconnected";
     layout.updateHeader(state);
-    // Client dummy per evitare crash
     client = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
   }
 
