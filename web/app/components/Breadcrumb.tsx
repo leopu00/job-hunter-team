@@ -2,7 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { NotificationCenter } from './NotificationCenter'
+
+// ── Label map ──────────────────────────────────────────────────────────────
 
 const LABELS: Record<string, string> = {
   dashboard: 'Dashboard', agents: 'Agenti', tasks: 'Task', assistant: 'Assistente',
@@ -13,49 +16,130 @@ const LABELS: Record<string, string> = {
   memory: 'Memory', channels: 'Canali', settings: 'Impostazioni', cron: 'Cron',
   config: 'Config', daemon: 'Daemon', health: 'Health', overview: 'Overview',
   retry: 'Retry', tools: 'Tool', 'not-found': '404',
+  jobs: 'Offerte', applications: 'Candidature', interviews: 'Colloqui',
+  companies: 'Aziende', profiles: 'Profili', alerts: 'Alert',
+  'cover-letters': 'Cover Letter', workers: 'Workers', status: 'Stato',
 }
 
-const ID_PATTERN = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
+const ID_RE = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
 
-function segmentLabel(seg: string): string {
+function segLabel(seg: string): string {
   if (LABELS[seg]) return LABELS[seg]
-  if (ID_PATTERN.test(seg)) return seg.length > 16 ? seg.slice(0, 8) + '…' : seg
+  if (ID_RE.test(seg)) return seg.length > 12 ? seg.slice(0, 8) + '…' : seg
   return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
 }
 
-const HIDDEN_PREFIXES = ['/', '/setup']
+// ── Collapse dropdown ──────────────────────────────────────────────────────
+
+type Crumb = { label: string; href: string; last: boolean }
+
+function CollapseDropdown({ hidden }: { hidden: Crumb[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <span ref={ref} className="relative inline-flex items-center gap-1">
+      <span style={{ color: 'var(--color-border)' }}>/</span>
+      <button onClick={() => setOpen(v => !v)}
+        className="px-1.5 py-0.5 rounded text-[10px] transition-colors hover:opacity-80"
+        style={{ background: 'var(--color-border)', color: 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
+        ···
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50 min-w-[140px]"
+          style={{ background: 'var(--color-deep)', border: '1px solid var(--color-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
+          {hidden.map(c => (
+            <Link key={c.href} href={c.href} onClick={() => setOpen(false)}
+              className="block px-3 py-1.5 text-[10px] no-underline hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
+              {c.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
+// ── Copy button ────────────────────────────────────────────────────────────
+
+function CopyPath({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(path).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 1500)
+    })
+  }, [path])
+  return (
+    <button onClick={copy} title="Copia path"
+      className="text-[9px] px-1.5 py-0.5 rounded transition-all hover:opacity-80"
+      style={{ background: copied ? 'var(--color-green)18' : 'transparent', color: copied ? 'var(--color-green)' : 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
+      {copied ? '✓' : '⎘'}
+    </button>
+  )
+}
+
+// ── Breadcrumb ─────────────────────────────────────────────────────────────
+
+const HIDDEN_PATHS = ['/', '/setup']
+const MAX_VISIBLE  = 3   // mostra max N segmenti, collassa il resto
 
 export default function Breadcrumb() {
   const pathname = usePathname()
-  if (!pathname || HIDDEN_PREFIXES.includes(pathname) || pathname.startsWith('/auth')) return null
+  if (!pathname || HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/auth')) return null
 
   const segments = pathname.split('/').filter(Boolean)
   if (segments.length === 0) return null
 
-  const crumbs = segments.map((seg, i) => ({
-    label: segmentLabel(seg),
+  const crumbs: Crumb[] = segments.map((seg, i) => ({
+    label: segLabel(seg),
     href:  '/' + segments.slice(0, i + 1).join('/'),
     last:  i === segments.length - 1,
   }))
 
+  // Collapse: first + hidden[] + last  (only when > MAX_VISIBLE)
+  const needsCollapse = crumbs.length > MAX_VISIBLE
+  const visible: (Crumb | 'collapse')[] = needsCollapse
+    ? [crumbs[0], 'collapse', crumbs[crumbs.length - 1]]
+    : crumbs
+  const hidden = needsCollapse ? crumbs.slice(1, -1) : []
+
   return (
-    <nav aria-label="breadcrumb" className="flex items-center gap-1 px-5 py-2 border-b text-[10px]"
+    <nav aria-label="breadcrumb" className="flex items-center gap-1 px-4 py-2 border-b text-[10px]"
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-deep)', position: 'sticky', top: 0, zIndex: 40 }}>
-      <Link href="/dashboard" className="no-underline transition-colors" style={{ color: 'var(--color-dim)' }}
-        onMouseEnter={e => e.currentTarget.style.color = 'var(--color-muted)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>⌂</Link>
-      {crumbs.map(crumb => (
-        <span key={crumb.href} className="flex items-center gap-1">
-          <span style={{ color: 'var(--color-border)' }}>/</span>
-          {crumb.last
-            ? <span style={{ color: 'var(--color-muted)' }}>{crumb.label}</span>
-            : <Link href={crumb.href} className="no-underline transition-colors" style={{ color: 'var(--color-dim)' }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--color-muted)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>{crumb.label}</Link>
-          }
-        </span>
-      ))}
-      <span className="ml-auto"><NotificationCenter /></span>
+
+      {/* Home icon */}
+      <Link href="/dashboard" title="Dashboard" className="no-underline transition-opacity hover:opacity-80 flex items-center"
+        style={{ color: 'var(--color-dim)', fontSize: 12 }}>🏠</Link>
+
+      {/* Crumbs */}
+      {visible.map((item, i) => {
+        if (item === 'collapse') return <CollapseDropdown key="collapse" hidden={hidden} />
+        const crumb = item as Crumb
+        return (
+          <span key={crumb.href} className="flex items-center gap-1 min-w-0">
+            <span style={{ color: 'var(--color-border)' }}>/</span>
+            {crumb.last
+              ? <span className="truncate max-w-[160px]" style={{ color: 'var(--color-muted)' }}>{crumb.label}</span>
+              : <Link href={crumb.href} className="no-underline transition-opacity hover:opacity-80 truncate max-w-[120px] block"
+                  style={{ color: 'var(--color-dim)' }}>{crumb.label}</Link>
+            }
+          </span>
+        )
+      })}
+
+      {/* Copy + notifications */}
+      <span className="ml-auto flex items-center gap-1">
+        <CopyPath path={pathname} />
+        <NotificationCenter />
+      </span>
     </nav>
   )
 }
