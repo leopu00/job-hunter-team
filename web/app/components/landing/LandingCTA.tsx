@@ -28,7 +28,7 @@ export default function LandingCTA() {
             {t('cta_desc')}
           </p>
           <Link
-            href="/?login=true"
+            href="/download"
             className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
             style={{
               background: 'var(--color-green)',
