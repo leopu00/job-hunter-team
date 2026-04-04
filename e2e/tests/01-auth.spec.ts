@@ -30,26 +30,26 @@ test.describe('Autenticazione Google', () => {
 
   test('/dashboard senza sessione redirige alla homepage', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page).toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).toHaveURL('https://jobhunterteam.ai/');
     await expect(page.getByText('Login with Google')).toBeVisible();
   });
 
   test('/positions senza sessione redirige alla homepage', async ({ page }) => {
     await page.goto('/positions');
-    await expect(page).toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).toHaveURL('https://jobhunterteam.ai/');
   });
 
   test('/applications senza sessione redirige alla homepage', async ({ page }) => {
     await page.goto('/applications');
-    await expect(page).toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).toHaveURL('https://jobhunterteam.ai/');
   });
 
   test('/profile senza sessione redirige alla homepage', async ({ page }) => {
     await page.goto('/profile');
-    await expect(page).toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).toHaveURL('https://jobhunterteam.ai/');
   });
 
   // TODO: test con sessione autenticata — richiede storageState
-  // Per attivare: npx playwright codegen --save-storage=auth-state.json https://job-hunter-team.vercel.app
+  // Per attivare: npx playwright codegen --save-storage=auth-state.json https://jobhunterteam.ai
   // Poi: test.use({ storageState: 'auth-state.json' });
 });

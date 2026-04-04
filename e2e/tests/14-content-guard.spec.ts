@@ -66,7 +66,7 @@ test.describe('Content guard — pagine pubbliche', () => {
   /**
    * CHECKLIST DA ESEGUIRE MANUALMENTE PRIMA DI OGNI MERGE PR FRONTEND:
    *
-   * 1. Dan esegue: BASE_URL=https://job-hunter-team.vercel.app npx playwright test 14-content-guard.spec.ts
+   * 1. Dan esegue: BASE_URL=https://jobhunterteam.ai npx playwright test 14-content-guard.spec.ts
    * 2. Dan esegue screenshot della nuova pagina
    * 3. Dan verifica manualmente il contenuto rispetto al legacy
    * 4. Tom esegue smoke HTTP (status code)
