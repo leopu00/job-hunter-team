@@ -37,7 +37,7 @@ export default function LandingHero() {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/?login=true"
+            href="/download"
             className="px-6 py-3 rounded text-[12px] font-bold tracking-wider no-underline transition-all"
             style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
           >
