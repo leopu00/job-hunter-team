@@ -171,6 +171,65 @@ export default function TeamPage() {
   const activeCount = ALL_AGENTS.filter(a => statuses[a.session] === 'active').length
   const { toast } = useToast()
   const prevStatusesRef = useRef<Record<string, AgentStatus> | null>(null)
+  const allOffline = activeCount === 0 && teamState === 'idle'
+
+  /* ── System diagnostics (when all offline) ─��──────────��──────── */
+
+  type DiagCheck = { label: string; ok: boolean; hint: string }
+  const [diag, setDiag] = useState<DiagCheck[] | null>(null)
+  const [diagLoading, setDiagLoading] = useState(false)
+
+  const runDiagnostics = useCallback(async () => {
+    setDiagLoading(true)
+    const checks: DiagCheck[] = []
+
+    // 1. Server locale raggiungibile
+    try {
+      const r = await fetch('/api/health')
+      const d = await r.json()
+      const isServerless = d.env === 'serverless'
+      if (isServerless) {
+        checks.push({ label: 'Server locale', ok: false, hint: 'Stai usando la versione cloud. Scarica l\'app per avviare gli agenti in locale.' })
+      } else {
+        checks.push({ label: 'Server locale', ok: true, hint: `Attivo (v${d.version})` })
+      }
+    } catch {
+      checks.push({ label: 'Server locale', ok: false, hint: 'Non raggiungibile. Avvia l\'app con ./start.sh' })
+    }
+
+    // 2. API key configurata
+    try {
+      const r = await fetch('/api/setup')
+      const d = await r.json()
+      if (d.exists && d.config?.active_provider) {
+        checks.push({ label: 'API Key', ok: true, hint: `Provider: ${d.config.active_provider}` })
+      } else {
+        checks.push({ label: 'API Key', ok: false, hint: 'Nessuna API key configurata. Vai a /setup per configurarla.' })
+      }
+    } catch {
+      checks.push({ label: 'API Key', ok: false, hint: 'Impossibile verificare. Il server potrebbe non essere attivo.' })
+    }
+
+    // 3. Workspace selezionato
+    try {
+      const r = await fetch('/api/workspace')
+      const d = await r.json()
+      if (d.path) {
+        checks.push({ label: 'Workspace', ok: true, hint: d.path })
+      } else {
+        checks.push({ label: 'Workspace', ok: false, hint: 'Nessun workspace selezionato. Torna alla home per sceglierne uno.' })
+      }
+    } catch {
+      checks.push({ label: 'Workspace', ok: true, hint: 'Modalita\' cloud attiva' })
+    }
+
+    setDiag(checks)
+    setDiagLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (allOffline) runDiagnostics()
+  }, [allOffline, runDiagnostics])
 
   /* ── Fetch status ────────────────────────────────────────────── */
 
@@ -512,6 +571,53 @@ export default function TeamPage() {
           <p className="text-[11px] mt-2" style={{ color: '#f44336' }}>{error}</p>
         )}
       </div>
+
+      {/* Diagnostic panel — when all agents are offline */}
+      {allOffline && (
+        <div className="mb-8 p-5 rounded-lg border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-[13px]" style={{ color: 'var(--color-yellow)' }}>!</span>
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--color-bright)' }}>Nessun agente attivo</span>
+          </div>
+
+          {diagLoading && (
+            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Diagnostica in corso…</p>
+          )}
+
+          {diag && (
+            <div className="flex flex-col gap-3">
+              {diag.map((c, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-[12px] mt-px" style={{ color: c.ok ? 'var(--color-green)' : 'var(--color-red)' }}>
+                    {c.ok ? '✓' : '✗'}
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold" style={{ color: 'var(--color-bright)' }}>{c.label}</p>
+                    <p className="text-[10px]" style={{ color: c.ok ? 'var(--color-dim)' : 'var(--color-muted)' }}>{c.hint}</p>
+                  </div>
+                </div>
+              ))}
+
+              {diag.some(c => !c.ok) && (
+                <div className="mt-2 flex items-center gap-3">
+                  <Link href="/setup" className="text-[10px] no-underline px-3 py-1.5 rounded"
+                    style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', transition: 'all 0.2s' }}>
+                    Vai al Setup
+                  </Link>
+                  <Link href="/download" className="text-[10px] no-underline px-3 py-1.5 rounded"
+                    style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', transition: 'all 0.2s' }}>
+                    Scarica l&apos;app locale
+                  </Link>
+                  <button onClick={runDiagnostics} className="text-[10px] px-3 py-1.5 rounded cursor-pointer"
+                    style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', background: 'transparent', fontFamily: 'inherit', transition: 'all 0.2s' }}>
+                    Ricontrolla
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Setup guide — visibile quando nessun agente attivo */}
       {showGuide && activeCount === 0 && teamState === 'idle' && (
