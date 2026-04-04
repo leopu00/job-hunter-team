@@ -5,6 +5,28 @@ import Link from 'next/link'
 
 type OS = 'mac' | 'linux' | 'windows' | null
 
+interface PlatformData {
+  id: string
+  label: string
+  file: string
+  size: string | null
+  requirements: string
+  instructions: string[]
+}
+
+interface ReleaseData {
+  version: string
+  downloadBaseUrl: string
+  platforms: PlatformData[]
+  releasesUrl: string
+}
+
+const ICONS: Record<string, () => React.ReactNode> = {
+  mac: AppleIcon,
+  linux: LinuxIcon,
+  windows: WindowsIcon,
+}
+
 function detectOS(): OS {
   if (typeof navigator === 'undefined') return null
   const ua = navigator.userAgent.toLowerCase()
@@ -14,59 +36,50 @@ function detectOS(): OS {
   return null
 }
 
-const VERSION = '0.1.0'
-const REPO = 'leopu00/job-hunter-team'
-const BASE_URL = `https://github.com/${REPO}/releases/latest/download`
+const FALLBACK_VERSION = '0.1.0'
+const FALLBACK_REPO = 'leopu00/job-hunter-team'
+const FALLBACK_BASE_URL = `https://github.com/${FALLBACK_REPO}/releases/latest/download`
 
-const PLATFORMS = [
+const FALLBACK_PLATFORMS: PlatformData[] = [
   {
-    id: 'mac' as const,
-    label: 'macOS',
-    file: `job-hunter-team-${VERSION}-mac.tar.gz`,
-    icon: AppleIcon,
-    instructions: [
-      'Estrai l\'archivio: tar -xzf job-hunter-team-*.tar.gz',
-      'Entra nella cartella: cd job-hunter-team',
-      'Avvia: ./start.sh',
-    ],
+    id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.tar.gz`, size: null,
     requirements: 'macOS 12+, Node.js 18+',
+    instructions: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
   },
   {
-    id: 'linux' as const,
-    label: 'Linux',
-    file: `job-hunter-team-${VERSION}-linux.tar.gz`,
-    icon: LinuxIcon,
-    instructions: [
-      'Estrai l\'archivio: tar -xzf job-hunter-team-*.tar.gz',
-      'Entra nella cartella: cd job-hunter-team',
-      'Avvia: ./start.sh',
-    ],
+    id: 'linux', label: 'Linux', file: `job-hunter-team-${FALLBACK_VERSION}-linux.tar.gz`, size: null,
     requirements: 'Ubuntu 20.04+ / Fedora 36+ / Debian 11+, Node.js 18+',
+    instructions: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
   },
   {
-    id: 'windows' as const,
-    label: 'Windows',
-    file: `job-hunter-team-${VERSION}-windows.zip`,
-    icon: WindowsIcon,
-    instructions: [
-      'Estrai lo ZIP in una cartella',
-      'Doppio click su start.bat',
-      'Oppure: PowerShell > .\\start.ps1',
-    ],
+    id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.zip`, size: null,
     requirements: 'Windows 10+, Node.js 18+, PowerShell 5.1+',
+    instructions: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
   },
 ]
 
 export default function DownloadPage() {
   const [detectedOS, setDetectedOS] = useState<OS>(null)
   const [expanded, setExpanded] = useState<OS>(null)
+  const [release, setRelease] = useState<ReleaseData>({
+    version: FALLBACK_VERSION,
+    downloadBaseUrl: FALLBACK_BASE_URL,
+    platforms: FALLBACK_PLATFORMS,
+    releasesUrl: `https://github.com/${FALLBACK_REPO}/releases`,
+  })
 
   useEffect(() => {
     setDetectedOS(detectOS())
+    fetch('/api/download')
+      .then(r => r.json())
+      .then((data: ReleaseData) => setRelease(data))
+      .catch(() => {})
   }, [])
 
+  const { version, downloadBaseUrl, platforms, releasesUrl } = release
+
   // Ordina: OS rilevato per primo
-  const sorted = [...PLATFORMS].sort((a, b) => {
+  const sorted = [...platforms].sort((a, b) => {
     if (a.id === detectedOS) return -1
     if (b.id === detectedOS) return 1
     return 0
@@ -89,15 +102,15 @@ export default function DownloadPage() {
             Scarica il sistema multi-agente che automatizza la tua ricerca di lavoro.
             Funziona interamente sul tuo computer — i tuoi dati restano tuoi.
           </p>
-          <span className="text-[10px] text-[var(--color-dim)]">v{VERSION} &middot; open source</span>
+          <span className="text-[10px] text-[var(--color-dim)]">v{version} &middot; open source</span>
         </div>
 
         {/* OS Cards */}
         <div className="flex flex-col gap-4 mb-10">
           {sorted.map((platform) => {
             const isDetected = platform.id === detectedOS
-            const isExpanded = expanded === platform.id
-            const Icon = platform.icon
+            const isExpanded = expanded === platform.id as OS
+            const Icon = ICONS[platform.id] || (() => null)
 
             return (
               <div key={platform.id} className="border rounded-lg overflow-hidden transition-colors"
@@ -122,11 +135,14 @@ export default function DownloadPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-[var(--color-dim)]">{platform.file}</span>
+                    <span className="text-[10px] text-[var(--color-dim)]">
+                      {platform.file}
+                      {platform.size && <> &middot; {platform.size}</>}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => setExpanded(isExpanded ? null : platform.id)}
+                      onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
                       className="px-3 py-2 rounded text-[11px] font-semibold transition-colors"
                       style={{
                         background: 'var(--color-card)',
@@ -136,7 +152,7 @@ export default function DownloadPage() {
                       }}>
                       {isExpanded ? 'Chiudi' : 'Istruzioni'}
                     </button>
-                    <a href={`${BASE_URL}/${platform.file}`}
+                    <a href={`${downloadBaseUrl}/${platform.file}`}
                       className="px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                       style={{
                         background: isDetected ? 'var(--color-green)' : 'var(--color-card)',
@@ -211,8 +227,11 @@ export default function DownloadPage() {
         {/* Footer */}
         <div className="text-center">
           <p className="text-[10px] text-[var(--color-dim)]">
-            v{VERSION}-alpha &middot; Job Hunter Team &middot;{' '}
+            v{version}-alpha &middot; Job Hunter Team &middot;{' '}
             <Link href="/" className="text-[var(--color-green)] hover:underline">Home</Link>
+            {' '}&middot;{' '}
+            <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
+              className="text-[var(--color-green)] hover:underline">Tutte le release</a>
           </p>
         </div>
       </div>
