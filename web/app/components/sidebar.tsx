@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import LanguageSwitcher from './LanguageSwitcher'
 
 const NAV_GROUPS = [
   {
@@ -100,6 +101,11 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Language */}
+      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <LanguageSwitcher />
+      </div>
     </aside>
   )
 }

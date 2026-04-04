@@ -1,0 +1,68 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+
+type LocaleInfo = { code: string; label: string; flag: string }
+
+export default function LanguageSwitcher() {
+  const [current, setCurrent] = useState('it')
+  const [locales, setLocales] = useState<LocaleInfo[]>([])
+  const [open, setOpen] = useState(false)
+
+  const fetchLocale = useCallback(async () => {
+    const res = await fetch('/api/i18n').catch(() => null)
+    if (!res?.ok) return
+    const data = await res.json()
+    setCurrent(data.current ?? 'it')
+    setLocales(data.locales ?? [])
+  }, [])
+
+  useEffect(() => { fetchLocale() }, [fetchLocale])
+
+  const switchLocale = async (code: string) => {
+    setOpen(false)
+    if (code === current) return
+    const res = await fetch('/api/i18n', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: code }),
+    }).catch(() => null)
+    if (res?.ok) {
+      setCurrent(code)
+    }
+  }
+
+  const currentInfo = locales.find(l => l.code === current)
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer w-full"
+        style={{ background: open ? 'var(--color-row)' : 'transparent', border: '1px solid var(--color-border)' }}>
+        <span className="text-[10px] font-bold tracking-wide" style={{ color: 'var(--color-muted)' }}>
+          {currentInfo?.flag ?? 'IT'}
+        </span>
+        <span className="text-[10px] text-[var(--color-dim)] flex-1 text-left">{currentInfo?.label ?? 'Italiano'}</span>
+        <span className="text-[8px] text-[var(--color-dim)]">{open ? '\u25B2' : '\u25BC'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 w-full rounded overflow-hidden shadow-lg"
+          style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', zIndex: 100 }}>
+          {locales.map(l => (
+            <button key={l.code} onClick={() => switchLocale(l.code)}
+              className="flex items-center gap-2 px-3 py-2 w-full transition-colors cursor-pointer text-left"
+              style={{
+                background: l.code === current ? 'rgba(0,232,122,0.08)' : 'transparent',
+                color: l.code === current ? 'var(--color-green)' : 'var(--color-muted)',
+              }}>
+              <span className="text-[10px] font-bold tracking-wide">{l.flag}</span>
+              <span className="text-[10px]">{l.label}</span>
+              {l.code === current && <span className="text-[8px] ml-auto" style={{ color: 'var(--color-green)' }}>&#10003;</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
