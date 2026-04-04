@@ -173,7 +173,53 @@ Oppure con Docker:
 cd web && docker compose up
 ```
 
-Pagine disponibili: `/dashboard` · `/agents` · `/settings` · `/cron` · `/team`
+### Pagine Web (48 pagine)
+
+| Categoria | Pagine |
+|-----------|--------|
+| **Pipeline** | `/dashboard` · `/positions` · `/applications` · `/ready` · `/risposte` · `/crescita` |
+| **Agenti** | `/agents` · `/agents/[id]` · `/team` · `/scout` · `/analista` · `/scorer` · `/scrittore` · `/critico` · `/sentinella` · `/capitano` · `/assistente` |
+| **Sessioni** | `/sessions/[id]` (chat replay) |
+| **Infrastruttura** | `/analytics` · `/health` · `/retry` · `/rate-limiter` · `/queue` · `/events` · `/logs` |
+| **Configurazione** | `/settings` · `/config` · `/credentials` · `/plugins` · `/tools` · `/templates` · `/providers` |
+| **Sistema** | `/overview` · `/memory` · `/gateway` · `/channels` · `/notifications` · `/history` · `/cron` · `/daemon` · `/deploy` · `/setup` |
+| **Profilo** | `/profile` · `/profile/edit` · `/assistant` |
+
+---
+
+## 🧪 Test
+
+**736+ test case** distribuiti su 168 file di test:
+
+- `tests/js/` — Test unitari e integrazione moduli shared (vitest)
+- `shared/*/` — Test co-locati nei moduli (agent runner, plugins, sessions, ecc.)
+- Copertura: config, validators, queue, retry, analytics, events, sessions, hooks, cron, templates, credentials, memory, agents, tools, telegram
+
+```bash
+cd tests/js && npx vitest run    # Esegui tutti i test JS
+```
+
+---
+
+## 🏥 Health Check
+
+Il sistema include un health check globale che verifica 7 moduli:
+
+| Modulo | Cosa controlla |
+|--------|---------------|
+| Config | `jht.config.json` presente e valido |
+| Sessioni | File sessioni e sessioni attive |
+| Analytics | Dati metriche API |
+| Credenziali | Provider configurati |
+| Plugin | Directory e plugin installati |
+| Memory | File bootstrap (SOUL/IDENTITY/MEMORY) |
+| Agenti | Sessioni tmux attive |
+
+```bash
+curl http://localhost:3000/api/health   # Health check API
+```
+
+Pagina `/health` con semafori verde/giallo/rosso e auto-refresh.
 
 ---
 
@@ -200,6 +246,14 @@ Pagine disponibili: `/dashboard` · `/agents` · `/settings` · `/cron` · `/tea
 - [x] Template engine con composizione prompt
 - [x] Sistema notifiche multi-canale
 - [x] Analytics token usage e costi
+- [x] Web dashboard 48 pagine (pipeline, agenti, sessioni, infrastruttura, config)
+- [x] Health check globale con semafori
+- [x] 736+ test case su 168 file
+- [x] Dettaglio sessione con chat replay
+- [x] Gestione tool con toggle e log esecuzioni
+- [x] Dashboard circuit breaker con reset
+- [x] Memory viewer/editor per SOUL/IDENTITY
+- [x] Gestione credenziali e plugin via web
 - [ ] Supporto multi-workspace
 - [ ] Export candidature in formato ATS-ready
 - [ ] Supporto modelli locali (Ollama)
