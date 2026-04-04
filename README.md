@@ -1,107 +1,117 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Job Hunter Team Banner" width="100%" />
+  <img src="assets/banner.png" alt="Job Hunter Team — Your AI-Powered Job Search Team" width="100%" />
 </p>
 
-# 🎯 Job Hunter Team
+<h1 align="center">Job Hunter Team</h1>
 
-> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.
+<p align="center">
+  <strong>Il tuo team di agenti AI che cerca lavoro per te.</strong><br/>
+  7 agenti autonomi — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.
+</p>
 
-Punta il sistema al tuo profilo, avvia il team e revisiona solo le candidature che superano il quality bar.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/leopu00/job-hunter-team/stargazers"><img src="https://img.shields.io/github/stars/leopu00/job-hunter-team?style=social" alt="GitHub Stars" /></a>
+  <a href="https://github.com/leopu00/job-hunter-team/network/members"><img src="https://img.shields.io/github/forks/leopu00/job-hunter-team?style=social" alt="GitHub Forks" /></a>
+  <a href="https://github.com/leopu00/job-hunter-team/issues"><img src="https://img.shields.io/github/issues/leopu00/job-hunter-team" alt="Issues" /></a>
+  <a href="https://github.com/leopu00/job-hunter-team/commits/master"><img src="https://img.shields.io/github/last-commit/leopu00/job-hunter-team" alt="Last Commit" /></a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
----
-
-## ✨ Cosa fa
-
-| Agente | Ruolo |
-|--------|-------|
-| 🕵️ **Scout** | Cerca posizioni su job board EU e remote |
-| 🔬 **Analista** | Verifica JD, aziende, cultura aziendale |
-| 📊 **Scorer** | Assegna punteggio 0-100 vs il tuo profilo |
-| ✍️ **Scrittore** | Genera CV e cover letter personalizzati |
-| ⚖️ **Critico** | Blind review (3 round obbligatori) |
-| 👨‍✈️ **Capitano** | Coordina la pipeline, gestisce anti-collision |
-| 🛡️ **Sentinella** | Monitora token, rate limit e stato del team |
-
----
-
-## 🏗️ Architettura
-
-```
-                        👨‍✈️  Capitano (alfa)
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-       🕵️ Scout         📊 Scorer        🛡️ Sentinella
-          │                 │
-       🔬 Analista       ✍️ Scrittore
-                            │
-                         ⚖️ Critico
-                            │
-                     ✅ Pronto per invio
-```
-
-Ogni agente è una sessione Claude Code con un file `CLAUDE.md` dedicato.
-Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
-
-### Interfacce disponibili
-
-```
-🖥️  Web Dashboard   →  http://localhost:3000      (Next.js)
-💻  CLI             →  jht setup / team / status  (Node.js)
-📟  TUI             →  jht tui                    (Terminal UI)
-```
+<p align="center">
+  <a href="#il-team">Il Team</a> ·
+  <a href="#architettura">Architettura</a> ·
+  <a href="#installazione">Installazione</a> ·
+  <a href="#utilizzo">Utilizzo</a> ·
+  <a href="#roadmap">Roadmap</a> ·
+  <a href="https://jobhunterteam.ai">Website</a>
+</p>
 
 ---
 
-## 📦 Moduli
+Punta il sistema al tuo profilo, avvia il team e revisiona solo le candidature che superano il quality bar. Ogni agente è specializzato in un compito preciso: lo Scout trova le posizioni, l'Analista le valuta, lo Scorer le classifica, lo Scrittore prepara i documenti, e il Critico controlla tutto prima dell'invio.
 
-### `shared/` — Librerie condivise
+---
 
-| Modulo | Descrizione |
-|--------|-------------|
-| `config/` | Config centralizzata `jht.config.json` — schema Zod, I/O, tipi |
-| `agents/` | Agent scope, runner con tool loop, config e sessioni agente |
-| `sessions/` | Gestione sessioni agente — creazione, persistenza, registry |
-| `hooks/` | Hook system — registry, loader, frontmatter, source precedence |
-| `events/` | Event bus pub/sub tipizzato — canali agente, sistema, messaggi |
-| `plugins/` | Sistema plugin — discovery, caricamento, lifecycle |
-| `context-engine/` | Motore contesto — raccolta e prioritizzazione info per LLM |
-| `tools/` | Tool registry — bash executor, heartbeat, tool custom per agenti |
-| `llm/` | Astrazione provider AI — Claude, OpenAI, Minimax con factory |
-| `rate-limiter/` | Rate limiting fixed-window, retry backoff, provider runner |
-| `retry/` | Retry con backoff esponenziale e circuit breaker 3 stati |
-| `queue/` | Job queue con priorita', retry, dead-letter, concorrenza |
-| `templates/` | Template .md con frontmatter, variabili, composizione prompt |
-| `notifications/` | Sistema notifiche — registry, notifier, canali multipli |
-| `analytics/` | Tracking chiamate API, token usage, latenza p95, costi |
-| `validators/` | Schema Zod per config, credentials, tasks, snapshot |
-| `history/` | Buffer storico conversazioni e azioni agente |
-| `gateway/` | Gateway HTTP multi-agente con router e middleware |
-| `channels/` | Canali di comunicazione — Web, CLI, Telegram |
-| `telegram/` | Bridge bidirezionale Telegram con bot Grammy |
-| `credentials/` | Gestione credenziali cifrate AES-256 — API key e OAuth |
-| `memory/` | Gestione identita', anima e memoria agenti (SOUL/IDENTITY/MEMORY) |
-| `cron/` | Scheduler task ricorrenti con espressioni cron |
-| `logger/` | Logger strutturato JSON con rolling file e output colorato |
-| `deploy/` | Script deploy, health-check e monitor produzione |
-| `daemon/` | Script installazione/disinstallazione daemon di sistema |
-| `backup/` | Backup e restore dati con retention policy e compressione |
-| `migrations/` | Migrazioni config con versioning sequenziale e rollback |
-| `i18n/` | Internazionalizzazione — traduzioni it/en con fallback |
+## Il Team
+
+| | Agente | Ruolo |
+|---|--------|-------|
+| 🕵️ | **Scout** | Cerca posizioni su job board EU e remote |
+| 👨‍🔬 | **Analista** | Verifica job description, aziende e cultura aziendale |
+| 👨‍💻 | **Scorer** | Assegna punteggio 0–100 rispetto al tuo profilo |
+| 👨‍🏫 | **Scrittore** | Genera CV e cover letter personalizzati per ogni posizione |
+| 👨‍⚖️ | **Critico** | Blind review in 3 round obbligatori prima dell'invio |
+| 👨‍✈️ | **Capitano** | Coordina la pipeline e gestisce l'anti-collision fra agenti |
+| 💂 | **Sentinella** | Monitora token, rate limit, costi API e stato del team |
+
+---
+
+## Architettura
+
+```
+                      👨‍✈️ Capitano
+                            |
+          +-----------------+-----------------+
+          |                 |                 |
+      🕵️ Scout        👨‍💻 Scorer        💂 Sentinella
+          |                 |
+      👨‍🔬 Analista    👨‍🏫 Scrittore
+                            |
+                       👨‍⚖️ Critico
+                            |
+                     Pronto per invio
+```
+
+Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicato che ne definisce personalità, competenze e regole operative. Il Capitano coordina l'intera pipeline via tmux e un database SQLite condiviso per sincronizzare lo stato fra gli agenti.
+
+### Interfacce
+
+| Interfaccia | Avvio | Stack |
+|-------------|-------|-------|
+| **Web Dashboard** | `cd web && npm run dev` | Next.js · 56 pagine |
+| **CLI** | `jht team start` | Node.js · 15+ comandi |
+| **TUI** | `jht tui` | Terminal UI interattiva |
+| **Telegram** | Bot bridge bidirezionale | Grammy |
+
+### Stack tecnologico
+
+| Layer | Tecnologie |
+|-------|-----------|
+| **Agenti** | Claude Code sessions · tmux · SQLite |
+| **Backend** | Node.js · TypeScript · Zod |
+| **Frontend** | Next.js · Tailwind CSS |
+| **Database** | Supabase (PostgreSQL, Frankfurt) · SQLite (locale) |
+| **Auth** | Google OAuth · credenziali AES-256 |
+| **LLM** | Claude · OpenAI · Minimax (factory pattern) |
+| **CI/CD** | GitHub Actions · 5 workflow · Vercel |
+| **Test** | Vitest · 800+ test case · 168 file |
+
+---
+
+## Moduli
+
+### `shared/` — Core
+
+| Categoria | Moduli |
+|-----------|--------|
+| **Agenti** | `agents/` runner e tool loop · `sessions/` persistenza e registry · `memory/` identità e anima (SOUL/IDENTITY/MEMORY) · `context-engine/` prioritizzazione contesto LLM |
+| **Orchestrazione** | `config/` config centralizzata Zod · `hooks/` hook system con precedence · `events/` pub/sub tipizzato · `plugins/` discovery e lifecycle · `queue/` job queue con dead-letter |
+| **LLM e Resilienza** | `llm/` astrazione multi-provider · `rate-limiter/` fixed-window e backoff · `retry/` circuit breaker 3 stati · `tools/` tool registry e bash executor |
+| **Comunicazione** | `gateway/` HTTP multi-agente · `channels/` Web, CLI, Telegram · `telegram/` bridge Grammy · `notifications/` multi-canale |
+| **Dati** | `templates/` prompt con frontmatter · `analytics/` token, costi, p95 · `validators/` schema Zod · `history/` buffer conversazioni · `credentials/` AES-256 |
+| **Infra** | `logger/` JSON strutturato · `cron/` scheduler · `deploy/` health-check e monitor · `daemon/` servizio di sistema · `backup/` restore con retention · `migrations/` versioning e rollback · `i18n/` it/en |
 
 ### Interfacce
 
 | Modulo | Descrizione |
 |--------|-------------|
-| `cli/` | CLI `jht` — setup, config, status, team, cron |
-| `tui/` | Terminal UI multi-agente — lista agenti, chat, status bar |
-| `web/` | Dashboard Next.js — agenti, impostazioni, cron, profilo |
+| `cli/` | CLI `jht` — setup, config, status, team, cron, export, backup |
+| `tui/` | Terminal UI — lista agenti, chat live, status bar |
+| `web/` | Dashboard Next.js — 56 pagine: pipeline, agenti, sessioni, task, analytics, config |
 
 ---
 
-## 🚀 Installazione
+## Installazione
 
 ### Prerequisiti
 
@@ -111,69 +121,48 @@ Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
 - **Claude CLI** — Claude Max subscription o Anthropic API key
 - **pandoc + typst** (opzionale, per generazione PDF)
 
-### Setup
+### Quick Start
 
 ```bash
-# 1. Clona il repo
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-
-# 2. Installa le dipendenze
 npm install
 npm install --prefix shared/cron
 
-# 3. Wizard di setup interattivo
+# Wizard di setup interattivo
 jht setup
 
-# 4. Compila il tuo profilo candidato
-# Modifica candidate_profile.yml — skills, esperienza, ruoli target
+# Compila il tuo profilo candidato
+# → candidate_profile.yml (skills, esperienza, ruoli target)
 ```
 
 > **Claude Max:** nessuna API key necessaria — il CLI usa la tua subscription.
-> **API key:** aggiungi `ANTHROPIC_API_KEY` a `.env`.
+> **API key:** aggiungi `ANTHROPIC_API_KEY` al file `.env`.
 
 ---
 
-## 🖥️ Utilizzo
+## Utilizzo
 
-### CLI
+### CLI — comandi principali
 
 ```bash
-# Setup e configurazione
-jht setup          # Wizard configurazione guidata
-jht config show    # Mostra configurazione corrente
-jht migrate        # Esegui migrazioni config (--dry-run)
-
-# Team e agenti
-jht team start     # Avvia tutto il team
-jht team stop      # Ferma tutto il team
-jht agents         # Lista agenti con stato tmux e task
-
-# Monitoraggio
-jht status         # Stato agenti e sistema
-jht health         # Health check 7 moduli con semafori
-jht stats          # Statistiche aggregate task/API/sessioni
-jht logs           # Log strutturati (--level, --module, --tail)
-jht providers      # Provider LLM configurati e stato auth
-
-# Gestione dati
-jht export <src>   # Esporta sessioni/task/analytics (JSON/CSV)
-jht import <file>  # Importa da file JSON (merge/replace)
-jht backup         # Crea/lista/ripristina backup
-jht cache stats    # Statistiche cache, jht cache clear
-
-# Plugin e cron
-jht plugins        # Lista/attiva/disattiva plugin
-jht cron list      # Lista job schedulati
-jht cron add       # Aggiungi job cron
+jht setup              # Wizard configurazione guidata
+jht team start         # Avvia tutto il team
+jht team stop          # Ferma tutto il team
+jht status             # Stato agenti e sistema
+jht health             # Health check 7 moduli con semafori
+jht stats              # Statistiche aggregate task/API/sessioni
+jht logs               # Log strutturati (--level, --module, --tail)
+jht export <src>       # Esporta sessioni/task/analytics (JSON/CSV)
+jht backup             # Crea/lista/ripristina backup
+jht plugins            # Lista/attiva/disattiva plugin
+jht cron list          # Lista job schedulati
 ```
 
-### TUI (Terminal UI)
+### TUI
 
 ```bash
-jht tui
-# Tab / ↑↓  — naviga tra gli agenti
-# Ctrl+C×2  — esci
+jht tui    # Tab/↑↓ naviga · Ctrl+C×2 esci
 ```
 
 ```
@@ -191,67 +180,55 @@ jht tui
 ### Web Dashboard
 
 ```bash
-cd web && npm run dev
-# → http://localhost:3000
+cd web && npm run dev        # Dev → http://localhost:3000
+cd web && docker compose up  # Docker
 ```
 
-Oppure con Docker:
+**56 pagine** organizzate per area:
 
-```bash
-cd web && docker compose up
-```
-
-### Pagine Web (56 pagine)
-
-| Categoria | Pagine |
-|-----------|--------|
-| **Pipeline** | `/dashboard` · `/positions` · `/positions/[id]` · `/applications` · `/ready` · `/risposte` · `/crescita` |
-| **Agenti** | `/agents` · `/agents/[id]` · `/agents/metrics` · `/team` · `/scout` · `/analista` · `/scorer` · `/scrittore` · `/critico` · `/sentinella` · `/capitano` · `/assistente` |
-| **Sessioni** | `/sessions` · `/sessions/[id]` (chat replay) |
-| **Task** | `/tasks` · `/tasks/[id]` (timeline stati) |
-| **Cronologia** | `/history` · `/history/[id]` (replay conversazione) |
-| **Infrastruttura** | `/analytics` · `/health` · `/retry` · `/rate-limiter` · `/queue` · `/events` · `/logs` |
-| **Configurazione** | `/settings` · `/config` · `/credentials` · `/plugins` · `/tools` · `/templates` · `/providers` · `/migrations` |
-| **Dati** | `/export` · `/import` · `/backup` |
-| **Sistema** | `/overview` · `/memory` · `/gateway` · `/channels` · `/notifications` · `/cron` · `/daemon` · `/deploy` · `/setup` |
-| **Profilo** | `/profile` · `/profile/edit` · `/assistant` |
+| Area | Pagine principali |
+|------|-------------------|
+| **Pipeline** | Dashboard · Posizioni · Candidature · Pronte per invio · Risposte · Crescita |
+| **Agenti** | Lista agenti · Metriche · Pagina dedicata per ogni agente |
+| **Dati** | Sessioni · Task · Cronologia (con chat replay) |
+| **Infra** | Analytics · Health · Retry · Rate limiter · Queue · Events · Logs |
+| **Config** | Settings · Credenziali · Plugin · Tools · Templates · Provider · Migrazioni |
+| **Sistema** | Overview · Memory · Gateway · Canali · Notifiche · Cron · Deploy |
 
 ---
 
-## 🧪 Test
+## Test
 
-**800+ test case** distribuiti su 168 file di test:
-
-- `tests/js/` — Test unitari e integrazione moduli shared (vitest)
-- `shared/*/` — Test co-locati nei moduli (agent runner, plugins, sessions, ecc.)
-- Copertura: config, validators, queue, retry, analytics, events, sessions, hooks, cron, templates, credentials, memory, agents, tools, telegram, logger, daemon, deploy, backup, history, assistant
+**800+ test case** su 168 file — copertura completa di tutti i moduli shared.
 
 ```bash
-cd tests/js && npx vitest run    # Esegui tutti i test JS
+cd tests/js && npx vitest run
 ```
 
 ---
 
-## 🔄 CI/CD
+## CI/CD
 
-**5 workflow GitHub Actions:**
-
-| Workflow | Trigger | Cosa fa |
-|----------|---------|---------|
-| `test.yml` | Push/PR | Vitest matrix parallelo su 12 moduli shared |
-| `ci.yml` | Push/PR | Build Next.js, lint, type-check |
-| `lint.yml` | Push/PR | ESLint + Prettier su tutti i moduli |
-| `security.yml` | Schedule/PR | Audit dipendenze, scan segreti |
+| Workflow | Trigger | Descrizione |
+|----------|---------|-------------|
+| `test.yml` | Push / PR | Vitest matrix parallelo su 12 moduli shared |
+| `ci.yml` | Push / PR | Build Next.js, lint, type-check |
+| `lint.yml` | Push / PR | ESLint + Prettier su tutti i moduli |
+| `security.yml` | Schedule / PR | Audit dipendenze, scan segreti |
 | `deploy.yml` | Tag release | Deploy produzione con health-check |
 
 ---
 
-## 🏥 Health Check
+## Health Check
 
-Il sistema include un health check globale che verifica 7 moduli:
+Health check globale su 7 moduli con semafori verde/giallo/rosso e auto-refresh.
 
-| Modulo | Cosa controlla |
-|--------|---------------|
+```bash
+curl http://localhost:3000/api/health
+```
+
+| Modulo | Verifica |
+|--------|----------|
 | Config | `jht.config.json` presente e valido |
 | Sessioni | File sessioni e sessioni attive |
 | Analytics | Dati metriche API |
@@ -260,76 +237,68 @@ Il sistema include un health check globale che verifica 7 moduli:
 | Memory | File bootstrap (SOUL/IDENTITY/MEMORY) |
 | Agenti | Sessioni tmux attive |
 
-```bash
-curl http://localhost:3000/api/health   # Health check API
-```
-
-Pagina `/health` con semafori verde/giallo/rosso e auto-refresh.
-
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-### ✅ Completato
+### Completato
 
-- [x] Pipeline multi-agente (scout → analista → scorer → scrittore → critico)
-- [x] CLI `jht` con 15 comandi (setup, config, status, team, cron, export, import, health, backup, migrate, cache, logs, providers, stats, plugins, agents)
-- [x] TUI multi-agente con navigazione agenti
-- [x] Web dashboard 56 pagine (pipeline, agenti, sessioni, task, cronologia, infrastruttura, config, dati)
+- [x] Pipeline multi-agente completa (scout → analista → scorer → scrittore → critico)
+- [x] CLI `jht` con 15+ comandi
+- [x] TUI multi-agente con navigazione e chat live
+- [x] Web dashboard 56 pagine
 - [x] Astrazione provider LLM (Claude / OpenAI / Minimax)
 - [x] Gateway HTTP, event bus, plugin system, hook system, context engine
 - [x] Rate limiter, retry con circuit breaker, job queue con dead-letter
-- [x] Canali di comunicazione (Web, CLI, Telegram)
-- [x] Credenziali cifrate AES-256, memoria agenti (SOUL/IDENTITY/MEMORY)
+- [x] Canali: Web, CLI, Telegram
+- [x] Credenziali AES-256, memoria agenti (SOUL/IDENTITY/MEMORY)
 - [x] Logger strutturato, analytics token/costi, notifiche multi-canale
-- [x] CI/CD con 5 workflow GitHub Actions, 800+ test case su 168 file
-- [x] Internazionalizzazione it/en
+- [x] CI/CD con 5 workflow, 800+ test su 168 file
+- [x] i18n it/en
 - [x] Supabase cloud (Frankfurt), Google OAuth, schema PostgreSQL V2
 
-### 🔨 Fase 1 — Consolidamento Web Platform (in corso, ~65%)
+### Fase 1 — Consolidamento Web Platform (in corso, ~65%)
 
 - [ ] Dashboard collegata a dati reali Supabase
 - [ ] Profilo utente con salvataggio cloud
-- [ ] Pagine posizioni e candidature
+- [ ] Pagine posizioni e candidature live
 - [ ] Deploy Vercel con CI/CD
 - [ ] API layer agenti → Supabase (multi-tenant)
 
-### 📦 Fase 2 — App Desktop Electron
+### Fase 2 — App Desktop Electron
 
-- [ ] App desktop scaricabile (.dmg / .exe / .AppImage) per utenti non tecnici
-- [ ] Setup wizard grafico (nessun terminale necessario)
-- [ ] Gestione agenti come processi background (sostituzione tmux)
+- [ ] App scaricabile (.dmg / .exe / .AppImage) per utenti non tecnici
+- [ ] Setup wizard grafico (zero terminale)
+- [ ] Agenti come processi background (sostituzione tmux)
 - [ ] Auto-install dipendenze, tray icon, notifiche native
-- [ ] Installer cross-platform con auto-update e code signing
-- [ ] Modalita' "computer dedicato" via SSH in rete locale
+- [ ] Auto-update e code signing cross-platform
 
-### ☁️ Fase 3 — Cloud Provisioning Multi-Provider
+### Fase 3 — Cloud Provisioning
 
-- [ ] Layer di astrazione con adapter per AWS, GCP, Hetzner
+- [ ] Adapter multi-provider (AWS, GCP, Hetzner)
 - [ ] One-click deploy da app desktop
 - [ ] Monitoring remoto, stima costi, billing alert
 - [ ] Tunnel sicuro app ↔ cloud (WireGuard/SSH)
 
-### 🌍 Fase 4 — Internazionalizzazione Completa
+### Fase 4 — Internazionalizzazione Completa
 
-- [ ] Inglese come lingua principale dell'interfaccia e documentazione
-- [ ] Infrastruttura per lingue aggiuntive (file JSON per lingua, language switcher)
-- [ ] Espansione: spagnolo, tedesco, francese, portoghese (contribuzioni community)
+- [ ] Inglese come lingua principale
+- [ ] Infrastruttura multi-lingua (JSON per lingua, language switcher)
+- [ ] Espansione community: ES, DE, FR, PT
 
-### 🌐 Fase 5 — Sito Web Pubblico e Distribuzione
+### Fase 5 — Sito Web Pubblico
 
-- [ ] Landing page con download e rilevamento OS automatico
-- [ ] Documentazione utente visuale (guide, FAQ, video tutorial)
-- [ ] Dominio, DNS, SSL
-
----
-
-## 🤝 Contributing
-
-Pull request benvenute. Prima di aggiungere nuovi agenti leggi [`shared/docs/add-agent.md`](shared/docs/add-agent.md).
+- [ ] Landing page con download e rilevamento OS
+- [ ] Documentazione visuale (guide, FAQ, video tutorial)
 
 ---
 
-## 📄 Licenza
+## Contributing
+
+Pull request benvenute! Prima di aggiungere nuovi agenti leggi [`shared/docs/add-agent.md`](shared/docs/add-agent.md).
+
+---
+
+## Licenza
 
 MIT — vedi [LICENSE](LICENSE).
