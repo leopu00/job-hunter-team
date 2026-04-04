@@ -1,129 +1,161 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Ultimo aggiornamento: 2026-03-28
+> Ultimo aggiornamento: 2026-04-04
 
 ---
 
 ## 🎯 Visione
 
-Job Hunter Team e' un framework multi-agente per automatizzare la ricerca lavoro. L'obiettivo e' renderlo accessibile a **3 tipi di utente** con modalita' diverse di utilizzo.
+Job Hunter Team diventa un'**applicazione desktop** scaricabile da chiunque — anche utenti non tecnici.
+L'utente scarica un installer, lo installa, e un wizard lo guida nel setup del team.
+Da browser, fa login e monitora il team da remoto.
+
+**Tre modalita' di esecuzione (scelta utente):**
 
 ```
-  👤 Utente non tecnico          👨‍💻 Utente tecnico            ☁️ Power user
+  👤 Utente qualsiasi              👨‍💻 Power user                ☁️ Cloud user
         │                              │                           │
         ▼                              ▼                           ▼
   ┌───────────┐                 ┌─────────────┐            ┌──────────────┐
-  │  🌐 Web   │                 │  💻 Locale  │            │  🖥️ Remote  │
-  │   Cloud   │ ◄── sync ──►   │   SQLite    │            │     VM       │
-  │ Supabase  │                 │   + PDF     │            │  AWS / GCP   │
+  │ 🖥️ App   │                 │  💻 PC      │            │  ☁️ Remote  │
+  │  Desktop  │                 │  Dedicato   │            │     VM       │
+  │ (locale)  │                 │ (rete LAN)  │            │ AWS/GCP/     │
+  │           │                 │             │            │ Hetzner      │
   └───────────┘                 └─────────────┘            └──────────────┘
         │                              │                           │
-        └──────────────┬───────────────┘                           │
-                       ▼                                           │
-                 🔄 Migrazione                                     │
-               locale <-> cloud ◄──────────────────────────────────┘
+        └──────────────────────────────┴───────────────────────────┘
+                                       │
+                                       ▼
+                              🌐 Web Dashboard
+                           (monitoring da remoto)
+                            Vercel + Supabase
+```
+
+**Stack decisioni:**
+
+| Componente | Tecnologia | Motivazione |
+|-----------|------------|-------------|
+| Desktop app | **Electron** | Riusa frontend Next.js, Node.js nativo per agenti |
+| Web dashboard | **Next.js su Vercel** | Pipeline CI/CD gia' scritta |
+| Backend dati | **Supabase** (Frankfurt) | Gia' attivo, PostgreSQL, auth Google |
+| Cloud provisioning | **Multi-provider** | AWS + GCP + Hetzner con layer di astrazione |
+| Lingua principale | **Inglese** | Target internazionale, italiano come seconda lingua |
+
+---
+
+## 📅 Fasi di sviluppo
+
+```
+  Fase 1              Fase 2              Fase 3              Fase 4              Fase 5
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  🔨 IN CORSO          ⏳ PROSSIMA         ⏳ PROSSIMA          ⏳ PROSSIMA         🔮 FUTURO
+  Web Platform        App Desktop         Cloud Multi-         i18n                Sito Web
+  consolidamento      Electron            Provider             Completa            Pubblico
 ```
 
 ---
 
-## 📦 Modalita' di utilizzo
+### 🔨 Fase 1 — Consolidamento Web Platform (sprint corrente)
 
-### 🌐 1. Web/Cloud — Per tutti
-
-> _"Apri il browser, vedi i tuoi dati, da qualsiasi parte del mondo."_
-
-| | |
-|---|---|
-| 🎯 **Target** | Utenti non tecnici |
-| 🔐 **Auth** | Google OAuth via Supabase |
-| 💾 **Storage** | PostgreSQL cloud (Supabase, Frankfurt) |
-| 🖥️ **Accesso** | Browser — qualsiasi dispositivo |
-| 🤖 **Interazione** | Chat con Assistente |
-| ⚙️ **Requisiti** | Nessuno — solo un browser |
-
-**L'utente puo':**
-- 📊 Vedere la dashboard con lo stato della pipeline
-- 📄 Consultare CV e cover letter generati
-- ⭐ Vedere il rating delle posizioni trovate
-- 💬 Chattare con l'Assistente per configurazione e supporto
-- 📋 Gestire il proprio profilo candidato
+> _"La web app funziona end-to-end con dati reali."_
 
 ```
-🟢 Stato: IN SVILUPPO
+🟢 Stato: IN CORSO
 ━━━━━━━━━━━━━━━━░░░░░ ~65%
 
-✅ App Next.js funzionante
+✅ App Next.js funzionante con 56 pagine
 ✅ Auth Google configurata
 ✅ Schema DB V2 (5 tabelle + RLS)
-✅ Pagina Assistente con chat
-⬜ Dashboard con dati reali
+✅ CI/CD Vercel pipeline scritta
+⬜ Dashboard con dati reali Supabase
+⬜ Profilo utente con salvataggio cloud
 ⬜ Pagine posizioni e candidature
-⬜ Deploy Vercel
+⬜ Deploy Vercel (mancano secrets GitHub)
+⬜ API layer agenti → Supabase (multi-tenant)
+⬜ Test E2E piattaforma web
 ```
 
 ---
 
-### 💻 2. Locale — Per sviluppatori
+### 📦 Fase 2 — App Desktop Electron
 
-> _"Cloni la repo, lanci il team, controlli tutto dal tuo terminale."_
-
-| | |
-|---|---|
-| 🎯 **Target** | Utenti tecnici / sviluppatori |
-| 💾 **Storage** | SQLite locale + PDF su filesystem |
-| 🤖 **Agenti** | Claude CLI via tmux |
-| 📁 **Workspace** | Separato dal framework (`JHT_WORKSPACE`) |
-| ⚙️ **Requisiti** | Python 3.10+, tmux, Claude CLI, Node.js 18+ |
-
-**L'utente puo':**
-- 🔧 Controllo completo sulla pipeline e sugli agenti
-- 🗄️ Dati locali, nessuna dipendenza cloud
-- 🖥️ Dashboard locale su `localhost:3000`
-- 📊 Query dirette al DB con `db_query.py`
-- ⚡ Personalizzazione totale dei prompt agenti
-
-```
-🟢 Stato: COMPLETATO
-━━━━━━━━━━━━━━━━━━━━ ~95%
-
-✅ Pipeline e2e validata (5 profili: 2 dev + 3 non-dev)
-✅ 33 test green (30 fast + 3 slow)
-✅ setup.sh automatizzato (venv, PEP 668)
-✅ Cross-platform (macOS, Linux, WSL)
-✅ Supporto profili non-dev
-⬜ Documentazione candidate_profile.yml
-```
-
----
-
-### 🖥️ 3. Remote VM — Il futuro
-
-> _"Noleggi una macchina, il team lavora per te, lo spegni quando vuoi."_
-
-| | |
-|---|---|
-| 🎯 **Target** | Power user / team aziendali |
-| ☁️ **Infra** | AWS EC2, GCP, o qualsiasi server remoto |
-| 🤖 **Agenti** | Girano sulla VM, non sul tuo computer |
-| 💰 **Modello** | Pay-per-use: avvii → lavora → spegni |
-| 🖥️ **Gestione** | Dalla dashboard web |
-
-**L'utente potra':**
-- 🚀 Lanciare il team senza installare nulla
-- 📡 Monitorare gli agenti da remoto
-- ⏱️ Start/stop del team con un click
-- 💸 Pagare solo per il tempo di utilizzo
-- 🔄 Scalare il numero di agenti
+> _"Scarichi, installi, usi. Come qualsiasi altra app."_
 
 ```
 ⚪ Stato: ROADMAP
 ░░░░░░░░░░░░░░░░░░░░ 0%
 
-⬜ Provisioning VM (AWS/GCP)
-⬜ Deploy automatico agenti
-⬜ Monitoring remoto
-⬜ Start/stop da dashboard
-⬜ Gestione costi e billing
+⬜ Scaffolding Electron (desktop/) con electron-forge
+⬜ Setup wizard grafico (lingua, profilo, API key)
+⬜ Gestione agenti come child process (no tmux)
+⬜ Auto-install dipendenze (Python embedded/rilevato)
+⬜ Tray icon + notifiche desktop native
+⬜ Installer: .dmg (macOS), .exe (Windows), .AppImage (Linux)
+⬜ Code signing (macOS + Windows)
+⬜ Auto-update via electron-updater + GitHub Releases
+⬜ Modalita' "computer dedicato" (SSH + mDNS discovery)
+```
+
+---
+
+### ☁️ Fase 3 — Cloud Provisioning Multi-Provider
+
+> _"Clicca un bottone, il team gira su un server cloud."_
+
+```
+⚪ Stato: ROADMAP
+░░░░░░░░░░░░░░░░░░░░ 0%
+
+⬜ Layer di astrazione shared/cloud/ (interfaccia CloudProvider)
+⬜ Adapter AWS EC2 (provisioning, security group, lifecycle)
+⬜ Adapter Google Cloud GCE (firewall, startup script)
+⬜ Adapter Hetzner Cloud (EU-only, costi bassi)
+⬜ UI Cloud nel wizard desktop (scelta provider, stima costi)
+⬜ One-click deploy + monitoring + teardown
+⬜ Tunnel sicuro app ↔ cloud (WireGuard / SSH tunnel)
+⬜ Billing alert (notifica soglia costi)
+```
+
+---
+
+### 🌍 Fase 4 — Internazionalizzazione Completa
+
+> _"La piattaforma parla la lingua dell'utente."_
+
+```
+⚪ Stato: ROADMAP (base it/en gia' presente in shared/i18n/)
+━━━░░░░░░░░░░░░░░░░░ ~15%
+
+✅ Modulo i18n con supporto it/en e fallback
+✅ Chiavi traduzione per nav, common, status, time, notifications
+⬜ Inglese come lingua principale (default) per UI e docs
+⬜ Refactor traduzioni in file separati per lingua (locales/*.json)
+⬜ Language switcher in app desktop e web dashboard
+⬜ Copertura i18n per tutte le nuove pagine (wizard, cloud, ecc.)
+⬜ Espansione: spagnolo, tedesco, francese, portoghese
+⬜ Guida per traduttori community
+```
+
+---
+
+### 🌐 Fase 5 — Sito Web Pubblico e Distribuzione
+
+> _"Landing page, download, onboarding per utenti non tecnici."_
+
+```
+⚪ Stato: ROADMAP
+░░░░░░░░░░░░░░░░░░░░ 0%
+
+✅ Dominio acquistato: **jobhunterteam.ai** (Cloudflare)
+✅ DNS configurato: Record A → Vercel (216.198.79.1), DNS only
+✅ Dominio collegato a Vercel, SSL auto-generato
+✅ Supabase Auth: Site URL e redirect aggiornati a jobhunterteam.ai
+⬜ Configurazione sottodomini (app, docs, api)
+⬜ Landing page (hero, features, 3 step, download, FAQ)
+⬜ Pagina download con rilevamento OS automatico
+⬜ Documentazione utente visuale (guide, screenshot, FAQ)
+⬜ Video tutorial (opzionale)
 ```
 
 ---
@@ -143,63 +175,38 @@ Job Hunter Team e' un framework multi-agente per automatizzare la ricerca lavoro
 | 💻 → 🌐 | Profilo, posizioni, score, candidature, PDF |
 | 🌐 → 💻 | Stessi dati, scaricati in SQLite + cartelle locali |
 
-```
-⚪ Stato: ROADMAP
-░░░░░░░░░░░░░░░░░░░░ 0%
-
-⬜ Tool SQLite → PostgreSQL
-⬜ Tool PostgreSQL → SQLite
-⬜ Export/import PDF
-⬜ UI nella dashboard
-```
+> Questa feature e' trasversale e verra' implementata progressivamente tra Fase 1 e Fase 3.
 
 ---
 
-## 📅 Fasi di sviluppo
+## 📦 Modalita' di utilizzo (dettaglio)
 
-```
-  Fase 1              Fase 2              Fase 3              Fase 4
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### 🖥️ 1. App Desktop — Per tutti
 
-  ✅ COMPLETATA       🔨 IN CORSO          ⏳ PROSSIMA         🔮 FUTURO
-  Pipeline locale     Piattaforma web      Migrazione dati     Remote VM
-```
+| | |
+|---|---|
+| 🎯 **Target** | Chiunque — utenti non tecnici inclusi |
+| 📥 **Installazione** | Scarica installer (.dmg/.exe/.AppImage), doppio click |
+| ⚙️ **Setup** | Wizard grafico: lingua → profilo → API key → via |
+| 🤖 **Agenti** | Girano come processi background nell'app |
+| 💾 **Storage** | SQLite locale + sync opzionale con Supabase |
+| 📡 **Monitoring** | Web dashboard da browser (anche da telefono) |
 
-### ✅ Fase 1 — Pipeline locale
+### 💻 2. Computer Dedicato — Per chi ha un PC extra
 
-- [x] 🤖 Pipeline: scout → analista → scorer → scrittore → critico
-- [x] 🗄️ Database SQLite V2
-- [x] 🔒 Anti-collisione tra agenti
-- [x] 📦 Setup automatizzato (`setup.sh` + `setup.ps1` per Windows)
-- [x] 🧪 Test suite (33 test)
-- [x] 👥 Supporto profili non-dev
-- [x] 🖥️ Cross-platform (macOS, Linux, WSL)
+| | |
+|---|---|
+| 🎯 **Target** | Chi vuole un PC sempre acceso dedicato al team |
+| 🔧 **Setup** | Dall'app desktop, configura il PC remoto via SSH |
+| 🤖 **Agenti** | Girano sul PC dedicato, non sul principale |
+| 📡 **Monitoring** | Web dashboard + notifiche desktop |
 
-### 🔨 Fase 2 — Piattaforma web
+### ☁️ 3. Cloud Remoto — Per chi vuole zero hardware
 
-- [x] ⚡ App Next.js con auth Google
-- [x] 🗄️ Schema PostgreSQL su Supabase
-- [x] 💻 Modalita' locale senza Supabase
-- [x] 🤖 Agente Assistente con chat web
-- [x] 🖥️ Workspace separato (`JHT_WORKSPACE`)
-- [ ] 📊 Dashboard collegata a dati reali Supabase
-- [ ] 👤 Pagina profilo con salvataggio cloud
-- [ ] 📋 Pagina posizioni (lista + score)
-- [ ] 📄 Pagina candidature (CV, CL, stato)
-- [ ] 🚀 Deploy Vercel con CI/CD
-- [ ] 🔌 API layer agenti → Supabase (multi-tenant)
-
-### ⏳ Fase 3 — Migrazione dati
-
-- [ ] 💻→🌐 Tool migrazione SQLite → PostgreSQL
-- [ ] 🌐→💻 Tool migrazione PostgreSQL → SQLite
-- [ ] 📄 Export/import PDF
-- [ ] 🖥️ UI nella dashboard per avviare la migrazione
-
-### 🔮 Fase 4 — Remote VM
-
-- [ ] ☁️ Provisioning VM (AWS/GCP)
-- [ ] 🤖 Deploy automatico agenti su VM
-- [ ] 📡 Monitoring remoto dalla dashboard
-- [ ] ▶️ Start/stop team da web
-- [ ] 💰 Gestione costi e billing
+| | |
+|---|---|
+| 🎯 **Target** | Power user, chi non vuole tenere un PC acceso |
+| ☁️ **Provider** | AWS, GCP, Hetzner (scelta utente) |
+| 💰 **Costo** | Pay-per-use: avvii → lavora → spegni |
+| 🤖 **Agenti** | Girano sulla VM cloud |
+| 📡 **Monitoring** | Web dashboard + app desktop |
