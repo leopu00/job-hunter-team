@@ -24,6 +24,8 @@ import { registerDashboardCommand } from './commands/dashboard.js';
 import { registerContextCommand } from './commands/context.js';
 import { registerSecretsCommand } from './commands/secrets.js';
 import { registerHooksCommand } from './commands/hooks.js';
+import { registerReportCommand } from './commands/report.js';
+import { registerWebhooksCommand } from './commands/webhooks.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -58,6 +60,8 @@ export function buildProgram() {
   registerContextCommand(program);
   registerSecretsCommand(program);
   registerHooksCommand(program);
+  registerReportCommand(program);
+  registerWebhooksCommand(program);
 
   return program;
 }
