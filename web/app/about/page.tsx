@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── Dati agenti ──────────────────────────────────────────────────── */
 
@@ -61,7 +62,7 @@ function AboutContent() {
         </section>
 
         {/* ── La storia + Timeline ──────────────────────────────── */}
-        <section className="mb-20">
+        <FadeInSection><section className="mb-20">
           <SectionLabel text={t('about_story_label')} />
           <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_story_title')}</h2>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
@@ -81,10 +82,10 @@ function AboutContent() {
               </div>
             ))}
           </div>
-        </section>
+        </section></FadeInSection>
 
         {/* ── Gli agenti ────────────────────────────────────────── */}
-        <section className="mb-20">
+        <FadeInSection delay={100}><section className="mb-20">
           <SectionLabel text={t('about_agents_label')} />
           <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_agents_title')}</h2>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
@@ -107,10 +108,10 @@ function AboutContent() {
               </div>
             ))}
           </div>
-        </section>
+        </section></FadeInSection>
 
         {/* ── Come funziona ─────────────────────────────────────── */}
-        <section className="mb-20">
+        <FadeInSection delay={100}><section className="mb-20">
           <SectionLabel text={t('about_how_label')} />
           <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_how_title')}</h2>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
@@ -130,10 +131,10 @@ function AboutContent() {
               </div>
             ))}
           </div>
-        </section>
+        </section></FadeInSection>
 
         {/* ── Visione futura ────────────────────────────────────── */}
-        <section className="mb-16">
+        <FadeInSection delay={100}><section className="mb-16">
           <SectionLabel text={t('about_vision_label')} />
           <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_vision_title')}</h2>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
@@ -151,7 +152,7 @@ function AboutContent() {
               </div>
             ))}
           </div>
-        </section>
+        </section></FadeInSection>
 
         {/* ── CTA ───────────────────────────────────────────────── */}
         <section className="text-center py-12 border-t border-[var(--color-border)]">
