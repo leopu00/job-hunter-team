@@ -2,12 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
-export type Theme = 'dark' | 'light'
+export type Theme = 'dark' | 'light' | 'system'
 
 const STORAGE_KEY = 'jht-theme'
 
-type ThemeCtx = { theme: Theme; toggleTheme: () => void; setTheme: (t: Theme) => void }
-const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', toggleTheme: () => {}, setTheme: () => {} })
+type ThemeCtx = { theme: Theme; resolvedTheme: 'dark' | 'light'; toggleTheme: () => void; setTheme: (t: Theme) => void }
+const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', resolvedTheme: 'dark', toggleTheme: () => {}, setTheme: () => {} })
 
 export function useTheme() { return useContext(ThemeContext) }
 
@@ -29,30 +29,38 @@ function getSystemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-/** Risolve tema iniziale: stored → system → dark */
+/** Risolve tema iniziale: stored → 'system' se niente salvato */
 function resolveInitialTheme(): Theme {
   const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
-  if (stored === 'dark' || stored === 'light') return stored
-  return getSystemTheme()
+  if (stored === 'dark' || stored === 'light' || stored === 'system') return stored
+  return 'system'
+}
+
+function resolveActual(t: Theme): 'dark' | 'light' {
+  return t === 'system' ? getSystemTheme() : t
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark')
+  const [theme, setThemeState]         = useState<Theme>('dark')
+  const [resolvedTheme, setResolved]   = useState<'dark' | 'light'>('dark')
 
-  // Init: legge localStorage o system preference
+  // Init: legge localStorage, fallback system
   useEffect(() => {
-    const resolved = resolveInitialTheme()
-    setThemeState(resolved)
-    applyTheme(resolved)
+    const t = resolveInitialTheme()
+    const actual = resolveActual(t)
+    setThemeState(t)
+    setResolved(actual)
+    applyTheme(actual)
   }, [])
 
-  // Ascolta cambi di system preference (solo se nessuna preferenza salvata)
+  // Ascolta cambi di system preference
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const handler = (e: MediaQueryListEvent) => {
-      if (localStorage.getItem(STORAGE_KEY)) return // rispetta scelta utente
-      const sys: Theme = e.matches ? 'dark' : 'light'
-      setThemeState(sys)
+      const current = (localStorage.getItem(STORAGE_KEY) ?? 'system') as Theme
+      if (current !== 'system') return
+      const sys: 'dark' | 'light' = e.matches ? 'dark' : 'light'
+      setResolved(sys)
       applyTheme(sys)
     }
     mq.addEventListener('change', handler)
@@ -61,10 +69,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((t: Theme) => {
     enableTransition()
+    const actual = resolveActual(t)
     setThemeState(t)
-    applyTheme(t)
+    setResolved(actual)
+    applyTheme(actual)
     localStorage.setItem(STORAGE_KEY, t)
-    // Sync con UserPreferences API (fire-and-forget)
     fetch('/api/preferences', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -73,11 +82,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-  }, [theme, setTheme])
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+  }, [resolvedTheme, setTheme])
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, resolvedTheme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -85,8 +94,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 /** Toggle animato con icone sun/moon */
 export function ThemeToggle({ className }: { className?: string }) {
-  const { theme, toggleTheme } = useTheme()
-  const isDark = theme === 'dark'
+  const { resolvedTheme, toggleTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
   return (
     <button
       onClick={toggleTheme}
@@ -109,17 +118,22 @@ export function ThemeToggle({ className }: { className?: string }) {
 /** DarkModeToggle esteso — mostra testo + icona, usabile in settings */
 export function DarkModeToggle() {
   const { theme, setTheme } = useTheme()
+  const OPTIONS: { value: Theme; label: string }[] = [
+    { value: 'dark',   label: '☀ dark'   },
+    { value: 'light',  label: '◐ light'  },
+    { value: 'system', label: '⊙ system' },
+  ]
   return (
     <div className="flex items-center gap-2">
-      {(['dark', 'light'] as Theme[]).map(t => (
-        <button key={t} onClick={() => setTheme(t)}
+      {OPTIONS.map(({ value, label }) => (
+        <button key={value} onClick={() => setTheme(value)}
           className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
           style={{
-            border: `1px solid ${theme === t ? 'var(--color-green)' : 'var(--color-border)'}`,
-            color: theme === t ? 'var(--color-green)' : 'var(--color-dim)',
-            background: theme === t ? 'rgba(0,232,122,0.08)' : 'transparent',
+            border: `1px solid ${theme === value ? 'var(--color-green)' : 'var(--color-border)'}`,
+            color: theme === value ? 'var(--color-green)' : 'var(--color-dim)',
+            background: theme === value ? 'rgba(0,232,122,0.08)' : 'transparent',
           }}>
-          {t === 'dark' ? '☀ dark' : '◐ light'}
+          {label}
         </button>
       ))}
     </div>
