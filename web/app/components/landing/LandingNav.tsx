@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { useLandingI18n } from './LandingI18n'
+import { useLandingI18n, type Lang } from './LandingI18n'
 
 function FlagIT() {
   return (
@@ -25,8 +26,85 @@ function FlagEN() {
   )
 }
 
+const LANGUAGES: { code: Lang; label: string; Flag: () => React.JSX.Element }[] = [
+  { code: 'it', label: 'Italiano', Flag: FlagIT },
+  { code: 'en', label: 'English', Flag: FlagEN },
+]
+
+function LangDropdown() {
+  const { lang, setLang } = useLandingI18n()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const current = LANGUAGES.find(l => l.code === lang)!
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-all"
+        style={{
+          background: 'var(--color-panel)',
+          border: '1px solid var(--color-border)',
+          cursor: 'pointer',
+        }}
+      >
+        <current.Flag />
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
+          <path d="M2 4L5 7L8 4" stroke="var(--color-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1.5 rounded-lg overflow-hidden"
+          style={{
+            background: 'var(--color-panel)',
+            border: '1px solid var(--color-border)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            animation: 'fade-in 0.15s ease both',
+            minWidth: 140,
+          }}
+        >
+          {LANGUAGES.map(({ code, label, Flag }) => (
+            <button
+              key={code}
+              onClick={() => { setLang(code); setOpen(false) }}
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
+              style={{
+                cursor: 'pointer',
+                background: code === lang ? 'var(--color-card)' : 'transparent',
+                color: code === lang ? 'var(--color-white)' : 'var(--color-muted)',
+                fontSize: 11,
+                fontWeight: code === lang ? 600 : 400,
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              <Flag />
+              <span>{label}</span>
+              {code === lang && (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="ml-auto">
+                  <path d="M2 5L4 7L8 3" stroke="var(--color-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function LandingNav() {
-  const { lang, toggle, t } = useLandingI18n()
+  const { t } = useLandingI18n()
 
   return (
     <nav
@@ -67,18 +145,7 @@ export default function LandingNav() {
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          onClick={toggle}
-          className="flex items-center justify-center w-8 h-8 rounded transition-all"
-          style={{
-            background: 'var(--color-panel)',
-            border: '1px solid var(--color-border)',
-            cursor: 'pointer',
-          }}
-          title={lang === 'it' ? 'Switch to English' : 'Passa all\'italiano'}
-        >
-          {lang === 'it' ? <FlagIT /> : <FlagEN />}
-        </button>
+        <LangDropdown />
 
         <Link
           href="/?login=true"
