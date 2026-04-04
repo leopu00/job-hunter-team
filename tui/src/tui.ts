@@ -242,6 +242,11 @@ export async function runJhtTui() {
       requestExit();
       return { consume: true };
     }
+    // Ctrl+D — esci (come OpenClaw)
+    if (matchesKey(data, Key.ctrl("d"))) {
+      if (inputBuffer.length === 0) { requestExit(); }
+      return { consume: true };
+    }
     if (matchesKey(data, Key.ctrl("u"))) {
       inputBuffer = "";
       updateInputLine();
