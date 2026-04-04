@@ -6,6 +6,7 @@ import { execSync } from 'node:child_process'
 
 export const dynamic = 'force-dynamic'
 
+const IS_SERVERLESS = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV)
 const JHT_DIR = path.join(os.homedir(), '.jht')
 const startedAt = Date.now()
 
@@ -82,6 +83,21 @@ function getVersion(): string {
 
 /** GET — health check globale */
 export async function GET() {
+  // Su Vercel serverless non c'e' filesystem locale ne' tmux
+  if (IS_SERVERLESS) {
+    return NextResponse.json({
+      status: 'ok' as Status,
+      version: getVersion(),
+      uptime: Date.now() - startedAt,
+      timestamp: Date.now(),
+      env: 'serverless',
+      modules: [
+        { id: 'runtime', label: 'Runtime', status: 'ok', detail: 'Vercel serverless' },
+      ],
+      counts: { ok: 1, warn: 0, error: 0 },
+    })
+  }
+
   const modules = [checkConfig(), checkSessions(), checkAnalytics(), checkCredentials(), checkPlugins(), checkMemory(), checkAgents()]
   const errors = modules.filter(m => m.status === 'error').length
   const warns = modules.filter(m => m.status === 'warn').length
@@ -91,6 +107,7 @@ export async function GET() {
     status: overall, version: getVersion(),
     uptime: Date.now() - startedAt,
     timestamp: Date.now(),
+    env: 'local',
     modules,
     counts: { ok: modules.filter(m => m.status === 'ok').length, warn: warns, error: errors },
   })
