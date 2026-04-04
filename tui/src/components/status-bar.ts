@@ -50,8 +50,7 @@ export class StatusBar {
     parts.push(theme.dim(connectionStatus));
 
     // Agenti summary
-    const agentSummary = `${workingAgents}/${totalAgents} attivi`;
-    parts.push(theme.dim(agentSummary));
+    parts.push(theme.dim(`${workingAgents} agenti attivi`));
 
     // Token agente selezionato
     if (selectedAgent) {

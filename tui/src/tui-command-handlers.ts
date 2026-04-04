@@ -30,6 +30,8 @@ type CommandChatLog = {
 export type CommandHandlerContext = {
   client: JhtChatClient;
   chatLog: CommandChatLog;
+  /** Log di sistema visibile nella vista corrente (non solo AI) */
+  systemLog: CommandChatLog;
   opts: ChatOptions;
   state: TuiStateAccess;
   setActivityStatus: (text: string) => void;
@@ -52,6 +54,8 @@ function parseCommand(input: string): { name: string; args: string } {
 export function createCommandHandlers(context: CommandHandlerContext) {
   const { chatLog, opts, state, setActivityStatus, requestRender,
     noteLocalRunId, forgetLocalRunId } = context;
+  /** Log visibile nella vista corrente */
+  const sysLog = context.systemLog;
 
   /** Invia messaggio: se in chat tmux, va a tmux; se in AI, va ad Anthropic */
   const sendMessage = async (text: string) => {
@@ -134,7 +138,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
     switch (name) {
       case "help":
-        chatLog.addSystem(HELP);
+        sysLog.addSystem(HELP);
         break;
 
       case "team":
@@ -151,32 +155,32 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
       case "ai":
         context.switchView("ai");
-        chatLog.addSystem("chat AI attiva");
+        sysLog.addSystem("chat AI attiva");
         break;
 
       case "chat": {
         if (!args) {
-          chatLog.addSystem("uso: /chat <agente>  (es. /chat gatekeeper)");
+          sysLog.addSystem("uso: /chat <agente>  (es. /chat gatekeeper)");
           break;
         }
         const sessionName = resolveSessionName(args);
         if (!sessionName) {
-          chatLog.addSystem(`sessione tmux per "${args}" non trovata. Usa /team per vedere gli agenti attivi.`);
+          sysLog.addSystem(`sessione tmux per "${args}" non trovata. Usa /team per vedere gli agenti attivi.`);
           break;
         }
         state.chatTargetSession = sessionName;
         context.switchView("chat");
-        chatLog.addSystem(`chat con ${sessionName} — scrivi un messaggio`);
+        sysLog.addSystem(`chat con ${sessionName} — scrivi un messaggio`);
         break;
       }
 
       case "send": {
         if (!args) {
-          chatLog.addSystem("uso: /send <messaggio>");
+          sysLog.addSystem("uso: /send <messaggio>");
           break;
         }
         if (!state.chatTargetSession) {
-          chatLog.addSystem("nessun agente selezionato — usa /chat <agente> prima");
+          sysLog.addSystem("nessun agente selezionato — usa /chat <agente> prima");
           break;
         }
         await sendMessage(args);
@@ -185,38 +189,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
       case "start": {
         if (!args) {
-          chatLog.addSystem("uso: /start <agente>  (es. /start scout)");
+          sysLog.addSystem("uso: /start <agente>  (es. /start scout)");
           const sessions = listJhtSessions();
           if (sessions.length > 0) {
-            chatLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
+            sysLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
           }
           break;
         }
         const startResult = startSession(args);
         if (startResult.ok) {
-          chatLog.addSystem(`sessione ${startResult.name} avviata`);
+          sysLog.addSystem(`sessione ${startResult.name} avviata`);
           setActivityStatus(`avviato ${startResult.name}`);
           state.activeTmuxCount = listJhtSessions().length;
           context.refreshCurrentView();
         } else {
-          chatLog.addSystem(`errore: ${startResult.error ?? "impossibile avviare"} (${startResult.name})`);
+          sysLog.addSystem(`errore: ${startResult.error ?? "impossibile avviare"} (${startResult.name})`);
         }
         break;
       }
 
       case "stop": case "kill": {
         if (!args) {
-          chatLog.addSystem("uso: /stop <agente>  (es. /stop scout)");
+          sysLog.addSystem("uso: /stop <agente>  (es. /stop scout)");
           const sessions = listJhtSessions();
           if (sessions.length > 0) {
-            chatLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
+            sysLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
           }
           break;
         }
         const targetSession = resolveSessionName(args) ?? args;
         const stopResult = stopSession(targetSession);
         if (stopResult.ok) {
-          chatLog.addSystem(`sessione ${targetSession} fermata`);
+          sysLog.addSystem(`sessione ${targetSession} fermata`);
           setActivityStatus(`fermato ${targetSession}`);
           state.activeTmuxCount = listJhtSessions().length;
           if (state.chatTargetSession === targetSession) {
@@ -224,19 +228,19 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
           context.refreshCurrentView();
         } else {
-          chatLog.addSystem(`errore: ${stopResult.error ?? "impossibile fermare"} (${targetSession})`);
+          sysLog.addSystem(`errore: ${stopResult.error ?? "impossibile fermare"} (${targetSession})`);
         }
         break;
       }
 
       case "refresh":
         context.refreshCurrentView();
-        chatLog.addSystem("aggiornato");
+        sysLog.addSystem("aggiornato");
         break;
 
       case "status":
         if (!state.isConnected) {
-          chatLog.addSystem("API: non connesso — usa /setup <API_KEY>");
+          sysLog.addSystem("API: non connesso — usa /setup <API_KEY>");
         } else {
           try {
             const s = await context.client.getStatus();
@@ -245,26 +249,26 @@ export function createCommandHandlers(context: CommandHandlerContext) {
               const parts: string[] = [];
               if (r.model) parts.push(`model: ${r.model}`);
               if (r.historyLength !== undefined) parts.push(`history: ${r.historyLength}`);
-              parts.push("connected: true");
-              for (const p of parts) chatLog.addSystem(p);
+              parts.push("API: connesso");
+              for (const p of parts) sysLog.addSystem(p);
             }
-          } catch (err) { chatLog.addSystem(`status fallito: ${String(err)}`); }
+          } catch (err) { sysLog.addSystem(`status fallito: ${String(err)}`); }
         }
-        chatLog.addSystem(`tmux: ${state.activeTmuxCount} sessioni attive`);
-        chatLog.addSystem(`vista: ${state.currentView}`);
+        sysLog.addSystem(`tmux: ${state.activeTmuxCount} sessioni agenti`);
+        sysLog.addSystem(`vista: ${state.currentView}`);
         break;
 
       case "abort":
-        if (!state.activeChatRunId) { chatLog.addSystem("nessun run AI attivo"); break; }
+        if (!state.activeChatRunId) { sysLog.addSystem("nessun run AI attivo"); break; }
         try {
           await context.client.abortRun(state.currentSessionKey);
-          chatLog.addSystem("run AI interrotto");
-        } catch (err) { chatLog.addSystem(`abort fallito: ${String(err)}`); }
+          sysLog.addSystem("run AI interrotto");
+        } catch (err) { sysLog.addSystem(`abort fallito: ${String(err)}`); }
         break;
 
       case "new":
         state.currentSessionKey = `jht-${randomUUID()}`;
-        chatLog.addSystem(`nuova sessione AI: ${state.currentSessionKey}`);
+        sysLog.addSystem(`nuova sessione AI: ${state.currentSessionKey}`);
         break;
 
       case "profile": {
@@ -315,13 +319,19 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
       case "setup": {
         if (!args) {
-          chatLog.addSystem("uso: /setup <ANTHROPIC_API_KEY>");
-          chatLog.addSystem("Trova la key su https://console.anthropic.com/settings/keys");
+          sysLog.addSystem("uso: /setup <ANTHROPIC_API_KEY>");
+          sysLog.addSystem("La chiave inizia con sk-ant- — trovala su console.anthropic.com");
+          break;
+        }
+        // Validazione prefisso API key
+        if (!args.startsWith("sk-ant-")) {
+          sysLog.addSystem("chiave non valida — deve iniziare con sk-ant-");
+          sysLog.addSystem("Questa sembra una chiave OpenAI, non Anthropic.");
           break;
         }
         if (context.reconnect) {
           const ok = context.reconnect(args);
-          chatLog.addSystem(ok ? "connesso ad Anthropic API" : "errore connessione — verifica la chiave");
+          sysLog.addSystem(ok ? "connesso ad Anthropic API" : "errore connessione — verifica la chiave");
         }
         break;
       }
