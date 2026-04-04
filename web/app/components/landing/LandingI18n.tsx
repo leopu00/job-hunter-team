@@ -95,13 +95,13 @@ type TranslationKey = keyof typeof translations
 
 interface I18nCtx {
   lang: Lang
-  toggle: () => void
+  setLang: (lang: Lang) => void
   t: (key: TranslationKey) => string
 }
 
 const LandingI18nContext = createContext<I18nCtx>({
   lang: 'it',
-  toggle: () => {},
+  setLang: () => {},
   t: (key) => translations[key].it,
 })
 
@@ -112,16 +112,12 @@ export function useLandingI18n() {
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>('it')
 
-  const toggle = useCallback(() => {
-    setLang(prev => prev === 'it' ? 'en' : 'it')
-  }, [])
-
   const t = useCallback((key: TranslationKey) => {
     return translations[key][lang]
   }, [lang])
 
   return (
-    <LandingI18nContext.Provider value={{ lang, toggle, t }}>
+    <LandingI18nContext.Provider value={{ lang, setLang, t }}>
       {children}
     </LandingI18nContext.Provider>
   )
