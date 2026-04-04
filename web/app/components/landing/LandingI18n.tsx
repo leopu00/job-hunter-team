@@ -366,6 +366,63 @@ const translations = {
   about_vision_1:    { it: 'Integrazione diretta con portali di candidatura',        en: 'Direct integration with application portals' },
   about_vision_2:    { it: 'Preparazione automatica ai colloqui con mock interview', en: 'Automatic interview preparation with mock interviews' },
   about_vision_3:    { it: 'Networking assistito e follow-up automatizzati',         en: 'Assisted networking and automated follow-ups' },
+
+  // Onboarding wizard
+  ob_title:          { it: 'Benvenuto in Job Hunter Team',   en: 'Welcome to Job Hunter Team' },
+  ob_skip:           { it: 'Salta',                          en: 'Skip' },
+  ob_next:           { it: 'Avanti',                         en: 'Next' },
+  ob_back:           { it: 'Indietro',                       en: 'Back' },
+  ob_finish:         { it: 'Inizia a cercare',               en: 'Start searching' },
+  ob_step:           { it: 'Passo',                          en: 'Step' },
+
+  ob_s1_title:       { it: 'Benvenuto',                      en: 'Welcome' },
+  ob_s1_desc:        {
+    it: 'Job Hunter Team e il tuo team personale di agenti AI. Cercano offerte, le analizzano, scrivono CV e cover letter su misura — tutto in automatico, tutto sul tuo computer.',
+    en: 'Job Hunter Team is your personal AI agent team. They find listings, analyze them, write tailored CVs and cover letters — all automatically, all on your computer.',
+  },
+  ob_s1_hint:        {
+    it: 'Configuriamo insieme il tuo spazio in 5 passi veloci.',
+    en: 'Let\'s set up your workspace in 5 quick steps.',
+  },
+
+  ob_s2_title:       { it: 'Configura il profilo',           en: 'Set up your profile' },
+  ob_s2_desc:        {
+    it: 'Indica il tuo nome, il ruolo che cerchi e un breve riassunto della tua esperienza. Gli agenti useranno queste informazioni per personalizzare ogni candidatura.',
+    en: 'Enter your name, the role you\'re looking for and a brief summary of your experience. Agents will use this information to personalize every application.',
+  },
+  ob_s2_name:        { it: 'Nome',                           en: 'Name' },
+  ob_s2_role:        { it: 'Ruolo target',                   en: 'Target role' },
+  ob_s2_bio:         { it: 'Breve bio',                      en: 'Short bio' },
+
+  ob_s3_title:       { it: 'Scegli le competenze',           en: 'Choose your skills' },
+  ob_s3_desc:        {
+    it: 'Seleziona le tecnologie e competenze che conosci. Lo Scorer le usera\' per calcolare il match con ogni offerta.',
+    en: 'Select the technologies and skills you know. The Scorer will use them to compute the match with each listing.',
+  },
+  ob_s3_hint:        {
+    it: 'Clicca per selezionare, clicca di nuovo per deselezionare.',
+    en: 'Click to select, click again to deselect.',
+  },
+
+  ob_s4_title:       { it: 'Configura la API Key',           en: 'Configure your API Key' },
+  ob_s4_desc:        {
+    it: 'Gli agenti usano Claude (Anthropic) per ragionare. Inserisci la tua chiave API per attivarli. La chiave resta sul tuo computer, non viene mai inviata a terzi.',
+    en: 'Agents use Claude (Anthropic) to reason. Enter your API key to activate them. The key stays on your computer, never sent to third parties.',
+  },
+  ob_s4_placeholder: { it: 'sk-ant-...',                     en: 'sk-ant-...' },
+  ob_s4_hint:        {
+    it: 'Ottienila su console.anthropic.com. Salvata in ~/.jht/jht.config.json.',
+    en: 'Get it at console.anthropic.com. Saved in ~/.jht/jht.config.json.',
+  },
+
+  ob_s5_title:       { it: 'Avvia il primo agente',          en: 'Launch your first agent' },
+  ob_s5_desc:        {
+    it: 'Tutto pronto! Premi il bottone per avviare lo Scout — il primo agente che cerchera\' offerte per te. Potrai avviare il team completo dalla pagina Team.',
+    en: 'All set! Press the button to launch the Scout — the first agent that will search listings for you. You can launch the full team from the Team page.',
+  },
+  ob_s5_launch:      { it: 'Avvia Scout',                    en: 'Launch Scout' },
+  ob_s5_skip_agent:  { it: 'Lo faro\' dopo',                 en: 'I\'ll do it later' },
+  ob_s5_launched:    { it: 'Scout avviato!',                  en: 'Scout launched!' },
 } as const
 
 type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
