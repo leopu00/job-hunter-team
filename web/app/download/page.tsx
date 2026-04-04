@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
+import LandingNav from '../components/landing/LandingNav'
 
 type OS = 'mac' | 'linux' | 'windows' | null
 
@@ -27,6 +29,12 @@ const ICONS: Record<string, () => React.ReactNode> = {
   windows: WindowsIcon,
 }
 
+const INSTR_KEYS: Record<string, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
+  mac: 'dl_mac_instr',
+  linux: 'dl_linux_instr',
+  windows: 'dl_windows_instr',
+}
+
 function detectOS(): OS {
   if (typeof navigator === 'undefined') return null
   const ua = navigator.userAgent.toLowerCase()
@@ -44,21 +52,22 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
   {
     id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.tar.gz`, size: null,
     requirements: 'macOS 12+, Node.js 18+',
-    instructions: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
+    instructions: [],
   },
   {
     id: 'linux', label: 'Linux', file: `job-hunter-team-${FALLBACK_VERSION}-linux.tar.gz`, size: null,
     requirements: 'Ubuntu 20.04+ / Fedora 36+ / Debian 11+, Node.js 18+',
-    instructions: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
+    instructions: [],
   },
   {
     id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.zip`, size: null,
     requirements: 'Windows 10+, Node.js 18+, PowerShell 5.1+',
-    instructions: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
+    instructions: [],
   },
 ]
 
-export default function DownloadPage() {
+function DownloadContent() {
+  const { t, ta } = useLandingI18n()
   const [detectedOS, setDetectedOS] = useState<OS>(null)
   const [expanded, setExpanded] = useState<OS>(null)
   const [release, setRelease] = useState<ReleaseData>({
@@ -78,7 +87,6 @@ export default function DownloadPage() {
 
   const { version, downloadBaseUrl, platforms, releasesUrl } = release
 
-  // Ordina: OS rilevato per primo
   const sorted = [...platforms].sort((a, b) => {
     if (a.id === detectedOS) return -1
     if (b.id === detectedOS) return 1
@@ -86,156 +94,167 @@ export default function DownloadPage() {
   })
 
   return (
-    <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex flex-col items-center px-5 py-12">
-      <div className="w-full max-w-2xl" style={{ animation: 'fade-in 0.5s ease both' }}>
+    <>
+      <LandingNav />
+      <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex flex-col items-center px-5 py-12 pt-24">
+        <div className="w-full max-w-2xl" style={{ animation: 'fade-in 0.5s ease both' }}>
 
-        {/* Header */}
-        <div className="mb-12 text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6 no-underline hover:no-underline">
-            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">download</span>
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-            Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
-          </h1>
-          <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-md mx-auto mb-2">
-            Scarica il sistema multi-agente che automatizza la tua ricerca di lavoro.
-            Funziona interamente sul tuo computer — i tuoi dati restano tuoi.
-          </p>
-          <span className="text-[10px] text-[var(--color-dim)]">v{version} &middot; open source</span>
-        </div>
-
-        {/* OS Cards */}
-        <div className="flex flex-col gap-4 mb-10">
-          {sorted.map((platform) => {
-            const isDetected = platform.id === detectedOS
-            const isExpanded = expanded === platform.id as OS
-            const Icon = ICONS[platform.id] || (() => null)
-
-            return (
-              <div key={platform.id} className="border rounded-lg overflow-hidden transition-colors"
-                style={{
-                  borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
-                  background: 'var(--color-panel)',
-                  boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
-                }}>
-                {/* Card header */}
-                <div className="px-5 py-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-                    <Icon />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
-                      {isDetected && (
-                        <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
-                          style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
-                          rilevato
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-[var(--color-dim)]">
-                      {platform.file}
-                      {platform.size && <> &middot; {platform.size}</>}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
-                      className="px-3 py-2 rounded text-[11px] font-semibold transition-colors"
-                      style={{
-                        background: 'var(--color-card)',
-                        color: 'var(--color-muted)',
-                        border: '1px solid var(--color-border)',
-                        cursor: 'pointer',
-                      }}>
-                      {isExpanded ? 'Chiudi' : 'Istruzioni'}
-                    </button>
-                    <a href={`${downloadBaseUrl}/${platform.file}`}
-                      className="px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
-                      style={{
-                        background: isDetected ? 'var(--color-green)' : 'var(--color-card)',
-                        color: isDetected ? '#000' : 'var(--color-green)',
-                        border: isDetected ? 'none' : '1px solid var(--color-green)',
-                        cursor: 'pointer',
-                      }}>
-                      Scarica
-                    </a>
-                  </div>
-                </div>
-
-                {/* Expandable instructions */}
-                {isExpanded && (
-                  <div className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
-                    <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-                      <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-3">Istruzioni</p>
-                      <ol className="space-y-2 mb-4">
-                        {platform.instructions.map((step, i) => (
-                          <li key={i} className="flex gap-2 text-[11px]">
-                            <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
-                            <code className="text-[var(--color-bright)] font-mono">{step}</code>
-                          </li>
-                        ))}
-                      </ol>
-                      <p className="text-[10px] text-[var(--color-dim)]">
-                        <span className="font-semibold">Requisiti:</span> {platform.requirements}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* How it works */}
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8">
-          <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-4">Come funziona</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { step: '01', title: 'Scarica', desc: 'Scegli il pacchetto per il tuo sistema operativo' },
-              { step: '02', title: 'Avvia', desc: 'Esegui lo script di avvio — installa tutto automaticamente' },
-              { step: '03', title: 'Usa', desc: 'Il browser si apre su localhost con l\'interfaccia del team' },
-            ].map(({ step, title, desc }) => (
-              <div key={step} className="text-center">
-                <div className="text-[20px] font-bold text-[var(--color-green)] mb-1">{step}</div>
-                <div className="text-[12px] font-bold text-[var(--color-white)] mb-1">{title}</div>
-                <div className="text-[10px] text-[var(--color-muted)] leading-relaxed">{desc}</div>
-              </div>
-            ))}
+          {/* Header */}
+          <div className="mb-12 text-center">
+            <Link href="/" className="inline-flex items-center gap-2 mb-6 no-underline hover:no-underline">
+              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">download</span>
+            </Link>
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
+              Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
+            </h1>
+            <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-md mx-auto mb-2">
+              {t('dl_desc')}
+            </p>
+            <span className="text-[10px] text-[var(--color-dim)]">v{version} &middot; open source</span>
           </div>
-        </div>
 
-        {/* Node.js requirement note */}
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
-          <div className="flex items-start gap-3">
-            <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0">!</span>
-            <div>
-              <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">Requisito: Node.js 18+</p>
-              <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
-                Job Hunter Team richiede Node.js per funzionare. Se non lo hai installato,
-                lo script di avvio ti guidera' nell'installazione.
-                Scarica Node.js da{' '}
-                <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer"
-                  className="text-[var(--color-green)] hover:underline">nodejs.org</a>.
-              </p>
+          {/* OS Cards */}
+          <div className="flex flex-col gap-4 mb-10">
+            {sorted.map((platform) => {
+              const isDetected = platform.id === detectedOS
+              const isExpanded = expanded === platform.id as OS
+              const Icon = ICONS[platform.id] || (() => null)
+              const instrKey = INSTR_KEYS[platform.id]
+              const instructions = instrKey ? ta(instrKey) : platform.instructions
+
+              return (
+                <div key={platform.id} className="border rounded-lg overflow-hidden transition-colors"
+                  style={{
+                    borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
+                    background: 'var(--color-panel)',
+                    boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
+                  }}>
+                  {/* Card header */}
+                  <div className="px-5 py-4 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
+                      <Icon />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
+                        {isDetected && (
+                          <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
+                            style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
+                            {t('dl_detected')}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[var(--color-dim)]">
+                        {platform.file}
+                        {platform.size && <> &middot; {platform.size}</>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
+                        className="px-3 py-2 rounded text-[11px] font-semibold transition-colors"
+                        style={{
+                          background: 'var(--color-card)',
+                          color: 'var(--color-muted)',
+                          border: '1px solid var(--color-border)',
+                          cursor: 'pointer',
+                        }}>
+                        {isExpanded ? t('dl_close') : t('dl_instructions')}
+                      </button>
+                      <a href={`${downloadBaseUrl}/${platform.file}`}
+                        className="px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
+                        style={{
+                          background: isDetected ? 'var(--color-green)' : 'var(--color-card)',
+                          color: isDetected ? '#000' : 'var(--color-green)',
+                          border: isDetected ? 'none' : '1px solid var(--color-green)',
+                          cursor: 'pointer',
+                        }}>
+                        {t('dl_download')}
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Expandable instructions */}
+                  {isExpanded && (
+                    <div className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
+                      <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+                        <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-3">{t('dl_instructions')}</p>
+                        <ol className="space-y-2 mb-4">
+                          {instructions.map((step, i) => (
+                            <li key={i} className="flex gap-2 text-[11px]">
+                              <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
+                              <code className="text-[var(--color-bright)] font-mono">{step}</code>
+                            </li>
+                          ))}
+                        </ol>
+                        <p className="text-[10px] text-[var(--color-dim)]">
+                          <span className="font-semibold">Requirements:</span> {platform.requirements}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* How it works */}
+          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8">
+            <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-4">{t('dl_how_title')}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {([
+                { step: '01', titleKey: 'dl_step1_title', descKey: 'dl_step1_desc' },
+                { step: '02', titleKey: 'dl_step2_title', descKey: 'dl_step2_desc' },
+                { step: '03', titleKey: 'dl_step3_title', descKey: 'dl_step3_desc' },
+              ] as const).map(({ step, titleKey, descKey }) => (
+                <div key={step} className="text-center">
+                  <div className="text-[20px] font-bold text-[var(--color-green)] mb-1">{step}</div>
+                  <div className="text-[12px] font-bold text-[var(--color-white)] mb-1">{t(titleKey)}</div>
+                  <div className="text-[10px] text-[var(--color-muted)] leading-relaxed">{t(descKey)}</div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-[10px] text-[var(--color-dim)]">
-            v{version}-alpha &middot; Job Hunter Team &middot;{' '}
-            <Link href="/" className="text-[var(--color-green)] hover:underline">Home</Link>
-            {' '}&middot;{' '}
-            <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
-              className="text-[var(--color-green)] hover:underline">Tutte le release</a>
-          </p>
+          {/* Node.js requirement note */}
+          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
+            <div className="flex items-start gap-3">
+              <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0">!</span>
+              <div>
+                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_node_title')}</p>
+                <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
+                  {t('dl_node_desc')}{' '}
+                  {t('dl_node_link')}{' '}
+                  <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer"
+                    className="text-[var(--color-green)] hover:underline">nodejs.org</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-[10px] text-[var(--color-dim)]">
+              v{version}-alpha &middot; Job Hunter Team &middot;{' '}
+              <Link href="/" className="text-[var(--color-green)] hover:underline">{t('dl_home')}</Link>
+              {' '}&middot;{' '}
+              <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
+                className="text-[var(--color-green)] hover:underline">{t('dl_all_releases')}</a>
+            </p>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
+  )
+}
+
+export default function DownloadPage() {
+  return (
+    <LandingI18nProvider>
+      <DownloadContent />
+    </LandingI18nProvider>
   )
 }
 
