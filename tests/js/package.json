@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "vitest": "^2.1.0",
-    "zod": "^3.22.0",
+    "zod": "^4.3.6",
     "grammy": "^1.31.0",
     "@grammyjs/auto-retry": "^2.0.2",
     "@grammyjs/runner": "^2.0.3"
