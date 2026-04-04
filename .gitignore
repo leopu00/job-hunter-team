@@ -85,3 +85,4 @@ Thumbs.db
 
 # ── PLAYWRIGHT MCP ───────────────────────────────────────────
 .playwright-mcp/
+.vercel
