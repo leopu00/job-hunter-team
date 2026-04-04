@@ -65,3 +65,55 @@ export function resolveSessionName(agentId: string): string | null {
   const match = sessions.find((s) => s.agentId === normalized);
   return match?.name ?? null;
 }
+
+/** Mappa agentId → nome sessione tmux standard */
+const SESSION_NAME_MAP: Record<string, string> = {
+  gatekeeper: "JHT-GATEKEEPER",
+  fullstack: "JHT-FULLSTACK",
+  fullstack_2: "JHT-FULLSTACK-2",
+  fullstack_3: "JHT-FULLSTACK-3",
+  coord: "JHT-COORD",
+  sentinel: "JHT-SENTINEL",
+  scout: "SCOUT-1",
+  analista: "ANALISTA-1",
+  scorer: "SCORER-1",
+  scrittore: "SCRITTORE-1",
+  critico: "CRITICO",
+  sentinella: "SENTINELLA",
+  assistente: "ASSISTENTE",
+  alfa: "ALFA",
+};
+
+/** Avvia una nuova sessione tmux per un agente */
+export function startSession(agentId: string, workDir?: string): { ok: boolean; name: string; error?: string } {
+  const normalized = agentId.toLowerCase().replace(/-/g, "_");
+  const name = SESSION_NAME_MAP[normalized] ?? `JHT-${agentId.toUpperCase()}`;
+
+  if (sessionExists(name)) {
+    return { ok: false, name, error: "sessione gia' attiva" };
+  }
+
+  const args = ["new-session", "-d", "-s", name];
+  if (workDir) args.push("-c", workDir);
+
+  const r = spawnSync("tmux", args, { encoding: "utf-8", timeout: 3000 });
+  if (r.status !== 0) {
+    return { ok: false, name, error: r.stderr?.trim() || "errore tmux" };
+  }
+  return { ok: true, name };
+}
+
+/** Ferma (kill) una sessione tmux */
+export function stopSession(sessionName: string): { ok: boolean; error?: string } {
+  if (!sessionExists(sessionName)) {
+    return { ok: false, error: "sessione non trovata" };
+  }
+  const r = spawnSync("tmux", ["kill-session", "-t", sessionName], {
+    encoding: "utf-8",
+    timeout: 3000,
+  });
+  if (r.status !== 0) {
+    return { ok: false, error: r.stderr?.trim() || "errore tmux" };
+  }
+  return { ok: true };
+}
