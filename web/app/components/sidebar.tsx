@@ -13,6 +13,19 @@ const NAV_GROUPS = [
       { href: '/dashboard', label: 'Dashboard' },
       { href: '/deploy',    label: 'Deploy' },
       { href: '/gateway',   label: 'Gateway' },
+      { href: '/status',    label: 'Stato' },
+    ],
+  },
+  {
+    label: 'JOB HUNTING',
+    links: [
+      { href: '/jobs',          label: 'Offerte' },
+      { href: '/applications',  label: 'Candidature' },
+      { href: '/interviews',    label: 'Colloqui' },
+      { href: '/companies',     label: 'Aziende' },
+      { href: '/cover-letters', label: 'Cover Letter' },
+      { href: '/profiles',      label: 'Profili' },
+      { href: '/alerts',        label: 'Alert' },
     ],
   },
   {
@@ -22,6 +35,7 @@ const NAV_GROUPS = [
       { href: '/assistant', label: 'Assistente' },
       { href: '/tasks',     label: 'Task' },
       { href: '/queue',     label: 'Queue' },
+      { href: '/workers',   label: 'Workers' },
     ],
   },
   {
@@ -31,6 +45,19 @@ const NAV_GROUPS = [
       { href: '/history',   label: 'History' },
       { href: '/analytics', label: 'Analytics' },
       { href: '/logs',      label: 'Logs' },
+      { href: '/database',  label: 'Database' },
+    ],
+  },
+  {
+    label: 'TOOLS',
+    links: [
+      { href: '/api-explorer', label: 'API Explorer' },
+      { href: '/automations',  label: 'Automazioni' },
+      { href: '/scheduler',    label: 'Scheduler' },
+      { href: '/monitoring',   label: 'Monitoring' },
+      { href: '/errors',       label: 'Errori' },
+      { href: '/performance',  label: 'Performance' },
+      { href: '/git',          label: 'Git' },
     ],
   },
   {
