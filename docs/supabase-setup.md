@@ -79,8 +79,8 @@ web/
 
 | Campo | Valore |
 |-------|--------|
-| `site_url` | `https://job-hunter-team.vercel.app` |
-| `uri_allow_list` | `https://job-hunter-team.vercel.app/**,http://localhost:3000/**` |
+| `site_url` | `https://jobhunterteam.ai` |
+| `uri_allow_list` | `https://jobhunterteam.ai/**,https://jht-web-deploy.vercel.app/**,https://job-hunter-team.vercel.app/**,http://localhost:3000/**` |
 | Google OAuth | ✅ Configurato |
 
 ---
@@ -124,7 +124,7 @@ Aggiungi le env vars nel progetto Vercel (valori in `web/.env.local`):
 NEXT_PUBLIC_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<chiave anon>
 SUPABASE_SERVICE_ROLE_KEY=<chiave service_role>
-NEXT_PUBLIC_APP_URL=https://job-hunter-team.vercel.app
+NEXT_PUBLIC_APP_URL=https://jobhunterteam.ai
 ```
 
 ---
