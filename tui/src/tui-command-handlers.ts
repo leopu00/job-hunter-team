@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
-import { sendToSession, resolveSessionName } from "./tui-tmux.js";
+import { sendToSession, resolveSessionName, startSession, stopSession, listJhtSessions } from "./tui-tmux.js";
 
 export type JhtChatClient = {
   sendChat: (params: {
@@ -108,6 +108,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "comandi:",
     "  /team            — vista panoramica team",
     "  /chat <agente>   — chat diretta con agente (tmux)",
+    "  /start <agente>  — avvia sessione tmux per un agente",
+    "  /stop <agente>   — ferma sessione tmux di un agente",
     "  /tasks           — dashboard task",
     "  /dashboard       — panoramica budget, deploy, task",
     "  /ai              — chat AI (Anthropic)",
@@ -115,7 +117,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /setup <key>     — configura API key Anthropic",
     "  /refresh         — aggiorna vista corrente",
     "  /status          — stato connessione",
-    "  /stop            — interrompi run attivo",
+    "  /abort           — interrompi run AI attivo",
     "  /new             — nuova sessione AI",
     "  /help            — mostra aiuto",
     "",
@@ -175,6 +177,52 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           break;
         }
         await sendMessage(args);
+        break;
+      }
+
+      case "start": {
+        if (!args) {
+          chatLog.addSystem("uso: /start <agente>  (es. /start scout)");
+          const sessions = listJhtSessions();
+          if (sessions.length > 0) {
+            chatLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
+          }
+          break;
+        }
+        const startResult = startSession(args);
+        if (startResult.ok) {
+          chatLog.addSystem(`sessione ${startResult.name} avviata`);
+          setActivityStatus(`avviato ${startResult.name}`);
+          state.activeTmuxCount = listJhtSessions().length;
+          context.refreshCurrentView();
+        } else {
+          chatLog.addSystem(`errore: ${startResult.error ?? "impossibile avviare"} (${startResult.name})`);
+        }
+        break;
+      }
+
+      case "stop": case "kill": {
+        if (!args) {
+          chatLog.addSystem("uso: /stop <agente>  (es. /stop scout)");
+          const sessions = listJhtSessions();
+          if (sessions.length > 0) {
+            chatLog.addSystem("sessioni attive: " + sessions.map((s) => s.name).join(", "));
+          }
+          break;
+        }
+        const targetSession = resolveSessionName(args) ?? args;
+        const stopResult = stopSession(targetSession);
+        if (stopResult.ok) {
+          chatLog.addSystem(`sessione ${targetSession} fermata`);
+          setActivityStatus(`fermato ${targetSession}`);
+          state.activeTmuxCount = listJhtSessions().length;
+          if (state.chatTargetSession === targetSession) {
+            state.chatTargetSession = null;
+          }
+          context.refreshCurrentView();
+        } else {
+          chatLog.addSystem(`errore: ${stopResult.error ?? "impossibile fermare"} (${targetSession})`);
+        }
         break;
       }
 
