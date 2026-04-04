@@ -3,6 +3,32 @@
 import { useEffect, useState } from 'react'
 import { Card, Field, inputCls, btnPrimary, btnSecondary } from '../setup/ui'
 
+type TgStatus = { configured: boolean; connected: boolean; running: boolean; botUsername: string | null; botName: string | null; mode: string | null }
+
+function TelegramStatusWidget() {
+  const [s, setS] = useState<TgStatus | null>(null)
+  useEffect(() => {
+    const load = () => fetch('/api/telegram/status').then(r => r.json()).then(setS).catch(() => null)
+    load()
+    const id = setInterval(load, 15_000)
+    return () => clearInterval(id)
+  }, [])
+  if (!s) return <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Verifica stato…</p>
+  const dot = s.connected ? 'var(--color-green)' : s.configured ? 'var(--color-yellow)' : 'var(--color-dim)'
+  const label = s.connected ? 'connesso' : s.configured ? 'token non valido' : 'non configurato'
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded border text-[11px]"
+      style={{ borderColor: s.connected ? 'rgba(0,232,122,0.2)' : 'var(--color-border)', background: 'var(--color-card)' }}>
+      <div className="flex items-center gap-2">
+        <span style={{ color: dot, animation: s.connected ? 'pulse-dot 2.5s ease-in-out infinite' : undefined }}>●</span>
+        <span style={{ color: dot }}>{label}</span>
+        {s.running && <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded border" style={{ color: 'var(--color-blue)', borderColor: 'rgba(77,159,255,0.25)' }}>tmux attivo</span>}
+      </div>
+      {s.botUsername && <p className="font-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>@{s.botUsername} · {s.botName}</p>}
+    </div>
+  )
+}
+
 type Provider = 'claude' | 'openai' | 'minimax'
 
 interface SettingsForm {
@@ -117,6 +143,7 @@ export default function SettingsPage() {
 
         {/* Telegram */}
         <Card title="Telegram" sub="Notifiche e comandi via bot">
+          <TelegramStatusWidget />
           <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" checked={form.telegramEnabled}
               onChange={e => set({ telegramEnabled: e.target.checked })} />
