@@ -77,7 +77,7 @@ export function NotificationBadge({
               color: '#fff', lineHeight: 1, whiteSpace: 'nowrap',
               animation: pulse ? 'nb-pulse 1.4s ease infinite' : 'nb-pop .25s ease',
             }),
-          } as React.CSSProperties}
+          } as unknown as React.CSSProperties}
         >
           {variant === 'count' ? label : null}
         </span>

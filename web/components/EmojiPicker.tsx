@@ -47,7 +47,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
   const catData = { ...CATEGORIES, recenti: { icon: '🕐', emojis: recents } }
   const displayEmojis = search
     ? Object.values(CATEGORIES).flatMap(c => c.emojis).filter(e => e.includes(search))
-    : cat === 'recenti' ? recents : catData[cat]?.emojis ?? []
+    : cat === 'recenti' ? recents : (catData as Record<string, { emojis: string[] }>)[cat]?.emojis ?? []
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>

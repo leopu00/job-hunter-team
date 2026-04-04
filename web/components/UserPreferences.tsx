@@ -48,7 +48,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function UserPreferences({ onClose }: { onClose: () => void }) {
   const { theme, setTheme } = useTheme()
-  const [prefs, setPrefs] = useState<Prefs>({ ...DEFAULTS, theme })
+  const [prefs, setPrefs] = useState<Prefs>({ ...DEFAULTS, theme: theme === 'system' ? 'dark' : theme })
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok'>('idle')
 
   useEffect(() => {
