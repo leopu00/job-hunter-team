@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { NotificationCenter } from './NotificationCenter'
 
 const LABELS: Record<string, string> = {
   dashboard: 'Dashboard', agents: 'Agenti', tasks: 'Task', assistant: 'Assistente',
@@ -54,6 +55,7 @@ export default function Breadcrumb() {
           }
         </span>
       ))}
+      <span className="ml-auto"><NotificationCenter /></span>
     </nav>
   )
 }
