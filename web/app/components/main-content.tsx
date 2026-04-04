@@ -22,7 +22,7 @@ export default function MainContent({ children }: { children: React.ReactNode })
   }, [])
 
   const hasSidebar = pathname !== '/' && !PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
-  const marginLeft = hasSidebar && !isMobile ? 200 : 0
+  const marginLeft = hasSidebar && !isMobile ? 'var(--sidebar-w, 200px)' : 0
 
   return (
     <div id="main-content" tabIndex={-1} style={{ marginLeft, minHeight: '100vh', position: 'relative', zIndex: 1 }}>
