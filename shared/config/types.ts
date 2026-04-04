@@ -14,8 +14,10 @@ export type AuthMethod = "api_key" | "subscription";
 export interface AIProviderConfig {
   name: AIProviderName;
   auth_method: AuthMethod;
-  /** Obbligatorio se auth_method = "api_key" */
+  /** Obbligatorio se auth_method = "api_key" (plaintext legacy) */
   api_key?: string;
+  /** SecretRef per API key (env/file/exec) — preferito a api_key plaintext */
+  api_key_ref?: import("./secret-ref").SecretRef;
   /** Obbligatorio se auth_method = "subscription" */
   subscription?: SubscriptionConfig;
   /** Modello da usare (es. "claude-opus-4-6", "gpt-4o", "minimax-01") */
