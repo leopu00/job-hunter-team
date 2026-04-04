@@ -173,15 +173,23 @@ export default function SetupPage() {
               )}
               {health === 'error' && (
                 <>
-                  <span className="text-2xl" style={{ color: 'var(--color-red)' }}>✗</span>
-                  <p className="text-[12px]" style={{ color: 'var(--color-red)' }}>{healthMsg}</p>
+                  <span className="text-2xl" style={{ color: 'var(--color-yellow)' }}>!</span>
+                  <p className="text-[12px] font-semibold" style={{ color: 'var(--color-yellow)' }}>
+                    {healthMsg.includes('ENOENT') || healthMsg.includes('mkdir') || healthMsg.includes('no such file')
+                      ? 'Questa funzione richiede il server locale'
+                      : healthMsg || 'Configurazione non salvata'}
+                  </p>
+                  <p className="text-[10px] leading-relaxed text-center" style={{ color: 'var(--color-muted)' }}>
+                    Il salvataggio su disco richiede l&apos;app in esecuzione sul tuo computer.
+                    Puoi comunque proseguire alla dashboard.
+                  </p>
                   <button onClick={() => save()} className="px-4 py-1.5 rounded text-[11px] cursor-pointer"
                     style={{ background: 'var(--color-border)', color: 'var(--color-bright)' }}>Riprova</button>
                 </>
               )}
             </div>
             <NavButtons onBack={back} onNext={() => { window.location.href = '/dashboard' }}
-              nextLabel="Vai alla dashboard" disabled={health !== 'ok'} />
+              nextLabel="Vai alla dashboard" disabled={health === 'loading'} />
           </Card>
         )}
 
