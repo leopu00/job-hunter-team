@@ -1,8 +1,17 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 
 export type Lang = 'it' | 'en'
+
+const STORAGE_KEY = 'jht-lang'
+
+function getSavedLang(): Lang {
+  if (typeof window === 'undefined') return 'it'
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved === 'en') return 'en'
+  return 'it'
+}
 
 const translations = {
   // Nav
@@ -89,20 +98,60 @@ const translations = {
 
   // Footer
   footer_jht:        { it: 'Job Hunter Team',  en: 'Job Hunter Team' },
+
+  // Download page
+  dl_desc:           {
+    it: 'Scarica il sistema multi-agente che automatizza la tua ricerca di lavoro. Funziona interamente sul tuo computer — i tuoi dati restano tuoi.',
+    en: 'Download the multi-agent system that automates your job search. Runs entirely on your computer — your data stays yours.',
+  },
+  dl_detected:       { it: 'rilevato',                  en: 'detected' },
+  dl_instructions:   { it: 'Istruzioni',                en: 'Instructions' },
+  dl_close:          { it: 'Chiudi',                     en: 'Close' },
+  dl_download:       { it: 'Scarica',                    en: 'Download' },
+  dl_how_title:      { it: 'Come funziona',              en: 'How it works' },
+  dl_step1_title:    { it: 'Scarica',                    en: 'Download' },
+  dl_step1_desc:     { it: 'Scegli il pacchetto per il tuo sistema operativo', en: 'Choose the package for your operating system' },
+  dl_step2_title:    { it: 'Avvia',                      en: 'Launch' },
+  dl_step2_desc:     { it: 'Esegui lo script di avvio — installa tutto automaticamente', en: 'Run the startup script — installs everything automatically' },
+  dl_step3_title:    { it: 'Usa',                        en: 'Use' },
+  dl_step3_desc:     { it: 'Il browser si apre su localhost con l\'interfaccia del team', en: 'The browser opens on localhost with the team interface' },
+  dl_node_title:     { it: 'Requisito: Node.js 18+',    en: 'Requirement: Node.js 18+' },
+  dl_node_desc:      {
+    it: 'Job Hunter Team richiede Node.js per funzionare. Se non lo hai installato, lo script di avvio ti guidera\' nell\'installazione.',
+    en: 'Job Hunter Team requires Node.js to run. If you don\'t have it installed, the startup script will guide you through the installation.',
+  },
+  dl_node_link:      { it: 'Scarica Node.js da',        en: 'Download Node.js from' },
+  dl_home:           { it: 'Home',                       en: 'Home' },
+  dl_all_releases:   { it: 'Tutte le release',           en: 'All releases' },
+  dl_mac_instr:      {
+    it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
+    en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
+  },
+  dl_linux_instr:    {
+    it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
+    en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
+  },
+  dl_windows_instr:  {
+    it: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
+    en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
+  },
 } as const
 
-type TranslationKey = keyof typeof translations
+type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
+type ArrayKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string[] ? K : never }[keyof typeof translations]
 
 interface I18nCtx {
   lang: Lang
   setLang: (lang: Lang) => void
-  t: (key: TranslationKey) => string
+  t: (key: StringKeys) => string
+  ta: (key: ArrayKeys) => string[]
 }
 
 const LandingI18nContext = createContext<I18nCtx>({
   lang: 'it',
   setLang: () => {},
-  t: (key) => translations[key].it,
+  t: (key) => translations[key].it as string,
+  ta: (key) => translations[key].it as string[],
 })
 
 export function useLandingI18n() {
@@ -110,14 +159,27 @@ export function useLandingI18n() {
 }
 
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>('it')
+  const [lang, setLangState] = useState<Lang>('it')
 
-  const t = useCallback((key: TranslationKey) => {
-    return translations[key][lang]
+  useEffect(() => {
+    setLangState(getSavedLang())
+  }, [])
+
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l)
+    localStorage.setItem(STORAGE_KEY, l)
+  }, [])
+
+  const t = useCallback((key: StringKeys) => {
+    return translations[key][lang] as string
+  }, [lang])
+
+  const ta = useCallback((key: ArrayKeys) => {
+    return translations[key][lang] as string[]
   }, [lang])
 
   return (
-    <LandingI18nContext.Provider value={{ lang, setLang, t }}>
+    <LandingI18nContext.Provider value={{ lang, setLang, t, ta }}>
       {children}
     </LandingI18nContext.Provider>
   )
