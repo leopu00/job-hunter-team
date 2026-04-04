@@ -3,7 +3,6 @@ import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import type { CandidateProfile } from '@/lib/types'
 import ProfileCompanyClient from '@/components/ProfileCompanyClient'
-import ProfileAssistant from '@/components/ProfileAssistant'
 
 export default async function ProfileCompany() {
   let profile: CandidateProfile | null = null
@@ -333,7 +332,6 @@ export default async function ProfileCompany() {
       )}
 
       <ProfileCompanyClient profile={profile} />
-      <ProfileAssistant profile={profile} />
     </div>
   )
 }
