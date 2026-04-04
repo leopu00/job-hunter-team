@@ -5,7 +5,13 @@
  */
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
+import { loadProfile } from "../tui-profile.js";
 import type { JhtTask } from "../tui-tasks.js";
+
+/** Filtra task interni del team dev (task-fs-*, task-gk-*, ecc.) */
+function isUserTask(t: JhtTask): boolean {
+  return !(/^task-(fs|gk|rx|ka|rc|sc|cr|se|al|ac)-/i.test(t.id));
+}
 
 const STATUS_ORDER = ["in-progress", "done", "merged", "rejected", "blocked"];
 
@@ -24,17 +30,38 @@ export class TaskPanel extends Container {
   refresh(tasks: JhtTask[]) {
     this.clear();
 
-    this.add(theme.accent("  TASK \u2014 Dashboard"));
+    this.add(theme.accent("  TASK \u2014 Le Tue Ricerche"));
     this.add(theme.border("  " + "\u2500".repeat(60)));
     this.add("");
 
-    if (tasks.length === 0) {
-      this.add(theme.dim("  Nessun task trovato in ~/.jht-dev/tasks/"));
+    // Filtra: mostra solo task utente, non quelli interni dev
+    const userTasks = tasks.filter(isUserTask);
+
+    if (userTasks.length === 0) {
+      const profile = loadProfile();
+      this.add(theme.text("  Nessuna ricerca attiva."));
+      this.add("");
+      if (profile.completato) {
+        this.add(theme.dim("  Il team sta analizzando il tuo profilo."));
+        this.add(theme.dim("  Le ricerche appariranno qui appena avviate."));
+      } else {
+        this.add(theme.warning("  Completa il profilo per avviare le ricerche."));
+        this.add(theme.dim("  Usa /profile per impostare competenze e zona."));
+      }
+      this.add("");
+
+      // Mostra sommario team dev in modo discreto
+      if (tasks.length > 0) {
+        const inProgress = tasks.filter((t) => t.stato === "in-progress").length;
+        const done = tasks.filter((t) => t.stato === "done" || t.stato === "merged").length;
+        this.add(theme.border("  " + "\u2500".repeat(60)));
+        this.add(theme.dim(`  Team: ${inProgress} task attivi, ${done} completati`));
+      }
       return;
     }
 
     const groups = new Map<string, JhtTask[]>();
-    for (const t of tasks) {
+    for (const t of userTasks) {
       const s = t.stato || "unknown";
       if (!groups.has(s)) groups.set(s, []);
       groups.get(s)!.push(t);
@@ -53,7 +80,7 @@ export class TaskPanel extends Container {
     }
 
     this.add(theme.border("  " + "\u2500".repeat(60)));
-    this.add(`  Totale: ${theme.accent(String(tasks.length))} task`);
+    this.add(`  Ricerche: ${theme.accent(String(userTasks.length))}`);
   }
 
   private renderGroup(status: string, tasks: JhtTask[]) {
