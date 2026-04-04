@@ -9,7 +9,7 @@ import * as path from 'path';
  */
 
 const REPORT_DIR = path.join(__dirname, '../../reports/visual');
-const BASE_URL = process.env.BASE_URL || 'https://job-hunter-team.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'https://jobhunterteam.ai';
 
 test.beforeAll(() => {
   if (!fs.existsSync(REPORT_DIR)) fs.mkdirSync(REPORT_DIR, { recursive: true });

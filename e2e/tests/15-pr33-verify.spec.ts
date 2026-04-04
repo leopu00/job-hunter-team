@@ -51,7 +51,7 @@ test.describe('PR #33 — verifica post-deploy', () => {
   test.skip('/positions — mostra filtro TIER (richiede auth)', async ({ page }) => {
     // Attivare con: test.use({ storageState: 'auth-state.json' })
     await page.goto('/positions');
-    await expect(page).not.toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).not.toHaveURL('https://jobhunterteam.ai/');
 
     // I 4 tier devono essere visibili come tab/filtro
     await expect(page.getByText(/seria/i)).toBeVisible({ timeout: 10_000 });
@@ -72,7 +72,7 @@ test.describe('PR #33 — verifica post-deploy', () => {
   test.skip('/crescita — mostra analytics tier breakdown (richiede auth)', async ({ page }) => {
     // Attivare con: test.use({ storageState: 'auth-state.json' })
     await page.goto('/crescita');
-    await expect(page).not.toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).not.toHaveURL('https://jobhunterteam.ai/');
 
     // Deve mostrare distribuzione tier
     await expect(page.getByText(/seria|tier1/i)).toBeVisible({ timeout: 10_000 });
@@ -87,14 +87,14 @@ test.describe('PR #33 — verifica post-deploy', () => {
   test.skip('/positions/[id] — mostra job description e link annuncio (richiede auth)', async ({ page }) => {
     // Attivare con: test.use({ storageState: 'auth-state.json' })
     await page.goto('/positions');
-    await expect(page).not.toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).not.toHaveURL('https://jobhunterteam.ai/');
 
     const firstLink = page.locator('a[href*="/positions/"]').first();
     await expect(firstLink).toBeVisible({ timeout: 10_000 });
     const href = await firstLink.getAttribute('href');
     await firstLink.click();
 
-    await expect(page).not.toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).not.toHaveURL('https://jobhunterteam.ai/');
     expect(page.url()).toContain('/positions/');
 
     // Job description visibile
