@@ -20,7 +20,7 @@ import pytest
 
 VERCEL_URL = os.environ.get(
     "VERCEL_URL",
-    "https://job-hunter-team.vercel.app"
+    "https://jobhunterteam.ai"
 ).rstrip("/")
 
 

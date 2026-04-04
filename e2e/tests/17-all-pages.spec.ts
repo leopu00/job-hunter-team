@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * che la sidebar di navigazione sia presente e funzionante.
  */
 
-const BASE = process.env.BASE_URL || 'https://job-hunter-team.vercel.app';
+const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
 
 const PAGES = [
   { path: '/',                  name: 'homepage/overview' },

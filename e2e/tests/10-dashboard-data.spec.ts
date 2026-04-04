@@ -12,7 +12,7 @@ test.describe('Dashboard — dati reali post-login', () => {
   test('dashboard non mostra contatori a zero dopo il fix middleware', async ({ page }) => {
     // Test senza auth: verifica che la pagina risponda e rediriga
     await page.goto('/dashboard');
-    await expect(page).toHaveURL('https://job-hunter-team.vercel.app/');
+    await expect(page).toHaveURL('https://jobhunterteam.ai/');
     // La homepage deve essere raggiungibile (middleware non deve bloccare utenti non autenticati)
     await expect(page.getByText('Login with Google')).toBeVisible();
   });

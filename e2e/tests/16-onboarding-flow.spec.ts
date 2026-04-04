@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
  * i provider disponibili sono visibili e selezionabili.
  */
 
-const BASE = process.env.BASE_URL || 'https://job-hunter-team.vercel.app';
+const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
 
 test.describe('Onboarding — Setup Wizard Web', () => {
 
