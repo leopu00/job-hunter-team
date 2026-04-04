@@ -28,9 +28,17 @@ export default function LandingNav() {
         <a href="#how" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
           Come funziona
         </a>
-        <a href="#cta" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-          Inizia
+        <a
+          href="https://github.com/leopu00/job-hunter-team"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+        >
+          GitHub
         </a>
+        <Link href="/download" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          Download
+        </Link>
       </div>
 
       <Link
