@@ -234,6 +234,9 @@ function DownloadContent() {
             </div>
           </div>
 
+          {/* Mac detailed guide */}
+          <MacGuide />
+
           {/* Footer */}
           <div className="text-center">
             <p className="text-[10px] text-[var(--color-dim)]">
@@ -255,6 +258,94 @@ export default function DownloadPage() {
     <LandingI18nProvider>
       <DownloadContent />
     </LandingI18nProvider>
+  )
+}
+
+/* ── Mac Installation Guide ── */
+
+function MacGuide() {
+  const { t, ta } = useLandingI18n()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden mb-8">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors"
+        style={{ cursor: 'pointer', background: 'transparent', border: 'none' }}>
+        <div className="flex items-center gap-3">
+          <AppleIcon />
+          <span className="text-[13px] font-bold text-[var(--color-white)]">{t('dl_mac_guide_title')}</span>
+        </div>
+        <span className="text-[var(--color-dim)] text-[14px]">{open ? '\u25B2' : '\u25BC'}</span>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
+          <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+
+            {/* Requisiti */}
+            <GuideSection title={t('dl_mac_prereq_title')}>
+              <ul className="space-y-1.5">
+                {ta('dl_mac_prereq').map((item, i) => (
+                  <li key={i} className="flex gap-2 text-[11px]">
+                    <span className="text-[var(--color-green)] flex-shrink-0">{'\u2713'}</span>
+                    <span className="text-[var(--color-bright)]">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </GuideSection>
+
+            {/* Passo 1: Node.js */}
+            <GuideSection title={t('dl_mac_node_title')}>
+              <p className="text-[10px] text-[var(--color-muted)] mb-3">{t('dl_mac_node_desc')}</p>
+              <ol className="space-y-2 mb-3">
+                {ta('dl_mac_node_steps').map((step, i) => (
+                  <li key={i} className="flex gap-2 text-[11px]">
+                    <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
+                    <code className="text-[var(--color-bright)] font-mono text-[10px] leading-relaxed">{step}</code>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-[10px] text-[var(--color-dim)] italic">{t('dl_mac_node_alt')}</p>
+            </GuideSection>
+
+            {/* Passo 2: Download e avvio */}
+            <GuideSection title={t('dl_mac_install_title')}>
+              <ol className="space-y-2">
+                {ta('dl_mac_install_steps').map((step, i) => (
+                  <li key={i} className="flex gap-2 text-[11px]">
+                    <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
+                    <code className="text-[var(--color-bright)] font-mono text-[10px] leading-relaxed">{step}</code>
+                  </li>
+                ))}
+              </ol>
+            </GuideSection>
+
+            {/* Cosa succede */}
+            <GuideSection title={t('dl_mac_expect_title')} last>
+              <ol className="space-y-1.5">
+                {ta('dl_mac_expect_steps').map((step, i) => (
+                  <li key={i} className="flex gap-2 text-[11px]">
+                    <span className="text-[var(--color-dim)] flex-shrink-0">{'\u25B8'}</span>
+                    <span className="text-[var(--color-muted)]">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </GuideSection>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GuideSection({ title, children, last }: { title: string; children: React.ReactNode; last?: boolean }) {
+  return (
+    <div className={last ? '' : 'mb-5'}>
+      <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] mb-2">{title}</p>
+      {children}
+    </div>
   )
 }
 
