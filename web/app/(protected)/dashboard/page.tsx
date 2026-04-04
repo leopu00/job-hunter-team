@@ -4,6 +4,7 @@ import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
+import OnboardingWizard from '@/app/components/OnboardingWizard'
 
 const STATUS_COLORS: Record<string, string> = {
   new:      'var(--color-muted)',
@@ -421,6 +422,7 @@ export default async function DashboardPage() {
         </table>
       </div>
 
+      <OnboardingWizard />
     </div>
   )
 }
