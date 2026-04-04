@@ -8,7 +8,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "npm run lint --prefix web",
+    "format:check": "npx prettier --check 'web/app/**/*.{ts,tsx}' 'shared/**/*.ts'"
   },
   "keywords": [],
   "author": "",
