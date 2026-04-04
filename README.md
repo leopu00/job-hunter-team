@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Job Hunter Team Banner" width="100%" />
+</p>
+
 # 🎯 Job Hunter Team
 
 > Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.
@@ -266,47 +270,57 @@ Pagina `/health` con semafori verde/giallo/rosso e auto-refresh.
 
 ## 🗺️ Roadmap
 
+### ✅ Completato
+
 - [x] Pipeline multi-agente (scout → analista → scorer → scrittore → critico)
-- [x] CLI `jht` con setup wizard interattivo
+- [x] CLI `jht` con 15 comandi (setup, config, status, team, cron, export, import, health, backup, migrate, cache, logs, providers, stats, plugins, agents)
 - [x] TUI multi-agente con navigazione agenti
-- [x] Web dashboard (agenti, cron, impostazioni)
-- [x] Astrazione provider LLM (Claude / OpenAI / Minimax)
-- [x] Gateway HTTP multi-agente
-- [x] Canali di comunicazione (Web, CLI, Telegram)
-- [x] Credenziali cifrate AES-256
-- [x] Memoria agenti (SOUL / IDENTITY / MEMORY)
-- [x] Logger strutturato con rolling file
-- [x] Script deploy e health-check produzione
-- [x] Agent runner con tool loop e abort
-- [x] Hook system con source precedence
-- [x] Event bus pub/sub tipizzato
-- [x] Plugin system con lifecycle
-- [x] Context engine per LLM
-- [x] Rate limiter e retry con circuit breaker
-- [x] Job queue con dead-letter
-- [x] Template engine con composizione prompt
-- [x] Sistema notifiche multi-canale
-- [x] Analytics token usage e costi
 - [x] Web dashboard 56 pagine (pipeline, agenti, sessioni, task, cronologia, infrastruttura, config, dati)
-- [x] Health check globale con semafori
-- [x] 800+ test case su 168 file
-- [x] Dettaglio sessione con chat replay
-- [x] Gestione tool con toggle e log esecuzioni
-- [x] Dashboard circuit breaker con reset
-- [x] Memory viewer/editor per SOUL/IDENTITY
-- [x] Gestione credenziali e plugin via web
-- [x] CLI 15 comandi (setup, config, status, team, cron, export, import, health, backup, migrate, cache, logs, providers, stats, plugins, agents)
-- [x] Export/import dati JSON e CSV con validazione
-- [x] Backup e restore con manifest
-- [x] Migrazioni config con versioning
-- [x] Metriche agenti con grafici comparativi e score
-- [x] Replay conversazione con paginazione messaggi
-- [x] CI/CD con 5 workflow GitHub Actions
+- [x] Astrazione provider LLM (Claude / OpenAI / Minimax)
+- [x] Gateway HTTP, event bus, plugin system, hook system, context engine
+- [x] Rate limiter, retry con circuit breaker, job queue con dead-letter
+- [x] Canali di comunicazione (Web, CLI, Telegram)
+- [x] Credenziali cifrate AES-256, memoria agenti (SOUL/IDENTITY/MEMORY)
+- [x] Logger strutturato, analytics token/costi, notifiche multi-canale
+- [x] CI/CD con 5 workflow GitHub Actions, 800+ test case su 168 file
 - [x] Internazionalizzazione it/en
-- [x] Dependabot per aggiornamento dipendenze
-- [ ] Supporto multi-workspace
-- [ ] Export candidature in formato ATS-ready
-- [ ] Supporto modelli locali (Ollama)
+- [x] Supabase cloud (Frankfurt), Google OAuth, schema PostgreSQL V2
+
+### 🔨 Fase 1 — Consolidamento Web Platform (in corso, ~65%)
+
+- [ ] Dashboard collegata a dati reali Supabase
+- [ ] Profilo utente con salvataggio cloud
+- [ ] Pagine posizioni e candidature
+- [ ] Deploy Vercel con CI/CD
+- [ ] API layer agenti → Supabase (multi-tenant)
+
+### 📦 Fase 2 — App Desktop Electron
+
+- [ ] App desktop scaricabile (.dmg / .exe / .AppImage) per utenti non tecnici
+- [ ] Setup wizard grafico (nessun terminale necessario)
+- [ ] Gestione agenti come processi background (sostituzione tmux)
+- [ ] Auto-install dipendenze, tray icon, notifiche native
+- [ ] Installer cross-platform con auto-update e code signing
+- [ ] Modalita' "computer dedicato" via SSH in rete locale
+
+### ☁️ Fase 3 — Cloud Provisioning Multi-Provider
+
+- [ ] Layer di astrazione con adapter per AWS, GCP, Hetzner
+- [ ] One-click deploy da app desktop
+- [ ] Monitoring remoto, stima costi, billing alert
+- [ ] Tunnel sicuro app ↔ cloud (WireGuard/SSH)
+
+### 🌍 Fase 4 — Internazionalizzazione Completa
+
+- [ ] Inglese come lingua principale dell'interfaccia e documentazione
+- [ ] Infrastruttura per lingue aggiuntive (file JSON per lingua, language switcher)
+- [ ] Espansione: spagnolo, tedesco, francese, portoghese (contribuzioni community)
+
+### 🌐 Fase 5 — Sito Web Pubblico e Distribuzione
+
+- [ ] Landing page con download e rilevamento OS automatico
+- [ ] Documentazione utente visuale (guide, FAQ, video tutorial)
+- [ ] Dominio, DNS, SSL
 
 ---
 
