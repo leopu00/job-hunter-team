@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  vitest:
+    name: vitest — ${{ matrix.module }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - assistant
+          - config
+          - context-engine
+          - deploy
+          - events
+          - integration
+          - queue
+          - sessions
+          - tasks
+          - telegram
+          - validators
+          - wizard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: tests/js/package-lock.json
+
+      - name: Install dependencies
+        working-directory: tests/js
+        run: npm ci
+
+      - name: Run tests — ${{ matrix.module }}
+        working-directory: tests/js
+        run: npx vitest run ${{ matrix.module }} --reporter=verbose
