@@ -150,6 +150,9 @@ export default function LandingNav() {
           <Link href="/faq" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             FAQ
           </Link>
+          <Link href="/about" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            About
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -204,6 +207,9 @@ export default function LandingNav() {
           </Link>
           <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             FAQ
+          </Link>
+          <Link href="/about" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            About
           </Link>
           <Link
             href="/?login=true"
