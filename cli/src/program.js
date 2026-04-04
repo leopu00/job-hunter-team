@@ -19,6 +19,7 @@ import { registerNotificationsCommand } from './commands/notifications.js';
 import { registerSessionsCommand } from './commands/sessions.js';
 import { registerTemplatesCommand } from './commands/templates.js';
 import { registerDoctorCommand } from './commands/doctor.js';
+import { registerResetCommand } from './commands/reset.js';
 import { registerUpgradeCommand } from './commands/upgrade.js';
 import { registerDashboardCommand } from './commands/dashboard.js';
 
@@ -50,6 +51,7 @@ export function buildProgram() {
   registerSessionsCommand(program);
   registerTemplatesCommand(program);
   registerDoctorCommand(program);
+  registerResetCommand(program);
   registerUpgradeCommand(program);
   registerDashboardCommand(program);
 
