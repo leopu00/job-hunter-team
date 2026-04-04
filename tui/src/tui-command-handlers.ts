@@ -1,5 +1,10 @@
+/**
+ * Command handlers — gestisce comandi slash e invio messaggi.
+ * Ispirato a OpenClaw tui-command-handlers.ts con adattamenti per JHT.
+ */
 import { randomUUID } from "node:crypto";
-import type { ChatOptions, JhtAgent, TuiStateAccess } from "./tui-types.js";
+import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
+import { sendToSession, resolveSessionName } from "./tui-tmux.js";
 
 export type JhtChatClient = {
   sendChat: (params: {
@@ -28,6 +33,8 @@ export type CommandHandlerContext = {
   setActivityStatus: (text: string) => void;
   refreshAgents: () => Promise<void>;
   requestRender: () => void;
+  switchView: (view: TuiView) => void;
+  refreshCurrentView: () => void;
   noteLocalRunId?: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
   reconnect?: (apiKey: string) => boolean;
@@ -40,84 +47,168 @@ function parseCommand(input: string): { name: string; args: string } {
   return { name: (name ?? "").toLowerCase(), args: rest.join(" ").trim() };
 }
 
-function formatStatus(status: unknown): string[] {
-  if (typeof status === "string") return [status];
-  if (!status || typeof status !== "object") return ["status: no data"];
-  const r = status as Record<string, unknown>;
-  const lines: string[] = [];
-  if (r.runtimeVersion) lines.push(`version: ${r.runtimeVersion}`);
-  if (r.isConnected !== undefined) lines.push(`connected: ${r.isConnected}`);
-  if (r.activeRuns !== undefined) lines.push(`active runs: ${r.activeRuns}`);
-  return lines.length > 0 ? lines : ["status: ok"];
-}
-
 export function createCommandHandlers(context: CommandHandlerContext) {
-  const { chatLog, opts, state, setActivityStatus, refreshAgents, requestRender,
+  const { chatLog, opts, state, setActivityStatus, requestRender,
     noteLocalRunId, forgetLocalRunId } = context;
 
+  /** Invia messaggio: se in chat tmux, va a tmux; se in AI, va ad Anthropic */
   const sendMessage = async (text: string) => {
-    if (!state.isConnected) {
-      chatLog.addSystem("non connesso — usa /setup <API_KEY> per configurare");
-      setActivityStatus("disconnected"); requestRender(); return;
+    // Chat tmux: invia al target
+    if (state.currentView === "chat" && state.chatTargetSession) {
+      chatLog.addUser(text);
+      const ok = sendToSession(state.chatTargetSession, text);
+      if (ok) {
+        chatLog.addSystem("inviato");
+        setActivityStatus("inviato a " + state.chatTargetSession);
+      } else {
+        chatLog.addSystem("invio fallito — sessione non raggiungibile");
+        setActivityStatus("errore invio");
+      }
+      requestRender();
+      return;
     }
-    const runId = randomUUID();
-    chatLog.addUser(text); state.pendingOptimisticUserMessage = true;
-    setActivityStatus("sending"); requestRender();
-    try {
-      noteLocalRunId?.(runId);
-      await context.client.sendChat({ sessionKey: state.currentSessionKey, message: text,
-        thinking: opts.thinking, deliver: opts.deliver, timeoutMs: opts.timeoutMs, runId });
-      setActivityStatus("waiting");
-    } catch (err) {
-      forgetLocalRunId?.(runId); state.pendingOptimisticUserMessage = false;
-      state.activeChatRunId = null;
-      chatLog.addSystem(`invio fallito: ${String(err)}`); setActivityStatus("error");
+
+    // AI chat: invia ad Anthropic
+    if (state.currentView === "ai") {
+      if (!state.isConnected) {
+        chatLog.addSystem("non connesso — usa /setup <API_KEY> per configurare");
+        setActivityStatus("disconnected");
+        requestRender();
+        return;
+      }
+      const runId = randomUUID();
+      chatLog.addUser(text);
+      state.pendingOptimisticUserMessage = true;
+      setActivityStatus("sending");
+      requestRender();
+      try {
+        noteLocalRunId?.(runId);
+        await context.client.sendChat({
+          sessionKey: state.currentSessionKey, message: text,
+          thinking: opts.thinking, deliver: opts.deliver, timeoutMs: opts.timeoutMs, runId,
+        });
+        setActivityStatus("waiting");
+      } catch (err) {
+        forgetLocalRunId?.(runId);
+        state.pendingOptimisticUserMessage = false;
+        state.activeChatRunId = null;
+        chatLog.addSystem(`invio fallito: ${String(err)}`);
+        setActivityStatus("error");
+      }
+      requestRender();
+      return;
     }
+
+    // Altre viste: suggerisci di usare /chat o /ai
+    chatLog.addSystem("usa /chat <agente> per chattare con un agente o /ai per la chat AI");
     requestRender();
   };
 
-  const HELP = `commands:\n  /setup <key> — configura API key Anthropic\n  /status  — stato connessione\n  /stop    — interrompi run attivo\n  /new     — nuova sessione\n  /agent [id] — mostra o cambia agente\n  /agents  — lista agenti\n  /help    — mostra aiuto`.trim();
+  const HELP = [
+    "comandi:",
+    "  /team            — vista panoramica team",
+    "  /chat <agente>   — chat diretta con agente (tmux)",
+    "  /tasks           — dashboard task",
+    "  /ai              — chat AI (Anthropic)",
+    "  /send <msg>      — invia messaggio all'agente selezionato",
+    "  /setup <key>     — configura API key Anthropic",
+    "  /refresh         — aggiorna vista corrente",
+    "  /status          — stato connessione",
+    "  /stop            — interrompi run attivo",
+    "  /new             — nuova sessione AI",
+    "  /help            — mostra aiuto",
+    "",
+    "  Tab / frecce     — naviga viste",
+    "  Ctrl+C           — esci",
+  ].join("\n");
 
   const handleCommand = async (raw: string) => {
     const { name, args } = parseCommand(raw);
     if (!name) return;
+
     switch (name) {
       case "help":
-        chatLog.addSystem(HELP); break;
+        chatLog.addSystem(HELP);
+        break;
+
+      case "team":
+        context.switchView("team");
+        break;
+
+      case "tasks":
+        context.switchView("tasks");
+        break;
+
+      case "ai":
+        context.switchView("ai");
+        chatLog.addSystem("chat AI attiva");
+        break;
+
+      case "chat": {
+        if (!args) {
+          chatLog.addSystem("uso: /chat <agente>  (es. /chat gatekeeper)");
+          break;
+        }
+        const sessionName = resolveSessionName(args);
+        if (!sessionName) {
+          chatLog.addSystem(`sessione tmux per "${args}" non trovata. Usa /team per vedere gli agenti attivi.`);
+          break;
+        }
+        state.chatTargetSession = sessionName;
+        context.switchView("chat");
+        chatLog.addSystem(`chat con ${sessionName} — scrivi un messaggio`);
+        break;
+      }
+
+      case "send": {
+        if (!args) {
+          chatLog.addSystem("uso: /send <messaggio>");
+          break;
+        }
+        if (!state.chatTargetSession) {
+          chatLog.addSystem("nessun agente selezionato — usa /chat <agente> prima");
+          break;
+        }
+        await sendMessage(args);
+        break;
+      }
+
+      case "refresh":
+        context.refreshCurrentView();
+        chatLog.addSystem("aggiornato");
+        break;
 
       case "status":
-        if (!state.isConnected) { chatLog.addSystem("stato: non connesso — usa /setup <API_KEY>"); break; }
-        try { const s = await context.client.getStatus(); for (const l of formatStatus(s)) chatLog.addSystem(l); }
-        catch (err) { chatLog.addSystem(`status fallito: ${String(err)}`); }
+        if (!state.isConnected) {
+          chatLog.addSystem("API: non connesso — usa /setup <API_KEY>");
+        } else {
+          try {
+            const s = await context.client.getStatus();
+            if (s && typeof s === "object") {
+              const r = s as Record<string, unknown>;
+              const parts: string[] = [];
+              if (r.model) parts.push(`model: ${r.model}`);
+              if (r.historyLength !== undefined) parts.push(`history: ${r.historyLength}`);
+              parts.push("connected: true");
+              for (const p of parts) chatLog.addSystem(p);
+            }
+          } catch (err) { chatLog.addSystem(`status fallito: ${String(err)}`); }
+        }
+        chatLog.addSystem(`tmux: ${state.activeTmuxCount} sessioni attive`);
+        chatLog.addSystem(`vista: ${state.currentView}`);
         break;
 
       case "stop": case "abort":
         if (!state.activeChatRunId) { chatLog.addSystem("nessun run attivo"); break; }
-        try { await context.client.abortRun(state.currentSessionKey); chatLog.addSystem("run interrotto"); }
-        catch (err) { chatLog.addSystem(`stop fallito: ${String(err)}`); }
+        try {
+          await context.client.abortRun(state.currentSessionKey);
+          chatLog.addSystem("run interrotto");
+        } catch (err) { chatLog.addSystem(`stop fallito: ${String(err)}`); }
         break;
 
       case "new":
-        try {
-          const key = `jht-${randomUUID()}`;
-          state.currentSessionKey = key; chatLog.addSystem(`nuova sessione: ${key}`);
-        } catch (err) { chatLog.addSystem(`nuova sessione fallita: ${String(err)}`); }
-        break;
-
-      case "agent":
-        if (!args) { chatLog.addSystem(`agente attivo: ${state.currentAgentId}`); }
-        else { state.currentAgentId = args.trim().toLowerCase(); chatLog.addSystem(`agente: ${state.currentAgentId}`); }
-        break;
-
-      case "agents":
-        try {
-          await refreshAgents();
-          if (state.agents.length === 0) { chatLog.addSystem("nessun agente"); break; }
-          for (const a of state.agents) {
-            const marker = a.id === state.currentAgentId ? " ◀" : "";
-            chatLog.addSystem(`  ${a.id} (${a.name})${marker}`);
-          }
-        } catch (err) { chatLog.addSystem(`agenti fallito: ${String(err)}`); }
+        state.currentSessionKey = `jht-${randomUUID()}`;
+        chatLog.addSystem(`nuova sessione AI: ${state.currentSessionKey}`);
         break;
 
       case "setup": {
@@ -134,7 +225,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       }
 
       default:
-        await sendMessage(raw); return;
+        await sendMessage(raw);
+        return;
     }
     requestRender();
   };
