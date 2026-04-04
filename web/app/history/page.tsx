@@ -3,136 +3,85 @@
 import Link from 'next/link'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 
-type SessionState = 'active' | 'paused' | 'ended'
-type Session = {
-  id: string
-  label?: string
-  channelId: string
-  state: SessionState
-  provider?: string
-  model?: string
-  userId?: string
-  createdAtMs: number
-  updatedAtMs: number
-  lastMessageAtMs?: number
-  messageCount: number
+type ActionType = 'view' | 'apply' | 'save' | 'edit' | 'delete'
+type EntityType = 'job' | 'contact' | 'company' | 'template' | 'document' | 'session'
+type Activity = { id: string; action: ActionType; entity: EntityType; entityName: string; detail?: string; timestamp: number }
+
+const ACTION_CFG: Record<ActionType, { label: string; icon: string; color: string }> = {
+  view:   { label: 'Visto',      icon: '👁', color: 'var(--color-muted)' },
+  apply:  { label: 'Candidato',  icon: '📨', color: 'var(--color-green)' },
+  save:   { label: 'Salvato',    icon: '⭐', color: 'var(--color-yellow)' },
+  edit:   { label: 'Modificato', icon: '✏', color: '#61affe' },
+  delete: { label: 'Eliminato',  icon: '🗑', color: 'var(--color-red)' },
 }
 
-const STATE_CFG: Record<SessionState, { label: string; color: string; border: string }> = {
-  active: { label: 'attiva',   color: 'var(--color-green)',  border: 'rgba(0,232,122,0.3)' },
-  paused: { label: 'in pausa', color: 'var(--color-yellow)', border: 'rgba(245,197,24,0.3)' },
-  ended:  { label: 'terminata',color: 'var(--color-dim)',    border: 'var(--color-border)' },
+const ENTITY_LABEL: Record<EntityType, string> = {
+  job: 'Offerta', contact: 'Contatto', company: 'Azienda', template: 'Template', document: 'Documento', session: 'Sessione',
 }
 
-const CHANNEL_ICON: Record<string, string> = {
-  web: '🌐', cli: '💻', telegram: '✈️',
+function groupByDay(items: Activity[]): { label: string; date: string; items: Activity[] }[] {
+  const groups = new Map<string, Activity[]>()
+  for (const a of items) {
+    const d = new Date(a.timestamp)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(a)
+  }
+  const today = new Date(); const yesterday = new Date(Date.now() - 86_400_000)
+  const fmt = (ds: string) => {
+    const [y, m, d] = ds.split('-').map(Number)
+    if (y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate()) return 'Oggi'
+    if (y === yesterday.getFullYear() && m === yesterday.getMonth() + 1 && d === yesterday.getDate()) return 'Ieri'
+    const dt = new Date(y, m - 1, d)
+    return dt.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
+  return [...groups.entries()].map(([date, items]) => ({ label: fmt(date), date, items }))
 }
 
-function formatDate(ms: number): string {
-  const d = new Date(ms)
-  const now = new Date()
-  const diffDays = Math.floor((now.getTime() - ms) / 86400000)
-  if (diffDays === 0) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-  if (diffDays === 1) return 'ieri'
-  if (diffDays < 7) return `${diffDays}g fa`
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
-}
-
-function SessionCard({ session, onOpen, onEnd }: {
-  session: Session
-  onOpen: (id: string) => void
-  onEnd: (id: string) => void
-}) {
-  const cfg = STATE_CFG[session.state]
-  const icon = CHANNEL_ICON[session.channelId] ?? '💬'
-  const title = session.label ?? `Sessione ${session.id.slice(0, 8)}`
+function ActivityRow({ a }: { a: Activity }) {
+  const cfg = ACTION_CFG[a.action] ?? ACTION_CFG.view
+  const time = new Date(a.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
   return (
-    <div
-      className="flex items-center gap-4 px-5 py-4 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors cursor-pointer group"
-      onClick={() => onOpen(session.id)}
-    >
-      <div className="text-xl w-8 text-center flex-shrink-0">{icon}</div>
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-row)] transition-colors">
+      <span className="text-sm flex-shrink-0">{cfg.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <span className="text-[12px] font-semibold text-[var(--color-bright)] group-hover:text-[var(--color-white)] transition-colors truncate max-w-[200px]">
-            {title}
-          </span>
-          <span className="badge text-[9px]" style={{ color: cfg.color, border: `1px solid ${cfg.border}`, background: 'transparent' }}>
-            {cfg.label}
-          </span>
-          {session.model && (
-            <span className="text-[9px] font-mono text-[var(--color-dim)]">{session.model}</span>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-semibold text-[var(--color-bright)]">{a.entityName}</span>
+          <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
+            style={{ color: cfg.color, border: `1px solid var(--color-border)` }}>{cfg.label}</span>
+          <span className="text-[9px] text-[var(--color-dim)]">{ENTITY_LABEL[a.entity]}</span>
         </div>
-        <p className="text-[10px] text-[var(--color-dim)]">
-          {session.messageCount} messaggi · {session.channelId}
-          {session.userId && ` · ${session.userId}`}
-        </p>
+        {a.detail && <p className="text-[10px] text-[var(--color-dim)] truncate">{a.detail}</p>}
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="text-[10px] text-[var(--color-dim)]">
-          {formatDate(session.lastMessageAtMs ?? session.updatedAtMs)}
-        </span>
-        {session.state !== 'ended' && (
-          <button
-            onClick={e => { e.stopPropagation(); onEnd(session.id) }}
-            className="text-[9px] font-semibold tracking-wide opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ color: 'var(--color-dim)' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--color-red)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}
-          >
-            chiudi
-          </button>
-        )}
-      </div>
+      <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{time}</span>
     </div>
   )
 }
 
 export default function HistoryPage() {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | SessionState>('all')
-  const [loading, setLoading] = useState(true)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [filterAction, setFilterAction] = useState<string>('all')
+  const [days, setDays] = useState(7)
 
-  const fetchSessions = useCallback(async () => {
-    const res = await fetch('/api/sessions').catch(() => null)
-    if (!res?.ok) { setLoading(false); return }
-    const data = await res.json()
-    setSessions((data.sessions ?? []).sort((a: Session, b: Session) =>
-      (b.lastMessageAtMs ?? b.updatedAtMs) - (a.lastMessageAtMs ?? a.updatedAtMs)
-    ))
-    setLoading(false)
-  }, [])
+  const fetchData = useCallback(async () => {
+    const p = new URLSearchParams(); p.set('days', String(days))
+    if (filterAction !== 'all') p.set('action', filterAction)
+    const res = await fetch(`/api/history?${p}`).catch(() => null)
+    if (!res?.ok) return
+    setActivities((await res.json()).activities ?? [])
+  }, [filterAction, days])
 
-  useEffect(() => { fetchSessions() }, [fetchSessions])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  const endSession = async (id: string) => {
-    await fetch(`/api/sessions?id=${id}`, { method: 'DELETE' }).catch(() => null)
-    fetchSessions()
-  }
+  const clearHistory = async () => { await fetch('/api/history?all=true', { method: 'DELETE' }); fetchData() }
 
-  const openSession = (id: string) => {
-    window.location.href = `/assistant?session=${id}`
-  }
+  const grouped = useMemo(() => groupByDay(activities), [activities])
 
-  const visible = useMemo(() => {
-    return sessions.filter(s => {
-      if (filter !== 'all' && s.state !== filter) return false
-      if (!search.trim()) return true
-      const q = search.toLowerCase()
-      return (s.label ?? '').toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q) ||
-        s.channelId.toLowerCase().includes(q)
-    })
-  }, [sessions, filter, search])
-
-  const FILTERS: Array<{ key: typeof filter; label: string }> = [
-    { key: 'all', label: 'tutte' },
-    { key: 'active', label: 'attive' },
-    { key: 'paused', label: 'in pausa' },
-    { key: 'ended', label: 'terminate' },
+  const ACTIONS: Array<{ key: string; label: string }> = [
+    { key: 'all', label: 'tutte' }, { key: 'view', label: 'visti' }, { key: 'apply', label: 'candidature' },
+    { key: 'save', label: 'salvati' }, { key: 'edit', label: 'modifiche' }, { key: 'delete', label: 'eliminati' },
   ]
+  const PERIODS = [{ v: 7, l: '7g' }, { v: 30, l: '30g' }, { v: 90, l: '90g' }]
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -142,49 +91,51 @@ export default function HistoryPage() {
           <span className="text-[var(--color-border)]">/</span>
           <span className="text-[10px] text-[var(--color-muted)]">Cronologia</span>
         </div>
-        <div className="mt-3">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Cronologia</h1>
-          <p className="text-[var(--color-muted)] text-[11px] mt-1">{sessions.length} conversazioni totali</p>
+        <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Cronologia</h1>
+            <p className="text-[var(--color-muted)] text-[11px] mt-1">{activities.length} attività negli ultimi {days} giorni</p>
+          </div>
+          {activities.length > 0 && (
+            <button onClick={clearHistory} className="px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all"
+              style={{ border: '1px solid rgba(255,69,96,0.3)', color: 'var(--color-red)', background: 'transparent' }}>cancella cronologia</button>
+          )}
         </div>
       </div>
 
-      {/* Ricerca + filtri */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <input
-          type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Cerca per titolo, ID, canale…"
-          className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }}
-        />
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
         <div className="flex gap-1">
-          {FILTERS.map(f => (
-            <button key={f.key} onClick={() => setFilter(f.key)}
-              className="px-3 py-1.5 rounded text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer"
-              style={{ background: filter === f.key ? 'var(--color-row)' : 'transparent', color: filter === f.key ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${filter === f.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
-              {f.label}
+          {ACTIONS.map(a => (
+            <button key={a.key} onClick={() => setFilterAction(a.key)}
+              className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase cursor-pointer transition-colors"
+              style={{ background: filterAction === a.key ? 'var(--color-row)' : 'transparent', color: filterAction === a.key ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${filterAction === a.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {PERIODS.map(p => (
+            <button key={p.v} onClick={() => setDays(p.v)}
+              className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase cursor-pointer transition-colors"
+              style={{ background: days === p.v ? 'var(--color-row)' : 'transparent', color: days === p.v ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${days === p.v ? 'var(--color-border-glow)' : 'transparent'}` }}>
+              {p.l}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Lista sessioni */}
-      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {loading && (
-          <div className="flex justify-center py-16">
-            <span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span>
+      {grouped.length === 0 ? (
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] py-16 text-center">
+          <p className="text-[var(--color-dim)] text-[12px]">Nessuna attività trovata.</p>
+        </div>
+      ) : grouped.map(g => (
+        <div key={g.date} className="mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-1 px-1">{g.label}</p>
+          <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
+            {g.items.map(a => <ActivityRow key={a.id} a={a} />)}
           </div>
-        )}
-        {!loading && visible.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-center">
-            <div className="text-3xl mb-3 opacity-20">💬</div>
-            <p className="text-[var(--color-dim)] text-[12px]">
-              {search ? 'Nessun risultato per questa ricerca.' : 'Nessuna conversazione trovata.'}
-            </p>
-          </div>
-        )}
-        {visible.map(s => (
-          <SessionCard key={s.id} session={s} onOpen={openSession} onEnd={endSession} />
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   )
 }
