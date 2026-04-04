@@ -93,9 +93,11 @@ export async function proxy(request: NextRequest) {
   }
 
   // --- API: Rate limiting ---
+  let rlRemaining: number | null = null
   if (isApi) {
     const rlKey = getRateLimitKey(request)
     const { allowed, remaining, resetAt } = checkRateLimit(rlKey)
+    rlRemaining = remaining
 
     if (!allowed) {
       const origin = request.headers.get('origin')
@@ -168,10 +170,8 @@ export async function proxy(request: NextRequest) {
   if (isApi) {
     const origin = request.headers.get('origin')
     for (const [k, v] of Object.entries(getCorsHeaders(origin))) supabaseResponse.headers.set(k, v)
-    const rlKey = getRateLimitKey(request)
-    const { remaining } = checkRateLimit(rlKey)
     supabaseResponse.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
-    supabaseResponse.headers.set('X-RateLimit-Remaining', String(remaining))
+    supabaseResponse.headers.set('X-RateLimit-Remaining', String(rlRemaining ?? RATE_LIMIT_MAX))
     logRequest(request, 200, Date.now() - start)
   }
 
