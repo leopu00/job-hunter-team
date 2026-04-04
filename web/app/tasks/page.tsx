@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { EmptyState } from './components/EmptyState'
 
 type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timed_out' | 'cancelled' | 'lost'
 type TaskRecord = { taskId: string; label?: string; task: string; agentId?: string; status: TaskStatus; createdAt: number; endedAt?: number }
@@ -157,7 +158,7 @@ export default function TasksPage() {
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {tasks.length === 0
-          ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun task trovato.</p></div>
+          ? <EmptyState icon="📋" title="Nessun task" description="I task degli agenti appariranno qui." size="md" />
           : tasks.map(t => <TaskRow key={t.taskId} task={t} onCancel={cancelTask} />)
         }
       </div>
