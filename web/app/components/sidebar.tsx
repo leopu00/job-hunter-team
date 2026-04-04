@@ -6,169 +6,145 @@ import { useState, useEffect } from 'react'
 import LanguageSwitcher from './LanguageSwitcher'
 import { ThemeToggle } from '../theme-provider'
 
-const NAV_GROUPS = [
-  {
-    label: 'SISTEMA',
-    links: [
-      { href: '/dashboard', label: 'Dashboard' },
-      { href: '/deploy',    label: 'Deploy' },
-      { href: '/gateway',   label: 'Gateway' },
-      { href: '/status',    label: 'Stato' },
-    ],
-  },
-  {
-    label: 'JOB HUNTING',
-    links: [
-      { href: '/jobs',          label: 'Offerte' },
-      { href: '/applications',  label: 'Candidature' },
-      { href: '/interviews',    label: 'Colloqui' },
-      { href: '/companies',     label: 'Aziende' },
-      { href: '/cover-letters', label: 'Cover Letter' },
-      { href: '/profiles',      label: 'Profili' },
-      { href: '/alerts',        label: 'Alert' },
-    ],
-  },
-  {
-    label: 'AGENTI',
-    links: [
-      { href: '/agents',    label: 'Agenti' },
-      { href: '/assistant', label: 'Assistente' },
-      { href: '/tasks',     label: 'Task' },
-      { href: '/queue',     label: 'Queue' },
-      { href: '/workers',   label: 'Workers' },
-    ],
-  },
-  {
-    label: 'DATI',
-    links: [
-      { href: '/events',    label: 'Events' },
-      { href: '/history',   label: 'History' },
-      { href: '/analytics', label: 'Analytics' },
-      { href: '/logs',      label: 'Logs' },
-      { href: '/database',  label: 'Database' },
-    ],
-  },
-  {
-    label: 'TOOLS',
-    links: [
-      { href: '/api-explorer', label: 'API Explorer' },
-      { href: '/automations',  label: 'Automazioni' },
-      { href: '/scheduler',    label: 'Scheduler' },
-      { href: '/monitoring',   label: 'Monitoring' },
-      { href: '/errors',       label: 'Errori' },
-      { href: '/performance',  label: 'Performance' },
-      { href: '/git',          label: 'Git' },
-    ],
-  },
-  {
-    label: 'CONFIG',
-    links: [
-      { href: '/providers',     label: 'Provider' },
-      { href: '/rate-limiter',  label: 'Rate Limiter' },
-      { href: '/credentials',   label: 'Credenziali' },
-      { href: '/channels',      label: 'Canali' },
-      { href: '/plugins',       label: 'Plugin' },
-      { href: '/templates',     label: 'Template' },
-      { href: '/memory',        label: 'Memory' },
-      { href: '/notifications', label: 'Notifiche' },
-      { href: '/settings',      label: 'Impostazioni' },
-      { href: '/cron',          label: 'Cron' },
-    ],
-  },
+// ── Nav data: [group, [[href, label, badge?][]]] ───────────────────────────
+
+const NAV: [string, [string, string, number?][]][] = [
+  ['SISTEMA',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Stato']]],
+  ['JOB HUNTING', [['/jobs','Offerte'],['/applications','Candidature',3],['/interviews','Colloqui',1],['/companies','Aziende'],['/cover-letters','Cover Letter'],['/profiles','Profili'],['/alerts','Alert',5]]],
+  ['AGENTI',      [['/agents','Agenti'],['/assistant','Assistente'],['/tasks','Task'],['/queue','Queue'],['/workers','Workers']]],
+  ['DATI',        [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
+  ['TOOLS',       [['/api-explorer','API Explorer'],['/automations','Automazioni'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errori'],['/performance','Performance'],['/git','Git']]],
+  ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
 ]
 
-const PROTECTED_PREFIXES = [
-  '/dashboard', '/profile', '/capitano', '/scout', '/analista',
-  '/scorer', '/scrittore', '/critico', '/sentinella', '/team',
-  '/applications', '/positions', '/ready', '/risposte', '/crescita',
-  '/assistente', '/setup',
-]
+const PROTECTED = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup']
 
 export default function Sidebar() {
-  const pathname = usePathname()
+  const pathname    = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile,   setIsMobile]   = useState(false)
+  const [collapsed,  setCollapsed]  = useState(false)
+  const [favs,       setFavs]       = useState<string[]>([])
+  const [hovered,    setHovered]    = useState<string | null>(null)
 
-  const isProtected = pathname === '/' || PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const isProtected = pathname === '/' || PROTECTED.some(p => pathname === p || pathname.startsWith(p + '/'))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
+    check(); window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Chiudi drawer al cambio pagina
   useEffect(() => { setMobileOpen(false) }, [pathname])
+
+  useEffect(() => {
+    try {
+      setFavs(JSON.parse(localStorage.getItem('jht:sb-favs') ?? '[]'))
+      setCollapsed(localStorage.getItem('jht:sb-coll') === 'true')
+    } catch {}
+  }, [])
+
+  const w = collapsed ? 48 : 200
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', `${w}px`)
+  }, [w])
 
   if (isProtected) return null
 
-  const sidebarContent = (
-    <aside
-      aria-label="sidebar"
-      className="flex flex-col overflow-y-auto h-full"
-      style={{ width: 200, background: 'var(--color-deep)', borderRight: '1px solid var(--color-border)' }}>
-      <div className="px-5 py-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
-        <div>
-          <p className="text-[11px] font-bold tracking-widest text-[var(--color-white)]">JHT</p>
-          <p className="text-[9px] text-[var(--color-dim)]">Job Hunter Team</p>
-        </div>
-        {isMobile && (
-          <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>
+  const toggleCollapse = () => {
+    const next = !collapsed; setCollapsed(next)
+    localStorage.setItem('jht:sb-coll', String(next))
+  }
+  const toggleFav = (href: string) => {
+    const next = favs.includes(href) ? favs.filter(f => f !== href) : [...favs, href]
+    setFavs(next); localStorage.setItem('jht:sb-favs', JSON.stringify(next))
+  }
+
+  const allLinks   = NAV.flatMap(([, ls]) => ls)
+  const favLinks   = allLinks.filter(([h]) => favs.includes(h))
+
+  const renderLink = ([href, label, badge]: [string, string, number?]) => {
+    const active = pathname === href || pathname.startsWith(href + '/')
+    const isFav  = favs.includes(href)
+    return (
+      <li key={href} className="relative" onMouseEnter={() => setHovered(href)} onMouseLeave={() => setHovered(null)}>
+        <Link href={href} aria-current={active ? 'page' : undefined}
+          className="flex items-center gap-2 px-2 py-1.5 rounded text-[11px] no-underline transition-colors"
+          style={{ color: active ? 'var(--color-green)' : 'var(--color-muted)', background: active ? 'rgba(0,232,122,0.08)' : 'transparent', borderLeft: active ? '2px solid var(--color-green)' : '2px solid transparent' }}>
+          {collapsed
+            ? <span className="w-full text-center text-[10px] font-semibold" title={label}>{label[0]}</span>
+            : <><span className="flex-1 truncate">{label}</span>
+               {badge ? <span className="text-[8px] font-bold px-1 rounded-full" style={{ background: 'var(--color-red)22', color: 'var(--color-red)' }}>{badge}</span> : null}</>
+          }
+        </Link>
+        {!collapsed && hovered === href && (
+          <button onClick={() => toggleFav(href)}
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] transition-opacity"
+            style={{ color: isFav ? 'var(--color-yellow)' : 'var(--color-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
+            {isFav ? '★' : '☆'}
+          </button>
         )}
+      </li>
+    )
+  }
+
+  const sidebarContent = (
+    <aside role="navigation" aria-label="Navigazione principale"
+      className="flex flex-col h-full overflow-y-auto"
+      style={{ width: w, minWidth: w, background: 'var(--color-deep)', borderRight: '1px solid var(--color-border)', transition: 'width 0.2s ease, min-width 0.2s ease' }}>
+
+      {/* Header */}
+      <div className="px-3 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+        {!collapsed && <div><p className="text-[11px] font-bold tracking-widest" style={{ color: 'var(--color-white)' }}>JHT</p><p className="text-[9px]" style={{ color: 'var(--color-dim)' }}>Job Hunter Team</p></div>}
+        <div className="flex items-center gap-1 ml-auto">
+          {isMobile  && <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
+          {!isMobile && <button onClick={toggleCollapse} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
+        </div>
       </div>
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-4">
-        {NAV_GROUPS.map(group => (
-          <div key={group.label}>
-            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{group.label}</p>
-            <ul className="flex flex-col gap-0.5">
-              {group.links.map(({ href, label }) => {
-                const active = pathname === href || pathname.startsWith(href + '/')
-                return (
-                  <li key={href}>
-                    <Link href={href} aria-current={active ? 'page' : undefined}
-                      className="block px-2 py-1.5 rounded text-[11px] no-underline transition-colors"
-                      style={{ color: active ? 'var(--color-green)' : 'var(--color-muted)', background: active ? 'rgba(0,232,122,0.08)' : 'transparent', borderLeft: active ? '2px solid var(--color-green)' : '2px solid transparent' }}>
-                      {label}
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
+
+      {/* Nav */}
+      <nav className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+        {!collapsed && favLinks.length > 0 && (
+          <div>
+            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ PREFERITI</p>
+            <ul className="flex flex-col gap-0.5">{favLinks.map(renderLink)}</ul>
+          </div>
+        )}
+        {NAV.map(([group, links]) => (
+          <div key={group}>
+            {!collapsed && <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{group}</p>}
+            <ul className="flex flex-col gap-0.5">{links.map(renderLink)}</ul>
           </div>
         ))}
       </nav>
-      <div className="px-3 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
-        <LanguageSwitcher />
-        <ThemeToggle />
+
+      {/* Footer */}
+      <div className="px-3 py-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
+        {!collapsed && (
+          <div className="flex items-center justify-between">
+            <span className="text-[8px] font-mono" style={{ color: 'var(--color-dim)' }}>v1.0.0</span>
+            <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"
+              className="text-[8px] hover:opacity-80 transition-opacity" style={{ color: 'var(--color-dim)' }}>docs →</a>
+          </div>
+        )}
+        {!collapsed && <div className="flex items-center justify-between"><LanguageSwitcher /><ThemeToggle /></div>}
       </div>
     </aside>
   )
 
   if (isMobile) return (
     <>
-      {/* Hamburger */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        aria-label="Apri menu"
-        style={{ position: 'fixed', top: 12, left: 12, zIndex: 60, background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: 'var(--color-muted)', lineHeight: 1 }}>
-        ☰
-      </button>
-      {/* Overlay */}
+      <button onClick={() => setMobileOpen(true)} aria-label="Apri menu"
+        style={{ position: 'fixed', top: 12, left: 12, zIndex: 60, background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: 'var(--color-muted)', lineHeight: 1 }}>☰</button>
       {mobileOpen && (
         <>
           <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 55, animation: 'fade-in 0.15s ease both' }} />
-          <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', zIndex: 60, animation: 'fade-in 0.2s ease both' }}>
-            {sidebarContent}
-          </div>
+          <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', zIndex: 60, animation: 'fade-in 0.2s ease both' }}>{sidebarContent}</div>
         </>
       )}
     </>
   )
 
-  return (
-    <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', zIndex: 50 }}>
-      {sidebarContent}
-    </div>
-  )
+  return <div style={{ position: 'fixed', left: 0, top: 0, height: '100vh', zIndex: 50 }}>{sidebarContent}</div>
 }
