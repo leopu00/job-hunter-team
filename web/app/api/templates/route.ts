@@ -9,11 +9,14 @@ const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
 
 type Frontmatter = Record<string, string | undefined>
 
+type TemplateCategory = 'cover-letter' | 'follow-up' | 'thank-you' | 'referral' | 'salary'
+
 interface TemplateSummary {
   name: string
   filePath: string
   title: string
   summary: string
+  category: TemplateCategory
   variables: string[]
   charCount: number
 }
@@ -82,6 +85,7 @@ function loadTemplates(dir: string): TemplateDetail[] {
         filePath,
         title: frontmatter.title ?? file.replace('.md', ''),
         summary: frontmatter.summary ?? content.slice(0, 120),
+        category: (frontmatter.category as TemplateCategory) ?? 'cover-letter',
         variables: extractVariables(content),
         charCount: content.length,
         content,
@@ -93,13 +97,37 @@ function loadTemplates(dir: string): TemplateDetail[] {
   return result
 }
 
-/** GET — lista template: ?name=SOUL.md per dettaglio singolo */
+const SAMPLE_TEMPLATES: TemplateDetail[] = [
+  { name: 'cover-letter-standard.md', filePath: '', title: 'Cover Letter Standard', summary: 'Lettera di presentazione generica per candidature', category: 'cover-letter',
+    variables: ['nome', 'azienda', 'posizione', 'esperienza'], charCount: 280, frontmatter: { category: 'cover-letter' },
+    content: 'Gentile team di {azienda},\n\nmi chiamo {nome} e scrivo per candidarmi alla posizione di {posizione}.\n\nCon {esperienza} anni di esperienza nel settore, sono convinto di poter contribuire significativamente al vostro team. La mia passione per la tecnologia e la mia esperienza pratica mi rendono un candidato ideale.\n\nResto a disposizione per un colloquio conoscitivo.\n\nCordiali saluti,\n{nome}',
+    raw: '' },
+  { name: 'follow-up-interview.md', filePath: '', title: 'Follow-up Post Colloquio', summary: 'Email di follow-up dopo un colloquio', category: 'follow-up',
+    variables: ['nome', 'azienda', 'intervistatore', 'posizione'], charCount: 220, frontmatter: { category: 'follow-up' },
+    content: 'Gentile {intervistatore},\n\nla ringrazio per il tempo dedicatomi durante il colloquio per la posizione di {posizione} presso {azienda}.\n\nLa conversazione ha rafforzato il mio interesse per il ruolo. Resto a disposizione per qualsiasi informazione aggiuntiva.\n\nCordiali saluti,\n{nome}',
+    raw: '' },
+  { name: 'thank-you-letter.md', filePath: '', title: 'Lettera di Ringraziamento', summary: 'Ringraziamento dopo offerta o colloquio', category: 'thank-you',
+    variables: ['nome', 'azienda', 'contatto'], charCount: 180, frontmatter: { category: 'thank-you' },
+    content: 'Gentile {contatto},\n\ndesidero ringraziarla per l\'opportunita\' offertami da {azienda}. Apprezzo molto la fiducia riposta in me e sono entusiasta di iniziare questa nuova avventura.\n\nCordiali saluti,\n{nome}',
+    raw: '' },
+  { name: 'referral-request.md', filePath: '', title: 'Richiesta Referral', summary: 'Richiesta di referral a un contatto', category: 'referral',
+    variables: ['nome', 'contatto', 'azienda', 'posizione'], charCount: 240, frontmatter: { category: 'referral' },
+    content: 'Ciao {contatto},\n\nspero tu stia bene! Ho visto che {azienda} sta cercando un {posizione} e so che lavori li\'.\n\nSaresti disponibile a fare una referral per la mia candidatura? Ti allego il mio CV aggiornato. Qualsiasi supporto sarebbe molto apprezzato.\n\nGrazie mille,\n{nome}',
+    raw: '' },
+  { name: 'salary-negotiation.md', filePath: '', title: 'Negoziazione RAL', summary: 'Template per negoziare lo stipendio', category: 'salary',
+    variables: ['nome', 'azienda', 'posizione', 'ral_attuale', 'ral_richiesta'], charCount: 300, frontmatter: { category: 'salary' },
+    content: 'Gentile team HR di {azienda},\n\nsono molto entusiasta dell\'offerta per la posizione di {posizione}. Dopo attenta valutazione, vorrei discutere la componente retributiva.\n\nConsiderando la mia esperienza e il benchmark di mercato, ritengo che una RAL di {ral_richiesta} rifletta meglio il valore che posso portare al team.\n\nSono aperto al dialogo e disponibile a trovare un accordo soddisfacente per entrambe le parti.\n\nCordiali saluti,\n{nome}',
+    raw: '' },
+]
+
+/** GET — lista template: ?name=xxx&category=xxx */
 export async function GET(req: NextRequest) {
   const workspace = getWorkspace()
-  if (!workspace) return NextResponse.json({ templates: [], error: 'workspace non configurato' })
+  let templates = workspace ? loadTemplates(workspace) : []
+  if (templates.length === 0) templates = SAMPLE_TEMPLATES
 
-  const templates = loadTemplates(workspace)
   const name = req.nextUrl.searchParams.get('name')
+  const category = req.nextUrl.searchParams.get('category')
 
   if (name) {
     const tpl = templates.find(t => t.name === name)
@@ -107,8 +135,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ template: tpl })
   }
 
-  const summaries: TemplateSummary[] = templates.map(({ content, frontmatter, raw, ...rest }) => rest)
-  return NextResponse.json({ templates: summaries, total: summaries.length })
+  let summaries: TemplateSummary[] = templates.map(({ content, frontmatter, raw, ...rest }) => rest)
+  if (category) summaries = summaries.filter(t => t.category === category)
+  const categories = [...new Set(templates.map(t => t.category))].sort()
+  return NextResponse.json({ templates: summaries, total: summaries.length, categories })
 }
 
 /** POST — preview con variabili: { name: "SOUL.md", variables: { nome: "Rex" } } */
