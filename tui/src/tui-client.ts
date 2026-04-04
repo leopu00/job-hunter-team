@@ -12,22 +12,23 @@ const API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
 const SYSTEM_PROMPT = `Sei l'assistente AI del Job Hunter Team. Aiuti l'utente nella ricerca lavoro: scrivi cover letter, prepari colloqui, analizzi offerte, ottimizzi CV. Rispondi in italiano, sii conciso e pratico.`;
 
-function loadApiKey(): string {
+export function loadApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
   try {
     const cfg = JSON.parse(readFileSync(join(homedir(), ".jht", "jht.config.json"), "utf-8"));
     const key = cfg?.providers?.claude?.api_key ?? cfg?.providers?.anthropic?.api_key;
     if (key) return key;
   } catch { /* ignore */ }
-  throw new Error("ANTHROPIC_API_KEY non trovata — imposta env o ~/.jht/jht.config.json");
+  return null;
 }
 
 type ConversationMessage = { role: "user" | "assistant"; content: string };
 
 export type ChatEventCallback = (event: ChatEvent) => void;
 
-export function createTuiClient(onChatEvent: ChatEventCallback): JhtChatClient & { history: ConversationMessage[] } {
-  const apiKey = loadApiKey();
+export function createTuiClient(onChatEvent: ChatEventCallback, apiKeyOverride?: string): JhtChatClient & { history: ConversationMessage[] } {
+  const apiKey = apiKeyOverride ?? loadApiKey();
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY non configurata");
   const abortControllers = new Map<string, AbortController>();
   const history: ConversationMessage[] = [];
 
