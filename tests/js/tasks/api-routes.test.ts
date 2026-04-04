@@ -194,3 +194,45 @@ describe("/api/queue", () => {
   });
 });
 
+describe("/api/health", () => {
+  it("GET ritorna 7 modules e status/uptime/version", async () => {
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ version: 1 }));
+    vi.mocked(cp.execSync).mockImplementation(() => { throw new Error(); });
+    const { GET } = await import("../../../web/app/api/health/route");
+    const data = await (await GET()).json();
+    expect(data.modules.length).toBe(7);
+    expect(data).toHaveProperty("status");
+    expect(data).toHaveProperty("uptime");
+  });
+
+  it("GET con file mancanti ritorna status warn/error", async () => {
+    mockEnoent();
+    vi.mocked(fs.accessSync).mockImplementation(() => { throw new Error(); });
+    vi.mocked(cp.execSync).mockImplementation(() => { throw new Error(); });
+    const { GET } = await import("../../../web/app/api/health/route");
+    const data = await (await GET()).json();
+    expect(["warn", "error"]).toContain(data.status);
+    expect(data.counts.ok).toBeLessThan(7);
+  });
+});
+
+describe("/api/tasks — edge cases", () => {
+  it("GET store vuoto (ENOENT) ritorna array vuoto", async () => {
+    mockEnoent();
+    const { GET } = await import("../../../web/app/api/tasks/route");
+    const data = await (await GET(mkReq("/api/tasks"))).json();
+    expect(data.tasks).toHaveLength(0);
+  });
+
+  it("GET filtro active include queued e running", async () => {
+    mockRead({ version: 1, updatedAt: 0, tasks: [
+      { taskId: "t1", status: "queued", task: "a", createdAt: 1, runtime: "cli", ownerKey: "w" },
+      { taskId: "t2", status: "succeeded", task: "b", createdAt: 2, runtime: "cli", ownerKey: "w" },
+    ] });
+    const { GET } = await import("../../../web/app/api/tasks/route");
+    const data = await (await GET(mkReq("/api/tasks?status=active"))).json();
+    expect(data.tasks).toHaveLength(1);
+    expect(data.tasks[0].status).toBe("queued");
+  });
+});
