@@ -22,6 +22,11 @@ import { registerDoctorCommand } from './commands/doctor.js';
 import { registerResetCommand } from './commands/reset.js';
 import { registerUpgradeCommand } from './commands/upgrade.js';
 import { registerDashboardCommand } from './commands/dashboard.js';
+import { registerContextCommand } from './commands/context.js';
+import { registerSecretsCommand } from './commands/secrets.js';
+import { registerHooksCommand } from './commands/hooks.js';
+import { registerReportCommand } from './commands/report.js';
+import { registerWebhooksCommand } from './commands/webhooks.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -54,6 +59,11 @@ export function buildProgram() {
   registerResetCommand(program);
   registerUpgradeCommand(program);
   registerDashboardCommand(program);
+  registerContextCommand(program);
+  registerSecretsCommand(program);
+  registerHooksCommand(program);
+  registerReportCommand(program);
+  registerWebhooksCommand(program);
 
   return program;
 }
