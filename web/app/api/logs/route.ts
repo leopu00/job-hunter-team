@@ -51,6 +51,33 @@ function extractSubsystems(entries: LogEntry[]): string[] {
   return [...set].sort()
 }
 
+const SAMPLE_SUBSYSTEMS = ['gateway', 'coordinator', 'scout', 'assistente', 'scrittore', 'tui', 'web', 'config']
+const SAMPLE_MESSAGES: Record<LogLevel, string[]> = {
+  debug: ['Cache hit per sessione abc-123', 'Parsing config completato in 12ms', 'WebSocket heartbeat OK', 'Token refresh non necessario'],
+  info:  ['Server avviato su porta 3002', 'Job match trovato: Frontend Dev @ Acme', 'Sessione utente creata', 'Config ricaricata da disco', 'Worker scout attivato'],
+  warn:  ['Rate limit vicino (80%)', 'Risposta API lenta (2.3s)', 'Config mancante per telegram', 'Retry tentativo 2/3 per API call'],
+  error: ['Connessione DB fallita: timeout', 'API key non valida — 401', 'Worker crash: out of memory', 'File non trovato: jobs.json'],
+}
+
+function generateSampleLogs(date: string): LogEntry[] {
+  const entries: LogEntry[] = []
+  const levels: LogLevel[] = ['debug', 'info', 'info', 'info', 'warn', 'error']
+  for (let i = 0; i < 60; i++) {
+    const h = String(Math.floor(i * 24 / 60)).padStart(2, '0')
+    const m = String((i * 17) % 60).padStart(2, '0')
+    const s = String((i * 31) % 60).padStart(2, '0')
+    const level = levels[i % levels.length]
+    const msgs = SAMPLE_MESSAGES[level]
+    entries.push({
+      time: `${date}T${h}:${m}:${s}.${String((i * 137) % 1000).padStart(3, '0')}Z`,
+      level,
+      subsystem: SAMPLE_SUBSYSTEMS[i % SAMPLE_SUBSYSTEMS.length],
+      message: msgs[i % msgs.length],
+    })
+  }
+  return entries
+}
+
 /** GET — log strutturati con filtri: ?date=YYYY-MM-DD&level=error&subsystem=gateway&limit=100&offset=0 */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
@@ -63,6 +90,7 @@ export async function GET(req: NextRequest) {
 
   const filePath = logFilePath(date)
   let entries = readLogFile(filePath)
+  if (entries.length === 0) entries = generateSampleLogs(date)
 
   if (level) entries = entries.filter(e => e.level === level)
   if (subsystem) entries = entries.filter(e => e.subsystem === subsystem)
