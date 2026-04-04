@@ -4,6 +4,7 @@ import './globals.css'
 import Sidebar from './components/sidebar'
 import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
+import Breadcrumb from './components/Breadcrumb'
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -28,6 +29,7 @@ export default function RootLayout({
         <ThemeProvider>
           <Sidebar />
           <MainContent>
+            <Breadcrumb />
             {children}
           </MainContent>
         </ThemeProvider>
