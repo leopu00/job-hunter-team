@@ -44,6 +44,8 @@ function StatusDot({ status }: { status: AgentStatus }) {
   return (
     <span
       className={c.pulse ? 'status-pulse' : ''}
+      role="status"
+      aria-label={status === 'running' ? 'online' : status === 'pending' ? 'in avvio' : 'offline'}
       style={{
         display: 'inline-block',
         width: 8,
@@ -88,6 +90,8 @@ function AgentCard({
   return (
     <div
       className="rounded-xl p-4 transition-all duration-150"
+      role="article"
+      aria-label={`${agent.name} — ${status === 'running' ? 'online' : status === 'pending' ? 'in avvio' : 'offline'}`}
       style={{
         background: 'var(--color-panel)',
         border: `1px solid ${isRunning ? `${agent.color}33` : 'var(--color-border)'}`,
@@ -132,6 +136,7 @@ function AgentCard({
         <button
           onClick={() => onAction(agent.id, isRunning ? 'stop' : 'start')}
           disabled={isLoading || status === 'pending'}
+          aria-label={isRunning ? `Ferma ${agent.name}` : `Avvia ${agent.name}`}
           className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
           style={{
             background: isLoading || status === 'pending'
