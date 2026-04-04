@@ -83,6 +83,9 @@ Il Capitano coordina la pipeline via tmux e un database SQLite condiviso.
 | `logger/` | Logger strutturato JSON con rolling file e output colorato |
 | `deploy/` | Script deploy, health-check e monitor produzione |
 | `daemon/` | Script installazione/disinstallazione daemon di sistema |
+| `backup/` | Backup e restore dati con retention policy e compressione |
+| `migrations/` | Migrazioni config con versioning sequenziale e rollback |
+| `i18n/` | Internazionalizzazione — traduzioni it/en con fallback |
 
 ### Interfacce
 
@@ -132,12 +135,33 @@ jht setup
 ### CLI
 
 ```bash
+# Setup e configurazione
 jht setup          # Wizard configurazione guidata
 jht config show    # Mostra configurazione corrente
-jht status         # Stato agenti e sistema
+jht migrate        # Esegui migrazioni config (--dry-run)
+
+# Team e agenti
 jht team start     # Avvia tutto il team
 jht team stop      # Ferma tutto il team
-jht cron list      # Lista task schedulati
+jht agents         # Lista agenti con stato tmux e task
+
+# Monitoraggio
+jht status         # Stato agenti e sistema
+jht health         # Health check 7 moduli con semafori
+jht stats          # Statistiche aggregate task/API/sessioni
+jht logs           # Log strutturati (--level, --module, --tail)
+jht providers      # Provider LLM configurati e stato auth
+
+# Gestione dati
+jht export <src>   # Esporta sessioni/task/analytics (JSON/CSV)
+jht import <file>  # Importa da file JSON (merge/replace)
+jht backup         # Crea/lista/ripristina backup
+jht cache stats    # Statistiche cache, jht cache clear
+
+# Plugin e cron
+jht plugins        # Lista/attiva/disattiva plugin
+jht cron list      # Lista job schedulati
+jht cron add       # Aggiungi job cron
 ```
 
 ### TUI (Terminal UI)
@@ -173,31 +197,48 @@ Oppure con Docker:
 cd web && docker compose up
 ```
 
-### Pagine Web (48 pagine)
+### Pagine Web (56 pagine)
 
 | Categoria | Pagine |
 |-----------|--------|
-| **Pipeline** | `/dashboard` · `/positions` · `/applications` · `/ready` · `/risposte` · `/crescita` |
-| **Agenti** | `/agents` · `/agents/[id]` · `/team` · `/scout` · `/analista` · `/scorer` · `/scrittore` · `/critico` · `/sentinella` · `/capitano` · `/assistente` |
-| **Sessioni** | `/sessions/[id]` (chat replay) |
+| **Pipeline** | `/dashboard` · `/positions` · `/positions/[id]` · `/applications` · `/ready` · `/risposte` · `/crescita` |
+| **Agenti** | `/agents` · `/agents/[id]` · `/agents/metrics` · `/team` · `/scout` · `/analista` · `/scorer` · `/scrittore` · `/critico` · `/sentinella` · `/capitano` · `/assistente` |
+| **Sessioni** | `/sessions` · `/sessions/[id]` (chat replay) |
+| **Task** | `/tasks` · `/tasks/[id]` (timeline stati) |
+| **Cronologia** | `/history` · `/history/[id]` (replay conversazione) |
 | **Infrastruttura** | `/analytics` · `/health` · `/retry` · `/rate-limiter` · `/queue` · `/events` · `/logs` |
-| **Configurazione** | `/settings` · `/config` · `/credentials` · `/plugins` · `/tools` · `/templates` · `/providers` |
-| **Sistema** | `/overview` · `/memory` · `/gateway` · `/channels` · `/notifications` · `/history` · `/cron` · `/daemon` · `/deploy` · `/setup` |
+| **Configurazione** | `/settings` · `/config` · `/credentials` · `/plugins` · `/tools` · `/templates` · `/providers` · `/migrations` |
+| **Dati** | `/export` · `/import` · `/backup` |
+| **Sistema** | `/overview` · `/memory` · `/gateway` · `/channels` · `/notifications` · `/cron` · `/daemon` · `/deploy` · `/setup` |
 | **Profilo** | `/profile` · `/profile/edit` · `/assistant` |
 
 ---
 
 ## 🧪 Test
 
-**736+ test case** distribuiti su 168 file di test:
+**800+ test case** distribuiti su 168 file di test:
 
 - `tests/js/` — Test unitari e integrazione moduli shared (vitest)
 - `shared/*/` — Test co-locati nei moduli (agent runner, plugins, sessions, ecc.)
-- Copertura: config, validators, queue, retry, analytics, events, sessions, hooks, cron, templates, credentials, memory, agents, tools, telegram
+- Copertura: config, validators, queue, retry, analytics, events, sessions, hooks, cron, templates, credentials, memory, agents, tools, telegram, logger, daemon, deploy, backup, history, assistant
 
 ```bash
 cd tests/js && npx vitest run    # Esegui tutti i test JS
 ```
+
+---
+
+## 🔄 CI/CD
+
+**5 workflow GitHub Actions:**
+
+| Workflow | Trigger | Cosa fa |
+|----------|---------|---------|
+| `test.yml` | Push/PR | Vitest matrix parallelo su 12 moduli shared |
+| `ci.yml` | Push/PR | Build Next.js, lint, type-check |
+| `lint.yml` | Push/PR | ESLint + Prettier su tutti i moduli |
+| `security.yml` | Schedule/PR | Audit dipendenze, scan segreti |
+| `deploy.yml` | Tag release | Deploy produzione con health-check |
 
 ---
 
@@ -246,14 +287,23 @@ Pagina `/health` con semafori verde/giallo/rosso e auto-refresh.
 - [x] Template engine con composizione prompt
 - [x] Sistema notifiche multi-canale
 - [x] Analytics token usage e costi
-- [x] Web dashboard 48 pagine (pipeline, agenti, sessioni, infrastruttura, config)
+- [x] Web dashboard 56 pagine (pipeline, agenti, sessioni, task, cronologia, infrastruttura, config, dati)
 - [x] Health check globale con semafori
-- [x] 736+ test case su 168 file
+- [x] 800+ test case su 168 file
 - [x] Dettaglio sessione con chat replay
 - [x] Gestione tool con toggle e log esecuzioni
 - [x] Dashboard circuit breaker con reset
 - [x] Memory viewer/editor per SOUL/IDENTITY
 - [x] Gestione credenziali e plugin via web
+- [x] CLI 15 comandi (setup, config, status, team, cron, export, import, health, backup, migrate, cache, logs, providers, stats, plugins, agents)
+- [x] Export/import dati JSON e CSV con validazione
+- [x] Backup e restore con manifest
+- [x] Migrazioni config con versioning
+- [x] Metriche agenti con grafici comparativi e score
+- [x] Replay conversazione con paginazione messaggi
+- [x] CI/CD con 5 workflow GitHub Actions
+- [x] Internazionalizzazione it/en
+- [x] Dependabot per aggiornamento dipendenze
 - [ ] Supporto multi-workspace
 - [ ] Export candidature in formato ATS-ready
 - [ ] Supporto modelli locali (Ollama)
