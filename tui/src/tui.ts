@@ -14,7 +14,7 @@ import { runSetupWizard, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
-import { listJhtSessions, capturePane } from "./tui-tmux.js";
+import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
 import type { JhtAgent, JhtTuiState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
@@ -48,7 +48,7 @@ export async function runJhtTui() {
     activityStatus: "idle",
     toolsExpanded: false,
     isConnected: true,
-    activeTmuxCount: listJhtSessions().length,
+    activeTmuxCount: listUserSessions().length,
     currentView: "team",
     chatTargetSession: null,
     currentAgentId: "assistente",
@@ -111,7 +111,7 @@ export async function runJhtTui() {
     layout.mainSlot.clear();
     switch (view) {
       case "team":
-        teamPanel.refresh(listJhtSessions(), loadTasks());
+        teamPanel.refresh(listUserSessions(), loadTasks());
         layout.mainSlot.addChild(teamPanel);
         break;
       case "chat":
@@ -137,7 +137,7 @@ export async function runJhtTui() {
 
   /** Refresh vista corrente */
   const refreshCurrentView = () => {
-    state.activeTmuxCount = listJhtSessions().length;
+    state.activeTmuxCount = listUserSessions().length;
     switchView(state.currentView);
   };
 
@@ -159,10 +159,23 @@ export async function runJhtTui() {
   // Stub client
   const stubClient = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
 
+  // systemLog proxy — scrive nel pannello della vista corrente
+  const systemLog = {
+    addSystem: (text: string) => {
+      switch (state.currentView) {
+        case "ai": aiChatPanel.addSystem(text); break;
+        case "chat": chatPanel.addSystem(text); break;
+        default: aiChatPanel.addSystem(text); break;
+      }
+    },
+    addUser: (text: string) => { aiChatPanel.addUser(text); },
+  };
+
   // Command context
   const commandContext: Parameters<typeof createCommandHandlers>[0] = {
     client: stubClient,
     chatLog: aiChatPanel,
+    systemLog,
     opts: {},
     state,
     setActivityStatus,
@@ -171,6 +184,7 @@ export async function runJhtTui() {
     switchView,
     refreshCurrentView,
     reconnect: (apiKey: string) => {
+      if (!apiKey.startsWith("sk-ant-")) return false;
       try {
         saveApiKey(apiKey);
         commandContext.client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt), apiKey);
@@ -180,7 +194,14 @@ export async function runJhtTui() {
         layout.updateStatusBar(state);
         tui.requestRender();
         return true;
-      } catch { return false; }
+      } catch {
+        state.isConnected = false;
+        state.connectionStatus = "no API";
+        layout.updateHeader(state);
+        layout.updateStatusBar(state);
+        tui.requestRender();
+        return false;
+      }
     },
   };
 
@@ -279,7 +300,7 @@ export async function runJhtTui() {
 
   // Polling tmux + auto-refresh vista chat
   const tmuxPoll = setInterval(() => {
-    const sessions = listJhtSessions();
+    const sessions = listUserSessions();
     const count = sessions.length;
     if (count !== state.activeTmuxCount) {
       state.activeTmuxCount = count;
