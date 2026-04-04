@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 const PROTECTED_PREFIXES = [
   '/dashboard', '/profile', '/capitano', '/scout', '/analista',
@@ -11,9 +12,20 @@ const PROTECTED_PREFIXES = [
 
 export default function MainContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   const hasSidebar = pathname !== '/' && !PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const marginLeft = hasSidebar && !isMobile ? 200 : 0
+
   return (
-    <div id="main-content" tabIndex={-1} style={{ marginLeft: hasSidebar ? 200 : 0, minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+    <div id="main-content" tabIndex={-1} style={{ marginLeft, minHeight: '100vh', position: 'relative', zIndex: 1 }}>
       {children}
     </div>
   )
