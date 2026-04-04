@@ -9,7 +9,7 @@ import { ThemeToggle } from '../theme-provider'
 // ── Nav data: [group, [[href, label, badge?][]]] ───────────────────────────
 
 const NAV: [string, [string, string, number?][]][] = [
-  ['SISTEMA',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Stato']]],
+  ['SISTEMA',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Stato'],['/download','Download']]],
   ['JOB HUNTING', [['/jobs','Offerte'],['/applications','Candidature',3],['/interviews','Colloqui',1],['/companies','Aziende'],['/cover-letters','Cover Letter'],['/profiles','Profili'],['/alerts','Alert',5]]],
   ['AGENTI',      [['/agents','Agenti'],['/assistant','Assistente'],['/tasks','Task'],['/queue','Queue'],['/workers','Workers']]],
   ['DATI',        [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
@@ -17,7 +17,7 @@ const NAV: [string, [string, string, number?][]][] = [
   ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
 ]
 
-const PROTECTED = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup']
+const PROTECTED = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup','/download']
 
 export default function Sidebar() {
   const pathname    = usePathname()

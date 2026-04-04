@@ -63,6 +63,9 @@ export function LandingFooter() {
           >
             GitHub
           </a>
+          <a href="/download" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline">
+            Download
+          </a>
           <span className="text-[10px] text-[var(--color-dim)]">v1.0.0-beta</span>
         </div>
       </div>
