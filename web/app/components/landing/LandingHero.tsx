@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useLandingI18n } from './LandingI18n'
 
 const TERMINAL_LINES = [
   { prefix: '>', text: ' jht scan --role "Frontend Developer" --location "Remote"', color: 'var(--color-white)' },
@@ -14,56 +15,47 @@ const TERMINAL_LINES = [
 ]
 
 export default function LandingHero() {
+  const { t } = useLandingI18n()
+
   return (
     <section className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
-      {/* Glow orb */}
-      <div
-        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle, rgba(0,232,122,0.08) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-        }}
-      />
-
       <div className="relative z-10 text-center max-w-3xl mx-auto" style={{ animation: 'fade-in 0.6s ease both' }}>
         <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
           <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-          <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">beta pubblica</span>
+          <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('hero_badge')}</span>
         </div>
 
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
-          Il tuo team di agenti AI
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
+          {t('hero_title_1')}
           <br />
-          <span style={{ color: 'var(--color-green)' }}>per trovare lavoro</span>
+          <span className="text-gradient" style={{ color: 'var(--color-green)' }}>{t('hero_title_2')}</span>
         </h1>
 
         <p className="text-[13px] md:text-[15px] text-[var(--color-muted)] leading-relaxed max-w-xl mx-auto mb-10">
-          Un sistema multi-agente che automatizza ogni fase della ricerca:
-          dalla scansione delle offerte alla candidatura personalizzata.
-          Tu decidi la strategia, gli agenti eseguono.
+          {t('hero_desc')}
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/?login=true"
+            href="/download"
             className="px-6 py-3 rounded text-[12px] font-bold tracking-wider no-underline transition-all"
             style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
           >
-            Inizia gratis
+            {t('hero_cta')}
           </Link>
           <a
             href="#features"
             className="px-6 py-3 rounded text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-[var(--color-bright)]"
           >
-            Scopri come funziona
+            {t('hero_cta2')}
           </a>
         </div>
       </div>
 
       {/* Terminal mockup */}
       <div
-        className="relative z-10 w-full max-w-2xl mt-16 rounded-lg overflow-hidden border border-[var(--color-border)]"
-        style={{ background: 'var(--color-deep)', animation: 'fade-in 0.8s ease 0.3s both', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}
+        className="glass-panel relative z-10 w-full max-w-2xl mt-16 rounded-xl overflow-hidden"
+        style={{ animation: 'fade-in 0.8s ease 0.3s both, float 8s ease-in-out infinite', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
       >
         {/* Title bar */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border)]">
