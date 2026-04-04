@@ -74,6 +74,23 @@ function searchPages(q: string): SearchResult[] {
     { title: 'Circuit Breaker', href: '/retry', detail: 'Stato circuit breaker' },
     { title: 'Impostazioni', href: '/settings', detail: 'Configurazione' },
     { title: 'Config', href: '/config', detail: 'Editor JSON config' },
+    { title: 'Secrets', href: '/secrets', detail: 'API key e token cifrati' },
+    { title: 'Context Engine', href: '/context', detail: 'Budget token e sezioni contesto' },
+    { title: 'Attività', href: '/activity', detail: 'Feed timeline attività team' },
+    { title: 'Team', href: '/team', detail: 'Stato agenti e sessioni tmux' },
+    { title: 'Validators', href: '/validators', detail: 'Validatori schema' },
+    { title: 'Skills', href: '/skills', detail: 'Skill registrate' },
+    { title: 'Task', href: '/tasks', detail: 'Task degli agenti' },
+    { title: 'Backup', href: '/backup', detail: 'Backup e ripristino' },
+    { title: 'Monitoring', href: '/monitoring', detail: 'Metriche sistema' },
+    { title: 'Cron', href: '/cron', detail: 'Job schedulati' },
+    { title: 'Notifiche', href: '/notifications', detail: 'Centro notifiche' },
+    { title: 'Template', href: '/templates', detail: 'Template messaggi' },
+    { title: 'Export', href: '/export', detail: 'Esporta dati' },
+    { title: 'Import', href: '/import', detail: 'Importa dati' },
+    { title: 'Logs', href: '/logs', detail: 'Log di sistema' },
+    { title: 'Providers', href: '/providers', detail: 'Provider AI (Anthropic, OpenAI)' },
+    { title: 'Profilo', href: '/profile', detail: 'Profilo candidato' },
   ]
   return pages
     .filter(p => p.title.toLowerCase().includes(q) || p.detail.toLowerCase().includes(q))
