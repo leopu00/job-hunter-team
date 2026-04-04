@@ -3,62 +3,64 @@
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 
-type JobOption = { id: string; title: string; company: string }
-type ComparedJob = { id: string; title: string; company: string; location: string; salary: { min: number; max: number; currency: string }; benefits: string[]; skills: string[]; rating: number; remote: boolean; type: string; salaryScore: number; benefitCount: number; skillCount: number }
+type JobOption = { id: string; title: string; company: string; score: number; status: string }
+type Job = { id: string; title: string; company: string; location: string; remote: string; salaryMin: number; salaryMax: number; score: number; matchedSkills: string[]; missingSkills: string[]; benefits: string[]; status: string }
+type Highlights = { bestScoreId?: string; bestSalaryId?: string }
 
-function Stars({ rating }: { rating: number }) {
-  return <span className="text-[10px]">{'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))} <span className="text-[var(--color-dim)]">{rating.toFixed(1)}</span></span>
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  saved: { label: 'Salvata', color: 'var(--color-dim)' }, applied: { label: 'Candidato', color: '#61affe' },
+  interview: { label: 'Colloquio', color: 'var(--color-yellow)' }, offer: { label: 'Offerta', color: 'var(--color-green)' },
+  rejected: { label: 'Rifiutata', color: 'var(--color-red)' },
 }
 
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max ? Math.round(value / max * 100) : 0
+function ScoreBar({ value, best }: { value: number; best: boolean }) {
   return (
-    <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-deep)' }}>
-      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--color-border)' }}>
+        <div className="h-full rounded-full" style={{ width: `${value}%`, background: best ? 'var(--color-green)' : '#61affe' }} />
+      </div>
+      <span className="text-[11px] font-bold" style={{ color: best ? 'var(--color-green)' : 'var(--color-bright)' }}>{value}%</span>
     </div>
   )
 }
 
 export default function ComparePage() {
-  const [jobs, setJobs] = useState<JobOption[]>([])
+  const [available, setAvailable] = useState<JobOption[]>([])
   const [selected, setSelected] = useState<string[]>([])
-  const [comparison, setComparison] = useState<ComparedJob[]>([])
-  const [loading, setLoading] = useState(false)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [highlights, setHighlights] = useState<Highlights>({})
 
-  const fetchJobs = useCallback(async () => {
+  const fetchAvailable = useCallback(async () => {
     const res = await fetch('/api/compare').catch(() => null)
     if (!res?.ok) return
-    const d = await res.json()
-    setJobs(d.jobs ?? [])
+    setAvailable((await res.json()).available ?? [])
   }, [])
 
-  useEffect(() => { fetchJobs() }, [fetchJobs])
+  useEffect(() => { fetchAvailable() }, [fetchAvailable])
 
-  const toggleSelect = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev.length >= 3 ? prev : [...prev, id])
-  }
+  const toggle = (id: string) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : p.length >= 4 ? p : [...p, id])
 
   const compare = async () => {
     if (selected.length < 2) return
-    setLoading(true)
-    const res = await fetch('/api/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: selected }) }).catch(() => null)
-    if (res?.ok) { const d = await res.json(); setComparison(d.comparison ?? []) }
-    setLoading(false)
+    const res = await fetch(`/api/compare?ids=${selected.join(',')}`).catch(() => null)
+    if (!res?.ok) return
+    const data = await res.json()
+    setJobs(data.jobs ?? []); setHighlights(data.highlights ?? {})
   }
 
-  const maxSalary = Math.max(...comparison.map(j => j.salary.max), 1)
-  const maxBenefits = Math.max(...comparison.map(j => j.benefitCount), 1)
-  const maxSkills = Math.max(...comparison.map(j => j.skillCount), 1)
+  const reset = () => { setJobs([]); setSelected([]); setHighlights({}) }
+  const fmtSalary = (min: number, max: number) => `${(min / 1000).toFixed(0)}k–${(max / 1000).toFixed(0)}k €`
 
-  const ROWS: [string, (j: ComparedJob) => React.ReactNode][] = [
-    ['Azienda', j => <span className="text-[11px] text-[var(--color-bright)] font-medium">{j.company}</span>],
-    ['Posizione', j => <span className="text-[10px] text-[var(--color-muted)]">{j.title}</span>],
-    ['Località', j => <span className="text-[10px] text-[var(--color-muted)]">{j.location} {j.remote && <span style={{ color: 'var(--color-green)' }}>· Remote</span>}</span>],
-    ['Tipo', j => <span className="text-[10px] text-[var(--color-dim)]">{j.type}</span>],
-    ['RAL', j => <><span className="text-[11px] text-[var(--color-white)] font-bold">{(j.salary.min / 1000).toFixed(0)}k–{(j.salary.max / 1000).toFixed(0)}k €</span><Bar value={j.salary.max} max={maxSalary} color="var(--color-green)" /></>],
-    ['Rating', j => <Stars rating={j.rating} />],
-    ['Benefits', j => <><Bar value={j.benefitCount} max={maxBenefits} color="#61affe" /><div className="flex flex-wrap gap-1 mt-1">{j.benefits.map(b => <span key={b} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-deep)', color: 'var(--color-dim)' }}>{b}</span>)}</div></>],
-    ['Skills', j => <><Bar value={j.skillCount} max={maxSkills} color="#49cc90" /><div className="flex flex-wrap gap-1 mt-1">{j.skills.map(s => <span key={s} className="text-[8px] px-1.5 py-0.5 rounded font-mono" style={{ background: 'var(--color-deep)', color: 'var(--color-muted)' }}>{s}</span>)}</div></>],
+  const ROWS: Array<{ label: string; render: (j: Job) => React.ReactNode }> = [
+    { label: 'Posizione', render: j => <span className="text-[11px] font-semibold text-[var(--color-bright)]">{j.title}</span> },
+    { label: 'Azienda', render: j => <span className="text-[11px] text-[var(--color-muted)]">{j.company}</span> },
+    { label: 'Sede', render: j => <span className="text-[10px] text-[var(--color-muted)]">{j.location} · {j.remote === 'remote' ? 'Full remote' : j.remote === 'hybrid' ? 'Ibrido' : 'In sede'}</span> },
+    { label: 'RAL', render: j => <span className="text-[11px] font-bold" style={{ color: highlights.bestSalaryId === j.id ? 'var(--color-green)' : 'var(--color-bright)' }}>{fmtSalary(j.salaryMin, j.salaryMax)}</span> },
+    { label: 'Score', render: j => <ScoreBar value={j.score} best={highlights.bestScoreId === j.id} /> },
+    { label: 'Stato', render: j => { const s = STATUS_LABEL[j.status]; return <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: s?.color, border: '1px solid var(--color-border)' }}>{s?.label ?? j.status}</span> }},
+    { label: 'Skill OK', render: j => <div className="flex flex-wrap gap-1">{j.matchedSkills.map(s => <span key={s} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)' }}>{s}</span>)}</div> },
+    { label: 'Skill mancanti', render: j => j.missingSkills.length > 0 ? <div className="flex flex-wrap gap-1">{j.missingSkills.map(s => <span key={s} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,69,96,0.1)', color: 'var(--color-red)' }}>{s}</span>)}</div> : <span className="text-[9px] text-[var(--color-green)]">Nessuna</span> },
+    { label: 'Benefits', render: j => <div className="flex flex-wrap gap-1">{j.benefits.map(b => <span key={b} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-dim)' }}>{b}</span>)}</div> },
   ]
 
   return (
@@ -67,39 +69,39 @@ export default function ComparePage() {
         <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
           <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Compara Offerte</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Confronto</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Compara Offerte</h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">Seleziona 2-3 offerte per un confronto side-by-side</p>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Confronto Candidature</h1>
+        <p className="text-[var(--color-muted)] text-[11px] mt-1">Seleziona 2-4 candidature per un confronto side-by-side</p>
       </div>
 
-      {comparison.length === 0 && (
+      {jobs.length === 0 && (
         <>
           <div className="flex flex-wrap gap-2 mb-4">
-            {jobs.map(j => (
-              <button key={j.id} onClick={() => toggleSelect(j.id)} className="px-3 py-2 rounded-lg text-[10px] cursor-pointer transition-colors"
+            {available.map(j => (
+              <button key={j.id} onClick={() => toggle(j.id)} className="px-3 py-2 rounded-lg text-[10px] cursor-pointer transition-colors"
                 style={{ background: selected.includes(j.id) ? 'var(--color-green)' : 'var(--color-row)', color: selected.includes(j.id) ? '#000' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
-                <span className="font-bold">{j.title}</span> · {j.company}
+                <span className="font-bold">{j.title}</span> · {j.company} <span className="text-[8px] opacity-70">({j.score}%)</span>
               </button>
             ))}
           </div>
-          <button onClick={compare} disabled={selected.length < 2 || loading} className="px-4 py-2 rounded-lg text-[11px] font-bold cursor-pointer"
-            style={{ background: selected.length >= 2 ? 'var(--color-green)' : 'var(--color-border)', color: selected.length >= 2 ? '#000' : 'var(--color-dim)' }}>
-            {loading ? 'Caricamento...' : `Confronta (${selected.length}/3)`}
+          <button onClick={compare} disabled={selected.length < 2} className="px-4 py-2 rounded-lg text-[11px] font-bold cursor-pointer"
+            style={{ background: selected.length >= 2 ? 'var(--color-green)' : 'var(--color-border)', color: selected.length >= 2 ? '#000' : 'var(--color-dim)', border: 'none' }}>
+            Confronta ({selected.length} selezionate)
           </button>
         </>
       )}
 
-      {comparison.length > 0 && (
+      {jobs.length > 0 && (
         <>
-          <button onClick={() => { setComparison([]); setSelected([]) }} className="mb-4 px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer"
+          <button onClick={reset} className="mb-4 px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer"
             style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)' }}>← Nuovo confronto</button>
-          <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-            {ROWS.map(([label, render]) => (
-              <div key={label} className="flex border-b border-[var(--color-border)]">
-                <div className="w-24 flex-shrink-0 px-3 py-3 text-[8px] font-bold tracking-widest text-[var(--color-dim)]" style={{ background: 'var(--color-deep)' }}>{label.toUpperCase()}</div>
-                {comparison.map(j => (
-                  <div key={j.id} className="flex-1 px-4 py-3 border-l border-[var(--color-border)]">{render(j)}</div>
+          <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-panel)]">
+            {ROWS.map(r => (
+              <div key={r.label} className="flex border-b border-[var(--color-border)]">
+                <div className="w-28 flex-shrink-0 px-3 py-3 text-[8px] font-bold uppercase tracking-widest text-[var(--color-dim)]" style={{ background: 'var(--color-row)' }}>{r.label}</div>
+                {jobs.map(j => (
+                  <div key={j.id} className="flex-1 min-w-[160px] px-4 py-3 border-l border-[var(--color-border)]">{r.render(j)}</div>
                 ))}
               </div>
             ))}
