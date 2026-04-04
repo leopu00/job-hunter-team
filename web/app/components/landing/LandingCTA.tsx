@@ -48,27 +48,55 @@ export default function LandingCTA() {
 }
 
 export function LandingFooter() {
+  const linkClass = 'text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline block py-0.5'
+
   return (
-    <footer className="px-6 py-8 border-t border-[var(--color-border)]">
-      <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
-          <span className="text-[11px] font-bold tracking-widest text-[var(--color-muted)]">JHT</span>
-          <span className="text-[10px] text-[var(--color-dim)]">· Job Hunter Team</span>
+    <footer className="px-6 pt-12 pb-8 border-t border-[var(--color-border)]">
+      <div className="max-w-5xl mx-auto">
+        {/* Columns */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+          {/* Brand */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
+              <span className="text-[11px] font-bold tracking-widest text-[var(--color-muted)]">JHT</span>
+            </div>
+            <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
+              Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.
+            </p>
+          </div>
+
+          {/* Prodotto */}
+          <div>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Prodotto</h4>
+            <Link href="/download" className={linkClass}>Download</Link>
+            <Link href="/team" className={linkClass}>Team</Link>
+            <Link href="/dashboard" className={linkClass}>Dashboard</Link>
+            <Link href="/faq" className={linkClass}>FAQ</Link>
+          </div>
+
+          {/* Risorse */}
+          <div>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Risorse</h4>
+            <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
+            <Link href="/setup" className={linkClass}>Setup</Link>
+            <Link href="/reports" className={linkClass}>Reports</Link>
+          </div>
+
+          {/* Contatti */}
+          <div>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Contatti</h4>
+            <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>Segnala un bug</a>
+            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>Discussioni</a>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <a
-            href="https://github.com/leopu00/job-hunter-team"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline"
-          >
-            GitHub
-          </a>
-          <a href="/download" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline">
-            Download
-          </a>
-          <span className="text-[10px] text-[var(--color-dim)]">v1.0.0-beta</span>
+
+        {/* Bottom bar */}
+        <div className="pt-6 border-t border-[var(--color-border)] flex flex-col md:flex-row items-center justify-between gap-3">
+          <span className="text-[9px] text-[var(--color-dim)]">
+            &copy; {new Date().getFullYear()} Job Hunter Team &mdash; Open Source under MIT License
+          </span>
+          <span className="text-[9px] text-[var(--color-dim)]">v1.0.0-beta</span>
         </div>
       </div>
     </footer>
