@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import LanguageSwitcher from './LanguageSwitcher'
+import { ThemeToggle } from '../theme-provider'
 
 const NAV_GROUPS = [
   {
@@ -110,8 +111,9 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="px-3 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
         <LanguageSwitcher />
+        <ThemeToggle />
       </div>
     </aside>
   )
