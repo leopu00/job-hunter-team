@@ -38,7 +38,7 @@ function loadExistingConfig(): Record<string, unknown> {
   }
 }
 
-function saveApiKey(key: string): void {
+export function saveApiKey(key: string): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
   const cfg = loadExistingConfig();
   if (!cfg.providers || typeof cfg.providers !== "object") {
