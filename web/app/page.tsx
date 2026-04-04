@@ -9,6 +9,7 @@ import LandingNav from './components/landing/LandingNav'
 import LandingHero from './components/landing/LandingHero'
 import LandingFeatures from './components/landing/LandingFeatures'
 import LandingSteps from './components/landing/LandingSteps'
+import LandingGetStarted from './components/landing/LandingGetStarted'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 
@@ -82,6 +83,7 @@ function PageContent() {
         <LandingHero />
         <LandingFeatures />
         <LandingSteps />
+        <LandingGetStarted />
         <LandingCTA />
         <LandingFooter />
       </main>

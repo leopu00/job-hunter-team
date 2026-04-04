@@ -86,6 +86,25 @@ const translations = {
     en: 'Review ready applications in the dashboard. Approve, edit or discard. Always in control.',
   },
 
+  // Get Started
+  gs_label:          { it: 'inizia subito',      en: 'get started' },
+  gs_title:          { it: 'Come iniziare',       en: 'Get started' },
+  gs_0_title:        { it: 'Scarica',             en: 'Download' },
+  gs_0_desc:         {
+    it: 'Scarica il pacchetto per il tuo sistema operativo. Un solo file, nessuna installazione complessa.',
+    en: 'Download the package for your OS. One file, no complex installation.',
+  },
+  gs_1_title:        { it: 'Imposta il profilo',  en: 'Set up your profile' },
+  gs_1_desc:         {
+    it: 'Indica il tuo ruolo, le competenze e la zona di ricerca. Il team si calibra su di te in pochi secondi.',
+    en: 'Enter your role, skills and search area. The team calibrates to you in seconds.',
+  },
+  gs_2_title:        { it: 'Lascia lavorare il team', en: 'Let the team work' },
+  gs_2_desc:         {
+    it: 'Gli agenti cercano, analizzano e preparano candidature mentre tu fai altro. Rivedi e approva dalla dashboard.',
+    en: 'Agents search, analyze and prepare applications while you do other things. Review and approve from the dashboard.',
+  },
+
   // CTA
   cta_title_1:       { it: 'Pronto a rivoluzionare',           en: 'Ready to revolutionize' },
   cta_title_2:       { it: 'la tua ricerca lavoro?',           en: 'your job search?' },
