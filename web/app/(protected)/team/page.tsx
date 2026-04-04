@@ -35,14 +35,22 @@ const ALL_AGENTS: AgentDef[] = [CAPITANO, ...PIPELINE, SENTINELLA]
 
 /* ── Componenti ───────────────────────────────────────────────────── */
 
+function Spinner({ size = 14, color = '#ffc107' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="spinner-rotate" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function StatusDot({ status }: { status: AgentStatus }) {
-  const bg =
-    status === 'active' ? '#4caf50' :
-    status === 'spawning' ? '#ffc107' :
-    'rgba(255,255,255,0.15)'
+  if (status === 'spawning') {
+    return <Spinner size={12} color="#ffc107" />
+  }
+  const bg = status === 'active' ? '#4caf50' : 'rgba(255,255,255,0.15)'
   return (
     <span
-      className={status === 'spawning' ? 'status-pulse' : ''}
       style={{
         display: 'inline-block',
         width: 6,
@@ -393,13 +401,13 @@ export default function TeamPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
 
-      {/* Pulse animation for spawning dots */}
+      {/* Animations */}
       <style>{`
-        @keyframes status-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
+        @keyframes spinner-rotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
-        .status-pulse { animation: status-pulse 1.5s ease-in-out infinite; }
+        .spinner-rotate { animation: spinner-rotate 0.8s linear infinite; }
       `}</style>
 
       {/* Header */}
@@ -458,10 +466,10 @@ export default function TeamPage() {
                 }
               }}
             >
-              {teamState === 'idle' && '\u25B6 Avvia Team'}
-              {teamState === 'starting' && '\u21BB Avvio in corso...'}
-              {teamState === 'ready' && '\u2713 Team Pronto'}
-              {teamState === 'stopping' && '\u21BB Spegnimento...'}
+              {teamState === 'idle' && <><span style={{ marginRight: 4 }}>{'\u25B6'}</span> Avvia Team</>}
+              {teamState === 'starting' && <><Spinner size={12} color="#ffc107" /> <span style={{ marginLeft: 4 }}>Avvio in corso...</span></>}
+              {teamState === 'ready' && <><span style={{ marginRight: 4 }}>{'\u2713'}</span> Team Pronto</>}
+              {teamState === 'stopping' && <><Spinner size={12} color="#f44336" /> <span style={{ marginLeft: 4 }}>Spegnimento...</span></>}
             </button>
             {(teamState === 'ready' || activeCount > 0) && teamState !== 'stopping' && (
               <button
@@ -503,7 +511,7 @@ export default function TeamPage() {
                   letterSpacing: '0.05em',
                 }}
               >
-                {'\u21BB'} Spegnimento...
+                <Spinner size={12} color="#f44336" /> <span style={{ marginLeft: 4 }}>Spegnimento...</span>
               </span>
             )}
           </div>
