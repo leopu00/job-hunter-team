@@ -1,0 +1,52 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  eslint-web:
+    name: ESLint — web/
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+  prettier:
+    name: Prettier check — web/ + shared/
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Prettier
+        run: npm install --no-save prettier
+
+      - name: Prettier check — web/
+        run: npx prettier --check "web/app/**/*.{ts,tsx}"
+
+      - name: Prettier check — shared/
+        run: npx prettier --check "shared/**/*.ts" --ignore-path /dev/null
