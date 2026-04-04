@@ -82,9 +82,10 @@ test.describe('API routes — rispondono', () => {
 
 test.describe('Sidebar navigazione', () => {
 
-  test('sidebar presente sulla homepage', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
-    const nav = page.locator('nav').or(page.locator('[data-testid="sidebar"]')).or(page.locator('aside'));
+  test('sidebar presente su /agents', async ({ page }) => {
+    // La homepage (/) non mostra la sidebar per design — usare una pagina interna
+    await page.goto(`${BASE}/agents`, { waitUntil: 'domcontentloaded' });
+    const nav = page.locator('aside').or(page.locator('nav')).or(page.locator('[data-testid="sidebar"]'));
     await expect(nav.first()).toBeVisible({ timeout: 10000 });
   });
 
