@@ -8,7 +8,7 @@ import { Key, matchesKey, ProcessTerminal, Text, TUI } from "@mariozechner/pi-tu
 import { createJhtLayout } from "./tui-layout.js";
 import { ChatPanel } from "./components/chat-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { runSetupWizard } from "./tui-setup.js";
+import { runSetupWizard, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import type { JhtAgent, JhtTuiState, TuiStateAccess, SessionInfo } from "./tui-types.js";
@@ -83,28 +83,6 @@ export async function runJhtTui() {
   layout.updateHeader(state);
   layout.updateStatusBar(state);
 
-  // Crea client Anthropic
-  let client: ReturnType<typeof createTuiClient>;
-  if (resolvedApiKey) {
-    try {
-      client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt), resolvedApiKey);
-      chatPanel.addSystem("Connesso ad Anthropic API. Scrivi un messaggio e premi Enter.");
-    } catch (err) {
-      chatPanel.addSystem(`Errore: ${String((err as Error).message)}`);
-      state.isConnected = false;
-      state.connectionStatus = "disconnected";
-      layout.updateHeader(state);
-      client = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
-    }
-  } else {
-    chatPanel.addSystem("API key non configurata — la chat AI non è disponibile.");
-    chatPanel.addSystem("Usa /setup per configurare la chiave o riavvia la TUI.");
-    state.isConnected = false;
-    state.connectionStatus = "disconnected";
-    layout.updateHeader(state);
-    client = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
-  }
-
   const setActivityStatus = (s: string) => { state.activityStatus = s; layout.updateStatusBar(state); updateInputLine(); };
 
   // Event handlers (gestisce streaming, finalize, errori)
@@ -116,16 +94,51 @@ export async function runJhtTui() {
     setActivityStatus,
   });
 
-  // Command handlers (gestisce /status, /stop, /new, /help, e messaggi)
-  const { handleCommand, sendMessage } = createCommandHandlers({
-    client,
+  // Stub client (usato quando non connessi)
+  const stubClient = { sendChat: async () => {}, getStatus: async () => ({}), abortRun: async () => {}, listAgents: async () => [], history: [] } as any;
+
+  // Command context con client mutabile e reconnect
+  const commandContext: Parameters<typeof createCommandHandlers>[0] = {
+    client: stubClient,
     chatLog: chatPanel,
     opts: {},
     state,
     setActivityStatus,
-    refreshAgents: async () => { state.agents = await client.listAgents(); layout.agentList.setAgents(state.agents); },
+    refreshAgents: async () => { state.agents = await commandContext.client.listAgents(); layout.agentList.setAgents(state.agents); },
     requestRender: () => tui.requestRender(),
-  });
+    reconnect: (apiKey: string) => {
+      try {
+        saveApiKey(apiKey);
+        commandContext.client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt), apiKey);
+        state.isConnected = true;
+        state.connectionStatus = "connected";
+        layout.updateHeader(state);
+        layout.updateStatusBar(state);
+        tui.requestRender();
+        return true;
+      } catch { return false; }
+    },
+  };
+
+  // Connessione iniziale
+  if (resolvedApiKey) {
+    try {
+      commandContext.client = createTuiClient((evt) => eventHandlers.handleChatEvent(evt), resolvedApiKey);
+      chatPanel.addSystem("Connesso ad Anthropic API. Scrivi un messaggio e premi Enter.");
+    } catch (err) {
+      chatPanel.addSystem(`Errore: ${String((err as Error).message)}`);
+      state.isConnected = false;
+      state.connectionStatus = "disconnected";
+    }
+  } else {
+    chatPanel.addSystem("API key non configurata. Usa /setup <API_KEY> per connetterti.");
+    state.isConnected = false;
+    state.connectionStatus = "disconnected";
+  }
+  layout.updateHeader(state);
+
+  // Command handlers (gestisce /status, /stop, /new, /setup, /help, e messaggi)
+  const { handleCommand, sendMessage } = createCommandHandlers(commandContext);
 
   let exitRequested = false;
   const requestExit = () => { if (exitRequested) return; exitRequested = true; try { tui.stop(); } catch {} process.exit(0); };
