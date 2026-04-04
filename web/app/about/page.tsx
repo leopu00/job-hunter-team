@@ -1,103 +1,184 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useCallback } from 'react'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
+import LandingNav from '../components/landing/LandingNav'
 
-type AboutData = {
-  name: string; version: string; description: string; builtWith: string;
-  stats: { sharedModules: number; webPages: number; apiRoutes: number; testFiles: number; cliCommands: number };
-  modules: string[];
-  stack: Record<string, string[]>;
-}
+/* ── Dati agenti ──────────────────────────────────────────────────── */
 
-function StatCard({ label, value }: { label: string; value: number }) {
+type AgentKey = 'alfa' | 'scout' | 'analista' | 'scorer' | 'scrittore' | 'critico' | 'sentinella' | 'assistente'
+
+const AGENTS: { key: AgentKey; emoji: string; color: string }[] = [
+  { key: 'alfa',       emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100' },
+  { key: 'scout',      emoji: '\uD83D\uDD75\uFE0F',          color: '#2196f3' },
+  { key: 'analista',   emoji: '\u{1F468}\u200D\uD83D\uDD2C', color: '#00e676' },
+  { key: 'scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff' },
+  { key: 'scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600' },
+  { key: 'critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336' },
+  { key: 'sentinella', emoji: '\uD83D\uDC82',                 color: '#607d8b' },
+  { key: 'assistente', emoji: '\uD83E\uDDD1\u200D\uD83D\uDCBB', color: '#26c6da' },
+]
+
+const TIMELINE = ['2025 Q3', '2025 Q4', '2026 Q1', '2026 Q2']
+
+/* ── Componenti sezione ───────────────────────────────────────────── */
+
+function SectionLabel({ text }: { text: string }) {
   return (
-    <div className="flex flex-col items-center p-4 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-      <span className="text-2xl font-bold text-[var(--color-green)] font-mono">{value}</span>
-      <span className="text-[10px] text-[var(--color-dim)] mt-1 text-center">{label}</span>
+    <div className="flex items-center gap-2 mb-3">
+      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
+      <span className="text-[9px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>{text}</span>
     </div>
   )
 }
 
-function StackSection({ title, items }: { title: string; items: string[] }) {
+/* ── Contenuto pagina ─────────────────────────────────────────────── */
+
+function AboutContent() {
+  const { t } = useLandingI18n()
+
   return (
-    <div>
-      <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">{title}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {items.map(item => (
-          <span key={item} className="px-2.5 py-1 rounded text-[10px] font-mono"
-            style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
-            {item}
-          </span>
-        ))}
-      </div>
+    <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)' }}>
+      <LandingNav />
+
+      <main className="max-w-4xl mx-auto px-6 pt-28 pb-16">
+
+        {/* ── Hero ──────────────────────────────────────────────── */}
+        <section className="text-center mb-20">
+          <div className="inline-flex items-center gap-2 mb-5">
+            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <span className="text-[9px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>
+              {t('about_badge')}
+            </span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight mb-5">
+            {t('about_title_1')}<br />
+            <span style={{ color: 'var(--color-green)' }}>{t('about_title_2')}</span>
+          </h1>
+          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mx-auto">
+            {t('about_intro')}
+          </p>
+        </section>
+
+        {/* ── La storia + Timeline ──────────────────────────────── */}
+        <section className="mb-20">
+          <SectionLabel text={t('about_story_label')} />
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_story_title')}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
+            {t('about_story_desc')}
+          </p>
+
+          {/* Timeline */}
+          <div className="relative pl-6 border-l border-[var(--color-border)]">
+            {TIMELINE.map((date, i) => (
+              <div key={i} className="mb-6 last:mb-0 relative">
+                <div className="absolute -left-[25px] w-2.5 h-2.5 rounded-full border-2"
+                  style={{ borderColor: 'var(--color-green)', background: i === TIMELINE.length - 1 ? 'var(--color-green)' : 'var(--color-bg, #060608)' }} />
+                <span className="text-[9px] font-bold tracking-widest text-[var(--color-green)] uppercase">{date}</span>
+                <p className="text-[11px] text-[var(--color-muted)] mt-1">
+                  {t(`about_tl_${i}` as 'about_tl_0')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Gli agenti ────────────────────────────────────────── */}
+        <section className="mb-20">
+          <SectionLabel text={t('about_agents_label')} />
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_agents_title')}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
+            {t('about_agents_desc')}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {AGENTS.map(({ key, emoji, color }) => (
+              <div key={key} className="rounded-lg p-5 border border-[var(--color-border)] transition-colors hover:border-[var(--color-dim)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl">{emoji}</span>
+                  <h3 className="text-[13px] font-bold" style={{ color }}>
+                    {t(`about_agent_${key}_name` as 'about_agent_alfa_name')}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                  {t(`about_agent_${key}_desc` as 'about_agent_alfa_desc')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Come funziona ─────────────────────────────────────── */}
+        <section className="mb-20">
+          <SectionLabel text={t('about_how_label')} />
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_how_title')}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
+            {t('about_how_desc')}
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+                <span className="text-[11px] font-mono font-bold mt-px flex-shrink-0" style={{ color: 'var(--color-green)' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                  {t(`about_how_${i}` as 'about_how_0')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Visione futura ────────────────────────────────────── */}
+        <section className="mb-16">
+          <SectionLabel text={t('about_vision_label')} />
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-4">{t('about_vision_title')}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-2xl mb-8">
+            {t('about_vision_desc')}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+                <span className="text-[13px] mt-px" style={{ color: 'var(--color-green)' }}>{'\u2192'}</span>
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                  {t(`about_vision_${i}` as 'about_vision_0')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── CTA ───────────────────────────────────────────────── */}
+        <section className="text-center py-12 border-t border-[var(--color-border)]">
+          <p className="text-[12px] text-[var(--color-muted)] mb-5">
+            {t('cta_desc')}
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <Link href="/download" className="px-6 py-2.5 rounded text-[11px] font-bold tracking-wider no-underline transition-all"
+              style={{ background: 'var(--color-green)', color: '#060608' }}>
+              {t('cta_button')}
+            </Link>
+            <Link href="/team" className="px-6 py-2.5 rounded text-[11px] font-bold tracking-wider no-underline transition-all"
+              style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+              {t('nav_download') === 'Download' ? 'Meet the team' : 'Vedi il team'}
+            </Link>
+          </div>
+        </section>
+
+      </main>
     </div>
   )
 }
 
 export default function AboutPage() {
-  const [data, setData] = useState<AboutData | null>(null)
-
-  const fetchAbout = useCallback(async () => {
-    const res = await fetch('/api/about').catch(() => null)
-    if (!res?.ok) return
-    setData(await res.json())
-  }, [])
-
-  useEffect(() => { fetchAbout() }, [fetchAbout])
-
-  if (!data) return <div className="flex items-center justify-center py-20"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
-
   return (
-    <div style={{ animation: 'fade-in 0.35s ease both' }}>
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
-          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">About</span>
-        </div>
-        <div className="mt-3">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{data.name}</h1>
-          <p className="text-[var(--color-muted)] text-[11px] mt-1">{data.description}</p>
-          <div className="flex items-center gap-3 mt-2">
-            <span className="font-mono text-[11px] px-2 py-0.5 rounded" style={{ color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.3)' }}>v{data.version}</span>
-            <span className="text-[10px] text-[var(--color-dim)]">{data.builtWith}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-5 gap-3 mb-8">
-        <StatCard label="Moduli Shared" value={data.stats.sharedModules} />
-        <StatCard label="Pagine Web" value={data.stats.webPages} />
-        <StatCard label="API Routes" value={data.stats.apiRoutes} />
-        <StatCard label="File Test" value={data.stats.testFiles} />
-        <StatCard label="Comandi CLI" value={data.stats.cliCommands} />
-      </div>
-
-      <div className="mb-8">
-        <h2 className="text-sm font-bold text-[var(--color-bright)] mb-4">Stack Tecnologico</h2>
-        <div className="grid grid-cols-2 gap-4">
-          {Object.entries(data.stack).map(([k, v]) => <StackSection key={k} title={k} items={v} />)}
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <h2 className="text-sm font-bold text-[var(--color-bright)] mb-3">Moduli</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {data.modules.map(m => (
-            <span key={m} className="px-2 py-1 rounded text-[10px] font-mono"
-              style={{ background: 'rgba(0,232,122,0.06)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.2)' }}>
-              {m}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="border-t border-[var(--color-border)] pt-4">
-        <p className="text-[10px] text-[var(--color-dim)] text-center">
-          Job Hunter Team — Piattaforma multi-agente autonoma
-        </p>
-      </div>
-    </div>
+    <LandingI18nProvider>
+      <AboutContent />
+    </LandingI18nProvider>
   )
 }
