@@ -13,7 +13,7 @@ export default function MainContent({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const hasSidebar = pathname !== '/' && !PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
   return (
-    <div style={{ marginLeft: hasSidebar ? 200 : 0, minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+    <div id="main-content" tabIndex={-1} style={{ marginLeft: hasSidebar ? 200 : 0, minHeight: '100vh', position: 'relative', zIndex: 1 }}>
       {children}
     </div>
   )
