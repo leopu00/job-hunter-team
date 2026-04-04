@@ -105,6 +105,45 @@ const translations = {
     en: 'Agents search, analyze and prepare applications while you do other things. Review and approve from the dashboard.',
   },
 
+  // Demo page
+  demo_badge:        { it: 'tour guidato',           en: 'guided tour' },
+  demo_title:        { it: 'Come funziona JHT',      en: 'How JHT works' },
+  demo_subtitle:     {
+    it: 'Un tour passo passo del sistema: dall\'installazione ai risultati.',
+    en: 'A step-by-step tour of the system: from installation to results.',
+  },
+  demo_s0_title:     { it: 'Scarica e avvia',        en: 'Download and launch' },
+  demo_s0_desc:      {
+    it: 'Scarica il pacchetto, estrai e lancia start.sh. Il server si avvia su localhost:3000 e il browser si apre automaticamente.',
+    en: 'Download the package, extract and run start.sh. The server starts on localhost:3000 and the browser opens automatically.',
+  },
+  demo_s1_title:     { it: 'Configura il profilo',   en: 'Configure your profile' },
+  demo_s1_desc:      {
+    it: 'Inserisci nome, competenze, zona di ricerca e tipo di lavoro. Gli agenti si calibrano sul tuo profilo per cercare le offerte giuste.',
+    en: 'Enter your name, skills, search area and job type. Agents calibrate to your profile to find the right listings.',
+  },
+  demo_s2_title:     { it: 'Avvia il team',          en: 'Start the team' },
+  demo_s2_desc:      {
+    it: 'Dalla pagina Team, premi "Avvia tutti". Ogni agente si attiva nella sua sessione: Scout cerca, Analista valuta, Scorer classifica.',
+    en: 'From the Team page, click "Start all". Each agent activates in its session: Scout searches, Analyst evaluates, Scorer ranks.',
+  },
+  demo_s3_title:     { it: 'Pipeline in azione',     en: 'Pipeline in action' },
+  demo_s3_desc:      {
+    it: 'La pipeline lavora in autonomia. Lo Scout trova offerte, l\'Analista le esamina, lo Scorer calcola il match, lo Scrittore prepara i documenti.',
+    en: 'The pipeline works autonomously. Scout finds listings, Analyst examines them, Scorer computes matches, Writer prepares documents.',
+  },
+  demo_s4_title:     { it: 'Dashboard risultati',    en: 'Results dashboard' },
+  demo_s4_desc:      {
+    it: 'Nella dashboard vedi le candidature pronte, il match score, e lo stato di ogni offerta. Approva, modifica o scarta con un click.',
+    en: 'In the dashboard you see ready applications, match scores, and each listing\'s status. Approve, edit or discard with one click.',
+  },
+  demo_s5_title:     { it: 'Candidatura finale',     en: 'Final application' },
+  demo_s5_desc:      {
+    it: 'Il Critico revisiona ogni documento. Quando tutto e pronto, approvi l\'invio. Tu resti sempre al comando, gli agenti eseguono.',
+    en: 'The Critic reviews every document. When everything is ready, you approve the submission. You stay in control, agents execute.',
+  },
+  demo_cta:          { it: 'Prova ora',              en: 'Try now' },
+
   // CTA
   cta_title_1:       { it: 'Pronto a rivoluzionare',           en: 'Ready to revolutionize' },
   cta_title_2:       { it: 'la tua ricerca lavoro?',           en: 'your job search?' },
