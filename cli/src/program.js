@@ -18,6 +18,8 @@ import { registerAgentsCommand } from './commands/agents.js';
 import { registerNotificationsCommand } from './commands/notifications.js';
 import { registerSessionsCommand } from './commands/sessions.js';
 import { registerTemplatesCommand } from './commands/templates.js';
+import { registerDoctorCommand } from './commands/doctor.js';
+import { registerUpgradeCommand } from './commands/upgrade.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -46,6 +48,8 @@ export function buildProgram() {
   registerNotificationsCommand(program);
   registerSessionsCommand(program);
   registerTemplatesCommand(program);
+  registerDoctorCommand(program);
+  registerUpgradeCommand(program);
 
   return program;
 }
