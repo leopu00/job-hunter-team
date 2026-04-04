@@ -1,59 +1,33 @@
 'use client'
 
-const FEATURES = [
-  {
-    icon: '⚡',
-    title: 'Team Multi-Agente',
-    desc: '7 agenti AI specializzati — Scout, Analista, Scorer, Scrittore, Critico, Sentinella e Capitano — che collaborano come un vero team.',
-    accent: 'var(--color-green)',
-  },
-  {
-    icon: '◉',
-    title: 'Scansione Continua',
-    desc: 'Monitoring automatico di job board, LinkedIn e canali dedicati. Non perdere mai un\'opportunità rilevante.',
-    accent: 'var(--color-blue)',
-  },
-  {
-    icon: '✦',
-    title: 'Candidature Smart',
-    desc: 'CV e cover letter personalizzate per ogni posizione, ottimizzate per i sistemi ATS e per il recruiter.',
-    accent: 'var(--color-purple)',
-  },
-  {
-    icon: '△',
-    title: 'Scoring Intelligente',
-    desc: 'Ogni offerta viene analizzata e valutata in base al tuo profilo, competenze e preferenze. Focus su ciò che conta.',
-    accent: 'var(--color-yellow)',
-  },
-  {
-    icon: '◆',
-    title: 'Dashboard Real-Time',
-    desc: 'Metriche, analytics e stato di ogni candidatura. Tutto in una vista: token, costi, latenza, pipeline completa.',
-    accent: 'var(--color-orange)',
-  },
-  {
-    icon: '⬡',
-    title: 'Tu al Comando',
-    desc: 'Gli agenti propongono, tu decidi. Ogni candidatura richiede la tua approvazione prima dell\'invio.',
-    accent: 'var(--color-green)',
-  },
-]
+import { useLandingI18n } from './LandingI18n'
+
+const FEATURES_META = [
+  { icon: '⚡', titleKey: 'feat_0_title', descKey: 'feat_0_desc', accent: 'var(--color-green)' },
+  { icon: '◉',  titleKey: 'feat_1_title', descKey: 'feat_1_desc', accent: 'var(--color-blue)' },
+  { icon: '✦',  titleKey: 'feat_2_title', descKey: 'feat_2_desc', accent: 'var(--color-purple)' },
+  { icon: '△',  titleKey: 'feat_3_title', descKey: 'feat_3_desc', accent: 'var(--color-yellow)' },
+  { icon: '◆',  titleKey: 'feat_4_title', descKey: 'feat_4_desc', accent: 'var(--color-orange)' },
+  { icon: '⬡',  titleKey: 'feat_5_title', descKey: 'feat_5_desc', accent: 'var(--color-green)' },
+] as const
 
 export default function LandingFeatures() {
+  const { t } = useLandingI18n()
+
   return (
     <section id="features" className="px-6 py-24 relative">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           <span className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-3 block">
-            capabilities
+            {t('feat_label')}
           </span>
           <h2 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight">
-            Tutto ciò che serve,<br />niente di superfluo
+            {t('feat_title_1')}<br />{t('feat_title_2')}
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f, i) => (
+          {FEATURES_META.map((f, i) => (
             <div
               key={i}
               className="landing-feature-card group rounded-lg p-6 border border-[var(--color-border)] transition-all duration-300"
@@ -66,10 +40,10 @@ export default function LandingFeatures() {
                 {f.icon}
               </div>
               <h3 className="text-[13px] font-bold text-[var(--color-white)] mb-2 tracking-wide">
-                {f.title}
+                {t(f.titleKey)}
               </h3>
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-                {f.desc}
+                {t(f.descKey)}
               </p>
               {/* Glow border on hover */}
               <div

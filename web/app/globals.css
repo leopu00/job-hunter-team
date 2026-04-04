@@ -235,3 +235,25 @@ label {
   border-color: var(--color-border-glow);
   transform: translateY(-2px);
 }
+
+/* ── Modern Aesthetics ───────────────────────────────────────────── */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.glass-panel {
+  background: rgba(17, 17, 22, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-white) 0%, var(--color-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
