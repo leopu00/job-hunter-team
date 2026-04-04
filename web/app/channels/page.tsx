@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 
-type ChannelId = 'web' | 'cli' | 'telegram'
+type ChannelId = 'web' | 'cli' | 'telegram' | 'email' | 'slack' | 'webhook'
 type Caps = { markdown: boolean; streaming: boolean; attachments: boolean; push: boolean }
 type Stats = { messagesSent: number; messagesReceived: number; lastActivityAt: number | null; errors: number }
-type ChannelInfo = { id: ChannelId; name: string; description: string; connected: boolean; capabilities: Caps; stats: Stats }
+type ChannelInfo = { id: ChannelId; name: string; description: string; connected: boolean; enabled: boolean; capabilities: Caps; stats: Stats }
 
-const CH_ICON: Record<ChannelId, string> = { web: '🌐', cli: '⌨', telegram: '✈' }
+const CH_ICON: Record<ChannelId, string> = { web: 'W', cli: 'C', telegram: 'T', email: 'E', slack: 'S', webhook: 'H' }
 
 function CapBadge({ label, active }: { label: string; active: boolean }) {
   return (
@@ -28,7 +28,7 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-function ChannelCard({ ch }: { ch: ChannelInfo }) {
+function ChannelCard({ ch, onToggle }: { ch: ChannelInfo; onToggle: (id: ChannelId, enabled: boolean) => void }) {
   const lastActivity = ch.stats.lastActivityAt
     ? new Date(ch.stats.lastActivityAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : 'mai'
@@ -43,10 +43,17 @@ function ChannelCard({ ch }: { ch: ChannelInfo }) {
             <p className="text-[10px] text-[var(--color-muted)]">{ch.description}</p>
           </div>
         </div>
-        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
-          style={{ color: ch.connected ? 'var(--color-green)' : 'var(--color-red)', background: ch.connected ? 'rgba(0,232,122,0.08)' : 'rgba(255,69,96,0.08)', border: `1px solid ${ch.connected ? 'rgba(0,232,122,0.3)' : 'rgba(255,69,96,0.3)'}` }}>
-          {ch.connected ? 'connesso' : 'disconnesso'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
+            style={{ color: ch.connected ? 'var(--color-green)' : 'var(--color-red)', background: ch.connected ? 'rgba(0,232,122,0.08)' : 'rgba(255,69,96,0.08)', border: `1px solid ${ch.connected ? 'rgba(0,232,122,0.3)' : 'rgba(255,69,96,0.3)'}` }}>
+            {ch.connected ? 'connesso' : 'disconnesso'}
+          </span>
+          <button onClick={() => onToggle(ch.id, !ch.enabled)}
+            className="px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
+            style={{ color: ch.enabled ? 'var(--color-green)' : 'var(--color-dim)', background: ch.enabled ? 'rgba(0,232,122,0.08)' : 'var(--color-row)', border: `1px solid ${ch.enabled ? 'rgba(0,232,122,0.3)' : 'var(--color-border)'}` }}>
+            {ch.enabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">
@@ -85,6 +92,11 @@ export default function ChannelsPage() {
   useEffect(() => { fetchChannels() }, [fetchChannels])
   useEffect(() => { const id = setInterval(fetchChannels, 5000); return () => clearInterval(id) }, [fetchChannels])
 
+  const toggleChannel = async (id: ChannelId, enabled: boolean) => {
+    await fetch('/api/channels', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, enabled }) }).catch(() => null)
+    fetchChannels()
+  }
+
   const FILTERS: Array<{ key: FilterStatus; label: string }> = [
     { key: 'all', label: 'tutti' }, { key: 'connected', label: 'connessi' }, { key: 'disconnected', label: 'disconnessi' },
   ]
@@ -98,7 +110,7 @@ export default function ChannelsPage() {
           <span className="text-[10px] text-[var(--color-muted)]">Canali</span>
         </div>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Canali</h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">{connectedCount} connessi · {channels.length} totali</p>
+        <p className="text-[var(--color-muted)] text-[11px] mt-1">{connectedCount} connessi · {channels.filter(c => c.enabled).length} attivi · {channels.length} totali</p>
       </div>
 
       <div className="flex gap-1 mb-6">
@@ -114,7 +126,7 @@ export default function ChannelsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {channels.length === 0
           ? <div className="col-span-full flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessun canale trovato.</p></div>
-          : channels.map(ch => <ChannelCard key={ch.id} ch={ch} />)
+          : channels.map(ch => <ChannelCard key={ch.id} ch={ch} onToggle={toggleChannel} />)
         }
       </div>
     </div>
