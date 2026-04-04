@@ -5,6 +5,7 @@ import Sidebar from './components/sidebar'
 import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
 import Breadcrumb from './components/Breadcrumb'
+import { ToastProvider } from './components/Toast'
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -27,11 +28,13 @@ export default function RootLayout({
     <html lang="it" className={jetbrainsMono.variable}>
       <body>
         <ThemeProvider>
-          <Sidebar />
-          <MainContent>
-            <Breadcrumb />
-            {children}
-          </MainContent>
+          <ToastProvider>
+            <Sidebar />
+            <MainContent>
+              <Breadcrumb />
+              {children}
+            </MainContent>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>
