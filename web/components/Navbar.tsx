@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
 import TeamDropdown from './TeamDropdown'
+import { NotificationCenter } from '@/app/components/NotificationCenter'
 
 interface NavbarProps {
   user: User | null
@@ -50,9 +51,10 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/profile">Profilo</NavLink>
         </div>
 
-        {/* User / Login */}
+        {/* Notifications + User / Login */}
         {user ? (
           <div className="flex items-center gap-3">
+            <NotificationCenter />
             <div className="hidden sm:flex flex-col items-end">
               <span className="text-[11px] text-[var(--color-bright)] leading-none font-medium">
                 {fullName ?? email.split('@')[0]}
@@ -83,6 +85,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           </div>
         ) : (
           <div className="flex items-center gap-3">
+            <NotificationCenter />
             {workspace && <WorkspacePath path={workspace} />}
             <LoginButton />
           </div>
