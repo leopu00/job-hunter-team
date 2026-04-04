@@ -127,6 +127,88 @@ const translations = {
     it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
     en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
   },
+  dl_mac_guide_title: {
+    it: 'Guida installazione macOS',
+    en: 'macOS Installation Guide',
+  },
+  dl_mac_prereq_title: {
+    it: 'Requisiti',
+    en: 'Requirements',
+  },
+  dl_mac_prereq: {
+    it: ['macOS 12 Monterey o successivo', 'Node.js 18 o successivo (vedi sotto come installarlo)', 'Circa 500 MB di spazio libero', 'Connessione internet (solo per la prima installazione)'],
+    en: ['macOS 12 Monterey or later', 'Node.js 18 or later (see below how to install it)', 'About 500 MB of free disk space', 'Internet connection (only for the first install)'],
+  },
+  dl_mac_node_title: {
+    it: 'Passo 1 — Installa Node.js',
+    en: 'Step 1 — Install Node.js',
+  },
+  dl_mac_node_desc: {
+    it: 'Se non hai gia\' Node.js, il metodo piu\' semplice e\' con Homebrew:',
+    en: 'If you don\'t have Node.js yet, the easiest method is with Homebrew:',
+  },
+  dl_mac_node_steps: {
+    it: [
+      'Apri il Terminale (Applicazioni > Utility > Terminale, oppure cerca "Terminale" in Spotlight con Cmd+Spazio)',
+      'Se non hai Homebrew, installalo: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+      'Installa Node.js: brew install node',
+      'Verifica: node -v (deve mostrare v18 o superiore)',
+    ],
+    en: [
+      'Open Terminal (Applications > Utilities > Terminal, or search "Terminal" in Spotlight with Cmd+Space)',
+      'If you don\'t have Homebrew, install it: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+      'Install Node.js: brew install node',
+      'Verify: node -v (should show v18 or higher)',
+    ],
+  },
+  dl_mac_node_alt: {
+    it: 'In alternativa, scarica l\'installer da nodejs.org e segui la procedura guidata.',
+    en: 'Alternatively, download the installer from nodejs.org and follow the setup wizard.',
+  },
+  dl_mac_install_title: {
+    it: 'Passo 2 — Scarica e avvia',
+    en: 'Step 2 — Download and launch',
+  },
+  dl_mac_install_steps: {
+    it: [
+      'Scarica il pacchetto macOS dal bottone qui sopra',
+      'Apri il Terminale e vai nella cartella Downloads: cd ~/Downloads',
+      'Estrai l\'archivio: tar -xzf job-hunter-team-*.tar.gz',
+      'Entra nella cartella: cd job-hunter-team',
+      'Rendi eseguibile lo script: chmod +x start.sh',
+      'Avvia: ./start.sh',
+    ],
+    en: [
+      'Download the macOS package from the button above',
+      'Open Terminal and go to your Downloads folder: cd ~/Downloads',
+      'Extract the archive: tar -xzf job-hunter-team-*.tar.gz',
+      'Enter the folder: cd job-hunter-team',
+      'Make the script executable: chmod +x start.sh',
+      'Launch: ./start.sh',
+    ],
+  },
+  dl_mac_expect_title: {
+    it: 'Cosa succede',
+    en: 'What happens',
+  },
+  dl_mac_expect_steps: {
+    it: [
+      'Lo script verifica che Node.js sia installato',
+      'Installa le dipendenze automaticamente (solo la prima volta)',
+      'Compila l\'applicazione (solo la prima volta, richiede qualche minuto)',
+      'Avvia il server locale sulla porta 3000',
+      'Apre automaticamente Safari su http://localhost:3000',
+      'Per fermare il server: premi Ctrl+C nel Terminale',
+    ],
+    en: [
+      'The script checks that Node.js is installed',
+      'Installs dependencies automatically (first time only)',
+      'Builds the application (first time only, takes a few minutes)',
+      'Starts the local server on port 3000',
+      'Automatically opens Safari at http://localhost:3000',
+      'To stop the server: press Ctrl+C in the Terminal',
+    ],
+  },
   dl_linux_instr:    {
     it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
     en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
