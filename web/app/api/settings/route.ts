@@ -36,10 +36,57 @@ export async function GET() {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  let body: Record<string, unknown>
+  try { body = await req.json() }
+  catch { return NextResponse.json({ error: 'body non valido' }, { status: 400 }) }
+
+  let existing: Record<string, unknown> = {}
+  if (fs.existsSync(CONFIG_PATH)) {
+    try { existing = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) } catch { /* usa default */ }
+  }
+  const app   = (body.app   ?? {}) as Record<string, unknown>
+  const notif = (body.notifications ?? {}) as Record<string, unknown>
+  const updated = {
+    ...existing,
+    app: { ...(existing.app as Record<string, unknown> ?? {}), ...app },
+    notifications: { ...(existing.notifications as Record<string, unknown> ?? {}), ...notif },
+  }
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true })
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2) + '\n', 'utf-8')
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'errore' }, { status: 500 })
+  }
+}
+
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'body non valido' }, { status: 400 }) }
+
+  // Danger zone actions
+  if (body._action === 'reset_config') {
+    try {
+      const defaults = { version: 1, providers: {}, channels: {}, workspace: CONFIG_DIR, cron_enabled: false }
+      fs.mkdirSync(CONFIG_DIR, { recursive: true })
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaults, null, 2) + '\n', 'utf-8')
+      return NextResponse.json({ ok: true })
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'errore reset' }, { status: 500 })
+    }
+  }
+  if (body._action === 'clear_cache') {
+    const cacheDir = path.join(CONFIG_DIR, 'cache')
+    try {
+      if (fs.existsSync(cacheDir)) fs.rmSync(cacheDir, { recursive: true, force: true })
+      fs.mkdirSync(cacheDir, { recursive: true })
+      return NextResponse.json({ ok: true })
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'errore cache' }, { status: 500 })
+    }
+  }
 
   // Leggi config esistente come base
   let existing: Record<string, unknown> = { version: 1, providers: {}, channels: {}, workspace: CONFIG_DIR }
