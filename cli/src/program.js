@@ -13,6 +13,8 @@ import { registerCacheCommand } from './commands/cache.js';
 import { registerLogsCommand } from './commands/logs.js';
 import { registerProvidersCommand } from './commands/providers.js';
 import { registerStatsCommand } from './commands/stats.js';
+import { registerPluginsCommand } from './commands/plugins.js';
+import { registerAgentsCommand } from './commands/agents.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -36,6 +38,8 @@ export function buildProgram() {
   registerLogsCommand(program);
   registerProvidersCommand(program);
   registerStatsCommand(program);
+  registerPluginsCommand(program);
+  registerAgentsCommand(program);
 
   return program;
 }
