@@ -46,7 +46,7 @@ export async function GET() {
 
   const [tmuxActive, botInfo] = await Promise.all([
     checkTmux('JHT-BOT'),
-    token ? getMe(token) : Promise.resolve({ ok: false }),
+    token ? getMe(token) : Promise.resolve({ ok: false } as { ok: boolean; username?: string; firstName?: string; id?: number }),
   ])
 
   const connected = configured && botInfo.ok
