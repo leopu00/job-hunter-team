@@ -204,15 +204,20 @@ function WorkspaceView({
       setWorkspace(pendingPath)
       setWs(pendingPath)
       if (!data.hasDb) {
-        await fetch('/api/workspace/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: pendingPath }),
-        })
+        try {
+          await fetch('/api/workspace/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: pendingPath }),
+          })
+        } catch { /* init non critico — il db verra' creato dopo */ }
       }
+      // Redirect alla dashboard — usa location.href per full reload con cookie
       window.location.href = '/dashboard'
-    } catch { /* ignore */ }
-    setConfirming(false)
+      return
+    } catch {
+      setConfirming(false)
+    }
   }
 
   const hasWorkspace = workspace.length > 0
