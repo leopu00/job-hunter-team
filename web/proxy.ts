@@ -57,11 +57,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Utente autenticato sulla landing → redirect alla dashboard
-  if (pathname === '/' && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
+  // Landing page sempre accessibile — nessun redirect automatico
   return supabaseResponse
 }
 

@@ -33,54 +33,25 @@ function PageContent() {
   const [inputPath, setInputPath] = useState('')
 
   useEffect(() => {
-    // Se l'utente vuole il login/workspace selector, mostra subito
-    if (wantsLogin) {
-      if (!supabaseConfigured) {
-        // Modalita' locale: carica workspace se esiste
-        const saved = getWorkspace()
-        if (saved) {
-          fetch('/api/workspace')
-            .then(r => r.json())
-            .then(data => {
-              if (data.path) {
-                setWs(data.path)
-                setInputPath(data.path)
-                setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
-              }
-            })
-            .catch(() => {})
-        }
-      }
-      setLoading(false)
-      return
-    }
-
-    // Check se utente gia' autenticato → redirect a dashboard
-    if (supabaseConfigured) {
-      const supabase = createClient()
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user) router.replace('/dashboard')
-        else setLoading(false)
-      })
-    } else {
-      // Modalita' locale: se ha workspace con DB, redirect a dashboard
+    // Se l'utente vuole il login/workspace selector, carica dati workspace
+    if (wantsLogin && !supabaseConfigured) {
       const saved = getWorkspace()
       if (saved) {
         fetch('/api/workspace')
           .then(r => r.json())
           .then(data => {
-            if (data.path && data.hasDb && !wantsChange) {
-              router.replace('/dashboard')
-            } else {
-              setLoading(false)
+            if (data.path) {
+              setWs(data.path)
+              setInputPath(data.path)
+              setWsStatus({ hasDb: data.hasDb, hasProfile: data.hasProfile })
             }
           })
-          .catch(() => setLoading(false))
-      } else {
-        setLoading(false)
+          .catch(() => {})
       }
     }
-  }, [router, wantsLogin, wantsChange])
+    // La landing page si mostra SEMPRE — nessun redirect automatico
+    setLoading(false)
+  }, [wantsLogin])
 
   if (loading) return null
 
