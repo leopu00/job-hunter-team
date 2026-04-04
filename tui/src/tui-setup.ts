@@ -1,12 +1,13 @@
 /**
- * Setup wizard — guida l'utente alla configurazione iniziale della TUI.
- * Si attiva quando ANTHROPIC_API_KEY non è trovata.
+ * Setup wizard — onboarding completo al primo avvio.
+ * Step: API key → profilo utente (nome, competenze, zona, tipo lavoro).
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import * as readline from "node:readline";
 import chalk from "chalk";
+import { loadProfile, saveProfile, isProfileComplete, type UserProfile } from "./tui-profile.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
@@ -24,7 +25,7 @@ function printStep(n: number, total: number, text: string) {
   console.log(chalk.dim(`  [${n}/${total}]`) + " " + chalk.white(text));
 }
 
-function prompt(rl: readline.Interface, question: string): Promise<string> {
+function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise((resolve) => {
     rl.question(question, (answer) => resolve(answer.trim()));
   });
@@ -49,79 +50,85 @@ export function saveApiKey(key: string): void {
 }
 
 export async function runSetupWizard(): Promise<string | null> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const TOTAL = 5;
 
   printBanner();
-
-  console.log(chalk.yellow("  Benvenuto! Per usare la TUI serve una API key di Anthropic."));
-  console.log(chalk.dim("  La chiave verrà salvata in ~/.jht/jht.config.json"));
+  console.log(chalk.yellow("  Benvenuto! Configuriamo il tuo Job Hunter Team."));
+  console.log(chalk.dim("  I dati vengono salvati in ~/.jht/jht.config.json"));
   console.log("");
 
-  printStep(1, 2, "Come vuoi configurare l'accesso?");
-  console.log("");
-  console.log(chalk.white("    1") + chalk.dim(") Inserisci la tua ANTHROPIC_API_KEY"));
-  console.log(chalk.white("    2") + chalk.dim(") Salta per ora (la TUI partirà senza chat AI)"));
+  // ── Step 1: API Key ──
+  printStep(1, TOTAL, "API Key Anthropic (per la chat AI)");
+  console.log(chalk.dim("  Puoi trovarla su https://console.anthropic.com/settings/keys"));
+  console.log(chalk.white("    1") + chalk.dim(") Inserisci la chiave"));
+  console.log(chalk.white("    2") + chalk.dim(") Salta (potrai configurarla dopo con /setup)"));
   console.log("");
 
-  const choice = await prompt(rl, chalk.green("  > Scelta (1/2): "));
-
+  let apiKey: string | null = null;
+  const choice = await ask(rl, chalk.green("  > Scelta (1/2): "));
   if (choice === "1") {
-    console.log("");
-    printStep(2, 2, "Inserisci la tua API key Anthropic");
-    console.log(chalk.dim("  Puoi trovarla su https://console.anthropic.com/settings/keys"));
-    console.log("");
-
-    const key = await prompt(rl, chalk.green("  > API Key: "));
-
-    if (!key || key.length < 10) {
-      console.log("");
-      console.log(chalk.red("  ✗ Chiave non valida. Setup saltato."));
-      console.log(chalk.dim("  Puoi riprovare lanciando di nuovo la TUI."));
-      console.log("");
-      rl.close();
-      await sleep(1500);
-      return null;
-    }
-
-    // Test rapido della key
-    console.log("");
-    console.log(chalk.dim("  Verifica chiave in corso..."));
-
-    const valid = await testApiKey(key);
-    if (valid) {
-      saveApiKey(key);
-      console.log(chalk.green("  ✓ Chiave valida e salvata in ~/.jht/jht.config.json"));
-      console.log("");
-      rl.close();
-      await sleep(1000);
-      return key;
-    } else {
-      console.log(chalk.red("  ✗ Chiave non valida o errore di connessione."));
-      const retry = await prompt(rl, chalk.yellow("  Vuoi salvarla comunque? (s/n): "));
-      if (retry.toLowerCase() === "s") {
+    const key = await ask(rl, chalk.green("  > API Key: "));
+    if (key && key.length >= 10) {
+      console.log(chalk.dim("  Verifica in corso..."));
+      const valid = await testApiKey(key);
+      if (valid) {
         saveApiKey(key);
-        console.log(chalk.green("  ✓ Chiave salvata."));
-        rl.close();
-        await sleep(1000);
-        return key;
+        console.log(chalk.green("  ✓ Chiave valida e salvata."));
+        apiKey = key;
+      } else {
+        const save = await ask(rl, chalk.yellow("  Chiave non verificata. Salvare comunque? (s/n): "));
+        if (save.toLowerCase() === "s") { saveApiKey(key); apiKey = key; }
       }
-      rl.close();
-      await sleep(1000);
-      return null;
     }
   }
-
-  // Scelta 2: salta
   console.log("");
-  console.log(chalk.dim("  Setup saltato. La TUI partirà senza connessione AI."));
-  console.log(chalk.dim("  Puoi configurare la key in qualsiasi momento con /setup"));
+
+  // ── Step 2: Nome ──
+  printStep(2, TOTAL, "Come ti chiami?");
+  const nome = await ask(rl, chalk.green("  > Nome: "));
+  console.log("");
+
+  // ── Step 3: Competenze ──
+  printStep(3, TOTAL, "Quali sono le tue competenze principali?");
+  console.log(chalk.dim("  Separale con virgola. Es: Python, React, Project Management"));
+  const compRaw = await ask(rl, chalk.green("  > Competenze: "));
+  const competenze = compRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  console.log("");
+
+  // ── Step 4: Zona ──
+  printStep(4, TOTAL, "In che zona cerchi lavoro?");
+  console.log(chalk.dim("  Es: Milano, Roma, Remoto, Italia"));
+  const zona = await ask(rl, chalk.green("  > Zona: "));
+  console.log("");
+
+  // ── Step 5: Tipo lavoro ──
+  printStep(5, TOTAL, "Che tipo di lavoro cerchi?");
+  console.log(chalk.dim("  Es: Full-time, Part-time, Freelance, Stage"));
+  const tipoLavoro = await ask(rl, chalk.green("  > Tipo: "));
+  console.log("");
+
+  // ── Salva profilo ──
+  const profile: UserProfile = {
+    nome,
+    eta: "",
+    competenze,
+    zona,
+    tipoLavoro,
+    completato: isProfileComplete({ nome, eta: "", competenze, zona, tipoLavoro, completato: false }),
+  };
+  saveProfile(profile);
+
+  console.log(chalk.green("  ✓ Profilo salvato!"));
+  if (profile.completato) {
+    console.log(chalk.green("  ✓ Setup completato — gli agenti possono iniziare a cercare."));
+  } else {
+    console.log(chalk.yellow("  ⚠ Profilo incompleto — usa /profile nella TUI per completarlo."));
+  }
   console.log("");
   rl.close();
   await sleep(1500);
-  return null;
+  return apiKey;
 }
 
 async function testApiKey(key: string): Promise<boolean> {
@@ -140,7 +147,7 @@ async function testApiKey(key: string): Promise<boolean> {
       }),
       signal: AbortSignal.timeout(10000),
     });
-    return res.ok || res.status === 400; // 400 = key valida ma richiesta malformata
+    return res.ok || res.status === 400;
   } catch {
     return false;
   }
