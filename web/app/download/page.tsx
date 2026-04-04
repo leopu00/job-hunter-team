@@ -239,6 +239,18 @@ function DownloadContent() {
           {/* Mac detailed guide */}
           <MacGuide />
 
+          {/* Demo CTA */}
+          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8 text-center">
+            <p className="text-[12px] text-[var(--color-muted)] mb-3">
+              Vuoi vedere come funziona prima di scaricare?
+            </p>
+            <Link href="/demo"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold tracking-wide transition-all no-underline"
+              style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}>
+              Guarda la demo interattiva &rarr;
+            </Link>
+          </div>
+
           {/* Footer */}
           <div className="text-center">
             <p className="text-[10px] text-[var(--color-dim)]">
