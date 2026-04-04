@@ -70,25 +70,25 @@ export function LandingFooter() {
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Prodotto</h4>
             <Link href="/download" className={linkClass}>Download</Link>
-            <Link href="/team" className={linkClass}>Team</Link>
-            <Link href="/dashboard" className={linkClass}>Dashboard</Link>
+            <Link href="/pricing" className={linkClass}>Pricing</Link>
             <Link href="/demo" className={linkClass}>Demo</Link>
-            <Link href="/faq" className={linkClass}>FAQ</Link>
-            <Link href="/about" className={linkClass}>About</Link>
+            <Link href="/changelog" className={linkClass}>Changelog</Link>
           </div>
 
           {/* Risorse */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Risorse</h4>
+            <Link href="/guide" className={linkClass}>Guida</Link>
+            <Link href="/faq" className={linkClass}>FAQ</Link>
+            <Link href="/docs" className={linkClass}>Documentazione</Link>
+            <Link href="/about" className={linkClass}>Chi siamo</Link>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
-            <Link href="/setup" className={linkClass}>Setup</Link>
-            <Link href="/reports" className={linkClass}>Reports</Link>
-            <Link href="/pricing" className={linkClass}>Pricing</Link>
           </div>
 
           {/* Contatti */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Contatti</h4>
+            <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
             <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>Segnala un bug</a>
             <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>Discussioni</a>
             <Link href="/privacy" className={linkClass}>Privacy</Link>
