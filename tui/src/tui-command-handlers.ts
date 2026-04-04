@@ -30,6 +30,7 @@ export type CommandHandlerContext = {
   requestRender: () => void;
   noteLocalRunId?: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
+  reconnect?: (apiKey: string) => boolean;
 };
 
 function parseCommand(input: string): { name: string; args: string } {
@@ -51,12 +52,12 @@ function formatStatus(status: unknown): string[] {
 }
 
 export function createCommandHandlers(context: CommandHandlerContext) {
-  const { client, chatLog, opts, state, setActivityStatus, refreshAgents, requestRender,
+  const { chatLog, opts, state, setActivityStatus, refreshAgents, requestRender,
     noteLocalRunId, forgetLocalRunId } = context;
 
   const sendMessage = async (text: string) => {
     if (!state.isConnected) {
-      chatLog.addSystem("non connesso al gateway — messaggio non inviato");
+      chatLog.addSystem("non connesso — usa /setup <API_KEY> per configurare");
       setActivityStatus("disconnected"); requestRender(); return;
     }
     const runId = randomUUID();
@@ -64,7 +65,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     setActivityStatus("sending"); requestRender();
     try {
       noteLocalRunId?.(runId);
-      await client.sendChat({ sessionKey: state.currentSessionKey, message: text,
+      await context.client.sendChat({ sessionKey: state.currentSessionKey, message: text,
         thinking: opts.thinking, deliver: opts.deliver, timeoutMs: opts.timeoutMs, runId });
       setActivityStatus("waiting");
     } catch (err) {
@@ -75,7 +76,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     requestRender();
   };
 
-  const HELP = `commands:\n  /status  — gateway status\n  /stop    — interrompi run attivo\n  /new     — nuova sessione\n  /agent [id] — mostra o cambia agente\n  /agents  — lista agenti\n  /help    — mostra aiuto`.trim();
+  const HELP = `commands:\n  /setup <key> — configura API key Anthropic\n  /status  — stato connessione\n  /stop    — interrompi run attivo\n  /new     — nuova sessione\n  /agent [id] — mostra o cambia agente\n  /agents  — lista agenti\n  /help    — mostra aiuto`.trim();
 
   const handleCommand = async (raw: string) => {
     const { name, args } = parseCommand(raw);
@@ -85,13 +86,14 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         chatLog.addSystem(HELP); break;
 
       case "status":
-        try { const s = await client.getStatus(); for (const l of formatStatus(s)) chatLog.addSystem(l); }
+        if (!state.isConnected) { chatLog.addSystem("stato: non connesso — usa /setup <API_KEY>"); break; }
+        try { const s = await context.client.getStatus(); for (const l of formatStatus(s)) chatLog.addSystem(l); }
         catch (err) { chatLog.addSystem(`status fallito: ${String(err)}`); }
         break;
 
       case "stop": case "abort":
         if (!state.activeChatRunId) { chatLog.addSystem("nessun run attivo"); break; }
-        try { await client.abortRun(state.currentSessionKey); chatLog.addSystem("run interrotto"); }
+        try { await context.client.abortRun(state.currentSessionKey); chatLog.addSystem("run interrotto"); }
         catch (err) { chatLog.addSystem(`stop fallito: ${String(err)}`); }
         break;
 
@@ -117,6 +119,19 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
         } catch (err) { chatLog.addSystem(`agenti fallito: ${String(err)}`); }
         break;
+
+      case "setup": {
+        if (!args) {
+          chatLog.addSystem("uso: /setup <ANTHROPIC_API_KEY>");
+          chatLog.addSystem("Trova la key su https://console.anthropic.com/settings/keys");
+          break;
+        }
+        if (context.reconnect) {
+          const ok = context.reconnect(args);
+          chatLog.addSystem(ok ? "connesso ad Anthropic API" : "errore connessione — verifica la chiave");
+        }
+        break;
+      }
 
       default:
         await sendMessage(raw); return;
