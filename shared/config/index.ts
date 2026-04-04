@@ -30,6 +30,21 @@ export {
   writeConfig,
   configExists,
   redactConfig,
+  parseJson5,
+  onConfigChange,
   JHT_CONFIG_DIR,
   JHT_CONFIG_PATH,
 } from "./io";
+
+export {
+  resolveSecret,
+  createSecretRef,
+  describeSecret,
+} from "./secret-ref";
+export type {
+  SecretRef,
+  SecretPlaintext,
+  SecretEnvRef,
+  SecretFileRef,
+  SecretExecRef,
+} from "./secret-ref";
