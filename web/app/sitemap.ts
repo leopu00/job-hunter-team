@@ -1,0 +1,23 @@
+import type { MetadataRoute } from 'next'
+
+const SITE_URL = 'https://jobhunterteam.ai'
+
+/** Pagine pubbliche indicizzabili — landing, documentazione, info */
+const PUBLIC_PAGES = [
+  { path: '/',          priority: 1.0,  changeFrequency: 'weekly'  as const },
+  { path: '/download',  priority: 0.9,  changeFrequency: 'weekly'  as const },
+  { path: '/guide',     priority: 0.8,  changeFrequency: 'monthly' as const },
+  { path: '/faq',       priority: 0.8,  changeFrequency: 'monthly' as const },
+  { path: '/changelog', priority: 0.6,  changeFrequency: 'weekly'  as const },
+  { path: '/about',     priority: 0.5,  changeFrequency: 'monthly' as const },
+  { path: '/docs',      priority: 0.7,  changeFrequency: 'monthly' as const },
+]
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  return PUBLIC_PAGES.map((page) => ({
+    url: `${SITE_URL}${page.path}`,
+    lastModified: new Date(),
+    changeFrequency: page.changeFrequency,
+    priority: page.priority,
+  }))
+}
