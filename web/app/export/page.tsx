@@ -3,13 +3,18 @@
 import Link from 'next/link'
 import { useState, useCallback } from 'react'
 
-type DataSource = 'sessions' | 'tasks' | 'analytics'
+type DataSource = 'sessions' | 'tasks' | 'analytics' | 'jobs' | 'applications' | 'contacts' | 'companies' | 'interviews'
 type ExportFormat = 'json' | 'csv'
 
-const SOURCES: { id: DataSource; label: string; desc: string; color: string }[] = [
-  { id: 'sessions',  label: 'Sessioni',  desc: 'Sessioni agente con stato e metadata',  color: 'var(--color-green)' },
-  { id: 'tasks',     label: 'Task',      desc: 'Task con status, tempi e agente',       color: 'var(--color-blue)' },
-  { id: 'analytics', label: 'Analytics', desc: 'Chiamate API, token, costi, latenza',   color: 'var(--color-yellow)' },
+const SOURCES: { id: DataSource; label: string; desc: string; color: string; group: string }[] = [
+  { id: 'jobs',         label: 'Offerte',       desc: 'Offerte di lavoro salvate',           color: '#61affe',             group: 'Job Hunting' },
+  { id: 'applications', label: 'Candidature',   desc: 'Candidature inviate con timeline',    color: 'var(--color-green)',   group: 'Job Hunting' },
+  { id: 'contacts',     label: 'Contatti',      desc: 'Contatti networking',                 color: '#9b59b6',             group: 'Job Hunting' },
+  { id: 'companies',    label: 'Aziende',       desc: 'Aziende monitorate con rating',       color: '#fca130',             group: 'Job Hunting' },
+  { id: 'interviews',   label: 'Colloqui',      desc: 'Colloqui programmati e completati',   color: '#50e3c2',             group: 'Job Hunting' },
+  { id: 'sessions',     label: 'Sessioni',      desc: 'Sessioni agente con stato e metadata', color: 'var(--color-green)', group: 'Sistema' },
+  { id: 'tasks',        label: 'Task',          desc: 'Task con status, tempi e agente',      color: 'var(--color-blue)',  group: 'Sistema' },
+  { id: 'analytics',    label: 'Analytics',     desc: 'Chiamate API, token, costi, latenza',  color: 'var(--color-yellow)', group: 'Sistema' },
 ]
 
 function today(): string { return new Date().toISOString().slice(0, 10) }
@@ -57,7 +62,7 @@ export default function ExportPage() {
           <span className="text-[10px] text-[var(--color-muted)]">Esporta</span>
         </div>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Esporta Dati</h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">Esporta sessioni, task o analytics in JSON o CSV</p>
+        <p className="text-[var(--color-muted)] text-[11px] mt-1">Esporta dati job hunting e sistema in JSON o CSV</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -65,14 +70,21 @@ export default function ExportPage() {
         <div className="space-y-5">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-2">Sorgente dati</p>
-            <div className="space-y-2">
-              {SOURCES.map(s => (
-                <button key={s.id} onClick={() => setSource(s.id)}
-                  className="w-full text-left px-4 py-3 rounded-lg transition-all cursor-pointer"
-                  style={{ border: `1px solid ${source === s.id ? s.color : 'var(--color-border)'}`, background: source === s.id ? `${s.color}0d` : 'transparent' }}>
-                  <p className="text-[12px] font-semibold" style={{ color: source === s.id ? s.color : 'var(--color-muted)' }}>{s.label}</p>
-                  <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{s.desc}</p>
-                </button>
+            <div className="space-y-3">
+              {['Job Hunting', 'Sistema'].map(group => (
+                <div key={group}>
+                  <p className="text-[8px] font-bold tracking-widest text-[var(--color-dim)] mb-1">{group.toUpperCase()}</p>
+                  <div className="space-y-1">
+                    {SOURCES.filter(s => s.group === group).map(s => (
+                      <button key={s.id} onClick={() => setSource(s.id)}
+                        className="w-full text-left px-3 py-2 rounded-lg transition-all cursor-pointer"
+                        style={{ border: `1px solid ${source === s.id ? s.color : 'var(--color-border)'}`, background: source === s.id ? `${s.color}0d` : 'transparent' }}>
+                        <p className="text-[11px] font-semibold" style={{ color: source === s.id ? s.color : 'var(--color-muted)' }}>{s.label}</p>
+                        <p className="text-[8px] text-[var(--color-dim)]">{s.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

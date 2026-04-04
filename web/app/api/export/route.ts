@@ -7,39 +7,42 @@ export const dynamic = 'force-dynamic'
 
 const JHT_DIR = path.join(os.homedir(), '.jht')
 
-type DataSource = 'sessions' | 'tasks' | 'analytics'
+type DataSource = 'sessions' | 'tasks' | 'analytics' | 'jobs' | 'applications' | 'contacts' | 'companies' | 'interviews'
 type ExportFormat = 'json' | 'csv'
 
 function readJsonSafe<T>(p: string): T | null {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
 }
 
-function loadSessions(since: number, until: number): Record<string, unknown>[] {
-  const store = readJsonSafe<{ sessions?: Record<string, unknown>[] }>(path.join(JHT_DIR, 'sessions', 'sessions.json'))
-  return (store?.sessions ?? []).filter((s: any) => {
-    const ts = s.createdAtMs ?? s.createdAt ?? 0
-    return ts >= since && ts <= until
-  })
+const DATE_FIELDS = ['createdAt', 'createdAtMs', 'appliedAt', 'date', 'timestamp', 'closedAt', 'lastContact'];
+
+function filterByDate(items: Record<string, unknown>[], since: number, until: number): Record<string, unknown>[] {
+  return items.filter(item => {
+    for (const f of DATE_FIELDS) {
+      const val = item[f];
+      if (typeof val === 'number' && val >= since && val <= until) return true;
+    }
+    return since === 0 && until >= Date.now();
+  });
 }
 
-function loadTasks(since: number, until: number): Record<string, unknown>[] {
-  const store = readJsonSafe<{ tasks?: Record<string, unknown>[] }>(path.join(JHT_DIR, 'tasks', 'tasks.json'))
-  return (store?.tasks ?? []).filter((t: any) => {
-    const ts = t.createdAt ?? 0
-    return ts >= since && ts <= until
-  })
-}
-
-function loadAnalytics(since: number, until: number): Record<string, unknown>[] {
-  const store = readJsonSafe<{ entries?: Record<string, unknown>[] }>(path.join(JHT_DIR, 'analytics', 'analytics.json'))
-  return (store?.entries ?? []).filter((e: any) => {
-    const ts = e.timestamp ?? 0
-    return ts >= since && ts <= until
-  })
+function loadWrapped(file: string, key?: string): (since: number, until: number) => Record<string, unknown>[] {
+  return (since, until) => {
+    const raw = readJsonSafe<Record<string, unknown>>(path.join(JHT_DIR, file));
+    const items = key ? (raw as any)?.[key] ?? [] : Array.isArray(raw) ? raw : [];
+    return filterByDate(items, since, until);
+  };
 }
 
 const LOADERS: Record<DataSource, (since: number, until: number) => Record<string, unknown>[]> = {
-  sessions: loadSessions, tasks: loadTasks, analytics: loadAnalytics,
+  sessions: loadWrapped('sessions/sessions.json', 'sessions'),
+  tasks: loadWrapped('tasks/tasks.json', 'tasks'),
+  analytics: loadWrapped('analytics/analytics.json', 'entries'),
+  jobs: loadWrapped('jobs.json'),
+  applications: loadWrapped('applications.json'),
+  contacts: loadWrapped('contacts.json'),
+  companies: loadWrapped('companies.json'),
+  interviews: loadWrapped('interviews.json'),
 }
 
 function toCsv(rows: Record<string, unknown>[]): string {
@@ -61,7 +64,7 @@ export async function GET(req: NextRequest) {
   const format = (sp.get('format') ?? 'json') as ExportFormat
 
   if (!source || !LOADERS[source]) {
-    return NextResponse.json({ ok: false, error: 'source obbligatorio: sessions | tasks | analytics' }, { status: 400 })
+    return NextResponse.json({ ok: false, error: `source obbligatorio: ${Object.keys(LOADERS).join(' | ')}` }, { status: 400 })
   }
   if (format !== 'json' && format !== 'csv') {
     return NextResponse.json({ ok: false, error: 'format: json | csv' }, { status: 400 })
