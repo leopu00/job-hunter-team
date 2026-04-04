@@ -1,154 +1,121 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useToast } from '../components/Toast'
-import { EmptyState } from '../components/EmptyState'
+import Link from 'next/link'
+import { useEffect, useState, useCallback } from 'react'
 
-type Module  = { id: string; label: string }
-type Row     = { module: string; metric: string; value: string; detail: string }
-type Report  = { period: { from: string; to: string }; generated_at: string; modules: string[]; rows: Row[] }
+type MonthData = { month: string; sent: number; responses: number }
+type PhaseTime = { phase: string; avgDays: number }
+type TopCompany = { company: string; applications: number; responses: number }
+type KPI = { totalApplications: number; responseRate: number; interviewsScheduled: number; offersReceived: number; avgResponseDays: number }
+type Period = '30d' | '90d' | '6m'
 
-const inp: React.CSSProperties = {
-  border: '1px solid var(--color-border)', background: 'var(--color-card)',
-  color: 'var(--color-bright)', borderRadius: 6, fontSize: 11,
-  padding: '6px 10px', outline: 'none', fontFamily: 'var(--font-mono)',
-}
-
-function exportCsv(report: Report) {
-  const header = 'Modulo,Metrica,Valore,Dettaglio'
-  const rows   = report.rows.map(r => [r.module, r.metric, r.value, r.detail].map(v => `"${v.replace(/"/g, '""')}"`).join(','))
-  const csv    = [header, ...rows].join('\n')
-  const a      = document.createElement('a')
-  a.href       = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-  a.download   = `report-${report.period.from}-${report.period.to}.csv`
-  a.click()
+function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0
+  return (
+    <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--color-border)' }}>
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  )
 }
 
 export default function ReportsPage() {
-  const [modules,   setModules]   = useState<Module[]>([])
-  const [selected,  setSelected]  = useState<string[]>([])
-  const [from,      setFrom]      = useState(() => new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10))
-  const [to,        setTo]        = useState(() => new Date().toISOString().slice(0, 10))
-  const [report,    setReport]    = useState<Report | null>(null)
-  const [busy,      setBusy]      = useState(false)
-  const { addToast } = useToast()
+  const [period, setPeriod] = useState<Period>('30d')
+  const [kpi, setKpi] = useState<KPI | null>(null)
+  const [monthly, setMonthly] = useState<MonthData[]>([])
+  const [phases, setPhases] = useState<PhaseTime[]>([])
+  const [companies, setCompanies] = useState<TopCompany[]>([])
 
-  useEffect(() => {
-    fetch('/api/reports').then(r => r.json()).then(d => {
-      setModules(d.modules ?? [])
-      setSelected((d.modules ?? []).map((m: Module) => m.id))
-    }).catch(() => {})
-  }, [])
+  const fetchData = useCallback(async () => {
+    const res = await fetch(`/api/reports?period=${period}`).catch(() => null)
+    if (!res?.ok) return
+    const data = await res.json()
+    setKpi(data.kpi ?? null); setMonthly(data.monthly ?? [])
+    setPhases(data.phaseTimes ?? []); setCompanies(data.topCompanies ?? [])
+  }, [period])
 
-  const toggle = (id: string) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  const generate = async () => {
-    if (!selected.length) { addToast({ type: 'warning', message: 'Seleziona almeno un modulo' }); return }
-    setBusy(true)
-    try {
-      const r = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to, modules: selected }) })
-      const d = await r.json()
-      if (d.report) { setReport(d.report); addToast({ type: 'success', message: 'Report generato' }) }
-      else addToast({ type: 'error', message: d.error ?? 'Errore' })
-    } catch { addToast({ type: 'error', message: 'Errore di rete' }) }
-    finally { setBusy(false) }
-  }
+  const maxSent = Math.max(...monthly.map(m => m.sent), 1)
+  const maxPhase = Math.max(...phases.map(p => p.avgDays), 1)
+  const maxApps = Math.max(...companies.map(c => c.applications), 1)
+  const PERIODS: Array<{ key: Period; label: string }> = [{ key: '30d', label: '30 giorni' }, { key: '90d', label: '90 giorni' }, { key: '6m', label: '6 mesi' }]
 
-  const moduleLabel = (id: string) => modules.find(m => m.id === id)?.label ?? id
+  const KPI_CARDS: Array<{ label: string; value: string; color: string }> = kpi ? [
+    { label: 'Candidature', value: String(kpi.totalApplications), color: '#61affe' },
+    { label: 'Tasso risposta', value: `${kpi.responseRate}%`, color: 'var(--color-green)' },
+    { label: 'Colloqui', value: String(kpi.interviewsScheduled), color: 'var(--color-yellow)' },
+    { label: 'Offerte', value: String(kpi.offersReceived), color: 'var(--color-green)' },
+    { label: 'Tempo risposta', value: `${kpi.avgResponseDays}g`, color: 'var(--color-muted)' },
+  ] : []
 
   return (
-    <main className="min-h-screen px-6 py-10">
-      <div className="max-w-4xl flex flex-col gap-6">
-        <div>
-          <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>Report</h1>
+    <div style={{ animation: 'fade-in 0.35s ease both' }}>
+      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
+        <div className="flex items-center gap-2 mb-1">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Report</span>
         </div>
-
-        {/* Form */}
-        <div className="flex flex-col gap-4 p-5 rounded-xl" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-dim)' }}>Configurazione</p>
-
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>Da</label>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ ...inp, colorScheme: 'dark' }} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>A</label>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ ...inp, colorScheme: 'dark' }} />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>Moduli</label>
-            <div className="flex gap-3 flex-wrap">
-              {modules.map(m => {
-                const on = selected.includes(m.id)
-                return (
-                  <button key={m.id} onClick={() => toggle(m.id)}
-                    className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
-                    style={{ border: `1px solid ${on ? 'var(--color-green)' : 'var(--color-border)'}`,
-                      background: on ? 'rgba(0,232,122,0.08)' : 'transparent',
-                      color: on ? 'var(--color-green)' : 'var(--color-dim)' }}>
-                    {m.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <button onClick={generate} disabled={busy}
-            className="self-start px-5 py-2 rounded text-[11px] font-bold cursor-pointer transition-all"
-            style={{ background: busy ? 'var(--color-border)' : 'var(--color-green)', color: busy ? 'var(--color-dim)' : 'var(--color-void)', border: 'none' }}>
-            {busy ? 'Generazione…' : 'Genera Report'}
-          </button>
-        </div>
-
-        {/* Preview */}
-        {report && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>
-                Generato: {report.generated_at} · {report.rows.length} righe
-              </p>
-              <button onClick={() => exportCsv(report)}
-                className="px-4 py-1.5 rounded text-[10px] font-semibold cursor-pointer"
-                style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)', background: 'transparent' }}>
-                Export CSV ↓
+        <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Report</h1>
+          <div className="flex gap-1">
+            {PERIODS.map(p => (
+              <button key={p.key} onClick={() => setPeriod(p.key)}
+                className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase cursor-pointer transition-colors"
+                style={{ background: period === p.key ? 'var(--color-row)' : 'transparent', color: period === p.key ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${period === p.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
+                {p.label}
               </button>
-            </div>
-            {report.rows.length === 0 ? (
-              <EmptyState icon="📊" title="Nessun dato nel periodo selezionato" size="sm" />
-            ) : (
-              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr style={{ background: 'var(--color-deep)', borderBottom: '1px solid var(--color-border)' }}>
-                      {['Modulo', 'Metrica', 'Valore', 'Dettaglio'].map(h => (
-                        <th key={h} className="px-4 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider"
-                          style={{ color: 'var(--color-dim)' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.rows.map((r, i) => (
-                      <tr key={i} style={{ background: 'var(--color-panel)', borderBottom: i < report.rows.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                        <td className="px-4 py-2.5"><span className="text-[9px] px-2 py-0.5 rounded font-mono"
-                          style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-muted)' }}>
-                          {moduleLabel(r.module)}</span></td>
-                        <td className="px-4 py-2.5 text-[11px]" style={{ color: 'var(--color-muted)' }}>{r.metric}</td>
-                        <td className="px-4 py-2.5 text-[11px] font-mono font-bold" style={{ color: 'var(--color-bright)' }}>{r.value}</td>
-                        <td className="px-4 py-2.5 text-[10px]" style={{ color: 'var(--color-dim)' }}>{r.detail || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            ))}
           </div>
-        )}
+        </div>
       </div>
-    </main>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        {KPI_CARDS.map(k => (
+          <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+            <p className="text-[9px] uppercase tracking-widest text-[var(--color-dim)]">{k.label}</p>
+            <p className="text-xl font-bold mt-1" style={{ color: k.color }}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mb-4">
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Candidature per mese</p>
+          {monthly.map(m => (
+            <div key={m.month} className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] text-[var(--color-dim)] w-16">{m.month}</span>
+              <Bar value={m.sent} max={maxSent} color="#61affe" />
+              <span className="text-[10px] font-bold text-[var(--color-bright)] w-8 text-right">{m.sent}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Tempo medio per fase</p>
+          {phases.map(p => (
+            <div key={p.phase} className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] text-[var(--color-dim)] w-28 truncate">{p.phase}</span>
+              <Bar value={p.avgDays} max={maxPhase} color="var(--color-yellow)" />
+              <span className="text-[10px] font-bold text-[var(--color-bright)] w-10 text-right">{p.avgDays}g</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Top aziende</p>
+        {companies.map(c => {
+          const rate = c.applications > 0 ? Math.round((c.responses / c.applications) * 100) : 0
+          return (
+            <div key={c.company} className="flex items-center gap-3 mb-2">
+              <span className="text-[11px] font-semibold text-[var(--color-bright)] w-36 truncate">{c.company}</span>
+              <Bar value={c.applications} max={maxApps} color="var(--color-green)" />
+              <span className="text-[9px] text-[var(--color-muted)] w-20 text-right">{c.applications} inv · {rate}%</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

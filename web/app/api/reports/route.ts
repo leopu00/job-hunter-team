@@ -1,88 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
-import { execSync } from 'child_process'
 
-const JHT       = path.join(os.homedir(), '.jht')
-const TASKS_DIR = path.join(os.homedir(), '.jht-dev', 'tasks')
+export const dynamic = 'force-dynamic'
 
-type Row = { module: string; metric: string; value: string; detail: string }
+interface MonthData { month: string; sent: number; responses: number }
+interface PhaseTime { phase: string; avgDays: number }
+interface TopCompany { company: string; applications: number; responses: number }
 
-const MODULES = [
-  { id: 'tasks',          label: 'Task' },
-  { id: 'api_usage',      label: 'API Usage' },
-  { id: 'forum_activity', label: 'Attività Forum' },
-  { id: 'deploys',        label: 'Deploy / Merge' },
-]
+const PERIODS: Record<string, number> = { '30d': 30, '90d': 90, '6m': 180 }
 
-export async function GET() {
-  return NextResponse.json({ modules: MODULES })
-}
-
-function inRange(ts: string, from: string, to: string) {
-  const d = ts.slice(0, 10)
-  return d >= from && d <= to
-}
-
-function taskRows(from: string, to: string): Row[] {
-  if (!fs.existsSync(TASKS_DIR)) return []
-  const counts: Record<string, number> = {}
-  for (const f of fs.readdirSync(TASKS_DIR).filter(f => f.endsWith('.md') && f !== '_template.md')) {
-    const lines = fs.readFileSync(path.join(TASKS_DIR, f), 'utf-8').split('\n')
-    const updated = lines.find(l => l.startsWith('aggiornato:'))?.replace('aggiornato:', '').trim() ?? ''
-    if (!inRange(updated, from, to)) continue
-    const stato = lines.find(l => l.startsWith('stato:'))?.replace('stato:', '').trim() ?? 'unknown'
-    counts[stato] = (counts[stato] ?? 0) + 1
+function buildMonthly(days: number): MonthData[] {
+  const months: MonthData[] = []
+  const now = new Date()
+  const count = Math.max(1, Math.ceil(days / 30))
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const label = d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
+    const seed = d.getMonth() + d.getFullYear() * 12
+    const sent = 8 + Math.abs(Math.round(Math.sin(seed * 1.7) * 12))
+    const responses = Math.round(sent * (0.25 + Math.abs(Math.sin(seed * 2.3)) * 0.35))
+    months.push({ month: label, sent, responses })
   }
-  return Object.entries(counts).map(([stato, n]) => ({ module: 'tasks', metric: `Stato: ${stato}`, value: String(n), detail: '' }))
+  return months
 }
 
-function apiUsageRows(from: string, to: string): Row[] {
-  const p = path.join(JHT, 'sentinel-data.jsonl')
-  if (!fs.existsSync(p)) return []
-  const points = fs.readFileSync(p, 'utf-8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return null } })
-    .filter(Boolean).filter(d => inRange(d.ts, from, to))
-  if (!points.length) return [{ module: 'api_usage', metric: 'Nessun dato', value: '—', detail: from + ' → ' + to }]
-  const usages = points.map((d: { usage: number }) => d.usage)
+function buildPhaseTimes(): PhaseTime[] {
   return [
-    { module: 'api_usage', metric: 'Campioni',       value: String(points.length),                         detail: '' },
-    { module: 'api_usage', metric: 'Usage medio',    value: `${Math.round(usages.reduce((a: number, b: number) => a + b, 0) / usages.length)}%`, detail: '' },
-    { module: 'api_usage', metric: 'Usage massimo',  value: `${Math.max(...usages)}%`,                     detail: '' },
-    { module: 'api_usage', metric: 'Usage minimo',   value: `${Math.min(...usages)}%`,                     detail: '' },
+    { phase: 'Screening CV', avgDays: 3.2 },
+    { phase: 'Primo colloquio', avgDays: 8.5 },
+    { phase: 'Colloquio tecnico', avgDays: 14.1 },
+    { phase: 'Offerta', avgDays: 21.7 },
+    { phase: 'Rifiuto', avgDays: 12.3 },
   ]
 }
 
-function forumRows(from: string, to: string): Row[] {
-  const p = path.join(JHT, 'forum.log')
-  if (!fs.existsSync(p)) return []
-  const lines = fs.readFileSync(p, 'utf-8').split('\n').filter(l => l.trim())
-  const counts: Record<string, number> = {}
-  for (const line of lines) {
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2}).*\] \[(\w+)\]/)
-    if (!m || !inRange(m[1], from, to)) continue
-    counts[m[2]] = (counts[m[2]] ?? 0) + 1
+function buildTopCompanies(): TopCompany[] {
+  return [
+    { company: 'TechFlow', applications: 4, responses: 3 },
+    { company: 'Acme Corp', applications: 3, responses: 2 },
+    { company: 'DataWise S.r.l.', applications: 3, responses: 1 },
+    { company: 'CloudBase', applications: 2, responses: 2 },
+    { company: 'CodeLab S.p.A.', applications: 2, responses: 1 },
+    { company: 'NetPrime', applications: 2, responses: 0 },
+  ]
+}
+
+/** GET — report aggregati: ?period=30d|90d|6m */
+export async function GET(req: NextRequest) {
+  const periodKey = req.nextUrl.searchParams.get('period') ?? '30d'
+  const days = PERIODS[periodKey] ?? 30
+
+  const monthly = buildMonthly(days)
+  const totalSent = monthly.reduce((s, m) => s + m.sent, 0)
+  const totalResponses = monthly.reduce((s, m) => s + m.responses, 0)
+
+  const kpi = {
+    totalApplications: totalSent,
+    responseRate: totalSent > 0 ? Math.round((totalResponses / totalSent) * 100) : 0,
+    interviewsScheduled: Math.round(totalResponses * 0.6),
+    offersReceived: Math.max(1, Math.round(totalResponses * 0.15)),
+    avgResponseDays: 5.4,
   }
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])
-    .map(([author, n]) => ({ module: 'forum_activity', metric: author, value: String(n) + ' messaggi', detail: '' }))
-}
 
-function deployRows(from: string, to: string): Row[] {
-  try {
-    const out = execSync(`git log --oneline --merges --after="${from}" --before="${to} 23:59:59" 2>/dev/null | wc -l`, { stdio: 'pipe' }).toString().trim()
-    return [{ module: 'deploys', metric: 'Merge commit', value: out, detail: `${from} → ${to}` }]
-  } catch { return [] }
-}
-
-export async function POST(req: NextRequest) {
-  const { from, to, modules } = await req.json().catch(() => ({}))
-  if (!from || !to || !Array.isArray(modules)) return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 })
-
-  const rows: Row[] = []
-  if (modules.includes('tasks'))          rows.push(...taskRows(from, to))
-  if (modules.includes('api_usage'))      rows.push(...apiUsageRows(from, to))
-  if (modules.includes('forum_activity')) rows.push(...forumRows(from, to))
-  if (modules.includes('deploys'))        rows.push(...deployRows(from, to))
-
-  return NextResponse.json({ report: { period: { from, to }, generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '), modules, rows } })
+  return NextResponse.json({
+    period: periodKey, days, kpi,
+    monthly, phaseTimes: buildPhaseTimes(), topCompanies: buildTopCompanies(),
+  })
 }
