@@ -25,7 +25,7 @@ export default function LandingHero() {
           <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('hero_badge')}</span>
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
+        <h1 className="text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
           {t('hero_title_1')}
           <br />
           <span className="text-gradient" style={{ color: 'var(--color-green)' }}>{t('hero_title_2')}</span>
@@ -66,7 +66,7 @@ export default function LandingHero() {
         </div>
 
         {/* Terminal body */}
-        <div className="px-4 py-4 font-mono text-[11px] md:text-[12px] leading-relaxed">
+        <div className="px-3 sm:px-4 py-4 font-mono text-[9px] sm:text-[11px] md:text-[12px] leading-relaxed overflow-x-auto">
           {TERMINAL_LINES.map((line, i) => (
             <div key={i} className="landing-term-line" style={{ animationDelay: `${0.8 + i * 0.35}s` }}>
               <span style={{ color: line.color, opacity: 0.7 }}>{line.prefix}</span>
