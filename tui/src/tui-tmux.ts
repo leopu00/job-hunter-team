@@ -34,6 +34,16 @@ export function listJhtSessions(): TmuxSession[] {
     });
 }
 
+/** Sessioni interne da nascondere all'utente finale */
+const INTERNAL_PREFIXES = ["lab-", "JHT-E2E", "JHT-SENTINEL-USAGE"];
+
+/** Elenca solo le sessioni agenti visibili all'utente (filtra sessioni interne dev) */
+export function listUserSessions(): TmuxSession[] {
+  return listJhtSessions().filter(
+    (s) => !INTERNAL_PREFIXES.some((p) => s.name.startsWith(p)),
+  );
+}
+
 /** Cattura le ultime N righe del pane di una sessione tmux */
 export function capturePane(sessionName: string, lines = 10): string[] {
   const r = spawnSync("tmux", ["capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`], {
