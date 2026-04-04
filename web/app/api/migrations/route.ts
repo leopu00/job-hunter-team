@@ -79,20 +79,38 @@ export async function GET() {
 // POST — esegui migrazioni up
 export async function POST() {
   try {
-    const { migrateUp } = await import('../../../../shared/migrations/runner.js');
+    // Migrate up inline — shared/migrations/runner non disponibile
     const config = loadConfig();
-    const result = migrateUp(REGISTERED_MIGRATIONS, config, { statePath: STATE_PATH });
+    const state = loadState();
+    const pending = REGISTERED_MIGRATIONS
+      .filter(m => compareVersions(m.version, state.currentVersion) > 0)
+      .sort((a, b) => compareVersions(a.version, b.version));
 
-    if (result.ok && result.applied.length > 0) {
+    const from = state.currentVersion;
+    const applied: { version: string; description: string; success: boolean; error?: string }[] = [];
+
+    for (const m of pending) {
+      try {
+        m.up(config);
+        state.applied.push({ version: m.version, description: m.description, appliedAt: Date.now() });
+        state.currentVersion = m.version;
+        applied.push({ version: m.version, description: m.description, success: true });
+      } catch (e) {
+        applied.push({ version: m.version, description: m.description, success: false, error: String(e) });
+        break;
+      }
+    }
+
+    state.updatedAt = Date.now();
+    fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), 'utf-8');
+    if (applied.some(a => a.success)) {
       fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
     }
 
-    return NextResponse.json({
-      ok: result.ok, from: result.from, to: result.to,
-      applied: result.applied.map(a => ({ version: a.version, description: a.description, success: a.success, error: a.error })),
-      rolledBack: result.rolledBack,
-    }, { status: result.ok ? 200 : 500 });
+    const ok = applied.every(a => a.success);
+    return NextResponse.json({ ok, from, to: state.currentVersion, applied }, { status: ok ? 200 : 500 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -105,18 +123,35 @@ export async function PATCH(req: Request) {
   if (!target) return NextResponse.json({ error: 'Parametro target richiesto' }, { status: 400 });
 
   try {
-    const { migrateDown } = await import('../../../../shared/migrations/runner.js');
+    // Migrate down inline — shared/migrations/runner non disponibile
     const config = loadConfig();
-    const result = migrateDown(REGISTERED_MIGRATIONS, config, target, { statePath: STATE_PATH });
+    const state = loadState();
+    const from = state.currentVersion;
+    const toRollback = REGISTERED_MIGRATIONS
+      .filter(m => compareVersions(m.version, target) > 0 && compareVersions(m.version, state.currentVersion) <= 0)
+      .sort((a, b) => compareVersions(b.version, a.version));
 
-    if (result.ok && result.applied.length > 0) {
+    const applied: { version: string; description: string; success: boolean; error?: string }[] = [];
+    for (const m of toRollback) {
+      try {
+        m.down(config);
+        state.applied = state.applied.filter(a => a.version !== m.version);
+        state.currentVersion = target;
+        applied.push({ version: m.version, description: m.description, success: true });
+      } catch (e) {
+        applied.push({ version: m.version, description: m.description, success: false, error: String(e) });
+        break;
+      }
+    }
+
+    state.updatedAt = Date.now();
+    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), 'utf-8');
+    if (applied.some(a => a.success)) {
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
     }
 
-    return NextResponse.json({
-      ok: result.ok, from: result.from, to: result.to,
-      applied: result.applied.map(a => ({ version: a.version, description: a.description, success: a.success, error: a.error })),
-    }, { status: result.ok ? 200 : 500 });
+    const ok = applied.every(a => a.success);
+    return NextResponse.json({ ok, from, to: state.currentVersion, applied }, { status: ok ? 200 : 500 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -52,22 +52,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nessuna sorgente trovata' }, { status: 400 });
     }
 
-    // Importa dinamicamente per evitare problemi con webpack/next
-    const { createBackup } = await import('../../../../shared/backup/runner.js');
-    const result = createBackup(existing, { backupDir: BACKUP_DIR, compress: true, sources: existing });
+    // Backup inline — shared/backup/runner non disponibile
+    const start = Date.now();
+    const id = `bk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const archivePath = path.join(BACKUP_DIR, `${id}.json`);
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 500 });
+    const snapshot: Record<string, string> = {};
+    for (const src of existing) {
+      try { snapshot[src] = fs.readFileSync(src, 'utf-8'); } catch { /* skip */ }
     }
+    fs.writeFileSync(archivePath, JSON.stringify(snapshot, null, 2), 'utf-8');
+    const sizeBytes = fs.statSync(archivePath).size;
 
-    // Aggiorna descrizione se fornita
-    if (description && result.entry) {
-      const catalog = loadCatalog();
-      const entry = catalog.find(e => e.id === result.entry!.id);
-      if (entry) { entry.description = description; saveCatalog(catalog); }
-    }
+    const entry: BackupEntry = {
+      id, createdAt: Date.now(), sizeBytes, sources: existing,
+      compressed: false, archivePath, description,
+    };
+    const catalog = loadCatalog();
+    catalog.push(entry);
+    saveCatalog(catalog);
 
-    return NextResponse.json({ backup: result.entry, durationMs: result.durationMs }, { status: 201 });
+    return NextResponse.json({ backup: entry, durationMs: Date.now() - start }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -80,14 +86,23 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
 
   try {
-    const { restoreBackup } = await import('../../../../shared/backup/runner.js');
-    const targetDir = path.join(homedir(), '.jht', 'restored', id);
-    const result = restoreBackup(id, targetDir, { backupDir: BACKUP_DIR });
+    // Restore inline — shared/backup/runner non disponibile
+    const start = Date.now();
+    const catalog = loadCatalog();
+    const entry = catalog.find(e => e.id === id);
+    if (!entry) return NextResponse.json({ error: 'Backup non trovato' }, { status: 404 });
+    if (!fs.existsSync(entry.archivePath)) return NextResponse.json({ error: 'Archivio mancante' }, { status: 404 });
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 404 });
+    const snapshot = JSON.parse(fs.readFileSync(entry.archivePath, 'utf-8'));
+    const targetDir = path.join(homedir(), '.jht', 'restored', id);
+    fs.mkdirSync(targetDir, { recursive: true });
+    const restoredFiles: string[] = [];
+    for (const [filePath, content] of Object.entries(snapshot)) {
+      const dest = path.join(targetDir, path.basename(filePath));
+      fs.writeFileSync(dest, content as string, 'utf-8');
+      restoredFiles.push(dest);
     }
-    return NextResponse.json({ restored: result.restoredFiles, targetDir, durationMs: result.durationMs });
+    return NextResponse.json({ restored: restoredFiles, targetDir, durationMs: Date.now() - start });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
