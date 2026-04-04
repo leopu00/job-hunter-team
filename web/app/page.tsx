@@ -2,7 +2,7 @@
 
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Suspense, useEffect, useState, useRef, type ReactNode } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getWorkspace, setWorkspace } from '@/lib/workspace-client'
 import LandingNav from './components/landing/LandingNav'
@@ -12,35 +12,7 @@ import LandingSteps from './components/landing/LandingSteps'
 import LandingGetStarted from './components/landing/LandingGetStarted'
 import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
-
-function ScrollReveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect() } },
-      { threshold: 0.15 },
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [])
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
-        transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s`,
-      }}
-    >
-      {children}
-    </div>
-  )
-}
+import FadeInSection from './components/landing/FadeInSection'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -110,10 +82,10 @@ function PageContent() {
       <main style={{ position: 'relative', zIndex: 1 }}>
         <LandingNav />
         <LandingHero />
-        <ScrollReveal><LandingFeatures /></ScrollReveal>
-        <ScrollReveal delay={0.1}><LandingSteps /></ScrollReveal>
-        <ScrollReveal delay={0.1}><LandingGetStarted /></ScrollReveal>
-        <ScrollReveal><LandingCTA /></ScrollReveal>
+        <FadeInSection><LandingFeatures /></FadeInSection>
+        <FadeInSection delay={100}><LandingSteps /></FadeInSection>
+        <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
+        <FadeInSection delay={100}><LandingCTA /></FadeInSection>
         <LandingFooter />
       </main>
     </LandingI18nProvider>
