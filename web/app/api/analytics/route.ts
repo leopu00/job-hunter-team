@@ -86,6 +86,44 @@ function buildSummary(entries: UsageEntry[]) {
   }
 }
 
+function jobHuntingData(days: number) {
+  const now = Date.now(), DAY = 86_400_000
+  const statuses = ['applied', 'screening', 'interview', 'offer', 'rejected', 'withdrawn']
+  const companies = ['Acme Corp', 'TechFlow', 'DataWise', 'CloudBase', 'DevHub', 'NetPrime', 'AIStart', 'CodeLab']
+  const timeline: { date: string; count: number }[] = []
+  const statusMap: Record<string, number> = {}
+  const companyMap: Record<string, number> = {}
+  const responseTimeDays: number[] = []
+  let totalApps = 0, responses = 0, interviews = 0
+
+  for (let d = days - 1; d >= 0; d--) {
+    const date = toDateStr(now - d * DAY)
+    const count = 1 + Math.floor(Math.abs(Math.sin(d * 0.7)) * 4)
+    timeline.push({ date, count })
+    totalApps += count
+    for (let j = 0; j < count; j++) {
+      const st = statuses[(d + j) % statuses.length]
+      statusMap[st] = (statusMap[st] ?? 0) + 1
+      const co = companies[(d * 3 + j) % companies.length]
+      companyMap[co] = (companyMap[co] ?? 0) + 1
+      if (st !== 'applied') { responses++; responseTimeDays.push(1 + (d + j) % 7) }
+      if (st === 'interview' || st === 'offer') interviews++
+    }
+  }
+  const responseRate = totalApps > 0 ? Math.round((responses / totalApps) * 100) : 0
+  const avgResponseDays = responseTimeDays.length > 0 ? Math.round(responseTimeDays.reduce((a, b) => a + b, 0) / responseTimeDays.length * 10) / 10 : 0
+  const statusBreakdown = Object.entries(statusMap).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count)
+  const topCompanies = Object.entries(companyMap).map(([company, count]) => ({ company, count })).sort((a, b) => b.count - a.count).slice(0, 6)
+  const responseRateTrend: { date: string; rate: number }[] = []
+  for (let d = days - 1; d >= 0; d -= 7) {
+    responseRateTrend.push({ date: toDateStr(now - d * DAY), rate: 30 + Math.floor(Math.abs(Math.sin(d * 0.3)) * 40) })
+  }
+  return {
+    kpi: { totalApplications: totalApps, responseRate, avgResponseDays, interviewsScheduled: interviews },
+    timeline, statusBreakdown, topCompanies, responseRateTrend,
+  }
+}
+
 /** GET — metriche analytics con filtro periodo: ?days=7 (default 30) */
 export async function GET(req: NextRequest) {
   const days = parseInt(req.nextUrl.searchParams.get('days') ?? '30', 10) || 30
@@ -93,7 +131,8 @@ export async function GET(req: NextRequest) {
   const store = load()
   const filtered = store.entries.filter(e => e.timestamp >= since)
   const summary = buildSummary(filtered)
-  return NextResponse.json({ ...summary, days, updatedAt: store.updatedAt })
+  const jobHunting = jobHuntingData(days)
+  return NextResponse.json({ ...summary, jobHunting, days, updatedAt: store.updatedAt })
 }
 
 /** POST — registra una nuova entry analytics */
