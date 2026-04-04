@@ -1,0 +1,66 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    # Scansione settimanale ogni lunedì alle 07:00 UTC
+    - cron: "0 7 * * 1"
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Audit web/
+        working-directory: web
+        run: npm audit --audit-level=high
+
+      - name: Audit tests/js/
+        working-directory: tests/js
+        run: npm audit --audit-level=high
+
+  secrets:
+    name: Gitleaks — secrets check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sast:
+    name: SAST — Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep scan
+        run: |
+          semgrep ci \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/secrets \
+            --error \
+            --exclude "tests/**" \
+            --exclude "node_modules/**"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
