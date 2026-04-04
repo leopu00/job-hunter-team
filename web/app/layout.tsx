@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
     images: ['/og-image.png'],
   },
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
 }
 
 export default function RootLayout({
