@@ -7,7 +7,7 @@ const PROTECTED_PREFIXES = [
   '/dashboard', '/profile', '/capitano', '/scout', '/analista',
   '/scorer', '/scrittore', '/critico', '/sentinella', '/team',
   '/applications', '/positions', '/ready', '/risposte', '/crescita',
-  '/assistente', '/setup', '/download', '/about',
+  '/assistente', '/setup', '/download', '/about', '/demo',
 ]
 
 export default function MainContent({ children }: { children: React.ReactNode }) {
