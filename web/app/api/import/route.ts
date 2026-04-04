@@ -7,13 +7,18 @@ export const dynamic = 'force-dynamic'
 
 const JHT_DIR = path.join(os.homedir(), '.jht')
 
-type ImportTarget = 'sessions' | 'tasks' | 'config'
+type ImportTarget = 'sessions' | 'tasks' | 'config' | 'jobs' | 'contacts' | 'companies'
 
 const PATHS: Record<ImportTarget, string> = {
-  sessions: path.join(JHT_DIR, 'sessions', 'sessions.json'),
-  tasks:    path.join(JHT_DIR, 'tasks', 'tasks.json'),
-  config:   path.join(JHT_DIR, 'jht.config.json'),
+  sessions:  path.join(JHT_DIR, 'sessions', 'sessions.json'),
+  tasks:     path.join(JHT_DIR, 'tasks', 'tasks.json'),
+  config:    path.join(JHT_DIR, 'jht.config.json'),
+  jobs:      path.join(JHT_DIR, 'jobs.json'),
+  contacts:  path.join(JHT_DIR, 'contacts.json'),
+  companies: path.join(JHT_DIR, 'companies.json'),
 }
+
+const JH_REQUIRED: Record<string, string[]> = { jobs: ['title', 'company'], contacts: ['name'], companies: ['name'] }
 
 function readJsonSafe<T>(p: string): T | null {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
@@ -61,8 +66,21 @@ function validateConfig(data: unknown): ValidationResult {
   return { ok: true, errors, count: 1 }
 }
 
+function validateJhEntity(data: unknown, entity: string): ValidationResult {
+  const errors: string[] = []
+  const items = Array.isArray(data) ? data : (data as any)?.data
+  if (!Array.isArray(items)) { errors.push('Dati devono essere un array o { data: [...] }'); return { ok: false, errors, count: 0 } }
+  const req = JH_REQUIRED[entity] ?? []
+  for (let i = 0; i < Math.min(items.length, 10); i++) {
+    const missing = req.filter(f => !items[i][f])
+    if (missing.length) errors.push(`Riga [${i}]: mancano ${missing.join(', ')}`)
+  }
+  return { ok: errors.length === 0, errors, count: items.length }
+}
+
 const VALIDATORS: Record<ImportTarget, (d: unknown) => ValidationResult> = {
   sessions: validateSessions, tasks: validateTasks, config: validateConfig,
+  jobs: d => validateJhEntity(d, 'jobs'), contacts: d => validateJhEntity(d, 'contacts'), companies: d => validateJhEntity(d, 'companies'),
 }
 
 /** POST /api/import — importa dati JSON. Body: { target, data, mode: 'merge' | 'replace', dryRun? } */
@@ -72,7 +90,7 @@ export async function POST(req: NextRequest) {
 
   const target = body.target as ImportTarget
   if (!target || !PATHS[target]) {
-    return NextResponse.json({ ok: false, error: 'target obbligatorio: sessions | tasks | config' }, { status: 400 })
+    return NextResponse.json({ ok: false, error: `target obbligatorio: ${Object.keys(PATHS).join(' | ')}` }, { status: 400 })
   }
   if (!body.data) return NextResponse.json({ ok: false, error: 'campo "data" obbligatorio' }, { status: 400 })
 
@@ -88,15 +106,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, count: 1, mode })
   }
 
+  const isJh = ['jobs', 'contacts', 'companies'].includes(target)
   const incoming = body.data as Record<string, unknown>
-  const items = (incoming.sessions ?? incoming.tasks ?? incoming.data) as unknown[]
+  const items = isJh ? (Array.isArray(incoming) ? incoming : (incoming as any).data ?? []) as unknown[] : ((incoming.sessions ?? incoming.tasks ?? incoming.data) as unknown[])
 
   if (mode === 'replace') {
-    writeJsonSafe(filePath, target === 'sessions' ? { sessions: items } : { version: 1, updatedAt: Date.now(), tasks: items })
+    if (isJh) { writeJsonSafe(filePath, items) }
+    else { writeJsonSafe(filePath, target === 'sessions' ? { sessions: items } : { version: 1, updatedAt: Date.now(), tasks: items }) }
     return NextResponse.json({ ok: true, count: items.length, mode })
   }
 
   // Merge: aggiungi solo record con ID nuovo
+  if (isJh) {
+    const current = readJsonSafe<unknown[]>(filePath) ?? []
+    const existing = Array.isArray(current) ? current : []
+    const ids = new Set(existing.map((r: any) => r.id))
+    const added = items.filter((r: any) => !ids.has(r.id))
+    writeJsonSafe(filePath, [...existing, ...added])
+    return NextResponse.json({ ok: true, count: added.length, skipped: items.length - added.length, mode })
+  }
+
   const existing = readJsonSafe<Record<string, unknown>>(filePath) ?? {}
   const key = target === 'sessions' ? 'sessions' : 'tasks'
   const idField = target === 'sessions' ? 'id' : 'taskId'
