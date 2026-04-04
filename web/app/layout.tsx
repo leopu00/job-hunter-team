@@ -19,8 +19,28 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Job Hunter Team',
-  description: 'Sistema automatizzato di ricerca e candidatura',
+  title: {
+    default: 'Job Hunter Team',
+    template: '%s | Job Hunter Team',
+  },
+  description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
+  keywords: ['job hunting', 'AI agents', 'job search', 'candidature automatiche', 'open source'],
+  authors: [{ name: 'Job Hunter Team' }],
+  openGraph: {
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'Job Hunter Team',
+    title: 'Job Hunter Team',
+    description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Job Hunter Team' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Job Hunter Team',
+    description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
+    images: ['/og-image.png'],
+  },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.com'),
 }
 
 export default function RootLayout({
