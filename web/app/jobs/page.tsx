@@ -45,6 +45,7 @@ export default function JobsPage() {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -52,9 +53,10 @@ export default function JobsPage() {
     if (search) params.set('q', search);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/jobs${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setJobs(data.jobs ?? []); setTotal(data.total ?? 0); setCounts(data.counts ?? {});
+    setLoading(false);
   }, [statusFilter, search])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -98,7 +100,9 @@ export default function JobsPage() {
           <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">DATA</span>
           <span className="w-20 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-center">STATO</span>
         </div>
-        {jobs.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : jobs.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna offerta trovata.</p></div>
           : jobs.map(j => <JobRow key={j.id} j={j} />)}
       </div>
