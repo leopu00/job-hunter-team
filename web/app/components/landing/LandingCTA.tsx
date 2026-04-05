@@ -15,6 +15,7 @@ export default function LandingCTA() {
         {/* Background glow */}
         <div
           className="absolute inset-0 pointer-events-none"
+          aria-hidden="true"
           style={{
             background: 'radial-gradient(ellipse at center, rgba(0,232,122,0.06) 0%, transparent 70%)',
           }}
