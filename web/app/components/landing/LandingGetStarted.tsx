@@ -13,7 +13,7 @@ export default function LandingGetStarted() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="start" className="px-6 py-24 relative">
+    <section id="start" aria-label="Per iniziare" className="px-6 py-24 relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24" style={{ background: 'linear-gradient(180deg, transparent, var(--color-border))' }} />
 
       <div className="max-w-4xl mx-auto">
