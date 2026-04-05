@@ -123,7 +123,7 @@ export default function RetryPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
       ) : !data || data.breakers.length === 0 ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun circuit breaker registrato.</p>
       ) : (
