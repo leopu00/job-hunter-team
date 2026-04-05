@@ -94,7 +94,7 @@ function QueueItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {loc && <span className="text-[var(--color-dim)]">{loc}</span>}
@@ -116,7 +116,7 @@ function ProgressItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {loc && <span className="text-[var(--color-dim)]">{loc}</span>}
@@ -145,7 +145,7 @@ function CompletedItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {writerTag && <span style={{ fontSize: '0.85em', color: '#00bcd4', fontWeight: 600 }}>{writerTag}</span>}

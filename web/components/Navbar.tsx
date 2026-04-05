@@ -131,6 +131,7 @@ function WorkspacePath({ path }: { path: string }) {
           {i > 0 && <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">›</span>}
           <span
             className="text-[10px] font-medium truncate"
+            title={seg}
             style={{
               color: i === display.length - 1 ? 'var(--color-bright)' : 'var(--color-dim)',
               maxWidth: i === display.length - 1 ? '140px' : '80px',
