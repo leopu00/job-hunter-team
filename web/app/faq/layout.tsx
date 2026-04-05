@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import FaqJsonLd from './FaqJsonLd'
+import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'FAQ',
@@ -14,6 +15,7 @@ export default function FaqLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <FaqJsonLd />
+      <BreadcrumbJsonLd items={[{ name: 'FAQ', path: '/faq' }]} />
       {children}
     </>
   )
