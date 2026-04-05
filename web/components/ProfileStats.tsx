@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { CandidateProfile } from '@/lib/types'
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -67,6 +67,29 @@ function calcCompletion(p: CandidateProfile | null): number {
   return Math.round((filled / checks.length) * 100)
 }
 
+/* ── Animated counter hook ────────────────────────────────────────── */
+
+function useAnimatedCount(target: number, duration = 800): number {
+  const [count, setCount] = useState(0)
+  const startRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (target === 0) { setCount(0); return }
+    startRef.current = null
+    let raf: number
+    const step = (ts: number) => {
+      if (startRef.current === null) startRef.current = ts
+      const elapsed = ts - startRef.current
+      const progress = Math.min(elapsed / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3) // easeOutCubic
+      setCount(Math.round(eased * target))
+      if (progress < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return count
+}
+
 /* ── Types ────────────────────────────────────────────────────────── */
 
 type AppStatus = 'draft' | 'sent' | 'viewed' | 'interview' | 'offer' | 'rejected'
@@ -92,6 +115,7 @@ export default function ProfileStats({ profile }: Props) {
   const t = (k: string) => T[k]?.[lang] ?? k
 
   const completion = calcCompletion(profile)
+  const animatedCompletion = useAnimatedCount(completion)
   const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
 
   // Avatar
@@ -244,8 +268,8 @@ export default function ProfileStats({ profile }: Props) {
                 {t('completion')}
               </div>
               <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
-                  {completion}%
+                <span className="text-2xl font-bold tabular-nums" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
+                  {animatedCompletion}%
                 </span>
               </div>
               <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
