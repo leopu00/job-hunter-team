@@ -29,6 +29,7 @@ const ITEMS: Item[] = [
   { id: 'reports',      label: 'Reports',        detail: 'Generazione report e CSV',           category: 'Pagine' },
   { id: 'integrations', label: 'Integrazioni',   detail: 'Telegram, GitHub, LinkedIn…',        category: 'Pagine' },
   { id: 'stats',        label: 'Statistiche',    detail: 'Metriche progetto open source',      category: 'Pagine' },
+  { id: 'terms',        label: 'Termini',        detail: 'Termini di servizio e licenza',      category: 'Pagine' },
   { id: 'settings',     label: 'Impostazioni',   detail: 'General, Notifiche, Sicurezza',      category: 'Config' },
   { id: 'credentials',  label: 'Credenziali',    detail: 'API key e OAuth',                    category: 'Config' },
   { id: 'providers',    label: 'Provider',       detail: 'Provider AI configurati',            category: 'Config' },

@@ -93,6 +93,7 @@ export function LandingFooter() {
             <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>Segnala un bug</a>
             <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>Discussioni</a>
             <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
+            <Link href="/terms" className={linkClass}>Termini di Servizio</Link>
           </div>
         </div>
 
