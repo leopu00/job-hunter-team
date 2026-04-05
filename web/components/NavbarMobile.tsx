@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS: { href: string; label: string; accent?: string }[] = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -16,6 +17,7 @@ const NAV_ITEMS: { href: string; label: string; accent?: string }[] = [
 
 export default function NavbarMobile() {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
 
   return (
     <div className="md:hidden flex items-center">
@@ -39,17 +41,22 @@ export default function NavbarMobile() {
           className="absolute top-full left-0 right-0 flex flex-col border-b border-[var(--color-border)]"
           style={{ background: 'var(--color-panel)', animation: 'fade-in 0.15s ease both', zIndex: 50 }}
         >
-          {NAV_ITEMS.map(({ href, label, accent }) => (
+          {NAV_ITEMS.map(({ href, label, accent }) => {
+            const active = pathname === href || pathname.startsWith(href + '/')
+            return (
             <Link
               key={href}
               href={href}
+              role="menuitem"
+              aria-current={active ? 'page' : undefined}
               onClick={() => setOpen(false)}
               className="px-5 py-3 text-[12px] font-semibold tracking-wide no-underline border-b border-[var(--color-border)] last:border-b-0 transition-colors hover:bg-[var(--color-card)]"
-              style={{ color: accent ?? 'var(--color-muted)' }}
+              style={{ color: active ? 'var(--color-green)' : accent ?? 'var(--color-muted)' }}
             >
               {label}
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
