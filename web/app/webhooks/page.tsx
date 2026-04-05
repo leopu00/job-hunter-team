@@ -145,7 +145,7 @@ export default function WebhooksPage() {
                 <button onClick={() => toggle(wh)} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}>
                   {wh.enabled ? 'off' : 'on'}
                 </button>
-                <button onClick={() => del(wh.id)} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
+                <button onClick={() => del(wh.id)} aria-label="Elimina webhook" className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
               </div>
             </div>
           ))}
