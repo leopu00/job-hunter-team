@@ -80,6 +80,7 @@ export function Table<T extends Record<string, unknown>>({
             {columns.map(col => (
               <th
                 key={String(col.key)}
+                scope="col"
                 className={`${pad} text-left font-semibold tracking-widest uppercase select-none ${col.sortable ? 'cursor-pointer' : ''}`}
                 style={{ width: col.width, textAlign: col.align ?? 'left', color: 'var(--color-dim)', fontSize: 9 }}
                 onClick={col.sortable ? () => toggleSort(String(col.key)) : undefined}
