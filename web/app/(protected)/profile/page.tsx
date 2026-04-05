@@ -497,7 +497,7 @@ export default async function ProfilePage() {
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
       <div className="section-label mb-4">{title}</div>
       {children}
     </div>
