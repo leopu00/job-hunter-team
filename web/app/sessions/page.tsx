@@ -45,9 +45,9 @@ function SessionRow({ s, onPatch }: { s: Session; onPatch: (id: string, state: S
       </div>
       <span className="badge text-[9px] font-mono" style={{ color: cfg.color, border: `1px solid ${cfg.color}44`, background: `${cfg.color}0d` }}>{cfg.label}</span>
       <div className="flex gap-1 flex-shrink-0">
-        {s.state !== 'active' && <button onClick={() => onPatch(s.id, 'active')} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(0,232,122,0.2)', color: 'var(--color-green)', background: 'transparent' }}>▶</button>}
-        {s.state === 'active' && <button onClick={() => onPatch(s.id, 'paused')} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(245,197,24,0.2)', color: 'var(--color-yellow)', background: 'transparent' }}>⏸</button>}
-        {s.state !== 'ended'  && <button onClick={() => onPatch(s.id, 'ended')}  className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>■</button>}
+        {s.state !== 'active' && <button onClick={() => onPatch(s.id, 'active')} aria-label="Riprendi sessione" className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(0,232,122,0.2)', color: 'var(--color-green)', background: 'transparent' }}>▶</button>}
+        {s.state === 'active' && <button onClick={() => onPatch(s.id, 'paused')} aria-label="Pausa sessione" className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(245,197,24,0.2)', color: 'var(--color-yellow)', background: 'transparent' }}>⏸</button>}
+        {s.state !== 'ended'  && <button onClick={() => onPatch(s.id, 'ended')} aria-label="Termina sessione" className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>■</button>}
       </div>
     </div>
   )

@@ -49,6 +49,7 @@ function ChannelCard({ ch, onToggle }: { ch: ChannelInfo; onToggle: (id: Channel
             {ch.connected ? 'connesso' : 'disconnesso'}
           </span>
           <button onClick={() => onToggle(ch.id, !ch.enabled)}
+            aria-label={`${ch.enabled ? 'Disattiva' : 'Attiva'} canale ${ch.id}`}
             className="px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
             style={{ color: ch.enabled ? 'var(--color-green)' : 'var(--color-dim)', background: ch.enabled ? 'rgba(0,232,122,0.08)' : 'var(--color-row)', border: `1px solid ${ch.enabled ? 'rgba(0,232,122,0.3)' : 'var(--color-border)'}` }}>
             {ch.enabled ? 'ON' : 'OFF'}
