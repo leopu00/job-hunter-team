@@ -255,7 +255,7 @@ export default function ProfileStats({ profile }: Props) {
         {/* Name + Stats cards */}
         <div className="flex-1 min-w-0">
           {profile?.name && (
-            <h2 className="text-lg font-bold text-[var(--color-white)] mb-1 truncate">{profile.name}</h2>
+            <h2 className="text-lg font-bold text-[var(--color-white)] mb-1 truncate" title={profile.name}>{profile.name}</h2>
           )}
           {profile?.target_role && (
             <p className="text-[11px] text-[var(--color-muted)] mb-4">{profile.target_role} {profile.location ? `· ${profile.location}` : ''}</p>
