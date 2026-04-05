@@ -111,7 +111,7 @@ type ChatListProps = {
 
 export function ChatList({ messages, typing, typingLabel, className }: ChatListProps) {
   return (
-    <div className={`flex flex-col px-4 py-3 overflow-y-auto ${className ?? ''}`}>
+    <div role="log" aria-label="Messaggi chat" className={`flex flex-col px-4 py-3 overflow-y-auto ${className ?? ''}`}>
       {messages.map((msg, i) => {
         const prevRole = i > 0 ? messages[i - 1].role : null
         return (
