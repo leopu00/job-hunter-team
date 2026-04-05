@@ -395,6 +395,7 @@ function PricingContent() {
           </Link>
         </div>
       </div>
+      <LandingFooter />
     </main>
     <LandingFooter />
   )
