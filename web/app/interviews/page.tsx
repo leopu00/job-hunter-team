@@ -93,11 +93,11 @@ export default function InterviewsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Colloqui</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Colloqui</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Colloqui</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} colloqui · {upcoming} in programma · {passed} superati</p>
       </div>
