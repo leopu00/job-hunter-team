@@ -40,9 +40,9 @@ function GoalRow({ goal, onUpdate }: { goal: Goal; onUpdate: (id: string, curren
       </div>
       {goal.status !== 'completed' && (
         <div className="flex gap-1 mt-2">
-          <button onClick={() => onUpdate(goal.id, goal.current + 1)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-bold"
+          <button onClick={() => onUpdate(goal.id, goal.current + 1)} aria-label="Incrementa progresso" className="text-[9px] px-3 py-1.5 rounded cursor-pointer font-bold"
             style={{ background: 'var(--color-row)', color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>+1</button>
-          {goal.current > 0 && <button onClick={() => onUpdate(goal.id, goal.current - 1)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-bold"
+          {goal.current > 0 && <button onClick={() => onUpdate(goal.id, goal.current - 1)} aria-label="Decrementa progresso" className="text-[9px] px-3 py-1.5 rounded cursor-pointer font-bold"
             style={{ background: 'var(--color-row)', color: 'var(--color-red)', border: '1px solid var(--color-border)' }}>-1</button>}
         </div>
       )}
