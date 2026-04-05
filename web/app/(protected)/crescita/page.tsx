@@ -179,7 +179,7 @@ export default async function CrescitaPage() {
                 const max = sourceDist[0]?.count ?? 1
                 return sourceDist.map(s => (
                   <div key={s.source} className="flex items-center gap-3">
-                    <div className="w-32 text-[9.5px] font-semibold text-right shrink-0 text-[var(--color-muted)] truncate">{s.source}</div>
+                    <div className="w-32 text-[9.5px] font-semibold text-right shrink-0 text-[var(--color-muted)] truncate" title={s.source}>{s.source}</div>
                     <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                       <div className="h-full rounded-full" style={{ width: `${(s.count / max) * 100}%`, background: 'var(--color-blue)', opacity: 0.8 }} />
                     </div>
