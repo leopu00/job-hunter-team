@@ -6,6 +6,17 @@ import type { CandidateProfile } from '@/lib/types'
 import ProfilePageClient from '@/components/ProfilePageClient'
 import ProfileStats from '@/components/ProfileStats'
 
+const SKILL_CATEGORY_COLORS = [
+  'var(--color-blue)',
+  'var(--color-green)',
+  'var(--color-purple)',
+  'var(--color-yellow)',
+  'var(--color-orange)',
+  '#58a6ff',
+  '#f78166',
+  '#d2a8ff',
+]
+
 export default async function ProfilePage() {
   let profile: CandidateProfile | null = null
 
@@ -145,21 +156,28 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Skills */}
-        <ProfileSection title="Skills">
+        <ProfileSection title={`Skills${allSkills.length > 0 ? ` (${allSkills.length})` : ''}`}>
           {allSkills.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {Object.entries(profile.skills!).map(([category, items]) => (
-                <div key={category}>
-                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1.5">
-                    {category.replace(/_/g, ' ')}
+              {Object.entries(profile.skills!).map(([category, items], catIdx) => {
+                const color = SKILL_CATEGORY_COLORS[catIdx % SKILL_CATEGORY_COLORS.length]
+                return (
+                  <div key={category}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                      <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)]">
+                        {category.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[9px] text-[var(--color-dim)]">({(items as string[]).length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(items as string[]).map(s => (
+                        <span key={s} className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded" style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>{s}</span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(items as string[]).map(s => (
-                      <span key={s} className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-blue)]/10 text-[var(--color-blue)] border border-[var(--color-blue)]/20">{s}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <span className="text-[var(--color-dim)] text-[11px]">Nessuna skill inserita</span>
