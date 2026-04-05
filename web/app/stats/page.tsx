@@ -52,6 +52,10 @@ const T = {
     commit_label: 'commit',
     stack: 'Tech Stack',
     stack_desc: 'Le tecnologie che alimentano Job Hunter Team',
+    heatmap: 'Attivita giornaliera',
+    heatmap_desc: 'Commit al giorno negli ultimi 90 giorni',
+    less: 'Meno',
+    more: 'Piu',
   },
   en: {
     title: 'Project Statistics',
@@ -93,6 +97,10 @@ const T = {
     commit_label: 'commits',
     stack: 'Tech Stack',
     stack_desc: 'The technologies powering Job Hunter Team',
+    heatmap: 'Daily activity',
+    heatmap_desc: 'Commits per day over the last 90 days',
+    less: 'Less',
+    more: 'More',
   },
 }
 
@@ -108,6 +116,7 @@ type StatsData = {
   areas: { web: number; api: number; shared: number; e2e: number }
   recentCommits: { hash: string; date: string; message: string; author: string }[]
   topContributors: { name: string; commits: number }[]
+  dailyCommits: { date: string; count: number }[]
 }
 
 /* ── Componenti grafici CSS puro ─────────────────────────────────── */
@@ -247,6 +256,64 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   )
 }
 
+function Heatmap({ days, lessLabel, moreLabel }: { days: { date: string; count: number }[]; lessLabel: string; moreLabel: string }) {
+  const dayMap = new Map(days.map(d => [d.date, d.count]))
+  const max = Math.max(...days.map(d => d.count), 1)
+
+  // Build 90-day grid (13 weeks), starting from 90 days ago
+  const today = new Date()
+  const cells: { date: string; count: number; col: number; row: number }[] = []
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    const dayOfWeek = d.getDay()
+    const col = Math.floor((89 - i + (new Date(today.getTime() - 89 * 86400000).getDay())) / 7)
+    cells.push({ date: key, count: dayMap.get(key) ?? 0, col, row: dayOfWeek })
+  }
+
+  const totalCols = Math.max(...cells.map(c => c.col)) + 1
+
+  const getColor = (count: number) => {
+    if (count === 0) return 'var(--color-card)'
+    const intensity = count / max
+    if (intensity <= 0.25) return '#00e87a33'
+    if (intensity <= 0.5) return '#00e87a66'
+    if (intensity <= 0.75) return '#00e87aaa'
+    return '#00e87a'
+  }
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${totalCols}, 12px)`, gridTemplateRows: 'repeat(7, 12px)' }}>
+          {cells.map(cell => (
+            <div
+              key={cell.date}
+              className="rounded-sm transition-colors"
+              style={{
+                gridColumn: cell.col + 1,
+                gridRow: cell.row + 1,
+                width: 12,
+                height: 12,
+                background: getColor(cell.count),
+              }}
+              title={`${cell.date}: ${cell.count} commit`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 mt-3 justify-end">
+        <span className="text-[9px] text-[var(--color-dim)]">{lessLabel}</span>
+        {[0, 0.25, 0.5, 0.75, 1].map((level, i) => (
+          <div key={i} className="w-3 h-3 rounded-sm" style={{ background: getColor(level * max) }} />
+        ))}
+        <span className="text-[9px] text-[var(--color-dim)]">{moreLabel}</span>
+      </div>
+    </div>
+  )
+}
+
 /* ── Pagina ───────────────────────────────────────────────────────── */
 
 function StatsContent() {
@@ -363,6 +430,15 @@ function StatsContent() {
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.weekly}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.weekly_desc}</p>
                 <WeeklyChart weeks={data.weeklyCommits} />
+              </section>
+            )}
+
+            {/* Daily heatmap */}
+            {data.dailyCommits && data.dailyCommits.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.heatmap}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.heatmap_desc}</p>
+                <Heatmap days={data.dailyCommits} lessLabel={t.less} moreLabel={t.more} />
               </section>
             )}
 
