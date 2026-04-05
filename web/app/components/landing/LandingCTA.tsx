@@ -48,6 +48,7 @@ export default function LandingCTA() {
 }
 
 export function LandingFooter() {
+  const { t } = useLandingI18n()
   const linkClass = 'text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline block py-0.5'
 
   return (
@@ -62,36 +63,36 @@ export function LandingFooter() {
               <span className="text-[11px] font-bold tracking-widest text-[var(--color-muted)]">JHT</span>
             </div>
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
-              Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.
+              {t('footer_brand_desc')}
             </p>
           </div>
 
           {/* Prodotto */}
           <div>
-            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Prodotto</h4>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_product')}</h4>
             <Link href="/download" className={linkClass}>Download</Link>
             <Link href="/pricing" className={linkClass}>Pricing</Link>
             <Link href="/demo" className={linkClass}>Demo</Link>
             <Link href="/changelog" className={linkClass}>Changelog</Link>
-            <Link href="/stats" className={linkClass}>Statistiche</Link>
-            <Link href="/reports" className={linkClass}>Report</Link>
+            <Link href="/stats" className={linkClass}>{t('footer_stats')}</Link>
+            <Link href="/reports" className={linkClass}>{t('footer_report')}</Link>
           </div>
 
           {/* Risorse */}
           <div>
-            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Risorse</h4>
-            <Link href="/guide" className={linkClass}>Guida</Link>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_resources')}</h4>
+            <Link href="/guide" className={linkClass}>{t('footer_guide')}</Link>
             <Link href="/faq" className={linkClass}>FAQ</Link>
-            <Link href="/docs" className={linkClass}>Documentazione</Link>
-            <Link href="/about" className={linkClass}>Chi siamo</Link>
+            <Link href="/docs" className={linkClass}>{t('footer_docs')}</Link>
+            <Link href="/about" className={linkClass}>{t('footer_about')}</Link>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
           </div>
 
           {/* Contatti */}
           <div>
-            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Contatti</h4>
-            <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>Segnala un bug</a>
-            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>Discussioni</a>
+            <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_contacts')}</h4>
+            <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_bug')}</a>
+            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_discuss')}</a>
             <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
           </div>
         </nav>
