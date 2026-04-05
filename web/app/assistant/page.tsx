@@ -184,7 +184,7 @@ export default function AssistantPage() {
               background: input.trim() && agentStatus === 'active' ? 'var(--color-green)' : 'var(--color-border)',
               cursor: input.trim() && agentStatus === 'active' ? 'pointer' : 'default',
             }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={input.trim() && agentStatus === 'active' ? '#000' : 'var(--color-dim)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke={input.trim() && agentStatus === 'active' ? '#000' : 'var(--color-dim)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
           </button>
