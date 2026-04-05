@@ -132,9 +132,9 @@ export default function TasksPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]" style={{ animation: 'fade-in 0.2s ease both' }}>
           <div className="flex flex-col gap-3">
             <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && createTask()}
-              placeholder="Descrizione task…" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              placeholder="Descrizione task…" aria-label="Descrizione task" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
             <div className="flex gap-2">
-              <input value={newAgent} onChange={e => setNewAgent(e.target.value)} placeholder="Agente (opzionale, es. SCOUT-1)"
+              <input value={newAgent} onChange={e => setNewAgent(e.target.value)} placeholder="Agente (opzionale, es. SCOUT-1)" aria-label="Agente assegnato"
                 className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <button onClick={createTask} disabled={!newTask.trim() || creating}
                 className="px-5 py-2 rounded-lg text-[11px] font-bold tracking-wide flex-shrink-0"
