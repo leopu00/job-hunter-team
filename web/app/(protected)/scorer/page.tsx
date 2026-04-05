@@ -29,7 +29,7 @@ export default async function ScorerPage() {
       </div>
 
       {/* ── Totale KPI ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'Posizioni scored', val: total, color: 'var(--color-purple)' },
           { label: 'Score medio', val: globalAvg, color: globalAvg >= 70 ? 'var(--color-green)' : globalAvg >= 40 ? 'var(--color-yellow)' : 'var(--color-orange)' },
@@ -44,7 +44,7 @@ export default async function ScorerPage() {
       </div>
 
       {/* ── Per agente ───────────────────────────────────────────── */}
-      <div className="section-label mb-4">Attività per Scorer</div>
+      <div className="section-label mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>Attività per Scorer</div>
       {stats.length === 0 ? (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-8 text-center text-[var(--color-dim)] text-[11px]">
           Nessuna attività registrata.
