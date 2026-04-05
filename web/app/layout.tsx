@@ -32,13 +32,11 @@ export const metadata: Metadata = {
     siteName: 'Job Hunter Team',
     title: 'Job Hunter Team',
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Job Hunter Team' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Job Hunter Team',
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
-    images: ['/og-image.png'],
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
   manifest: '/manifest.json',
