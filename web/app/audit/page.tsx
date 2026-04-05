@@ -57,7 +57,7 @@ export default function AuditPage() {
   for (const e of events) counts[e.severity]++
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-5xl flex flex-col gap-6">
 
         <div className="flex items-end justify-between flex-wrap gap-4">

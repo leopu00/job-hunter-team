@@ -66,7 +66,7 @@ export default function ForumPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-4" style={{ height: 'calc(100vh - 80px)' }}>
 
         {/* Header */}
