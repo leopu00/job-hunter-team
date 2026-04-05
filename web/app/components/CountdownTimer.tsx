@@ -77,7 +77,7 @@ export function CountdownTimer({
   }[size]
 
   return (
-    <div className={`flex flex-col items-center gap-1 ${className ?? ''}`}
+    <div role="timer" aria-label={label ?? 'Countdown'} className={`flex flex-col items-center gap-1 ${className ?? ''}`}
       style={{ opacity: expired ? 0.5 : 1 }}>
 
       {/* Label */}
