@@ -126,7 +126,7 @@ function LoginView({ authError }: { authError: boolean }) {
       <div className="w-full max-w-md" style={{ animation: 'fade-in 0.5s ease both' }}>
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 mb-6">
-            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">sistema attivo</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
@@ -236,7 +236,7 @@ function WorkspaceView({
       <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.5s ease both' }}>
         <div className="mb-10 text-center">
           <div className="inline-flex items-center gap-2 mb-6">
-            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">modalita locale</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
