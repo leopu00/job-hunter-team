@@ -28,9 +28,9 @@ export default function LandingSteps() {
 
         <div className="flex flex-col gap-8">
           {STEPS_META.map((s, i) => (
-            <div key={i} className="flex gap-6 items-start" style={{ animation: `fade-in 0.4s ease ${i * 0.15}s both` }}>
+            <div key={i} className="group flex gap-6 items-start" style={{ animation: `fade-in 0.4s ease ${i * 0.15}s both` }}>
               {/* Step number */}
-              <div className="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center border border-[var(--color-border)]"
+              <div className="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center border border-[var(--color-border)] transition-colors duration-200 group-hover:border-[var(--color-green)]"
                 style={{ background: 'var(--color-panel)', color: 'var(--color-green)', fontSize: 14, fontWeight: 700 }}>
                 {s.n}
               </div>
@@ -41,7 +41,7 @@ export default function LandingSteps() {
                 <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">{t(s.descKey)}</p>
 
                 {/* Code snippet */}
-                <div className="rounded px-3 py-2 border border-[var(--color-border)] overflow-x-auto"
+                <div className="rounded px-3 py-2 border border-[var(--color-border)] overflow-x-auto transition-colors duration-200 group-hover:border-[var(--color-border-glow)]"
                   style={{ background: 'var(--color-void)' }}>
                   <code className="text-[10px] md:text-[11px] text-[var(--color-base)] whitespace-nowrap">{s.code}</code>
                 </div>
