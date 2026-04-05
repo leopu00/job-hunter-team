@@ -120,7 +120,10 @@ export default function MigrationsPage() {
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {pending.length === 0 && applied.length === 0
-          ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna migrazione registrata.</p></div>
+          ? <div className="flex flex-col items-center py-16 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessuna migrazione registrata.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Le migrazioni appariranno qui quando il database viene aggiornato.</p>
+            </div>
           : <>
               {pending.map(m => <MigRow key={m.version} version={m.version} description={m.description} status="pending" />)}
               {applied.map(m => <MigRow key={m.version} version={m.version} description={m.description} status="applied" date={m.appliedAt} />)}
