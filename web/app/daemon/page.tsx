@@ -23,7 +23,10 @@ function ServiceCard({ svc, onAction }: { svc: ServiceInfo; onAction: (name: str
   }
   const statusColor = svc.running ? 'var(--color-green)' : svc.status === 'loaded' ? 'var(--color-yellow)' : 'var(--color-dim)'
   return (
-    <div className="border rounded-lg overflow-hidden" style={{ borderColor: svc.running ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: 'var(--color-panel)' }}>
+    <div className="border rounded-lg overflow-hidden transition-colors duration-200"
+      style={{ borderColor: svc.running ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: 'var(--color-panel)' }}
+      onMouseEnter={e => { if (!svc.running) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { if (!svc.running) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <span style={{ color: statusColor, animation: svc.running ? 'pulse-dot 2.5s ease-in-out infinite' : undefined }}>●</span>
         <div className="flex-1">
