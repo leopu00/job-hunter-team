@@ -411,23 +411,38 @@ export default async function ProfilePage() {
         {/* Desideri e aspirazioni */}
         <ProfileSection title="Desideri & Aspirazioni">
           {hasAspirations ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {aspirations.short_term && (
-                <div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Breve termine</div>
-                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.short_term}</p>
+                <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-yellow)' }}>
+                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-yellow)] mb-0.5">Breve termine</div>
+                    <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.short_term}</p>
+                  </div>
                 </div>
               )}
               {aspirations.long_term && (
-                <div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Lungo termine</div>
-                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.long_term}</p>
+                <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-blue)' }}>
+                    <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                  <div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-blue)] mb-0.5">Lungo termine</div>
+                    <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.long_term}</p>
+                  </div>
                 </div>
               )}
               {aspirations.ambitious && (
-                <div>
-                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-1">Aspirazioni ambiziose</div>
-                  <p className="text-[11px] text-[var(--color-bright)] leading-relaxed italic">{aspirations.ambitious}</p>
+                <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-green)]/20">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }}>
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  <div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-green)] mb-0.5">Aspirazioni ambiziose</div>
+                    <p className="text-[11px] text-[var(--color-bright)] leading-relaxed italic">{aspirations.ambitious}</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -438,10 +453,13 @@ export default async function ProfilePage() {
 
         {/* Strengths */}
         {strengths.length > 0 && (
-          <ProfileSection title="Punti di forza">
-            <div className="flex flex-wrap gap-1.5">
+          <ProfileSection title={`Punti di forza (${strengths.length})`}>
+            <div className="flex flex-wrap gap-2">
               {strengths.map((s, i) => (
-                <span key={i} className="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-green)]/10 text-[var(--color-green)] border border-[var(--color-green)]/20">{s}</span>
+                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-[var(--color-green)]/8 text-[var(--color-green)] border border-[var(--color-green)]/20">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                  {s}
+                </span>
               ))}
             </div>
           </ProfileSection>
