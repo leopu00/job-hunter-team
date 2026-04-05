@@ -33,7 +33,7 @@ function SessionRow({ s, onPatch }: { s: Session; onPatch: (id: string, state: S
   const cfg = STATE_CFG[s.state]
   const end = s.lastMessageAtMs ?? s.updatedAtMs
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+    <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
       <span className="text-base flex-shrink-0">{CHANNEL_ICON[s.channelId] ?? '◆'}</span>
       <div className="flex-1 min-w-0">
         <Link href={`/sessions/${s.id}`} className="text-[12px] font-semibold no-underline hover:underline" style={{ color: 'var(--color-bright)' }}>
