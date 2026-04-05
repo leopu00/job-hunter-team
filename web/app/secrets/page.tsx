@@ -92,13 +92,13 @@ export default function SecretsPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]" style={{ animation: 'fade-in 0.2s ease both' }}>
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (es. OPENAI_KEY)" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (es. OPENAI_KEY)" aria-label="Nome segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <select value={type} onChange={e => setType(e.target.value as SecretType)} aria-label="Tipo segreto" className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                 {(Object.keys(TYPE_LABEL) as SecretType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
             </div>
             <div className="flex gap-2">
-              <input type="password" value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Valore…" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input type="password" value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Valore…" aria-label="Valore segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <button onClick={create} disabled={!name.trim() || !value.trim() || creating}
                 className="px-5 py-2 rounded-lg text-[11px] font-bold flex-shrink-0"
                 style={{ background: name.trim() && value.trim() ? 'var(--color-green)' : 'var(--color-border)', color: name.trim() && value.trim() ? '#000' : 'var(--color-dim)', cursor: name.trim() && value.trim() ? 'pointer' : 'default' }}>
