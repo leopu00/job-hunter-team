@@ -51,7 +51,7 @@ html[data-theme="light"] {
 /* ── Base ────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
 body {
   background-color: var(--color-void);
