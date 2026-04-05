@@ -56,7 +56,7 @@ export default async function ScorerPage() {
           const color = colors[i % colors.length]
           const avgColor = s.avgScore >= 70 ? 'var(--color-green)' : s.avgScore >= 40 ? 'var(--color-yellow)' : 'var(--color-orange)'
           return (
-            <div key={s.scorer} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+            <div key={s.scorer} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <span className="text-[13px] font-bold" style={{ color }}>{s.scorer}</span>
