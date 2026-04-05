@@ -86,7 +86,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
-        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Candidature per mese</p>
           {monthly.map(m => (
             <div key={m.month} className="flex items-center gap-2 mb-2">
@@ -97,7 +97,7 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Tempo medio per fase</p>
           {phases.map(p => (
             <div key={p.phase} className="flex items-center gap-2 mb-2">
