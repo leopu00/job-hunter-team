@@ -113,7 +113,7 @@ export default function SessionDetailCompany() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
       ) : !data ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Sessione non trovata.</p>
       ) : (
