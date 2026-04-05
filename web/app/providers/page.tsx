@@ -142,7 +142,7 @@ export default function ProvidersPage() {
 
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.providers.map(p => <ProviderCard key={p.id} provider={p} />)}
+          {data.providers.map((p, i) => <div key={p.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ProviderCard provider={p} /></div>)}
         </div>
       )}
     </div>
