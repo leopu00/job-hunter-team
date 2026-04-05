@@ -33,13 +33,13 @@ export default async function RispostePage() {
 
       {/* ── Risposte ─────────────────────────────────────────────── */}
       {risposte.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="text-4xl mb-4" style={{ opacity: 0.3 }}>📭</div>
           <p className="text-[var(--color-muted)] text-[13px]">Nessuna risposta ricevuta ancora.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">Le risposte appariranno qui quando le aziende risponderanno.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4" style={{ animation: 'fade-in 0.35s ease both' }}>
           {risposte.map(a => <RispostaCard key={a.id} app={a} />)}
         </div>
       )}

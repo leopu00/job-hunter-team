@@ -71,7 +71,7 @@ export default async function ReadyPage() {
 
       {/* ── Pipeline progress ──────────────────────────────────── */}
       {(readyApps.length > 0 || appsWithReadyPositions.length > 0) && (
-        <div className="mb-8 p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg">
+        <div className="mb-8 p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)]">Pipeline progress</span>
             <span className="text-[10px] text-[var(--color-muted)]">
@@ -91,7 +91,7 @@ export default async function ReadyPage() {
       )}
 
       {/* ── Candidature pronte (CV scritto, da inviare) ─────────── */}
-      <section className="mb-10">
+      <section className="mb-10" style={{ animation: 'fade-in 0.35s ease both 0.05s' }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-2 h-2 rounded-full" style={{ background: '#7fffb2', boxShadow: '0 0 8px #7fffb2' }} />
           <span className="section-label" style={{ color: '#7fffb2', marginBottom: 0 }}>
@@ -111,7 +111,7 @@ export default async function ReadyPage() {
       </section>
 
       {/* ── Posizioni ready (CV da scrivere) ────────────────────── */}
-      <section className="mb-8">
+      <section className="mb-8" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-orange)', boxShadow: '0 0 8px var(--color-orange)' }} />
           <span className="section-label" style={{ color: 'var(--color-orange)', marginBottom: 0 }}>
