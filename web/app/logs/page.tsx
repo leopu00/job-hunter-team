@@ -50,18 +50,21 @@ export default function LogsPage() {
   const [level, setLevel] = useState<FilterLevel>('all')
   const [subsystem, setSubsystem] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const PAGE_SIZE = 50
 
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
+
   const fetchLogs = useCallback(async (append = false) => {
     const params = new URLSearchParams()
     if (date) params.set('date', date)
     if (level !== 'all') params.set('level', level)
     if (subsystem) params.set('subsystem', subsystem)
-    if (search) params.set('search', search)
+    if (debouncedSearch) params.set('search', debouncedSearch)
     params.set('limit', String(PAGE_SIZE))
     if (append) params.set('offset', String(entries.length))
     const res = await fetch(`/api/logs?${params}`).catch(() => null)
@@ -74,7 +77,7 @@ export default function LogsPage() {
     setDates(data.dates ?? [])
     setSubsystems(data.subsystems ?? [])
     if (!date && data.date) setDate(data.date)
-  }, [date, level, subsystem, search, entries.length])
+  }, [date, level, subsystem, debouncedSearch, entries.length])
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return
@@ -83,12 +86,12 @@ export default function LogsPage() {
     setLoading(false)
   }, [fetchLogs, loading, hasMore])
 
-  useEffect(() => { fetchLogs() }, [date, level, subsystem, search]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchLogs() }, [date, level, subsystem, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!autoRefresh) return
     const id = setInterval(() => fetchLogs(), 5000)
     return () => clearInterval(id)
-  }, [date, level, subsystem, search, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [date, level, subsystem, debouncedSearch, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // IntersectionObserver per scroll infinito
   useEffect(() => {
