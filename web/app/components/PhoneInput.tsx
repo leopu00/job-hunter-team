@@ -110,8 +110,7 @@ export function PhoneInput({
         {/* Country picker */}
         <button type="button" disabled={disabled} onClick={() => setOpen(o => !o)}
           className="flex items-center gap-1.5 px-2 py-2 flex-shrink-0 cursor-pointer"
-          style={{ background: 'var(--color-row)', borderRight: `1px solid ${borderColor}`, border: 'none',
-            borderRight: `1px solid ${borderColor}`, outline: 'none' }}>
+          style={{ background: 'var(--color-row)', border: 'none', borderRight: `1px solid ${borderColor}`, outline: 'none' }}>
           {showFlag && <span style={{ fontSize: 16, lineHeight: 1 }}>{country.flag}</span>}
           <span style={{ fontSize: 10, color: 'var(--color-dim)', fontFamily: 'var(--font-mono)' }}>{country.dial}</span>
           <span style={{ fontSize: 8, color: 'var(--color-dim)' }}>▾</span>

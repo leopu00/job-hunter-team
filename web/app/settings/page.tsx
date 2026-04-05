@@ -54,7 +54,7 @@ export default function SettingsPage() {
   const [loading, setL] = useState(true)
   const [busy, setBusy] = useState(false)
   const [tab, setTab]   = useState<TabId>('general')
-  const { addToast }    = useToast()
+  const { toast }       = useToast()
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(({ config }) => {
@@ -73,11 +73,11 @@ export default function SettingsPage() {
       const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: { name: s.app_name, language: s.language }, notifications: s.notifications }) })
       const d = await r.json()
-      d.ok ? addToast({ type: 'success', message: 'Impostazioni salvate' })
-           : addToast({ type: 'error', message: d.error ?? 'Errore' })
-    } catch { addToast({ type: 'error', message: 'Errore di rete' }) }
+      d.ok ? toast('Impostazioni salvate', 'success')
+           : toast(d.error ?? 'Errore', 'error')
+    } catch { toast('Errore di rete', 'error') }
     finally { setBusy(false) }
-  }, [s, addToast])
+  }, [s, toast])
 
   const dangerAction = useCallback(async (act: string, label: string) => {
     setBusy(true)
@@ -85,11 +85,11 @@ export default function SettingsPage() {
       const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ _action: act }) })
       const d = await r.json()
-      d.ok ? addToast({ type: 'success', message: `${label} completato` })
-           : addToast({ type: 'error', message: d.error ?? 'Errore' })
-    } catch { addToast({ type: 'error', message: 'Errore di rete' }) }
+      d.ok ? toast(`${label} completato`, 'success')
+           : toast(d.error ?? 'Errore', 'error')
+    } catch { toast('Errore di rete', 'error') }
     finally { setBusy(false) }
-  }, [addToast])
+  }, [toast])
 
   if (loading) return <main className="p-10"><p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p></main>
 
