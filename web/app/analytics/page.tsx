@@ -17,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function KPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
-    <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+    <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors">
       <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">{label}</p>
       <p className="text-xl font-bold" style={{ color }}>{value}</p>
       {sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{sub}</p>}
