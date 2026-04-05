@@ -107,7 +107,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
           <thead>
             <tr style={{ background: 'var(--color-row)' }}>
               <th scope="col" style={{ ...th, width: 36 }}>
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+                <input type="checkbox" aria-label="Seleziona tutti" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
               </th>
               {columns.map(col => (
                 <th key={col.key} scope="col" style={{ ...th, width: colWidths[col.key] }}>
@@ -133,7 +133,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
                 onMouseEnter={e => { if (!selected.has(row.id)) e.currentTarget.style.background = 'rgba(0,232,122,0.03)' }}
                 onMouseLeave={e => { if (!selected.has(row.id)) e.currentTarget.style.background = ri % 2 ? 'var(--color-row)' : 'transparent' }}>
                 <td style={td}>
-                  <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+                  <input type="checkbox" aria-label="Seleziona riga" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
                 </td>
                 {columns.map(col => (
                   <td key={col.key} style={td}>
