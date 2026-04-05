@@ -71,7 +71,7 @@ export default async function ReadyPage() {
 
       {/* ── Pipeline progress ──────────────────────────────────── */}
       {(readyApps.length > 0 || appsWithReadyPositions.length > 0) && (
-        <div className="mb-8 p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" style={{ animation: 'fade-in 0.35s ease both' }}>
+        <div className="mb-8 p-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)]">Pipeline progress</span>
             <span className="text-[10px] text-[var(--color-muted)]">
