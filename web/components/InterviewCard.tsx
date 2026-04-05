@@ -110,6 +110,7 @@ export default function InterviewCard({ interview, compact = false, onClick }: I
               {/* Note preview */}
               {interview.notes && (
                 <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 border-l-2 pl-2 italic"
+                  title={interview.notes}
                   style={{ borderColor: 'var(--color-border)' }}>
                   {interview.notes}
                 </p>
