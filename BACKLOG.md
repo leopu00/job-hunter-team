@@ -7,8 +7,8 @@ Ultimo aggiornamento: 2026-04-04
 ## VISIONE PRODOTTO
 
 Job Hunter Team diventa un'applicazione desktop scaricabile da chiunque — anche utenti non tecnici.
-L'utente scarica un installer (.dmg / .exe / .AppImage), lo installa, e un wizard lo guida nel setup del team.
-Da browser, fa login e monitora il team da remoto (es. dal telefono mentre il PC lavora).
+L'utente scarica un installer (.dmg / .exe / .AppImage), lo installa, e un launcher desktop prepara l'ambiente, avvia JHT in background e apre la GUI web locale nel browser.
+La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desktop fa da installer, orchestratore e punto di ingresso zero-terminale.
 
 **Tre modalità di esecuzione (scelta utente):**
 
@@ -18,7 +18,7 @@ Da browser, fa login e monitora il team da remoto (es. dal telefono mentre il PC
 
 **Stack decisioni:**
 
-- Desktop app: **Electron** (riusa frontend Next.js, Node.js nativo per agenti, ecosistema maturo per installer/auto-update)
+- Desktop app: **Launcher Electron leggero** (installer, lifecycle manager, tray, auto-update; la GUI operativa resta nel browser)
 - Web dashboard: **Next.js su Vercel** (pipeline CI/CD già scritta)
 - Backend dati: **Supabase** (Frankfurt, già attivo)
 - Cloud provisioning: **Multi-provider** (AWS + GCP + Hetzner fin dall'inizio, layer di astrazione con adapter)
@@ -98,32 +98,37 @@ Obiettivo: la web app funziona end-to-end con dati reali.
 
 ---
 
-### FASE 2 — App Desktop Electron
+### FASE 2 — Desktop Launcher
 
 Obiettivo: un installer scaricabile che rende JHT usabile da chiunque.
 
 #### [JHT-DESKTOP-01] Scaffolding progetto Electron
 - Creare `desktop/` nella root del progetto
-- Setup electron-forge o electron-builder
-- Integrare il frontend Next.js esistente (web/) come renderer
-- Il processo main di Electron gestisce il lifecycle degli agenti
+- Setup electron-builder per packaging desktop
+- Creare un launcher shell con finestra minima/tray + lifecycle manager
+- Il processo main di Electron installa il payload JHT, avvia i servizi locali e apre il browser su `http://localhost:3000`
 
 #### [JHT-DESKTOP-02] Setup Wizard integrato
-- Wizard first-run nell'app: lingua, profilo candidato, API key (o Claude Max detection)
+- Wizard first-run nell'app: lingua, profilo candidato, provider AI, credenziali
 - Genera `jht.config.json` e `candidate_profile.yml` tramite UI guidata
+- `Claude CLI` richiesto solo se l'utente sceglie Claude Max / subscription flow
 - Nessun terminale necessario — tutto da interfaccia grafica
 
-#### [JHT-DESKTOP-03] Gestione agenti come processi background
-- L'app Electron avvia/ferma gli agenti come child process Node.js
-- Sostituire la dipendenza da tmux con process management nativo (cross-platform)
+#### [JHT-DESKTOP-03] Lifecycle manager e background runtime
+- L'app Electron avvia/ferma JHT come processo locale in background
+- MVP: riuso del flusso esistente, senza obbligare l'utente al terminale
+- Esporre start / stop / restart / status / log dalla shell desktop
+- Aprire automaticamente il browser quando `localhost` è pronto
 - Tray icon con stato del team (icona verde/giallo/rosso)
 - Notifiche desktop native (posizione trovata, candidatura pronta, errore)
 
-#### [JHT-DESKTOP-04] Auto-install dipendenze
-- Al primo avvio, l'app verifica e installa silenziosamente le dipendenze necessarie
-- Node.js bundlato con Electron, Python embedded o rilevato dal sistema
+#### [JHT-DESKTOP-04] Payload prebuildato e bootstrap silenzioso
+- Le release includono la build web già pronta e il payload runtime di JHT
+- Nessun `npm install` o `next build` sul computer dell'utente
+- L'app verifica e installa solo le dipendenze davvero mancanti per il provider scelto
+- Node.js bundlato o incluso nel payload; Python embedded o rilevato dal sistema
 - Progress bar durante l'installazione iniziale
-- Nessun requisito manuale per l'utente
+- Nessun requisito manuale per l'utente finale salvo casi eccezionali
 
 #### [JHT-DESKTOP-05] Installer cross-platform e auto-update
 - Build con electron-builder: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
@@ -183,14 +188,14 @@ Obiettivo: l'utente clicca un bottone e JHT gira su un server cloud.
 Obiettivo: la piattaforma parla la lingua dell'utente. Inglese come lingua principale.
 
 #### [JHT-I18N-01] Inglese come lingua principale
-- Convertire tutta l'interfaccia web, desktop app, e documentazione in inglese come lingua di default
+- Convertire tutta l'interfaccia web, launcher desktop, e documentazione in inglese come lingua di default
 - L'italiano diventa seconda lingua (già supportato in `shared/i18n/`)
 - Aggiornare README.md, docs/, e tutti i testi user-facing in inglese
 - Il modulo `shared/i18n/` già supporta it/en con fallback — estendere le chiavi per coprire tutte le nuove pagine (desktop wizard, cloud setup, ecc.)
 
 #### [JHT-I18N-02] Infrastruttura per lingue aggiuntive
 - Refactor `shared/i18n/translations.ts` per caricare traduzioni da file separati per lingua (es. `locales/en.json`, `locales/it.json`)
-- Aggiungere language switcher nell'app desktop e nella web dashboard
+- Aggiungere language switcher nel launcher desktop e nella web dashboard
 - Selezione lingua nel setup wizard (primo step)
 
 #### [JHT-I18N-03] Espansione lingue future
@@ -211,13 +216,13 @@ Obiettivo: landing page, download, onboarding per utenti non tecnici.
 
 #### [JHT-WEB-02] Pagina download con rilevamento OS
 - Rileva automaticamente il sistema operativo del visitatore
-- Bottone principale per il download corretto (.dmg / .exe / .AppImage)
+- Bottone principale per il download corretto del launcher (.dmg / .exe / .AppImage)
 - Link alternativi per altri OS
 - Checksum SHA256 per verifica integrità
 
 #### [JHT-WEB-03] Documentazione utente (non-dev, in inglese)
-- Guide visuali: "How to install JHT", "How to set up your profile", "How to start the team"
-- Screenshot dell'app desktop
+- Guide visuali: "How to install JHT", "How to set up your profile", "How the launcher starts your local dashboard"
+- Screenshot del launcher desktop + GUI web nel browser
 - FAQ per problemi comuni
 - Video tutorial (opzionale, fase successiva)
 - Versione italiana come seconda lingua
