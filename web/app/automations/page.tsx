@@ -54,6 +54,7 @@ export default function AutomationsPage() {
   const [actFilter, setActFilter] = useState('all')
   const [triggers, setTriggers] = useState<string[]>([])
   const [actions, setActions] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -61,10 +62,11 @@ export default function AutomationsPage() {
     if (actFilter !== 'all') params.set('action', actFilter);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/automations${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setAutomations(data.automations ?? []); setEnabled(data.enabled ?? 0); setTotal(data.total ?? 0);
     setTriggers(data.triggers ?? []); setActions(data.actions ?? []);
+    setLoading(false);
   }, [trigFilter, actFilter])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -109,7 +111,9 @@ export default function AutomationsPage() {
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">PROSSIMO</span>
           <span className="w-8" />
         </div>
-        {automations.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : automations.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna automazione trovata.</p></div>
           : automations.map(a => <AutoRow key={a.id} a={a} onToggle={toggle} />)}
       </div>
