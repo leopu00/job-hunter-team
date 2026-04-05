@@ -47,7 +47,7 @@ function ChannelCard({ ch }: { ch: Channel }) {
 function MiddlewareRow({ mw, last }: { mw: MiddlewareEntry; last: boolean }) {
   const phaseColor = mw.phase === 'pre' ? 'var(--color-blue)' : 'var(--color-orange)'
   return (
-    <div className={`flex items-center gap-4 px-5 py-3 ${last ? '' : 'border-b border-[var(--color-border)]'}`}>
+    <div className={`flex items-center gap-4 px-5 py-3 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${last ? '' : 'border-b border-[var(--color-border)]'}`}>
       <span className="text-[9px] font-mono px-2 py-0.5 rounded border" style={{ color: phaseColor, borderColor: `${phaseColor}44`, background: `${phaseColor}0d`, minWidth: 36, textAlign: 'center' }}>
         {mw.phase}
       </span>
