@@ -39,7 +39,7 @@ function Star({ fill, fontSize, icon, color }: { fill: number; fontSize: number;
     )
   }
   return (
-    <svg width={fontSize} height={fontSize} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }}>
+    <svg width={fontSize} height={fontSize} viewBox="0 0 24 24" style={{ display: 'block', flexShrink: 0 }} aria-hidden="true">
       <defs>
         <clipPath id={id}>
           <rect x="0" y="0" width={24 * fill} height="24" />
