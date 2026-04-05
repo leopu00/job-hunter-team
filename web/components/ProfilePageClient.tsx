@@ -453,7 +453,7 @@ export default function ProfilePageClient({ profile }: Props) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Nome completo">
                     <input type="text" value={form.name} placeholder="Es. Mario Rossi"
-                      onChange={e => set('name', e.target.value)} />
+                      onChange={e => set('name', e.target.value)} autoComplete="name" />
                   </Field>
                   <Field label="Ruolo target">
                     <input type="text" value={form.target_role} placeholder="Es. Backend Developer"
@@ -469,7 +469,7 @@ export default function ProfilePageClient({ profile }: Props) {
                   </Field>
                   <Field label="Email">
                     <input type="email" value={form.email} placeholder="nome@example.com"
-                      onChange={e => set('email', e.target.value)} />
+                      onChange={e => set('email', e.target.value)} autoComplete="email" />
                   </Field>
                 </div>
                 <div className="flex items-center gap-3 mt-2">

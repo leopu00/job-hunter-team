@@ -68,11 +68,11 @@ export default function BookmarksPage() {
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo segnalibro</p>
           <div className="flex flex-wrap gap-2 items-end">
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titolo posizione *"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" required />
             <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" required />
             <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" autoComplete="url" />
           </div>
           <div className="flex flex-wrap gap-2 items-end mt-2">
             <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note personali"

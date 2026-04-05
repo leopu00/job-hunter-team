@@ -96,8 +96,8 @@ export default function MessagesPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo messaggio</p>
           <div className="flex flex-wrap gap-2 mb-2">
-            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Nome contatto" className={`${inputCls} flex-1 min-w-[140px]`} />
-            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Nome azienda" className={`${inputCls} min-w-[120px]`} />
+            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Nome contatto" className={`${inputCls} flex-1 min-w-[140px]`} autoComplete="name" required />
+            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Nome azienda" className={`${inputCls} min-w-[120px]`} autoComplete="organization" required />
           </div>
           <div className="flex gap-2">
             <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." aria-label="Testo messaggio" className={`${inputCls} flex-1`}

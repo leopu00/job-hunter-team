@@ -147,7 +147,7 @@ export default function SetupPage() {
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Path</label>
               <input type="text" value={form.workspace} placeholder="~/.jht (default)" onChange={e => set({ workspace: e.target.value })}
-                className={inp} style={{ color: 'var(--color-bright)' }} />
+                className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
               <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Lascia vuoto per il default ~/.jht</p>
             </div>
             <NavButtons onBack={back} onNext={() => { next(); save() }} nextLabel="Salva e verifica" />
