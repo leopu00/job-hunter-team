@@ -46,9 +46,9 @@ function ReminderRow({ rem, onStatus }: { rem: Reminder; onStatus: (id: string, 
       <span className="text-[9px] font-mono w-16 text-right" style={{ color: overdue ? 'var(--color-red)' : 'var(--color-dim)' }}>{timeLabel(rem.dueDate)}</span>
       <span className="text-[8px] font-bold px-1.5 py-0.5 rounded w-16 text-center" style={{ color: stat.color, border: `1px solid ${stat.color}` }}>{stat.label}</span>
       <div className="flex gap-1">
-        {rem.status !== 'done' && <button onClick={() => onStatus(rem.id, 'done')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>✓</button>}
-        {rem.status === 'pending' && <button onClick={() => onStatus(rem.id, 'snoozed')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#fca130', border: '1px solid var(--color-border)' }}>⏸</button>}
-        {rem.status === 'snoozed' && <button onClick={() => onStatus(rem.id, 'pending')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#61affe', border: '1px solid var(--color-border)' }}>▶</button>}
+        {rem.status !== 'done' && <button onClick={() => onStatus(rem.id, 'done')} aria-label="Segna come completato" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>✓</button>}
+        {rem.status === 'pending' && <button onClick={() => onStatus(rem.id, 'snoozed')} aria-label="Posticipa promemoria" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#fca130', border: '1px solid var(--color-border)' }}>⏸</button>}
+        {rem.status === 'snoozed' && <button onClick={() => onStatus(rem.id, 'pending')} aria-label="Riattiva promemoria" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#61affe', border: '1px solid var(--color-border)' }}>▶</button>}
       </div>
     </div>
   )
