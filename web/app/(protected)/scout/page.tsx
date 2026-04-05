@@ -54,7 +54,7 @@ export default async function ScoutPage() {
           const pctApplied = s.total > 0 ? ((s.applied / s.total) * 100).toFixed(1) : '0'
           const pctResponded = s.applied > 0 ? ((s.responded / s.applied) * 100).toFixed(1) : '0'
           return (
-            <div key={s.scout} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+            <div key={s.scout} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <span className="text-[13px] font-bold" style={{ color }}>{s.scout}</span>
