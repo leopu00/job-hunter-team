@@ -117,7 +117,7 @@ export default function CompanyCard({ company, showDescription = false, compact 
         <>
           {/* Descrizione */}
           {showDescription && company.description && (
-            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed">{company.description}</p>
+            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed" title={company.description}>{company.description}</p>
           )}
 
           {/* Meta row */}
