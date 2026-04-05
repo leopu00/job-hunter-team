@@ -1,10 +1,12 @@
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
-import OnboardingWizard from '@/app/components/OnboardingWizard'
+
+const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
 const STATUS_COLORS: Record<string, string> = {
   new:      'var(--color-muted)',
