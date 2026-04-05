@@ -59,7 +59,7 @@ export function DataTable<T extends Record<string, unknown>>({
           onFocus={e => e.currentTarget.style.borderColor = 'var(--color-green)'}
           onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'} />
       )}
-      <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+      <div className="border rounded-lg overflow-x-auto" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
         <table className="w-full text-[11px]" aria-label={ariaLabel}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
