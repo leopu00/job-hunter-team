@@ -31,6 +31,7 @@ const FALLBACK = {
   weeklyCommits: [],
   typeCounts: { feat: 180, fix: 90, merge: 120, test: 30, other: 80 },
   areas: { web: 300, api: 100, shared: 36, e2e: 30 },
+  recentCommits: [] as { hash: string; date: string; message: string; author: string }[],
 }
 
 export async function GET() {
@@ -81,6 +82,13 @@ export async function GET() {
   // Contributori unici
   const contributors = parseInt(run('git log --format="%aN" | sort -u | wc -l'), 10) || 0
 
+  // Ultimi 8 commit
+  const recentRaw = run('git log --format="%h|%aI|%s|%aN" -8 HEAD')
+  const recentCommits = recentRaw.split('\n').filter(Boolean).map(line => {
+    const [hash, date, message, author] = line.split('|')
+    return { hash, date: date.slice(0, 10), message, author }
+  })
+
   // Giorni di sviluppo
   const first = new Date(firstCommitDate || '2025-07-01')
   const last = new Date(lastCommitDate || new Date().toISOString())
@@ -105,5 +113,6 @@ export async function GET() {
     weeklyCommits,
     typeCounts,
     areas,
+    recentCommits,
   })
 }
