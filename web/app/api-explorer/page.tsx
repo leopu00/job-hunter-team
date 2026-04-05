@@ -77,7 +77,7 @@ export default function ApiExplorerPage() {
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca endpoint..."
-          className="text-[10px] px-3 py-1.5 rounded w-48" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
+          aria-label="Cerca endpoint" className="text-[10px] px-3 py-1.5 rounded w-48" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
         <div className="flex gap-1">
           {METHODS.map(m => (
             <button key={m} onClick={() => setMethodFilter(m)}
