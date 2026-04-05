@@ -17,6 +17,12 @@ type Migration = {
   up: (c: Record<string, unknown>) => Record<string, unknown>;
   down: (c: Record<string, unknown>) => Record<string, unknown>;
 };
+type MigrationResultEntry = {
+  version: string;
+  description: string;
+  success: boolean;
+  error?: string;
+};
 
 function loadState(): MigrationState {
   try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf-8')); }
@@ -96,7 +102,12 @@ export async function POST() {
 
     return NextResponse.json({
       ok: result.ok, from: result.from, to: result.to,
-      applied: result.applied.map(a => ({ version: a.version, description: a.description, success: a.success, error: a.error })),
+      applied: result.applied.map((a: MigrationResultEntry) => ({
+        version: a.version,
+        description: a.description,
+        success: a.success,
+        error: a.error,
+      })),
       rolledBack: result.rolledBack,
     }, { status: result.ok ? 200 : 500 });
   } catch (err) {
@@ -121,7 +132,12 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({
       ok: result.ok, from: result.from, to: result.to,
-      applied: result.applied.map(a => ({ version: a.version, description: a.description, success: a.success, error: a.error })),
+      applied: result.applied.map((a: MigrationResultEntry) => ({
+        version: a.version,
+        description: a.description,
+        success: a.success,
+        error: a.error,
+      })),
     }, { status: result.ok ? 200 : 500 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
