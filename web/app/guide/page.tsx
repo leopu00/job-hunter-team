@@ -24,12 +24,23 @@ function Code({ children }: { children: string }) {
   )
 }
 
-function H2({ children }: { children: string }) {
-  return <h2 className="text-[16px] font-bold text-[var(--color-white)] mt-8 mb-3">{children}</h2>
+function H2({ children, id }: { children: string; id?: string }) {
+  const anchor = id ?? children.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return (
+    <h2 id={anchor} className="text-[16px] font-bold text-[var(--color-white)] mt-8 mb-3 group scroll-mt-24">
+      {children}
+      <a href={`#${anchor}`} className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--color-dim)] no-underline" aria-label={`Link a ${children}`}>#</a>
+    </h2>
+  )
 }
 
 function H3({ children }: { children: string }) {
-  return <h3 className="text-[13px] font-semibold text-[var(--color-bright)] mt-5 mb-2">{children}</h3>
+  const anchor = children.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return (
+    <h3 id={anchor} className="text-[13px] font-semibold text-[var(--color-bright)] mt-5 mb-2 scroll-mt-24">
+      {children}
+    </h3>
+  )
 }
 
 function P({ children }: { children: React.ReactNode }) {
