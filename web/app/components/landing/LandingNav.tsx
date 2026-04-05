@@ -166,6 +166,9 @@ export default function LandingNav() {
           <Link href="/about" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
             {t('nav_about')}
           </Link>
+          <Link href="/stats" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/stats')}>
+            {t('nav_stats')}
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -233,6 +236,9 @@ export default function LandingNav() {
           </Link>
           <Link href="/about" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
             {t('nav_about')}
+          </Link>
+          <Link href="/stats" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/stats')}>
+            {t('nav_stats')}
           </Link>
           <Link
             href="/?login=true"

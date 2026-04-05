@@ -24,6 +24,7 @@ const translations = {
   nav_faq:           { it: 'FAQ',              en: 'FAQ' },
   nav_pricing:       { it: 'Pricing',          en: 'Pricing' },
   nav_about:         { it: 'Chi siamo',        en: 'About' },
+  nav_stats:         { it: 'Stats',            en: 'Stats' },
   nav_login:         { it: 'Accedi',           en: 'Sign in' },
 
   // Hero
