@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
 import TeamDropdown from './TeamDropdown'
-import { NotificationCenter } from '@/app/components/NotificationCenter'
 import NavbarMobile from './NavbarMobile'
+
+const NotificationCenter = dynamic(() => import('@/app/components/NotificationCenter').then(m => m.NotificationCenter))
 
 interface NavbarProps {
   user: User | null
