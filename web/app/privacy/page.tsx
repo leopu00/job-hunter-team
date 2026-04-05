@@ -93,7 +93,6 @@ function PrivacyContent() {
       </div>
       <LandingFooter />
     </main>
-    <LandingFooter />
   )
 }
 
