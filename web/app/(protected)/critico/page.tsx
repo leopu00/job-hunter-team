@@ -324,7 +324,7 @@ export default function CriticoPage() {
               const color  = colors[i % colors.length]
               const pctPass = s.total > 0 ? ((s.pass / s.total) * 100).toFixed(1) : '0'
               return (
-                <div key={s.critico} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+                <div key={s.critico} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <span className="text-[13px] font-bold" style={{ color }}>{s.critico}</span>
