@@ -12,11 +12,11 @@ export default async function RispostePage() {
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Risposte</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Risposte</span>
+        </nav>
         <div className="mt-3">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-2 h-2 rounded-full" style={{ background: '#58a6ff', animation: risposte.length > 0 ? 'pulse-dot 2s ease-in-out infinite' : undefined }} />
