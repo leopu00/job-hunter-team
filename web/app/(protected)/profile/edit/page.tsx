@@ -393,7 +393,7 @@ export default function ProfileEditPage() {
             </FormField>
           </FormRow>
           <FormField label="Website">
-            <input type="text" value={form.website} placeholder="https://..."
+            <input type="url" value={form.website} placeholder="https://..."
               onChange={e => set('website', e.target.value)} />
           </FormField>
         </FormSection>
@@ -567,7 +567,7 @@ export default function ProfileEditPage() {
               onChange={e => set('proj_description', e.target.value)} />
           </FormField>
           <FormField label="URL (opzionale)">
-            <input type="text" value={form.proj_url} placeholder="https://github.com/..."
+            <input type="url" value={form.proj_url} placeholder="https://github.com/..."
               onChange={e => set('proj_url', e.target.value)} />
           </FormField>
           <button type="button" onClick={addProject} disabled={!form.proj_name.trim()}
