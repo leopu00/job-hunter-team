@@ -125,14 +125,16 @@ export function GlobalSearch() {
 
   return (
     <div className="fixed inset-0 flex items-start justify-center pt-[10vh] px-4 z-[9990]"
+      role="dialog" aria-modal="true" aria-label="Cerca"
       style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', animation: 'fade-in 0.1s ease both' }}
       onClick={e => { if (e.target === e.currentTarget) closeSearch() }}>
       <div className="w-full max-w-xl rounded-xl overflow-hidden"
         style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }}>
 
         <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <span style={{ color: 'var(--color-dim)', fontSize: 14 }}>🔍</span>
+          <span style={{ color: 'var(--color-dim)', fontSize: 14 }} aria-hidden="true">🔍</span>
           <input ref={inputRef} value={query} placeholder="Cerca pagine, sezioni…"
+            role="combobox" aria-expanded={displayList.length > 0} aria-controls="search-listbox" aria-activedescendant={displayList[selected] ? `search-item-${displayList[selected].id}` : undefined}
             onChange={e => { setQuery(e.target.value); setSelected(0) }}
             onKeyDown={onKey}
             className="flex-1 bg-transparent outline-none text-[13px]"
@@ -140,13 +142,13 @@ export function GlobalSearch() {
           <kbd className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-dim)' }}>esc</kbd>
         </div>
 
-        <div className="overflow-y-auto" style={{ maxHeight: '55vh' }}>
+        <div id="search-listbox" role="listbox" className="overflow-y-auto" style={{ maxHeight: '55vh' }}>
           {showRecent && <p className="px-4 pt-2.5 pb-1 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-dim)' }}>Recenti</p>}
           {displayList.length === 0 && query.length > 0 && (
-            <p className="px-4 py-6 text-[11px] text-center" style={{ color: 'var(--color-dim)' }}>Nessun risultato per "{query}"</p>
+            <p className="px-4 py-6 text-[11px] text-center" style={{ color: 'var(--color-dim)' }}>Nessun risultato per &ldquo;{query}&rdquo;</p>
           )}
           {displayList.map((item, i) => (
-            <button key={item.id} onClick={() => execute(item)} onMouseEnter={() => setSelected(i)}
+            <button key={item.id} id={`search-item-${item.id}`} role="option" aria-selected={i === selected} onClick={() => execute(item)} onMouseEnter={() => setSelected(i)}
               className="flex items-center gap-3 w-full px-4 py-2.5 text-left cursor-pointer transition-colors"
               style={{ background: i === selected ? 'var(--color-deep)' : 'transparent', border: 'none' }}>
               <span className="text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold shrink-0 w-14 text-center"
