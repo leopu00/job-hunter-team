@@ -386,7 +386,7 @@ function StatsContent() {
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">open source</span>
           </div>
           <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">
@@ -403,7 +403,7 @@ function StatsContent() {
                 border: `1px solid ${data.source === 'git' ? 'rgba(0,232,122,0.2)' : 'rgba(255,193,7,0.2)'}`,
               }}
             >
-              <div className="w-1.5 h-1.5 rounded-full" style={{
+              <div className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{
                 background: data.source === 'git' ? 'var(--color-green)' : 'var(--color-yellow)',
                 animation: data.source === 'git' ? 'pulse-dot 2s ease-in-out infinite' : 'none',
               }} />
@@ -623,7 +623,7 @@ function StatsContent() {
                       {formatDate(data.overview.lastCommit)}
                     </div>
                   </div>
-                  <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+                  <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
                 </div>
               </div>
             </section></FadeInSection>
