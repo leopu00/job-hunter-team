@@ -35,7 +35,7 @@ function SectionBadge({ s }: { s: Section }) {
 function ProfileCard({ p, expanded, onToggle }: { p: Profile; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           {p.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
         </div>

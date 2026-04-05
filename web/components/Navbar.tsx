@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
 import TeamDropdown from './TeamDropdown'
-import { NotificationCenter } from '@/app/components/NotificationCenter'
 import NavbarMobile from './NavbarMobile'
+
+const NotificationCenter = dynamic(() => import('@/app/components/NotificationCenter').then(m => m.NotificationCenter))
 
 interface NavbarProps {
   user: User | null
@@ -25,7 +27,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
       style={{ position: 'relative', zIndex: 10 }}
       className="border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+      <nav aria-label="Navigazione app" className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
 
         {/* Brand */}
         <Link
@@ -48,6 +50,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/ready" accent="#7fffb2">Pronte</NavLink>
           <NavLink href="/risposte" accent="#58a6ff">Risposte</NavLink>
           <NavLink href="/crescita">Crescita</NavLink>
+          <NavLink href="/reports">Report</NavLink>
           <TeamDropdown />
           <NavLink href="/profile">Profilo</NavLink>
         </div>
@@ -130,6 +133,7 @@ function WorkspacePath({ path }: { path: string }) {
           {i > 0 && <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">›</span>}
           <span
             className="text-[10px] font-medium truncate"
+            title={seg}
             style={{
               color: i === display.length - 1 ? 'var(--color-bright)' : 'var(--color-dim)',
               maxWidth: i === display.length - 1 ? '140px' : '80px',

@@ -89,7 +89,7 @@ export default function JobCard({ job, showDescription = false, compact = false,
         <div className="flex-1 min-w-0">
           {/* Titolo + score */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[13px] font-semibold text-[var(--color-bright)] truncate">{job.title}</span>
+            <span className="text-[13px] font-semibold text-[var(--color-bright)] truncate" title={job.title}>{job.title}</span>
             {job.score !== undefined && (
               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.2)' }}>
                 {job.score}%
@@ -115,7 +115,7 @@ export default function JobCard({ job, showDescription = false, compact = false,
         <>
           {/* Descrizione */}
           {showDescription && job.description && (
-            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed">{job.description}</p>
+            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed" title={job.description}>{job.description}</p>
           )}
 
           {/* Meta row: tipo, salary, data */}

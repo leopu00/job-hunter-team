@@ -102,7 +102,6 @@ export default function InputSlider({
               background: trackBg,
               borderRadius: trackH,
               cursor: disabled ? 'default' : 'pointer',
-              outline: 'none',
               // thumb size via CSS var trick for webkit
               ['--thumb-size' as string]: `${thumb}px`,
             }}

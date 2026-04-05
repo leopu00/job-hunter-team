@@ -100,6 +100,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <button
       onClick={toggleTheme}
+      title={isDark ? 'Passa a tema chiaro' : 'Passa a tema scuro'}
       aria-label={isDark ? 'Passa a tema chiaro' : 'Passa a tema scuro'}
       className={className}
       style={{

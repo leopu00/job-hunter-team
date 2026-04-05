@@ -62,7 +62,7 @@ function FileRow({ uf, onRemove }: { uf: UploadedFile; onRemove: () => void }) {
         </div>
         {uf.done && !uf.error && <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--color-green)' }}>✓</span>}
         {uf.error && <span className="text-[9px] flex-shrink-0 truncate max-w-[100px]" style={{ color: 'var(--color-red)' }}>{uf.error}</span>}
-        <button onClick={onRemove} className="flex-shrink-0 text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dim)' }}>✕</button>
+        <button onClick={onRemove} aria-label="Rimuovi file" className="flex-shrink-0 text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dim)' }}>✕</button>
       </div>
       {!uf.done && uf.progress > 0 && (
         <div className="h-0.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
@@ -131,10 +131,12 @@ export function FileUpload({ accept = [], maxSizeMb = 10, multiple = false, onUp
       {label && <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-dim)' }}>{label}</p>}
 
       {/* Drop zone */}
-      <div onClick={() => inputRef.current?.click()}
+      <div role="button" tabIndex={0} onClick={() => inputRef.current?.click()}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
+        aria-label="Seleziona file da caricare"
         className="flex flex-col items-center justify-center gap-1 py-6 rounded-xl cursor-pointer transition-colors"
         style={{ border: `1.5px dashed ${color}`, background: dragOver ? 'var(--color-blue)08' : 'transparent' }}>
         <span className="text-[20px]">📂</span>

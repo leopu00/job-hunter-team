@@ -78,7 +78,7 @@ export default function MapSVG({ markers = [], onMarkerClick, width = 600, heigh
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
-      <svg width={width} height={height} style={{ borderRadius: 8, border: '1px solid var(--color-border)' }}>
+      <svg role="img" aria-label="Mappa posizioni" width={width} height={height} style={{ borderRadius: 8, border: '1px solid var(--color-border)' }}>
         {/* Oceano */}
         <rect width={width} height={height} fill="#0a1628" rx={8} />
 
@@ -105,10 +105,16 @@ export default function MapSVG({ markers = [], onMarkerClick, width = 600, heigh
           const r = isCluster ? 10 + Math.min(cl.markers.length, 8) : 6
           return (
             <g key={i}
+              role="button"
+              tabIndex={0}
+              aria-label={isCluster ? `${cl.markers.length} posizioni raggruppate` : m.label}
               style={{ cursor: 'pointer' }}
-              onMouseEnter={e => { setTip(cl); setTipPos({ x: cl.cx, y: cl.cy }) }}
+              onFocus={() => { setTip(cl); setTipPos({ x: cl.cx, y: cl.cy }) }}
+              onBlur={() => setTip(null)}
+              onMouseEnter={() => { setTip(cl); setTipPos({ x: cl.cx, y: cl.cy }) }}
               onMouseLeave={() => setTip(null)}
-              onClick={() => !isCluster && onMarkerClick?.(m)}>
+              onClick={() => !isCluster && onMarkerClick?.(m)}
+              onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !isCluster) { e.preventDefault(); onMarkerClick?.(m) } }}>
               <circle cx={cl.cx} cy={cl.cy} r={r + 4} fill={c} opacity={0.15} />
               <circle cx={cl.cx} cy={cl.cy} r={r} fill={c} stroke="#000" strokeWidth={1} opacity={0.9} />
               {isCluster && (
@@ -123,7 +129,7 @@ export default function MapSVG({ markers = [], onMarkerClick, width = 600, heigh
 
       {/* Tooltip */}
       {tip && (
-        <div style={{
+        <div role="tooltip" style={{
           position: 'absolute', pointerEvents: 'none', zIndex: 10,
           left: tipPos.x + 12, top: tipPos.y - 8,
           background: 'var(--color-panel)', border: '1px solid var(--color-border)',

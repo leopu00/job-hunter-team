@@ -1,23 +1,25 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { NotificationCenter } from './NotificationCenter'
+
+const NotificationCenter = dynamic(() => import('./NotificationCenter').then(m => m.NotificationCenter))
 
 // ── Label map ──────────────────────────────────────────────────────────────
 
 const LABELS: Record<string, string> = {
   dashboard: 'Dashboard', agents: 'Agenti', tasks: 'Task', assistant: 'Assistente',
-  history: 'History', sessions: 'Sessioni', analytics: 'Analytics', queue: 'Queue',
-  events: 'Events', notifications: 'Notifiche', credentials: 'Credenziali',
+  history: 'Storico', sessions: 'Sessioni', analytics: 'Analytics', queue: 'Coda',
+  events: 'Eventi', notifications: 'Notifiche', credentials: 'Credenziali',
   plugins: 'Plugin', templates: 'Template', logs: 'Log', deploy: 'Deploy',
   providers: 'Provider', gateway: 'Gateway', 'rate-limiter': 'Rate Limiter',
-  memory: 'Memory', channels: 'Canali', settings: 'Impostazioni', cron: 'Cron',
-  config: 'Config', daemon: 'Daemon', health: 'Health', overview: 'Overview',
-  retry: 'Retry', tools: 'Tool', 'not-found': '404',
+  memory: 'Memoria', channels: 'Canali', settings: 'Impostazioni', cron: 'Cron',
+  config: 'Configurazione', daemon: 'Daemon', health: 'Salute', overview: 'Panoramica',
+  retry: 'Retry', tools: 'Strumenti', 'not-found': '404',
   jobs: 'Offerte', applications: 'Candidature', interviews: 'Colloqui',
-  companies: 'Aziende', profiles: 'Profili', alerts: 'Alert',
+  companies: 'Aziende', profiles: 'Profili', alerts: 'Avvisi',
   'cover-letters': 'Cover Letter', workers: 'Workers', status: 'Stato',
   positions: 'Posizioni', ready: 'Pronte', risposte: 'Risposte',
   crescita: 'Crescita', profile: 'Profilo', team: 'Team',
@@ -27,8 +29,25 @@ const LABELS: Record<string, string> = {
   demo: 'Demo', download: 'Download', guide: 'Guida',
   faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
   privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
-  stats: 'Statistiche',
+  stats: 'Statistiche', reports: 'Report', setup: 'Setup', edit: 'Modifica',
   terms: 'Termini di Servizio',
+  // Pagine aggiuntive
+  achievements: 'Obiettivi', activity: 'Attività', 'ai-assistant': 'Assistente AI',
+  'api-explorer': 'API Explorer', archive: 'Archivio', audit: 'Audit',
+  automations: 'Automazioni', backup: 'Backup', bookmarks: 'Preferiti',
+  budget: 'Budget', calendar: 'Calendario', compare: 'Confronto',
+  contacts: 'Contatti', context: 'Contesto', database: 'Database',
+  env: 'Ambiente', errors: 'Errori', export: 'Esportazione',
+  feedback: 'Feedback', forum: 'Forum', git: 'Git', goals: 'Obiettivi',
+  hooks: 'Hook', import: 'Importazione', insights: 'Insight',
+  integrations: 'Integrazioni', map: 'Mappa', messages: 'Messaggi',
+  migrations: 'Migrazioni', monitoring: 'Monitoraggio', networking: 'Networking',
+  onboarding: 'Onboarding', performance: 'Performance', pipelines: 'Pipeline',
+  recommendations: 'Raccomandazioni', reminders: 'Promemoria',
+  'resume-builder': 'Crea CV', 'saved-searches': 'Ricerche Salvate',
+  scheduler: 'Schedulatore', search: 'Ricerca', secrets: 'Segreti',
+  sentinel: 'Sentinella', skills: 'Competenze', timeline: 'Timeline',
+  validators: 'Validatori', webhooks: 'Webhook', metrics: 'Metriche',
 }
 
 const ID_RE = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
@@ -58,12 +77,14 @@ function CollapseDropdown({ hidden }: { hidden: Crumb[] }) {
     <span ref={ref} className="relative inline-flex items-center gap-1">
       <span style={{ color: 'var(--color-border)' }}>/</span>
       <button onClick={() => setOpen(v => !v)}
+        aria-label="Mostra percorso completo"
+        aria-expanded={open}
         className="px-1.5 py-0.5 rounded text-[10px] transition-colors hover:opacity-80"
         style={{ background: 'var(--color-border)', color: 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
         ···
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50 min-w-[140px]"
+        <div role="menu" className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50 min-w-[140px]"
           style={{ background: 'var(--color-deep)', border: '1px solid var(--color-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
           {hidden.map(c => (
             <Link key={c.href} href={c.href} onClick={() => setOpen(false)}
@@ -88,7 +109,8 @@ function CopyPath({ path }: { path: string }) {
     })
   }, [path])
   return (
-    <button onClick={copy} title="Copia path"
+    <button onClick={copy} title="Copia path" aria-label={copied ? 'Path copiato' : 'Copia path'}
+      aria-live="polite"
       className="text-[9px] px-1.5 py-0.5 rounded transition-all hover:opacity-80"
       style={{ background: copied ? 'var(--color-green)18' : 'transparent', color: copied ? 'var(--color-green)' : 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
       {copied ? '✓' : '⎘'}

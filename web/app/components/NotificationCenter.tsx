@@ -151,8 +151,10 @@ export function NotificationCenter() {
           border: `1px solid ${open ? 'var(--color-border)' : 'transparent'}`,
         }}
         aria-label={t.title}
+        aria-expanded={open}
+        aria-haspopup="true"
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path
             d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6v2.5L2 10v1h12v-1l-1.5-1.5V6c0-2.5-2-4.5-4.5-4.5zM6.5 12a1.5 1.5 0 003 0"
             stroke="var(--color-muted)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"
@@ -221,7 +223,11 @@ export function NotificationCenter() {
                 return (
                   <div
                     key={n.id}
+                    role={n.read ? undefined : 'button'}
+                    tabIndex={n.read ? undefined : 0}
+                    aria-label={n.read ? undefined : `Segna come letta: ${n.title}`}
                     onClick={() => !n.read && markRead(n.id)}
+                    onKeyDown={e => { if (!n.read && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); markRead(n.id) } }}
                     className="flex gap-3 px-4 py-3 cursor-pointer transition-colors border-b"
                     style={{
                       borderColor: 'var(--color-border)',

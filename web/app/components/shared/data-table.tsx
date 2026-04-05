@@ -63,7 +63,7 @@ export function DataTable<T extends Record<string, unknown>>({
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               {columns.map(col => (
-                <th key={String(col.key)} className="px-4 py-2.5 text-left font-semibold"
+                <th key={String(col.key)} scope="col" className="px-4 py-2.5 text-left font-semibold"
                   style={{ color: 'var(--color-dim)', cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none' }}
                   onClick={() => col.sortable && toggleSort(col.key)}>
                   {col.label}

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -15,5 +16,5 @@ export const metadata: Metadata = {
 }
 
 export default function PrivacyLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (<><BreadcrumbJsonLd items={[{ name: 'Privacy Policy', path: '/privacy' }]} />{children}</>)
 }
