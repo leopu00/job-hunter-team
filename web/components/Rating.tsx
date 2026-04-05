@@ -115,7 +115,8 @@ export default function Rating({
       tabIndex={isInteractive ? 0 : -1}
       onKeyDown={handleKeyDown}
       onMouseLeave={() => isInteractive && setHover(null)}
-      style={{ display: 'inline-flex', alignItems: 'center', gap, outline: 'none', cursor: isInteractive ? 'pointer' : 'default' }}>
+      className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded"
+      style={{ display: 'inline-flex', alignItems: 'center', gap, cursor: isInteractive ? 'pointer' : 'default' }}>
       {Array.from({ length: max }, (_, i) => (
         <div
           key={i}
