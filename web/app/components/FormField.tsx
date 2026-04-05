@@ -12,6 +12,7 @@ export type FormFieldProps = {
   error?:       string          // errore esterno (es. da submit)
   required?:    boolean
   disabled?:    boolean
+  htmlFor?:     string          // associa label all'input
   className?:   string
   children?:    ReactNode       // custom input/select
 }
@@ -34,11 +35,11 @@ export const fieldInputStyle = (error: boolean, disabled: boolean): React.CSSPro
 
 // ── FormField wrapper ──────────────────────────────────────────────────────
 
-export function FormField({ label, help, error, required, disabled, className, children }: FormFieldProps) {
+export function FormField({ label, help, error, required, disabled, htmlFor, className, children }: FormFieldProps) {
   return (
     <div className={`flex flex-col gap-1 ${className ?? ''}`}>
       {label && (
-        <label className="text-[10px] font-semibold flex items-center gap-1"
+        <label htmlFor={htmlFor} className="text-[10px] font-semibold flex items-center gap-1"
           style={{ color: 'var(--color-muted)' }}>
           {label}
           {required && <span style={{ color: 'var(--color-red)' }}>*</span>}
@@ -84,7 +85,7 @@ export function TextField({ label, help, error: externalError, validate, classNa
   const err = externalError ?? inlineError ?? undefined
 
   return (
-    <FormField label={label} help={help} error={err} required={rest.required} disabled={rest.disabled} className={className}>
+    <FormField label={label} help={help} error={err} required={rest.required} disabled={rest.disabled} htmlFor={id} className={className}>
       <input id={id} {...rest} onBlur={handleBlur} onChange={handleChange}
         style={fieldInputStyle(!!err, !!rest.disabled)} />
     </FormField>
@@ -117,7 +118,7 @@ export function TextAreaField({ label, help, error: externalError, validate, cla
   const err = externalError ?? inlineError ?? undefined
 
   return (
-    <FormField label={label} help={help} error={err} required={rest.required} disabled={rest.disabled} className={className}>
+    <FormField label={label} help={help} error={err} required={rest.required} disabled={rest.disabled} htmlFor={id} className={className}>
       <textarea id={id} rows={rows} {...rest} onBlur={handleBlur} onChange={handleChange}
         style={{ ...fieldInputStyle(!!err, !!rest.disabled), resize: 'vertical', fontFamily: 'inherit' }} />
     </FormField>
@@ -138,9 +139,10 @@ type SelectFieldProps = Omit<InputHTMLAttributes<HTMLSelectElement>, 'className'
 }
 
 export function SelectField({ label, help, error, options, placeholder, className, ...rest }: SelectFieldProps) {
+  const id = useId()
   return (
-    <FormField label={label} help={help} error={error} required={rest.required} disabled={rest.disabled} className={className}>
-      <select {...(rest as React.SelectHTMLAttributes<HTMLSelectElement>)}
+    <FormField label={label} help={help} error={error} required={rest.required} disabled={rest.disabled} htmlFor={id} className={className}>
+      <select id={id} {...(rest as React.SelectHTMLAttributes<HTMLSelectElement>)}
         style={{ ...fieldInputStyle(!!error, !!rest.disabled), appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
         {placeholder && <option value="">{placeholder}</option>}
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
