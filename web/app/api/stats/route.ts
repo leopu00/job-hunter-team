@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'node:child_process'
 
+export const dynamic = 'force-dynamic'
+
 function run(cmd: string): string {
   try {
     return execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim()
