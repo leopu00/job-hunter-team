@@ -127,7 +127,7 @@ export default function ChannelsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {channels.length === 0
           ? <div className="col-span-full flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessun canale trovato.</p></div>
-          : channels.map(ch => <ChannelCard key={ch.id} ch={ch} onToggle={toggleChannel} />)
+          : channels.map((ch, i) => <div key={ch.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ChannelCard ch={ch} onToggle={toggleChannel} /></div>)
         }
       </div>
     </div>
