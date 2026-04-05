@@ -330,9 +330,9 @@ function PricingContent() {
             <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-dim)', width: '40%' }} />
+                  <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-dim)', width: '40%' }} />
                   {PLANS.map((p) => (
-                    <th key={p.nameKey} className="text-center py-3 px-3 font-bold" style={{ color: p.accent }}>
+                    <th key={p.nameKey} scope="col" className="text-center py-3 px-3 font-bold" style={{ color: p.accent }}>
                       {t(p.nameKey)}
                     </th>
                   ))}
