@@ -104,7 +104,7 @@ export default function ProgressRing({
 
   return (
     <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg width={px} height={px} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
+      <svg width={px} height={px} style={{ display: 'block', transform: 'rotate(-90deg)' }} role="img" aria-label={`Progresso: ${Math.round(clampedValue)}%`}>
         {/* Track */}
         <circle
           cx={cx} cy={cy} r={radius}
