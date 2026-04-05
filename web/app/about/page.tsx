@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── Dati agenti ──────────────────────────────────────────────────── */
@@ -172,6 +173,7 @@ function AboutContent() {
         </section>
 
       </main>
+      <LandingFooter />
     </div>
   )
 }
