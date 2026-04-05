@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
@@ -56,6 +56,11 @@ const T = {
     heatmap_desc: 'Commit al giorno negli ultimi 90 giorni',
     less: 'Meno',
     more: 'Piu',
+    contribute_title: 'Vuoi contribuire?',
+    contribute_desc: 'Job Hunter Team e open source. Ogni contributo conta — bug report, feature, documentazione.',
+    contribute_cta: 'Vai al repository',
+    share: 'Condividi',
+    copied: 'Copiato!',
   },
   en: {
     title: 'Project Statistics',
@@ -101,6 +106,11 @@ const T = {
     heatmap_desc: 'Commits per day over the last 90 days',
     less: 'Less',
     more: 'More',
+    contribute_title: 'Want to contribute?',
+    contribute_desc: 'Job Hunter Team is open source. Every contribution counts — bug reports, features, documentation.',
+    contribute_cta: 'Go to repository',
+    share: 'Share',
+    copied: 'Copied!',
   },
 }
 
@@ -322,6 +332,7 @@ function StatsContent() {
   const [data, setData] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [shared, setShared] = useState(false)
 
   const fetchData = () => {
     setLoading(true)
@@ -374,6 +385,24 @@ function StatsContent() {
               {data.source === 'git' ? 'live' : 'snapshot'}
             </div>
           )}
+          <div className="mt-4">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                  setShared(true); setTimeout(() => setShared(false), 2000)
+                })
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-semibold tracking-wide transition-all hover:opacity-80"
+              style={{
+                background: shared ? 'rgba(0,232,122,0.1)' : 'transparent',
+                color: shared ? 'var(--color-green)' : 'var(--color-dim)',
+                border: `1px solid ${shared ? 'var(--color-green)' : 'var(--color-border)'}`,
+                cursor: 'pointer',
+              }}
+            >
+              {shared ? t.copied : t.share}
+            </button>
+          </div>
         </div>
 
         {/* Loading */}
@@ -596,6 +625,25 @@ function StatsContent() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </section>
+            {/* Contribute CTA */}
+            <section className="text-center py-10 px-6 rounded-xl border border-[var(--color-border)] relative overflow-hidden"
+              style={{ background: 'var(--color-panel)' }}>
+              <div className="absolute inset-0 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(0,232,122,0.04) 0%, transparent 70%)' }} />
+              <div className="relative z-10">
+                <h2 className="text-lg font-bold text-[var(--color-white)] mb-2">{t.contribute_title}</h2>
+                <p className="text-[12px] text-[var(--color-muted)] max-w-md mx-auto mb-5 leading-relaxed">{t.contribute_desc}</p>
+                <a
+                  href="https://github.com/leopu00/job-hunter-team"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded text-[11px] font-bold tracking-wider no-underline transition-all hover:opacity-90"
+                  style={{ background: 'var(--color-green)', color: '#060608' }}
+                >
+                  {t.contribute_cta}
+                </a>
               </div>
             </section>
           </div>
