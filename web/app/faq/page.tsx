@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 type FaqItem = { q: string; a: React.ReactNode }
 
@@ -224,19 +225,22 @@ function FaqContent() {
         </div>
 
         {/* FAQ list */}
-        <div className="flex flex-col">
-          {FAQ_ITEMS.map((item, i) => (
-            <FaqAccordion
-              key={i}
-              item={item}
-              index={i}
-              isOpen={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
-            />
-          ))}
-        </div>
+        <FadeInSection>
+          <div className="flex flex-col">
+            {FAQ_ITEMS.map((item, i) => (
+              <FaqAccordion
+                key={i}
+                item={item}
+                index={i}
+                isOpen={openIndex === i}
+                onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              />
+            ))}
+          </div>
+        </FadeInSection>
 
         {/* CTA */}
+        <FadeInSection delay={100}>
         <div className="mt-10 rounded-lg p-6 text-center" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
           <p className="text-[13px] text-[var(--color-bright)] font-semibold mb-2">{t('faq_no_answer')}</p>
           <p className="text-[11px] text-[var(--color-muted)] mb-4">
@@ -259,6 +263,7 @@ function FaqContent() {
             </Link>
           </div>
         </div>
+        </FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
