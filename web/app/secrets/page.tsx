@@ -126,9 +126,9 @@ export default function SecretsPage() {
                 <p className="text-[10px] font-mono text-[var(--color-dim)] mt-0.5">{s.masked ? s.value : s.value} · {TYPE_LABEL[s.type]} · {fmtDate(s.createdAt)}</p>
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <button onClick={() => reveal(s.id)} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}>{s.masked ? '👁' : '🙈'}</button>
-                <button onClick={() => copy(s)} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: copied === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: 'transparent' }}>{copied === s.id ? '✓' : '⎘'}</button>
-                <button onClick={() => del(s.id)} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
+                <button onClick={() => reveal(s.id)} aria-label={s.masked ? 'Mostra valore' : 'Nascondi valore'} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}>{s.masked ? '👁' : '🙈'}</button>
+                <button onClick={() => copy(s)} aria-label="Copia valore" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: copied === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: 'transparent' }}>{copied === s.id ? '✓' : '⎘'}</button>
+                <button onClick={() => del(s.id)} aria-label="Elimina segreto" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
               </div>
             </div>
           ))}
