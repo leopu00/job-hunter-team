@@ -420,7 +420,7 @@ export default function ProfileEditPage() {
           {languages.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {languages.map((l, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <span className="text-[12px] text-[var(--color-bright)]">{l.language}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--color-muted)]">{l.level}</span>
@@ -459,7 +459,7 @@ export default function ProfileEditPage() {
           {experience.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {experience.map((e, i) => (
-                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="text-[12px] font-semibold text-[var(--color-bright)]">{e.role}</span>
@@ -507,7 +507,7 @@ export default function ProfileEditPage() {
           {education.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {education.map((e, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div>
                     <span className="text-[12px] text-[var(--color-bright)]">{e.title}</span>
                     {e.institution && <span className="text-[10px] text-[var(--color-muted)] ml-2">{e.institution}</span>}
@@ -554,7 +554,7 @@ export default function ProfileEditPage() {
           {projects.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {projects.map((p, i) => (
-                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name}</span>
                     <button type="button" onClick={() => setProjects(prev => prev.filter((_, j) => j !== i))}
@@ -699,7 +699,7 @@ export default function ProfileEditPage() {
           {uploadedFiles.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {uploadedFiles.map(f => (
-                <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[12px] text-[var(--color-bright)] truncate" title={f.name}>{f.name}</span>
                     <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
