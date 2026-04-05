@@ -27,6 +27,7 @@ const LABELS: Record<string, string> = {
   demo: 'Demo', download: 'Download', guide: 'Guida',
   faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
   privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
+  stats: 'Statistiche',
 }
 
 const ID_RE = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
