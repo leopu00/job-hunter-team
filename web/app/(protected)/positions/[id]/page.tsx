@@ -142,7 +142,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {(pros.length > 0 || cons.length > 0) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {pros.length > 0 && (
-                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
                   <div className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: 'var(--color-green)' }}>
                     Pro
                   </div>
@@ -157,7 +157,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 </div>
               )}
               {cons.length > 0 && (
-                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
                   <div className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: 'var(--color-red)' }}>
                     Contro
                   </div>
@@ -176,7 +176,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
           {/* Score breakdown */}
           {score && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">Score breakdown</div>
               <div className="space-y-3">
                 <ScoreBar label="Stack match"    value={score.stack_match}    max={40} />
@@ -195,7 +195,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
           {/* Application */}
           {application && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">Candidatura</div>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <InfoRow label="Stato" value={application.status} />
@@ -244,7 +244,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
           {/* Job description */}
           {(position.jd_text || position.requirements) && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-3">Job Description</div>
               {position.requirements && (
                 <div className="mb-4">
@@ -271,7 +271,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
         <div className="space-y-4">
 
           {/* Details */}
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="section-label mb-3">Dettagli</div>
             <div className="space-y-2">
               {position.source && <InfoRow label="Fonte" value={position.source} />}
@@ -305,7 +305,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
           {/* Company */}
           {company && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-3">Azienda</div>
               <div className="space-y-2">
                 {company.verdict && (
@@ -363,7 +363,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
           {/* Notes */}
           {position.notes && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-2">Note</div>
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">{position.notes}</p>
             </div>
