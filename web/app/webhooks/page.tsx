@@ -94,7 +94,7 @@ export default function WebhooksPage() {
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
             </div>
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
             <div className="flex flex-wrap gap-1.5">
               {ALL_EVENTS.map(ev => (
                 <button key={ev} onClick={() => toggleEvent(ev)} className="px-2 py-1 rounded text-[9px] font-mono cursor-pointer transition-all"
