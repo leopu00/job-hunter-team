@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const CRON_DIR   = path.join(os.homedir(), '.jht', 'cron')
 const CRON_STORE = path.join(CRON_DIR, 'jobs.json')
 

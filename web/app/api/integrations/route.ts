@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const JHT         = path.join(os.homedir(), '.jht')
 const CONFIG_PATH = path.join(JHT, 'jht.config.json')
 const CREDS_DIR   = path.join(JHT, 'credentials')
