@@ -51,7 +51,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
   }, [])
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center"
+    <div role="dialog" aria-label={`Immagine ${index + 1} di ${images.length}`} className="fixed inset-0 flex flex-col items-center justify-center"
       style={{ zIndex: 9999, background: 'rgba(0,0,0,0.92)', animation: 'lb-in 0.18s ease' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
 

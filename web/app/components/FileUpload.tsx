@@ -62,7 +62,7 @@ function FileRow({ uf, onRemove }: { uf: UploadedFile; onRemove: () => void }) {
         </div>
         {uf.done && !uf.error && <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--color-green)' }}>✓</span>}
         {uf.error && <span className="text-[9px] flex-shrink-0 truncate max-w-[100px]" style={{ color: 'var(--color-red)' }}>{uf.error}</span>}
-        <button onClick={onRemove} className="flex-shrink-0 text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dim)' }}>✕</button>
+        <button onClick={onRemove} aria-label="Rimuovi file" className="flex-shrink-0 text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dim)' }}>✕</button>
       </div>
       {!uf.done && uf.progress > 0 && (
         <div className="h-0.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
