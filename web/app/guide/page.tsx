@@ -49,7 +49,7 @@ function CmdTable({ rows }: { rows: [string, string][] }) {
   return (
     <div className="border border-[var(--color-border)] rounded-lg overflow-hidden" style={{ background: 'var(--color-panel)' }}>
       {rows.map(([cmd, desc], i) => (
-        <div key={cmd} className={`flex items-start gap-4 px-4 py-2.5 ${i < rows.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+        <div key={cmd} className={`flex items-start gap-4 px-4 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < rows.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
           <span className="text-[11px] font-mono text-[var(--color-green)] w-40 flex-shrink-0">{cmd}</span>
           <span className="text-[11px] text-[var(--color-dim)]">{desc}</span>
         </div>
