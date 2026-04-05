@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     title: 'Demo | Job Hunter Team',
     description: 'Tour guidato di Job Hunter Team: scopri come funziona il sistema multi-agente dall\'installazione ai risultati.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Demo | Job Hunter Team',
+    description: 'Tour guidato di Job Hunter Team: scopri come funziona il sistema multi-agente dall\'installazione ai risultati.',
+  },
 }
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
