@@ -107,7 +107,7 @@ export function CommandPalette({ commands, open, onClose }: CommandPaletteProps)
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: 360 }}>
+        <div ref={listRef} role="listbox" className="overflow-y-auto" style={{ maxHeight: 360 }}>
           {filtered.length === 0
             ? <p className="text-center py-8 text-[11px]" style={{ color: 'var(--color-dim)' }}>Nessun risultato per &ldquo;{query}&rdquo;</p>
             : Array.from(groups.entries()).map(([group, items]) => (
@@ -116,7 +116,7 @@ export function CommandPalette({ commands, open, onClose }: CommandPaletteProps)
                 {items.map(cmd => {
                   const idx = filtered.indexOf(cmd)
                   return (
-                    <div key={cmd.id} data-idx={idx}
+                    <div key={cmd.id} data-idx={idx} role="option" aria-selected={idx === active}
                       onClick={() => { cmd.action(); onClose() }}
                       onMouseEnter={() => setActive(idx)}
                       className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
