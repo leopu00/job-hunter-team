@@ -30,7 +30,7 @@ function AlertRow({ a, expanded, onToggle, onSwitch }: { a: Alert; expanded: boo
         <span className="badge text-[8px] px-2 py-0.5 rounded" style={{ color: ch.color, border: `1px solid ${ch.color}40` }}>{ch.label}</span>
         <span className="text-[9px] font-mono text-[var(--color-dim)] w-10 text-right">{a.triggerCount}x</span>
         <span className="text-[9px] text-[var(--color-dim)] w-14 text-right">{timeAgo(a.lastTriggered)}</span>
-        <button onClick={e => { e.stopPropagation(); onSwitch(a.id, !a.enabled); }} className="text-[9px] font-bold cursor-pointer w-8"
+        <button onClick={e => { e.stopPropagation(); onSwitch(a.id, !a.enabled); }} aria-label={`${a.enabled ? 'Disattiva' : 'Attiva'} alert ${a.name}`} className="text-[9px] font-bold cursor-pointer w-8"
           style={{ color: a.enabled ? 'var(--color-green)' : 'var(--color-dim)' }}>{a.enabled ? 'ON' : 'OFF'}</button>
       </div>
       {expanded && (
