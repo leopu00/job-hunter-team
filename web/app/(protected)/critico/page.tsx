@@ -205,7 +205,7 @@ export default function CriticoPage() {
       </div>
 
       {!live ? (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10" role="status" aria-live="polite">
           Caricamento…
         </div>
       ) : queue.length === 0 ? (
@@ -260,7 +260,7 @@ export default function CriticoPage() {
       </div>
 
       {!live ? (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10" role="status" aria-live="polite">
           Caricamento…
         </div>
       ) : feed.length === 0 ? (
