@@ -89,7 +89,8 @@ function CopyPath({ path }: { path: string }) {
     })
   }, [path])
   return (
-    <button onClick={copy} title="Copia path"
+    <button onClick={copy} title="Copia path" aria-label={copied ? 'Path copiato' : 'Copia path'}
+      aria-live="polite"
       className="text-[9px] px-1.5 py-0.5 rounded transition-all hover:opacity-80"
       style={{ background: copied ? 'var(--color-green)18' : 'transparent', color: copied ? 'var(--color-green)' : 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
       {copied ? '✓' : '⎘'}

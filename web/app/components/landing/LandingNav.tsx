@@ -116,6 +116,7 @@ export default function LandingNav() {
 
   return (
     <nav
+      aria-label="Navigazione principale"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: 'linear-gradient(180deg, var(--color-void) 60%, transparent)',
