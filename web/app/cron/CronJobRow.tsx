@@ -19,7 +19,7 @@ export function CronJobRow({ job, onToggle, onDelete }: Props) {
   const statusColor = job.state.lastRunStatus ? STATUS_COLOR[job.state.lastRunStatus] : 'var(--color-dim)'
 
   return (
-    <div className="flex flex-col gap-2 px-4 py-3 border-b border-[var(--color-border)] last:border-0"
+    <div className="flex flex-col gap-2 px-4 py-3 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]"
       style={{ background: job.enabled ? 'transparent' : 'rgba(0,0,0,0.15)' }}>
       {/* Riga principale */}
       <div className="flex items-start justify-between gap-3">
