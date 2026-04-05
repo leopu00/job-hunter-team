@@ -87,7 +87,8 @@ export default function FeedbackPage() {
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
           <div className="mb-3 p-3 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
             <p className="text-[9px] text-[var(--color-dim)]">Trascina screenshot qui (opzionale)</p></div>
-          <button onClick={submit} className="px-4 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Invia feedback</button>
+          <button onClick={submit} disabled={!form.description.trim() || !form.rating} className="px-4 py-1.5 rounded text-[10px] font-bold"
+            style={{ background: form.description.trim() && form.rating ? 'var(--color-green)' : 'var(--color-border)', color: form.description.trim() && form.rating ? '#000' : 'var(--color-dim)', cursor: form.description.trim() && form.rating ? 'pointer' : 'default' }}>Invia feedback</button>
         </div>
       )}
 
