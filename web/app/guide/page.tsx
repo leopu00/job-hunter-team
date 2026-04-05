@@ -261,9 +261,13 @@ function GuideContent() {
           </p>
 
           {/* Tabs */}
-          <div className="flex gap-2 flex-wrap mt-5">
+          <div className="flex gap-2 flex-wrap mt-5" role="tablist" aria-label="Sezioni guida">
             {TABS.map(tab => (
               <button key={tab.id} onClick={() => setActive(tab.id)}
+                role="tab"
+                aria-selected={active === tab.id}
+                aria-controls={`guide-panel-${tab.id}`}
+                id={`guide-tab-${tab.id}`}
                 className="px-4 py-2 rounded-lg text-[11px] font-semibold cursor-pointer transition-all"
                 style={{
                   border: `1px solid ${active === tab.id ? 'var(--color-green)' : 'var(--color-border)'}`,
@@ -277,7 +281,13 @@ function GuideContent() {
         </div>
 
         {/* Content */}
-        <div style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
+        <div
+          role="tabpanel"
+          id={`guide-panel-${active}`}
+          aria-labelledby={`guide-tab-${active}`}
+          style={{ animation: 'fade-in 0.2s ease both' }}
+          key={active}
+        >
           {CONTENT[active]}
         </div>
 
