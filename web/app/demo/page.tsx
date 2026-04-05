@@ -115,17 +115,17 @@ function DemoContent() {
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'var(--color-panel)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    {'\u2190'} Precedente
+                    {'\u2190'} {t('demo_prev')}
                   </button>
                 )}
                 {activeStep < STEPS.length - 1 ? (
                   <button
                     onClick={() => setActiveStep(activeStep + 1)}
-                    aria-label={`Passo successivo: ${t(STEPS[activeStep + 1].titleKey as any)}`}
+                    aria-label={`${t('demo_next')}: ${t(STEPS[activeStep + 1].titleKey as any)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    Successivo {'\u2192'}
+                    {t('demo_next')} {'\u2192'}
                   </button>
                 ) : (
                   <Link
@@ -159,7 +159,7 @@ function DemoContent() {
           {/* All steps overview */}
           <div className="mt-20">
             <h3 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
-              Tutti i passaggi
+              {t('demo_all_steps')}
             </h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {STEPS.map((s, i) => (
