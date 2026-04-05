@@ -87,7 +87,7 @@ function TopCompanies({ data }: { data: AnalyticsData['topCompanies'] }) {
           <span className="text-[9px] font-mono text-[var(--color-dim)] w-3 flex-shrink-0">{i + 1}</span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[10px] text-[var(--color-muted)] truncate">{c.name}</span>
+              <span className="text-[10px] text-[var(--color-muted)] truncate" title={c.name}>{c.name}</span>
               <span className="text-[9px] font-mono text-[var(--color-green)] ml-2 flex-shrink-0">{c.count}</span>
             </div>
             <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>

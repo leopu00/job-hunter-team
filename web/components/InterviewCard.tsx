@@ -87,8 +87,8 @@ export default function InterviewCard({ interview, compact = false, onClick }: I
 
         <div className="flex-1 min-w-0">
           {/* Azienda + ruolo */}
-          <p className="text-[13px] font-semibold text-[var(--color-bright)] truncate">{interview.company}</p>
-          <p className="text-[11px] text-[var(--color-muted)] truncate">{interview.role}</p>
+          <p className="text-[13px] font-semibold text-[var(--color-bright)] truncate" title={interview.company}>{interview.company}</p>
+          <p className="text-[11px] text-[var(--color-muted)] truncate" title={interview.role}>{interview.role}</p>
 
           {!compact && (
             <>
@@ -101,7 +101,7 @@ export default function InterviewCard({ interview, compact = false, onClick }: I
               </div>
               {/* Location / URL */}
               {interview.location && (
-                <p className="text-[9px] text-[var(--color-dim)] mt-0.5 truncate">{interview.location}</p>
+                <p className="text-[9px] text-[var(--color-dim)] mt-0.5 truncate" title={interview.location}>{interview.location}</p>
               )}
               {/* Intervistatore */}
               {interview.interviewer && (
