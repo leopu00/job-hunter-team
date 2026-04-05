@@ -113,7 +113,7 @@ export default function BookmarksPage() {
           <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun segnalibro trovato.</p></div>
         ) : bookmarks.map(b => (
           <div key={b.id} className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
-            <span className="text-sm flex-shrink-0">⭐</span>
+            <span className="text-sm flex-shrink-0" aria-hidden="true">⭐</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 {b.url ? <a href={b.url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-semibold text-[var(--color-bright)] hover:underline">{b.jobTitle}</a>
@@ -129,7 +129,7 @@ export default function BookmarksPage() {
               )}
             </div>
             <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{fmtDate(b.savedAt)}</span>
-            <button onClick={() => remove(b.id)} className="text-[10px] font-bold cursor-pointer transition-colors flex-shrink-0"
+            <button onClick={() => remove(b.id)} aria-label="Rimuovi segnalibro" className="text-[10px] font-bold cursor-pointer transition-colors flex-shrink-0"
               style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--color-red)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>

@@ -23,7 +23,7 @@ function IntCard({ i }: { i: Integration }) {
 
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{ICONS[i.id] ?? '🔌'}</span>
+          <span className="text-2xl" aria-hidden="true">{ICONS[i.id] ?? '🔌'}</span>
           <div>
             <p className="text-[13px] font-bold" style={{ color: 'var(--color-white)' }}>{i.name}</p>
             <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>{i.description}</p>

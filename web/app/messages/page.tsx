@@ -120,7 +120,7 @@ export default function MessagesPage() {
               <div className="flex items-center gap-2">
                 {t.unread && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'var(--color-green)' }} />}
                 <span className="text-[12px] font-semibold text-[var(--color-bright)] flex-1 truncate">{t.contact}</span>
-                {t.starred && <span className="text-[10px]">⭐</span>}
+                {t.starred && <span className="text-[10px]" aria-hidden="true">⭐</span>}
                 <span className="text-[9px] text-[var(--color-dim)]">{fmtTime(t.lastTimestamp)}</span>
               </div>
               <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{t.company}</p>

@@ -344,7 +344,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 )}
                 {company.red_flags && (
                   <p className="text-[11px] leading-relaxed mt-2" style={{ color: 'var(--color-red)' }}>
-                    ⚠ {company.red_flags}
+                    <span aria-hidden="true">⚠</span> {company.red_flags}
                   </p>
                 )}
               </div>

@@ -43,7 +43,7 @@ function AgentCard({ agent, onToggle }: { agent: Agent; onToggle: (session: stri
   const isActive = agent.status === 'active'
   return (
     <div className="flex items-center gap-4 px-5 py-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: 'fade-in 0.3s ease both' }}>
-      <div className="text-2xl w-8 text-center flex-shrink-0">{agent.emoji}</div>
+      <div className="text-2xl w-8 text-center flex-shrink-0" aria-hidden="true">{agent.emoji}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="text-[13px] font-semibold text-[var(--color-bright)]">{agent.role}</span>
