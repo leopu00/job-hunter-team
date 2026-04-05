@@ -112,20 +112,20 @@ const translations = {
   dl_step1_title:    { it: 'Scarica',                    en: 'Download' },
   dl_step1_desc:     { it: 'Scegli il pacchetto per il tuo sistema operativo', en: 'Choose the package for your operating system' },
   dl_step2_title:    { it: 'Avvia',                      en: 'Launch' },
-  dl_step2_desc:     { it: 'Esegui lo script di avvio — installa tutto automaticamente', en: 'Run the startup script — installs everything automatically' },
+  dl_step2_desc:     { it: 'Apri il launcher o lo script incluso: bootstrap e avvio partono automaticamente', en: 'Open the included launcher or script: bootstrap and startup run automatically' },
   dl_step3_title:    { it: 'Usa',                        en: 'Use' },
   dl_step3_desc:     { it: 'Il browser si apre su localhost con l\'interfaccia del team', en: 'The browser opens on localhost with the team interface' },
-  dl_node_title:     { it: 'Requisito: Node.js 18+',    en: 'Requirement: Node.js 18+' },
-  dl_node_desc:      {
-    it: 'Job Hunter Team richiede Node.js per funzionare. Se non lo hai installato, lo script di avvio ti guidera\' nell\'installazione.',
-    en: 'Job Hunter Team requires Node.js to run. If you don\'t have it installed, the startup script will guide you through the installation.',
+  dl_setup_title:    { it: 'Nota installazione',        en: 'Install note' },
+  dl_setup_desc:     {
+    it: 'Su macOS il launcher nel file .dmg gestisce il bootstrap in background. Su Linux e Windows i pacchetti attuali possono ancora richiedere Node.js 18+.',
+    en: 'On macOS the launcher inside the .dmg handles bootstrap in the background. On Linux and Windows, the current packages may still require Node.js 18+.',
   },
-  dl_node_link:      { it: 'Scarica Node.js da',        en: 'Download Node.js from' },
+  dl_setup_link:     { it: 'Node.js disponibile su',    en: 'Node.js available at' },
   dl_home:           { it: 'Home',                       en: 'Home' },
   dl_all_releases:   { it: 'Tutte le release',           en: 'All releases' },
   dl_mac_instr:      {
-    it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
-    en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
+    it: ['Apri il file .dmg scaricato', 'Trascina JHT Desktop nella cartella Applicazioni', 'Avvia JHT Desktop: il launcher aprira la dashboard nel browser'],
+    en: ['Open the downloaded .dmg file', 'Drag JHT Desktop into the Applications folder', 'Launch JHT Desktop: the launcher will open the dashboard in your browser'],
   },
   dl_linux_instr:    {
     it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],

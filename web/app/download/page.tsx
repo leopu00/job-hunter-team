@@ -219,15 +219,15 @@ function DownloadContent() {
             </div>
           </div>
 
-          {/* Node.js requirement note */}
+          {/* Install note */}
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
             <div className="flex items-start gap-3">
               <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0">!</span>
               <div>
-                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_node_title')}</p>
+                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_setup_title')}</p>
                 <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
-                  {t('dl_node_desc')}{' '}
-                  {t('dl_node_link')}{' '}
+                  {t('dl_setup_desc')}{' '}
+                  {t('dl_setup_link')}{' '}
                   <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer"
                     className="text-[var(--color-green)] hover:underline">nodejs.org</a>.
                 </p>
