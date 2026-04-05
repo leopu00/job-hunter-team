@@ -47,7 +47,7 @@ function TimelineNode({ entry, isLast }: { entry: TimelineEntry; isLast: boolean
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="flex justify-between py-1.5 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
       <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
       <span className="text-[10px] text-[var(--color-muted)] font-mono">{value}</span>
     </div>
