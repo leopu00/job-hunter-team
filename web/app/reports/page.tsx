@@ -76,8 +76,9 @@ export default function ReportsPage() {
         <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
       ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        {KPI_CARDS.map(k => (
-          <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        {KPI_CARDS.map((k, i) => (
+          <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-all duration-200 hover:border-[var(--color-border-glow)]"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
             <p className="text-[9px] uppercase tracking-widest text-[var(--color-dim)]">{k.label}</p>
             <p className="text-xl font-bold mt-1" style={{ color: k.color }}>{k.value}</p>
           </div>
