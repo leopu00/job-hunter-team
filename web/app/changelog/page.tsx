@@ -77,9 +77,10 @@ export default function ChangelogPage() {
         </div>
 
         {/* Filtri */}
-        <div className="flex gap-1.5 mt-4 flex-wrap">
+        <div className="flex gap-1.5 mt-4 flex-wrap" role="radiogroup" aria-label="Filtra per tipo">
           {FILTERS.map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
+              role="radio" aria-checked={filter === f.key}
               className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
               style={{
                 border: `1px solid ${filter === f.key ? 'var(--color-green)' : 'var(--color-border)'}`,
