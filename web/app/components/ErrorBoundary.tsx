@@ -33,7 +33,7 @@ export function DefaultFallback({ error, reset }: FallbackProps) {
       <div className="w-12 h-12 rounded-full flex items-center justify-center"
         style={{ background: 'color-mix(in srgb, var(--color-red) 15%, transparent)' }}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          style={{ color: 'var(--color-red)' }}>
+          aria-hidden="true" style={{ color: 'var(--color-red)' }}>
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
