@@ -98,7 +98,7 @@ export default function ErrorsPage() {
           ))}
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per tipo errore" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutti i tipi</option>
           {types.map(t => <option key={t} value={t}>{t}</option>)}
         </select>

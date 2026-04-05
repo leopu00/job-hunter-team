@@ -134,11 +134,11 @@ export default function LogsPage() {
           ))}
         </div>
         <select value={date} onChange={e => setDate(e.target.value)}
-          className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
+          aria-label="Filtra per data" className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
           {dates.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={subsystem} onChange={e => setSubsystem(e.target.value)}
-          className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
+          aria-label="Filtra per modulo" className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
           <option value="">tutti i moduli</option>
           {subsystems.map(s => <option key={s} value={s}>{s}</option>)}
         </select>

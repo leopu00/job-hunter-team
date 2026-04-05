@@ -88,12 +88,12 @@ export default function AutomationsPage() {
 
       <div className="flex flex-wrap gap-3 mb-4">
         <select value={trigFilter} onChange={e => setTrigFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per trigger" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutti i trigger</option>
           {triggers.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <select value={actFilter} onChange={e => setActFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per azione" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutte le azioni</option>
           {actions.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
