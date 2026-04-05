@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
+import ScrollToTop from '../components/landing/ScrollToTop'
 
 /* ── Step data ────────────────────────────────────────────────────── */
 
@@ -185,6 +186,7 @@ function DemoContent() {
         </div>
       </main>
       <LandingFooter />
+      <ScrollToTop />
     </>
   )
 }

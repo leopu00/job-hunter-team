@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { LandingI18nProvider } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
+import ScrollToTop from '../components/landing/ScrollToTop'
 
 type SectionId = 'install' | 'tui' | 'webapp'
 
@@ -282,6 +283,7 @@ function GuideContent() {
         </div>
       </div>
       <LandingFooter />
+      <ScrollToTop />
     </main>
   )
 }
