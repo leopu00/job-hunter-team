@@ -71,7 +71,7 @@ function AddForm({ provider, type, onDone }: { provider: string; type: string; o
         <p className="text-[11px] font-semibold text-[var(--color-bright)]">Aggiungi — {label}</p>
         <button onClick={onDone} className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] cursor-pointer">Annulla</button>
       </div>
-      <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'}
+      <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'} aria-label={isApiKey ? 'API Key' : 'Access Token'}
         value={value} onChange={e => setValue(e.target.value)}
         className="w-full px-3 py-2 rounded text-[12px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
       {error && <p className="text-[10px] text-[var(--color-red)] mt-1.5" role="alert">{error}</p>}
