@@ -67,7 +67,7 @@ export default function RootLayout({
               <Sidebar />
               <MainContent>
                 <Breadcrumb />
-                <div id="main-content">{children}</div>
+                {children}
               </MainContent>
             </KeyboardShortcutsProvider>
           </ToastProvider>
