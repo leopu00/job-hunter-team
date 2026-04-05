@@ -86,6 +86,13 @@ export default function RootLayout({
             <p>Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser per continuare.</p>
           </div>
         </noscript>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:text-[12px] focus:font-semibold focus:no-underline"
+          style={{ background: 'var(--color-green)', color: '#000' }}
+        >
+          Vai al contenuto
+        </a>
         <ThemeProvider>
           <AccessibilityProvider>
           <ToastProvider>
