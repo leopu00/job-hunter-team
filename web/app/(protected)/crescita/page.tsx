@@ -64,8 +64,8 @@ export default async function CrescitaPage() {
           { label: 'Candidature create', val: appTotal, color: 'var(--color-purple)' },
           { label: 'CV inviati', val: appSent, color: 'var(--color-green)' },
           { label: 'Risposte ricevute', val: risposteCount, color: '#58a6ff' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
@@ -151,11 +151,12 @@ export default async function CrescitaPage() {
           { label: 'Practice',     desc: 'score 40–69', count: scoreDist.buckets.find(b => b.label === '41–60')?.count ?? 0, color: 'var(--color-yellow)', href: '/positions?tier=practice' },
           { label: 'Riferimento',  desc: 'score < 40', count: scoreDist.buckets.find(b => b.label === '≤ 40')?.count ?? 0, color: 'var(--color-orange)', href: '/positions?tier=riferimento' },
           { label: 'Non scored',   desc: 'nessun score', count: scoreDist.total - scoreDist.withScore, color: 'var(--color-dim)', href: '/positions?tier=noscore' },
-        ].map(({ label, desc, count, color, href }) => (
+        ].map(({ label, desc, count, color, href }, i) => (
           <a
             key={label}
             href={href}
             className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors no-underline"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}
           >
             <div className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-1" style={{ color }}>{label}</div>
             <div className="text-3xl font-bold leading-none mb-1" style={{ color }}>{count}</div>
