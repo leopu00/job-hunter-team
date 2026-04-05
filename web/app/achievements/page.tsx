@@ -95,12 +95,12 @@ export default function AchievementsPage() {
             <p className="text-[var(--color-dim)] text-[12px]">{filterCat !== 'all' ? 'Nessun achievement in questa categoria.' : 'Nessun achievement trovato.'}</p>
             {filterCat !== 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Prova a selezionare una categoria diversa.</p>}
           </div>
-        ) : achievements.map(a => {
+        ) : achievements.map((a, idx) => {
           const cat = CAT_CFG[a.category]
           const pct = Math.min(100, Math.round((a.current / a.target) * 100))
           return (
             <div key={a.id} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors hover:bg-[var(--color-row)]"
-              style={{ opacity: a.unlocked ? 1 : 0.5 }}>
+              style={{ opacity: a.unlocked ? 1 : 0.5, animation: `fade-in 0.4s ease ${idx * 0.06}s both` }}>
               <span className="text-2xl flex-shrink-0">{a.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
