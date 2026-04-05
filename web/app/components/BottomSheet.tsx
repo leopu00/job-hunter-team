@@ -63,10 +63,21 @@ export function BottomSheet({
     setTimeout(() => { setClosing(false); onClose() }, 280)
   }, [onClose])
 
-  // ESC chiude
+  // ESC chiude + focus trap
   useEffect(() => {
-    if (!open) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    if (!open || !sheetRef.current) return
+    const el = sheetRef.current
+    const sel = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    const focusables = () => Array.from(el.querySelectorAll<HTMLElement>(sel))
+    focusables()[0]?.focus()
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return }
+      if (e.key !== 'Tab') return
+      const fs = focusables()
+      if (!fs.length) { e.preventDefault(); return }
+      if (e.shiftKey) { if (document.activeElement === fs[0]) { e.preventDefault(); fs.at(-1)?.focus() } }
+      else            { if (document.activeElement === fs.at(-1)) { e.preventDefault(); fs[0]?.focus() } }
+    }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
   }, [open, close])
