@@ -360,16 +360,17 @@ export default function TeamPage() {
       {/* Agent Grid */}
       <div
         className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', animation: 'fade-in 0.35s ease both' }}
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
       >
-        {AGENTS.map(agent => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            status={statuses[agent.id] ?? 'stopped'}
-            onAction={handleAction}
-            actionLoading={actionLoading}
-          />
+        {AGENTS.map((agent, i) => (
+          <div key={agent.id} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
+            <AgentCard
+              agent={agent}
+              status={statuses[agent.id] ?? 'stopped'}
+              onAction={handleAction}
+              actionLoading={actionLoading}
+            />
+          </div>
         ))}
       </div>
 
