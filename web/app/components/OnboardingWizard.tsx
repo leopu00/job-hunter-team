@@ -226,11 +226,11 @@ export default function OnboardingWizard() {
               <div className="flex flex-col gap-3">
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_name')}</label>
-                  <input value={name} onChange={e => setName(e.target.value)} className={inp} style={inputStyle} placeholder="Mario Rossi" />
+                  <input value={name} onChange={e => setName(e.target.value)} className={inp} style={inputStyle} placeholder="Mario Rossi" autoComplete="name" required />
                 </div>
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_role')}</label>
-                  <input value={role} onChange={e => setRole(e.target.value)} className={inp} style={inputStyle} placeholder="Full Stack Developer" />
+                  <input value={role} onChange={e => setRole(e.target.value)} className={inp} style={inputStyle} placeholder="Full Stack Developer" autoComplete="organization-title" />
                 </div>
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_bio')}</label>
