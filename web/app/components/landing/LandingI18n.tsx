@@ -137,8 +137,9 @@ const translations = {
   },
 } as const
 
-type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
-type ArrayKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string[] ? K : never }[keyof typeof translations]
+type TranslationKey = keyof typeof translations
+type ArrayKeys = 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'
+type StringKeys = Exclude<TranslationKey, ArrayKeys>
 
 interface I18nCtx {
   lang: Lang
@@ -151,7 +152,7 @@ const LandingI18nContext = createContext<I18nCtx>({
   lang: 'it',
   setLang: () => {},
   t: (key) => translations[key].it as string,
-  ta: (key) => translations[key].it as string[],
+  ta: (key) => Array.from(translations[key].it),
 })
 
 export function useLandingI18n() {
@@ -175,7 +176,7 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   }, [lang])
 
   const ta = useCallback((key: ArrayKeys) => {
-    return translations[key][lang] as string[]
+    return Array.from(translations[key][lang])
   }, [lang])
 
   return (

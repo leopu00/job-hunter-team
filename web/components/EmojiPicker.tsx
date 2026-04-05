@@ -15,6 +15,7 @@ const CATEGORIES: Record<string, { icon: string; emojis: string[] }> = {
 
 const LS_KEY = 'emoji_recents'
 const MAX_RECENTS = 18
+type CategoryKey = keyof typeof CATEGORIES | 'recenti'
 
 export interface EmojiPickerProps {
   onSelect: (emoji: string) => void
@@ -24,7 +25,7 @@ export interface EmojiPickerProps {
 export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
   const [open, setOpen]       = useState(false)
   const [search, setSearch]   = useState('')
-  const [cat, setCat]         = useState('sorrisi')
+  const [cat, setCat]         = useState<CategoryKey>('sorrisi')
   const [recents, setRecents] = useState<string[]>([])
   const ref = useRef<HTMLDivElement>(null)
 
@@ -44,7 +45,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
     setOpen(false)
   }
 
-  const catData = { ...CATEGORIES, recenti: { icon: '🕐', emojis: recents } }
+  const catData: Record<CategoryKey, { icon: string; emojis: string[] }> = { ...CATEGORIES, recenti: { icon: '🕐', emojis: recents } }
   const displayEmojis = search
     ? Object.values(CATEGORIES).flatMap(c => c.emojis).filter(e => e.includes(search))
     : cat === 'recenti' ? recents : catData[cat]?.emojis ?? []
@@ -67,7 +68,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
           {!search && (
             <div style={{ display: 'flex', padding: '2px 6px', gap: 2, borderBottom: '1px solid var(--color-border)', overflowX: 'auto' }}>
               {Object.entries(catData).map(([key, { icon }]) => (
-                <button key={key} onClick={() => setCat(key)} title={key}
+                <button key={key} onClick={() => setCat(key as CategoryKey)} title={key}
                   style={{ background: cat === key ? 'var(--color-row)' : 'none', border: 'none', fontSize: 14, cursor: 'pointer', borderRadius: 5, padding: '3px 5px', opacity: key === 'recenti' && recents.length === 0 ? 0.3 : 1 }}>
                   {icon}
                 </button>
@@ -79,7 +80,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 1, padding: 6, maxHeight: 200, overflowY: 'auto' }}>
             {displayEmojis.length === 0
               ? <div style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 10, color: 'var(--color-dim)', padding: '16px 0' }}>Nessun risultato</div>
-              : displayEmojis.map((emoji, i) => (
+              : displayEmojis.map((emoji: string, i: number) => (
                 <button key={i} onClick={() => select(emoji)} title={emoji}
                   style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4, padding: 2, lineHeight: 1.2 }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--color-row)'}
