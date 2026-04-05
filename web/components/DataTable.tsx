@@ -95,7 +95,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
         <span style={{ fontSize: 10, color: 'var(--color-dim)', flex: 1 }}>
           {selCount > 0 ? `${selCount} selezionat${selCount === 1 ? 'o' : 'i'}` : `${sorted.length} righe`}
         </span>
-        <button onClick={handleExport} style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-panel)', color: 'var(--color-muted)', cursor: 'pointer' }}>
+        <button onClick={handleExport} className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]" style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-panel)', color: 'var(--color-muted)', cursor: 'pointer' }}>
           ↓ CSV{selCount > 0 ? ` (${selCount})` : ''}
         </button>
       </div>
@@ -127,7 +127,10 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
           </thead>
           <tbody>
             {sorted.map((row, ri) => (
-              <tr key={row.id} style={{ background: selected.has(row.id) ? 'rgba(0,232,122,0.06)' : ri % 2 ? 'var(--color-row)' : 'transparent', transition: 'background 0.1s' }}>
+              <tr key={row.id}
+                style={{ background: selected.has(row.id) ? 'rgba(0,232,122,0.06)' : ri % 2 ? 'var(--color-row)' : 'transparent', transition: 'background 0.1s' }}
+                onMouseEnter={e => { if (!selected.has(row.id)) e.currentTarget.style.background = 'rgba(0,232,122,0.03)' }}
+                onMouseLeave={e => { if (!selected.has(row.id)) e.currentTarget.style.background = ri % 2 ? 'var(--color-row)' : 'transparent' }}>
                 <td style={td}>
                   <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
                 </td>
