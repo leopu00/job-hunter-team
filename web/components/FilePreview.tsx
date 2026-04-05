@@ -108,7 +108,7 @@ function FileItem({
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
+        <div title={file.name} style={{
           fontSize: 12, fontWeight: 500,
           color: 'var(--color-bright)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
