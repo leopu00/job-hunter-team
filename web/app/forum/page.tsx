@@ -82,7 +82,7 @@ export default function ForumPage() {
           </div>
           <div className="flex items-center gap-2">
             <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>Autore</label>
-            <select value={filter} onChange={e => setFilter(e.target.value)}
+            <select value={filter} onChange={e => setFilter(e.target.value)} aria-label="Filtra per autore"
               className="px-2 py-1.5 rounded text-[11px] font-mono outline-none cursor-pointer"
               style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-bright)' }}>
               <option value="">Tutti</option>

@@ -117,7 +117,7 @@ export default function SettingsPage() {
               <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} />
             </Row>
             <Row label="Lingua default">
-              <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))}>
+              <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))} aria-label="Lingua">
                 <option value="it">Italiano</option>
                 <option value="en">English</option>
               </select>
