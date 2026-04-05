@@ -21,7 +21,7 @@ function ErrorRow({ err, onStatus, expanded, onExpand }: { err: TrackedError; on
   const cfg = STATUS_CFG[err.status];
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onExpand}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onExpand} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(); } }}>
         <span className="w-8 text-[12px] font-bold font-mono text-[var(--color-red)] text-center">{err.count}x</span>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-[var(--color-bright)] truncate">{err.message}</p>
