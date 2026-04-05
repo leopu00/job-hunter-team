@@ -158,6 +158,8 @@ function DownloadContent() {
                     <div className="flex items-center gap-2 mt-3">
                       <button
                         onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`dl-instr-${platform.id}`}
                         className="flex-1 sm:flex-none px-3 py-2 rounded text-[11px] font-semibold transition-colors"
                         style={{
                           background: 'var(--color-card)',
@@ -182,7 +184,7 @@ function DownloadContent() {
 
                   {/* Expandable instructions */}
                   {isExpanded && (
-                    <div className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
+                    <div id={`dl-instr-${platform.id}`} role="region" aria-label={`${platform.label} ${t('dl_instructions')}`} className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
                       <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
                         <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-3">{t('dl_instructions')}</p>
                         <ol className="space-y-2 mb-4">
@@ -289,17 +291,19 @@ function MacGuide() {
     <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden mb-8">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls="dl-mac-guide-panel"
         className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors"
         style={{ cursor: 'pointer', background: 'transparent', border: 'none' }}>
         <div className="flex items-center gap-3">
           <AppleIcon />
           <span className="text-[13px] font-bold text-[var(--color-white)]">{t('dl_mac_guide_title')}</span>
         </div>
-        <span className="text-[var(--color-dim)] text-[14px]">{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="text-[var(--color-dim)] text-[14px]" aria-hidden="true">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
 
       {open && (
-        <div className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
+        <div id="dl-mac-guide-panel" role="region" aria-label={t('dl_mac_guide_title')} className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
           <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
 
             {/* Requisiti */}
