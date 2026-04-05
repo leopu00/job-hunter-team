@@ -37,7 +37,7 @@ function ProviderCard({ p }: { p: ProviderLimit }) {
   const icon = PROVIDER_ICONS[p.id] ?? '◆'
   const maxStep = Math.max(...p.backoffSteps, 1)
   return (
-    <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+    <div className="border rounded-lg overflow-hidden transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
       <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <span className="text-xl">{icon}</span>
         <div>
