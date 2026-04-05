@@ -33,6 +33,15 @@ export const metadata: Metadata = {
   description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
   keywords: ['job hunting', 'AI agents', 'job search', 'candidature automatiche', 'open source'],
   authors: [{ name: 'Job Hunter Team' }],
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+  },
   openGraph: {
     type: 'website',
     locale: 'it_IT',
@@ -64,13 +73,6 @@ export default function RootLayout({
   return (
     <html lang="it" className={jetbrainsMono.variable}>
       <body>
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded focus:text-[12px] focus:font-semibold focus:no-underline"
-          style={{ background: 'var(--color-green)', color: '#060608' }}
-        >
-          Vai al contenuto principale
-        </a>
         <noscript>
           <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'monospace', background: '#060608', color: '#e0e0f0', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <p>Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser per continuare.</p>
