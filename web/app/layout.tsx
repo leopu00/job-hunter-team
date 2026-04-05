@@ -59,6 +59,11 @@ export default function RootLayout({
   return (
     <html lang="it" className={jetbrainsMono.variable}>
       <body>
+        <noscript>
+          <div style={{ background: '#ffc107', color: '#000', padding: '12px 20px', textAlign: 'center', fontSize: 13, fontFamily: 'monospace' }}>
+            Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser.
+          </div>
+        </noscript>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-semibold" style={{ background: 'var(--color-green)', color: 'var(--color-void)' }}>
           Vai al contenuto principale
         </a>
