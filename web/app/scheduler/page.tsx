@@ -16,7 +16,9 @@ const PRIO_CLR: Record<string, string> = {
 
 function StatBox({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="flex flex-col items-center p-3 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
+    <div className="flex flex-col items-center p-3 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <span className="text-xl font-bold font-mono" style={{ color }}>{value}</span>
       <span className="text-[9px] text-[var(--color-dim)] mt-0.5">{label}</span>
     </div>
