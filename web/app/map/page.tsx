@@ -16,7 +16,9 @@ function MapView({ clusters, selected, onSelect }: { clusters: Cluster[]; select
         const r = Math.max(2, Math.min(5, c.count / 4))
         const isSelected = selected?.city === c.city
         return (
-          <g key={c.city} onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
+          <g key={c.city} role="button" tabIndex={0} aria-label={`${c.city}: ${c.count} posizioni`}
+            onClick={() => onSelect(c)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(c); } }}
+            style={{ cursor: 'pointer' }}>
             <circle cx={c.x} cy={c.y} r={r + 1} fill={isSelected ? 'var(--color-green)' : 'transparent'} opacity={0.3} />
             <circle cx={c.x} cy={c.y} r={r} fill={isSelected ? 'var(--color-green)' : '#61affe'} opacity={0.8} />
             <text x={c.x} y={c.y - r - 1.5} textAnchor="middle" fill="var(--color-muted)" fontSize={2.8} fontWeight="bold">{c.city}</text>
