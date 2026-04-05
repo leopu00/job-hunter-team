@@ -105,11 +105,11 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ background: 'var(--color-row)' }}>
-              <th style={{ ...th, width: 36 }}>
+              <th scope="col" style={{ ...th, width: 36 }}>
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
               </th>
               {columns.map(col => (
-                <th key={col.key} style={{ ...th, width: colWidths[col.key] }}>
+                <th key={col.key} scope="col" style={{ ...th, width: colWidths[col.key] }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => handleSort(col)}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-muted)', cursor: col.sortable ? 'pointer' : 'default', flex: 1, textAlign: 'left' }}>
                       {col.label}

@@ -149,6 +149,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
               {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Stipendio', 'Score', 'Stato'].map(h => (
                 <th
                   key={h}
+                  scope="col"
                   className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
                   style={{ color: 'var(--color-dim)' }}
                 >

@@ -103,7 +103,7 @@ export default function ValidatorsPage() {
                   <thead>
                     <tr style={{ background: 'var(--color-deep)', borderBottom: '1px solid var(--color-border)' }}>
                       {['Schema', 'Tipo', 'Descrizione', 'Campi', ''].map(h => (
-                        <th key={h} className="px-4 py-2 text-left text-[9px] font-bold uppercase tracking-wider"
+                        <th key={h} scope="col" className="px-4 py-2 text-left text-[9px] font-bold uppercase tracking-wider"
                           style={{ color: 'var(--color-dim)' }}>{h}</th>
                       ))}
                     </tr>
