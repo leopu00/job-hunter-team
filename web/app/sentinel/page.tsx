@@ -126,7 +126,7 @@ export default function SentinelPage() {
                 Storico ordini throttle
               </p>
               <div style={{ background: 'var(--color-panel)' }}>
-                {orders.map((o, i) => <OrderRow key={i} o={o} />)}
+                {orders.map((o, i) => <div key={i} style={{ animation: `fade-in 0.35s ease ${i * 0.04}s both` }}><OrderRow o={o} /></div>)}
               </div>
             </div>
           )}
