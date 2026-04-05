@@ -88,7 +88,7 @@ export default function ApiExplorerPage() {
           ))}
         </div>
         <select value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per modulo" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutti i moduli</option>
           {modules.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
