@@ -88,7 +88,7 @@ export default function ActivityPage() {
 
       {!loading && data && data.items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">📭</span>
+          <span className="text-4xl" aria-hidden="true">📭</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessuna attività</p>
           <p className="text-[10px] text-[var(--color-dim)]">L&apos;attività del team apparirà qui.</p>
         </div>

@@ -73,7 +73,7 @@ export default function ContextPage() {
 
       {!loading && !data && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">🧠</span>
+          <span className="text-4xl" aria-hidden="true">🧠</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Dati non disponibili</p>
         </div>
       )}

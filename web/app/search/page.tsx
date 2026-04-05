@@ -85,7 +85,7 @@ export default function SearchPage() {
       {/* Empty state iniziale */}
       {!data && !loading && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">🔍</span>
+          <span className="text-4xl" aria-hidden="true">🔍</span>
           <p className="text-[12px] text-[var(--color-dim)]">Digita per cercare nel dashboard</p>
         </div>
       )}
@@ -93,7 +93,7 @@ export default function SearchPage() {
       {/* No results */}
       {noResults && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">📭</span>
+          <span className="text-4xl" aria-hidden="true">📭</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessun risultato per &ldquo;{data.query}&rdquo;</p>
         </div>
       )}
