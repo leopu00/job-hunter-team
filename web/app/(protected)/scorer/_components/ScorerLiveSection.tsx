@@ -254,7 +254,7 @@ export default function ScorerLiveSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Coda lavoro */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-dim)]">
               In Coda — Checked
@@ -274,7 +274,7 @@ export default function ScorerLiveSection() {
         </div>
 
         {/* Ultime scored */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: 'var(--color-yellow)' }}>
               Ultime 10 Scored
@@ -289,7 +289,7 @@ export default function ScorerLiveSection() {
       </div>
 
       {/* Escluse dallo scorer */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: 'var(--color-red)' }}>
             Ultime 10 Escluse (score &lt; 40)
