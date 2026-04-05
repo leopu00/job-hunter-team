@@ -119,7 +119,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-5 pt-1">
           {tab === 'general' && <>
             <Row label="Nome applicazione">
-              <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} />
+              <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} aria-label="Nome applicazione" />
             </Row>
             <Row label="Lingua default">
               <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))} aria-label="Lingua">
