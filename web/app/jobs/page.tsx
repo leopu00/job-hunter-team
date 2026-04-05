@@ -45,19 +45,22 @@ export default function JobsPage() {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
     if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (search) params.set('q', search);
+    if (debouncedSearch) params.set('q', debouncedSearch);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/jobs${q}`).catch(() => null);
     if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setJobs(data.jobs ?? []); setTotal(data.total ?? 0); setCounts(data.counts ?? {});
     setLoading(false);
-  }, [statusFilter, search])
+  }, [statusFilter, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
