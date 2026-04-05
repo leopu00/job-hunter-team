@@ -21,7 +21,7 @@ function MethodBadge({ method }: { method: string }) {
 function EndpointRow({ ep, expanded, onToggle }: { ep: EndpointInfo; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <MethodBadge method={ep.method} />
         <span className="text-[11px] font-mono text-[var(--color-bright)] flex-1">{ep.path}</span>
         {ep.description && <span className="text-[9px] text-[var(--color-dim)] max-w-[40%] truncate">{ep.description}</span>}
