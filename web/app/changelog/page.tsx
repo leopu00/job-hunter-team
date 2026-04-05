@@ -95,15 +95,15 @@ export default function ChangelogPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-16">
+        <div className="flex justify-center py-16" role="status" aria-live="polite">
           <span className="text-[var(--color-dim)] text-[12px]">Caricamento...</span>
         </div>
       )}
 
       {/* Empty */}
       {!loading && filteredDays.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-[var(--color-dim)] text-3xl">~</span>
+        <div className="flex flex-col items-center justify-center py-16 gap-3" role="status" aria-live="polite">
+          <span className="text-[var(--color-dim)] text-3xl" aria-hidden="true">~</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessuna modifica trovata</p>
         </div>
       )}
