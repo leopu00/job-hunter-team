@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import FaqJsonLd from './FaqJsonLd'
 
 export const metadata: Metadata = {
   title: 'FAQ',
@@ -10,5 +11,10 @@ export const metadata: Metadata = {
 }
 
 export default function FaqLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (
+    <>
+      <FaqJsonLd />
+      {children}
+    </>
+  )
 }
