@@ -80,6 +80,7 @@ export default function Sidebar() {
         </Link>
         {!collapsed && hovered === href && (
           <button onClick={() => toggleFav(href)}
+            aria-label={isFav ? `Rimuovi ${label} dai preferiti` : `Aggiungi ${label} ai preferiti`}
             className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] transition-opacity"
             style={{ color: isFav ? 'var(--color-yellow)' : 'var(--color-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {isFav ? '★' : '☆'}
@@ -98,8 +99,8 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
         {!collapsed && <div><p className="text-[11px] font-bold tracking-widest" style={{ color: 'var(--color-white)' }}>JHT</p><p className="text-[9px]" style={{ color: 'var(--color-dim)' }}>Job Hunter Team</p></div>}
         <div className="flex items-center gap-1 ml-auto">
-          {isMobile  && <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
-          {!isMobile && <button onClick={toggleCollapse} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
+          {isMobile  && <button onClick={() => setMobileOpen(false)} aria-label="Chiudi menu" style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
+          {!isMobile && <button onClick={toggleCollapse} aria-label={collapsed ? 'Espandi sidebar' : 'Comprimi sidebar'} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
         </div>
       </div>
 
