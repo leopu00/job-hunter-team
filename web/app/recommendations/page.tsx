@@ -26,12 +26,14 @@ export default function RecommendationsCompany() {
   const [jobs, setCompany] = useState<JobRec[]>([])
   const [companies, setCompanies] = useState<CompanyRec[]>([])
   const [actions, setActions] = useState<ActionRec[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/recommendations').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json()
     setCompany(d.jobs ?? []); setCompanies(d.companies ?? []); setActions(d.actions ?? [])
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -48,6 +50,9 @@ export default function RecommendationsCompany() {
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Suggerimenti personalizzati basati sul tuo profilo e storico</p>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="mb-6">
         <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">AZIONI PRIORITARIE</h2>
         <div className="flex flex-col gap-2">
@@ -101,6 +106,7 @@ export default function RecommendationsCompany() {
           </div>
         </div>
       </div>
+      </>)}
     </div>
   )
 }
