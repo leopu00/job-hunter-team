@@ -91,7 +91,7 @@ export default function CompaniesPage() {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca azienda o settore..."
           aria-label="Cerca aziende" className="text-[10px] px-3 py-1.5 rounded w-48" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
         <select value={sectorFilter} onChange={e => setSectorFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per settore" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutti i settori</option>
           {sectors.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
