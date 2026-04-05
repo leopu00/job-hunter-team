@@ -138,7 +138,7 @@ export default function RetryPage() {
             <StatCard label="Semi-aperti" value={String(data.summary.halfOpen)} color="var(--color-yellow)" />
           </div>
           <div className="grid md:grid-cols-2 gap-3">
-            {data.breakers.map(b => <BreakerCard key={b.id} b={b} onReset={handleReset} resetting={resetting} />)}
+            {data.breakers.map((b, i) => <div key={b.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><BreakerCard b={b} onReset={handleReset} resetting={resetting} /></div>)}
           </div>
         </>
       )}
