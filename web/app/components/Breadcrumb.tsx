@@ -57,12 +57,14 @@ function CollapseDropdown({ hidden }: { hidden: Crumb[] }) {
     <span ref={ref} className="relative inline-flex items-center gap-1">
       <span style={{ color: 'var(--color-border)' }}>/</span>
       <button onClick={() => setOpen(v => !v)}
+        aria-label="Mostra percorso completo"
+        aria-expanded={open}
         className="px-1.5 py-0.5 rounded text-[10px] transition-colors hover:opacity-80"
         style={{ background: 'var(--color-border)', color: 'var(--color-dim)', border: 'none', cursor: 'pointer' }}>
         ···
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50 min-w-[140px]"
+        <div role="menu" className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50 min-w-[140px]"
           style={{ background: 'var(--color-deep)', border: '1px solid var(--color-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
           {hidden.map(c => (
             <Link key={c.href} href={c.href} onClick={() => setOpen(false)}
