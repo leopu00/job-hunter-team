@@ -96,11 +96,11 @@ export default function MessagesPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo messaggio</p>
           <div className="flex flex-wrap gap-2 mb-2">
-            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" className={`${inputCls} flex-1 min-w-[140px]`} />
-            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" className={`${inputCls} min-w-[120px]`} />
+            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Contatto" className={`${inputCls} flex-1 min-w-[140px]`} />
+            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Azienda" className={`${inputCls} min-w-[120px]`} />
           </div>
           <div className="flex gap-2">
-            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." className={`${inputCls} flex-1`}
+            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." aria-label="Messaggio" className={`${inputCls} flex-1`}
               onKeyDown={e => e.key === 'Enter' && sendNew()} />
             <button onClick={sendNew} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
               style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>invia</button>
