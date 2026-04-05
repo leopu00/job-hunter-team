@@ -132,20 +132,27 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ]
 
-function FaqAccordion({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; onToggle: () => void }) {
+function FaqAccordion({ item, isOpen, onToggle, index }: { item: FaqItem; isOpen: boolean; onToggle: () => void; index: number }) {
+  const panelId = `faq-panel-${index}`
+  const buttonId = `faq-btn-${index}`
+
   return (
     <div
       className="border-b border-[var(--color-border)]"
       style={{ transition: 'background 0.2s' }}
     >
       <button
+        id={buttonId}
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={panelId}
         className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
         style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
       >
         <span className="text-[13px] font-semibold text-[var(--color-white)]">{item.q}</span>
         <span
           className="text-[var(--color-dim)] text-[14px] flex-shrink-0 transition-transform"
+          aria-hidden="true"
           style={{ transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
         >
           +
@@ -153,6 +160,9 @@ function FaqAccordion({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boole
       </button>
       {isOpen && (
         <div
+          id={panelId}
+          role="region"
+          aria-labelledby={buttonId}
           className="pb-4 px-1 text-[12px] text-[var(--color-muted)] leading-relaxed [&_code]:break-all [&_code]:text-[10px] sm:[&_code]:text-[11px]"
           style={{ animation: 'fade-in 0.15s ease both' }}
         >
@@ -190,6 +200,7 @@ function FaqContent() {
             <FaqAccordion
               key={i}
               item={item}
+              index={i}
               isOpen={openIndex === i}
               onToggle={() => setOpenIndex(openIndex === i ? null : i)}
             />
