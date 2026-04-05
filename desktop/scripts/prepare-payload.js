@@ -25,6 +25,7 @@ function copyDir(name) {
   const to = path.join(payloadRoot, name)
   fs.cpSync(from, to, {
     recursive: true,
+    dereference: true,
     filter: (source) => {
       const rel = path.relative(from, source)
       if (!rel) return true
