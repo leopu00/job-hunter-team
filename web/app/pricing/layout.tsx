@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Pricing | Job Hunter Team',
     description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Pricing Job Hunter Team' }],
   },
 }
 
