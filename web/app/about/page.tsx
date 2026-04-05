@@ -63,7 +63,7 @@ function AboutContent() {
         {/* ── Hero ──────────────────────────────────────────────── */}
         <section className="text-center mb-20">
           <div className="inline-flex items-center gap-2 mb-5">
-            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[9px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>
               {t('about_badge')}
             </span>
@@ -113,7 +113,7 @@ function AboutContent() {
               <div key={key} className="rounded-lg p-5 border border-[var(--color-border)] transition-colors hover:border-[var(--color-dim)]"
                 style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-2xl">{emoji}</span>
+                  <span className="text-2xl" aria-hidden="true">{emoji}</span>
                   <h3 className="text-[13px] font-bold" style={{ color }}>
                     {t(`about_agent_${key}_name` as 'about_agent_alfa_name')}
                   </h3>
@@ -161,7 +161,7 @@ function AboutContent() {
             {[0, 1, 2, 3].map(i => (
               <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)]"
                 style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
-                <span className="text-[13px] mt-px" style={{ color: 'var(--color-green)' }}>{'\u2192'}</span>
+                <span className="text-[13px] mt-px" aria-hidden="true" style={{ color: 'var(--color-green)' }}>{'\u2192'}</span>
                 <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
                   {t(`about_vision_${i}` as 'about_vision_0')}
                 </p>
