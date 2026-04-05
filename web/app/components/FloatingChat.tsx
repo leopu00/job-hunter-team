@@ -154,9 +154,11 @@ export default function FloatingChat() {
           <div className="p-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid var(--color-border)' }}>
             <input value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()} placeholder="Scrivi un messaggio..."
+              aria-label="Scrivi un messaggio all'assistente"
               className="flex-1 text-[11px] px-3 py-2 rounded-lg outline-none"
               style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
             <button onClick={() => send()} disabled={sending || !input.trim()}
+              aria-label="Invia messaggio"
               className="px-4 py-2 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
               style={{ background: input.trim() ? 'var(--color-green)' : 'var(--color-border)', color: input.trim() ? '#000' : 'var(--color-dim)' }}>
               ↑
