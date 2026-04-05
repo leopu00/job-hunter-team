@@ -98,7 +98,7 @@ export function SkillMatcher({ required, owned, className }: SkillMatcherProps) 
             <span>Match competenze</span>
             <span>{matched.length}/{required.length}</span>
           </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+          <div role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Match competenze" className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
             <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
           </div>
         </div>
