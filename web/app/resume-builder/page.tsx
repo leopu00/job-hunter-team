@@ -28,12 +28,14 @@ export default function ResumeBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/resume').catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json();
     setData({ personal: d.personal ?? {}, experience: d.experience ?? [], education: d.education ?? [], skills: d.skills ?? [], languages: d.languages ?? [] });
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -64,7 +66,9 @@ export default function ResumeBuilderPage() {
         </div>
       </div>
 
-      {tab === 'edit' ? (
+      {loading ? (
+        <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : tab === 'edit' ? (
         <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5">
           <SectionTitle title="Dati Personali" />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>

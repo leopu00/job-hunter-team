@@ -55,12 +55,14 @@ export default function GoalsPage() {
   const [summary, setSummary] = useState<Summary>({ total: 0, completed: 0, onTrack: 0, behind: 0 })
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ title: '', target: '', unit: '', deadline: '' })
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/goals').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json()
     setGoals(d.goals ?? []); setSummary(d.summary ?? {})
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -103,7 +105,7 @@ export default function GoalsPage() {
             <input id="goal-target" type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <div className="flex flex-col gap-0.5 w-24"><label htmlFor="goal-unit" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">UNITÀ</label>
             <input id="goal-unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="es. candidature" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-32"><label htmlFor="goal-deadline" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DEADLINE</label>
+          <div className="flex flex-col gap-0.5 w-32"><label htmlFor="goal-deadline" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCADENZA</label>
             <input id="goal-deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <button onClick={add} disabled={!form.title.trim() || !form.target || !form.deadline} className="px-3 py-1.5 rounded text-[10px] font-bold"
             style={{ background: form.title.trim() && form.target && form.deadline ? 'var(--color-green)' : 'var(--color-border)', color: form.title.trim() && form.target && form.deadline ? '#000' : 'var(--color-dim)', cursor: form.title.trim() && form.target && form.deadline ? 'pointer' : 'default' }}>Crea</button>
@@ -111,7 +113,9 @@ export default function GoalsPage() {
       )}
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {goals.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : goals.length === 0
           ? <div className="py-12 text-center">
               <p className="text-[var(--color-dim)] text-[12px]">Nessun obiettivo impostato.</p>
               <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa <span className="font-bold text-[var(--color-muted)]">+ Nuovo obiettivo</span> per definire un traguardo da raggiungere.</p>
