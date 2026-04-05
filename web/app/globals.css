@@ -199,6 +199,12 @@ label {
   margin-bottom: 6px;
 }
 
+/* ── Focus visible (keyboard a11y) ───────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--color-void); }
