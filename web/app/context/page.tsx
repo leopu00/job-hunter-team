@@ -34,7 +34,9 @@ function TokenBar({ pct }: { pct: number }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="p-4 rounded-lg border flex flex-col gap-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+    <div className="p-4 rounded-lg border flex flex-col gap-1 transition-colors duration-200" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <span className="text-[9px] uppercase tracking-widest text-[var(--color-dim)]">{label}</span>
       <span className="text-xl font-bold text-[var(--color-bright)]">{value}</span>
       {sub && <span className="text-[9px] text-[var(--color-dim)]">{sub}</span>}
