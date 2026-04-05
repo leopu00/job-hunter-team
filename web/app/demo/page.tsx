@@ -146,9 +146,9 @@ function DemoContent() {
               style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)' }}
             >
               <div className="flex items-center gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#f44336', opacity: 0.6 }} />
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#ffc107', opacity: 0.6 }} />
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#4caf50', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#f44336', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#ffc107', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#4caf50', opacity: 0.6 }} />
                 <span className="ml-2 text-[9px] text-[var(--color-dim)]">{STEPS[activeStep].titleKey.replace('demo_s', 'step-').replace('_title', '')}</span>
               </div>
               <div className="p-4 sm:p-5 min-h-[220px]">
@@ -251,7 +251,7 @@ function ProfileMockup() {
         </div>
       ))}
       <div className="flex items-center gap-2 mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
         <span className="text-[10px] text-[var(--color-green)]">Profilo completo</span>
       </div>
     </div>
@@ -274,7 +274,7 @@ function TeamMockup() {
           <div className="text-lg mb-1">{a.emoji}</div>
           <div className="text-[9px] font-bold" style={{ color: a.color }}>{a.name}</div>
           <div className="flex justify-center mt-1">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.15)' }} />
+            <span className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{ background: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.15)' }} />
           </div>
         </div>
       ))}
@@ -294,7 +294,7 @@ function PipelineMockup() {
     <div className="space-y-2">
       {steps.map((s, i) => (
         <div key={i} className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" aria-hidden="true" style={{ background: s.color }} />
           <span className="text-[10px] font-bold flex-shrink-0 w-16" style={{ color: s.color }}>{s.agent}</span>
           <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{s.msg}</span>
         </div>
