@@ -34,7 +34,7 @@ function ChannelCard({ ch, onToggle }: { ch: ChannelInfo; onToggle: (id: Channel
     : 'mai'
 
   return (
-    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 flex flex-col gap-4">
+    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 flex flex-col gap-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xl">{CH_ICON[ch.id]}</span>
