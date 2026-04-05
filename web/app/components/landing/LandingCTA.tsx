@@ -7,7 +7,7 @@ export default function LandingCTA() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="cta" className="px-6 py-24 relative">
+    <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
       <div
         className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
         style={{ background: 'var(--color-panel)' }}
