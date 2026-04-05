@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "dist": "electron-builder"
+    "prepare:payload": "node ./scripts/prepare-payload.js",
+    "dist": "npm run prepare:payload && electron-builder"
   },
   "devDependencies": {
     "electron": "^37.2.6",
@@ -21,6 +22,12 @@
       "preload.js",
       "runtime.js",
       "renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "app-payload",
+        "to": "app-payload"
+      }
     ],
     "directories": {
       "output": "dist"
