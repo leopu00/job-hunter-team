@@ -66,7 +66,7 @@ export default function PerformancePage() {
       </div>
 
       {Object.keys(cwv).length > 0 && (
-        <div className="grid grid-cols-5 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-8">
           {cwv.lcp && <VitalCard name="LCP" metric={cwv.lcp} />}
           {cwv.fid && <VitalCard name="FID" metric={cwv.fid} />}
           {cwv.cls && <VitalCard name="CLS" metric={cwv.cls} />}
