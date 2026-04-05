@@ -67,7 +67,7 @@ export default function ResumeBuilderPage() {
       {tab === 'edit' ? (
         <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5">
           <SectionTitle title="Dati Personali" />
-          <div className="grid grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>
 
           <SectionTitle title="Esperienza" />
           {data.experience.map((exp, i) => (
