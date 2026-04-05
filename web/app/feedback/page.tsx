@@ -83,8 +83,8 @@ export default function FeedbackPage() {
                 <option value="bug">Bug</option><option value="feature">Feature</option><option value="ux">UX</option><option value="other">Altro</option>
               </select></div>
           </div>
-          <div className="mb-3"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DESCRIZIONE</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
+          <div className="mb-3"><label htmlFor="feedback-desc" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DESCRIZIONE</label>
+            <textarea id="feedback-desc" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
           <div className="mb-3 p-3 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
             <p className="text-[9px] text-[var(--color-dim)]">Trascina screenshot qui (opzionale)</p></div>
           <button onClick={submit} disabled={!form.description.trim() || !form.rating} className="px-4 py-1.5 rounded text-[10px] font-bold"
