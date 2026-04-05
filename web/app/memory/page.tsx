@@ -14,7 +14,7 @@ const FILE_ICONS: Record<string, string> = {
 function FileTab({ file, active, onClick }: { file: MemFile; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 text-left rounded transition-colors cursor-pointer w-full"
+      className="flex items-center gap-2 px-3 py-2 text-left rounded transition-colors cursor-pointer w-full hover:bg-[rgba(255,255,255,0.03)]"
       style={{ background: active ? 'var(--color-row)' : 'transparent', borderLeft: active ? '2px solid var(--color-green)' : '2px solid transparent' }}>
       <span className="w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center"
         style={{ background: file.exists ? 'var(--color-green)' : 'var(--color-border)', color: file.exists ? 'var(--color-bg)' : 'var(--color-dim)' }}>
