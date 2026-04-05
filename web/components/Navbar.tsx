@@ -25,7 +25,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
       style={{ position: 'relative', zIndex: 10 }}
       className="border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+      <nav aria-label="Navigazione app" className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
 
         {/* Brand */}
         <Link
