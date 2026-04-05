@@ -330,13 +330,13 @@ export default function ProfileEditPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-3">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
           <Link href="/profile" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Profilo</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Modifica</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Modifica</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Modifica Profilo</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
           Questi dati vengono usati dagli agenti per personalizzare CV e cover letter
