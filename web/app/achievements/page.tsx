@@ -92,7 +92,8 @@ export default function AchievementsPage() {
       <div className="grid md:grid-cols-2 gap-3">
         {achievements.length === 0 ? (
           <div className="md:col-span-2 border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] py-16 text-center">
-            <p className="text-[var(--color-dim)] text-[12px]">Nessun achievement trovato.</p>
+            <p className="text-[var(--color-dim)] text-[12px]">{filterCat !== 'all' ? 'Nessun achievement in questa categoria.' : 'Nessun achievement trovato.'}</p>
+            {filterCat !== 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Prova a selezionare una categoria diversa.</p>}
           </div>
         ) : achievements.map(a => {
           const cat = CAT_CFG[a.category]
