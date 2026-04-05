@@ -5,6 +5,9 @@ const urlValue = document.getElementById('urlValue')
 const hintText = document.getElementById('hintText')
 const portInput = document.getElementById('portInput')
 const logFileValue = document.getElementById('logFileValue')
+const depsBadge = document.getElementById('depsBadge')
+const buildBadge = document.getElementById('buildBadge')
+const modeBadge = document.getElementById('modeBadge')
 
 const startButton = document.getElementById('startButton')
 const stopButton = document.getElementById('stopButton')
@@ -59,11 +62,18 @@ function updateButtons(status) {
   browserButton.disabled = busy
 }
 
+function renderSetup(setup) {
+  depsBadge.textContent = setup.hasNodeModules ? 'deps: ok' : 'deps: missing'
+  buildBadge.textContent = setup.hasProductionBuild ? 'build: ready' : 'build: dev fallback'
+  modeBadge.textContent = `mode: ${setup.suggestedMode ?? 'unavailable'}`
+}
+
 function renderStatus(status) {
   modeValue.textContent = describeMode(status)
   portValue.textContent = String(status.port)
   runtimeValue.textContent = status.runtimeKind ?? 'n/a'
   urlValue.textContent = status.url
+  renderSetup(status.setup)
   updateHint(status)
   updateButtons(status)
 }
@@ -75,7 +85,9 @@ async function refreshStatus() {
 
 async function boot() {
   const logFile = await window.launcherApi.getLogFile()
+  const setup = await window.launcherApi.inspectSetup()
   logFileValue.textContent = `Log file: ${logFile}`
+  renderSetup(setup)
   await refreshStatus()
 }
 
