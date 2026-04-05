@@ -290,6 +290,14 @@ const translations = {
     en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
   },
 
+  // FAQ page
+  faq_title:         { it: 'Domande Frequenti',      en: 'Frequently Asked Questions' },
+  faq_subtitle:      { it: 'Tutto quello che devi sapere su Job Hunter Team.', en: 'Everything you need to know about Job Hunter Team.' },
+  faq_no_answer:     { it: 'Non trovi la risposta?', en: 'Can\'t find the answer?' },
+  faq_no_answer_desc: { it: 'Consulta la guida completa o la documentazione tecnica.', en: 'Check out the full guide or the technical documentation.' },
+  faq_guide_btn:     { it: 'Guida Utente',           en: 'User Guide' },
+  faq_docs_btn:      { it: 'Documentazione',         en: 'Documentation' },
+
   // About page
   about_badge:       { it: 'chi siamo',           en: 'about us' },
   about_title_1:     { it: 'Un team di agenti AI',  en: 'An AI agent team' },
