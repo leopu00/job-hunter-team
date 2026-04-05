@@ -28,7 +28,7 @@ export default function LandingSteps() {
 
         <div className="flex flex-col gap-8">
           {STEPS_META.map((s, i) => (
-            <div key={i} className="flex gap-6 items-start">
+            <div key={i} className="flex gap-6 items-start" style={{ animation: `fade-in 0.4s ease ${i * 0.15}s both` }}>
               {/* Step number */}
               <div className="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center border border-[var(--color-border)]"
                 style={{ background: 'var(--color-panel)', color: 'var(--color-green)', fontSize: 14, fontWeight: 700 }}>
