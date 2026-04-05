@@ -227,11 +227,15 @@ function PricingContent() {
             <span className="text-[11px]" style={{ color: !yearly ? 'var(--color-white)' : 'var(--color-dim)' }}>{t('monthly')}</span>
             <button
               onClick={() => setYearly((v) => !v)}
+              role="switch"
+              aria-checked={yearly}
+              aria-label={yearly ? t('yearly') : t('monthly')}
               className="relative w-11 h-6 rounded-full cursor-pointer transition-colors"
               style={{ background: yearly ? 'var(--color-green)' : 'var(--color-border)', border: 'none' }}
             >
               <span
                 className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                aria-hidden="true"
                 style={{ left: yearly ? 22 : 2 }}
               />
             </button>
@@ -364,20 +368,30 @@ function PricingContent() {
             {faqs.map((faq, i) => (
               <div key={i} className="border-b border-[var(--color-border)]">
                 <button
+                  id={`pricing-faq-btn-${i}`}
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  aria-expanded={openFaq === i}
+                  aria-controls={`pricing-faq-panel-${i}`}
                   className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
                   style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
                 >
                   <span className="text-[12px] font-semibold text-[var(--color-white)]">{faq.q}</span>
                   <span
                     className="text-[var(--color-dim)] text-[14px] flex-shrink-0"
+                    aria-hidden="true"
                     style={{ transform: openFaq === i ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
                   >
                     +
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed" style={{ animation: 'fade-in 0.15s ease both' }}>
+                  <div
+                    id={`pricing-faq-panel-${i}`}
+                    role="region"
+                    aria-labelledby={`pricing-faq-btn-${i}`}
+                    className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed"
+                    style={{ animation: 'fade-in 0.15s ease both' }}
+                  >
                     {faq.a}
                   </div>
                 )}
