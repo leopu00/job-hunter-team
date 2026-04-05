@@ -147,7 +147,7 @@ export default function MessagesPage() {
               ))}
             </div>
             <div className="px-4 py-3 border-t border-[var(--color-border)] flex gap-2">
-              <input value={reply} onChange={e => setReply(e.target.value)} placeholder="Rispondi..." className={`${inputCls} flex-1`}
+              <input value={reply} onChange={e => setReply(e.target.value)} placeholder="Rispondi..." aria-label="Rispondi al messaggio" className={`${inputCls} flex-1`}
                 onKeyDown={e => e.key === 'Enter' && sendReply()} />
               <button onClick={sendReply} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
                 style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>invia</button>
