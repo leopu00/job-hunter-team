@@ -135,14 +135,14 @@ const FAQ_ITEMS: FaqItem[] = [
 function FaqAccordion({ item, index, isOpen, onToggle }: { item: FaqItem; index: number; isOpen: boolean; onToggle: () => void }) {
   return (
     <div
-      className="border-b border-[var(--color-border)]"
-      style={{ transition: 'background 0.2s' }}
+      className="border-b border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.015)] rounded-sm"
+      style={{ transition: 'background 0.2s', animation: `fade-in 0.35s ease ${index * 0.06}s both` }}
     >
       <button
         onClick={onToggle}
         aria-expanded={isOpen}
         aria-controls={`faq-panel-${index}`}
-        className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
+        className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded"
         style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
       >
         <span className="text-[13px] font-semibold text-[var(--color-white)]">{item.q}</span>
