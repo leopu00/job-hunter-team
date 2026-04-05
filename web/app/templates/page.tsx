@@ -26,7 +26,7 @@ function VarBadge({ name }: { name: string }) {
 
 function TemplateRow({ t, onSelect, selected }: { t: TemplateSummary; onSelect: (n: string) => void; selected: boolean }) {
   return (
-    <div onClick={() => onSelect(t.name)} className="px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors cursor-pointer"
+    <div role="button" tabIndex={0} onClick={() => onSelect(t.name)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(t.name); } }} className="px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors cursor-pointer"
       style={{ background: selected ? 'var(--color-row)' : undefined }}>
       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
         <span className="text-[12px] font-semibold text-[var(--color-bright)]">{t.title}</span>

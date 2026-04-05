@@ -75,7 +75,8 @@ export default function CalendarPage() {
             const isToday = cell.inMonth && cell.day === today;
             const isSelected = cell.inMonth && cell.day === selectedDay;
             return (
-              <div key={i} onClick={() => cell.inMonth && setSelectedDay(cell.day === selectedDay ? null : cell.day)}
+              <div key={i} role="button" tabIndex={cell.inMonth ? 0 : -1} onClick={() => cell.inMonth && setSelectedDay(cell.day === selectedDay ? null : cell.day)}
+                onKeyDown={e => { if (cell.inMonth && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedDay(cell.day === selectedDay ? null : cell.day); } }}
                 className="min-h-[60px] p-1 border-b border-r border-[var(--color-border)] cursor-pointer transition-colors"
                 style={{ background: isSelected ? 'rgba(0,232,122,0.06)' : 'transparent', opacity: cell.inMonth ? 1 : 0.3 }}>
                 <span className="text-[10px] font-mono" style={{ color: isToday ? 'var(--color-green)' : 'var(--color-dim)', fontWeight: isToday ? 700 : 400 }}>{cell.day}</span>
