@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { NotificationCenter } from './NotificationCenter'
+
+const NotificationCenter = dynamic(() => import('./NotificationCenter').then(m => m.NotificationCenter))
 
 // ── Label map ──────────────────────────────────────────────────────────────
 
