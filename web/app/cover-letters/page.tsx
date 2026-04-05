@@ -19,7 +19,7 @@ function CLRow({ cl, expanded, onToggle }: { cl: CoverLetter; expanded: boolean;
   const cfg = STATUS_CFG[cl.status] ?? STATUS_CFG.draft;
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} aria-label={`${expanded ? 'Chiudi' : 'Espandi'} cover letter: ${cl.title}`} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-[var(--color-bright)] font-medium truncate">{cl.title}</p>
           <p className="text-[9px] text-[var(--color-dim)]">{cl.jobTarget} · {cl.company}</p>
