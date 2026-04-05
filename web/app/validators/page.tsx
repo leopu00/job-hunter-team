@@ -27,7 +27,9 @@ function SchemaRow({ s }: { s: Schema }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <tr className="cursor-pointer transition-colors" onClick={() => setOpen(o => !o)}
+      <tr className="cursor-pointer transition-colors" role="button" tabIndex={0} aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}
         style={{ borderBottom: '1px solid var(--color-border)', background: open ? 'var(--color-deep)' : 'var(--color-panel)' }}>
         <td className="px-4 py-2.5 text-[11px] font-mono font-semibold" style={{ color: 'var(--color-bright)' }}>{s.name}</td>
         <td className="px-4 py-2.5"><TypeBadge type={s.type} /></td>
