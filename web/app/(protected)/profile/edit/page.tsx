@@ -378,7 +378,7 @@ export default function ProfileEditPage() {
                 onChange={e => set('email', e.target.value)} />
             </FormField>
             <FormField label="Telefono">
-              <input type="text" value={form.phone} placeholder="+39 333 1234567"
+              <input type="tel" value={form.phone} placeholder="+39 333 1234567"
                 onChange={e => set('phone', e.target.value)} />
             </FormField>
           </FormRow>
