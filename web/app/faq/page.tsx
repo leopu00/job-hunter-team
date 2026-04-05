@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { LandingI18nProvider } from '../components/landing/LandingI18n'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
@@ -174,6 +174,7 @@ function FaqAccordion({ item, isOpen, onToggle, index }: { item: FaqItem; isOpen
 }
 
 function FaqContent() {
+  const { t } = useLandingI18n()
   const [openIndex, setOpenIndex] = useState<number | null>(0)
 
   return (
@@ -188,9 +189,9 @@ function FaqContent() {
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">FAQ</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Domande Frequenti</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{t('faq_title')}</h1>
           <p className="text-[var(--color-muted)] text-[12px] mt-2 leading-relaxed">
-            Tutto quello che devi sapere su Job Hunter Team.
+            {t('faq_subtitle')}
           </p>
         </div>
 
@@ -209,9 +210,9 @@ function FaqContent() {
 
         {/* CTA */}
         <div className="mt-10 rounded-lg p-6 text-center" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-          <p className="text-[13px] text-[var(--color-bright)] font-semibold mb-2">Non trovi la risposta?</p>
+          <p className="text-[13px] text-[var(--color-bright)] font-semibold mb-2">{t('faq_no_answer')}</p>
           <p className="text-[11px] text-[var(--color-muted)] mb-4">
-            Consulta la guida completa o la documentazione tecnica.
+            {t('faq_no_answer_desc')}
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
@@ -219,14 +220,14 @@ function FaqContent() {
               className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
               style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
             >
-              Guida Utente
+              {t('faq_guide_btn')}
             </Link>
             <Link
               href="/docs"
               className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
               style={{ border: '1px solid var(--color-border)', color: 'var(--color-dim)' }}
             >
-              Documentazione
+              {t('faq_docs_btn')}
             </Link>
           </div>
         </div>
@@ -235,11 +236,11 @@ function FaqContent() {
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link href="/guide"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; Guida
+            &larr; {t('nav_guide')}
           </Link>
           <Link href="/download"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            Download &rarr;
+            {t('nav_download')} &rarr;
           </Link>
         </div>
       </div>
