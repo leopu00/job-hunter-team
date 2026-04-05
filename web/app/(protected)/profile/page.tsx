@@ -513,7 +513,7 @@ function SalaryRange({ label, min, max, color }: { label: string; min: number; m
           €{min.toLocaleString('it-IT')} – €{max.toLocaleString('it-IT')}
         </span>
       </div>
-      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+      <div role="progressbar" aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))} aria-valuemin={0} aria-valuemax={100} aria-label="Range stipendio" className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, (max / 120000) * 100)}%`, background: color, opacity: 0.6 }} />
       </div>
     </div>
