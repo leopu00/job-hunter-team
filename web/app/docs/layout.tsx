@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Documentazione | Job Hunter Team',
     description: 'Documentazione tecnica di Job Hunter Team: architettura, moduli condivisi, comandi CLI e API routes.',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Documentazione Job Hunter Team' }],
   },
 }
 
