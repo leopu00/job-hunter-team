@@ -700,10 +700,14 @@ export default function ProfileEditPage() {
                     <span className="text-[12px] text-[var(--color-bright)] truncate" title={f.name}>{f.name}</span>
                     <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                   </div>
-                  <button type="button" onClick={() => handleDeleteFile(f.name)}
-                    className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0 ml-3">
-                    × elimina
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-[var(--color-blue)] hover:underline no-underline">apri</a>
+                    <button type="button" onClick={() => handleDeleteFile(f.name)}
+                      className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
+                      × elimina
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
