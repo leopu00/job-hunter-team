@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Demo | Job Hunter Team',
     description: 'Tour guidato di Job Hunter Team: scopri come funziona il sistema multi-agente dall\'installazione ai risultati.',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Demo Job Hunter Team' }],
   },
 }
 
