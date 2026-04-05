@@ -111,7 +111,7 @@ export default function MigrationsPage() {
           </div>
         </div>
         {msg && (
-          <div className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
+          <div role="alert" className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
             style={{ background: msg.ok ? 'rgba(0,200,83,0.08)' : 'rgba(255,69,96,0.08)', color: msg.ok ? 'var(--color-green)' : 'var(--color-red)', border: `1px solid ${msg.ok ? 'rgba(0,200,83,0.3)' : 'rgba(255,69,96,0.3)'}` }}>
             {msg.text}
           </div>
