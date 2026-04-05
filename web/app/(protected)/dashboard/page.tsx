@@ -366,7 +366,7 @@ export default async function DashboardPage() {
                 <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
                   {p.legacy_id ? `JHT-${String(p.legacy_id).padStart(3, '0')}` : p.id.slice(0, 8)}
                 </td>
-                <td className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate">
+                <td className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate" title={p.title}>
                   <Link
                     href={`/positions/${p.id}`}
                     className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
