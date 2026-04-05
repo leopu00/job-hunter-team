@@ -15,7 +15,10 @@ const STATUS_CFG: Record<string, { color: string; bg: string }> = {
 
 function MetricCard({ label, value, unit, warn }: { label: string; value: string; unit?: string; warn?: boolean }) {
   return (
-    <div className="flex flex-col p-4 rounded-lg" style={{ background: 'var(--color-row)', border: `1px solid ${warn ? 'rgba(255,69,96,0.3)' : 'var(--color-border)'}` }}>
+    <div className="flex flex-col p-4 rounded-lg transition-colors duration-200"
+      style={{ background: 'var(--color-row)', border: `1px solid ${warn ? 'rgba(255,69,96,0.3)' : 'var(--color-border)'}` }}
+      onMouseEnter={e => { if (!warn) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { if (!warn) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <span className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase">{label}</span>
       <span className="text-xl font-bold font-mono mt-1" style={{ color: warn ? 'var(--color-red)' : 'var(--color-bright)' }}>{value}<span className="text-[10px] text-[var(--color-dim)] ml-1">{unit}</span></span>
     </div>
