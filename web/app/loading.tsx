@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="min-h-screen flex items-center justify-center">
+    <main aria-busy="true" aria-label="Caricamento" className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="flex gap-1.5">
           {[0, 1, 2].map((i) => (

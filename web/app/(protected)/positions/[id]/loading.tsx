@@ -1,6 +1,6 @@
 export default function PositionDetailLoading() {
   return (
-    <div style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div aria-busy="true" aria-label="Caricamento dettaglio posizione" style={{ animation: 'fade-in 0.2s ease both' }}>
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-6">
         <div className="h-3 w-16 rounded bg-[var(--color-border)] animate-pulse" />
