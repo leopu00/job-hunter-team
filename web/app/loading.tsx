@@ -1,8 +1,8 @@
 export default function Loading() {
   return (
-    <main aria-busy="true" aria-label="Caricamento" className="min-h-screen flex items-center justify-center">
+    <main role="status" aria-busy="true" aria-label="Caricamento" className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <span
               key={i}

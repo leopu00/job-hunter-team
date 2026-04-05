@@ -30,6 +30,7 @@ const LABELS: Record<string, string> = {
   faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
   privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
   stats: 'Statistiche', reports: 'Report', setup: 'Setup', edit: 'Modifica',
+  terms: 'Termini di Servizio',
   // Pagine aggiuntive
   achievements: 'Obiettivi', activity: 'Attività', 'ai-assistant': 'Assistente AI',
   'api-explorer': 'API Explorer', archive: 'Archivio', audit: 'Audit',
@@ -147,8 +148,8 @@ export default function Breadcrumb() {
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-deep)', position: 'sticky', top: 0, zIndex: 40 }}>
 
       {/* Home icon */}
-      <Link href="/dashboard" title="Dashboard" className="no-underline transition-opacity hover:opacity-80 flex items-center"
-        style={{ color: 'var(--color-dim)', fontSize: 12 }}>🏠</Link>
+      <Link href="/dashboard" title="Dashboard" aria-label="Dashboard" className="no-underline transition-opacity hover:opacity-80 flex items-center"
+        style={{ color: 'var(--color-dim)', fontSize: 12 }}><span aria-hidden="true">🏠</span></Link>
 
       {/* Crumbs */}
       {visible.map((item, i) => {

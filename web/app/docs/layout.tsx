@@ -8,6 +8,11 @@ export const metadata: Metadata = {
     title: 'Documentazione | Job Hunter Team',
     description: 'Documentazione tecnica di Job Hunter Team: architettura, moduli condivisi, comandi CLI e API routes.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Documentazione | Job Hunter Team',
+    description: 'Documentazione tecnica di Job Hunter Team: architettura, moduli condivisi, comandi CLI e API routes.',
+  },
 }
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'

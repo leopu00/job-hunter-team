@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Achievement' }
+export const metadata: Metadata = {
+  title: 'Traguardi — Job Hunter',
+  description: 'Traguardi e obiettivi raggiunti',
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children

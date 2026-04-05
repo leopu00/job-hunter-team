@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const JHT = path.join(os.homedir(), '.jht')
 const FORUM_PATH    = path.join(JHT, 'forum.log')
 const SENTINEL_PATH = path.join(JHT, 'sentinel-log.txt')

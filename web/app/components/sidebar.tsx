@@ -105,7 +105,7 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+      <nav aria-label="Menu dashboard" className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
         {!collapsed && favLinks.length > 0 && (
           <div>
             <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ PREFERITI</p>

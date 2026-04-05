@@ -1,6 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react'
+
+const CookieConsent = lazy(() => import('./CookieConsent'))
 
 export type Lang = 'it' | 'en'
 
@@ -24,6 +26,7 @@ const translations = {
   nav_faq:           { it: 'FAQ',              en: 'FAQ' },
   nav_pricing:       { it: 'Pricing',          en: 'Pricing' },
   nav_about:         { it: 'Chi siamo',        en: 'About' },
+  nav_stats:         { it: 'Stats',            en: 'Stats' },
   nav_login:         { it: 'Accedi',           en: 'Sign in' },
 
   // Hero
@@ -148,6 +151,9 @@ const translations = {
     en: 'The Critic reviews every document. When everything is ready, you approve the submission. You stay in control, agents execute.',
   },
   demo_cta:          { it: 'Prova ora',              en: 'Try now' },
+  demo_prev:         { it: 'Precedente',             en: 'Previous' },
+  demo_next:         { it: 'Successivo',             en: 'Next' },
+  demo_all_steps:    { it: 'Tutti i passaggi',       en: 'All steps' },
 
   // CTA
   cta_title_1:       { it: 'Pronto a rivoluzionare',           en: 'Ready to revolutionize' },
@@ -157,6 +163,7 @@ const translations = {
     en: 'Stop sending generic applications. Let a team of AI agents work for you, smart and personalized.',
   },
   cta_button:        { it: 'Inizia ora — è gratis',            en: 'Start now — it\'s free' },
+  cta_team:          { it: 'Vedi il team',                      en: 'Meet the team' },
   cta_note:          { it: 'Nessuna carta di credito richiesta · Beta pubblica', en: 'No credit card required · Public beta' },
 
   // Footer
@@ -172,6 +179,9 @@ const translations = {
   footer_contacts:   { it: 'Contatti',           en: 'Contacts' },
   footer_bug:        { it: 'Segnala un bug',     en: 'Report a bug' },
   footer_discuss:    { it: 'Discussioni',        en: 'Discussions' },
+  footer_privacy:    { it: 'Privacy Policy',    en: 'Privacy Policy' },
+  footer_terms:      { it: 'Termini di Servizio', en: 'Terms of Service' },
+  footer_copyright:  { it: 'Open Source sotto licenza MIT', en: 'Open Source under MIT License' },
 
   // Download page
   dl_desc:           {
@@ -197,6 +207,8 @@ const translations = {
   dl_node_link:      { it: 'Scarica Node.js da',        en: 'Download Node.js from' },
   dl_home:           { it: 'Home',                       en: 'Home' },
   dl_all_releases:   { it: 'Tutte le release',           en: 'All releases' },
+  dl_demo_question:  { it: 'Vuoi vedere come funziona prima di scaricare?', en: 'Want to see how it works before downloading?' },
+  dl_demo_cta:       { it: 'Guarda la demo interattiva', en: 'Watch the interactive demo' },
   dl_mac_instr:      {
     it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
     en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
@@ -291,6 +303,19 @@ const translations = {
     it: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
     en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
   },
+
+  // Guide page
+  guide_title:       { it: 'Guida Utente',           en: 'User Guide' },
+  guide_subtitle:    { it: 'Come installare, configurare e usare Job Hunter Team — dalla TUI alla web app.', en: 'How to install, configure and use Job Hunter Team — from the TUI to the web app.' },
+  guide_docs_link:   { it: 'Documentazione tecnica', en: 'Technical documentation' },
+
+  // FAQ page
+  faq_title:         { it: 'Domande Frequenti',      en: 'Frequently Asked Questions' },
+  faq_subtitle:      { it: 'Tutto quello che devi sapere su Job Hunter Team.', en: 'Everything you need to know about Job Hunter Team.' },
+  faq_no_answer:     { it: 'Non trovi la risposta?', en: 'Can\'t find the answer?' },
+  faq_no_answer_desc: { it: 'Consulta la guida completa o la documentazione tecnica.', en: 'Check out the full guide or the technical documentation.' },
+  faq_guide_btn:     { it: 'Guida Utente',           en: 'User Guide' },
+  faq_docs_btn:      { it: 'Documentazione',         en: 'Documentation' },
 
   // About page
   about_badge:       { it: 'chi siamo',           en: 'about us' },
@@ -489,6 +514,7 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   return (
     <LandingI18nContext.Provider value={{ lang, setLang, t, ta }}>
       {children}
+      <Suspense><CookieConsent /></Suspense>
     </LandingI18nContext.Provider>
   )
 }

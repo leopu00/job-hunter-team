@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -192,6 +193,21 @@ const FEATURE_KEYS: TKey[] = [
 
 /* ── Components ───────────────────────────────────────────────────── */
 
+function PricingJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Job Hunter Team',
+    applicationCategory: 'BusinessApplication',
+    offers: [
+      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'EUR', description: 'Piano gratuito con 3 agenti AI' },
+      { '@type': 'Offer', name: 'Pro', price: '19', priceCurrency: 'EUR', description: 'Piano Pro con 7 agenti AI e supporto prioritario' },
+      { '@type': 'Offer', name: 'Enterprise', price: '0', priceCurrency: 'EUR', description: 'Piano Enterprise personalizzato per team e agenzie' },
+    ],
+  }
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+}
+
 function PricingContent() {
   const { lang } = useLandingI18n()
   const tx = T[lang as 'it' | 'en'] ?? T.it
@@ -209,6 +225,7 @@ function PricingContent() {
 
   return (
     <main style={{ position: 'relative', zIndex: 1 }}>
+      <PricingJsonLd />
       <LandingNav />
 
       <div className="max-w-5xl mx-auto px-5 pt-32 pb-20">
@@ -227,14 +244,15 @@ function PricingContent() {
             <span className="text-[11px]" style={{ color: !yearly ? 'var(--color-white)' : 'var(--color-dim)' }}>{t('monthly')}</span>
             <button
               onClick={() => setYearly((v) => !v)}
-              aria-label={yearly ? t('monthly') : t('yearly')}
               role="switch"
               aria-checked={yearly}
+              aria-label={yearly ? t('yearly') : t('monthly')}
               className="relative w-11 h-6 rounded-full cursor-pointer transition-colors"
               style={{ background: yearly ? 'var(--color-green)' : 'var(--color-border)', border: 'none' }}
             >
               <span
                 className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                aria-hidden="true"
                 style={{ left: yearly ? 22 : 2 }}
               />
             </button>
@@ -250,7 +268,7 @@ function PricingContent() {
         </div>
 
         {/* Plan cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+        <FadeInSection><div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
           {PLANS.map((plan, planIdx) => {
             const price = yearly ? plan.priceYearly : plan.priceMonthly
             return (
@@ -299,7 +317,7 @@ function PricingContent() {
                     if (val === false) return null
                     return (
                       <li key={f.key} className="flex items-start gap-2 text-[11px]">
-                        <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-green)' }}>
+                        <span className="mt-0.5 flex-shrink-0" aria-hidden="true" style={{ color: 'var(--color-green)' }}>
                           {val === true ? '✓' : '▸'}
                         </span>
                         <span style={{ color: 'var(--color-muted)' }}>
@@ -324,10 +342,10 @@ function PricingContent() {
               </div>
             )
           })}
-        </div>
+        </div></FadeInSection>
 
         {/* Feature comparison table */}
-        <div className="mb-16">
+        <FadeInSection delay={100}><div className="mb-16">
           <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('features_title')}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }} aria-label="Confronto funzionalità piani">
@@ -350,8 +368,8 @@ function PricingContent() {
                       const val = feat?.value
                       return (
                         <td key={p.nameKey} className="text-center py-2.5 px-3">
-                          {val === true && <span style={{ color: 'var(--color-green)' }}>✓</span>}
-                          {val === false && <span style={{ color: 'var(--color-dim)' }}>—</span>}
+                          {val === true && <span aria-label="Incluso" style={{ color: 'var(--color-green)' }}>✓</span>}
+                          {val === false && <span aria-label="Non incluso" style={{ color: 'var(--color-dim)' }}>—</span>}
                           {typeof val === 'string' && <span style={{ color: 'var(--color-bright)' }}>{t(val)}</span>}
                         </td>
                       )
@@ -361,18 +379,19 @@ function PricingContent() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div></FadeInSection>
 
         {/* FAQ */}
-        <div className="max-w-2xl mx-auto">
+        <FadeInSection delay={200}><div className="max-w-2xl mx-auto">
           <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('faq_title')}</h2>
           <div className="flex flex-col">
             {faqs.map((faq, i) => (
               <div key={i} className="border-b border-[var(--color-border)]">
                 <button
+                  id={`pricing-faq-btn-${i}`}
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   aria-expanded={openFaq === i}
-                  aria-controls={`pricing-faq-${i}`}
+                  aria-controls={`pricing-faq-panel-${i}`}
                   className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
                   style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
                 >
@@ -386,14 +405,20 @@ function PricingContent() {
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div id={`pricing-faq-${i}`} role="region" aria-labelledby={`pricing-faq-btn-${i}`} className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed" style={{ animation: 'fade-in 0.15s ease both' }}>
+                  <div
+                    id={`pricing-faq-panel-${i}`}
+                    role="region"
+                    aria-labelledby={`pricing-faq-btn-${i}`}
+                    className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed"
+                    style={{ animation: 'fade-in 0.15s ease both' }}
+                  >
                     {faq.a}
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </div>
+        </div></FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">

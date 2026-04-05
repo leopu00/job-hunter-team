@@ -27,7 +27,7 @@ function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => v
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
       style={{ opacity: n.read ? 0.5 : 1 }}>
-      <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold"
+      <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center text-[11px] font-bold" aria-hidden="true"
         style={{ background: `${t.color}18`, color: t.color }}>{t.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
@@ -54,7 +54,7 @@ function Btn({ label, color, onClick, ariaLabel }: { label: string; color: strin
     <button onClick={onClick} aria-label={ariaLabel} className="text-[10px] font-bold transition-colors cursor-pointer"
       style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
       onMouseEnter={e => e.currentTarget.style.color = color}
-      onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>{label}</button>
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'} {...rest}>{label}</button>
   )
 }
 

@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const LOG_PATH = path.join(os.homedir(), '.jht', 'sentinel-log.txt')
 
 const USAGE_RE = /^\[(\S+)\] usage=(\d+)% \| delta=([+-]?\d+)% in 10m \| velocita=(\d+)%\/h \| vel_smussata=(\d+)%\/h \| vel_ideale=(\d+)%\/h \| rapporto=([\d.]+) \| throttle=(\d+) \| proiezione_reset=(\d+)% \| (.+)$/

@@ -104,7 +104,7 @@ function DownloadContent() {
           {/* Header */}
           <div className="mb-12 text-center">
             <Link href="/" className="inline-flex items-center gap-2 mb-6 no-underline hover:no-underline">
-              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
               <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">download</span>
             </Link>
             <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
@@ -161,6 +161,8 @@ function DownloadContent() {
                     <div className="flex items-center gap-2 mt-3">
                       <button
                         onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`dl-instr-${platform.id}`}
                         className="flex-1 sm:flex-none px-3 py-2 rounded text-[11px] font-semibold transition-colors"
                         style={{
                           background: 'var(--color-card)',
@@ -185,7 +187,7 @@ function DownloadContent() {
 
                   {/* Expandable instructions */}
                   {isExpanded && (
-                    <div className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
+                    <div id={`dl-instr-${platform.id}`} role="region" aria-label={`${platform.label} ${t('dl_instructions')}`} className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
                       <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
                         <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-3">{t('dl_instructions')}</p>
                         <ol className="space-y-2 mb-4">
@@ -228,7 +230,7 @@ function DownloadContent() {
           {/* Node.js requirement note */}
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
             <div className="flex items-start gap-3">
-              <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0">!</span>
+              <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0" aria-hidden="true">!</span>
               <div>
                 <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_node_title')}</p>
                 <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
@@ -247,12 +249,12 @@ function DownloadContent() {
           {/* Demo CTA */}
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8 text-center">
             <p className="text-[12px] text-[var(--color-muted)] mb-3">
-              Vuoi vedere come funziona prima di scaricare?
+              {t('dl_demo_question')}
             </p>
             <Link href="/demo"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold tracking-wide transition-all no-underline"
               style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}>
-              Guarda la demo interattiva &rarr;
+              {t('dl_demo_cta')} &rarr;
             </Link>
           </div>
 
@@ -292,17 +294,19 @@ function MacGuide() {
     <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden mb-8">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls="dl-mac-guide-panel"
         className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors"
         style={{ cursor: 'pointer', background: 'transparent', border: 'none' }}>
         <div className="flex items-center gap-3">
           <AppleIcon />
           <span className="text-[13px] font-bold text-[var(--color-white)]">{t('dl_mac_guide_title')}</span>
         </div>
-        <span className="text-[var(--color-dim)] text-[14px]">{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="text-[var(--color-dim)] text-[14px]" aria-hidden="true">{open ? '\u25B2' : '\u25BC'}</span>
       </button>
 
       {open && (
-        <div className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
+        <div id="dl-mac-guide-panel" role="region" aria-label={t('dl_mac_guide_title')} className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
           <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
 
             {/* Requisiti */}
@@ -374,7 +378,7 @@ function GuideSection({ title, children, last }: { title: string; children: Reac
 
 function AppleIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--color-muted)' }}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
       <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
     </svg>
   )
@@ -382,7 +386,7 @@ function AppleIcon() {
 
 function LinuxIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--color-muted)' }}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
       <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.199.023.4-.002.64-.092.66-.26.869-.6.778-1.2-.046-.268-.177-.533-.301-.67-.124-.201-.17-.401-.24-.7-.064-.334-.163-.469-.16-.867.266-.073.536-.267.735-.467.227-.2.418-.468.576-.77.318-.601.465-1.33.377-2.099-.039-.4-.123-.467-.2-.868-.082-.465.008-.533.022-1.07 0-.068.005-.2-.023-.335a.622.622 0 00-.105-.197c-.133-.2-.333-.395-.6-.464-.273-.067-.56-.066-.846-.067-.283 0-.518-.133-.666-.267-.15-.132-.28-.267-.453-.267-.166 0-.367.133-.467.267l-.235.268a.73.73 0 01-.65.333c-.347 0-.467-.2-.532-.401a.963.963 0 01-.043-.199v-.133c0-.1.024-.2.067-.301.167-.467.5-.867.867-1.067.367-.197.8-.133 1.067.133.167.168.267.4.333.667.067.267.126.533.126.802 0 .267-.059.533-.192.733-.133.2-.333.401-.534.534a2.098 2.098 0 01-.733.267c-.267.066-.533.066-.733-.067a.844.844 0 01-.313-.412L12.71 18.3c.133-.266.28-.47.413-.668.27-.4.54-.734.665-1.134.135-.4.2-.867.127-1.333a.844.844 0 00-.106-.333c-.159-.267-.4-.467-.667-.6l-.1-.067c.07-.333.12-.667.12-1 0-.534-.107-1.067-.334-1.534-.226-.466-.6-.866-1.066-1.066-.467-.2-1-.267-1.534-.134-.133.034-.267.1-.4.2 0-.868.134-1.734.534-2.401.4-.667 1.067-1.133 2-1.133h.133c.534.067.934.4 1.334.734.4.333.8.733 1.266.733.134 0 .267-.034.4-.1.534-.267.734-.8.734-1.334 0-.266-.067-.533-.2-.733a1.06 1.06 0 00-.534-.4 1.773 1.773 0 00-.467-.066z"/>
     </svg>
   )
@@ -390,7 +394,7 @@ function LinuxIcon() {
 
 function WindowsIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--color-muted)' }}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
       <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
     </svg>
   )
