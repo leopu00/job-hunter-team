@@ -197,7 +197,7 @@ export default function AssistentePage() {
           <span className="text-[10px] text-[var(--color-muted)]">Assistente</span>
         </div>
         <div className="mt-4 flex items-start gap-5">
-          <div className="text-5xl leading-none select-none">🤖</div>
+          <div className="text-5xl leading-none select-none" aria-hidden="true">🤖</div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Assistente</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
@@ -320,7 +320,7 @@ export default function AssistentePage() {
                 <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
                   {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-center">
-                      <div className="text-3xl mb-3 opacity-30">🤖</div>
+                      <div className="text-3xl mb-3 opacity-30" aria-hidden="true">🤖</div>
                       <p className="text-[var(--color-dim)] text-[11px]">
                         Scrivi un messaggio per iniziare la conversazione.
                       </p>
@@ -447,7 +447,7 @@ export default function AssistentePage() {
       {/* Empty state */}
       {!isActive && status != null && !startMsg && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="text-4xl mb-4 opacity-30">🤖</div>
+          <div className="text-4xl mb-4 opacity-30" aria-hidden="true">🤖</div>
           <p className="text-[var(--color-muted)] text-[13px]">L&apos;Assistente non è attivo.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">
             Premi <span style={{ color: 'var(--color-green)' }}>Avvia Assistente</span> per iniziare.
