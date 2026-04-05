@@ -113,7 +113,8 @@ export default function MessagesPage() {
           {threads.length === 0 ? (
             <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna conversazione.</p></div>
           ) : threads.map(t => (
-            <div key={t.id} onClick={() => { openThread(t.id); setShowCompose(false) }}
+            <div key={t.id} role="button" tabIndex={0} onClick={() => { openThread(t.id); setShowCompose(false) }}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openThread(t.id); setShowCompose(false); } }}
               className="px-4 py-3 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-row)] transition-colors"
               style={{ background: activeThread?.id === t.id ? 'var(--color-row)' : undefined }}>
               <div className="flex items-center gap-2">
