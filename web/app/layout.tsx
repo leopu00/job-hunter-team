@@ -10,8 +10,8 @@ import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
 import dynamic from 'next/dynamic'
 
-const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch), { ssr: false })
-const FloatingChat = dynamic(() => import('./components/FloatingChat'), { ssr: false })
+const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch))
+const FloatingChat = dynamic(() => import('./components/FloatingChat'))
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
