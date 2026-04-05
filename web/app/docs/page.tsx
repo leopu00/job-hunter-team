@@ -52,7 +52,7 @@ function ModulesSection() {
     <div className="flex flex-col gap-5">
       {groups.map(g => (
         <div key={g}>
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{g}</h3>
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{g}</h2>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
             {MODULES.filter(m => m.group === g).map((m, i, arr) => (
               <div key={m.id} className={`flex items-start gap-3 px-5 py-2.5 ${i < arr.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
