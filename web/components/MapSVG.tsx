@@ -108,7 +108,7 @@ export default function MapSVG({ markers = [], onMarkerClick, width = 600, heigh
               role="button"
               tabIndex={0}
               aria-label={isCluster ? `${cl.markers.length} posizioni raggruppate` : m.label}
-              style={{ cursor: 'pointer', outline: 'none' }}
+              style={{ cursor: 'pointer' }}
               onFocus={() => { setTip(cl); setTipPos({ x: cl.cx, y: cl.cy }) }}
               onBlur={() => setTip(null)}
               onMouseEnter={() => { setTip(cl); setTipPos({ x: cl.cx, y: cl.cy }) }}
