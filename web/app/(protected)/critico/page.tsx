@@ -173,7 +173,7 @@ export default function CriticoPage() {
       </div>
 
       {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg text-[11px]"
+        <div className="mb-6 px-4 py-3 rounded-lg text-[11px]" role="alert"
           style={{ background: 'var(--color-red)18', border: '1px solid var(--color-red)40', color: 'var(--color-red)' }}>
           Errore connessione: {error}
         </div>

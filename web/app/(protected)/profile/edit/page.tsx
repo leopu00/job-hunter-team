@@ -715,7 +715,7 @@ export default function ProfileEditPage() {
 
         {/* ── Submit ── */}
         {error && (
-          <div className="px-4 py-3 bg-[var(--color-red)]/10 border border-[var(--color-red)]/30 rounded text-[11px] text-[var(--color-red)]">
+          <div className="px-4 py-3 bg-[var(--color-red)]/10 border border-[var(--color-red)]/30 rounded text-[11px] text-[var(--color-red)]" role="alert">
             Errore: {error}
           </div>
         )}
