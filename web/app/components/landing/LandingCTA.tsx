@@ -88,9 +88,9 @@ export function LandingFooter() {
           {/* Contatti */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">Contatti</h4>
-            <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
             <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>Segnala un bug</a>
             <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>Discussioni</a>
+            <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
           </div>
         </div>
 
