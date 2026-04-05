@@ -25,7 +25,7 @@ function applyTheme(theme: Theme) {
 }
 
 /** Rileva preferenza di sistema */
-function getSystemTheme(): Theme {
+function getSystemTheme(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 

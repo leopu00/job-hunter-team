@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 
-type OS = 'mac' | 'linux' | 'windows' | null
+type PlatformId = 'mac' | 'linux' | 'windows'
+type OS = PlatformId | null
 
 interface PlatformData {
-  id: string
+  id: PlatformId
   label: string
   file: string
   size: string | null
@@ -23,13 +24,13 @@ interface ReleaseData {
   releasesUrl: string
 }
 
-const ICONS: Record<string, () => React.ReactNode> = {
+const ICONS: Record<PlatformId, () => React.ReactNode> = {
   mac: AppleIcon,
   linux: LinuxIcon,
   windows: WindowsIcon,
 }
 
-const INSTR_KEYS: Record<string, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
+const INSTR_KEYS: Record<PlatformId, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
   mac: 'dl_mac_instr',
   linux: 'dl_linux_instr',
   windows: 'dl_windows_instr',

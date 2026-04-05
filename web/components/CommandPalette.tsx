@@ -45,7 +45,7 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { registerEscape } = useShortcuts()
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const close = useCallback(() => { setOpen(false); setQuery(''); setExtra([]) }, [])
 
@@ -66,7 +66,7 @@ export default function CommandPalette() {
 
   // Ricerca dinamica via /api/search
   useEffect(() => {
-    clearTimeout(timerRef.current)
+    if (timerRef.current) clearTimeout(timerRef.current)
     if (query.length < 2) { setExtra([]); return }
     timerRef.current = setTimeout(async () => {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`).catch(() => null)
@@ -76,6 +76,9 @@ export default function CommandPalette() {
         id: `search-${r.id}`, label: r.title, detail: r.detail, category: 'Risultati', href: r.href,
       })))
     }, 180)
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
   }, [query])
 
   const filtered = [
