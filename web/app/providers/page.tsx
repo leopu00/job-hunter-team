@@ -125,7 +125,7 @@ export default function ProvidersPage() {
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Provider LLM</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
               {data ? `${available}/${data.providers.length} configurati · provider attivo: ${data.activeProvider}` : 'Caricamento…'}
-              {data && !data.configLoaded && <span className="ml-2 text-[var(--color-yellow)]">⚠ jht.config.json non trovato</span>}
+              {data && !data.configLoaded && <span className="ml-2 text-[var(--color-yellow)]"><span aria-hidden="true">⚠</span> jht.config.json non trovato</span>}
             </p>
           </div>
           <button onClick={fetchData}

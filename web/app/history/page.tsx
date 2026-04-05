@@ -43,7 +43,7 @@ function ActivityRow({ a }: { a: Activity }) {
   const time = new Date(a.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-row)] transition-colors">
-      <span className="text-sm flex-shrink-0">{cfg.icon}</span>
+      <span className="text-sm flex-shrink-0" aria-hidden="true">{cfg.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-semibold text-[var(--color-bright)]">{a.entityName}</span>
