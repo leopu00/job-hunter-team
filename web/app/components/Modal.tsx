@@ -16,6 +16,7 @@ export type ModalProps = {
   children:    ReactNode
   className?:  string
   width?:      number
+  ariaLabel?:  string
 }
 
 // ── Size map ───────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean)
 
 // ── Modal ──────────────────────────────────────────────────────────────────
 
-export function Modal({ open, onClose, title, size = 'md', footer, hideClose, children, className, width }: ModalProps) {
+export function Modal({ open, onClose, title, size = 'md', footer, hideClose, children, className, width, ariaLabel }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId   = `modal-title-${Math.random().toString(36).slice(2)}`
 
@@ -88,6 +89,7 @@ export function Modal({ open, onClose, title, size = 'md', footer, hideClose, ch
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={!title ? (ariaLabel ?? 'Finestra di dialogo') : undefined}
         className={`w-full flex flex-col rounded-xl overflow-hidden ${className ?? ''}`}
         style={{
           maxWidth:   width ? `${width}px` : SIZE_MAX[size],
