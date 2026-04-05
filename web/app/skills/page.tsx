@@ -102,8 +102,8 @@ export default function SkillsPage() {
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
               {LEVELS.map(l => <option key={l} value={l}>{LEVEL_CFG[l].label}</option>)}
             </select>
-            <button onClick={addSkill} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
-              style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>aggiungi</button>
+            <button onClick={addSkill} disabled={!newName.trim()} className="px-4 py-1.5 rounded-lg text-[11px] font-bold"
+              style={{ background: newName.trim() ? 'var(--color-green)' : 'var(--color-border)', color: newName.trim() ? '#000' : 'var(--color-dim)', border: 'none', cursor: newName.trim() ? 'pointer' : 'default' }}>aggiungi</button>
           </div>
         </div>
       </div>
