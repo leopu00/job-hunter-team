@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { LandingI18nProvider } from '../components/landing/LandingI18n'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
@@ -241,6 +241,7 @@ const CONTENT: Record<SectionId, React.ReactNode> = {
 }
 
 function GuideContent() {
+  const { t } = useLandingI18n()
   const [active, setActive] = useState<SectionId>('install')
 
   return (
@@ -253,11 +254,11 @@ function GuideContent() {
           <div className="flex items-center gap-2 mb-3">
             <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
             <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] text-[var(--color-muted)]">Guida</span>
+            <span className="text-[10px] text-[var(--color-muted)]">{t('nav_guide')}</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Guida Utente</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{t('guide_title')}</h1>
           <p className="text-[var(--color-muted)] text-[12px] mt-2 leading-relaxed">
-            Come installare, configurare e usare Job Hunter Team &mdash; dalla TUI alla web app.
+            {t('guide_subtitle')}
           </p>
 
           {/* Tabs */}
@@ -295,11 +296,11 @@ function GuideContent() {
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link href="/download"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; Download
+            &larr; {t('nav_download')}
           </Link>
           <Link href="/docs"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            Documentazione tecnica &rarr;
+            {t('guide_docs_link')} &rarr;
           </Link>
         </div>
       </div>
