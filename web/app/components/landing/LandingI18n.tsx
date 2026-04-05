@@ -458,6 +458,10 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
     setLangState(getSavedLang())
   }, [])
 
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
+
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
     localStorage.setItem(STORAGE_KEY, l)
