@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useTheme } from '../app/theme-provider'
+import { useTheme, type Theme } from '../app/theme-provider'
 
 type Prefs = {
-  theme: 'dark' | 'light'
+  theme: Theme
   language: 'it' | 'en'
   notifications: { enabled: boolean; sound: boolean; desktop: boolean }
   shortcuts: Record<string, string>

@@ -22,7 +22,7 @@ export default function SearchBar() {
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setResults([]); setOpen(false); return }
@@ -39,7 +39,7 @@ export default function SearchBar() {
   function handleChange(val: string) {
     setQuery(val)
     setSelected(-1)
-    clearTimeout(timerRef.current)
+    if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => search(val), 200)
   }
 
@@ -61,6 +61,12 @@ export default function SearchBar() {
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
   }, [])
 
   useEffect(() => {
