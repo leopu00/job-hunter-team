@@ -117,7 +117,7 @@ export default function AssistantPage() {
   const isWaiting = messages.length > 0 && messages[messages.length - 1].role === 'user'
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ position: 'relative', zIndex: 1 }}>
+    <div className="min-h-screen flex flex-col" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="border-b border-[var(--color-border)] px-5 py-3 flex items-center gap-3 flex-shrink-0"
         style={{ background: 'var(--color-panel)' }}>

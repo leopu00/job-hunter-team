@@ -65,7 +65,7 @@ function PrivacyContent() {
   ]
 
   return (
-    <main style={{ position: 'relative', zIndex: 1 }}>
+    <main style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
       <LandingNav />
       <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
         <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
