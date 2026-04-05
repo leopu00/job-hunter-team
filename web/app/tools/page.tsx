@@ -105,8 +105,8 @@ export default function ToolsPage() {
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Errore nel caricamento.</p>
       ) : tab === 'tools' ? (
         <div className="space-y-4">
-          {data.sections.map(s => (
-            <div key={s.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
+          {data.sections.map((s, i) => (
+            <div key={s.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
               <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
                 <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)]">{s.label}</p>
               </div>
