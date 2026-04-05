@@ -37,9 +37,9 @@ function ServiceRow({ svc }: { svc: ServiceHealth }) {
 function AgentGrid({ agents }: { agents: AgentInfo[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      {agents.map(a => (
+      {agents.map((a, i) => (
         <div key={a.session} className="flex items-center gap-2 px-3 py-2 rounded border text-[11px]"
-          style={{ borderColor: a.active ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: a.active ? 'rgba(0,232,122,0.04)' : 'transparent' }}>
+          style={{ borderColor: a.active ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: a.active ? 'rgba(0,232,122,0.04)' : 'transparent', animation: `fade-in 0.4s ease ${i * 0.05}s both` }}>
           <span style={{ color: a.active ? 'var(--color-green)' : 'var(--color-dim)', animation: a.active ? 'pulse-dot 2s ease-in-out infinite' : undefined }}>●</span>
           <span className="font-mono truncate" style={{ color: a.active ? 'var(--color-bright)' : 'var(--color-dim)' }}>{a.session}</span>
         </div>
