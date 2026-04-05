@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const SITE_URL = 'https://jobhunterteam.ai'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 
 /** Pagine pubbliche indicizzabili — landing, documentazione, info */
 const PUBLIC_PAGES = [
@@ -15,6 +15,7 @@ const PUBLIC_PAGES = [
   { path: '/docs',      priority: 0.7,  changeFrequency: 'monthly' as const },
   { path: '/demo',      priority: 0.7,  changeFrequency: 'monthly' as const },
   { path: '/stats',     priority: 0.6,  changeFrequency: 'weekly'  as const },
+  { path: '/reports',   priority: 0.6,  changeFrequency: 'weekly'  as const },
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
