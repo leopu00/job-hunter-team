@@ -12,9 +12,9 @@ type Props = {
 
 const PER_PAGE_DEFAULTS = [10, 25, 50, 100]
 
-function CompanyBtn({ label, onClick, active, disabled }: { label: string | number; onClick: () => void; active?: boolean; disabled?: boolean }) {
+function CompanyBtn({ label, onClick, active, disabled, 'aria-label': ariaLabel }: { label: string | number; onClick: () => void; active?: boolean; disabled?: boolean; 'aria-label'?: string }) {
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick} disabled={disabled} aria-label={ariaLabel}
       className="min-w-[30px] h-[30px] px-2 rounded text-[10px] font-mono font-semibold cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
         border: `1px solid ${active ? 'var(--color-green)' : 'var(--color-border)'}`,
@@ -44,13 +44,13 @@ export function Pagination({ page, totalCompanys, perCompany, totalItems, onComp
     <div className="flex items-center justify-between flex-wrap gap-3 text-[10px]">
       <span style={{ color: 'var(--color-dim)' }}>{start}–{end} di {totalItems}</span>
       <div className="flex items-center gap-1">
-        <CompanyBtn label="←" onClick={() => onCompany(page - 1)} disabled={page <= 1} />
+        <CompanyBtn label="←" onClick={() => onCompany(page - 1)} disabled={page <= 1} aria-label="Pagina precedente" />
         {pages.map((p, i) =>
           p === '…'
             ? <span key={`e${i}`} className="px-1" style={{ color: 'var(--color-dim)' }}>…</span>
             : <CompanyBtn key={p} label={p} onClick={() => onCompany(p as number)} active={p === page} />
         )}
-        <CompanyBtn label="→" onClick={() => onCompany(page + 1)} disabled={page >= totalCompanys} />
+        <CompanyBtn label="→" onClick={() => onCompany(page + 1)} disabled={page >= totalCompanys} aria-label="Pagina successiva" />
       </div>
       {onPerCompany && (
         <div className="flex items-center gap-2">
