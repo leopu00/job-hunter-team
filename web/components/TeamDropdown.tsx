@@ -33,6 +33,9 @@ export default function TeamDropdown() {
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(v => !v)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label="Menu agenti team"
         className="px-3 py-1.5 text-[11px] font-semibold tracking-widest uppercase hover:bg-[var(--color-card)] rounded transition-colors no-underline flex items-center gap-1"
         style={{
           color: '#ffc107',
