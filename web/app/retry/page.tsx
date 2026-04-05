@@ -67,7 +67,7 @@ function BreakerCard({ b, onReset, resetting }: { b: BreakerInfo; onReset: (id: 
           <div className="h-full rounded-full transition-all" style={{ width: `${failPct}%`, background: failPct >= 80 ? 'var(--color-red)' : failPct >= 50 ? 'var(--color-yellow)' : 'var(--color-green)' }} />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-[9px] text-[var(--color-dim)] mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[9px] text-[var(--color-dim)] mb-3">
         <div>Totale fail: <span className="text-[var(--color-muted)]">{b.totalFailures}</span></div>
         <div>Totale ok: <span className="text-[var(--color-muted)]">{b.totalSuccesses}</span></div>
         <div>Aperture: <span className="text-[var(--color-muted)]">{b.totalOpened}</span></div>
