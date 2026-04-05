@@ -38,6 +38,10 @@ export const metadata: Metadata = {
     title: 'Job Hunter Team',
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
   },
+  alternates: {
+    canonical: '/',
+    languages: { 'it-IT': '/', 'en-US': '/' },
+  },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
   manifest: '/manifest.json',
   other: {
