@@ -2,10 +2,13 @@
   "name": "Job Hunter Team",
   "short_name": "JHT",
   "description": "Un team di agenti AI che cercano lavoro per te",
+  "lang": "it",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#060608",
   "theme_color": "#00e87a",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "/icon.svg",
