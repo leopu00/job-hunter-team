@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     title: 'Changelog | Job Hunter Team',
     description: 'Tutte le novita e gli aggiornamenti di Job Hunter Team: nuove feature, fix e miglioramenti.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Changelog | Job Hunter Team',
+    description: 'Tutte le novita e gli aggiornamenti di Job Hunter Team: nuove feature, fix e miglioramenti.',
+  },
 }
 
 export default function ChangelogLayout({ children }: { children: React.ReactNode }) {

@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     title: 'Documentazione | Job Hunter Team',
     description: 'Documentazione tecnica di Job Hunter Team: architettura, moduli condivisi, comandi CLI e API routes.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Documentazione | Job Hunter Team',
+    description: 'Documentazione tecnica di Job Hunter Team: architettura, moduli condivisi, comandi CLI e API routes.',
+  },
 }
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
