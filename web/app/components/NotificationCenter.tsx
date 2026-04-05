@@ -151,6 +151,8 @@ export function NotificationCenter() {
           border: `1px solid ${open ? 'var(--color-border)' : 'transparent'}`,
         }}
         aria-label={t.title}
+        aria-expanded={open}
+        aria-haspopup="true"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path
