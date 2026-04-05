@@ -51,8 +51,6 @@ export default function robots(): MetadataRoute.Robots {
           '/validators',
           '/skills',
           '/notifications',
-          '/docs',
-          '/changelog',
         ],
       },
     ],
