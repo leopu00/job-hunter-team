@@ -104,7 +104,7 @@ export default function AutomationsPage() {
           <span className="w-2" /><span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AUTOMAZIONE</span>
           <span className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TRIGGER</span>
           <span className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AZIONE</span>
-          <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RUNS</span>
+          <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ESEC.</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ULTIMO</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">PROSSIMO</span>
           <span className="w-8" />
