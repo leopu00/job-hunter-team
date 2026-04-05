@@ -29,7 +29,7 @@ export default function LandingGetStarted() {
         <div className="grid md:grid-cols-3 gap-6">
           {STEPS.map((s, i) => (
             <div key={i} className="relative group">
-              <div className="border border-[var(--color-border)] rounded-xl p-6 h-full transition-all duration-200"
+              <div className="border border-[var(--color-border)] hover:border-[var(--color-border-glow)] rounded-xl p-6 h-full transition-all duration-200"
                 style={{ background: 'var(--color-panel)', animation: `fade-in 0.4s ease ${i * 0.12}s both` }}>
                 {/* Step number + icon */}
                 <div className="flex items-center gap-3 mb-4">
