@@ -50,11 +50,11 @@ export default function ResumeBuilderPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-4 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Resume Builder</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Resume Builder</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Resume Builder</h1>
           <div className="flex gap-2">
