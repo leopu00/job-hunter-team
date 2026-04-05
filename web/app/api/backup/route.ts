@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,11 @@ const DEFAULT_SOURCES = [
   path.join(JHT_DIR, 'notifications'),
 ];
 
+async function loadBackupRunner() {
+  const modulePath = path.join(process.cwd(), '..', 'shared', 'backup', 'runner.ts');
+  return import(pathToFileURL(modulePath).href);
+}
+
 // GET — lista backup
 export async function GET() {
   const entries = loadCatalog().sort((a, b) => b.createdAt - a.createdAt);
@@ -54,28 +60,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nessuna sorgente trovata' }, { status: 400 });
     }
 
-    // Backup inline — shared/backup/runner non disponibile
-    const start = Date.now();
-    const id = `bk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const archivePath = path.join(BACKUP_DIR, `${id}.json`);
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-
-    const snapshot: Record<string, string> = {};
-    for (const src of existing) {
-      try { snapshot[src] = fs.readFileSync(src, 'utf-8'); } catch { /* skip */ }
+    // Importa dinamicamente per evitare problemi con webpack/next
+    const { createBackup } = await loadBackupRunner();
+    const result = createBackup(existing, { backupDir: BACKUP_DIR, compress: true, sources: existing });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 500 });
     }
-    fs.writeFileSync(archivePath, JSON.stringify(snapshot, null, 2), 'utf-8');
-    const sizeBytes = fs.statSync(archivePath).size;
 
-    const entry: BackupEntry = {
-      id, createdAt: Date.now(), sizeBytes, sources: existing,
-      compressed: false, archivePath, description,
-    };
-    const catalog = loadCatalog();
-    catalog.push(entry);
-    saveCatalog(catalog);
+    if (description && result.entry) {
+      const catalog = loadCatalog();
+      const entry = catalog.find(e => e.id === result.entry.id);
+      if (entry) {
+        entry.description = description;
+        saveCatalog(catalog);
+      }
+    }
 
-    return NextResponse.json({ backup: entry, durationMs: Date.now() - start }, { status: 201 });
+    return NextResponse.json({ backup: result.entry, durationMs: result.durationMs }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -88,23 +89,14 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
 
   try {
-    // Restore inline — shared/backup/runner non disponibile
-    const start = Date.now();
-    const catalog = loadCatalog();
-    const entry = catalog.find(e => e.id === id);
-    if (!entry) return NextResponse.json({ error: 'Backup non trovato' }, { status: 404 });
-    if (!fs.existsSync(entry.archivePath)) return NextResponse.json({ error: 'Archivio mancante' }, { status: 404 });
-
-    const snapshot = JSON.parse(fs.readFileSync(entry.archivePath, 'utf-8'));
+    const { restoreBackup } = await loadBackupRunner();
     const targetDir = path.join(homedir(), '.jht', 'restored', id);
-    fs.mkdirSync(targetDir, { recursive: true });
-    const restoredFiles: string[] = [];
-    for (const [filePath, content] of Object.entries(snapshot)) {
-      const dest = path.join(targetDir, path.basename(filePath));
-      fs.writeFileSync(dest, content as string, 'utf-8');
-      restoredFiles.push(dest);
+    const result = restoreBackup(id, targetDir, { backupDir: BACKUP_DIR });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
     }
-    return NextResponse.json({ restored: restoredFiles, targetDir, durationMs: Date.now() - start });
+
+    return NextResponse.json({ restored: result.restoredFiles, targetDir, durationMs: result.durationMs });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

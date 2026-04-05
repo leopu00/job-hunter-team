@@ -69,6 +69,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | Interfaccia | Avvio | Stack |
 |-------------|-------|-------|
 | **Web Dashboard** | `cd web && npm run dev` | Next.js · 56 pagine |
+| **Desktop Launcher** | `JHT Desktop` *(roadmap)* | Installer `.dmg/.exe/.AppImage` · avvio background · browser su `localhost` |
 | **CLI** | `jht team start` | Node.js · 15+ comandi |
 | **TUI** | `jht tui` | Terminal UI interattiva |
 | **Telegram** | Bot bridge bidirezionale | Grammy |
@@ -118,7 +119,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 - **Node.js** 18+ e npm
 - **Python** 3.10+
 - **tmux** (Linux/macOS) — WSL2 + tmux su Windows
-- **Claude CLI** — Claude Max subscription o Anthropic API key
+- **Provider LLM a scelta** — OpenAI / Minimax / Anthropic API key; **Claude CLI** opzionale solo per flusso Claude Max
 - **pandoc + typst** (opzionale, per generazione PDF)
 
 ### Quick Start
@@ -136,8 +137,8 @@ jht setup
 # → candidate_profile.yml (skills, esperienza, ruoli target)
 ```
 
-> **Claude Max:** nessuna API key necessaria — il CLI usa la tua subscription.
-> **API key:** aggiungi `ANTHROPIC_API_KEY` al file `.env`.
+> **Claude Max:** nessuna API key necessaria — serve il `Claude CLI`.
+> **OpenAI / Minimax / Anthropic API:** puoi usare direttamente le rispettive API key senza passare dal `Claude CLI`.
 
 ---
 
@@ -194,6 +195,15 @@ cd web && docker compose up  # Docker
 | **Infra** | Analytics · Health · Retry · Rate limiter · Queue · Events · Logs |
 | **Config** | Settings · Credenziali · Plugin · Tools · Templates · Provider · Migrazioni |
 | **Sistema** | Overview · Memory · Gateway · Canali · Notifiche · Cron · Deploy |
+
+### Desktop Launcher — roadmap
+
+📦 La direzione prodotto per utenti non tecnici non è una riscrittura completa della UI in desktop native.
+
+- Il launcher desktop installerà JHT e le dipendenze necessarie in background.
+- Il launcher avvierà i servizi locali e aprirà automaticamente la GUI web nel browser su `http://localhost:3000`.
+- Le release desktop includeranno una build web già pronta: niente `npm install` o `next build` sul computer dell'utente.
+- `Claude CLI` non sarà obbligatorio: verrà richiesto solo se l'utente seleziona il flusso Claude Max invece di provider API-based.
 
 ---
 
@@ -265,12 +275,12 @@ curl http://localhost:3000/api/health
 - [ ] Deploy Vercel con CI/CD
 - [ ] API layer agenti → Supabase (multi-tenant)
 
-### Fase 2 — App Desktop Electron
+### Fase 2 — Desktop Launcher (in pianificazione)
 
-- [ ] App scaricabile (.dmg / .exe / .AppImage) per utenti non tecnici
-- [ ] Setup wizard grafico (zero terminale)
-- [ ] Agenti come processi background (sostituzione tmux)
-- [ ] Auto-install dipendenze, tray icon, notifiche native
+- [ ] Installer desktop (`.dmg` / `.exe` / `.AppImage`) per utenti non tecnici
+- [ ] Launcher/orchestratore locale che installa JHT, avvia tutto in background e apre il browser su `localhost`
+- [ ] Payload prebuildato: GUI web già compilata, niente rebuild sul computer dell'utente
+- [ ] Setup wizard grafico con scelta provider AI (`Claude CLI` solo se serve davvero)
 - [ ] Auto-update e code signing cross-platform
 
 ### Fase 3 — Cloud Provisioning

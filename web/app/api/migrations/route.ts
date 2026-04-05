@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,12 @@ type Migration = {
   version: string; description: string;
   up: (c: Record<string, unknown>) => Record<string, unknown>;
   down: (c: Record<string, unknown>) => Record<string, unknown>;
+};
+type MigrationResultEntry = {
+  version: string;
+  description: string;
+  success: boolean;
+  error?: string;
 };
 
 function loadState(): MigrationState {
@@ -47,6 +54,11 @@ const REGISTERED_MIGRATIONS: Migration[] = [
     down: (c) => { delete c.backup; return c; },
   },
 ];
+
+async function loadMigrationsRunner() {
+  const modulePath = path.join(process.cwd(), '..', 'shared', 'migrations', 'runner.ts');
+  return import(pathToFileURL(modulePath).href);
+}
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(n => parseInt(n, 10) || 0);
@@ -81,38 +93,25 @@ export async function GET() {
 // POST — esegui migrazioni up
 export async function POST() {
   try {
-    // Migrate up inline — shared/migrations/runner non disponibile
+    const { migrateUp } = await loadMigrationsRunner();
     const config = loadConfig();
-    const state = loadState();
-    const pending = REGISTERED_MIGRATIONS
-      .filter(m => compareVersions(m.version, state.currentVersion) > 0)
-      .sort((a, b) => compareVersions(a.version, b.version));
+    const result = migrateUp(REGISTERED_MIGRATIONS, config, { statePath: STATE_PATH });
 
-    const from = state.currentVersion;
-    const applied: { version: string; description: string; success: boolean; error?: string }[] = [];
-
-    for (const m of pending) {
-      try {
-        m.up(config);
-        state.applied.push({ version: m.version, description: m.description, appliedAt: Date.now() });
-        state.currentVersion = m.version;
-        applied.push({ version: m.version, description: m.description, success: true });
-      } catch (e) {
-        applied.push({ version: m.version, description: m.description, success: false, error: String(e) });
-        break;
-      }
-    }
-
-    state.updatedAt = Date.now();
-    fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), 'utf-8');
-    if (applied.some(a => a.success)) {
+    if (result.ok && result.applied.length > 0) {
       fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
     }
 
-    const ok = applied.every(a => a.success);
-    return NextResponse.json({ ok, from, to: state.currentVersion, applied }, { status: ok ? 200 : 500 });
+    return NextResponse.json({
+      ok: result.ok, from: result.from, to: result.to,
+      applied: result.applied.map((a: MigrationResultEntry) => ({
+        version: a.version,
+        description: a.description,
+        success: a.success,
+        error: a.error,
+      })),
+      rolledBack: result.rolledBack,
+    }, { status: result.ok ? 200 : 500 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -125,35 +124,23 @@ export async function PATCH(req: Request) {
   if (!target) return NextResponse.json({ error: 'Parametro target richiesto' }, { status: 400 });
 
   try {
-    // Migrate down inline — shared/migrations/runner non disponibile
+    const { migrateDown } = await loadMigrationsRunner();
     const config = loadConfig();
-    const state = loadState();
-    const from = state.currentVersion;
-    const toRollback = REGISTERED_MIGRATIONS
-      .filter(m => compareVersions(m.version, target) > 0 && compareVersions(m.version, state.currentVersion) <= 0)
-      .sort((a, b) => compareVersions(b.version, a.version));
+    const result = migrateDown(REGISTERED_MIGRATIONS, config, target, { statePath: STATE_PATH });
 
-    const applied: { version: string; description: string; success: boolean; error?: string }[] = [];
-    for (const m of toRollback) {
-      try {
-        m.down(config);
-        state.applied = state.applied.filter(a => a.version !== m.version);
-        state.currentVersion = target;
-        applied.push({ version: m.version, description: m.description, success: true });
-      } catch (e) {
-        applied.push({ version: m.version, description: m.description, success: false, error: String(e) });
-        break;
-      }
-    }
-
-    state.updatedAt = Date.now();
-    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), 'utf-8');
-    if (applied.some(a => a.success)) {
+    if (result.ok && result.applied.length > 0) {
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
     }
 
-    const ok = applied.every(a => a.success);
-    return NextResponse.json({ ok, from, to: state.currentVersion, applied }, { status: ok ? 200 : 500 });
+    return NextResponse.json({
+      ok: result.ok, from: result.from, to: result.to,
+      applied: result.applied.map((a: MigrationResultEntry) => ({
+        version: a.version,
+        description: a.description,
+        success: a.success,
+        error: a.error,
+      })),
+    }, { status: result.ok ? 200 : 500 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

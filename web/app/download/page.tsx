@@ -7,10 +7,11 @@ import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
-type OS = 'mac' | 'linux' | 'windows' | null
+type PlatformId = 'mac' | 'linux' | 'windows'
+type OS = PlatformId | null
 
 interface PlatformData {
-  id: string
+  id: PlatformId
   label: string
   file: string
   size: string | null
@@ -25,13 +26,13 @@ interface ReleaseData {
   releasesUrl: string
 }
 
-const ICONS: Record<string, () => React.ReactNode> = {
+const ICONS: Record<PlatformId, () => React.ReactNode> = {
   mac: AppleIcon,
   linux: LinuxIcon,
   windows: WindowsIcon,
 }
 
-const INSTR_KEYS: Record<string, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
+const INSTR_KEYS: Record<PlatformId, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
   mac: 'dl_mac_instr',
   linux: 'dl_linux_instr',
   windows: 'dl_windows_instr',
@@ -52,8 +53,8 @@ const FALLBACK_BASE_URL = `https://github.com/${FALLBACK_REPO}/releases/latest/d
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
-    id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.tar.gz`, size: null,
-    requirements: 'macOS 12+, Node.js 18+',
+    id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.dmg`, size: null,
+    requirements: 'macOS 12+',
     instructions: [],
   },
   {
@@ -227,15 +228,15 @@ function DownloadContent() {
             </div>
           </div>
 
-          {/* Node.js requirement note */}
+          {/* Install note */}
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
             <div className="flex items-start gap-3">
               <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0" aria-hidden="true">!</span>
               <div>
-                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_node_title')}</p>
+                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_setup_title')}</p>
                 <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
-                  {t('dl_node_desc')}{' '}
-                  {t('dl_node_link')}{' '}
+                  {t('dl_setup_desc')}{' '}
+                  {t('dl_setup_link')}{' '}
                   <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer"
                     className="text-[var(--color-green)] hover:underline">nodejs.org</a>.
                 </p>
