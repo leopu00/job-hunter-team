@@ -25,12 +25,14 @@ export default function DatabasePage() {
   const [query, setQuery] = useState('SELECT * LIMIT 20')
   const [result, setResult] = useState<{ columns: string[]; rows: Record<string, unknown>[]; count: number } | null>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const fetchTables = useCallback(async () => {
     const res = await fetch('/api/database').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setTables(data.tables ?? []); setTotalSizeKB(data.totalSizeKB ?? 0); setTotalRows(data.totalRows ?? 0);
+    setLoading(false);
   }, [])
 
   useEffect(() => { fetchTables() }, [fetchTables])
@@ -66,7 +68,9 @@ export default function DatabasePage() {
           <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ORIGINE</span>
           <span className="w-10" />
         </div>
-        {tables.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : tables.length === 0
           ? <div className="py-12 text-center">
               <p className="text-[var(--color-dim)] text-[12px]">Nessuna tabella trovata.</p>
               <p className="text-[var(--color-dim)] text-[10px] mt-1">Verifica che il database sia connesso e contenga almeno una tabella.</p>
