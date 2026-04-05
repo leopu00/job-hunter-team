@@ -42,7 +42,7 @@ export function Tabs<T extends string>({ tabs, active, onChange, size = 'md' }: 
             tabIndex={isActive ? 0 : -1}
             onClick={() => !tab.disabled && onChange(tab.id)}
             onKeyDown={e => handleKeyDown(e, tab.id)}
-            className="flex items-center gap-1.5 px-3 py-2.5 font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed outline-none relative"
+            className="flex items-center gap-1.5 px-3 py-2.5 font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-void)] relative"
             style={{
               fontSize: fs,
               color: isActive ? 'var(--color-green)' : 'var(--color-dim)',
