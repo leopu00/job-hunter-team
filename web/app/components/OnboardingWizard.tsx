@@ -145,7 +145,7 @@ export default function OnboardingWizard() {
         {/* Header */}
         <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
+            <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
             <span className="text-[10px] font-bold tracking-[0.15em] uppercase" style={{ color: 'var(--color-green)' }}>
               {t('s1_title') === 'Benvenuto' ? 'setup' : 'setup'}
             </span>
