@@ -115,7 +115,7 @@ export default function JobCard({ job, showDescription = false, compact = false,
         <>
           {/* Descrizione */}
           {showDescription && job.description && (
-            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed">{job.description}</p>
+            <p className="text-[10px] text-[var(--color-dim)] mt-2 line-clamp-2 leading-relaxed" title={job.description}>{job.description}</p>
           )}
 
           {/* Meta row: tipo, salary, data */}
