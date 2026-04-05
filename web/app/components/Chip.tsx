@@ -104,7 +104,7 @@ export function Chip({
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,0,0,0.15)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.7'; (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
           >
-            <svg width={s.icon - 2} height={s.icon - 2} viewBox="0 0 10 10" fill="none">
+            <svg width={s.icon - 2} height={s.icon - 2} viewBox="0 0 10 10" fill="none" aria-hidden="true">
               <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </button>
