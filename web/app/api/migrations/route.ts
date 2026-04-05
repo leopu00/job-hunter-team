@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 const STATE_PATH = path.join(homedir(), '.jht', 'migrations.json');
 const CONFIG_PATH = path.join(homedir(), '.jht', 'config.json');
@@ -46,6 +47,11 @@ const REGISTERED_MIGRATIONS: Migration[] = [
   },
 ];
 
+async function loadMigrationsRunner() {
+  const modulePath = path.join(process.cwd(), '..', 'shared', 'migrations', 'runner.ts');
+  return import(pathToFileURL(modulePath).href);
+}
+
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(n => parseInt(n, 10) || 0);
   const pb = b.split('.').map(n => parseInt(n, 10) || 0);
@@ -79,7 +85,7 @@ export async function GET() {
 // POST — esegui migrazioni up
 export async function POST() {
   try {
-    const { migrateUp } = await import('../../../../shared/migrations/runner.js');
+    const { migrateUp } = await loadMigrationsRunner();
     const config = loadConfig();
     const result = migrateUp(REGISTERED_MIGRATIONS, config, { statePath: STATE_PATH });
 
@@ -105,7 +111,7 @@ export async function PATCH(req: Request) {
   if (!target) return NextResponse.json({ error: 'Parametro target richiesto' }, { status: 400 });
 
   try {
-    const { migrateDown } = await import('../../../../shared/migrations/runner.js');
+    const { migrateDown } = await loadMigrationsRunner();
     const config = loadConfig();
     const result = migrateDown(REGISTERED_MIGRATIONS, config, target, { statePath: STATE_PATH });
 
