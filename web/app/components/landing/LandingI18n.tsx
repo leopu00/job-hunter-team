@@ -161,6 +161,17 @@ const translations = {
 
   // Footer
   footer_jht:        { it: 'Job Hunter Team',  en: 'Job Hunter Team' },
+  footer_brand_desc: { it: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.', en: 'An AI agent team that job-hunts for you. Open source, local, private.' },
+  footer_product:    { it: 'Prodotto',          en: 'Product' },
+  footer_stats:      { it: 'Statistiche',       en: 'Statistics' },
+  footer_report:     { it: 'Report',             en: 'Reports' },
+  footer_resources:  { it: 'Risorse',            en: 'Resources' },
+  footer_guide:      { it: 'Guida',              en: 'Guide' },
+  footer_docs:       { it: 'Documentazione',     en: 'Documentation' },
+  footer_about:      { it: 'Chi siamo',          en: 'About' },
+  footer_contacts:   { it: 'Contatti',           en: 'Contacts' },
+  footer_bug:        { it: 'Segnala un bug',     en: 'Report a bug' },
+  footer_discuss:    { it: 'Discussioni',        en: 'Discussions' },
 
   // Download page
   dl_desc:           {
