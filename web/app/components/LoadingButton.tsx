@@ -46,6 +46,7 @@ const SPINNER_SIZE: Record<ButtonSize, number> = { sm: 10, md: 12, lg: 14 }
 function Spinner({ size }: { size: number }) {
   return (
     <span
+      aria-hidden="true"
       className="inline-block rounded-full border-2 flex-shrink-0 animate-spin"
       style={{
         width: size, height: size,
@@ -78,6 +79,7 @@ export function Button({
       <button
         {...rest}
         disabled={isDisabled}
+        aria-busy={loading || undefined}
         className={`inline-flex items-center justify-center font-semibold tracking-wide leading-none transition-all cursor-pointer select-none ${SIZE_CLS[size]} ${VARIANT_HOVER[variant]} ${fullWidth ? 'w-full' : ''} ${className}`}
         style={{ ...VARIANT_STYLE[variant], ...style }}
       >
