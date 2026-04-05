@@ -114,7 +114,7 @@ export default function SecretsPage() {
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {secrets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <span className="text-4xl">🔐</span>
+              <span className="text-4xl" aria-hidden="true">🔐</span>
               <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessun secret</p>
               <p className="text-[10px] text-[var(--color-dim)]">Salva qui le tue API key e token cifrati.</p>
             </div>
