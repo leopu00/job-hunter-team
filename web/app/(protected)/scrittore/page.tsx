@@ -224,7 +224,7 @@ export default function ScrittorePage() {
       <div className="grid sm:grid-cols-2 gap-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>
 
         {/* Coda scored */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">
             In Coda — Scored (top 15)
           </h3>
@@ -238,7 +238,7 @@ export default function ScrittorePage() {
         </div>
 
         {/* In lavorazione */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-yellow)' }}>
             In Lavorazione
           </h3>
@@ -253,7 +253,7 @@ export default function ScrittorePage() {
       </div>
 
       {/* Ultimi completati */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
         <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-green)' }}>
           Ultimi 10 Completati
         </h3>
