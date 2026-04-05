@@ -53,10 +53,11 @@ export function EmptyState({
   const accentColor   = variant === 'error' ? 'var(--color-red)' : variant === 'empty' ? 'var(--color-blue)' : 'var(--color-green)'
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-4 text-center ${cfg.py} ${className ?? ''}`}>
+    <div className={`flex flex-col items-center justify-center gap-4 text-center ${cfg.py} ${className ?? ''}`}
+      {...(variant === 'error' ? { role: 'alert' as const } : {})}>
 
       {/* Icon */}
-      <div className={`${cfg.icon} select-none`} style={{ opacity: 0.45, lineHeight: 1 }}>
+      <div className={`${cfg.icon} select-none`} aria-hidden="true" style={{ opacity: 0.45, lineHeight: 1 }}>
         {resolvedIcon}
       </div>
 
