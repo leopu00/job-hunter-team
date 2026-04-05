@@ -35,8 +35,8 @@ export default async function ScorerPage() {
           { label: 'Score medio', val: globalAvg, color: globalAvg >= 70 ? 'var(--color-green)' : globalAvg >= 40 ? 'var(--color-yellow)' : 'var(--color-orange)' },
           { label: 'Alta (≥70)', val: stats.reduce((a, s) => a + s.high, 0), color: 'var(--color-green)' },
           { label: 'Bassa (<40)', val: stats.reduce((a, s) => a + s.low, 0), color: 'var(--color-red)' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, idx) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${idx * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
@@ -56,7 +56,7 @@ export default async function ScorerPage() {
           const color = colors[i % colors.length]
           const avgColor = s.avgScore >= 70 ? 'var(--color-green)' : s.avgScore >= 40 ? 'var(--color-yellow)' : 'var(--color-orange)'
           return (
-            <div key={s.scorer} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+            <div key={s.scorer} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <span className="text-[13px] font-bold" style={{ color }}>{s.scorer}</span>
