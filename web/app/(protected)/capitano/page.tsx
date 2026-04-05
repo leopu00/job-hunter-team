@@ -167,7 +167,7 @@ export default function CapitanoPage() {
           </div>
         </div>
 
-        <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
+        <div className="px-4 py-4 overflow-auto" role="log" aria-live="polite" aria-label="Messaggi chat" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="text-3xl mb-3 opacity-30" aria-hidden="true">👨‍✈️</div>
