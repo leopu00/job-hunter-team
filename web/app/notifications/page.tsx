@@ -43,15 +43,15 @@ function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => v
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[9px] text-[var(--color-dim)]">{ageLabel}</span>
         {!n.read && <Btn label="letto" color="var(--color-green)" onClick={() => onRead(n.id)} />}
-        <Btn label="×" color="var(--color-red)" onClick={() => onDelete(n.id)} />
+        <Btn label="×" color="var(--color-red)" onClick={() => onDelete(n.id)} ariaLabel="Elimina notifica" />
       </div>
     </div>
   )
 }
 
-function Btn({ label, color, onClick }: { label: string; color: string; onClick: () => void }) {
+function Btn({ label, color, onClick, ariaLabel }: { label: string; color: string; onClick: () => void; ariaLabel?: string }) {
   return (
-    <button onClick={onClick} className="text-[10px] font-bold transition-colors cursor-pointer"
+    <button onClick={onClick} aria-label={ariaLabel} className="text-[10px] font-bold transition-colors cursor-pointer"
       style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
       onMouseEnter={e => e.currentTarget.style.color = color}
       onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>{label}</button>
