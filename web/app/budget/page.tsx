@@ -94,7 +94,9 @@ export default function BudgetPage() {
 
           {/* Daily bar chart */}
           {barData.length > 0 && (
-            <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+            <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
               <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Peak usage giornaliero</p>
               <BarChart data={barData} height={120} color={usageColor} />
             </div>
@@ -103,11 +105,15 @@ export default function BudgetPage() {
           {/* Velocity line chart */}
           {velData.length > 1 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+              <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                 <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Velocità (ultimi 20 tick)</p>
                 <LineChart data={velData} height={100} color="var(--color-blue)" showLabels={false} />
               </div>
-              <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+              <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                 <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Usage (ultimi 20 tick)</p>
                 <LineChart data={usageData} height={100} color={usageColor} showLabels={false} />
               </div>
