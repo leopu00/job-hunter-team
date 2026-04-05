@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 
+export const dynamic = 'force-dynamic'
+
 const STATE_PATH = path.join(homedir(), '.jht', 'migrations.json');
 const CONFIG_PATH = path.join(homedir(), '.jht', 'config.json');
 

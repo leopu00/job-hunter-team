@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import { initDb } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   const wsPath = body.path as string | undefined

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 // Manifest statico degli schema Zod registrati in shared/validators/
 const VALIDATORS = [
   {

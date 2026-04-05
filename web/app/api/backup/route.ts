@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 
+export const dynamic = 'force-dynamic'
+
 const BACKUP_DIR = path.join(homedir(), '.jht', 'backups');
 const CATALOG_PATH = path.join(BACKUP_DIR, 'catalog.json');
 const JHT_DIR = path.join(homedir(), '.jht');

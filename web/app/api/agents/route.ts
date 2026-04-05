@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 
+export const dynamic = 'force-dynamic'
+
 // Agenti JHT con le relative sessioni tmux
 const AGENTS = [
   { id: 'alfa',       name: 'Alfa (Capitano)',  session: 'ALFA' },

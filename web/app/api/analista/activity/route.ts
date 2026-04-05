@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 function categorizeExclusion(notes: string | null): string {
   const n = (notes || '').toLowerCase()
   const m = n.match(/esclus[ao]:\s*\[(\w+)\]/i)
