@@ -9,11 +9,11 @@ export default function NotFound() {
 
         {/* Codice errore */}
         <div className="mb-6">
-          <p className="text-[120px] font-bold leading-none tracking-tighter" style={{ color: 'var(--color-border)', fontVariantNumeric: 'tabular-nums' }}>
+          <h1 className="text-[120px] font-bold leading-none tracking-tighter" style={{ color: 'var(--color-border)', fontVariantNumeric: 'tabular-nums' }}>
             404
-          </p>
+          </h1>
           <div className="mt-[-16px] flex items-center justify-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-red)' }}>pagina non trovata</span>
           </div>
         </div>

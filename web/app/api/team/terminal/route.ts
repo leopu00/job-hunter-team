@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_SESSION = /^[A-Z][A-Z0-9_-]*$/i
 
 export async function GET(req: NextRequest) {

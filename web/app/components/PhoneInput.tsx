@@ -125,6 +125,7 @@ export function PhoneInput({
           style={{ color: 'var(--color-bright)', border: 'none' }}
           aria-label="Numero di telefono"
           aria-invalid={!!error}
+          autoComplete="tel"
           title={full && isValid(value) ? `Numero completo: ${full}` : undefined}
         />
 
@@ -146,7 +147,7 @@ export function PhoneInput({
             <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>
               <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Cerca paese..." className="w-full bg-transparent outline-none text-[10px] font-mono"
-                style={{ color: 'var(--color-bright)', border: 'none' }} />
+                style={{ color: 'var(--color-bright)', border: 'none' }} autoComplete="off" />
             </div>
           )}
           <div style={{ maxHeight: 200, overflowY: 'auto' }}>

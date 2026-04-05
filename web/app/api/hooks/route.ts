@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const CONFIG_PATH   = path.join(os.homedir(), '.jht', 'jht.config.json')
 const HOOK_MD       = 'HOOK.md'
 const HANDLER_FILES = ['handler.ts', 'handler.js', 'handler.mjs']

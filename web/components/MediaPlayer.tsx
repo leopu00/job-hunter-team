@@ -117,14 +117,14 @@ export default function MediaPlayer({ src, type = 'video', autoPlay = false, pos
 
   if (isAudio) return (
     <div style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <audio ref={mediaRef} src={src} autoPlay={autoPlay} style={{ display: 'none' }} />
+      <audio ref={mediaRef} src={src} autoPlay={autoPlay} aria-label="Lettore audio" style={{ display: 'none' }} />
       {controls}
     </div>
   )
 
   return (
     <div ref={containerRef} className={className} onMouseMove={resetHide} onClick={togglePlay} style={{ position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden', cursor: 'pointer' }}>
-      <video ref={mediaRef} src={src} poster={poster} autoPlay={autoPlay} style={{ width: '100%', display: 'block' }} />
+      <video ref={mediaRef} src={src} poster={poster} autoPlay={autoPlay} aria-label="Lettore video" style={{ width: '100%', display: 'block' }} />
       <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, opacity: showControls ? 1 : 0, transition: 'opacity 0.3s ease' }}>
         {controls}
       </div>

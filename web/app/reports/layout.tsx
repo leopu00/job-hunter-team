@@ -8,6 +8,11 @@ export const metadata: Metadata = {
     title: 'Report | Job Hunter Team',
     description: 'Report candidature Job Hunter Team: KPI, andamento mensile, tempi per fase e top aziende.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Report | Job Hunter Team',
+    description: 'Report candidature Job Hunter Team: KPI, andamento mensile, tempi per fase e top aziende.',
+  },
 }
 
 export default function ReportsLayout({ children }: { children: React.ReactNode }) {

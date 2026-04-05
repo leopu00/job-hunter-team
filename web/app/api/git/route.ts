@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { execSync } from 'node:child_process';
 
+export const dynamic = 'force-dynamic'
+
 interface BranchInfo {
   name: string;
   lastCommit: string;

@@ -47,8 +47,8 @@ export function FormField({ label, help, error, required, disabled, htmlFor, cla
       )}
       <div style={{ opacity: disabled ? 0.6 : 1 }}>{children}</div>
       {error && (
-        <p className="text-[9px] flex items-center gap-1" style={{ color: 'var(--color-red)' }}>
-          <span>⚠</span>{error}
+        <p className="text-[9px] flex items-center gap-1" role="alert" style={{ color: 'var(--color-red)' }}>
+          <span aria-hidden="true">⚠</span>{error}
         </p>
       )}
       {!error && help && (

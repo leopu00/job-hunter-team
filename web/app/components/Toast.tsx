@@ -43,7 +43,7 @@ function ToastItem({ t, onRemove }: { t: Toast; onRemove: (id: string) => void }
       }}>
       {/* Content */}
       <div className="flex items-start gap-3 px-4 py-3">
-        <span className="flex-shrink-0 font-bold text-[13px]" style={{ color: cfg.color }}>{cfg.icon}</span>
+        <span className="flex-shrink-0 font-bold text-[13px]" aria-hidden="true" style={{ color: cfg.color }}>{cfg.icon}</span>
         <span className="flex-1" style={{ color: 'var(--color-bright)' }}>{t.message}</span>
         <button onClick={dismiss} aria-label="Chiudi notifica"
           className="flex-shrink-0 text-[14px] leading-none cursor-pointer"

@@ -60,10 +60,15 @@ export const metadata: Metadata = {
     title: 'Job Hunter Team',
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
   },
+  alternates: {
+    canonical: '/',
+    languages: { 'it-IT': '/', 'en-US': '/' },
+  },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
   robots: { index: true, follow: true },
   manifest: '/manifest.json',
   other: {
+    'theme-color': '#00e87a',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'black-translucent',
     'format-detection': 'telephone=no',
@@ -86,6 +91,9 @@ export default function RootLayout({
             <p>Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser per continuare.</p>
           </div>
         </noscript>
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-semibold" style={{ background: 'var(--color-green)', color: 'var(--color-void)' }}>
+          Vai al contenuto principale
+        </a>
         <ThemeProvider>
           <AccessibilityProvider>
           <ToastProvider>

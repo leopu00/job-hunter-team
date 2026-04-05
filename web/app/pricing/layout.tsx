@@ -8,6 +8,11 @@ export const metadata: Metadata = {
     title: 'Pricing | Job Hunter Team',
     description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
   },
+  twitter: {
+    card: 'summary',
+    title: 'Pricing | Job Hunter Team',
+    description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
+  },
 }
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'

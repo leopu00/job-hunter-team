@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const DATA_PATH = path.join(os.homedir(), '.jht', 'sentinel-data.jsonl')
 
 type Point = { ts: string; usage: number; velocity: number; velocity_smooth: number; velocity_ideal: number; projection: number; status: string; throttle?: number }
