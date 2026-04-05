@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
@@ -241,10 +242,13 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
     .map(s => `${s.color} ${s.offset}% ${s.offset + s.pct}%`)
     .join(', ')
 
+  const ariaLabel = segments.map(s => `${s.label}: ${s.value} (${Math.round(s.pct)}%)`).join(', ')
+
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center gap-6" role="img" aria-label={ariaLabel}>
       <div
         className="w-28 h-28 rounded-full flex-shrink-0 flex items-center justify-center"
+        aria-hidden="true"
         style={{
           background: `conic-gradient(${gradientStops})`,
         }}
@@ -361,6 +365,13 @@ function StatsContent() {
     <>
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-6 justify-center">
+          <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">{t.title}</span>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
@@ -395,6 +406,7 @@ function StatsContent() {
                   setShared(true); setTimeout(() => setShared(false), 2000)
                 })
               }}
+              aria-live="polite"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-semibold tracking-wide transition-all hover:opacity-80"
               style={{
                 background: shared ? 'rgba(0,232,122,0.1)' : 'transparent',
@@ -410,9 +422,9 @@ function StatsContent() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex justify-center py-20">
+          <div className="flex justify-center py-20" role="status" aria-live="polite">
             <div className="flex items-center gap-3">
-              <div className="flex gap-1">
+              <div className="flex gap-1" aria-hidden="true">
                 {[0, 1, 2].map(i => (
                   <span key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--color-green)', animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }} />
                 ))}
@@ -424,8 +436,8 @@ function StatsContent() {
 
         {/* Error */}
         {error && (
-          <div className="flex flex-col items-center py-20 gap-4">
-            <span className="text-[var(--color-red)] text-2xl">!</span>
+          <div className="flex flex-col items-center py-20 gap-4" role="alert">
+            <span className="text-[var(--color-red)] text-2xl" aria-hidden="true">!</span>
             <p className="text-[12px] text-[var(--color-muted)]">{t.error}</p>
             <button
               onClick={fetchData}
