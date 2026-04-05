@@ -87,7 +87,7 @@ export default function DatabasePage() {
             <div className="px-5 pb-3 overflow-x-auto">
               <p className="text-[9px] text-[var(--color-dim)] mb-2">{result.count} risultati</p>
               <table className="w-full text-[9px] font-mono">
-                <thead><tr>{result.columns.map(c => <th key={c} className="text-left px-2 py-1 text-[var(--color-dim)] border-b border-[var(--color-border)]">{c}</th>)}</tr></thead>
+                <thead><tr>{result.columns.map(c => <th key={c} scope="col" className="text-left px-2 py-1 text-[var(--color-dim)] border-b border-[var(--color-border)]">{c}</th>)}</tr></thead>
                 <tbody>{result.rows.map((r, i) => (
                   <tr key={i} className="hover:bg-[var(--color-row)]">{result.columns.map(c => <td key={c} className="px-2 py-1 text-[var(--color-muted)] border-b border-[var(--color-border)] max-w-[200px] truncate">{String(r[c] ?? '')}</td>)}</tr>
                 ))}</tbody>

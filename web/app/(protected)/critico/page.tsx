@@ -218,7 +218,7 @@ export default function CriticoPage() {
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['#', 'Posizione', 'Azienda', 'Scrittore', 'Scritto il'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
+                  <th key={h} scope="col" className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
                     style={{ color: 'var(--color-dim)' }}>
                     {h}
                   </th>
@@ -273,7 +273,7 @@ export default function CriticoPage() {
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['Posizione', 'Azienda', 'Verdetto', 'Voto', 'Round', 'Revisore', 'Data review'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
+                  <th key={h} scope="col" className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
                     style={{ color: 'var(--color-dim)' }}>
                     {h}
                   </th>
