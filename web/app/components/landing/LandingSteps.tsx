@@ -12,7 +12,7 @@ export default function LandingSteps() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="how" className="px-6 py-24 relative">
+    <section id="how" aria-label="Come funziona" className="px-6 py-24 relative">
       {/* Divider line */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24" aria-hidden="true" style={{ background: 'linear-gradient(180deg, transparent, var(--color-border))' }} />
 

@@ -15,7 +15,7 @@ export default function LandingFeatures() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="features" className="px-6 py-24 relative">
+    <section id="features" aria-label="Funzionalità" className="px-6 py-24 relative">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           <span className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-3 block">
