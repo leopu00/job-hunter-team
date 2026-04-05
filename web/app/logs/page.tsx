@@ -143,7 +143,7 @@ export default function LogsPage() {
           {subsystems.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="cerca..."
-          className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)] w-40" />
+          aria-label="Cerca nei log" className="text-[11px] px-2 py-1 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)] w-40" />
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
