@@ -102,7 +102,7 @@ function FileItem({
     >
       {/* Thumbnail o icona */}
       {img && file.url
-        ? <img src={file.url} alt={file.name} style={thumbStyle} />
+        ? <img src={file.url} alt={file.name} style={thumbStyle} loading="lazy" />
         : <div style={iconStyle}>{getIcon(file.name)}</div>
       }
 
