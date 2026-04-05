@@ -22,7 +22,7 @@ const PRIORITY_COLORS: Record<JobPriority, string> = {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="flex-1 min-w-[100px] p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+    <div className="flex-1 min-w-[100px] p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors">
       <div className="text-[20px] font-bold" style={{ color }}>{value}</div>
       <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest mt-0.5">{label}</div>
     </div>
@@ -126,12 +126,12 @@ export default function QueuePage() {
       </div>
 
       {tab === 'overview' ? (
-        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)] p-6 text-center">
+        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors p-6 text-center">
           <p className="text-[var(--color-muted)] text-[12px]">Seleziona un tab per vedere i dettagli dei job.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-2">Aggiornamento automatico ogni 5 secondi.</p>
         </div>
       ) : (
-        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
+        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors">
           {jobsForTab.length === 0
             ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun job.</p></div>
             : jobsForTab.map(j => <JobRow key={j.id} job={j} onRetry={tab === 'dead' ? retryJob : undefined} />)
