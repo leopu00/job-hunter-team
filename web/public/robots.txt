@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /team
+Disallow: /applications
+Disallow: /positions
+Disallow: /ready
+Disallow: /risposte
+Disallow: /crescita
+Disallow: /assistente
+Disallow: /capitano
+Disallow: /scout
+Disallow: /analista
+Disallow: /scorer
+Disallow: /scrittore
+Disallow: /critico
+Disallow: /sentinella
+Disallow: /setup
+
+Sitemap: https://jobhunterteam.ai/sitemap.xml
