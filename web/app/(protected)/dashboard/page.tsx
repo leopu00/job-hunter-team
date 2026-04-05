@@ -275,7 +275,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
 
         {/* Score distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <div className="flex items-center justify-between mb-4">
             <span className="section-label">Distribuzione Score</span>
             {scoreDist.avgScore != null && (
@@ -304,7 +304,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Source distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <div className="section-label mb-4">Fonti</div>
           <div className="space-y-3">
             {sourceDist.length === 0 ? (
