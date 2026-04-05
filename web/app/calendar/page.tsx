@@ -95,7 +95,7 @@ export default function CalendarPage() {
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">{selectedDay} {MONTHS[month]}</p>
           {dayEvents.length === 0 ? <p className="text-[10px] text-[var(--color-dim)]">Nessun evento per questo giorno.</p>
             : dayEvents.map(e => (
-              <div key={e.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+              <div key={e.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
                 <span className="w-2 h-2 rounded-full" style={{ background: TYPE_CLR[e.type] ?? 'var(--color-dim)' }} />
                 <span className="text-[10px] text-[var(--color-bright)] font-medium flex-1">{e.title}</span>
                 <span className="text-[9px] text-[var(--color-dim)]">{e.company}</span>

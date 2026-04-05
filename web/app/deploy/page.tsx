@@ -18,7 +18,7 @@ const STATUS_CFG: Record<ServiceStatus, { icon: string; color: string; label: st
 function ServiceRow({ svc }: { svc: ServiceHealth }) {
   const cfg = STATUS_CFG[svc.status]
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
       <span style={{ color: cfg.color, animation: svc.ok ? 'pulse-dot 3s ease-in-out infinite' : undefined }}>{cfg.icon}</span>
       <div className="flex-1 min-w-0">
         <span className="text-[12px] font-semibold" style={{ color: svc.ok ? 'var(--color-bright)' : cfg.color }}>{svc.name}</span>
