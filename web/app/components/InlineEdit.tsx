@@ -23,7 +23,7 @@ export interface InlineEditProps {
 // ── Spinner ────────────────────────────────────────────────────────────────
 const SPIN = `@keyframes ie-spin { to { transform: rotate(360deg) } }`
 const Spinner = () => (
-  <span style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
+  <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
     border: '2px solid var(--color-border)', borderTopColor: 'var(--color-green)',
     animation: 'ie-spin .7s linear infinite' }} />
 )
