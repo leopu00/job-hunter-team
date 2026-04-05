@@ -10,7 +10,7 @@ export default function LandingCTA() {
     <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
       <div
         className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
-        style={{ background: 'var(--color-panel)' }}
+        style={{ background: 'var(--color-panel)', animation: 'fade-in 0.5s ease both' }}
       >
         {/* Background glow */}
         <div
