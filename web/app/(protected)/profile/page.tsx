@@ -3,6 +3,7 @@ import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import type { CandidateProfile } from '@/lib/types'
 import ProfileCompanyClient from '@/components/ProfileCompanyClient'
+import ProfileStats from '@/components/ProfileStats'
 
 export default async function ProfileCompany() {
   let profile: CandidateProfile | null = null
@@ -65,6 +66,8 @@ export default async function ProfileCompany() {
           </p>
         )}
       </div>
+
+      <ProfileStats profile={profile} />
 
       {profile && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
