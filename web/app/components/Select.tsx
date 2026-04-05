@@ -86,6 +86,9 @@ export function Select({
 
       {/* Trigger */}
       <div onClick={() => !disabled && setOpen(v => !v)}
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer flex-wrap"
         style={{ background: 'var(--color-deep)', border: `1px solid ${open ? 'var(--color-blue)' : 'var(--color-border)'}`, minHeight: 36, opacity: disabled ? 0.5 : 1, transition: 'border-color 0.15s' }}>
 
@@ -121,7 +124,7 @@ export function Select({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute w-full top-full mt-1 rounded-lg z-50 overflow-hidden"
+        <div role="listbox" className="absolute w-full top-full mt-1 rounded-lg z-50 overflow-hidden"
           style={{ background: 'var(--color-deep)', border: '1px solid var(--color-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', maxHeight: 240, overflowY: 'auto', animation: 'sel-in 0.12s ease' }}>
 
           {/* Search */}
