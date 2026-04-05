@@ -119,7 +119,7 @@ export default function GatewayPage() {
         <div className="mb-6">
           <div className="section-label">Canali — {data.channels.filter(c => c.connected).length}/{data.channels.length} connessi</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {data.channels.map(ch => <ChannelCard key={ch.id} ch={ch} />)}
+            {data.channels.map((ch, i) => <div key={ch.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ChannelCard ch={ch} /></div>)}
           </div>
         </div>
 
@@ -140,8 +140,8 @@ export default function GatewayPage() {
               { label: 'Timeout richiesta', value: `${(data.config.requestTimeoutMs / 1000).toFixed(0)}s` },
               { label: 'Max queue', value: data.config.maxQueueSize },
               { label: 'Canali abilitati', value: data.config.channels.join(', ') },
-            ].map(({ label, value }) => (
-              <div key={label}>
+            ].map(({ label, value }, i) => (
+              <div key={label} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
                 <p className="text-[9px] text-[var(--color-dim)] mb-1">{label}</p>
                 <p className="text-[12px] font-mono font-semibold text-[var(--color-bright)]">{value}</p>
               </div>
