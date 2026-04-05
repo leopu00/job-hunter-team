@@ -93,7 +93,7 @@ export default function OverviewPage() {
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+          <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
           <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)]">sistema attivo</span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Job Hunter Team</h1>
