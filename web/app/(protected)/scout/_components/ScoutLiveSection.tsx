@@ -182,7 +182,7 @@ export default function ScoutLiveSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Coda lavoro */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-dim)]">
               Coda lavoro
@@ -202,7 +202,7 @@ export default function ScoutLiveSection() {
         </div>
 
         {/* Feed ultimi 10 trovati */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-dim)]">
               Ultime trovate
@@ -218,7 +218,7 @@ export default function ScoutLiveSection() {
       </div>
 
       {/* Sezione esclusioni */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: 'var(--color-red)' }}>
             Escluse oggi
