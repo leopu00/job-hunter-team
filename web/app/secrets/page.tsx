@@ -92,13 +92,13 @@ export default function SecretsPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]" style={{ animation: 'fade-in 0.2s ease both' }}>
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (es. OPENAI_KEY)" aria-label="Nome segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (es. OPENAI_KEY)" aria-label="Nome segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
               <select value={type} onChange={e => setType(e.target.value as SecretType)} aria-label="Tipo segreto" className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                 {(Object.keys(TYPE_LABEL) as SecretType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
             </div>
             <div className="flex gap-2">
-              <input type="password" value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Valore…" aria-label="Valore segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input type="password" value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Valore…" aria-label="Valore segreto" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
               <button onClick={create} disabled={!name.trim() || !value.trim() || creating}
                 className="px-5 py-2 rounded-lg text-[11px] font-bold flex-shrink-0"
                 style={{ background: name.trim() && value.trim() ? 'var(--color-green)' : 'var(--color-border)', color: name.trim() && value.trim() ? '#000' : 'var(--color-dim)', cursor: name.trim() && value.trim() ? 'pointer' : 'default' }}>
@@ -109,25 +109,25 @@ export default function SecretsPage() {
         </div>
       )}
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
       {!loading && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {secrets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <span className="text-4xl">🔐</span>
+              <span className="text-4xl" aria-hidden="true">🔐</span>
               <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessun secret</p>
               <p className="text-[10px] text-[var(--color-dim)]">Salva qui le tue API key e token cifrati.</p>
             </div>
           ) : secrets.map(s => (
             <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
-              <span className="text-base flex-shrink-0">{TYPE_ICON[s.type]}</span>
+              <span className="text-base flex-shrink-0" aria-hidden="true">{TYPE_ICON[s.type]}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-semibold text-[var(--color-bright)] truncate">{s.name}</p>
                 <p className="text-[10px] font-mono text-[var(--color-dim)] mt-0.5">{s.masked ? s.value : s.value} · {TYPE_LABEL[s.type]} · {fmtDate(s.createdAt)}</p>
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <button onClick={() => reveal(s.id)} aria-label={s.masked ? 'Mostra valore' : 'Nascondi valore'} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}>{s.masked ? '👁' : '🙈'}</button>
-                <button onClick={() => copy(s)} aria-label="Copia valore" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: copied === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: 'transparent' }}>{copied === s.id ? '✓' : '⎘'}</button>
+                <button onClick={() => reveal(s.id)} aria-label={s.masked ? 'Mostra valore' : 'Nascondi valore'} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}><span aria-hidden="true">{s.masked ? '👁' : '🙈'}</span></button>
+                <button onClick={() => copy(s)} aria-label="Copia valore" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: copied === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: 'transparent' }}><span aria-hidden="true">{copied === s.id ? '✓' : '⎘'}</span></button>
                 <button onClick={() => del(s.id)} aria-label="Elimina segreto" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
               </div>
             </div>

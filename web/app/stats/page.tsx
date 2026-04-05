@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -25,6 +27,7 @@ const T = {
     shared: 'Moduli condivisi',
     tests: 'Test E2E',
     langs: 'Lingue (IT/EN)',
+    loc: 'Linee di codice',
     // Sections
     weekly: 'Attivita settimanale',
     weekly_desc: 'Commit per settimana nelle ultime 12 settimane',
@@ -45,6 +48,24 @@ const T = {
     api: 'API Routes',
     shared_label: 'Shared',
     e2e: 'E2E Tests',
+    recent: 'Ultimi commit',
+    recent_desc: 'Le modifiche piu recenti al repository',
+    top_contributors: 'Top contributori',
+    top_contributors_desc: 'I contributori piu attivi per numero di commit',
+    commit_label: 'commit',
+    stack: 'Tech Stack',
+    stack_desc: 'Le tecnologie che alimentano Job Hunter Team',
+    heatmap: 'Attivita giornaliera',
+    heatmap_desc: 'Commit al giorno negli ultimi 90 giorni',
+    heatmap_aria: '{count} commit negli ultimi 90 giorni',
+    weekly_aria: '{count} commit in {weeks} settimane',
+    less: 'Meno',
+    more: 'Piu',
+    contribute_title: 'Vuoi contribuire?',
+    contribute_desc: 'Job Hunter Team e open source. Ogni contributo conta — bug report, feature, documentazione.',
+    contribute_cta: 'Vai al repository',
+    share: 'Condividi',
+    copied: 'Copiato!',
   },
   en: {
     title: 'Project Statistics',
@@ -61,6 +82,7 @@ const T = {
     shared: 'Shared modules',
     tests: 'E2E Tests',
     langs: 'Languages (IT/EN)',
+    loc: 'Lines of code',
     weekly: 'Weekly activity',
     weekly_desc: 'Commits per week over the last 12 weeks',
     types: 'Commit types',
@@ -79,30 +101,82 @@ const T = {
     api: 'API Routes',
     shared_label: 'Shared',
     e2e: 'E2E Tests',
+    recent: 'Recent commits',
+    recent_desc: 'Latest changes to the repository',
+    top_contributors: 'Top contributors',
+    top_contributors_desc: 'Most active contributors by commit count',
+    commit_label: 'commits',
+    stack: 'Tech Stack',
+    stack_desc: 'The technologies powering Job Hunter Team',
+    heatmap: 'Daily activity',
+    heatmap_desc: 'Commits per day over the last 90 days',
+    heatmap_aria: '{count} commits over the last 90 days',
+    weekly_aria: '{count} commits in {weeks} weeks',
+    less: 'Less',
+    more: 'More',
+    contribute_title: 'Want to contribute?',
+    contribute_desc: 'Job Hunter Team is open source. Every contribution counts — bug reports, features, documentation.',
+    contribute_cta: 'Go to repository',
+    share: 'Share',
+    copied: 'Copied!',
   },
 }
 
 type StatsData = {
+  source: 'git' | 'static'
   overview: {
     agents: number; languages: number; totalCommits: number; contributors: number
     devDays: number; apiRoutes: number; pages: number; sharedModules: number
-    e2eTests: number; firstCommit: string; lastCommit: string
+    e2eTests: number; linesOfCode: number; firstCommit: string; lastCommit: string
   }
   weeklyCommits: { week: string; count: number }[]
   typeCounts: { feat: number; fix: number; merge: number; test: number; other: number }
   areas: { web: number; api: number; shared: number; e2e: number }
+  recentCommits: { hash: string; date: string; message: string; author: string }[]
+  topContributors: { name: string; commits: number }[]
+  dailyCommits: { date: string; count: number }[]
 }
 
 /* ── Componenti grafici CSS puro ─────────────────────────────────── */
 
+function useCountUp(target: number, duration = 1200) {
+  const [count, setCount] = useState(0)
+  const ref = useRef<HTMLDivElement>(null)
+  const started = useRef(false)
+
+  useEffect(() => {
+    if (!ref.current || started.current) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || started.current) return
+      started.current = true
+      const start = performance.now()
+      const step = (now: number) => {
+        const progress = Math.min((now - start) / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        setCount(Math.round(eased * target))
+        if (progress < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }, { threshold: 0.3 })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [target, duration])
+
+  return { count, ref }
+}
+
 function StatCard({ value, label, accent }: { value: string | number; label: string; accent?: string }) {
+  const isNumber = typeof value === 'number'
+  const { count, ref } = useCountUp(isNumber ? value : 0)
+
   return (
     <div
+      ref={ref}
       className="p-5 rounded-xl border border-[var(--color-border)] transition-all hover:border-[var(--color-border-glow)]"
       style={{ background: 'var(--color-panel)' }}
     >
       <div className="text-2xl font-bold mb-1" style={{ color: accent ?? 'var(--color-green)' }}>
-        {value}
+        {isNumber ? count.toLocaleString() : value}
       </div>
       <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{label}</div>
     </div>
@@ -110,8 +184,9 @@ function StatCard({ value, label, accent }: { value: string | number; label: str
 }
 
 function BarChart({ data, maxVal }: { data: { label: string; value: number; color: string }[]; maxVal: number }) {
+  const ariaLabel = data.map(d => `${d.label}: ${d.value}`).join(', ')
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" role="img" aria-label={ariaLabel}>
       {data.map(d => (
         <div key={d.label} className="flex items-center gap-3">
           <span className="text-[10px] text-[var(--color-dim)] w-16 text-right flex-shrink-0">{d.label}</span>
@@ -132,21 +207,21 @@ function BarChart({ data, maxVal }: { data: { label: string; value: number; colo
   )
 }
 
-function WeeklyChart({ weeks }: { weeks: { week: string; count: number }[] }) {
+function WeeklyChart({ weeks, ariaLabel }: { weeks: { week: string; count: number }[]; ariaLabel: string }) {
   const max = Math.max(...weeks.map(w => w.count), 1)
 
   return (
-    <div className="flex items-end gap-1.5 h-32">
+    <div className="flex items-end gap-1.5 h-32" role="img" aria-label={ariaLabel}>
       {weeks.map(w => {
         const pct = (w.count / max) * 100
         const weekDate = new Date(w.week + 'T00:00:00')
         const label = `${weekDate.getDate()}/${weekDate.getMonth() + 1}`
         return (
-          <div key={w.week} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-            <span className="text-[9px] font-mono text-[var(--color-dim)]">{w.count}</span>
+          <div key={w.week} className="flex-1 flex flex-col items-center gap-1 min-w-0 group cursor-default" title={`${w.week}: ${w.count} commit`}>
+            <span className="text-[9px] font-mono text-[var(--color-dim)] group-hover:text-[var(--color-bright)] transition-colors">{w.count}</span>
             <div className="w-full rounded-t relative" style={{ height: `${Math.max(pct, 3)}%`, minHeight: '3px' }}>
               <div
-                className="absolute inset-0 rounded-t transition-all duration-500"
+                className="absolute inset-0 rounded-t transition-all duration-500 group-hover:opacity-100"
                 style={{ background: 'var(--color-green)', opacity: 0.3 + (pct / 100) * 0.7 }}
               />
             </div>
@@ -172,10 +247,13 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
     .map(s => `${s.color} ${s.offset}% ${s.offset + s.pct}%`)
     .join(', ')
 
+  const ariaLabel = segments.map(s => `${s.label}: ${s.value} (${Math.round(s.pct)}%)`).join(', ')
+
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center gap-6" role="img" aria-label={ariaLabel}>
       <div
         className="w-28 h-28 rounded-full flex-shrink-0 flex items-center justify-center"
+        aria-hidden="true"
         style={{
           background: `conic-gradient(${gradientStops})`,
         }}
@@ -200,6 +278,66 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   )
 }
 
+function Heatmap({ days, lessLabel, moreLabel, ariaLabel }: { days: { date: string; count: number }[]; lessLabel: string; moreLabel: string; ariaLabel: string }) {
+  const dayMap = new Map(days.map(d => [d.date, d.count]))
+  const max = Math.max(...days.map(d => d.count), 1)
+
+  // Build 90-day grid (13 weeks), starting from 90 days ago
+  const today = new Date()
+  const cells: { date: string; count: number; col: number; row: number }[] = []
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    const dayOfWeek = d.getDay()
+    const col = Math.floor((89 - i + (new Date(today.getTime() - 89 * 86400000).getDay())) / 7)
+    cells.push({ date: key, count: dayMap.get(key) ?? 0, col, row: dayOfWeek })
+  }
+
+  const totalCols = Math.max(...cells.map(c => c.col)) + 1
+
+  const getColor = (count: number) => {
+    if (count === 0) return 'var(--color-card)'
+    const intensity = count / max
+    if (intensity <= 0.25) return '#00e87a33'
+    if (intensity <= 0.5) return '#00e87a66'
+    if (intensity <= 0.75) return '#00e87aaa'
+    return '#00e87a'
+  }
+
+  const totalCommits = days.reduce((s, d) => s + d.count, 0)
+
+  return (
+    <div role="img" aria-label={ariaLabel}>
+      <div className="overflow-x-auto">
+        <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${totalCols}, 12px)`, gridTemplateRows: 'repeat(7, 12px)' }}>
+          {cells.map(cell => (
+            <div
+              key={cell.date}
+              className="rounded-sm transition-all hover:scale-150 hover:z-10 cursor-default"
+              style={{
+                gridColumn: cell.col + 1,
+                gridRow: cell.row + 1,
+                width: 12,
+                height: 12,
+                background: getColor(cell.count),
+              }}
+              title={`${cell.date}: ${cell.count} commit`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 mt-3 justify-end">
+        <span className="text-[9px] text-[var(--color-dim)]">{lessLabel}</span>
+        {[0, 0.25, 0.5, 0.75, 1].map((level, i) => (
+          <div key={i} className="w-3 h-3 rounded-sm" style={{ background: getColor(level * max) }} />
+        ))}
+        <span className="text-[9px] text-[var(--color-dim)]">{moreLabel}</span>
+      </div>
+    </div>
+  )
+}
+
 /* ── Pagina ───────────────────────────────────────────────────────── */
 
 function StatsContent() {
@@ -208,6 +346,7 @@ function StatsContent() {
   const [data, setData] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [shared, setShared] = useState(false)
 
   const fetchData = () => {
     setLoading(true)
@@ -231,12 +370,26 @@ function StatsContent() {
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name: t.title,
+        description: t.subtitle,
+        isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: 'https://jobhunterteam.ai' },
+      }) }} />
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-6 justify-center">
+          <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">{t.title}</span>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">open source</span>
           </div>
           <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">
@@ -245,13 +398,47 @@ function StatsContent() {
           <p className="text-[13px] text-[var(--color-muted)] max-w-lg mx-auto leading-relaxed">
             {t.subtitle}
           </p>
+          {data && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wider uppercase"
+              style={{
+                background: data.source === 'git' ? 'rgba(0,232,122,0.1)' : 'rgba(255,193,7,0.1)',
+                color: data.source === 'git' ? 'var(--color-green)' : 'var(--color-yellow)',
+                border: `1px solid ${data.source === 'git' ? 'rgba(0,232,122,0.2)' : 'rgba(255,193,7,0.2)'}`,
+              }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{
+                background: data.source === 'git' ? 'var(--color-green)' : 'var(--color-yellow)',
+                animation: data.source === 'git' ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+              }} />
+              {data.source === 'git' ? 'live' : 'snapshot'}
+            </div>
+          )}
+          <div className="mt-4">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                  setShared(true); setTimeout(() => setShared(false), 2000)
+                })
+              }}
+              aria-live="polite"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-semibold tracking-wide transition-all hover:opacity-80"
+              style={{
+                background: shared ? 'rgba(0,232,122,0.1)' : 'transparent',
+                color: shared ? 'var(--color-green)' : 'var(--color-dim)',
+                border: `1px solid ${shared ? 'var(--color-green)' : 'var(--color-border)'}`,
+                cursor: 'pointer',
+              }}
+            >
+              {shared ? t.copied : t.share}
+            </button>
+          </div>
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="flex justify-center py-20">
+          <div className="flex justify-center py-20" role="status" aria-live="polite">
             <div className="flex items-center gap-3">
-              <div className="flex gap-1">
+              <div className="flex gap-1" aria-hidden="true">
                 {[0, 1, 2].map(i => (
                   <span key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--color-green)', animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }} />
                 ))}
@@ -263,8 +450,8 @@ function StatsContent() {
 
         {/* Error */}
         {error && (
-          <div className="flex flex-col items-center py-20 gap-4">
-            <span className="text-[var(--color-red)] text-2xl">!</span>
+          <div className="flex flex-col items-center py-20 gap-4" role="alert">
+            <span className="text-[var(--color-red)] text-2xl" aria-hidden="true">!</span>
             <p className="text-[12px] text-[var(--color-muted)]">{t.error}</p>
             <button
               onClick={fetchData}
@@ -288,24 +475,34 @@ function StatsContent() {
               <StatCard value={data.overview.languages} label={t.langs} accent="var(--color-yellow)" />
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <StatCard value={data.overview.apiRoutes} label={t.api_routes} accent="var(--color-orange)" />
               <StatCard value={data.overview.pages} label={t.pages} accent="var(--color-blue)" />
               <StatCard value={data.overview.sharedModules} label={t.shared} accent="var(--color-purple)" />
               <StatCard value={data.overview.e2eTests} label={t.tests} accent="var(--color-yellow)" />
+              <StatCard value={data.overview.linesOfCode} label={t.loc} accent="var(--color-orange)" />
             </div>
 
             {/* Weekly activity chart */}
-            {data.weeklyCommits.length > 0 && (
+            <FadeInSection>{data.weeklyCommits.length > 0 && (
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.weekly}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.weekly_desc}</p>
-                <WeeklyChart weeks={data.weeklyCommits} />
+                <WeeklyChart weeks={data.weeklyCommits} ariaLabel={t.weekly_aria.replace('{count}', String(data.weeklyCommits.reduce((s, w) => s + w.count, 0))).replace('{weeks}', String(data.weeklyCommits.length))} />
               </section>
-            )}
+            )}</FadeInSection>
+
+            {/* Daily heatmap */}
+            <FadeInSection>{data.dailyCommits && data.dailyCommits.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.heatmap}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.heatmap_desc}</p>
+                <Heatmap days={data.dailyCommits} lessLabel={t.less} moreLabel={t.more} ariaLabel={t.heatmap_aria.replace('{count}', String(data.dailyCommits.reduce((s, d) => s + d.count, 0)))} />
+              </section>
+            )}</FadeInSection>
 
             {/* Two columns: commit types + code areas */}
-            <div className="grid md:grid-cols-2 gap-6">
+            <FadeInSection><div className="grid md:grid-cols-2 gap-6">
               {/* Commit types donut */}
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.types}</h2>
@@ -335,35 +532,164 @@ function StatsContent() {
                   ]}
                 />
               </section>
-            </div>
+            </div></FadeInSection>
+
+            {/* Recent commits */}
+            <FadeInSection delay={100}>{data.recentCommits && data.recentCommits.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.recent}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.recent_desc}</p>
+                <div className="flex flex-col gap-2">
+                  {data.recentCommits.map(c => {
+                    const typeMatch = c.message.match(/^(feat|fix|merge|test)/i)
+                    const typeColor = typeMatch
+                      ? { feat: '#00e676', fix: '#ffc107', merge: '#2196f3', test: '#b388ff' }[typeMatch[1].toLowerCase()] ?? '#607d8b'
+                      : '#607d8b'
+                    return (
+                      <div key={c.hash} className="flex items-start gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+                        <span className="text-[10px] font-mono flex-shrink-0 mt-0.5 px-1.5 py-0.5 rounded"
+                          style={{ background: 'var(--color-card)', color: 'var(--color-dim)' }}>
+                          {c.hash}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-[var(--color-muted)] truncate leading-relaxed">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 -mb-px" aria-hidden="true" style={{ background: typeColor }} />
+                            {c.message}
+                          </p>
+                          <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; <time dateTime={c.date}>{c.date}</time></p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}</FadeInSection>
+
+            {/* Top contributors */}
+            <FadeInSection delay={100}>{data.topContributors && data.topContributors.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.top_contributors}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.top_contributors_desc}</p>
+                <div className="flex flex-col gap-2">
+                  {data.topContributors.map((c, i) => {
+                    const maxCommits = data.topContributors[0]?.commits ?? 1
+                    const initials = c.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+                    const colors = ['#00e676', '#4d9fff', '#b388ff', '#ffc107', '#ff8c42', '#26c6da', '#f44336', '#607d8b', '#a855f7', '#ff4560']
+                    return (
+                      <div key={c.name} className="flex items-center gap-3 py-1.5">
+                        <span className="text-[10px] font-mono text-[var(--color-dim)] w-5 text-right flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold"
+                          style={{ background: `${colors[i % colors.length]}22`, color: colors[i % colors.length], border: `1px solid ${colors[i % colors.length]}44` }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-[var(--color-muted)] truncate">{c.name}</span>
+                            <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{c.commits} {t.commit_label}</span>
+                          </div>
+                          <div className="h-1 rounded-full mt-1" style={{ background: 'var(--color-card)' }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${(c.commits / maxCommits) * 100}%`, background: colors[i % colors.length] }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}</FadeInSection>
 
             {/* Timeline */}
-            <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+            <FadeInSection delay={100}><section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
               <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-4">{t.timeline}</h2>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
                   <div>
                     <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{t.first}</div>
-                    <div className="text-[13px] font-semibold text-[var(--color-bright)]">
+                    <time dateTime={data.overview.firstCommit} className="text-[13px] font-semibold text-[var(--color-bright)]">
                       {formatDate(data.overview.firstCommit)}
-                    </div>
+                    </time>
                   </div>
                 </div>
                 <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, var(--color-green), var(--color-border))' }} />
                 <div className="flex items-center gap-2">
                   <div>
                     <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider text-right">{t.last}</div>
-                    <div className="text-[13px] font-semibold text-[var(--color-bright)]">
+                    <time dateTime={data.overview.lastCommit} className="text-[13px] font-semibold text-[var(--color-bright)]">
                       {formatDate(data.overview.lastCommit)}
-                    </div>
+                    </time>
                   </div>
-                  <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+                  <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
                 </div>
               </div>
-            </section>
+            </section></FadeInSection>
+
+            {/* Tech Stack */}
+            <FadeInSection delay={100}><section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+              <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.stack}</h2>
+              <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.stack_desc}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {[
+                  { name: 'Next.js', cat: 'Framework', color: '#fff' },
+                  { name: 'React', cat: 'UI', color: '#61dafb' },
+                  { name: 'TypeScript', cat: 'Language', color: '#3178c6' },
+                  { name: 'Python', cat: 'Language', color: '#3776ab' },
+                  { name: 'Tailwind CSS', cat: 'Styling', color: '#06b6d4' },
+                  { name: 'Supabase', cat: 'Database', color: '#3ecf8e' },
+                  { name: 'Claude API', cat: 'AI', color: '#d97757' },
+                  { name: 'Zod', cat: 'Validation', color: '#3068b7' },
+                ].map(tech => (
+                  <div key={tech.name} className="flex items-center gap-2.5 p-3 rounded-lg border border-[var(--color-border)] transition-all hover:border-[var(--color-border-glow)]"
+                    style={{ background: 'var(--color-card)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" aria-hidden="true" style={{ background: tech.color }} />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-[var(--color-bright)] truncate">{tech.name}</div>
+                      <div className="text-[9px] text-[var(--color-dim)] uppercase tracking-wider">{tech.cat}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section></FadeInSection>
+            {/* Contribute CTA */}
+            <FadeInSection delay={100}><section className="text-center py-10 px-6 rounded-xl border border-[var(--color-border)] relative overflow-hidden"
+              style={{ background: 'var(--color-panel)' }}>
+              <div className="absolute inset-0 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(0,232,122,0.04) 0%, transparent 70%)' }} />
+              <div className="relative z-10">
+                <h2 className="text-lg font-bold text-[var(--color-white)] mb-2">{t.contribute_title}</h2>
+                <p className="text-[12px] text-[var(--color-muted)] max-w-md mx-auto mb-5 leading-relaxed">{t.contribute_desc}</p>
+                <a
+                  href="https://github.com/leopu00/job-hunter-team"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded text-[11px] font-bold tracking-wider no-underline transition-all hover:opacity-90"
+                  style={{ background: 'var(--color-green)', color: '#060608' }}
+                >
+                  {t.contribute_cta}
+                </a>
+              </div>
+            </section></FadeInSection>
           </div>
         )}
+
+        {/* Footer nav */}
+        <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between max-w-5xl mx-auto">
+          <Link href="/about"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+            &larr; {lang === 'en' ? 'About' : 'Chi siamo'}
+          </Link>
+          <Link href="/changelog"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+            Changelog &rarr;
+          </Link>
+        </div>
       </main>
       <LandingFooter />
       <ScrollToTop />

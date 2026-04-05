@@ -19,11 +19,11 @@ export default function Error({
 
         {/* Error code */}
         <div className="mb-6">
-          <p className="text-[80px] font-bold leading-none tracking-tighter" style={{ color: 'var(--color-border)', fontVariantNumeric: 'tabular-nums' }}>
+          <p aria-hidden="true" className="text-[80px] font-bold leading-none tracking-tighter" style={{ color: 'var(--color-border)', fontVariantNumeric: 'tabular-nums' }}>
             ERR
           </p>
           <div className="mt-[-12px] flex items-center justify-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-red)' }}>errore di runtime</span>
           </div>
         </div>

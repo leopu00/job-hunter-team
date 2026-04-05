@@ -10,6 +10,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const STATUS_FILE = path.join(os.homedir(), '.jht', 'telegram', 'bridge-status.json')
 
 interface BridgeStatusFile {

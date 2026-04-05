@@ -95,13 +95,13 @@ export default function PipelinesPage() {
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
 
       {!loading && data && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {data.pipelines.map((p, i) => (
             <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < data.pipelines.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
-              <span className="text-xl flex-shrink-0">{WORKFLOW_ICON[p.file] ?? '⚙️'}</span>
+              <span className="text-xl flex-shrink-0" aria-hidden="true">{WORKFLOW_ICON[p.file] ?? '⚙️'}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name}</span>

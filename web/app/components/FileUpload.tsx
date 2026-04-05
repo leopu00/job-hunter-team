@@ -139,7 +139,7 @@ export function FileUpload({ accept = [], maxSizeMb = 10, multiple = false, onUp
         aria-label="Seleziona file da caricare"
         className="flex flex-col items-center justify-center gap-1 py-6 rounded-xl cursor-pointer transition-colors"
         style={{ border: `1.5px dashed ${color}`, background: dragOver ? 'var(--color-blue)08' : 'transparent' }}>
-        <span className="text-[20px]">📂</span>
+        <span className="text-[20px]" aria-hidden="true">📂</span>
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
           Trascina qui o <span style={{ color: 'var(--color-blue)' }}>seleziona file</span>
         </p>

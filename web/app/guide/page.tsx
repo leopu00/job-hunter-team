@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { LandingI18nProvider } from '../components/landing/LandingI18n'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 type SectionId = 'install' | 'tui' | 'webapp'
 
@@ -24,12 +25,23 @@ function Code({ children }: { children: string }) {
   )
 }
 
-function H2({ children }: { children: string }) {
-  return <h2 className="text-[16px] font-bold text-[var(--color-white)] mt-8 mb-3">{children}</h2>
+function H2({ children, id }: { children: string; id?: string }) {
+  const anchor = id ?? children.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return (
+    <h2 id={anchor} className="text-[16px] font-bold text-[var(--color-white)] mt-8 mb-3 group scroll-mt-24">
+      {children}
+      <a href={`#${anchor}`} className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--color-dim)] no-underline" aria-label={`Link a ${children}`}>#</a>
+    </h2>
+  )
 }
 
 function H3({ children }: { children: string }) {
-  return <h3 className="text-[13px] font-semibold text-[var(--color-bright)] mt-5 mb-2">{children}</h3>
+  const anchor = children.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return (
+    <h3 id={anchor} className="text-[13px] font-semibold text-[var(--color-bright)] mt-5 mb-2 scroll-mt-24">
+      {children}
+    </h3>
+  )
 }
 
 function P({ children }: { children: React.ReactNode }) {
@@ -39,7 +51,7 @@ function P({ children }: { children: React.ReactNode }) {
 function Li({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2 text-[12px] text-[var(--color-muted)] leading-relaxed">
-      <span className="text-[var(--color-green)] mt-0.5 flex-shrink-0">&#x25B8;</span>
+      <span className="text-[var(--color-green)] mt-0.5 flex-shrink-0" aria-hidden="true">&#x25B8;</span>
       <span>{children}</span>
     </li>
   )
@@ -230,10 +242,24 @@ const CONTENT: Record<SectionId, React.ReactNode> = {
 }
 
 function GuideContent() {
+  const { t } = useLandingI18n()
   const [active, setActive] = useState<SectionId>('install')
+
+  const guideJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: 'Come installare Job Hunter Team',
+    description: 'Guida passo-passo per installare e configurare Job Hunter Team sul tuo computer.',
+    step: [
+      { '@type': 'HowToStep', name: 'Scarica il pacchetto', text: 'Vai alla pagina /download e scarica l\'archivio per il tuo sistema operativo.' },
+      { '@type': 'HowToStep', name: 'Estrai e avvia', text: 'Estrai l\'archivio e avvia lo script start.sh (macOS/Linux) o start.bat (Windows).' },
+      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Lo script installa le dipendenze e apre il browser su localhost:3000 con la dashboard.' },
+    ],
+  }
 
   return (
     <main style={{ position: 'relative', zIndex: 1 }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(guideJsonLd) }} />
       <LandingNav />
 
       <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
@@ -242,17 +268,21 @@ function GuideContent() {
           <div className="flex items-center gap-2 mb-3">
             <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
             <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] text-[var(--color-muted)]">Guida</span>
+            <span className="text-[10px] text-[var(--color-muted)]">{t('nav_guide')}</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Guida Utente</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{t('guide_title')}</h1>
           <p className="text-[var(--color-muted)] text-[12px] mt-2 leading-relaxed">
-            Come installare, configurare e usare Job Hunter Team &mdash; dalla TUI alla web app.
+            {t('guide_subtitle')}
           </p>
 
           {/* Tabs */}
-          <div className="flex gap-2 flex-wrap mt-5">
+          <div className="flex gap-2 flex-wrap mt-5" role="tablist" aria-label="Sezioni guida">
             {TABS.map(tab => (
               <button key={tab.id} onClick={() => setActive(tab.id)}
+                role="tab"
+                aria-selected={active === tab.id}
+                aria-controls={`guide-panel-${tab.id}`}
+                id={`guide-tab-${tab.id}`}
                 className="px-4 py-2 rounded-lg text-[11px] font-semibold cursor-pointer transition-all"
                 style={{
                   border: `1px solid ${active === tab.id ? 'var(--color-green)' : 'var(--color-border)'}`,
@@ -266,19 +296,25 @@ function GuideContent() {
         </div>
 
         {/* Content */}
-        <div style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
-          {CONTENT[active]}
-        </div>
+        <FadeInSection key={active}>
+          <div
+            role="tabpanel"
+            id={`guide-panel-${active}`}
+            aria-labelledby={`guide-tab-${active}`}
+          >
+            {CONTENT[active]}
+          </div>
+        </FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link href="/download"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; Download
+            &larr; {t('nav_download')}
           </Link>
           <Link href="/docs"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            Documentazione tecnica &rarr;
+            {t('guide_docs_link')} &rarr;
           </Link>
         </div>
       </div>

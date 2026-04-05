@@ -90,9 +90,9 @@ export default function OnboardingPage() {
       <p className="text-[10px] text-[var(--color-dim)] mb-4">Informazioni base per personalizzare l'esperienza.</p>
       <div className="flex flex-col gap-3">
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label>
-          <input autoComplete="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Il tuo nome" /></div>
+          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Il tuo nome" autoComplete="name" required /></div>
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">EMAIL</label>
-          <input type="email" autoComplete="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="email@esempio.com" /></div>
+          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="email@esempio.com" autoComplete="email" required /></div>
         <div className="p-4 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
           <p className="text-[10px] text-[var(--color-dim)]">Trascina il tuo CV qui o clicca per caricare</p>
           <p className="text-[8px] text-[var(--color-dim)] mt-1">PDF, DOC, DOCX (max 5MB)</p>
@@ -108,7 +108,7 @@ export default function OnboardingPage() {
           <input value={form.roles} onChange={e => setForm({ ...form, roles: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Frontend, Backend, Full Stack" /></div>
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">LOCALITÀ</label>
           <input value={form.locations} onChange={e => setForm({ ...form, locations: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Milano, Roma, Remoto" /></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RAL MINIMA</label>
             <input type="number" value={form.salaryMin} onChange={e => setForm({ ...form, salaryMin: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="30000" /></div>
           <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RAL MASSIMA</label>
@@ -126,9 +126,7 @@ export default function OnboardingPage() {
       <p className="text-[10px] text-[var(--color-dim)] mb-4">Come vuoi ricevere gli aggiornamenti?</p>
       <div className="flex flex-col gap-3">
         {([['emailCh', 'Email', 'Ricevi aggiornamenti via email'], ['telegram', 'Telegram', 'Notifiche istantanee via bot Telegram'], ['web', 'Web Push', 'Notifiche nel browser']] as const).map(([key, label, desc]) => (
-          <div key={key} className="flex items-center justify-between p-3 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
+          <div key={key} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
             <div><p className="text-[11px] text-[var(--color-bright)] font-medium">{label}</p><p className="text-[9px] text-[var(--color-dim)]">{desc}</p></div>
             <button onClick={() => setForm({ ...form, [key]: !form[key] })} className="text-[9px] font-bold px-3 py-1 rounded cursor-pointer"
               style={{ background: form[key] ? 'var(--color-green)' : 'var(--color-deep)', color: form[key] ? '#000' : 'var(--color-dim)' }}>{form[key] ? 'ON' : 'OFF'}</button>
@@ -143,7 +141,7 @@ export default function OnboardingPage() {
       <div className="flex flex-col gap-2">
         {[['Profilo', `${form.name || '—'} · ${form.email || '—'}`], ['Ruoli', form.roles || '—'], ['Località', form.locations || '—'], ['RAL', `${form.salaryMin || '?'}–${form.salaryMax || '?'}€`], ['Remote', form.remote ? 'Sì' : 'No'],
           ['Canali', [form.emailCh && 'Email', form.telegram && 'Telegram', form.web && 'Web'].filter(Boolean).join(', ') || '—']].map(([k, v]) => (
-          <div key={k} className="flex justify-between px-3 py-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ background: 'var(--color-row)' }}>
+          <div key={k} className="flex justify-between px-3 py-2 rounded" style={{ background: 'var(--color-row)' }}>
             <span className="text-[9px] text-[var(--color-dim)]">{k}</span>
             <span className="text-[9px] text-[var(--color-muted)] font-medium">{v}</span>
           </div>
@@ -154,7 +152,6 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-8" style={{ animation: 'fade-in 0.35s ease both' }}>
-      <h1 className="sr-only">Configurazione iniziale</h1>
       <Stepper current={step} completed={completed} />
       <div className="min-h-[320px]">{stepContent[step]}</div>
       {step > 0 && (

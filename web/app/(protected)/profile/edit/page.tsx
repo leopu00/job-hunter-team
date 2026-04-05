@@ -319,7 +319,7 @@ export default function ProfileEditPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-live="polite">
         <span className="text-[var(--color-dim)] text-[11px] tracking-widest uppercase animate-pulse">
           Caricamento...
         </span>
@@ -343,7 +343,7 @@ export default function ProfileEditPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} aria-busy={isPending} className="max-w-2xl space-y-8">
+      <form aria-label="Modifica profilo" onSubmit={handleSubmit} aria-busy={isPending} className="max-w-2xl space-y-8">
 
         {/* ── Info Base ── */}
         <FormSection title="Info Base">
@@ -733,7 +733,7 @@ export default function ProfileEditPage() {
 
         {/* ── Submit ── */}
         {error && (
-          <div className="px-4 py-3 bg-[var(--color-red)]/10 border border-[var(--color-red)]/30 rounded text-[11px] text-[var(--color-red)]">
+          <div className="px-4 py-3 bg-[var(--color-red)]/10 border border-[var(--color-red)]/30 rounded text-[11px] text-[var(--color-red)]" role="alert">
             Errore: {error}
           </div>
         )}

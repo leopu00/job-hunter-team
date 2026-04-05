@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 
+export const dynamic = 'force-dynamic'
+
 const PREFS_PATH = path.join(homedir(), '.jht', 'i18n-prefs.json');
 
 const SUPPORTED_LOCALES = [

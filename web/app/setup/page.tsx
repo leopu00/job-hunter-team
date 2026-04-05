@@ -95,7 +95,7 @@ export default function SetupPage() {
         {step === 'prereq' && (
           <Card title="Prerequisiti" sub="Verifica automatica ambiente">
             {loading
-              ? <p className="text-[11px] text-center py-4" style={{ color: 'var(--color-muted)' }}>Controllo in corso…</p>
+              ? <p className="text-[11px] text-center py-4" role="status" aria-live="polite" style={{ color: 'var(--color-muted)' }}>Controllo in corso…</p>
               : checks.map((c, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <span style={{ color: c.ok ? 'var(--color-green)' : 'var(--color-red)', fontSize: 13 }}>{c.ok ? '✓' : '✗'}</span>
@@ -147,7 +147,7 @@ export default function SetupPage() {
             <div className="flex flex-col gap-1">
               <label htmlFor="setup-workspace" className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Path</label>
               <input id="setup-workspace" type="text" value={form.workspace} placeholder="~/.jht (default)" onChange={e => set({ workspace: e.target.value })}
-                className={inp} style={{ color: 'var(--color-bright)' }} />
+                className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
               <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Lascia vuoto per il default ~/.jht</p>
             </div>
             <NavButtons onBack={back} onNext={() => { next(); save() }} nextLabel="Salva e verifica" />
@@ -159,14 +159,14 @@ export default function SetupPage() {
             <div className="flex flex-col items-center gap-3 py-4">
               {health === 'loading' && (
                 <>
-                  <div className="w-8 h-8 rounded-full border-2 animate-spin"
+                  <div className="w-8 h-8 rounded-full border-2 animate-spin" aria-hidden="true"
                     style={{ borderColor: 'var(--color-green)', borderTopColor: 'transparent' }} />
                   <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Salvataggio in corso…</p>
                 </>
               )}
               {health === 'ok' && (
                 <>
-                  <span className="text-3xl" style={{ color: 'var(--color-green)' }}>✓</span>
+                  <span className="text-3xl" aria-hidden="true" style={{ color: 'var(--color-green)' }}>✓</span>
                   <p className="text-[12px] font-semibold" style={{ color: 'var(--color-green)' }}>{healthMsg}</p>
                   <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Provider: {form.provider} · {form.workspace || '~/.jht'}</p>
                 </>

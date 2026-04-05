@@ -15,6 +15,7 @@ export default function LandingCTA() {
         {/* Background glow */}
         <div
           className="absolute inset-0 pointer-events-none"
+          aria-hidden="true"
           style={{
             background: 'radial-gradient(ellipse at center, rgba(0,232,122,0.06) 0%, transparent 70%)',
           }}
@@ -59,7 +60,7 @@ export function LandingFooter() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
               <span className="text-[11px] font-bold tracking-widest text-[var(--color-muted)]">JHT</span>
             </div>
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
@@ -86,6 +87,7 @@ export function LandingFooter() {
             <Link href="/docs" className={linkClass}>{t('footer_docs')}</Link>
             <Link href="/about" className={linkClass}>{t('footer_about')}</Link>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
+            <a href="/sitemap.xml" className={linkClass}>Sitemap</a>
           </div>
 
           {/* Contatti */}
@@ -93,14 +95,15 @@ export function LandingFooter() {
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_contacts')}</h4>
             <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_bug')}</a>
             <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_discuss')}</a>
-            <Link href="/privacy" className={linkClass}>Privacy Policy</Link>
+            <Link href="/privacy" className={linkClass}>{t('footer_privacy')}</Link>
+            <Link href="/terms" className={linkClass}>{t('footer_terms')}</Link>
           </div>
         </nav>
 
         {/* Bottom bar */}
         <div className="pt-6 border-t border-[var(--color-border)] flex flex-col md:flex-row items-center justify-between gap-3">
           <span className="text-[9px] text-[var(--color-dim)]">
-            &copy; {new Date().getFullYear()} Job Hunter Team &mdash; Open Source under MIT License
+            &copy; {new Date().getFullYear()} Job Hunter Team &mdash; {t('footer_copyright')}
           </span>
           <span className="text-[9px] text-[var(--color-dim)]">v1.0.0-beta</span>
         </div>

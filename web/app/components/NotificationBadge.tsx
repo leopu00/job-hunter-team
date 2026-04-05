@@ -102,7 +102,7 @@ export function IconBell({ count = 0, pulse = false, onClick, size = 20 }: IconB
         style={{ background: 'none', border: 'none', cursor: onClick ? 'pointer' : 'default',
           color: 'var(--color-muted)', padding: 4, lineHeight: 1, display: 'flex' }}
         aria-label={`Notifiche${count ? `: ${count}` : ''}`}>
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
