@@ -35,6 +35,7 @@ export default function LandingFeatures() {
             >
               <div
                 className="w-8 h-8 rounded flex items-center justify-center text-[16px] mb-4"
+                aria-hidden="true"
                 style={{ background: `${f.accent}15`, border: `1px solid ${f.accent}30` }}
               >
                 {f.icon}

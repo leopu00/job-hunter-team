@@ -14,7 +14,7 @@ export default function LandingSteps() {
   return (
     <section id="how" className="px-6 py-24 relative">
       {/* Divider line */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24" style={{ background: 'linear-gradient(180deg, transparent, var(--color-border))' }} />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24" aria-hidden="true" style={{ background: 'linear-gradient(180deg, transparent, var(--color-border))' }} />
 
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-16">
@@ -48,7 +48,7 @@ export default function LandingSteps() {
 
                 {/* Connector */}
                 {i < STEPS_META.length - 1 && (
-                  <div className="ml-6 mt-4 w-px h-6" style={{ background: 'var(--color-border)' }} />
+                  <div className="ml-6 mt-4 w-px h-6" aria-hidden="true" style={{ background: 'var(--color-border)' }} />
                 )}
               </div>
             </div>
