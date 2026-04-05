@@ -37,26 +37,33 @@ function useLang(): Lang {
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
+type CompletionCheck = { ok: boolean; label: Record<Lang, string> }
+
+function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
+  if (!p) return []
+  return [
+    { ok: !!p.name, label: { it: 'Nome', en: 'Name' } },
+    { ok: !!p.email, label: { it: 'Email', en: 'Email' } },
+    { ok: !!p.target_role, label: { it: 'Ruolo target', en: 'Target role' } },
+    { ok: !!p.location, label: { it: 'Location', en: 'Location' } },
+    { ok: p.experience_years != null, label: { it: 'Anni esperienza', en: 'Experience years' } },
+    { ok: !!(p.skills && Object.keys(p.skills).length > 0), label: { it: 'Skills', en: 'Skills' } },
+    { ok: !!(p.languages && p.languages.length > 0), label: { it: 'Lingue', en: 'Languages' } },
+    { ok: !!(p.job_titles && p.job_titles.length > 0), label: { it: 'Ruoli desiderati', en: 'Desired roles' } },
+    { ok: !!(p.location_preferences && p.location_preferences.length > 0), label: { it: 'Preferenze sede', en: 'Location prefs' } },
+    { ok: p.salary_target != null, label: { it: 'Salary target', en: 'Salary target' } },
+    { ok: !!(p.positioning?.contacts && Object.values(p.positioning.contacts).some(Boolean)), label: { it: 'Contatti', en: 'Contacts' } },
+    { ok: !!(p.positioning?.experience && (p.positioning.experience as unknown[]).length > 0), label: { it: 'Esperienza', en: 'Experience' } },
+    { ok: !!(p.positioning?.education && (p.positioning.education as unknown[]).length > 0), label: { it: 'Formazione', en: 'Education' } },
+    { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), label: { it: 'Obiettivi carriera', en: 'Career goals' } },
+    { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), label: { it: 'Punti di forza', en: 'Strengths' } },
+  ]
+}
+
 function calcCompletion(p: CandidateProfile | null): number {
   if (!p) return 0
-  const checks = [
-    !!p.name,
-    !!p.email,
-    !!p.target_role,
-    !!p.location,
-    p.experience_years != null,
-    p.skills && Object.keys(p.skills).length > 0,
-    p.languages && p.languages.length > 0,
-    p.job_titles && p.job_titles.length > 0,
-    p.location_preferences && p.location_preferences.length > 0,
-    p.salary_target != null,
-    p.positioning?.contacts && Object.values(p.positioning.contacts).some(Boolean),
-    p.positioning?.experience && (p.positioning.experience as unknown[]).length > 0,
-    p.positioning?.education && (p.positioning.education as unknown[]).length > 0,
-    p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean),
-    p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0,
-  ]
-  const filled = checks.filter(Boolean).length
+  const checks = calcCompletionChecks(p)
+  const filled = checks.filter(c => c.ok).length
   return Math.round((filled / checks.length) * 100)
 }
 
@@ -85,6 +92,7 @@ export default function ProfileStats({ profile }: Props) {
   const t = (k: string) => T[k]?.[lang] ?? k
 
   const completion = calcCompletion(profile)
+  const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -285,6 +293,26 @@ export default function ProfileStats({ profile }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ── Missing fields tips ──────────────────────────────── */}
+      {missingFields.length > 0 && missingFields.length <= 8 && (
+        <div className="mb-6 px-4 py-3 rounded-lg border border-[var(--color-yellow)]/20 bg-[var(--color-yellow)]/5">
+          <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-yellow)] mb-2">
+            {lang === 'it' ? `${missingFields.length} campi mancanti` : `${missingFields.length} missing fields`}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {missingFields.map((f, i) => (
+              <span
+                key={i}
+                className="text-[10px] px-2 py-0.5 rounded border font-semibold"
+                style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
+              >
+                {f.label[lang]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── CV Preview ──────────────────────────────────────────── */}
       {cvFiles.length > 0 && (
