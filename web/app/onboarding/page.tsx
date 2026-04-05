@@ -108,7 +108,7 @@ export default function OnboardingPage() {
           <input value={form.roles} onChange={e => setForm({ ...form, roles: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Frontend, Backend, Full Stack" /></div>
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">LOCALITÀ</label>
           <input value={form.locations} onChange={e => setForm({ ...form, locations: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Milano, Roma, Remoto" /></div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RAL MINIMA</label>
             <input type="number" value={form.salaryMin} onChange={e => setForm({ ...form, salaryMin: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="30000" /></div>
           <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RAL MASSIMA</label>
