@@ -117,6 +117,7 @@ export default function CommandPalette() {
             </svg>
             <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setSelected(0) }}
               onKeyDown={onKeyDown} placeholder="Cerca pagine, azioni, comandi…"
+              aria-label="Cerca comandi"
               className="flex-1 bg-transparent outline-none text-[13px]"
               style={{ color: 'var(--color-bright)' }} />
             <kbd className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-dim)' }}>esc</kbd>
