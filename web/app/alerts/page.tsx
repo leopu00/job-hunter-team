@@ -21,7 +21,7 @@ function AlertRow({ a, expanded, onToggle, onSwitch }: { a: Alert; expanded: boo
   const ch = CH_CLR[a.channel] ?? { color: 'var(--color-dim)', label: a.channel };
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: a.enabled ? 'var(--color-green)' : 'var(--color-dim)' }} />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-[var(--color-bright)] font-medium truncate">{a.name}</p>
