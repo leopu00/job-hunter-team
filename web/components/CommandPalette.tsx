@@ -112,11 +112,11 @@ export default function CommandPalette() {
         <div className="w-full max-w-xl rounded-xl overflow-hidden"
           style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', animation: 'fade-in 0.15s ease both' }}>
           <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="var(--color-dim)" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="var(--color-dim)" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
             </svg>
             <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setSelected(0) }}
-              onKeyDown={onKeyDown} placeholder="Cerca pagine, azioni, comandi…"
+              onKeyDown={onKeyDown} placeholder="Cerca pagine, azioni, comandi…" aria-label="Cerca comandi"
               className="flex-1 bg-transparent outline-none text-[13px]"
               style={{ color: 'var(--color-bright)' }} />
             <kbd className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-dim)' }}>esc</kbd>
