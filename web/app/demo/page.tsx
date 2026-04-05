@@ -53,11 +53,16 @@ function DemoContent() {
           </div>
 
           {/* Step selector (horizontal pills) */}
-          <div className="flex flex-wrap justify-center gap-2 mb-10">
+          <div className="flex flex-wrap justify-center gap-2 mb-10" role="tablist" aria-label="Passaggi demo">
             {STEPS.map((s, i) => (
               <button
                 key={i}
                 onClick={() => setActiveStep(i)}
+                role="tab"
+                aria-selected={i === activeStep}
+                aria-controls={`demo-panel-${i}`}
+                id={`demo-tab-${i}`}
+                aria-label={`Passo ${s.n}: ${t(s.titleKey as any)}`}
                 className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all"
                 style={{
                   background: i === activeStep ? 'var(--color-green)' : 'var(--color-panel)',
@@ -75,6 +80,9 @@ function DemoContent() {
           {/* Active step detail */}
           <div
             key={activeStep}
+            role="tabpanel"
+            id={`demo-panel-${activeStep}`}
+            aria-labelledby={`demo-tab-${activeStep}`}
             className="grid md:grid-cols-2 gap-8 items-start"
             style={{ animation: 'fade-in 0.3s ease both' }}
           >
@@ -103,6 +111,7 @@ function DemoContent() {
                 {activeStep > 0 && (
                   <button
                     onClick={() => setActiveStep(activeStep - 1)}
+                    aria-label={`Passo precedente: ${t(STEPS[activeStep - 1].titleKey as any)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'var(--color-panel)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
@@ -112,6 +121,7 @@ function DemoContent() {
                 {activeStep < STEPS.length - 1 ? (
                   <button
                     onClick={() => setActiveStep(activeStep + 1)}
+                    aria-label={`Passo successivo: ${t(STEPS[activeStep + 1].titleKey as any)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
