@@ -16,6 +16,7 @@ import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
 import JsonLd from './components/landing/JsonLd'
 import ScrollToTop from './components/landing/ScrollToTop'
+import CookieConsent from './components/landing/CookieConsent'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -93,6 +94,7 @@ function PageContent() {
         <FadeInSection delay={100}><LandingCTA /></FadeInSection>
         <LandingFooter />
         <ScrollToTop />
+        <CookieConsent />
       </main>
     </LandingI18nProvider>
   )
