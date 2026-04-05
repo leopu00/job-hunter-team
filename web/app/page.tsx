@@ -15,6 +15,7 @@ import LandingStats from './components/landing/LandingStats'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
 import JsonLd from './components/landing/JsonLd'
+import ScrollToTop from './components/landing/ScrollToTop'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -91,6 +92,7 @@ function PageContent() {
         <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
         <FadeInSection delay={100}><LandingCTA /></FadeInSection>
         <LandingFooter />
+        <ScrollToTop />
       </main>
     </LandingI18nProvider>
   )
