@@ -59,7 +59,7 @@ export default function SchedulerPage() {
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Coda prioritaria con dipendenze · {tasks.length} task</p>
       </div>
 
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
         <StatBox label="Pendenti" value={stats.pending} color="var(--color-yellow)" />
         <StatBox label="In esecuzione" value={stats.running} color="var(--color-blue)" />
         <StatBox label="Completati" value={stats.completed} color="var(--color-green)" />
