@@ -125,7 +125,7 @@ export default async function ReadyPage() {
           </div>
         ) : (
           <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-            <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+            <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Candidature pronte per invio">
               <thead>
                 <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
                   {['Titolo', 'Azienda', 'Location', 'Remote', 'Score'].map(h => (

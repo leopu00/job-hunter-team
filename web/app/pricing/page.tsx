@@ -327,7 +327,7 @@ function PricingContent() {
         <div className="mb-16">
           <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('features_title')}</h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+            <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }} aria-label="Confronto funzionalità piani">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-dim)', width: '40%' }} />
