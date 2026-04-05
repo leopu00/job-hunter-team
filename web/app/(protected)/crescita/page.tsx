@@ -95,7 +95,7 @@ export default async function CrescitaPage() {
 
       {/* ── Pipeline posizioni ───────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline Posizioni — {posTotal} totali</div>
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-10" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors mb-10" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
         <div className="space-y-3">
           {POS_PIPELINE.map(step => {
             const count = (posStats as any)[step.key] ?? 0
@@ -120,7 +120,7 @@ export default async function CrescitaPage() {
 
       {/* ── Pipeline candidature ─────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline Candidature — {appTotal} totali</div>
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.15s' }}>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors mb-8" style={{ animation: 'fade-in 0.35s ease both 0.15s' }}>
         <div className="space-y-3">
           {APP_PIPELINE.map(step => {
             const count = appStats[step.key] ?? 0
@@ -174,7 +174,7 @@ export default async function CrescitaPage() {
       {sourceDist.length > 0 && (
         <>
           <div className="section-label mb-4">Fonti — Top {sourceDist.length}</div>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-8">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors mb-8">
             <div className="space-y-3">
               {(() => {
                 const max = sourceDist[0]?.count ?? 1
@@ -198,7 +198,7 @@ export default async function CrescitaPage() {
 
       {/* ── Score medio ──────────────────────────────────────────── */}
       {scoreDist.avgScore != null && (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-8 flex items-center gap-6">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors mb-8 flex items-center gap-6">
           <div>
             <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-1">Score medio</div>
             <div
@@ -240,7 +240,7 @@ function ConversionCard({
   const pct = denominator > 0 ? (numerator / denominator) * 100 : 0
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
       <div className="text-[9.5px] font-semibold tracking-widest uppercase mb-3" style={{ color: 'var(--color-dim)' }}>{label}</div>
       <div className="text-4xl font-bold tracking-tight mb-3" style={{ color }}>{rate}%</div>
       <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: 'var(--color-border)' }}>
