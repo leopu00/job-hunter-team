@@ -342,7 +342,7 @@ function PricingContent() {
               </thead>
               <tbody>
                 {FEATURE_KEYS.map((fk, i) => (
-                  <tr key={fk} style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                  <tr key={fk} className="transition-colors hover:bg-[rgba(255,255,255,0.03)]" style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                     <td className="py-2.5 px-3 font-medium" style={{ color: 'var(--color-muted)' }}>{t(fk)}</td>
                     {PLANS.map((p) => {
                       const feat = p.features.find((f) => f.key === fk)
