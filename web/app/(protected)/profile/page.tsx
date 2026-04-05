@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
@@ -57,7 +58,12 @@ export default async function ProfilePage() {
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
+        <div className="flex items-center gap-2 mb-1">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Profilo</span>
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">
           Profilo Candidato
         </h1>
         {profile?.updated_at && (
@@ -68,6 +74,16 @@ export default async function ProfilePage() {
       </div>
 
       <ProfileStats profile={profile} />
+
+      {!profile && (
+        <div className="flex flex-col items-center justify-center py-12 mb-8 text-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-card)]">
+          <div className="text-3xl mb-3" style={{ opacity: 0.3 }}>👤</div>
+          <p className="text-[13px] text-[var(--color-muted)] font-semibold">Nessun profilo configurato</p>
+          <p className="text-[11px] text-[var(--color-dim)] mt-1 max-w-md">
+            Compila il form qui sotto oppure carica un CV per estrarre i dati automaticamente.
+          </p>
+        </div>
+      )}
 
       {profile && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
