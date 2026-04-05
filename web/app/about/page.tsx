@@ -37,11 +37,25 @@ function SectionLabel({ text }: { text: string }) {
 
 /* ── Contenuto pagina ─────────────────────────────────────────────── */
 
+function AboutJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Job Hunter Team',
+    url: 'https://jobhunterteam.ai',
+    description: 'Un team di agenti AI open-source che automatizza la ricerca di lavoro.',
+    foundingDate: '2025',
+    sameAs: ['https://github.com/leopu00/job-hunter-team'],
+  }
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+}
+
 function AboutContent() {
   const { t } = useLandingI18n()
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)' }}>
+      <AboutJsonLd />
       <LandingNav />
 
       <main className="max-w-4xl mx-auto px-6 pt-28 pb-16">
