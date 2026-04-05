@@ -23,7 +23,9 @@ export default function NavbarMobile() {
         onClick={() => setOpen(v => !v)}
         className="flex flex-col gap-1 p-1.5 rounded"
         style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
-        aria-label="Menu"
+        aria-label="Menu navigazione"
+        aria-expanded={open}
+        aria-controls="app-mobile-nav"
       >
         <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: open ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
         <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: open ? 0 : 1 }} />
@@ -32,6 +34,8 @@ export default function NavbarMobile() {
 
       {open && (
         <div
+          id="app-mobile-nav"
+          role="menu"
           className="absolute top-full left-0 right-0 flex flex-col border-b border-[var(--color-border)]"
           style={{ background: 'var(--color-panel)', animation: 'fade-in 0.15s ease both', zIndex: 50 }}
         >
