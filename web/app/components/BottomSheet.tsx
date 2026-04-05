@@ -125,6 +125,9 @@ export function BottomSheet({
       {/* Sheet */}
       <div
         ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || 'Bottom sheet'}
         className={`flex flex-col ${className}`}
         style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 41,
           height, maxHeight: '100vh',
