@@ -41,7 +41,7 @@ function AboutContent() {
   const { t } = useLandingI18n()
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)', animation: 'fade-in 0.35s ease both' }}>
       <LandingNav />
 
       <main className="max-w-4xl mx-auto px-6 pt-28 pb-16">
