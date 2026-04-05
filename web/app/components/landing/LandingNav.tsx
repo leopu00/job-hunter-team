@@ -56,6 +56,7 @@ function LangDropdown() {
           border: '1px solid var(--color-border)',
           cursor: 'pointer',
         }}
+        aria-label={`Lingua: ${current.label}`}
       >
         <current.Flag />
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
