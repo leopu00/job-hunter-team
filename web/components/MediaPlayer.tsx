@@ -106,11 +106,11 @@ export default function MediaPlayer({ src, type = 'video', autoPlay = false, pos
       </div>
       {/* Controls row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button onClick={togglePlay} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>{playing ? '⏸' : '▶'}</button>
+        <button aria-label={playing ? 'Pausa' : 'Riproduci'} onClick={togglePlay} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>{playing ? '⏸' : '▶'}</button>
         <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', minWidth: 70, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(current)} / {fmtTime(duration)}</span>
-        <button onClick={() => { const m = mediaRef.current; if (m) { m.muted = !m.muted; setMuted(m.muted) } }} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', padding: 0 }}>{muted ? '🔇' : volume > 0.5 ? '🔊' : '🔉'}</button>
+        <button aria-label={muted ? 'Attiva audio' : 'Disattiva audio'} onClick={() => { const m = mediaRef.current; if (m) { m.muted = !m.muted; setMuted(m.muted) } }} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', padding: 0 }}>{muted ? '🔇' : volume > 0.5 ? '🔊' : '🔉'}</button>
         <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => { const v = +e.target.value; const m = mediaRef.current; if (m) { m.volume = v; m.muted = v === 0 }; setVolume(v); setMuted(v === 0) }} style={{ width: 60, accentColor: 'var(--color-green)', cursor: 'pointer' }} />
-        {!isAudio && <button onClick={toggleFS} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', padding: 0 }}>{fullscreen ? '⊠' : '⛶'}</button>}
+        {!isAudio && <button aria-label={fullscreen ? 'Esci da schermo intero' : 'Schermo intero'} onClick={toggleFS} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', padding: 0 }}>{fullscreen ? '⊠' : '⛶'}</button>}
       </div>
     </div>
   )
