@@ -60,20 +60,23 @@ export default function CompaniesPage() {
   const [totalPositions, setTotalPositions] = useState(0)
   const [sectorFilter, setSectorFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
     if (sectorFilter !== 'all') params.set('sector', sectorFilter);
-    if (search) params.set('q', search);
+    if (debouncedSearch) params.set('q', debouncedSearch);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/companies${q}`).catch(() => null);
     if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setCompanies(data.companies ?? []); setTotal(data.total ?? 0); setSectors(data.sectors ?? []); setTotalPositions(data.totalPositions ?? 0);
     setLoading(false);
-  }, [sectorFilter, search])
+  }, [sectorFilter, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
