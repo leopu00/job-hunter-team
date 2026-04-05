@@ -1,0 +1,45 @@
+{
+  "name": "jht-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop launcher for Job Hunter Team",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ai.jobhunterteam.desktop",
+    "productName": "JHT Desktop",
+    "files": [
+      "main.js",
+      "preload.js",
+      "runtime.js",
+      "renderer/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
+  }
+}
