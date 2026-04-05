@@ -59,9 +59,9 @@ export default function CalendarPage() {
         <div className="flex items-center justify-between mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Calendario</h1>
           <div className="flex items-center gap-3">
-            <button onClick={prev} className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&larr;</button>
+            <button onClick={prev} aria-label="Mese precedente" className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&larr;</button>
             <span className="text-[12px] font-semibold text-[var(--color-bright)] w-36 text-center">{MONTHS[month]} {year}</span>
-            <button onClick={next} className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&rarr;</button>
+            <button onClick={next} aria-label="Mese successivo" className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&rarr;</button>
           </div>
           <p className="text-[var(--color-muted)] text-[11px]">{events.length} eventi</p>
         </div>
