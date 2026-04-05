@@ -130,7 +130,7 @@ export default function CredentialsPage() {
       {adding && <AddForm provider={adding.provider} type={adding.type} onDone={() => { setAdding(null); fetchProviders() }} />}
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
       ) : providers.length === 0 ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun provider disponibile.</p>
       ) : (
