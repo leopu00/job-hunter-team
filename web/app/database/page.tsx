@@ -79,6 +79,7 @@ export default function DatabasePage() {
           </div>
           <div className="px-5 py-3 flex gap-2 items-center">
             <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && runQuery()}
+              aria-label="Query SQL"
               className="flex-1 text-[10px] font-mono px-3 py-1.5 rounded" style={{ background: 'var(--color-deep)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
             <button onClick={runQuery} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Esegui</button>
           </div>
