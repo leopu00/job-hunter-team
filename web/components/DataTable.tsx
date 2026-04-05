@@ -15,6 +15,7 @@ export interface DataTableProps<T extends { id: string }> {
   rows: T[]
   /** Se presente sovrascrive il download CSV nativo */
   onExport?: (rows: T[]) => void
+  ariaLabel?: string
 }
 
 type SortDir = 'asc' | 'desc' | null
@@ -34,7 +35,7 @@ function downloadCSV(content: string) {
   a.click(); URL.revokeObjectURL(a.href)
 }
 
-export default function DataTable<T extends { id: string }>({ columns, rows, onExport }: DataTableProps<T>) {
+export default function DataTable<T extends { id: string }>({ columns, rows, onExport, ariaLabel }: DataTableProps<T>) {
   const [sortKey, setSortKey]     = useState<string | null>(null)
   const [sortDir, setSortDir]     = useState<SortDir>(null)
   const [selected, setSelected]   = useState<Set<string>>(new Set())
@@ -102,7 +103,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
 
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--color-border)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <table aria-label={ariaLabel} style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ background: 'var(--color-row)' }}>
               <th scope="col" style={{ ...th, width: 36 }}>
