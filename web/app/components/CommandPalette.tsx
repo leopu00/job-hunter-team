@@ -97,7 +97,7 @@ export function CommandPalette({ commands, open, onClose }: CommandPaletteProps)
 
         {/* Search */}
         <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--color-dim)', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--color-dim)', flexShrink: 0 }} aria-hidden="true">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setActive(0) }}
