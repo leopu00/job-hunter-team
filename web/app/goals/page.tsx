@@ -97,14 +97,14 @@ export default function GoalsPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end flex-wrap" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">OBIETTIVO</label>
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-20"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TARGET</label>
-            <input type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-24"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">UNITÀ</label>
-            <input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="es. candidature" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-32"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DEADLINE</label>
-            <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 flex-1"><label htmlFor="goal-title" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">OBIETTIVO</label>
+            <input id="goal-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-20"><label htmlFor="goal-target" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TARGET</label>
+            <input id="goal-target" type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-24"><label htmlFor="goal-unit" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">UNITÀ</label>
+            <input id="goal-unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="es. candidature" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-32"><label htmlFor="goal-deadline" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DEADLINE</label>
+            <input id="goal-deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <button onClick={add} disabled={!form.title.trim() || !form.target || !form.deadline} className="px-3 py-1.5 rounded text-[10px] font-bold"
             style={{ background: form.title.trim() && form.target && form.deadline ? 'var(--color-green)' : 'var(--color-border)', color: form.title.trim() && form.target && form.deadline ? '#000' : 'var(--color-dim)', cursor: form.title.trim() && form.target && form.deadline ? 'pointer' : 'default' }}>Crea</button>
         </div>
