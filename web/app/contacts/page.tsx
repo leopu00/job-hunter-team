@@ -91,17 +91,17 @@ export default function ContactsPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-32" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AZIENDA</label><input value={newCompany} onChange={e => setNewCompany(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-28" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RUOLO</label><input value={newRole} onChange={e => setNewRole(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-28" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">EMAIL</label><input value={newEmail} onChange={e => setNewEmail(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-36" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="contact-name" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input id="contact-name" value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-32" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="contact-company" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AZIENDA</label><input id="contact-company" value={newCompany} onChange={e => setNewCompany(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-28" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="contact-role" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RUOLO</label><input id="contact-role" value={newRole} onChange={e => setNewRole(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-28" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="contact-email" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">EMAIL</label><input id="contact-email" value={newEmail} onChange={e => setNewEmail(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-36" style={inputStyle} /></div>
           <button onClick={addContact} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Aggiungi</button>
         </div>
       )}
 
       <div className="mb-4">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca nome, azienda, ruolo..."
-          className="text-[10px] px-3 py-1.5 rounded w-56" style={inputStyle} />
+          aria-label="Cerca contatti" className="text-[10px] px-3 py-1.5 rounded w-56" style={inputStyle} />
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
