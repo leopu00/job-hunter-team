@@ -53,13 +53,15 @@ export default function BackupPage() {
   const [totalSize, setTotalSize] = useState(0)
   const [creating, setCreating] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchBackups = useCallback(async () => {
     const res = await fetch('/api/backup').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setBackups(data.backups ?? [])
     setTotalSize(data.totalSize ?? 0)
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchBackups() }, [fetchBackups])
@@ -131,7 +133,9 @@ export default function BackupPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {backups.length === 0
+        {loading
+          ? <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : backups.length === 0
           ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun backup trovato.</p></div>
           : backups.map(b => <BackupRow key={b.id} b={b} onRestore={restoreBackup} onDelete={deleteBackup} />)
         }

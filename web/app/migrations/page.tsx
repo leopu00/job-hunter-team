@@ -34,15 +34,17 @@ export default function MigrationsPage() {
   const [total, setTotal] = useState(0)
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchState = useCallback(async () => {
     const res = await fetch('/api/migrations').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setCurrentVersion(data.currentVersion ?? '0.0.0')
     setApplied(data.applied ?? [])
     setPending(data.pending ?? [])
     setTotal(data.totalRegistered ?? 0)
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchState() }, [fetchState])
@@ -119,7 +121,9 @@ export default function MigrationsPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {pending.length === 0 && applied.length === 0
+        {loading
+          ? <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : pending.length === 0 && applied.length === 0
           ? <div className="flex flex-col items-center py-16 text-center">
               <p className="text-[var(--color-dim)] text-[12px]">Nessuna migrazione registrata.</p>
               <p className="text-[var(--color-dim)] text-[10px] mt-1">Le migrazioni appariranno qui quando il database viene aggiornato.</p>

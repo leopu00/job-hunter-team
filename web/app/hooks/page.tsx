@@ -46,15 +46,17 @@ export default function HooksPage() {
   const [total, setTotal] = useState(0)
   const [hooksDir, setHooksDir] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const fetchHooks = useCallback(async () => {
     const res = await fetch('/api/hooks').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setHooks(data.hooks ?? [])
     setTotal(data.total ?? 0)
     setHooksDir(data.hooksDir ?? '')
     setError(data.error ?? '')
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchHooks() }, [fetchHooks])
@@ -79,7 +81,9 @@ export default function HooksPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {hooks.length === 0
+        {loading
+          ? <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : hooks.length === 0
           ? <div className="py-16 text-center">
               <p className="text-[var(--color-dim)] text-[12px]">Nessun hook trovato.</p>
               <p className="text-[var(--color-dim)] text-[10px] mt-1">Crea una cartella hooks/ nel workspace con HOOK.md e handler.ts</p>
