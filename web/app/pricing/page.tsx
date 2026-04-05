@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -267,7 +268,7 @@ function PricingContent() {
         </div>
 
         {/* Plan cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+        <FadeInSection><div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
           {PLANS.map((plan) => {
             const price = yearly ? plan.priceYearly : plan.priceMonthly
             return (
@@ -338,10 +339,10 @@ function PricingContent() {
               </div>
             )
           })}
-        </div>
+        </div></FadeInSection>
 
         {/* Feature comparison table */}
-        <div className="mb-16">
+        <FadeInSection delay={100}><div className="mb-16">
           <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('features_title')}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
@@ -375,10 +376,10 @@ function PricingContent() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div></FadeInSection>
 
         {/* FAQ */}
-        <div className="max-w-2xl mx-auto">
+        <FadeInSection delay={200}><div className="max-w-2xl mx-auto">
           <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('faq_title')}</h2>
           <div className="flex flex-col">
             {faqs.map((faq, i) => (
@@ -414,7 +415,7 @@ function PricingContent() {
               </div>
             ))}
           </div>
-        </div>
+        </div></FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
