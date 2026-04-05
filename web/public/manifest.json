@@ -30,6 +30,29 @@
     }
   ],
   "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Candidature",
+      "short_name": "Candidature",
+      "url": "/applications"
+    },
+    {
+      "name": "Posizioni",
+      "short_name": "Posizioni",
+      "url": "/positions"
+    },
+    {
+      "name": "Team",
+      "short_name": "Team",
+      "url": "/team"
+    }
+  ],
   "lang": "it",
   "dir": "ltr"
 }
