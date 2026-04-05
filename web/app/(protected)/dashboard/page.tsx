@@ -226,10 +226,11 @@ export default async function DashboardPage() {
           { label: 'CV scritti', val: stats.writing, color: 'var(--color-orange)' },
           { label: 'Pronte',     val: stats.ready,   color: '#7fffb2' },
           { label: 'Inviate',    val: stats.applied, color: 'var(--color-green)' },
-        ].map(({ label, val, color }) => (
+        ].map(({ label, val, color }, i) => (
           <div
             key={label}
             className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}
           >
             <div className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>
               {label}
