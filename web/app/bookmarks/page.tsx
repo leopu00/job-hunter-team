@@ -87,7 +87,7 @@ export default function BookmarksPage() {
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca titolo o azienda..."
-          className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] w-48" />
+          aria-label="Cerca preferiti" className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] w-48" />
         <div className="flex gap-1">
           {['all', ...allTags].map(t => (
             <button key={t} onClick={() => setFilterTag(t)}

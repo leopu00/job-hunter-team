@@ -85,7 +85,7 @@ export default function ValidatorsPage() {
             </h1>
           </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca schema…"
-            className="px-3 py-1.5 rounded text-[11px] outline-none font-mono"
+            aria-label="Cerca schema" className="px-3 py-1.5 rounded text-[11px] outline-none font-mono"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-bright)', minWidth: 200 }} />
         </div>
 
