@@ -223,9 +223,9 @@ export function NotificationCenter() {
                 return (
                   <div
                     key={n.id}
-                    role={n.read ? undefined : 'button'}
-                    tabIndex={n.read ? undefined : 0}
-                    aria-label={n.read ? undefined : `Segna come letta: ${n.title}`}
+                    role={n.read ? 'listitem' : 'button'}
+                    tabIndex={0}
+                    aria-label={n.read ? n.title : `Segna come letta: ${n.title}`}
                     onClick={() => !n.read && markRead(n.id)}
                     onKeyDown={e => { if (!n.read && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); markRead(n.id) } }}
                     className="flex gap-3 px-4 py-3 cursor-pointer transition-colors border-b"
