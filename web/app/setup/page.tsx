@@ -113,14 +113,14 @@ export default function SetupPage() {
           <Card title="Modello AI" sub="Provider e modello LLM">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Provider</label>
-              <select value={form.provider} onChange={e => set({ provider: e.target.value, model: '' })}
+              <select value={form.provider} onChange={e => set({ provider: e.target.value, model: '' })} aria-label="Provider AI"
                 className={inp} style={{ color: 'var(--color-bright)', cursor: 'pointer' }}>
                 {PROVIDERS.map(p => <option key={p.v} value={p.v}>{p.l}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Modello</label>
-              <select value={form.model} onChange={e => set({ model: e.target.value })}
+              <select value={form.model} onChange={e => set({ model: e.target.value })} aria-label="Modello AI"
                 className={inp} style={{ color: 'var(--color-bright)', cursor: 'pointer' }}>
                 <option value="">— automatico —</option>
                 {(MODELS[form.provider] ?? []).map(m => <option key={m} value={m}>{m}</option>)}

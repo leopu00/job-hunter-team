@@ -93,7 +93,7 @@ export default function SecretsPage() {
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (es. OPENAI_KEY)" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
-              <select value={type} onChange={e => setType(e.target.value as SecretType)} className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+              <select value={type} onChange={e => setType(e.target.value as SecretType)} aria-label="Tipo segreto" className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                 {(Object.keys(TYPE_LABEL) as SecretType[]).map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
             </div>
