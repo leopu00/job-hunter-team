@@ -50,13 +50,15 @@ export default function ContactsPage() {
   const [newCompany, setNewCompany] = useState('')
   const [newRole, setNewRole] = useState('')
   const [newEmail, setNewEmail] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const params = search ? `?q=${encodeURIComponent(search)}` : '';
     const res = await fetch(`/api/contacts${params}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setContacts(data.contacts ?? []); setTotal(data.total ?? 0);
+    setLoading(false);
   }, [search])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -105,7 +107,9 @@ export default function ContactsPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {contacts.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : contacts.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun contatto trovato.</p></div>
           : contacts.map(c => <ContactRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} onDelete={deleteContact} />)}
       </div>
