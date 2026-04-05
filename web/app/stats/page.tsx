@@ -47,6 +47,9 @@ const T = {
     e2e: 'E2E Tests',
     recent: 'Ultimi commit',
     recent_desc: 'Le modifiche piu recenti al repository',
+    top_contributors: 'Top contributori',
+    top_contributors_desc: 'I contributori piu attivi per numero di commit',
+    commit_label: 'commit',
   },
   en: {
     title: 'Project Statistics',
@@ -83,6 +86,9 @@ const T = {
     e2e: 'E2E Tests',
     recent: 'Recent commits',
     recent_desc: 'Latest changes to the repository',
+    top_contributors: 'Top contributors',
+    top_contributors_desc: 'Most active contributors by commit count',
+    commit_label: 'commits',
   },
 }
 
@@ -97,6 +103,7 @@ type StatsData = {
   typeCounts: { feat: number; fix: number; merge: number; test: number; other: number }
   areas: { web: number; api: number; shared: number; e2e: number }
   recentCommits: { hash: string; date: string; message: string; author: string }[]
+  topContributors: { name: string; commits: number }[]
 }
 
 /* ── Componenti grafici CSS puro ─────────────────────────────────── */
@@ -411,6 +418,46 @@ function StatsContent() {
                             {c.message}
                           </p>
                           <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; {c.date}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Top contributors */}
+            {data.topContributors && data.topContributors.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.top_contributors}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.top_contributors_desc}</p>
+                <div className="flex flex-col gap-2">
+                  {data.topContributors.map((c, i) => {
+                    const maxCommits = data.topContributors[0]?.commits ?? 1
+                    const initials = c.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+                    const colors = ['#00e676', '#4d9fff', '#b388ff', '#ffc107', '#ff8c42', '#26c6da', '#f44336', '#607d8b', '#a855f7', '#ff4560']
+                    return (
+                      <div key={c.name} className="flex items-center gap-3 py-1.5">
+                        <span className="text-[10px] font-mono text-[var(--color-dim)] w-5 text-right flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold"
+                          style={{ background: `${colors[i % colors.length]}22`, color: colors[i % colors.length], border: `1px solid ${colors[i % colors.length]}44` }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-[var(--color-muted)] truncate">{c.name}</span>
+                            <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{c.commits} {t.commit_label}</span>
+                          </div>
+                          <div className="h-1 rounded-full mt-1" style={{ background: 'var(--color-card)' }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${(c.commits / maxCommits) * 100}%`, background: colors[i % colors.length] }}
+                            />
+                          </div>
                         </div>
                       </div>
                     )
