@@ -126,7 +126,9 @@ export default function OnboardingPage() {
       <p className="text-[10px] text-[var(--color-dim)] mb-4">Come vuoi ricevere gli aggiornamenti?</p>
       <div className="flex flex-col gap-3">
         {([['emailCh', 'Email', 'Ricevi aggiornamenti via email'], ['telegram', 'Telegram', 'Notifiche istantanee via bot Telegram'], ['web', 'Web Push', 'Notifiche nel browser']] as const).map(([key, label, desc]) => (
-          <div key={key} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
+          <div key={key} className="flex items-center justify-between p-3 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
             <div><p className="text-[11px] text-[var(--color-bright)] font-medium">{label}</p><p className="text-[9px] text-[var(--color-dim)]">{desc}</p></div>
             <button onClick={() => setForm({ ...form, [key]: !form[key] })} className="text-[9px] font-bold px-3 py-1 rounded cursor-pointer"
               style={{ background: form[key] ? 'var(--color-green)' : 'var(--color-deep)', color: form[key] ? '#000' : 'var(--color-dim)' }}>{form[key] ? 'ON' : 'OFF'}</button>
@@ -141,7 +143,7 @@ export default function OnboardingPage() {
       <div className="flex flex-col gap-2">
         {[['Profilo', `${form.name || '—'} · ${form.email || '—'}`], ['Ruoli', form.roles || '—'], ['Località', form.locations || '—'], ['RAL', `${form.salaryMin || '?'}–${form.salaryMax || '?'}€`], ['Remote', form.remote ? 'Sì' : 'No'],
           ['Canali', [form.emailCh && 'Email', form.telegram && 'Telegram', form.web && 'Web'].filter(Boolean).join(', ') || '—']].map(([k, v]) => (
-          <div key={k} className="flex justify-between px-3 py-2 rounded" style={{ background: 'var(--color-row)' }}>
+          <div key={k} className="flex justify-between px-3 py-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ background: 'var(--color-row)' }}>
             <span className="text-[9px] text-[var(--color-dim)]">{k}</span>
             <span className="text-[9px] text-[var(--color-muted)] font-medium">{v}</span>
           </div>
