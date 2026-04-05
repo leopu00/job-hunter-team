@@ -22,7 +22,7 @@ function timeAgo(ts: number): string {
 function CompanyRow({ c, expanded, onToggle }: { c: Company; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-[var(--color-bright)] font-medium">{c.name}</p>
           <p className="text-[9px] text-[var(--color-dim)]">{c.sector} · {SIZE_LABEL[c.size] ?? c.size} · {c.location}</p>
