@@ -134,7 +134,7 @@ export default function AssistantPage() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 overflow-auto px-4 py-4 max-w-2xl w-full mx-auto">
+      <div className="flex-1 overflow-auto px-4 py-4 max-w-2xl w-full mx-auto" role="log" aria-live="polite" aria-label="Messaggi chat">
         {agentStatus === 'inactive' && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="text-4xl mb-4 opacity-30" aria-hidden="true">🤖</div>
