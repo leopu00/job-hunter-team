@@ -290,6 +290,11 @@ const translations = {
     en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
   },
 
+  // Guide page
+  guide_title:       { it: 'Guida Utente',           en: 'User Guide' },
+  guide_subtitle:    { it: 'Come installare, configurare e usare Job Hunter Team — dalla TUI alla web app.', en: 'How to install, configure and use Job Hunter Team — from the TUI to the web app.' },
+  guide_docs_link:   { it: 'Documentazione tecnica', en: 'Technical documentation' },
+
   // FAQ page
   faq_title:         { it: 'Domande Frequenti',      en: 'Frequently Asked Questions' },
   faq_subtitle:      { it: 'Tutto quello che devi sapere su Job Hunter Team.', en: 'Everything you need to know about Job Hunter Team.' },
