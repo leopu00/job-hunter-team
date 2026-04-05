@@ -129,7 +129,8 @@ export default function SkillsPage() {
             <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
               style={{ color: LEVEL_CFG[s.level].color, border: `1px solid var(--color-border)` }}>{LEVEL_CFG[s.level].label}</span>
             <span className="text-[9px] text-[var(--color-dim)] w-10 text-right">{s.endorsements}★</span>
-            <button onClick={() => deleteSkill(s.id)} className="text-[10px] font-bold cursor-pointer transition-colors"
+            <button onClick={() => deleteSkill(s.id)} aria-label={`Elimina competenza ${s.name}`}
+              className="text-[10px] font-bold cursor-pointer transition-colors"
               style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--color-red)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>
