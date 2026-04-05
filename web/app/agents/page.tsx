@@ -130,8 +130,10 @@ export default function AgentsPage() {
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        {agents.map(agent => (
-          <AgentCard key={agent.session} agent={agent} onToggle={toggleAgent} />
+        {agents.map((agent, i) => (
+          <div key={agent.session} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
+            <AgentCard agent={agent} onToggle={toggleAgent} />
+          </div>
         ))}
       </div>
     </div>
