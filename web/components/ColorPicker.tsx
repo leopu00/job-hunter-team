@@ -58,6 +58,8 @@ export default function ColorPicker({ value, onChange, label, disabled = false }
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
       {/* Trigger */}
       <button
+        aria-expanded={open}
+        aria-label="Seleziona colore"
         onClick={() => !disabled && setOpen(v => !v)}
         disabled={disabled}
         style={{
