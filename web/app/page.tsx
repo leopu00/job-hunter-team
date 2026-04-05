@@ -14,6 +14,8 @@ import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import LandingStats from './components/landing/LandingStats'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
+import JsonLd from './components/landing/JsonLd'
+import ScrollToTop from './components/landing/ScrollToTop'
 
 const supabaseConfigured = !!(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -80,6 +82,7 @@ function PageContent() {
   // --- Landing page (default per tutti gli utenti non autenticati) ---
   return (
     <LandingI18nProvider>
+      <JsonLd />
       <main style={{ position: 'relative', zIndex: 1 }}>
         <LandingNav />
         <LandingHero />
@@ -89,6 +92,7 @@ function PageContent() {
         <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
         <FadeInSection delay={100}><LandingCTA /></FadeInSection>
         <LandingFooter />
+        <ScrollToTop />
       </main>
     </LandingI18nProvider>
   )
