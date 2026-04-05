@@ -96,7 +96,7 @@ export default function TimelinePage() {
               {evts.map(e => {
                 const cfg = TYPE_CFG[e.type] ?? TYPE_CFG.update
                 return (
-                  <div key={e.id} className="flex gap-3 mb-2 relative">
+                  <div key={e.id} className="flex gap-3 mb-2 relative rounded transition-colors hover:bg-[rgba(255,255,255,0.015)]">
                     <div className="flex flex-col items-center">
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ background: cfg.color }} />
                       <div className="w-px flex-1" style={{ background: 'var(--color-border)' }} />
