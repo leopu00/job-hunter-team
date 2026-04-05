@@ -110,11 +110,11 @@ export default function DocsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Docs</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Docs</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Documentazione</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Architettura, moduli, CLI e API del Job Hunter Team.</p>
         <div className="flex gap-1.5 flex-wrap mt-4">
