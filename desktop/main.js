@@ -31,6 +31,7 @@ async function openRuntimeInBrowser() {
 
 app.whenReady().then(() => {
   ipcMain.handle('launcher:get-status', () => runtime.getStatus())
+  ipcMain.handle('launcher:inspect-setup', () => runtime.inspectSetup())
   ipcMain.handle('launcher:get-log-file', () => runtime.getLogFile())
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
   ipcMain.handle('launcher:start', async (_event, options) => {
