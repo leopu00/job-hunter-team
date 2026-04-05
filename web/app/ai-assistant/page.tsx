@@ -56,11 +56,11 @@ export default function AiAssistantPage() {
   return (
     <div className="flex flex-col" style={{ animation: 'fade-in 0.35s ease both', height: 'calc(100vh - 40px)' }}>
       <div className="pb-4 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">AI Assistant</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">AI Assistant</span>
+        </nav>
         <div className="flex items-center gap-2 mt-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
           <h1 className="text-lg font-bold tracking-tight text-[var(--color-white)]">AI Assistant</h1>
