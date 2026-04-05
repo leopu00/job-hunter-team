@@ -47,7 +47,7 @@ export function BarChart({ data, height = 160, color = 'var(--color-green)', sho
   const barW   = Math.max(4, (W - PAD.left - PAD.right) / data.length - 4)
 
   return (
-    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }}>
+    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }} role="img" aria-label={`Grafico a barre: ${data.length} valori, max ${max}`}>
       {showGrid && <GridLines min={min} max={max} innerH={innerH} />}
       {data.map((d, i) => {
         const x   = xPos(i, data.length) - barW / 2
@@ -72,7 +72,7 @@ export function LineChart({ data, height = 160, color = 'var(--color-green)', sh
   const points  = data.map((d, i) => `${xPos(i, data.length)},${yScale(d.value, min, max, innerH)}`).join(' ')
 
   return (
-    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }}>
+    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }} role="img" aria-label={`Grafico a linee: ${data.length} punti, range ${min}–${max}`}>
       {showGrid && <GridLines min={min} max={max} innerH={innerH} />}
       <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       {data.map((d, i) => (
@@ -99,7 +99,7 @@ export function AreaChart({ data, height = 160, color = 'var(--color-green)', sh
     : ''
 
   return (
-    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }}>
+    <svg viewBox={`0 0 ${W} ${height}`} className={`w-full ${className ?? ''}`} style={{ overflow: 'visible' }} role="img" aria-label={`Grafico area: ${data.length} punti, range ${min}–${max}`}>
       <defs>
         <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor={color} stopOpacity={0.3} />
