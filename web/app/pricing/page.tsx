@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
+import ScrollToTop from '../components/landing/ScrollToTop'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -396,6 +397,7 @@ function PricingContent() {
         </div>
       </div>
       <LandingFooter />
+      <ScrollToTop />
     </main>
   )
 }
