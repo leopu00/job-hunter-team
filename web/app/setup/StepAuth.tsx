@@ -50,7 +50,7 @@ export function StepAuth({ form, set, next, back }: Props) {
         <Field label="Email account" error={err}>
           <input type="email" autoComplete="email" value={form.email} placeholder="nome@email.com"
             onChange={e => { set({ email: e.target.value }); setErr(undefined) }}
-            className={inputCls} style={{ color: 'var(--color-bright)' }} autoComplete="email" required />
+            className={inputCls} style={{ color: 'var(--color-bright)' }} required />
         </Field>
       )}
 
