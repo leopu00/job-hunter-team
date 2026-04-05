@@ -95,7 +95,7 @@ export default function SetupPage() {
         {step === 'prereq' && (
           <Card title="Prerequisiti" sub="Verifica automatica ambiente">
             {loading
-              ? <p className="text-[11px] text-center py-4" style={{ color: 'var(--color-muted)' }}>Controllo in corso…</p>
+              ? <p className="text-[11px] text-center py-4" role="status" aria-live="polite" style={{ color: 'var(--color-muted)' }}>Controllo in corso…</p>
               : checks.map((c, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <span style={{ color: c.ok ? 'var(--color-green)' : 'var(--color-red)', fontSize: 13 }}>{c.ok ? '✓' : '✗'}</span>

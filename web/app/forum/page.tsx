@@ -95,7 +95,7 @@ export default function ForumPage() {
         <div ref={containerRef} onScroll={onScroll} className="flex-1 overflow-y-auto rounded-xl flex flex-col gap-0"
           style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
           {loading ? (
-            <p className="p-6 text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+            <p className="p-6 text-[11px]" role="status" aria-live="polite" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
           ) : messages.length === 0 ? (
             <p className="p-6 text-[11px]" style={{ color: 'var(--color-dim)' }}>Nessun messaggio.</p>
           ) : (

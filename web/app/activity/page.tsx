@@ -84,7 +84,7 @@ export default function ActivityPage() {
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
 
       {!loading && data && data.items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">

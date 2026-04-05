@@ -109,7 +109,7 @@ export default function SecretsPage() {
         </div>
       )}
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
       {!loading && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {secrets.length === 0 ? (

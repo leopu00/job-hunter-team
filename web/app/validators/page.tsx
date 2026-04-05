@@ -90,7 +90,7 @@ export default function ValidatorsPage() {
         </div>
 
         {loading ? (
-          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+          <p className="text-[11px]" role="status" aria-live="polite" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
         ) : filtered.length === 0 ? (
           <EmptyState icon="🔍" title="Nessuno schema trovato" size="sm" />
         ) : (
