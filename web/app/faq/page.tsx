@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { LandingI18nProvider } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
+import ScrollToTop from '../components/landing/ScrollToTop'
 
 type FaqItem = { q: string; a: React.ReactNode }
 
@@ -232,6 +233,7 @@ function FaqContent() {
         </div>
       </div>
       <LandingFooter />
+      <ScrollToTop />
     </main>
   )
 }
