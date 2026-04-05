@@ -7,8 +7,8 @@
 ## 🎯 Visione
 
 Job Hunter Team diventa un'**applicazione desktop** scaricabile da chiunque — anche utenti non tecnici.
-L'utente scarica un installer, lo installa, e un wizard lo guida nel setup del team.
-Da browser, fa login e monitora il team da remoto.
+L'utente scarica un installer, lo installa, e un launcher desktop prepara l'ambiente, avvia JHT in background e apre la GUI web locale nel browser.
+La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tramite zero-terminale.
 
 **Tre modalita' di esecuzione (scelta utente):**
 
@@ -35,7 +35,7 @@ Da browser, fa login e monitora il team da remoto.
 
 | Componente | Tecnologia | Motivazione |
 |-----------|------------|-------------|
-| Desktop app | **Electron** | Riusa frontend Next.js, Node.js nativo per agenti |
+| Desktop app | **Launcher Electron leggero** | Installer, tray, lifecycle manager; la GUI operativa resta nel browser |
 | Web dashboard | **Next.js su Vercel** | Pipeline CI/CD gia' scritta |
 | Backend dati | **Supabase** (Frankfurt) | Gia' attivo, PostgreSQL, auth Google |
 | Cloud provisioning | **Multi-provider** | AWS + GCP + Hetzner con layer di astrazione |
@@ -50,8 +50,8 @@ Da browser, fa login e monitora il team da remoto.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   🔨 IN CORSO          ⏳ PROSSIMA         ⏳ PROSSIMA          ⏳ PROSSIMA         🔮 FUTURO
-  Web Platform        App Desktop         Cloud Multi-         i18n                Sito Web
-  consolidamento      Electron            Provider             Completa            Pubblico
+  Web Platform        Desktop Launcher    Cloud Multi-         i18n                Sito Web
+  consolidamento      + localhost GUI     Provider             Completa            Pubblico
 ```
 
 ---
@@ -78,18 +78,19 @@ Da browser, fa login e monitora il team da remoto.
 
 ---
 
-### 📦 Fase 2 — App Desktop Electron
+### 📦 Fase 2 — Desktop Launcher
 
-> _"Scarichi, installi, usi. Come qualsiasi altra app."_
+> _"Scarichi, installi, parte tutto in background, poi lavori dal browser."_
 
 ```
 ⚪ Stato: ROADMAP
 ░░░░░░░░░░░░░░░░░░░░ 0%
 
-⬜ Scaffolding Electron (desktop/) con electron-forge
-⬜ Setup wizard grafico (lingua, profilo, API key)
-⬜ Gestione agenti come child process (no tmux)
-⬜ Auto-install dipendenze (Python embedded/rilevato)
+⬜ Scaffolding `desktop/` + electron-builder
+⬜ Launcher/orchestratore locale con tray e browser opener
+⬜ Setup wizard grafico (lingua, profilo, provider AI, credenziali)
+⬜ Payload prebuildato: GUI web gia' compilata, niente rebuild lato utente
+⬜ Bootstrap silenzioso dipendenze in base al provider scelto
 ⬜ Tray icon + notifiche desktop native
 ⬜ Installer: .dmg (macOS), .exe (Windows), .AppImage (Linux)
 ⬜ Code signing (macOS + Windows)
@@ -186,10 +187,11 @@ Da browser, fa login e monitora il team da remoto.
 | | |
 |---|---|
 | 🎯 **Target** | Chiunque — utenti non tecnici inclusi |
-| 📥 **Installazione** | Scarica installer (.dmg/.exe/.AppImage), doppio click |
-| ⚙️ **Setup** | Wizard grafico: lingua → profilo → API key → via |
-| 🤖 **Agenti** | Girano come processi background nell'app |
+| 📥 **Installazione** | Scarica il launcher (.dmg/.exe/.AppImage), doppio click |
+| ⚙️ **Setup** | Wizard grafico: lingua → profilo → provider AI → credenziali |
+| 🤖 **Runtime** | JHT gira in background; il launcher controlla start/stop/status |
 | 💾 **Storage** | SQLite locale + sync opzionale con Supabase |
+| 🌐 **GUI** | Browser su `http://localhost:3000` aperto automaticamente |
 | 📡 **Monitoring** | Web dashboard da browser (anche da telefono) |
 
 ### 💻 2. Computer Dedicato — Per chi ha un PC extra
@@ -197,9 +199,9 @@ Da browser, fa login e monitora il team da remoto.
 | | |
 |---|---|
 | 🎯 **Target** | Chi vuole un PC sempre acceso dedicato al team |
-| 🔧 **Setup** | Dall'app desktop, configura il PC remoto via SSH |
+| 🔧 **Setup** | Dal launcher desktop, configura il PC remoto via SSH |
 | 🤖 **Agenti** | Girano sul PC dedicato, non sul principale |
-| 📡 **Monitoring** | Web dashboard + notifiche desktop |
+| 📡 **Monitoring** | GUI web + notifiche desktop |
 
 ### ☁️ 3. Cloud Remoto — Per chi vuole zero hardware
 
@@ -209,4 +211,4 @@ Da browser, fa login e monitora il team da remoto.
 | ☁️ **Provider** | AWS, GCP, Hetzner (scelta utente) |
 | 💰 **Costo** | Pay-per-use: avvii → lavora → spegni |
 | 🤖 **Agenti** | Girano sulla VM cloud |
-| 📡 **Monitoring** | Web dashboard + app desktop |
+| 📡 **Monitoring** | GUI web + launcher desktop |
