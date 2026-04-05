@@ -1,8 +1,15 @@
 export default function ProfileLoading() {
   return (
     <div style={{ animation: 'fade-in 0.2s ease both' }}>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 mb-1">
+        <div className="h-3 w-16 rounded bg-[var(--color-border)] animate-pulse" />
+        <div className="h-3 w-2 rounded bg-[var(--color-border)]" />
+        <div className="h-3 w-12 rounded bg-[var(--color-border)] animate-pulse" />
+      </div>
+
       {/* Header skeleton */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
+      <div className="mb-8 pb-6 border-b border-[var(--color-border)] mt-3">
         <div className="h-7 w-52 rounded bg-[var(--color-border)] mb-2 animate-pulse" />
         <div className="h-3 w-36 rounded bg-[var(--color-border)] animate-pulse" />
       </div>
