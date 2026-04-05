@@ -67,8 +67,8 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        <div className="grid grid-cols-7">
+      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-panel)]">
+        <div className="grid grid-cols-7 min-w-[480px]">
           {DAYS.map(d => <div key={d} className="text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-center py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>{d}</div>)}
           {grid.map((cell, i) => {
             const evts = cell.inMonth ? (eventsByDay[cell.day] ?? []) : [];
