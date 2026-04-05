@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { EmptyState } from '../components/EmptyState'
 
@@ -78,9 +79,13 @@ export default function ValidatorsPage() {
   return (
     <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-6">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Validators</span>
+        </nav>
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>
               Validators
               {!loading && <span className="ml-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>{total} schemi</span>}
