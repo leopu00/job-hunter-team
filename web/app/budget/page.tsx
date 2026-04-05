@@ -50,7 +50,7 @@ export default function BudgetPage() {
   const usageData: DataPoint[] = velHist.map(v => ({ label: v.ts, value: v.usage }))
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-6">
 
         <div className="flex items-end justify-between flex-wrap gap-3">
