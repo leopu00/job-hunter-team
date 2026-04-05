@@ -102,7 +102,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-2xl flex flex-col gap-6">
         <div>
           <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
