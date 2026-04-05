@@ -2,6 +2,7 @@
   "name": "Job Hunter Team",
   "short_name": "JHT",
   "description": "Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.",
+  "id": "/",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
