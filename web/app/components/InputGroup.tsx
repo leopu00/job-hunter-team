@@ -139,7 +139,7 @@ export function InputAddon({ children, position = 'left' }: InputAddonProps) {
 
 // ── Input (standalone con styling base, usabile anche senza InputGroup) ────
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   size?:      InputSize
   error?:     boolean
   fullWidth?: boolean
