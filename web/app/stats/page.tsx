@@ -363,6 +363,13 @@ function StatsContent() {
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name: t.title,
+        description: t.subtitle,
+        isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: 'https://jobhunterteam.ai' },
+      }) }} />
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
         {/* Breadcrumb */}
