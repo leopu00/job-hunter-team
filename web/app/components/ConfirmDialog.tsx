@@ -28,7 +28,7 @@ export function ConfirmDialog({
   const confirmBg      = danger ? 'rgba(255,69,96,0.08)': 'rgba(0,232,122,0.08)'
 
   return (
-    <Modal open={open} onClose={onClose} title={title} width={400}>
+    <Modal open={open} onClose={onClose} title={title} size="sm">
       <div className="flex flex-col gap-5">
         {danger && (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded border text-[11px]"
