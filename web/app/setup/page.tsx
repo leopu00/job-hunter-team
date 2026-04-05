@@ -159,7 +159,7 @@ export default function SetupPage() {
             <div className="flex flex-col items-center gap-3 py-4">
               {health === 'loading' && (
                 <>
-                  <div className="w-8 h-8 rounded-full border-2 animate-spin"
+                  <div className="w-8 h-8 rounded-full border-2 animate-spin" aria-hidden="true"
                     style={{ borderColor: 'var(--color-green)', borderTopColor: 'transparent' }} />
                   <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Salvataggio in corso…</p>
                 </>
