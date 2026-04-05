@@ -103,7 +103,7 @@ export default function ContextPage() {
             <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Sezioni contesto</h2>
             <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
               {data.sections.map((sec, i) => (
-                <div key={sec.id} className={`flex items-center gap-4 px-5 py-3.5 ${i < data.sections.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
+                <div key={sec.id} className={`flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < data.sections.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
                   <span className="text-[10px] font-mono font-semibold text-[var(--color-bright)] w-16">{sec.id}</span>
                   <span className="flex-1 text-[10px] text-[var(--color-muted)]">{sec.description}</span>
                   <span className="badge text-[9px] font-mono" style={{ color: PRIORITY_COLOR[sec.priority], border: `1px solid ${PRIORITY_COLOR[sec.priority]}44`, background: `${PRIORITY_COLOR[sec.priority]}0d` }}>
@@ -120,7 +120,7 @@ export default function ContextPage() {
             <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Configurazione</h2>
             <div className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
               {Object.entries(data.config).map(([k, v]) => (
-                <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
                   <span className="text-[10px] font-mono text-[var(--color-dim)] w-40">{k}</span>
                   <span className="text-[10px] font-mono text-[var(--color-bright)]">{String(v)}</span>
                 </div>

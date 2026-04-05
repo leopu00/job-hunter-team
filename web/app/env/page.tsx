@@ -86,7 +86,7 @@ export default function EnvPage() {
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{cat}</h3>
               <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
                 {items.map((v, i) => (
-                  <div key={v.name} className={`flex items-center gap-3 px-5 py-3 ${i < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+                  <div key={v.name} className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0`} style={{ background: v.set ? 'var(--color-green)' : 'var(--color-border)' }} />
                     <span className="text-[11px] font-mono text-[var(--color-bright)] flex-1 truncate">{v.name}</span>
                     <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'var(--color-dim)', minWidth: 120, textAlign: 'right' }}>
