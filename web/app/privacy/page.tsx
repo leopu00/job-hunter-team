@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 
 const T = {
   it: {
@@ -91,6 +92,7 @@ function PrivacyContent() {
         </div>
       </div>
     </main>
+    <LandingFooter />
   )
 }
 
