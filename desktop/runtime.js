@@ -13,6 +13,15 @@ function getDefaultLogFile() {
   return path.join(os.tmpdir(), 'jht-desktop-launcher.log')
 }
 
+function resolveRepoRoot(baseDir = __dirname) {
+  const bundledRoot = path.join(process.resourcesPath ?? '', 'app-payload')
+  if (process.defaultApp !== true && process.resourcesPath && fs.existsSync(path.join(bundledRoot, 'web', 'package.json'))) {
+    return bundledRoot
+  }
+
+  return path.resolve(baseDir, '..')
+}
+
 function resolvePort(rawPort) {
   const requestedPort = Number.parseInt(String(rawPort ?? DEFAULT_PORT), 10)
   if (!Number.isFinite(requestedPort) || requestedPort < 1024 || requestedPort > 65535) {
@@ -38,7 +47,7 @@ function detectStartMode(webDir) {
   return null
 }
 
-function inspectWebSetup(repoRoot = path.resolve(__dirname, '..')) {
+function inspectWebSetup(repoRoot = resolveRepoRoot(__dirname)) {
   const webDir = path.join(repoRoot, 'web')
   const hasPackageJson = fileExists(path.join(webDir, 'package.json'))
   const hasNodeModules = fileExists(path.join(webDir, 'node_modules'))
@@ -82,7 +91,7 @@ function defaultSpawnSpecFactory({ mode, port, webDir }) {
 }
 
 function createRuntimeManager(config = {}) {
-  const repoRoot = config.repoRoot ?? path.resolve(__dirname, '..')
+  const repoRoot = config.repoRoot ?? resolveRepoRoot(__dirname)
   const logFile = config.logFile ?? getDefaultLogFile()
   const startTimeoutMs = config.startTimeoutMs ?? START_TIMEOUT_MS
   const stopTimeoutMs = config.stopTimeoutMs ?? STOP_TIMEOUT_MS
@@ -413,6 +422,7 @@ module.exports = {
   START_TIMEOUT_MS,
   STOP_TIMEOUT_MS,
   resolvePort,
+  resolveRepoRoot,
   detectStartMode,
   inspectWebSetup,
   createRuntimeManager,
