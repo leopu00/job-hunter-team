@@ -114,6 +114,7 @@ export default function ConfigPage() {
               value={text}
               onChange={e => handleChange(e.target.value)}
               spellCheck={false}
+              aria-label="Editor configurazione JSON"
               className="w-full resize-none font-mono text-[11px] bg-transparent outline-none px-4 py-4"
               style={{ color: 'var(--color-bright)', minHeight: 400, lineHeight: 1.7 }}
             />
