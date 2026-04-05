@@ -61,7 +61,6 @@ export const metadata: Metadata = {
     description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
-  alternates: { canonical: '/' },
   robots: { index: true, follow: true },
   manifest: '/manifest.json',
   other: {
