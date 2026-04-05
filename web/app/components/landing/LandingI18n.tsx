@@ -1,6 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react'
+
+const CookieConsent = lazy(() => import('./CookieConsent'))
 
 export type Lang = 'it' | 'en'
 
@@ -479,6 +481,7 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   return (
     <LandingI18nContext.Provider value={{ lang, setLang, t, ta }}>
       {children}
+      <Suspense><CookieConsent /></Suspense>
     </LandingI18nContext.Provider>
   )
 }
