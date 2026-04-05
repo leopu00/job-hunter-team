@@ -19,6 +19,14 @@ const LABELS: Record<string, string> = {
   jobs: 'Offerte', applications: 'Candidature', interviews: 'Colloqui',
   companies: 'Aziende', profiles: 'Profili', alerts: 'Alert',
   'cover-letters': 'Cover Letter', workers: 'Workers', status: 'Stato',
+  positions: 'Posizioni', ready: 'Pronte', risposte: 'Risposte',
+  crescita: 'Crescita', profile: 'Profilo', team: 'Team',
+  capitano: 'Capitano', scout: 'Scout', analista: 'Analista',
+  scorer: 'Scorer', scrittore: 'Scrittore', critico: 'Critico',
+  sentinella: 'Sentinella', assistente: 'Assistente',
+  demo: 'Demo', download: 'Download', guide: 'Guida',
+  faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
+  privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
 }
 
 const ID_RE = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
