@@ -129,7 +129,7 @@ export default function AgentMetricsPage() {
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
               <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-4">Score complessivo</p>
               <div className="flex flex-wrap justify-center gap-4">
-                {active.map((a, i) => <ScoreRing key={a.agentId} score={a.score} agentId={a.agentId} color={COLORS[i % COLORS.length]} />)}
+                {active.map((a, i) => <div key={a.agentId} style={{ animation: `fade-in 0.4s ease ${i * 0.1}s both` }}><ScoreRing score={a.score} agentId={a.agentId} color={COLORS[i % COLORS.length]} /></div>)}
               </div>
             </div>
           )}
