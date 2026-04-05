@@ -33,6 +33,15 @@ export const metadata: Metadata = {
   description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
   keywords: ['job hunting', 'AI agents', 'job search', 'candidature automatiche', 'open source'],
   authors: [{ name: 'Job Hunter Team' }],
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+  },
   openGraph: {
     type: 'website',
     locale: 'it_IT',
