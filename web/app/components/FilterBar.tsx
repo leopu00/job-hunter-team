@@ -11,7 +11,8 @@ type Props = { filters: FilterDef[]; values: FilterValues; onChange: (key: strin
 const inputBase: React.CSSProperties = {
   border: '1px solid var(--color-border)', background: 'var(--color-card)',
   color: 'var(--color-bright)', borderRadius: 6, fontSize: 11,
-  padding: '5px 10px', outline: 'none', fontFamily: 'var(--font-mono)',
+  padding: '5px 10px', fontFamily: 'var(--font-mono)',
+  transition: 'border-color 0.15s',
 }
 
 export function FilterBar({ filters, values, onChange, onClear }: Props) {
