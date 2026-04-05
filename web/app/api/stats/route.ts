@@ -32,6 +32,7 @@ const FALLBACK = {
   typeCounts: { feat: 180, fix: 90, merge: 120, test: 30, other: 80 },
   areas: { web: 300, api: 100, shared: 36, e2e: 30 },
   recentCommits: [] as { hash: string; date: string; message: string; author: string }[],
+  topContributors: [] as { name: string; commits: number }[],
 }
 
 export async function GET() {
@@ -89,6 +90,17 @@ export async function GET() {
     return { hash, date: date.slice(0, 10), message, author }
   })
 
+  // Top contributori (commit count per autore)
+  const contribRaw = run('git log --format="%aN" HEAD')
+  const contribMap = new Map<string, number>()
+  for (const name of contribRaw.split('\n').filter(Boolean)) {
+    contribMap.set(name, (contribMap.get(name) ?? 0) + 1)
+  }
+  const topContributors = [...contribMap.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([name, commits]) => ({ name, commits }))
+
   // Giorni di sviluppo
   const first = new Date(firstCommitDate || '2025-07-01')
   const last = new Date(lastCommitDate || new Date().toISOString())
@@ -114,5 +126,6 @@ export async function GET() {
     typeCounts,
     areas,
     recentCommits,
+    topContributors,
   })
 }
