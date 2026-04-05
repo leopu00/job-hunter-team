@@ -62,8 +62,8 @@ export default function DatabasePage() {
         <div className="flex items-center gap-4 px-5 py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
           <span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TABELLA</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RIGHE</span>
-          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SIZE</span>
-          <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SOURCE</span>
+          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">DIM</span>
+          <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ORIGINE</span>
           <span className="w-10" />
         </div>
         {tables.length === 0
