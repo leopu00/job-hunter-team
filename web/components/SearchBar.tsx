@@ -97,8 +97,8 @@ export default function SearchBar() {
                 <span className="text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold shrink-0"
                   style={{ background: `${color}22`, color }}>{TYPE_LABELS[r.type] ?? r.type}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-[var(--color-bright)] truncate">{r.title}</p>
-                  <p className="text-[9px] text-[var(--color-dim)] truncate">{r.detail}</p>
+                  <p className="text-[11px] font-semibold text-[var(--color-bright)] truncate" title={r.title}>{r.title}</p>
+                  <p className="text-[9px] text-[var(--color-dim)] truncate" title={r.detail}>{r.detail}</p>
                 </div>
               </button>
             )
