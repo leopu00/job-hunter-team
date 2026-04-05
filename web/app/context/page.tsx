@@ -91,7 +91,9 @@ export default function ContextPage() {
           </div>
 
           {/* Budget bar */}
-          <div className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+          <div className="p-4 rounded-lg border transition-colors duration-200" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-semibold text-[var(--color-muted)]">Utilizzo budget</span>
               <span className="text-[10px] font-mono text-[var(--color-dim)]">{data.budget.used.toLocaleString()} / {data.budget.total.toLocaleString()} token</span>
@@ -120,7 +122,9 @@ export default function ContextPage() {
           {/* Config */}
           <div>
             <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Configurazione</h2>
-            <div className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+            <div className="p-4 rounded-lg border transition-colors duration-200" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
               {Object.entries(data.config).map(([k, v]) => (
                 <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
                   <span className="text-[10px] font-mono text-[var(--color-dim)] w-40">{k}</span>
