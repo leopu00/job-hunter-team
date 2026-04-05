@@ -94,7 +94,8 @@ function Thumb({ value, min, max, step, onDrag, disabled, label }: ThumbProps) {
         onKeyDown={disabled ? undefined : onKey}
         style={{ width: 16, height: 16, borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'grab',
           background: disabled ? 'var(--color-border)' : 'var(--color-green)',
-          border: '2px solid var(--color-deep)', boxShadow: '0 1px 4px rgba(0,0,0,0.4)', outline: 'none' }} />
+          border: '2px solid var(--color-deep)', boxShadow: '0 1px 4px rgba(0,0,0,0.4)' }}
+        className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] focus-visible:ring-offset-1" />
     </div>
   )
 }
