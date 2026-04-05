@@ -83,6 +83,7 @@ const T = {
 }
 
 type StatsData = {
+  source: 'git' | 'static'
   overview: {
     agents: number; languages: number; totalCommits: number; contributors: number
     devDays: number; apiRoutes: number; pages: number; sharedModules: number
@@ -245,6 +246,21 @@ function StatsContent() {
           <p className="text-[13px] text-[var(--color-muted)] max-w-lg mx-auto leading-relaxed">
             {t.subtitle}
           </p>
+          {data && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wider uppercase"
+              style={{
+                background: data.source === 'git' ? 'rgba(0,232,122,0.1)' : 'rgba(255,193,7,0.1)',
+                color: data.source === 'git' ? 'var(--color-green)' : 'var(--color-yellow)',
+                border: `1px solid ${data.source === 'git' ? 'rgba(0,232,122,0.2)' : 'rgba(255,193,7,0.2)'}`,
+              }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full" style={{
+                background: data.source === 'git' ? 'var(--color-green)' : 'var(--color-yellow)',
+                animation: data.source === 'git' ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+              }} />
+              {data.source === 'git' ? 'live' : 'snapshot'}
+            </div>
+          )}
         </div>
 
         {/* Loading */}
