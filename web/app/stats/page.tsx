@@ -675,6 +675,18 @@ function StatsContent() {
             </section></FadeInSection>
           </div>
         )}
+
+        {/* Footer nav */}
+        <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between max-w-5xl mx-auto">
+          <Link href="/about"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+            &larr; {lang === 'en' ? 'About' : 'Chi siamo'}
+          </Link>
+          <Link href="/changelog"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+            Changelog &rarr;
+          </Link>
+        </div>
       </main>
       <LandingFooter />
       <ScrollToTop />
