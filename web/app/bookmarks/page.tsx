@@ -71,7 +71,7 @@ export default function BookmarksPage() {
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
             <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
           </div>
           <div className="flex flex-wrap gap-2 items-end mt-2">
