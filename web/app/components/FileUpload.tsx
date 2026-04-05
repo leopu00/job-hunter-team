@@ -131,10 +131,12 @@ export function FileUpload({ accept = [], maxSizeMb = 10, multiple = false, onUp
       {label && <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-dim)' }}>{label}</p>}
 
       {/* Drop zone */}
-      <div onClick={() => inputRef.current?.click()}
+      <div role="button" tabIndex={0} onClick={() => inputRef.current?.click()}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
+        aria-label="Seleziona file da caricare"
         className="flex flex-col items-center justify-center gap-1 py-6 rounded-xl cursor-pointer transition-colors"
         style={{ border: `1.5px dashed ${color}`, background: dragOver ? 'var(--color-blue)08' : 'transparent' }}>
         <span className="text-[20px]">📂</span>
