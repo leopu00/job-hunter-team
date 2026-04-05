@@ -23,6 +23,7 @@ export interface TableProps<T = Record<string, unknown>> {
   emptyMessage?: string
   loading?:      boolean
   className?:    string
+  ariaLabel?:    string
 }
 
 type SortDir = 'asc' | 'desc' | null
@@ -55,7 +56,7 @@ function SortIcon({ dir }: { dir: SortDir }) {
 
 export function Table<T extends Record<string, unknown>>({
   columns, data, onRowClick, striped = false, hoverable = true,
-  compact = false, emptyMessage = 'Nessun dato', loading = false, className = '',
+  compact = false, emptyMessage = 'Nessun dato', loading = false, className = '', ariaLabel,
 }: TableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
@@ -73,7 +74,7 @@ export function Table<T extends Record<string, unknown>>({
   return (
     <div className={`w-full overflow-x-auto rounded-lg border ${className}`}
       style={{ borderColor: 'var(--color-border)' }}>
-      <table className="w-full border-collapse">
+      <table className="w-full border-collapse" aria-label={ariaLabel}>
         {/* Head */}
         <thead>
           <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-row)' }}>
