@@ -23,7 +23,9 @@ function LogRow({ entry }: { entry: LogEntry }) {
   const timeShort = entry.time?.slice(11, 23) ?? ''
   return (
     <div className="px-4 py-1.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors font-mono text-[11px] cursor-pointer"
-      onClick={() => entry.data && setExpanded(v => !v)}>
+      role={entry.data ? 'button' : undefined} tabIndex={entry.data ? 0 : undefined} aria-expanded={entry.data ? expanded : undefined}
+      onClick={() => entry.data && setExpanded(v => !v)}
+      onKeyDown={e => { if (entry.data && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpanded(v => !v); } }}>
       <div className="flex items-center gap-3">
         <span className="text-[var(--color-dim)] flex-shrink-0" style={{ minWidth: 80 }}>{timeShort}</span>
         <LevelBadge level={entry.level} />
@@ -48,18 +50,21 @@ export default function LogsPage() {
   const [level, setLevel] = useState<FilterLevel>('all')
   const [subsystem, setSubsystem] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const PAGE_SIZE = 50
 
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
+
   const fetchLogs = useCallback(async (append = false) => {
     const params = new URLSearchParams()
     if (date) params.set('date', date)
     if (level !== 'all') params.set('level', level)
     if (subsystem) params.set('subsystem', subsystem)
-    if (search) params.set('search', search)
+    if (debouncedSearch) params.set('search', debouncedSearch)
     params.set('limit', String(PAGE_SIZE))
     if (append) params.set('offset', String(entries.length))
     const res = await fetch(`/api/logs?${params}`).catch(() => null)
@@ -72,7 +77,7 @@ export default function LogsPage() {
     setDates(data.dates ?? [])
     setSubsystems(data.subsystems ?? [])
     if (!date && data.date) setDate(data.date)
-  }, [date, level, subsystem, search, entries.length])
+  }, [date, level, subsystem, debouncedSearch, entries.length])
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return
@@ -81,12 +86,12 @@ export default function LogsPage() {
     setLoading(false)
   }, [fetchLogs, loading, hasMore])
 
-  useEffect(() => { fetchLogs() }, [date, level, subsystem, search]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchLogs() }, [date, level, subsystem, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!autoRefresh) return
     const id = setInterval(() => fetchLogs(), 5000)
     return () => clearInterval(id)
-  }, [date, level, subsystem, search, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [date, level, subsystem, debouncedSearch, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // IntersectionObserver per scroll infinito
   useEffect(() => {
@@ -105,11 +110,11 @@ export default function LogsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Log</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Log</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Log</h1>

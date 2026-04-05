@@ -34,7 +34,7 @@ function ChannelCard({ ch, onToggle }: { ch: ChannelInfo; onToggle: (id: Channel
     : 'mai'
 
   return (
-    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 flex flex-col gap-4">
+    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 flex flex-col gap-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xl" aria-hidden="true">{CH_ICON[ch.id]}</span>
@@ -49,6 +49,7 @@ function ChannelCard({ ch, onToggle }: { ch: ChannelInfo; onToggle: (id: Channel
             {ch.connected ? 'connesso' : 'disconnesso'}
           </span>
           <button onClick={() => onToggle(ch.id, !ch.enabled)}
+            aria-label={`${ch.enabled ? 'Disattiva' : 'Attiva'} canale ${ch.id}`}
             className="px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
             style={{ color: ch.enabled ? 'var(--color-green)' : 'var(--color-dim)', background: ch.enabled ? 'rgba(0,232,122,0.08)' : 'var(--color-row)', border: `1px solid ${ch.enabled ? 'rgba(0,232,122,0.3)' : 'var(--color-border)'}` }}>
             {ch.enabled ? 'ON' : 'OFF'}
@@ -104,11 +105,11 @@ export default function ChannelsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Canali</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Canali</span>
+        </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Canali</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{connectedCount} connessi · {channels.filter(c => c.enabled).length} attivi · {channels.length} totali</p>
       </div>
@@ -126,7 +127,7 @@ export default function ChannelsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {channels.length === 0
           ? <div className="col-span-full flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessun canale trovato.</p></div>
-          : channels.map(ch => <ChannelCard key={ch.id} ch={ch} onToggle={toggleChannel} />)
+          : channels.map((ch, i) => <div key={ch.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ChannelCard ch={ch} onToggle={toggleChannel} /></div>)
         }
       </div>
     </div>

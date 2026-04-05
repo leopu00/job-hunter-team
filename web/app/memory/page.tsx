@@ -14,7 +14,7 @@ const FILE_ICONS: Record<string, string> = {
 function FileTab({ file, active, onClick }: { file: MemFile; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 text-left rounded transition-colors cursor-pointer w-full"
+      className="flex items-center gap-2 px-3 py-2 text-left rounded transition-colors cursor-pointer w-full hover:bg-[rgba(255,255,255,0.03)]"
       style={{ background: active ? 'var(--color-row)' : 'transparent', borderLeft: active ? '2px solid var(--color-green)' : '2px solid transparent' }}>
       <span className="w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center"
         style={{ background: file.exists ? 'var(--color-green)' : 'var(--color-border)', color: file.exists ? 'var(--color-bg)' : 'var(--color-dim)' }}>
@@ -84,11 +84,11 @@ export default function MemoryPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Memory</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Memory</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Memory</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
           {data ? `${data.existing}/${data.total} file presenti` : 'Caricamento...'} — Soul, Identity, Memory
@@ -96,7 +96,7 @@ export default function MemoryPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="alert">Errore nel caricamento.</p>
       ) : (
@@ -138,6 +138,7 @@ export default function MemoryPage() {
               <div className="p-4">
                 {editing ? (
                   <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={20}
+                    aria-label="Contenuto memoria"
                     className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-3 text-[11px] text-[var(--color-bright)] font-mono resize-y outline-none focus:border-[var(--color-border-glow)] transition-colors" />
                 ) : current?.exists ? (
                   <pre className="text-[11px] text-[var(--color-muted)] font-mono whitespace-pre-wrap leading-relaxed">{current.content}</pre>

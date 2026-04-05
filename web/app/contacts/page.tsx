@@ -44,20 +44,25 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newCompany, setNewCompany] = useState('')
   const [newRole, setNewRole] = useState('')
   const [newEmail, setNewEmail] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
   const fetchData = useCallback(async () => {
-    const params = search ? `?q=${encodeURIComponent(search)}` : '';
+    const params = debouncedSearch ? `?q=${encodeURIComponent(debouncedSearch)}` : '';
     const res = await fetch(`/api/contacts${params}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setContacts(data.contacts ?? []); setTotal(data.total ?? 0);
-  }, [search])
+    setLoading(false);
+  }, [debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -77,11 +82,11 @@ export default function ContactsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Contatti</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Contatti</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div><h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Contatti</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} contatti professionali</p></div>
@@ -105,8 +110,13 @@ export default function ContactsPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {contacts.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun contatto trovato.</p></div>
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : contacts.length === 0
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">{search ? 'Nessun contatto corrisponde alla ricerca.' : 'Nessun contatto ancora.'}</p>
+              {!search && <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa il pulsante <span className="font-bold text-[var(--color-muted)]">+ Nuovo</span> per aggiungere il primo contatto.</p>}
+            </div>
           : contacts.map(c => <ContactRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} onDelete={deleteContact} />)}
       </div>
     </div>

@@ -45,17 +45,22 @@ export default function JobsPage() {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
     if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (search) params.set('q', search);
+    if (debouncedSearch) params.set('q', debouncedSearch);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/jobs${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setJobs(data.jobs ?? []); setTotal(data.total ?? 0); setCounts(data.counts ?? {});
-  }, [statusFilter, search])
+    setLoading(false);
+  }, [statusFilter, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -67,11 +72,11 @@ export default function JobsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Jobs</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Jobs</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Offerte Lavoro</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} offerte · {counts.interview ?? 0} colloqui · {counts.offer ?? 0} offerte</p>
       </div>
@@ -93,13 +98,18 @@ export default function JobsPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         <div className="flex items-center gap-3 px-5 py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
           <span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">POSIZIONE</span>
-          <span className="w-24 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SALARY</span>
-          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SOURCE</span>
+          <span className="w-24 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RAL</span>
+          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">FONTE</span>
           <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">DATA</span>
           <span className="w-20 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-center">STATO</span>
         </div>
-        {jobs.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna offerta trovata.</p></div>
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : jobs.length === 0
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">{search || statusFilter !== 'all' ? 'Nessuna offerta corrisponde ai filtri.' : 'Nessuna offerta ancora.'}</p>
+              {!search && statusFilter === 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Le offerte lavoro appariranno qui quando vengono aggiunte.</p>}
+            </div>
           : jobs.map(j => <JobRow key={j.id} j={j} />)}
       </div>
     </div>

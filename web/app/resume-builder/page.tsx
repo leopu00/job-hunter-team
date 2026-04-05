@@ -28,12 +28,14 @@ export default function ResumeBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/resume').catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json();
     setData({ personal: d.personal ?? {}, experience: d.experience ?? [], education: d.education ?? [], skills: d.skills ?? [], languages: d.languages ?? [] });
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -50,11 +52,11 @@ export default function ResumeBuilderPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-4 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Resume Builder</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Resume Builder</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Resume Builder</h1>
           <div className="flex gap-2">
@@ -64,10 +66,12 @@ export default function ResumeBuilderPage() {
         </div>
       </div>
 
-      {tab === 'edit' ? (
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5">
+      {loading ? (
+        <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : tab === 'edit' ? (
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <SectionTitle title="Dati Personali" />
-          <div className="grid grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>
 
           <SectionTitle title="Esperienza" />
           {data.experience.map((exp, i) => (
@@ -88,7 +92,7 @@ export default function ResumeBuilderPage() {
           ))}
         </div>
       ) : (
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-6">
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-6 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <div className="text-center mb-4 pb-3 border-b border-[var(--color-border)]">
             <p className="text-[16px] font-bold text-[var(--color-white)]">{data.personal.nome} {data.personal.cognome}</p>
             <p className="text-[11px] text-[var(--color-green)] font-medium">{data.personal.titolo}</p>

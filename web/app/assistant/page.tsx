@@ -117,7 +117,8 @@ export default function AssistantPage() {
   const isWaiting = messages.length > 0 && messages[messages.length - 1].role === 'user'
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ position: 'relative', zIndex: 1 }}>
+    <div className="min-h-screen flex flex-col" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
+      <h1 className="sr-only">Assistente</h1>
       {/* Header */}
       <div className="border-b border-[var(--color-border)] px-5 py-3 flex items-center gap-3 flex-shrink-0"
         style={{ background: 'var(--color-panel)' }}>
@@ -153,8 +154,10 @@ export default function AssistantPage() {
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_ACTIONS.map(a => (
                 <button key={a} onClick={() => sendMessage(a)}
-                  className="px-3 py-1.5 rounded-full text-[11px] border transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-card)' }}>
+                  className="px-3 py-1.5 rounded-full text-[11px] border transition-colors duration-200 cursor-pointer"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-card)' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                   {a}
                 </button>
               ))}
@@ -176,6 +179,7 @@ export default function AssistantPage() {
             onChange={e => setInput(e.target.value)}
             placeholder={agentStatus !== 'active' ? 'Avvia prima l\'assistente…' : 'Scrivi un messaggio…'}
             disabled={sending || agentStatus !== 'active'}
+            aria-label="Scrivi un messaggio"
             className="flex-1 bg-transparent outline-none text-[12px]"
             style={{ color: 'var(--color-bright)' }} />
           <button type="submit" disabled={!input.trim() || sending || agentStatus !== 'active'}

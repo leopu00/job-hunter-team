@@ -21,9 +21,11 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
 
 function Stars({ rating, onChange }: { rating: number; onChange?: (n: number) => void }) {
   return (
-    <span className="flex gap-0.5">
+    <span className="flex gap-0.5" role={onChange ? 'radiogroup' : undefined} aria-label={onChange ? 'Valutazione' : undefined}>
       {[1, 2, 3, 4, 5].map(n => (
-        <span key={n} onClick={() => onChange?.(n)} className={onChange ? 'cursor-pointer' : ''} style={{ color: n <= rating ? '#fca130' : 'var(--color-border)', fontSize: onChange ? 16 : 11 }}>★</span>
+        <span key={n} role={onChange ? 'radio' : undefined} tabIndex={onChange ? 0 : undefined} aria-checked={onChange ? n === rating : undefined} aria-label={onChange ? `${n} ${n === 1 ? 'stella' : 'stelle'}` : undefined}
+          onClick={() => onChange?.(n)} onKeyDown={onChange ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(n); } } : undefined}
+          className={onChange ? 'cursor-pointer' : ''} style={{ color: n <= rating ? '#fca130' : 'var(--color-border)', fontSize: onChange ? 16 : 11 }}>★</span>
       ))}
     </span>
   )
@@ -60,11 +62,11 @@ export default function FeedbackPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Feedback</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Feedback</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Feedback</h1>
@@ -78,16 +80,17 @@ export default function FeedbackPage() {
         <div className="mb-4 p-4 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
           <div className="flex items-center gap-4 mb-3">
             <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RATING</label><div className="mt-1"><Stars rating={form.rating} onChange={n => setForm({ ...form, rating: n })} /></div></div>
-            <div className="flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">CATEGORIA</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} aria-label="Categoria feedback" className="w-full text-[10px] px-2 py-1.5 rounded mt-1" style={inputStyle}>
+            <div className="flex-1"><label htmlFor="feedback-cat" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">CATEGORIA</label>
+              <select id="feedback-cat" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} aria-label="Categoria feedback" className="w-full text-[10px] px-2 py-1.5 rounded mt-1" style={inputStyle}>
                 <option value="bug">Bug</option><option value="feature">Feature</option><option value="ux">UX</option><option value="other">Altro</option>
               </select></div>
           </div>
-          <div className="mb-3"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DESCRIZIONE</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
+          <div className="mb-3"><label htmlFor="feedback-desc" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DESCRIZIONE</label>
+            <textarea id="feedback-desc" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
           <div className="mb-3 p-3 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
             <p className="text-[9px] text-[var(--color-dim)]">Trascina screenshot qui (opzionale)</p></div>
-          <button onClick={submit} className="px-4 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Invia feedback</button>
+          <button onClick={submit} disabled={!form.description.trim() || !form.rating} className="px-4 py-1.5 rounded text-[10px] font-bold"
+            style={{ background: form.description.trim() && form.rating ? 'var(--color-green)' : 'var(--color-border)', color: form.description.trim() && form.rating ? '#000' : 'var(--color-dim)', cursor: form.description.trim() && form.rating ? 'pointer' : 'default' }}>Invia feedback</button>
         </div>
       )}
 

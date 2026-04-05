@@ -50,7 +50,7 @@ function LogoPlaceholder({ name, logoUrl }: { name: string; logoUrl?: string }) 
   if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={logoUrl} alt={name} width={40} height={40} loading="lazy"
+      <img src={logoUrl} alt={name} width={40} height={40} loading="lazy" decoding="async"
         className="rounded-lg object-contain flex-shrink-0"
         style={{ background: 'var(--color-border)', padding: 4 }} />
     )

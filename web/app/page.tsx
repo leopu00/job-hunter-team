@@ -268,7 +268,7 @@ function WorkspaceView({
                 onChange={e => setInputPath(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleManualPath()}
                 placeholder="/percorso/alla/cartella"
-                className="flex-1 px-3 py-2 rounded-lg text-[12px] bg-[var(--color-card)] border border-[var(--color-border)] outline-none font-mono"
+                className="flex-1 px-3 py-2 rounded-lg text-[12px] bg-[var(--color-card)] border border-[var(--color-border)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] font-mono"
                 style={{ color: 'var(--color-bright)' }}
               />
             </div>

@@ -26,12 +26,14 @@ export default function RecommendationsPage() {
   const [jobs, setJobs] = useState<JobRec[]>([])
   const [companies, setCompanies] = useState<CompanyRec[]>([])
   const [actions, setActions] = useState<ActionRec[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/recommendations').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json()
     setJobs(d.jobs ?? []); setCompanies(d.companies ?? []); setActions(d.actions ?? [])
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -39,15 +41,18 @@ export default function RecommendationsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Raccomandazioni</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Raccomandazioni</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Raccomandazioni AI</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Suggerimenti personalizzati basati sul tuo profilo e storico</p>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="mb-6">
         <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">AZIONI PRIORITARIE</h2>
         <div className="flex flex-col gap-2">
@@ -68,9 +73,9 @@ export default function RecommendationsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">JOB SUGGERITI</h2>
+          <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">LAVORI SUGGERITI</h2>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
             {jobs.map(j => (
               <div key={j.id} className="px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
@@ -78,7 +83,7 @@ export default function RecommendationsPage() {
                   <span className="text-[11px] font-medium text-[var(--color-bright)]">{j.title}</span>
                   <ScoreBadge score={j.score} />
                 </div>
-                <p className="text-[9px] text-[var(--color-muted)]">{j.company} · {j.location} {j.remote && <span style={{ color: 'var(--color-green)' }}>· Remote</span>} · {j.salary}</p>
+                <p className="text-[9px] text-[var(--color-muted)]">{j.company} · {j.location} {j.remote && <span style={{ color: 'var(--color-green)' }}>· Remoto</span>} · {j.salary}</p>
                 <p className="text-[9px] text-[var(--color-dim)] mt-1 italic">{j.reason}</p>
               </div>
             ))}
@@ -101,6 +106,7 @@ export default function RecommendationsPage() {
           </div>
         </div>
       </div>
+      </>)}
     </div>
   )
 }

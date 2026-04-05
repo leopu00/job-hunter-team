@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import type { CronJob, CronListResponse } from './types'
 import { CronJobRow } from './CronJobRow'
@@ -45,12 +46,13 @@ export default function CronPage() {
       <div className="max-w-2xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
 
         {/* Header */}
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Cron Jobs</span>
+        </nav>
         <div className="flex items-start justify-between mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
-              <span className="text-[9px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>scheduler</span>
-            </div>
             <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-white)' }}>Cron Jobs</h1>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
               {loading ? 'Caricamento…' : `${active} attivi · ${inactive} in pausa`}

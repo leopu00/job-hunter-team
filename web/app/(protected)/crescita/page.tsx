@@ -43,11 +43,11 @@ export default async function CrescitaPage() {
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Crescita</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Crescita</span>
+        </nav>
         <div className="mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Crescita & Analytics</h1>
           <p className="text-[var(--color-muted)] text-[11px] mt-1">
@@ -64,8 +64,8 @@ export default async function CrescitaPage() {
           { label: 'Candidature create', val: appTotal, color: 'var(--color-purple)' },
           { label: 'CV inviati', val: appSent, color: 'var(--color-green)' },
           { label: 'Risposte ricevute', val: risposteCount, color: '#58a6ff' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
@@ -151,11 +151,12 @@ export default async function CrescitaPage() {
           { label: 'Practice',     desc: 'score 40–69', count: scoreDist.buckets.find(b => b.label === '41–60')?.count ?? 0, color: 'var(--color-yellow)', href: '/positions?tier=practice' },
           { label: 'Riferimento',  desc: 'score < 40', count: scoreDist.buckets.find(b => b.label === '≤ 40')?.count ?? 0, color: 'var(--color-orange)', href: '/positions?tier=riferimento' },
           { label: 'Non scored',   desc: 'nessun score', count: scoreDist.total - scoreDist.withScore, color: 'var(--color-dim)', href: '/positions?tier=noscore' },
-        ].map(({ label, desc, count, color, href }) => (
+        ].map(({ label, desc, count, color, href }, i) => (
           <a
             key={label}
             href={href}
             className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors no-underline"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}
           >
             <div className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-1" style={{ color }}>{label}</div>
             <div className="text-3xl font-bold leading-none mb-1" style={{ color }}>{count}</div>

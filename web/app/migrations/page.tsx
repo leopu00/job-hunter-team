@@ -34,15 +34,17 @@ export default function MigrationsPage() {
   const [total, setTotal] = useState(0)
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchState = useCallback(async () => {
     const res = await fetch('/api/migrations').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setCurrentVersion(data.currentVersion ?? '0.0.0')
     setApplied(data.applied ?? [])
     setPending(data.pending ?? [])
     setTotal(data.totalRegistered ?? 0)
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchState() }, [fetchState])
@@ -81,11 +83,11 @@ export default function MigrationsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Migrazioni</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Migrazioni</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Migrazioni</h1>
@@ -111,7 +113,7 @@ export default function MigrationsPage() {
           </div>
         </div>
         {msg && (
-          <div className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
+          <div role="alert" className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
             style={{ background: msg.ok ? 'rgba(0,200,83,0.08)' : 'rgba(255,69,96,0.08)', color: msg.ok ? 'var(--color-green)' : 'var(--color-red)', border: `1px solid ${msg.ok ? 'rgba(0,200,83,0.3)' : 'rgba(255,69,96,0.3)'}` }}>
             {msg.text}
           </div>
@@ -119,8 +121,13 @@ export default function MigrationsPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {pending.length === 0 && applied.length === 0
-          ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna migrazione registrata.</p></div>
+        {loading
+          ? <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : pending.length === 0 && applied.length === 0
+          ? <div className="flex flex-col items-center py-16 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessuna migrazione registrata.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Le migrazioni appariranno qui quando il database viene aggiornato.</p>
+            </div>
           : <>
               {pending.map(m => <MigRow key={m.version} version={m.version} description={m.description} status="pending" />)}
               {applied.map(m => <MigRow key={m.version} version={m.version} description={m.description} status="applied" date={m.appliedAt} />)}

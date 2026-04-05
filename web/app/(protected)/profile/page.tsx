@@ -26,7 +26,7 @@ export default async function ProfilePage() {
     if (!user) {
       return (
         <div className="p-12 text-center text-[var(--color-muted)]">
-          Sessione scaduta. <a href="/" className="text-[var(--color-green)]">Accedi di nuovo</a>
+          Sessione scaduta. <Link href="/" className="text-[var(--color-green)]">Accedi di nuovo</Link>
         </div>
       )
     }
@@ -69,11 +69,11 @@ export default async function ProfilePage() {
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Profilo</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Profilo</span>
+        </nav>
         <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
@@ -85,21 +85,34 @@ export default async function ProfilePage() {
               </p>
             )}
           </div>
-          {profile && (
-            <a
-              href="/api/profile/export"
-              download
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          <div className="flex items-center gap-2">
+            <Link
+              href="/profile/edit"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold no-underline transition-all hover:opacity-90"
+              style={{ background: 'var(--color-green)', color: '#000' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
-              Esporta JSON
-            </a>
-          )}
+              Modifica
+            </Link>
+            {profile && (
+              <a
+                href="/api/profile/export"
+                download
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Esporta JSON
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
@@ -279,7 +292,7 @@ export default async function ProfilePage() {
                 <div key={i} className="px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)] transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2 mb-0.5">
                     <div className="flex items-center gap-2 min-w-0">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0" style={{ color: 'var(--color-purple)' }} aria-hidden="true">
+                      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0" style={{ color: 'var(--color-purple)' }}>
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                       </svg>
                       <span className="text-[12px] font-semibold text-[var(--color-bright)] truncate" title={p.name || undefined}>{p.name || '—'}</span>
@@ -291,7 +304,7 @@ export default async function ProfilePage() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0"
                       >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                           <polyline points="15 3 21 3 21 9" />
                           <line x1="10" y1="14" x2="21" y2="3" />
@@ -340,7 +353,7 @@ export default async function ProfilePage() {
             <div className="flex flex-wrap gap-2 mb-3">
               {profile.location_preferences.map((lp, i) => (
                 <div key={i} className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-green)' }} aria-hidden="true">
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-green)' }}>
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </svg>
@@ -414,7 +427,7 @@ export default async function ProfilePage() {
             <div className="flex flex-col gap-2">
               {aspirations.short_term && (
                 <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-yellow)' }} aria-hidden="true">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-yellow)' }}>
                     <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                   </svg>
                   <div>
@@ -425,7 +438,7 @@ export default async function ProfilePage() {
               )}
               {aspirations.long_term && (
                 <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-blue)' }} aria-hidden="true">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-blue)' }}>
                     <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                   </svg>
                   <div>
@@ -436,7 +449,7 @@ export default async function ProfilePage() {
               )}
               {aspirations.ambitious && (
                 <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-green)]/20">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }} aria-hidden="true">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }}>
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                   <div>
@@ -457,7 +470,7 @@ export default async function ProfilePage() {
             <div className="flex flex-wrap gap-2">
               {strengths.map((s, i) => (
                 <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-[var(--color-green)]/8 text-[var(--color-green)] border border-[var(--color-green)]/20">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                   {s}
                 </span>
               ))}
@@ -500,7 +513,7 @@ function SalaryRange({ label, min, max, color }: { label: string; min: number; m
           €{min.toLocaleString('it-IT')} – €{max.toLocaleString('it-IT')}
         </span>
       </div>
-      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+      <div role="progressbar" aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))} aria-valuemin={0} aria-valuemax={100} aria-label="Range stipendio" className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, (max / 120000) * 100)}%`, background: color, opacity: 0.6 }} />
       </div>
     </div>
@@ -515,14 +528,14 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
       rel="noopener noreferrer"
       className="flex items-center gap-3 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)] no-underline transition-colors hover:border-[var(--color-border-glow)]"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} aria-hidden="true">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
         {icon}
       </svg>
       <div className="flex-1 min-w-0">
         <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] block">{label}</span>
         <span className="text-[11px] text-[var(--color-bright)] truncate block">{value}</span>
       </div>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0" style={{ color: 'var(--color-dim)' }} aria-hidden="true">
+      <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0" style={{ color: 'var(--color-dim)' }}>
         <polyline points="9 18 15 12 9 6" />
       </svg>
     </a>

@@ -110,11 +110,11 @@ export default function TasksPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Task</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Task</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Task</h1>
@@ -134,8 +134,8 @@ export default function TasksPage() {
             <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && createTask()}
               placeholder="Descrizione task…" aria-label="Descrizione task" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
             <div className="flex gap-2">
-              <input value={newAgent} onChange={e => setNewAgent(e.target.value)} placeholder="Agente (opzionale, es. SCOUT-1)" aria-label="Agente assegnato"
-                className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input value={newAgent} onChange={e => setNewAgent(e.target.value)} placeholder="Agente (opzionale, es. SCOUT-1)"
+                aria-label="Agente" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <button onClick={createTask} disabled={!newTask.trim() || creating}
                 className="px-5 py-2 rounded-lg text-[11px] font-bold tracking-wide flex-shrink-0"
                 style={{ background: newTask.trim() ? 'var(--color-green)' : 'var(--color-border)', color: newTask.trim() ? '#000' : 'var(--color-dim)', cursor: newTask.trim() ? 'pointer' : 'default' }}>

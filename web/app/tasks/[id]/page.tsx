@@ -47,7 +47,7 @@ function TimelineNode({ entry, isLast }: { entry: TimelineEntry; isLast: boolean
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between py-1.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="flex justify-between py-1.5 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
       <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
       <span className="text-[10px] text-[var(--color-muted)] font-mono">{value}</span>
     </div>
@@ -77,13 +77,13 @@ export default function TaskDetailPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
           <Link href="/tasks" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Task</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)] truncate max-w-[140px]">{data?.label ?? id?.slice(0, 8)}</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)] truncate max-w-[140px]" aria-current="page">{data?.label ?? id?.slice(0, 8)}</span>
+        </nav>
         <div className="mt-3 flex items-center gap-3">
           <h1 className="text-xl font-bold tracking-tight text-[var(--color-white)]">{data?.label ?? data?.task?.slice(0, 60) ?? 'Task'}</h1>
           {data && <span className="text-[10px] px-2 py-0.5 rounded uppercase font-semibold" style={{ background: `${color}22`, color }}>{data.status}</span>}
@@ -91,9 +91,12 @@ export default function TaskDetailPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="alert">Task non trovato.</p>
+        <div className="text-center py-16" role="alert">
+          <p className="text-[var(--color-dim)] text-[12px]">Task non trovato.</p>
+          <Link href="/tasks" className="text-[11px] text-[var(--color-green)] hover:underline mt-2 inline-block">← Torna ai task</Link>
+        </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">

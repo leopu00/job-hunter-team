@@ -98,6 +98,7 @@ export default function ProfilePageClient({ profile }: Props) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadSuccess, setUploadSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Extract state
@@ -216,6 +217,8 @@ export default function ProfilePageClient({ profile }: Props) {
         const filesData = await filesRes.json()
         if (Array.isArray(filesData.files)) setUploadedFiles(filesData.files)
         setSelectedFile(null)
+        setUploadSuccess(true)
+        setTimeout(() => setUploadSuccess(false), 2500)
       }
     } catch {
       setUploadError('Impossibile raggiungere il server.')
@@ -281,7 +284,7 @@ export default function ProfilePageClient({ profile }: Props) {
       {/* ── Hint assistente ─────────────────────────────────────── */}
       <div className="mb-6 flex items-start gap-4 px-5 py-4 rounded-lg border border-[var(--color-green)]/20 bg-[var(--color-green)]/5">
         <div className="text-[var(--color-green)] mt-0.5 flex-shrink-0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         </div>
@@ -321,7 +324,7 @@ export default function ProfilePageClient({ profile }: Props) {
             <input ref={fileInputRef} type="file" accept={ACCEPTED_EXT} className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
             <div className="flex flex-col items-center gap-2">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+              <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                 style={{ color: selectedFile ? 'var(--color-green)' : 'var(--color-dim)' }}>
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -349,6 +352,7 @@ export default function ProfilePageClient({ profile }: Props) {
             </button>
           </div>
           {uploadError && <p className="text-[10px] text-[var(--color-red)]">{uploadError}</p>}
+          {uploadSuccess && <p className="text-[10px] text-[var(--color-green)] font-semibold">File caricato con successo ✓</p>}
 
           {/* File list + extract */}
           {uploadedFiles.length > 0 && (
@@ -359,13 +363,20 @@ export default function ProfilePageClient({ profile }: Props) {
               <div className="flex flex-col gap-1.5">
                 {uploadedFiles.map((f, i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                       style={{ color: 'var(--color-dim)', flexShrink: 0 }}>
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
                     </svg>
                     <span className="text-[11px] text-[var(--color-bright)] flex-1 truncate" title={f.name}>{f.name}</span>
                     <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0">{formatBytes(f.size)}</span>
+                    {/\.(pdf|doc|docx|txt|md)$/i.test(f.name) && (
+                      <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
+                        aria-label={`Apri ${f.name} in nuova finestra`}
+                        className="text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0">
+                        Apri <span aria-hidden="true">↗</span>
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
@@ -453,7 +464,7 @@ export default function ProfilePageClient({ profile }: Props) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Nome completo">
                     <input type="text" value={form.name} placeholder="Es. Mario Rossi"
-                      onChange={e => set('name', e.target.value)} autoComplete="name" />
+                      onChange={e => set('name', e.target.value)} />
                   </Field>
                   <Field label="Ruolo target">
                     <input type="text" value={form.target_role} placeholder="Es. Backend Developer"
@@ -469,7 +480,7 @@ export default function ProfilePageClient({ profile }: Props) {
                   </Field>
                   <Field label="Email">
                     <input type="email" value={form.email} placeholder="nome@example.com"
-                      onChange={e => set('email', e.target.value)} autoComplete="email" />
+                      onChange={e => set('email', e.target.value)} />
                   </Field>
                 </div>
                 <div className="flex items-center gap-3 mt-2">

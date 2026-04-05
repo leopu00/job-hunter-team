@@ -53,13 +53,15 @@ export default function BackupPage() {
   const [totalSize, setTotalSize] = useState(0)
   const [creating, setCreating] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchBackups = useCallback(async () => {
     const res = await fetch('/api/backup').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setBackups(data.backups ?? [])
     setTotalSize(data.totalSize ?? 0)
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchBackups() }, [fetchBackups])
@@ -106,11 +108,11 @@ export default function BackupPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Backup</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Backup</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Backup</h1>
@@ -123,7 +125,7 @@ export default function BackupPage() {
           </button>
         </div>
         {msg && (
-          <div className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
+          <div role="alert" className="mt-3 px-4 py-2 rounded text-[11px] font-semibold"
             style={{ background: msg.ok ? 'rgba(0,200,83,0.08)' : 'rgba(255,69,96,0.08)', color: msg.ok ? 'var(--color-green)' : 'var(--color-red)', border: `1px solid ${msg.ok ? 'rgba(0,200,83,0.3)' : 'rgba(255,69,96,0.3)'}` }}>
             {msg.text}
           </div>
@@ -131,7 +133,9 @@ export default function BackupPage() {
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {backups.length === 0
+        {loading
+          ? <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : backups.length === 0
           ? <div className="flex flex-col items-center py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun backup trovato.</p></div>
           : backups.map(b => <BackupRow key={b.id} b={b} onRestore={restoreBackup} onDelete={deleteBackup} />)
         }

@@ -47,15 +47,17 @@ export default function TemplatesPage() {
   const [varValues, setVarValues] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState('')
   const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const fetchList = useCallback(async () => {
     const p = new URLSearchParams()
     if (filterCat !== 'all') p.set('category', filterCat)
     const res = await fetch(`/api/templates?${p}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setTemplates(data.templates ?? [])
     if (data.categories) setCategories(data.categories)
+    setLoading(false)
   }, [filterCat])
 
   useEffect(() => { fetchList() }, [fetchList])
@@ -90,11 +92,11 @@ export default function TemplatesPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Template</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Template</span>
+        </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Template</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{templates.length} template disponibili</p>
       </div>
@@ -112,7 +114,9 @@ export default function TemplatesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          {templates.length === 0
+          {loading
+            ? <div className="flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+            : templates.length === 0
             ? <div className="flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessun template trovato.</p></div>
             : templates.map(t => <TemplateRow key={t.name} t={t} onSelect={selectTemplate} selected={selected === t.name} />)}
         </div>

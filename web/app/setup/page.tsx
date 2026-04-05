@@ -133,8 +133,8 @@ export default function SetupPage() {
         {step === 'apikey' && (
           <Card title="API Key" sub={`Chiave per ${form.provider}`}>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Chiave API</label>
-              <input type="password" value={form.apiKey} placeholder="sk-…" onChange={e => set({ apiKey: e.target.value })}
+              <label htmlFor="setup-apikey" className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Chiave API</label>
+              <input id="setup-apikey" type="password" value={form.apiKey} placeholder="sk-…" onChange={e => set({ apiKey: e.target.value })}
                 className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
               <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Salvata in ~/.jht/jht.config.json</p>
             </div>
@@ -145,8 +145,8 @@ export default function SetupPage() {
         {step === 'workspace' && (
           <Card title="Workspace" sub="Directory di lavoro per i file">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Path</label>
-              <input type="text" value={form.workspace} placeholder="~/.jht (default)" onChange={e => set({ workspace: e.target.value })}
+              <label htmlFor="setup-workspace" className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Path</label>
+              <input id="setup-workspace" type="text" value={form.workspace} placeholder="~/.jht (default)" onChange={e => set({ workspace: e.target.value })}
                 className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
               <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Lascia vuoto per il default ~/.jht</p>
             </div>

@@ -13,7 +13,7 @@ export default function LandingGetStarted() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="start" aria-label="Per iniziare" className="px-6 py-24 relative">
+    <section aria-label="Inizia" id="start" className="px-6 py-24 relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24" style={{ background: 'linear-gradient(180deg, transparent, var(--color-border))' }} />
 
       <div className="max-w-4xl mx-auto">
@@ -29,8 +29,8 @@ export default function LandingGetStarted() {
         <div className="grid md:grid-cols-3 gap-6">
           {STEPS.map((s, i) => (
             <div key={i} className="relative group">
-              <div className="border border-[var(--color-border)] rounded-xl p-6 h-full transition-all duration-200"
-                style={{ background: 'var(--color-panel)' }}>
+              <div className="border border-[var(--color-border)] hover:border-[var(--color-border-glow)] rounded-xl p-6 h-full transition-all duration-200"
+                style={{ background: 'var(--color-panel)', animation: `fade-in 0.4s ease ${i * 0.12}s both` }}>
                 {/* Step number + icon */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[var(--color-border)] flex-shrink-0"
@@ -79,7 +79,7 @@ export default function LandingGetStarted() {
 
 function DownloadIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
@@ -89,7 +89,7 @@ function DownloadIcon() {
 
 function ProfileIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
@@ -98,7 +98,7 @@ function ProfileIcon() {
 
 function RocketIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
       <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
       <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />

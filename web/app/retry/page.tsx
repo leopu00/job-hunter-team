@@ -67,7 +67,7 @@ function BreakerCard({ b, onReset, resetting }: { b: BreakerInfo; onReset: (id: 
           <div className="h-full rounded-full transition-all" style={{ width: `${failPct}%`, background: failPct >= 80 ? 'var(--color-red)' : failPct >= 50 ? 'var(--color-yellow)' : 'var(--color-green)' }} />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-[9px] text-[var(--color-dim)] mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[9px] text-[var(--color-dim)] mb-3">
         <div>Totale fail: <span className="text-[var(--color-muted)]">{b.totalFailures}</span></div>
         <div>Totale ok: <span className="text-[var(--color-muted)]">{b.totalSuccesses}</span></div>
         <div>Aperture: <span className="text-[var(--color-muted)]">{b.totalOpened}</span></div>
@@ -113,19 +113,22 @@ export default function RetryPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Circuit Breaker</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Circuit Breaker</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Circuit Breaker</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Stato circuit breaker — open/closed/half-open, fallimenti, reset</p>
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data || data.breakers.length === 0 ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun circuit breaker registrato.</p>
+        <div className="text-center py-16">
+          <p className="text-[var(--color-dim)] text-[12px]">Nessun circuit breaker registrato.</p>
+          <p className="text-[var(--color-dim)] text-[10px] mt-1">I circuit breaker appariranno qui quando i servizi esterni vengono monitorati.</p>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -135,7 +138,7 @@ export default function RetryPage() {
             <StatCard label="Semi-aperti" value={String(data.summary.halfOpen)} color="var(--color-yellow)" />
           </div>
           <div className="grid md:grid-cols-2 gap-3">
-            {data.breakers.map(b => <BreakerCard key={b.id} b={b} onReset={handleReset} resetting={resetting} />)}
+            {data.breakers.map((b, i) => <div key={b.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><BreakerCard b={b} onReset={handleReset} resetting={resetting} /></div>)}
           </div>
         </>
       )}

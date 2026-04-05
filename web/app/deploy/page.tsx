@@ -18,7 +18,7 @@ const STATUS_CFG: Record<ServiceStatus, { icon: string; color: string; label: st
 function ServiceRow({ svc }: { svc: ServiceHealth }) {
   const cfg = STATUS_CFG[svc.status]
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
       <span style={{ color: cfg.color, animation: svc.ok ? 'pulse-dot 3s ease-in-out infinite' : undefined }}>{cfg.icon}</span>
       <div className="flex-1 min-w-0">
         <span className="text-[12px] font-semibold" style={{ color: svc.ok ? 'var(--color-bright)' : cfg.color }}>{svc.name}</span>
@@ -37,9 +37,9 @@ function ServiceRow({ svc }: { svc: ServiceHealth }) {
 function AgentGrid({ agents }: { agents: AgentInfo[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      {agents.map(a => (
+      {agents.map((a, i) => (
         <div key={a.session} className="flex items-center gap-2 px-3 py-2 rounded border text-[11px]"
-          style={{ borderColor: a.active ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: a.active ? 'rgba(0,232,122,0.04)' : 'transparent' }}>
+          style={{ borderColor: a.active ? 'rgba(0,232,122,0.25)' : 'var(--color-border)', background: a.active ? 'rgba(0,232,122,0.04)' : 'transparent', animation: `fade-in 0.4s ease ${i * 0.05}s both` }}>
           <span style={{ color: a.active ? 'var(--color-green)' : 'var(--color-dim)', animation: a.active ? 'pulse-dot 2s ease-in-out infinite' : undefined }}>●</span>
           <span className="font-mono truncate" style={{ color: a.active ? 'var(--color-bright)' : 'var(--color-dim)' }}>{a.session}</span>
         </div>
@@ -75,11 +75,11 @@ export default function DeployPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Deploy</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Deploy</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] flex items-center gap-3">

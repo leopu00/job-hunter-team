@@ -60,29 +60,34 @@ export default function CompaniesPage() {
   const [totalPositions, setTotalPositions] = useState(0)
   const [sectorFilter, setSectorFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
     if (sectorFilter !== 'all') params.set('sector', sectorFilter);
-    if (search) params.set('q', search);
+    if (debouncedSearch) params.set('q', debouncedSearch);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/companies${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setCompanies(data.companies ?? []); setTotal(data.total ?? 0); setSectors(data.sectors ?? []); setTotalPositions(data.totalPositions ?? 0);
-  }, [sectorFilter, search])
+    setLoading(false);
+  }, [sectorFilter, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Aziende</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Aziende</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Aziende</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} aziende · {totalPositions} posizioni aperte</p>
       </div>
@@ -104,7 +109,9 @@ export default function CompaniesPage() {
           <span className="w-12 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">APERTE</span>
           <span className="w-10 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">STORICO</span>
         </div>
-        {companies.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : companies.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna azienda trovata.</p></div>
           : companies.map(c => <CompanyRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} />)}
       </div>

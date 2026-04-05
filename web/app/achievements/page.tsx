@@ -28,15 +28,17 @@ export default function AchievementsPage() {
   const [unlocked, setUnlocked] = useState(0)
   const [total, setTotal] = useState(0)
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const p = new URLSearchParams()
     if (filterCat !== 'all') p.set('category', filterCat)
     const res = await fetch(`/api/achievements?${p}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setAchievements(data.achievements ?? []); setByCategory(data.byCategory ?? {})
     setUnlocked(data.unlocked ?? 0); setTotal(data.total ?? 0)
+    setLoading(false)
   }, [filterCat])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -47,15 +49,18 @@ export default function AchievementsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Achievement</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Achievement</span>
+        </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Achievement</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{unlocked}/{total} sbloccati</p>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {CATEGORIES.map(c => {
           const info = byCategory[c]
@@ -87,14 +92,15 @@ export default function AchievementsPage() {
       <div className="grid md:grid-cols-2 gap-3">
         {achievements.length === 0 ? (
           <div className="md:col-span-2 border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] py-16 text-center">
-            <p className="text-[var(--color-dim)] text-[12px]">Nessun achievement trovato.</p>
+            <p className="text-[var(--color-dim)] text-[12px]">{filterCat !== 'all' ? 'Nessun achievement in questa categoria.' : 'Nessun achievement trovato.'}</p>
+            {filterCat !== 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Prova a selezionare una categoria diversa.</p>}
           </div>
-        ) : achievements.map(a => {
+        ) : achievements.map((a, idx) => {
           const cat = CAT_CFG[a.category]
           const pct = Math.min(100, Math.round((a.current / a.target) * 100))
           return (
             <div key={a.id} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors hover:bg-[var(--color-row)]"
-              style={{ opacity: a.unlocked ? 1 : 0.5 }}>
+              style={{ opacity: a.unlocked ? 1 : 0.5, animation: `fade-in 0.4s ease ${idx * 0.06}s both` }}>
               <span className="text-2xl flex-shrink-0">{a.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -115,6 +121,7 @@ export default function AchievementsPage() {
           )
         })}
       </div>
+      </>)}
     </div>
   )
 }

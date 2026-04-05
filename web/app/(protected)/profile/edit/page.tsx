@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useTransition, useRef, type FormEvent } from 'react'
+import React, { useState, useEffect, useTransition, useRef, useId, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import type { CandidateProfile, Language } from '@/lib/types'
 
 type UploadedFile = { name: string; size: number; modified: number }
@@ -329,13 +330,20 @@ export default function ProfileEditPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <Link href="/profile" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Profilo</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Modifica</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Modifica Profilo</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
           Questi dati vengono usati dagli agenti per personalizzare CV e cover letter
         </p>
       </div>
 
-      <form aria-label="Modifica profilo" onSubmit={handleSubmit} className="max-w-2xl space-y-8">
+      <form aria-label="Modifica profilo" onSubmit={handleSubmit} aria-busy={isPending} className="max-w-2xl space-y-8">
 
         {/* ── Info Base ── */}
         <FormSection title="Info Base">
@@ -412,11 +420,12 @@ export default function ProfileEditPage() {
           {languages.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {languages.map((l, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <span className="text-[12px] text-[var(--color-bright)]">{l.language}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--color-muted)]">{l.level}</span>
                     <button type="button" onClick={() => setLanguages(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi lingua ${l.language}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
                       × rimuovi
                     </button>
@@ -450,7 +459,7 @@ export default function ProfileEditPage() {
           {experience.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {experience.map((e, i) => (
-                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="text-[12px] font-semibold text-[var(--color-bright)]">{e.role}</span>
@@ -458,6 +467,7 @@ export default function ProfileEditPage() {
                       {e.period && <span className="text-[10px] text-[var(--color-dim)] ml-2 font-mono">{e.period}</span>}
                     </div>
                     <button type="button" onClick={() => setExperience(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi esperienza ${e.role}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0">
                       × rimuovi
                     </button>
@@ -497,13 +507,14 @@ export default function ProfileEditPage() {
           {education.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {education.map((e, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div>
                     <span className="text-[12px] text-[var(--color-bright)]">{e.title}</span>
                     {e.institution && <span className="text-[10px] text-[var(--color-muted)] ml-2">{e.institution}</span>}
                     {e.year && <span className="text-[10px] text-[var(--color-dim)] ml-2 font-mono">{e.year}</span>}
                   </div>
                   <button type="button" onClick={() => setEducation(prev => prev.filter((_, j) => j !== i))}
+                    aria-label={`Rimuovi titolo ${e.title}`}
                     className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
                     × rimuovi
                   </button>
@@ -543,10 +554,11 @@ export default function ProfileEditPage() {
           {projects.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {projects.map((p, i) => (
-                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={i} className="px-3 py-2.5 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name}</span>
                     <button type="button" onClick={() => setProjects(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi progetto ${p.name}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0">
                       × rimuovi
                     </button>
@@ -687,15 +699,21 @@ export default function ProfileEditPage() {
           {uploadedFiles.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {uploadedFiles.map(f => (
-                <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
+                <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[12px] text-[var(--color-bright)] truncate" title={f.name}>{f.name}</span>
                     <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                   </div>
-                  <button type="button" onClick={() => handleDeleteFile(f.name)}
-                    className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0 ml-3">
-                    × elimina
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
+                      aria-label={`Apri ${f.name} in nuova finestra`}
+                      className="text-[10px] text-[var(--color-blue)] hover:underline no-underline">apri <span aria-hidden="true">↗</span></a>
+                    <button type="button" onClick={() => handleDeleteFile(f.name)}
+                      aria-label={`Elimina file ${f.name}`}
+                      className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
+                      × elimina
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -754,11 +772,12 @@ function FormRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
 }
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({ label, children }: { label: string; children: React.ReactElement<{ id?: string }> }) {
+  const id = useId()
   return (
     <div>
-      <label>{label}</label>
-      {children}
+      <label htmlFor={id}>{label}</label>
+      {React.cloneElement(children, { id })}
     </div>
   )
 }

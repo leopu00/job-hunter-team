@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { EmptyState } from '../components/EmptyState'
 
@@ -27,7 +28,9 @@ function SchemaRow({ s }: { s: Schema }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <tr className="cursor-pointer transition-colors" onClick={() => setOpen(o => !o)}
+      <tr className="cursor-pointer transition-colors" role="button" tabIndex={0} aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}
         style={{ borderBottom: '1px solid var(--color-border)', background: open ? 'var(--color-deep)' : 'var(--color-panel)' }}>
         <td className="px-4 py-2.5 text-[11px] font-mono font-semibold" style={{ color: 'var(--color-bright)' }}>{s.name}</td>
         <td className="px-4 py-2.5"><TypeBadge type={s.type} /></td>
@@ -74,18 +77,22 @@ export default function ValidatorsPage() {
   })).filter(m => m.schemas.length > 0)
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-6">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Validators</span>
+        </nav>
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>
               Validators
               {!loading && <span className="ml-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>{total} schemi</span>}
             </h1>
           </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca schema…"
-            aria-label="Cerca schema" className="px-3 py-1.5 rounded text-[11px] outline-none font-mono"
+            aria-label="Cerca schema" className="px-3 py-1.5 rounded text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] font-mono"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-bright)', minWidth: 200 }} />
         </div>
 

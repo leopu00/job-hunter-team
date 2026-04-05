@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { FilterBar, FilterDef, FilterValues } from '../components/FilterBar'
 import { EmptyState } from '../components/EmptyState'
@@ -57,12 +58,16 @@ export default function AuditPage() {
   for (const e of events) counts[e.severity]++
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-5xl flex flex-col gap-6">
 
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Audit Log</span>
+        </nav>
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>
               Audit Log
               {!loading && <span className="ml-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>{total} eventi</span>}
@@ -104,7 +109,7 @@ export default function AuditPage() {
                 </thead>
                 <tbody>
                   {visible.map((e, i) => (
-                    <tr key={e.id} style={{ background: 'var(--color-panel)', borderBottom: i < visible.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                    <tr key={e.id} className="transition-colors hover:bg-[rgba(255,255,255,0.02)]" style={{ background: 'var(--color-panel)', borderBottom: i < visible.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                       <td className="px-4 py-2.5"><SevBadge s={e.severity} /></td>
                       <td className="px-4 py-2.5 text-[10px] font-mono whitespace-nowrap" style={{ color: 'var(--color-dim)' }}>{e.ts}</td>
                       <td className="px-4 py-2.5 text-[11px] font-semibold" style={{ color: 'var(--color-muted)' }}>{e.actor}</td>

@@ -43,15 +43,15 @@ function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => v
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[9px] text-[var(--color-dim)]">{ageLabel}</span>
         {!n.read && <Btn label="letto" color="var(--color-green)" onClick={() => onRead(n.id)} />}
-        <Btn label="×" color="var(--color-red)" onClick={() => onDelete(n.id)} aria-label="Elimina notifica" />
+        <Btn label="×" color="var(--color-red)" onClick={() => onDelete(n.id)} ariaLabel="Elimina notifica" />
       </div>
     </div>
   )
 }
 
-function Btn({ label, color, onClick, ...rest }: { label: string; color: string; onClick: () => void } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function Btn({ label, color, onClick, ariaLabel }: { label: string; color: string; onClick: () => void; ariaLabel?: string }) {
   return (
-    <button onClick={onClick} className="text-[10px] font-bold transition-colors cursor-pointer"
+    <button onClick={onClick} aria-label={ariaLabel} className="text-[10px] font-bold transition-colors cursor-pointer"
       style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
       onMouseEnter={e => e.currentTarget.style.color = color}
       onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'} {...rest}>{label}</button>
@@ -105,11 +105,11 @@ export default function NotificationsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Notifiche</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Notifiche</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Notifiche</h1>

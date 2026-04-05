@@ -16,7 +16,9 @@ const PRIO_CLR: Record<string, string> = {
 
 function StatBox({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="flex flex-col items-center p-3 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
+    <div className="flex flex-col items-center p-3 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <span className="text-xl font-bold font-mono" style={{ color }}>{value}</span>
       <span className="text-[9px] text-[var(--color-dim)] mt-0.5">{label}</span>
     </div>
@@ -50,16 +52,16 @@ export default function SchedulerPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Scheduler</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Scheduler</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Scheduler</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Coda prioritaria con dipendenze · {tasks.length} task</p>
       </div>
 
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
         <StatBox label="Pendenti" value={stats.pending} color="var(--color-yellow)" />
         <StatBox label="In esecuzione" value={stats.running} color="var(--color-blue)" />
         <StatBox label="Completati" value={stats.completed} color="var(--color-green)" />

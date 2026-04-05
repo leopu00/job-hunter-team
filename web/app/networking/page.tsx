@@ -56,11 +56,11 @@ export default function NetworkingPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Networking</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Networking</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Networking</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{totalContacts} contatti · {companiesWithContacts} aziende con contatti · {network.length} aziende totali</p>
       </div>
@@ -81,11 +81,11 @@ export default function NetworkingPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">Mappa Contatti per Azienda</p>
           <div className="flex flex-col gap-2">
-            {network.map(n => <CompanyCard key={n.company} n={n} />)}
+            {network.map((n, i) => <div key={n.company} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><CompanyCard n={n} /></div>)}
           </div>
         </div>
         <div>

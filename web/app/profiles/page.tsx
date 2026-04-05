@@ -62,12 +62,14 @@ export default function ProfilesPage() {
   const [total, setTotal] = useState(0)
   const [avgCompleteness, setAvgCompleteness] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/profiles').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setProfiles(data.profiles ?? []); setTotal(data.total ?? 0); setAvgCompleteness(data.avgCompleteness ?? 0);
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -75,11 +77,11 @@ export default function ProfilesPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Profili</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Profili</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Profili Candidato</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} profili · {avgCompleteness}% completezza media</p>
       </div>
@@ -90,7 +92,9 @@ export default function ProfilesPage() {
           <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">COMPLETEZZA</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">AGGIORNATO</span>
         </div>
-        {profiles.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : profiles.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun profilo trovato.</p></div>
           : profiles.map(p => <ProfileCard key={p.id} p={p} expanded={expandedId === p.id} onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)} />)}
       </div>

@@ -70,11 +70,11 @@ export default function WebhooksPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Webhook</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Webhook</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Webhook</h1>
@@ -94,7 +94,7 @@ export default function WebhooksPage() {
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
               <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" />
             </div>
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="url" required />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="url" required />
             <div className="flex flex-wrap gap-1.5">
               {ALL_EVENTS.map(ev => (
                 <button key={ev} onClick={() => toggleEvent(ev)} className="px-2 py-1 rounded text-[9px] font-mono cursor-pointer transition-all"
@@ -122,7 +122,7 @@ export default function WebhooksPage() {
               <p className="text-[10px] text-[var(--color-dim)]">Registra webhook per ricevere notifiche sugli eventi.</p>
             </div>
           ) : webhooks.map((wh, i) => (
-            <div key={wh.id} className={`flex items-start gap-3 px-5 py-4 ${i < webhooks.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
+            <div key={wh.id} className={`flex items-start gap-3 px-5 py-4 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < webhooks.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[12px] font-semibold text-[var(--color-bright)]">{wh.name}</span>

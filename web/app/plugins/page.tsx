@@ -99,11 +99,11 @@ export default function PluginsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Plugin</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Plugin</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Plugin</h1>
@@ -124,14 +124,17 @@ export default function PluginsPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data || data.total === 0 ? (
         <div className="text-center py-16">
           <p className="text-[var(--color-dim)] text-[12px]">Nessun plugin trovato.</p>
           <p className="text-[var(--color-dim)] text-[10px] mt-2">I plugin vanno in <code className="text-[var(--color-muted)]">~/.jht/plugins/</code> con un file <code className="text-[var(--color-muted)]">jht.plugin.json</code></p>
         </div>
       ) : filtered.length === 0 ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun plugin per il filtro selezionato.</p>
+        <div className="text-center py-16">
+          <p className="text-[var(--color-dim)] text-[12px]">Nessun plugin per il filtro selezionato.</p>
+          <p className="text-[var(--color-dim)] text-[10px] mt-1">Prova a selezionare una categoria diversa.</p>
+        </div>
       ) : (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">

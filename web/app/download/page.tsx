@@ -118,7 +118,7 @@ function DownloadContent() {
 
           {/* OS Cards */}
           <div className="flex flex-col gap-4 mb-10">
-            {sorted.map((platform) => {
+            {sorted.map((platform, i) => {
               const isDetected = platform.id === detectedOS
               const isExpanded = expanded === platform.id as OS
               const Icon = ICONS[platform.id] || (() => null)
@@ -126,12 +126,15 @@ function DownloadContent() {
               const instructions = instrKey ? ta(instrKey) : platform.instructions
 
               return (
-                <div key={platform.id} className="border rounded-lg overflow-hidden transition-colors"
+                <div key={platform.id} className="border rounded-lg overflow-hidden transition-all duration-200"
                   style={{
                     borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
                     background: 'var(--color-panel)',
                     boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
-                  }}>
+                    animation: `fade-in 0.4s ease ${i * 0.12}s both`,
+                  }}
+                  onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                  onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                   {/* Card header */}
                   <div className="px-4 sm:px-5 py-4">
                     <div className="flex items-center gap-3 sm:gap-4">

@@ -55,12 +55,14 @@ export default function GoalsPage() {
   const [summary, setSummary] = useState<Summary>({ total: 0, completed: 0, onTrack: 0, behind: 0 })
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ title: '', target: '', unit: '', deadline: '' })
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/goals').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json()
     setGoals(d.goals ?? []); setSummary(d.summary ?? {})
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -81,11 +83,11 @@ export default function GoalsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Obiettivi</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Obiettivi</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Obiettivi</h1>
@@ -97,21 +99,27 @@ export default function GoalsPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end flex-wrap" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">OBIETTIVO</label>
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-20"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TARGET</label>
-            <input type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-24"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">UNITÀ</label>
-            <input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="es. candidature" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-32"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DEADLINE</label>
-            <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <button onClick={add} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Crea</button>
+          <div className="flex flex-col gap-0.5 flex-1"><label htmlFor="goal-title" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">OBIETTIVO</label>
+            <input id="goal-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-20"><label htmlFor="goal-target" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TARGET</label>
+            <input id="goal-target" type="number" value={form.target} onChange={e => setForm({ ...form, target: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-24"><label htmlFor="goal-unit" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">UNITÀ</label>
+            <input id="goal-unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="es. candidature" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-32"><label htmlFor="goal-deadline" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCADENZA</label>
+            <input id="goal-deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <button onClick={add} disabled={!form.title.trim() || !form.target || !form.deadline} className="px-3 py-1.5 rounded text-[10px] font-bold"
+            style={{ background: form.title.trim() && form.target && form.deadline ? 'var(--color-green)' : 'var(--color-border)', color: form.title.trim() && form.target && form.deadline ? '#000' : 'var(--color-dim)', cursor: form.title.trim() && form.target && form.deadline ? 'pointer' : 'default' }}>Crea</button>
         </div>
       )}
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {goals.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun obiettivo impostato.</p></div>
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : goals.length === 0
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessun obiettivo impostato.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa <span className="font-bold text-[var(--color-muted)]">+ Nuovo obiettivo</span> per definire un traguardo da raggiungere.</p>
+            </div>
           : goals.map(g => <GoalRow key={g.id} goal={g} onUpdate={update} />)}
       </div>
     </div>

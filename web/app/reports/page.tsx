@@ -24,13 +24,15 @@ export default function ReportsPage() {
   const [monthly, setMonthly] = useState<MonthData[]>([])
   const [phases, setPhases] = useState<PhaseTime[]>([])
   const [companies, setCompanies] = useState<TopCompany[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/reports?period=${period}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setKpi(data.kpi ?? null); setMonthly(data.monthly ?? [])
     setPhases(data.phaseTimes ?? []); setCompanies(data.topCompanies ?? [])
+    setLoading(false)
   }, [period])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -51,11 +53,11 @@ export default function ReportsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Report</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Report</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Report</h1>
           <div className="flex gap-1" role="radiogroup" aria-label="Periodo">
@@ -71,9 +73,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        {KPI_CARDS.map(k => (
-          <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        {KPI_CARDS.map((k, i) => (
+          <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-all duration-200 hover:border-[var(--color-border-glow)]"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
             <p className="text-[9px] uppercase tracking-widest text-[var(--color-dim)]">{k.label}</p>
             <p className="text-xl font-bold mt-1" style={{ color: k.color }}>{k.value}</p>
           </div>
@@ -81,7 +87,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
-        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Candidature per mese</p>
           {monthly.map(m => (
             <div key={m.month} className="flex items-center gap-2 mb-2">
@@ -92,7 +98,7 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">Tempo medio per fase</p>
           {phases.map(p => (
             <div key={p.phase} className="flex items-center gap-2 mb-2">
@@ -117,6 +123,7 @@ export default function ReportsPage() {
           )
         })}
       </div>
+      </>)}
     </div>
   )
 }

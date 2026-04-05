@@ -46,9 +46,9 @@ function ReminderRow({ rem, onStatus }: { rem: Reminder; onStatus: (id: string, 
       <span className="text-[9px] font-mono w-16 text-right" style={{ color: overdue ? 'var(--color-red)' : 'var(--color-dim)' }}>{timeLabel(rem.dueDate)}</span>
       <span className="text-[8px] font-bold px-1.5 py-0.5 rounded w-16 text-center" style={{ color: stat.color, border: `1px solid ${stat.color}` }}>{stat.label}</span>
       <div className="flex gap-1">
-        {rem.status !== 'done' && <button onClick={() => onStatus(rem.id, 'done')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>✓</button>}
-        {rem.status === 'pending' && <button onClick={() => onStatus(rem.id, 'snoozed')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#fca130', border: '1px solid var(--color-border)' }}>⏸</button>}
-        {rem.status === 'snoozed' && <button onClick={() => onStatus(rem.id, 'pending')} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#61affe', border: '1px solid var(--color-border)' }}>▶</button>}
+        {rem.status !== 'done' && <button onClick={() => onStatus(rem.id, 'done')} aria-label="Segna come completato" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>✓</button>}
+        {rem.status === 'pending' && <button onClick={() => onStatus(rem.id, 'snoozed')} aria-label="Posticipa promemoria" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#fca130', border: '1px solid var(--color-border)' }}>⏸</button>}
+        {rem.status === 'snoozed' && <button onClick={() => onStatus(rem.id, 'pending')} aria-label="Riattiva promemoria" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: '#61affe', border: '1px solid var(--color-border)' }}>▶</button>}
       </div>
     </div>
   )
@@ -87,11 +87,11 @@ export default function RemindersPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Promemoria</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Promemoria</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Promemoria</h1>
@@ -103,15 +103,16 @@ export default function RemindersPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end flex-wrap" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5 w-28"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TIPO</label>
-            <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} aria-label="Tipo promemoria" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle}>
+          <div className="flex flex-col gap-0.5 w-28"><label htmlFor="reminder-type" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TIPO</label>
+            <select id="reminder-type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} aria-label="Tipo promemoria" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle}>
               <option value="follow-up">Follow-up</option><option value="interview-prep">Prep colloquio</option><option value="offer-deadline">Scadenza offerta</option><option value="custom">Altro</option>
             </select></div>
-          <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TITOLO</label>
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 w-28"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCADENZA</label>
-            <input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <button onClick={add} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Crea</button>
+          <div className="flex flex-col gap-0.5 flex-1"><label htmlFor="reminder-title" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TITOLO</label>
+            <input id="reminder-title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 w-28"><label htmlFor="reminder-due" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCADENZA</label>
+            <input id="reminder-due" type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <button onClick={add} disabled={!form.title.trim() || !form.dueDate} className="px-3 py-1.5 rounded text-[10px] font-bold"
+            style={{ background: form.title.trim() && form.dueDate ? 'var(--color-green)' : 'var(--color-border)', color: form.title.trim() && form.dueDate ? '#000' : 'var(--color-dim)', cursor: form.title.trim() && form.dueDate ? 'pointer' : 'default' }}>Crea</button>
         </div>
       )}
 
