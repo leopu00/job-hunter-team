@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
@@ -45,6 +45,8 @@ const T = {
     api: 'API Routes',
     shared_label: 'Shared',
     e2e: 'E2E Tests',
+    recent: 'Ultimi commit',
+    recent_desc: 'Le modifiche piu recenti al repository',
   },
   en: {
     title: 'Project Statistics',
@@ -79,6 +81,8 @@ const T = {
     api: 'API Routes',
     shared_label: 'Shared',
     e2e: 'E2E Tests',
+    recent: 'Recent commits',
+    recent_desc: 'Latest changes to the repository',
   },
 }
 
@@ -92,18 +96,49 @@ type StatsData = {
   weeklyCommits: { week: string; count: number }[]
   typeCounts: { feat: number; fix: number; merge: number; test: number; other: number }
   areas: { web: number; api: number; shared: number; e2e: number }
+  recentCommits: { hash: string; date: string; message: string; author: string }[]
 }
 
 /* ── Componenti grafici CSS puro ─────────────────────────────────── */
 
+function useCountUp(target: number, duration = 1200) {
+  const [count, setCount] = useState(0)
+  const ref = useRef<HTMLDivElement>(null)
+  const started = useRef(false)
+
+  useEffect(() => {
+    if (!ref.current || started.current) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || started.current) return
+      started.current = true
+      const start = performance.now()
+      const step = (now: number) => {
+        const progress = Math.min((now - start) / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        setCount(Math.round(eased * target))
+        if (progress < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }, { threshold: 0.3 })
+    observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [target, duration])
+
+  return { count, ref }
+}
+
 function StatCard({ value, label, accent }: { value: string | number; label: string; accent?: string }) {
+  const isNumber = typeof value === 'number'
+  const { count, ref } = useCountUp(isNumber ? value : 0)
+
   return (
     <div
+      ref={ref}
       className="p-5 rounded-xl border border-[var(--color-border)] transition-all hover:border-[var(--color-border-glow)]"
       style={{ background: 'var(--color-panel)' }}
     >
       <div className="text-2xl font-bold mb-1" style={{ color: accent ?? 'var(--color-green)' }}>
-        {value}
+        {isNumber ? count : value}
       </div>
       <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{label}</div>
     </div>
@@ -352,6 +387,37 @@ function StatsContent() {
                 />
               </section>
             </div>
+
+            {/* Recent commits */}
+            {data.recentCommits && data.recentCommits.length > 0 && (
+              <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+                <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.recent}</h2>
+                <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.recent_desc}</p>
+                <div className="flex flex-col gap-2">
+                  {data.recentCommits.map(c => {
+                    const typeMatch = c.message.match(/^(feat|fix|merge|test)/i)
+                    const typeColor = typeMatch
+                      ? { feat: '#00e676', fix: '#ffc107', merge: '#2196f3', test: '#b388ff' }[typeMatch[1].toLowerCase()] ?? '#607d8b'
+                      : '#607d8b'
+                    return (
+                      <div key={c.hash} className="flex items-start gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
+                        <span className="text-[10px] font-mono flex-shrink-0 mt-0.5 px-1.5 py-0.5 rounded"
+                          style={{ background: 'var(--color-card)', color: 'var(--color-dim)' }}>
+                          {c.hash}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-[var(--color-muted)] truncate leading-relaxed">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 -mb-px" style={{ background: typeColor }} />
+                            {c.message}
+                          </p>
+                          <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; {c.date}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* Timeline */}
             <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
