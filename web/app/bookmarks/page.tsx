@@ -67,17 +67,17 @@ export default function BookmarksPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo segnalibro</p>
           <div className="flex flex-wrap gap-2 items-end">
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titolo posizione *"
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titolo posizione *" aria-label="Titolo posizione"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
-            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *"
+            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *" aria-label="Azienda"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)" aria-label="URL posizione"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
           </div>
           <div className="flex flex-wrap gap-2 items-end mt-2">
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note personali"
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note personali" aria-label="Note personali"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[200px]" />
-            <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tag (virgola-separati)"
+            <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tag (virgola-separati)" aria-label="Tag"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[140px]" />
             <button onClick={addBookmark} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
               style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>salva</button>
