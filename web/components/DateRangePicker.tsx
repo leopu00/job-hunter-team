@@ -139,9 +139,9 @@ export default function DateRangePicker({ value, onChange, placeholder = 'Selezi
           {/* Calendar */}
           <div style={{ minWidth: 196 }}>
             <div className="flex items-center justify-between mb-2">
-              <button onClick={prevMonth} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:14 }}>‹</button>
+              <button aria-label="Mese precedente" onClick={prevMonth} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:14 }}>‹</button>
               <span className="text-[10px] font-semibold" style={{ color: 'var(--color-bright)' }}>{MONTHS[viewMonth]} {viewYear}</span>
-              <button onClick={nextMonth} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:14 }}>›</button>
+              <button aria-label="Mese successivo" onClick={nextMonth} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:14 }}>›</button>
             </div>
             <CalendarMonth year={viewYear} month={viewMonth} start={value.start} end={value.end} hover={hover}
               onSelect={selectDay} onHover={setHover} />
