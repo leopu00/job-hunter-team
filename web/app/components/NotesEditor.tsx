@@ -94,9 +94,9 @@ export function NotesEditor({
             </span>
           )}
           {/* Tab switcher */}
-          <div className="flex rounded overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+          <div role="tablist" className="flex rounded overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
             {(['edit', 'preview'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
+              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
                 className="px-2 py-0.5 text-[9px] font-semibold uppercase transition-colors"
                 style={{
                   background: tab === t ? 'var(--color-border)' : 'transparent',
