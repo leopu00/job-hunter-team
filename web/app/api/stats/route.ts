@@ -9,14 +9,40 @@ function run(cmd: string): string {
   }
 }
 
+function hasGit(): boolean {
+  return run('git rev-parse --is-inside-work-tree') === 'true'
+}
+
+/* Dati statici di fallback per ambienti senza git (Vercel, Docker) */
+const FALLBACK = {
+  overview: {
+    agents: 8,
+    languages: 2,
+    totalCommits: 500,
+    contributors: 10,
+    devDays: 280,
+    apiRoutes: 100,
+    pages: 300,
+    sharedModules: 36,
+    e2eTests: 30,
+    firstCommit: '2025-07-01',
+    lastCommit: new Date().toISOString().slice(0, 10),
+  },
+  weeklyCommits: [],
+  typeCounts: { feat: 180, fix: 90, merge: 120, test: 30, other: 80 },
+  areas: { web: 300, api: 100, shared: 36, e2e: 30 },
+}
+
 export async function GET() {
-  // Commit count totale su master
+  if (!hasGit()) {
+    return NextResponse.json({ ok: true, source: 'static', ...FALLBACK })
+  }
+
+  // Commit count totale
   const totalCommits = parseInt(run('git rev-list --count HEAD'), 10) || 0
 
   // Commit per settimana (ultime 12 settimane)
-  const weeklyRaw = run(
-    'git log --since="12 weeks ago" --format="%aI" HEAD'
-  )
+  const weeklyRaw = run('git log --since="12 weeks ago" --format="%aI" HEAD')
   const weekMap = new Map<string, number>()
   for (const line of weeklyRaw.split('\n').filter(Boolean)) {
     const d = new Date(line)
@@ -62,6 +88,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    source: 'git',
     overview: {
       agents: 8,
       languages: 2,
