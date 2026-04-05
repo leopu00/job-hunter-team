@@ -166,7 +166,7 @@ export default function SetupPage() {
               )}
               {health === 'ok' && (
                 <>
-                  <span className="text-3xl" style={{ color: 'var(--color-green)' }}>✓</span>
+                  <span className="text-3xl" aria-hidden="true" style={{ color: 'var(--color-green)' }}>✓</span>
                   <p className="text-[12px] font-semibold" style={{ color: 'var(--color-green)' }}>{healthMsg}</p>
                   <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Provider: {form.provider} · {form.workspace || '~/.jht'}</p>
                 </>

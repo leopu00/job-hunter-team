@@ -65,9 +65,10 @@ export function DataTable<T extends Record<string, unknown>>({
               {columns.map(col => (
                 <th key={String(col.key)} scope="col" className="px-4 py-2.5 text-left font-semibold"
                   style={{ color: 'var(--color-dim)', cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none' }}
+                  aria-sort={col.sortable && sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   onClick={() => col.sortable && toggleSort(col.key)}>
                   {col.label}
-                  {col.sortable && sortKey === col.key && <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  {col.sortable && sortKey === col.key && <span className="ml-1" aria-hidden="true">{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
               ))}
             </tr>
