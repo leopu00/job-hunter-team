@@ -232,7 +232,7 @@ export default function CriticoPage() {
                   <td className="px-4 py-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>
                     {i + 1}
                   </td>
-                  <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]" title={item.title} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.title}
                   </td>
                   <td className="px-4 py-3 text-[11px]" style={{ color: 'var(--color-muted)' }}>
@@ -285,7 +285,7 @@ export default function CriticoPage() {
                 <tr key={item.id}
                   style={{ borderBottom: i < feed.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                   <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]"
-                    style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    title={item.title} style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.title}
                   </td>
                   <td className="px-4 py-3 text-[11px]" style={{ color: 'var(--color-muted)' }}>
