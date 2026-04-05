@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 type SectionId = 'install' | 'tui' | 'webapp'
 
@@ -50,7 +51,7 @@ function P({ children }: { children: React.ReactNode }) {
 function Li({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2 text-[12px] text-[var(--color-muted)] leading-relaxed">
-      <span className="text-[var(--color-green)] mt-0.5 flex-shrink-0">&#x25B8;</span>
+      <span className="text-[var(--color-green)] mt-0.5 flex-shrink-0" aria-hidden="true">&#x25B8;</span>
       <span>{children}</span>
     </li>
   )
@@ -295,15 +296,15 @@ function GuideContent() {
         </div>
 
         {/* Content */}
-        <div
-          role="tabpanel"
-          id={`guide-panel-${active}`}
-          aria-labelledby={`guide-tab-${active}`}
-          style={{ animation: 'fade-in 0.2s ease both' }}
-          key={active}
-        >
-          {CONTENT[active]}
-        </div>
+        <FadeInSection key={active}>
+          <div
+            role="tabpanel"
+            id={`guide-panel-${active}`}
+            aria-labelledby={`guide-tab-${active}`}
+          >
+            {CONTENT[active]}
+          </div>
+        </FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
