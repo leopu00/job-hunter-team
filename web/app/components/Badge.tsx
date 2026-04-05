@@ -74,7 +74,7 @@ export function Badge({
           style={{ color: 'currentColor', width: RMV_PX[size], height: RMV_PX[size] }}
           aria-label="Rimuovi"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"
             style={{ width: ICN_PX[size], height: ICN_PX[size] }}>
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
