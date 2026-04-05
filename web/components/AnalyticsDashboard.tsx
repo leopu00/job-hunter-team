@@ -25,7 +25,7 @@ function WeeklyChart({ data }: { data: AnalyticsData['weekly'] }) {
 
   return (
     <div ref={ref} className="w-full">
-      <svg width="100%" height={H}>
+      <svg width="100%" height={H} role="img" aria-label={`Candidature settimanali: ${data.length} settimane`}>
         {data.map((d, i) => {
           const bh = (d.count / max) * chartH
           const x  = pad.l + i * ((w - pad.l - pad.r) / data.length) + 2

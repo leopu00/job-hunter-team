@@ -67,7 +67,7 @@ export default function SalaryChart({ entries, currency = '€', period = 'year'
   return (
     <div ref={containerRef} className="w-full">
       {title && <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-3">{title}</p>}
-      <svg width="100%" height={svgH} style={{ overflow: 'visible', display: 'block' }}>
+      <svg width="100%" height={svgH} style={{ overflow: 'visible', display: 'block' }} role="img" aria-label={`Confronto stipendi: ${entries.length} ruoli, ${period === 'year' ? 'annuo' : 'mensile'}`}>
 
         {/* Tick lines + labels asse X */}
         {ticks.map((t, i) => {

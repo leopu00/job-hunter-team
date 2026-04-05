@@ -29,7 +29,7 @@ function Ring({ pct, size = 120, stroke = 10 }: { pct: number; size?: number; st
   const color = pct >= 80 ? 'var(--color-green)' : pct >= 50 ? 'var(--color-yellow)' : 'var(--color-blue)'
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]" role="img" aria-label={`Completamento profilo: ${Math.round(pct)}%`}>
       {/* Track */}
       <circle cx={size / 2} cy={size / 2} r={r}
         fill="none" stroke="var(--color-border)" strokeWidth={stroke} />
