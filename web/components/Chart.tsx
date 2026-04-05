@@ -49,7 +49,7 @@ export function BarChart({ data, width = 300, height = 160, showLegend, showValu
 
   return (
     <div>
-      <svg width={width} height={height} style={{ overflow: 'visible' }}>
+      <svg width={width} height={height} style={{ overflow: 'visible' }} role="img" aria-label={`Grafico a barre: ${data.length} valori, max ${max}`}>
         {data.map((d, i) => {
           const bH = ((d.value / max) * (height - pad - 16))
           const x  = pad + i * bW + bGap / 2
@@ -83,7 +83,7 @@ export function LineChart({ data, width = 300, height = 160, showLegend, showVal
 
   return (
     <div>
-      <svg width={width} height={height} style={{ overflow: 'visible' }}>
+      <svg width={width} height={height} style={{ overflow: 'visible' }} role="img" aria-label={`Grafico a linee: ${data.length} punti`}>
         <defs>
           <linearGradient id="lg-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={c} stopOpacity={0.25} />
@@ -127,7 +127,7 @@ export function PieChart({ data, width = 160, height = 160, showLegend }: ChartP
 
   return (
     <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-      <svg width={width} height={height}>
+      <svg width={width} height={height} role="img" aria-label={`Grafico a torta: ${data.length} fette`}>
         {arcs.map((a, i) => (
           <g key={i} onMouseEnter={() => setTip(i)} onMouseLeave={() => setTip(null)} style={{ cursor: 'pointer' }}>
             <path d={a.d} fill={a.c} opacity={tip === i ? 1 : 0.82} transform={tip === i ? `translate(${Math.cos(a.mid)*3},${Math.sin(a.mid)*3})` : ''} style={{ transition: 'transform 0.15s' }} />
