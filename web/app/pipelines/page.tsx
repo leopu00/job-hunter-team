@@ -100,7 +100,7 @@ export default function PipelinesPage() {
       {!loading && data && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {data.pipelines.map((p, i) => (
-            <div key={p.id} className={`flex items-center gap-4 px-5 py-4 ${i < data.pipelines.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
+            <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < data.pipelines.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-xl flex-shrink-0">{WORKFLOW_ICON[p.file] ?? '⚙️'}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
