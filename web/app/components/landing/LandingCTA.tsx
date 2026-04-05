@@ -84,6 +84,7 @@ export function LandingFooter() {
             <Link href="/docs" className={linkClass}>Documentazione</Link>
             <Link href="/about" className={linkClass}>Chi siamo</Link>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
+            <a href="/sitemap.xml" className={linkClass}>Sitemap</a>
           </div>
 
           {/* Contatti */}
