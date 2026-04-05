@@ -77,7 +77,7 @@ export default function MultiSelect({
                   borderRadius: 4, background: 'var(--color-green, #00e87a)', color: '#000',
                   fontSize: 11, fontWeight: 600, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {lbl}
-                  <span onClick={e => { e.stopPropagation(); commit(selected.filter(v => v !== val)) }} style={{ cursor: 'pointer' }}>×</span>
+                  <span role="button" aria-label={`Rimuovi ${lbl}`} onClick={e => { e.stopPropagation(); commit(selected.filter(v => v !== val)) }} style={{ cursor: 'pointer' }}>×</span>
                 </span>
               )
             })
