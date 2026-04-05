@@ -25,7 +25,7 @@ function OverviewSection() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map(s => (
-          <div key={s.l} className="p-4 rounded-lg border flex flex-col gap-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+          <div key={s.l} className="p-4 rounded-lg border flex flex-col gap-1 transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
             <span className="text-xl font-bold text-[var(--color-green)]">{s.v}</span>
             <span className="text-[9px] text-[var(--color-dim)]">{s.l}</span>
           </div>
@@ -36,7 +36,7 @@ function OverviewSection() {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)]">Stack</span>
         </div>
         {layers.map((l, i) => (
-          <div key={l.name} className={`flex items-start gap-3 px-5 py-3 ${i < layers.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+          <div key={l.name} className={`flex items-start gap-3 px-5 py-3 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < layers.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
             <span className="text-[11px] font-semibold text-[var(--color-bright)] w-44 flex-shrink-0">{l.name}</span>
             <span className="text-[10px] text-[var(--color-dim)]">{l.desc}</span>
           </div>
@@ -55,7 +55,7 @@ function ModulesSection() {
           <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{g}</h3>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
             {MODULES.filter(m => m.group === g).map((m, i, arr) => (
-              <div key={m.id} className={`flex items-start gap-3 px-5 py-2.5 ${i < arr.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+              <div key={m.id} className={`flex items-start gap-3 px-5 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < arr.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
                 <span className="text-[10px] font-mono text-[var(--color-green)] w-28 flex-shrink-0">{m.id}</span>
                 <span className="text-[10px] text-[var(--color-dim)]">{m.description}</span>
               </div>
@@ -71,7 +71,7 @@ function CliSection() {
   return (
     <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
       {CLI_COMMANDS.map((c, i) => (
-        <div key={c.cmd} className={`flex flex-col gap-0.5 px-5 py-2.5 ${i < CLI_COMMANDS.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+        <div key={c.cmd} className={`flex flex-col gap-0.5 px-5 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < CLI_COMMANDS.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-mono text-[var(--color-green)] flex-shrink-0">{c.cmd}</span>
             <span className="text-[10px] text-[var(--color-dim)]">{c.description}</span>
@@ -87,7 +87,7 @@ function ApiSection() {
   return (
     <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
       {API_ROUTES.map((r, i) => (
-        <div key={`${r.method}-${r.path}`} className={`flex items-center gap-3 px-5 py-2.5 ${i < API_ROUTES.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+        <div key={`${r.method}-${r.path}`} className={`flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < API_ROUTES.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
           <span className="text-[9px] font-mono font-bold w-12 flex-shrink-0" style={{ color: METHOD_COLOR[r.method] }}>{r.method}</span>
           <span className="text-[10px] font-mono text-[var(--color-muted)] w-48 flex-shrink-0 truncate">{r.path}</span>
           <span className="text-[10px] text-[var(--color-dim)]">{r.description}</span>
