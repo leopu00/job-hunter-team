@@ -24,13 +24,15 @@ export default function ReportsPage() {
   const [monthly, setMonthly] = useState<MonthData[]>([])
   const [phases, setPhases] = useState<PhaseTime[]>([])
   const [companies, setCompanies] = useState<TopCompany[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/reports?period=${period}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setKpi(data.kpi ?? null); setMonthly(data.monthly ?? [])
     setPhases(data.phaseTimes ?? []); setCompanies(data.topCompanies ?? [])
+    setLoading(false)
   }, [period])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -70,6 +72,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {KPI_CARDS.map(k => (
           <div key={k.label} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
@@ -116,6 +121,7 @@ export default function ReportsPage() {
           )
         })}
       </div>
+      </>)}
     </div>
   )
 }
