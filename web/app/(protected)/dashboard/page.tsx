@@ -216,7 +216,7 @@ export default async function DashboardPage() {
 
       {/* ── Stats ───────────────────────────────────────────────── */}
       <div className="section-label mb-4">Overview</div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'Trovate',    val: stats.total,   color: 'var(--color-blue)' },
           { label: 'Analizzate', val: stats.checked, color: 'var(--color-purple)' },
@@ -241,7 +241,7 @@ export default async function DashboardPage() {
 
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline</div>
-      <div className="overflow-x-auto mb-8">
+      <div className="overflow-x-auto mb-8" style={{ animation: 'fade-in 0.35s ease both 0.05s' }}>
         <div className="flex min-w-max border border-[var(--color-border)] rounded-lg overflow-hidden">
           {pipeline.map((step, i) => (
             <Link
@@ -269,7 +269,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── Charts ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
 
         {/* Score distribution */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
@@ -310,7 +310,7 @@ export default async function DashboardPage() {
               const max = sourceDist[0]?.count ?? 1
               return sourceDist.map(s => (
                 <div key={s.source} className="flex items-center gap-3">
-                  <span className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0">{s.source}</span>
+                  <span className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0" title={s.source}>{s.source}</span>
                   <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                     <div className="h-full rounded-full" style={{ width: `${(s.count / max) * 100}%`, background: 'var(--color-blue)', opacity: 0.7 }} />
                   </div>
