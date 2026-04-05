@@ -57,6 +57,8 @@ const T = {
     stack_desc: 'Le tecnologie che alimentano Job Hunter Team',
     heatmap: 'Attivita giornaliera',
     heatmap_desc: 'Commit al giorno negli ultimi 90 giorni',
+    heatmap_aria: '{count} commit negli ultimi 90 giorni',
+    weekly_aria: '{count} commit in {weeks} settimane',
     less: 'Meno',
     more: 'Piu',
     contribute_title: 'Vuoi contribuire?',
@@ -108,6 +110,8 @@ const T = {
     stack_desc: 'The technologies powering Job Hunter Team',
     heatmap: 'Daily activity',
     heatmap_desc: 'Commits per day over the last 90 days',
+    heatmap_aria: '{count} commits over the last 90 days',
+    weekly_aria: '{count} commits in {weeks} weeks',
     less: 'Less',
     more: 'More',
     contribute_title: 'Want to contribute?',
@@ -203,12 +207,11 @@ function BarChart({ data, maxVal }: { data: { label: string; value: number; colo
   )
 }
 
-function WeeklyChart({ weeks }: { weeks: { week: string; count: number }[] }) {
+function WeeklyChart({ weeks, ariaLabel }: { weeks: { week: string; count: number }[]; ariaLabel: string }) {
   const max = Math.max(...weeks.map(w => w.count), 1)
-  const totalCommits = weeks.reduce((s, w) => s + w.count, 0)
 
   return (
-    <div className="flex items-end gap-1.5 h-32" role="img" aria-label={`${totalCommits} commit in ${weeks.length} settimane`}>
+    <div className="flex items-end gap-1.5 h-32" role="img" aria-label={ariaLabel}>
       {weeks.map(w => {
         const pct = (w.count / max) * 100
         const weekDate = new Date(w.week + 'T00:00:00')
@@ -275,7 +278,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   )
 }
 
-function Heatmap({ days, lessLabel, moreLabel }: { days: { date: string; count: number }[]; lessLabel: string; moreLabel: string }) {
+function Heatmap({ days, lessLabel, moreLabel, ariaLabel }: { days: { date: string; count: number }[]; lessLabel: string; moreLabel: string; ariaLabel: string }) {
   const dayMap = new Map(days.map(d => [d.date, d.count]))
   const max = Math.max(...days.map(d => d.count), 1)
 
@@ -305,7 +308,7 @@ function Heatmap({ days, lessLabel, moreLabel }: { days: { date: string; count: 
   const totalCommits = days.reduce((s, d) => s + d.count, 0)
 
   return (
-    <div role="img" aria-label={`${totalCommits} commit negli ultimi 90 giorni`}>
+    <div role="img" aria-label={ariaLabel}>
       <div className="overflow-x-auto">
         <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${totalCols}, 12px)`, gridTemplateRows: 'repeat(7, 12px)' }}>
           {cells.map(cell => (
@@ -485,7 +488,7 @@ function StatsContent() {
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.weekly}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.weekly_desc}</p>
-                <WeeklyChart weeks={data.weeklyCommits} />
+                <WeeklyChart weeks={data.weeklyCommits} ariaLabel={t.weekly_aria.replace('{count}', String(data.weeklyCommits.reduce((s, w) => s + w.count, 0))).replace('{weeks}', String(data.weeklyCommits.length))} />
               </section>
             )}</FadeInSection>
 
@@ -494,7 +497,7 @@ function StatsContent() {
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.heatmap}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.heatmap_desc}</p>
-                <Heatmap days={data.dailyCommits} lessLabel={t.less} moreLabel={t.more} />
+                <Heatmap days={data.dailyCommits} lessLabel={t.less} moreLabel={t.more} ariaLabel={t.heatmap_aria.replace('{count}', String(data.dailyCommits.reduce((s, d) => s + d.count, 0)))} />
               </section>
             )}</FadeInSection>
 
@@ -550,7 +553,7 @@ function StatsContent() {
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] text-[var(--color-muted)] truncate leading-relaxed">
-                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 -mb-px" style={{ background: typeColor }} />
+                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 -mb-px" aria-hidden="true" style={{ background: typeColor }} />
                             {c.message}
                           </p>
                           <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; <time dateTime={c.date}>{c.date}</time></p>
@@ -607,7 +610,7 @@ function StatsContent() {
               <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-4">{t.timeline}</h2>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
                   <div>
                     <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{t.first}</div>
                     <time dateTime={data.overview.firstCommit} className="text-[13px] font-semibold text-[var(--color-bright)]">
@@ -645,7 +648,7 @@ function StatsContent() {
                 ].map(tech => (
                   <div key={tech.name} className="flex items-center gap-2.5 p-3 rounded-lg border border-[var(--color-border)] transition-all hover:border-[var(--color-border-glow)]"
                     style={{ background: 'var(--color-card)' }}>
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: tech.color }} />
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" aria-hidden="true" style={{ background: tech.color }} />
                     <div className="min-w-0">
                       <div className="text-[11px] font-semibold text-[var(--color-bright)] truncate">{tech.name}</div>
                       <div className="text-[9px] text-[var(--color-dim)] uppercase tracking-wider">{tech.cat}</div>
