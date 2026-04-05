@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useLandingI18n, type Lang } from './LandingI18n'
 
 function FlagIT() {
@@ -106,7 +107,12 @@ function LangDropdown() {
 
 export default function LandingNav() {
   const { t } = useLandingI18n()
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const navLinkStyle = (href: string) => ({
+    color: pathname === href ? 'var(--color-green)' : 'var(--color-muted)',
+  })
 
   return (
     <nav
@@ -142,22 +148,22 @@ export default function LandingNav() {
           >
             {t('nav_github')}
           </a>
-          <Link href="/download" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/download" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
             {t('nav_download')}
           </Link>
-          <Link href="/guide" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/guide" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/guide')}>
             {t('nav_guide')}
           </Link>
-          <Link href="/faq" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/faq" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
             {t('nav_faq')}
           </Link>
-          <Link href="/pricing" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/pricing" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
             {t('nav_pricing')}
           </Link>
-          <Link href="/demo" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/demo" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
             {t('nav_demo')}
           </Link>
-          <Link href="/about" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/about" className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
             {t('nav_about')}
           </Link>
         </div>
@@ -206,22 +212,22 @@ export default function LandingNav() {
             className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_github')}
           </a>
-          <Link href="/download" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/download" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
             {t('nav_download')}
           </Link>
-          <Link href="/guide" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/guide" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/guide')}>
             {t('nav_guide')}
           </Link>
-          <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
             {t('nav_faq')}
           </Link>
-          <Link href="/pricing" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/pricing" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
             {t('nav_pricing')}
           </Link>
-          <Link href="/demo" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/demo" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
             {t('nav_demo')}
           </Link>
-          <Link href="/about" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <Link href="/about" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
             {t('nav_about')}
           </Link>
           <Link
