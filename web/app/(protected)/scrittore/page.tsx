@@ -225,9 +225,9 @@ export default function ScrittorePage() {
 
         {/* Coda scored */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-          <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">
+          <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">
             In Coda — Scored (top 15)
-          </h3>
+          </h2>
           {!data || data.queue.length === 0 ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna posizione in coda</p>
           ) : (
@@ -239,9 +239,9 @@ export default function ScrittorePage() {
 
         {/* In lavorazione */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-          <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-yellow)' }}>
+          <h2 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-yellow)' }}>
             In Lavorazione
-          </h3>
+          </h2>
           {!data || data.in_progress.length === 0 ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuno scrittore attivo</p>
           ) : (
@@ -254,9 +254,9 @@ export default function ScrittorePage() {
 
       {/* Ultimi completati */}
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
-        <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-green)' }}>
+        <h2 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-green)' }}>
           Ultimi 10 Completati
-        </h3>
+        </h2>
         {!data || data.recent_completed.length === 0 ? (
           <p className="text-[var(--color-dim)] text-[11px] px-3">Nessun CV completato</p>
         ) : (
