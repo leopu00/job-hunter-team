@@ -129,7 +129,7 @@ export default async function ReadyPage() {
               <thead>
                 <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
                   {['Titolo', 'Azienda', 'Location', 'Remote', 'Score'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap" style={{ color: 'var(--color-dim)' }}>
+                    <th key={h} scope="col" className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap" style={{ color: 'var(--color-dim)' }}>
                       {h}
                     </th>
                   ))}
