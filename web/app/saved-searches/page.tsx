@@ -84,8 +84,8 @@ export default function SavedSearchesPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-40" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">QUERY</label><input value={newQuery} onChange={e => setNewQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="search-name" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input id="search-name" value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-40" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 flex-1"><label htmlFor="search-query" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">QUERY</label><input id="search-query" value={newQuery} onChange={e => setNewQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <button onClick={add} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Salva</button>
         </div>
       )}
