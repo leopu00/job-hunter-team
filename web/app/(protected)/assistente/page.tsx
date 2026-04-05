@@ -189,13 +189,13 @@ export default function AssistentePage() {
 
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
             Dashboard
           </Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Assistente</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Assistente</span>
+        </nav>
         <div className="mt-4 flex items-start gap-5">
           <div className="text-5xl leading-none select-none">🤖</div>
           <div>
@@ -370,11 +370,12 @@ export default function AssistentePage() {
                     <div key={`${file.name}-${i}`}
                       className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px]"
                       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                       </svg>
                       <span className="max-w-[150px] truncate" title={file.name}>{file.name}</span>
                       <button type="button" onClick={() => removeAttachedFile(i)}
+                        aria-label={`Rimuovi file ${file.name}`}
                         className="ml-0.5 hover:text-[var(--color-red)] transition-colors cursor-pointer"
                         style={{ color: 'var(--color-dim)', fontSize: '12px', lineHeight: 1 }}>
                         ×
@@ -394,9 +395,10 @@ export default function AssistentePage() {
                 <button type="button" onClick={() => fileInputRef.current?.click()}
                   disabled={sending}
                   className="pl-3 pr-1 py-3 transition-colors cursor-pointer"
+                  aria-label="Allega file"
                   title="Allega file"
                   style={{ color: attachedFiles.length > 0 ? 'var(--color-green)' : 'var(--color-dim)' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                   </svg>
                 </button>
