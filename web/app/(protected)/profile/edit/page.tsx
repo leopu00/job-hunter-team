@@ -318,7 +318,7 @@ export default function ProfileEditPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-live="polite">
         <span className="text-[var(--color-dim)] text-[11px] tracking-widest uppercase animate-pulse">
           Caricamento...
         </span>
