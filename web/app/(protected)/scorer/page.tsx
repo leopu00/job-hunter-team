@@ -67,7 +67,7 @@ export default async function ScorerPage() {
                   <span className="text-[18px] font-bold" style={{ color: avgColor }}>{s.avgScore}</span>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 {[
                   { label: 'Alta ≥70', val: s.high, c: 'var(--color-green)' },
                   { label: 'Media 40-69', val: s.mid, c: 'var(--color-yellow)' },
