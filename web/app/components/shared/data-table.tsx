@@ -17,12 +17,13 @@ type Props<T extends Record<string, unknown>> = {
   searchPlaceholder?: string
   emptyText?: string
   maxRows?: number
+  ariaLabel?: string
 }
 
 type SortDir = 'asc' | 'desc'
 
 export function DataTable<T extends Record<string, unknown>>({
-  columns, rows, keyField, searchable, searchPlaceholder = 'Cerca…', emptyText = 'Nessun risultato', maxRows,
+  columns, rows, keyField, searchable, searchPlaceholder = 'Cerca…', emptyText = 'Nessun risultato', maxRows, ariaLabel,
 }: Props<T>) {
   const [query, setQuery]     = useState('')
   const [sortKey, setSortKey] = useState<keyof T | null>(null)
@@ -59,7 +60,7 @@ export function DataTable<T extends Record<string, unknown>>({
           onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'} />
       )}
       <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
-        <table className="w-full text-[11px]">
+        <table className="w-full text-[11px]" aria-label={ariaLabel}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               {columns.map(col => (
@@ -76,7 +77,7 @@ export function DataTable<T extends Record<string, unknown>>({
             {filtered.length === 0
               ? <tr><td colSpan={columns.length} className="px-4 py-6 text-center" style={{ color: 'var(--color-dim)' }}>{emptyText}</td></tr>
               : filtered.map(row => (
-                  <tr key={String(row[keyField])} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <tr key={String(row[keyField])} className="border-t transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
                     {columns.map(col => (
                       <td key={String(col.key)} className="px-4 py-2.5" style={{ color: 'var(--color-base)' }}>
                         {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '—')}
