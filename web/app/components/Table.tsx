@@ -45,7 +45,7 @@ function sortData<T>(data: T[], key: string, dir: SortDir): T[] {
 
 function SortIcon({ dir }: { dir: SortDir }) {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ display: 'inline', marginLeft: 4 }}>
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true" style={{ display: 'inline', marginLeft: 4 }}>
       <path d="M3 4l2-2 2 2" stroke={dir === 'asc'  ? 'var(--color-green)' : 'var(--color-border)'} strokeWidth="1.5" strokeLinecap="round" />
       <path d="M3 6l2 2 2-2" stroke={dir === 'desc' ? 'var(--color-green)' : 'var(--color-border)'} strokeWidth="1.5" strokeLinecap="round" />
     </svg>

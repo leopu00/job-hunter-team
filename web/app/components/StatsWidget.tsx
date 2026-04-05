@@ -23,7 +23,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   const pts = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
   const area = `M${xs[0]},${H - PAD} ` + xs.map((x, i) => `L${x},${ys[i]}`).join(' ') + ` L${xs[xs.length - 1]},${H - PAD} Z`
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: 'visible', flexShrink: 0 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true" style={{ width: W, height: H, overflow: 'visible', flexShrink: 0 }}>
       <defs>
         <linearGradient id={`sg-${color.replace(/[^a-z0-9]/gi, '')}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor={color} stopOpacity={0.25} />
