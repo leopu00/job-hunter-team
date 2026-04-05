@@ -53,6 +53,8 @@ html[data-theme="light"] {
 
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
+::selection { background: rgba(0, 232, 122, 0.25); color: var(--color-white); }
+
 body {
   background-color: var(--color-void);
   color: var(--color-base);
