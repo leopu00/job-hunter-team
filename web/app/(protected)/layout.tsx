@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import Navbar from '@/components/Navbar'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function ProtectedLayout({
   children,
