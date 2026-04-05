@@ -286,7 +286,7 @@ label {
 /* ── High contrast ───���─────────────────────────────────────────── */
 @media (prefers-contrast: more) {
   :root {
-    --color-dim:    #6a6a80;
+    --color-dim:    #7a7a94;
     --color-muted:  #9a9ab4;
     --color-border: #3a3a50;
     --color-border-glow: #4a4a60;
