@@ -268,7 +268,7 @@ function TeamMockup() {
     { emoji: '\u{1F468}\u200D\u2696\uFE0F', name: 'Critico', color: '#f44336', status: 'offline' },
   ]
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
       {agents.map((a, i) => (
         <div key={i} className="text-center p-2 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
           <div className="text-lg mb-1">{a.emoji}</div>

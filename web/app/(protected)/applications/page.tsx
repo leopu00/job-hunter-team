@@ -52,11 +52,11 @@ export default async function ApplicationsPage() {
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Candidature</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Candidature</span>
+        </nav>
         <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Candidature</h1>

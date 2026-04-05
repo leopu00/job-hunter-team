@@ -56,11 +56,11 @@ export default function AiAssistantPage() {
   return (
     <div className="flex flex-col" style={{ animation: 'fade-in 0.35s ease both', height: 'calc(100vh - 40px)' }}>
       <div className="pb-4 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">AI Assistant</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">AI Assistant</span>
+        </nav>
         <div className="flex items-center gap-2 mt-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
           <h1 className="text-lg font-bold tracking-tight text-[var(--color-white)]">AI Assistant</h1>
@@ -74,8 +74,10 @@ export default function AiAssistantPage() {
             <div className="flex flex-wrap justify-center gap-2">
               {suggestions.map(s => (
                 <button key={s.label} onClick={() => send(s.prompt)}
-                  className="px-3 py-2 rounded-lg text-[10px] font-medium cursor-pointer transition-colors"
-                  style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+                  className="px-3 py-2 rounded-lg text-[10px] font-medium cursor-pointer transition-colors duration-200"
+                  style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                   {s.label}
                 </button>
               ))}
@@ -95,8 +97,10 @@ export default function AiAssistantPage() {
       {messages.length > 0 && suggestions.length > 0 && (
         <div className="flex gap-1 px-2 pb-2">
           {suggestions.map(s => (
-            <button key={s.label} onClick={() => send(s.prompt)} className="px-2 py-1 rounded text-[8px] cursor-pointer"
-              style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)' }}>{s.label}</button>
+            <button key={s.label} onClick={() => send(s.prompt)} className="px-2 py-1 rounded text-[8px] cursor-pointer transition-colors duration-200"
+              style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>{s.label}</button>
           ))}
         </div>
       )}

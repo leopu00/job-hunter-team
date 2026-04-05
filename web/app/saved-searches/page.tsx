@@ -25,7 +25,7 @@ function SearchRow({ ss, onToggle, onDelete }: { ss: SavedSearch; onToggle: (id:
       </div>
       <span className="text-[9px] text-[var(--color-dim)]">{FREQ_LABEL[ss.frequency] ?? ss.frequency}</span>
       <span className="text-[9px] text-[var(--color-dim)] w-14 text-right">{timeAgo(ss.lastRun)}</span>
-      <button onClick={() => onToggle(ss.id)} className="text-[9px] font-bold cursor-pointer w-8"
+      <button onClick={() => onToggle(ss.id)} aria-label={`${ss.alertEnabled ? 'Disattiva' : 'Attiva'} notifiche per ${ss.name}`} className="text-[9px] font-bold cursor-pointer w-8"
         style={{ color: ss.alertEnabled ? 'var(--color-green)' : 'var(--color-dim)' }}>{ss.alertEnabled ? 'ON' : 'OFF'}</button>
       <button onClick={() => onDelete(ss.id)} aria-label="Elimina ricerca salvata" className="text-[9px] font-bold cursor-pointer" style={{ color: 'var(--color-red)' }}>×</button>
     </div>
@@ -70,11 +70,11 @@ export default function SavedSearchesPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Ricerche Salvate</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Ricerche Salvate</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div><h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Ricerche Salvate</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} ricerche · {totalNew} nuovi risultati</p></div>
@@ -84,8 +84,8 @@ export default function SavedSearchesPage() {
 
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
-          <div className="flex flex-col gap-0.5"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-40" style={inputStyle} /></div>
-          <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">QUERY</label><input value={newQuery} onChange={e => setNewQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5"><label htmlFor="search-name" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label><input id="search-name" value={newName} onChange={e => setNewName(e.target.value)} className="text-[10px] px-2 py-1.5 rounded w-40" style={inputStyle} /></div>
+          <div className="flex flex-col gap-0.5 flex-1"><label htmlFor="search-query" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">QUERY</label><input id="search-query" value={newQuery} onChange={e => setNewQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <button onClick={add} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Salva</button>
         </div>
       )}

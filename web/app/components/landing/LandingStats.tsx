@@ -22,10 +22,10 @@ export default function LandingStats() {
   const items = STATS[lang as 'it' | 'en'] ?? STATS.it
 
   return (
-    <section aria-label="Statistiche progetto" className="py-16 px-5">
+    <section aria-label="Statistiche" className="py-16 px-5">
       <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-        {items.map((stat) => (
-          <div key={stat.label} className="text-center">
+        {items.map((stat, i) => (
+          <div key={stat.label} className="text-center p-4 rounded-lg border border-transparent transition-all duration-200 hover:border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.01)]" style={{ animation: `fade-in 0.4s ease ${i * 0.1}s both` }}>
             <div
               className="text-3xl font-bold mb-1"
               style={{ color: 'var(--color-green)' }}

@@ -37,7 +37,7 @@ function ProviderCard({ p }: { p: ProviderLimit }) {
   const icon = PROVIDER_ICONS[p.id] ?? '◆'
   const maxStep = Math.max(...p.backoffSteps, 1)
   return (
-    <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+    <div className="border rounded-lg overflow-hidden transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
       <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <span className="text-xl">{icon}</span>
         <div>
@@ -95,11 +95,11 @@ export default function RateLimiterPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Rate Limiter</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Rate Limiter</span>
+        </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Rate Limiter</h1>
@@ -122,7 +122,7 @@ export default function RateLimiterPage() {
 
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.providers.map(p => <ProviderCard key={p.id} p={p} />)}
+          {data.providers.map((p, i) => <div key={p.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ProviderCard p={p} /></div>)}
         </div>
       )}
     </div>

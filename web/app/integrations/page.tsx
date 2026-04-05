@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
 type Status = 'connected' | 'configured' | 'disconnected'
@@ -44,15 +45,14 @@ function IntCard({ i }: { i: Integration }) {
         </div>
       )}
 
-      <button className="self-start px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
+      <Link href="/settings" className="self-start px-3 py-1.5 rounded text-[10px] font-semibold no-underline transition-all"
         style={{
           border: `1px solid ${i.status === 'connected' ? 'rgba(255,69,96,0.3)' : color + '44'}`,
           color:  i.status === 'connected' ? 'var(--color-red)' : color,
           background: 'transparent',
-        }}
-        onClick={() => window.location.href = '/settings'}>
+        }}>
         {i.status === 'connected' ? 'Disconnetti' : 'Configura'} →
-      </button>
+      </Link>
     </div>
   )
 }
@@ -71,12 +71,16 @@ export default function IntegrationsPage() {
   }, [])
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-6">
 
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Integrazioni</span>
+        </nav>
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>Integrazioni</h1>
           </div>
           {!loading && (
@@ -92,7 +96,7 @@ export default function IntegrationsPage() {
           <p className="text-[11px]" style={{ color: 'var(--color-muted)' }} role="status" aria-live="polite">Caricamento…</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {integrations.map(i => <IntCard key={i.id} i={i} />)}
+            {integrations.map((intg, i) => <div key={intg.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><IntCard i={intg} /></div>)}
           </div>
         )}
       </div>

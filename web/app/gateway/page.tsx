@@ -47,7 +47,7 @@ function ChannelCard({ ch }: { ch: Channel }) {
 function MiddlewareRow({ mw, last }: { mw: MiddlewareEntry; last: boolean }) {
   const phaseColor = mw.phase === 'pre' ? 'var(--color-blue)' : 'var(--color-orange)'
   return (
-    <div className={`flex items-center gap-4 px-5 py-3 ${last ? '' : 'border-b border-[var(--color-border)]'}`}>
+    <div className={`flex items-center gap-4 px-5 py-3 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${last ? '' : 'border-b border-[var(--color-border)]'}`}>
       <span className="text-[9px] font-mono px-2 py-0.5 rounded border" style={{ color: phaseColor, borderColor: `${phaseColor}44`, background: `${phaseColor}0d`, minWidth: 36, textAlign: 'center' }}>
         {mw.phase}
       </span>
@@ -82,11 +82,11 @@ export default function GatewayPage() {
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Gateway</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Gateway</span>
+        </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] flex items-center gap-3">
@@ -119,7 +119,7 @@ export default function GatewayPage() {
         <div className="mb-6">
           <div className="section-label">Canali — {data.channels.filter(c => c.connected).length}/{data.channels.length} connessi</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {data.channels.map(ch => <ChannelCard key={ch.id} ch={ch} />)}
+            {data.channels.map((ch, i) => <div key={ch.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ChannelCard ch={ch} /></div>)}
           </div>
         </div>
 
@@ -140,8 +140,8 @@ export default function GatewayPage() {
               { label: 'Timeout richiesta', value: `${(data.config.requestTimeoutMs / 1000).toFixed(0)}s` },
               { label: 'Max queue', value: data.config.maxQueueSize },
               { label: 'Canali abilitati', value: data.config.channels.join(', ') },
-            ].map(({ label, value }) => (
-              <div key={label}>
+            ].map(({ label, value }, i) => (
+              <div key={label} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
                 <p className="text-[9px] text-[var(--color-dim)] mb-1">{label}</p>
                 <p className="text-[12px] font-mono font-semibold text-[var(--color-bright)]">{value}</p>
               </div>

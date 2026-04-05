@@ -16,7 +16,9 @@ function MapView({ clusters, selected, onSelect }: { clusters: Cluster[]; select
         const r = Math.max(2, Math.min(5, c.count / 4))
         const isSelected = selected?.city === c.city
         return (
-          <g key={c.city} onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
+          <g key={c.city} role="button" tabIndex={0} aria-label={`${c.city}: ${c.count} posizioni`}
+            onClick={() => onSelect(c)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(c); } }}
+            style={{ cursor: 'pointer' }}>
             <circle cx={c.x} cy={c.y} r={r + 1} fill={isSelected ? 'var(--color-green)' : 'transparent'} opacity={0.3} />
             <circle cx={c.x} cy={c.y} r={r} fill={isSelected ? 'var(--color-green)' : '#61affe'} opacity={0.8} />
             <text x={c.x} y={c.y - r - 1.5} textAnchor="middle" fill="var(--color-muted)" fontSize={2.8} fontWeight="bold">{c.city}</text>
@@ -48,11 +50,11 @@ export default function MapPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Mappa</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Mappa</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Mappa Opportunità</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{totalJobs} posizioni in {clusters.length} città</p>
       </div>
@@ -66,8 +68,8 @@ export default function MapPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           <MapView clusters={clusters} selected={selected} onSelect={setSelected} />
         </div>
 

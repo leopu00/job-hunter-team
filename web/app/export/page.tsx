@@ -56,11 +56,11 @@ export default function ExportPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Esporta</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Esporta</span>
+        </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Esporta Dati</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Esporta dati job hunting e sistema in JSON o CSV</p>
       </div>
@@ -105,11 +105,11 @@ export default function ExportPage() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-2">Periodo</p>
             <div className="flex gap-2 items-center">
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)} aria-label="Data inizio"
                 className="flex-1 text-[11px] px-3 py-2 rounded border bg-transparent font-mono"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
-              <span className="text-[9px] text-[var(--color-dim)]">→</span>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              <span className="text-[9px] text-[var(--color-dim)]" aria-hidden="true">→</span>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)} aria-label="Data fine"
                 className="flex-1 text-[11px] px-3 py-2 rounded border bg-transparent font-mono"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
             </div>
@@ -127,7 +127,7 @@ export default function ExportPage() {
 
         {/* Colonna destra — anteprima e azione */}
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Riepilogo export</p>
             <div className="space-y-2">
               <div className="flex justify-between text-[11px]">
@@ -151,7 +151,7 @@ export default function ExportPage() {
           </div>
 
           {result && (
-            <div className="rounded-lg border p-3 text-[11px]"
+            <div role="alert" className="rounded-lg border p-3 text-[11px]"
               style={{ borderColor: result.ok ? 'rgba(0,232,122,0.3)' : 'rgba(255,69,96,0.3)', color: result.ok ? 'var(--color-green)' : 'var(--color-red)', background: result.ok ? 'rgba(0,232,122,0.05)' : 'rgba(255,69,96,0.05)' }}>
               {result.msg}
             </div>

@@ -87,13 +87,13 @@ export default function AgentMetricsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
           <Link href="/agents" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Agenti</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Metriche</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Metriche</span>
+        </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Metriche Agenti</h1>
@@ -129,7 +129,7 @@ export default function AgentMetricsPage() {
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
               <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-4">Score complessivo</p>
               <div className="flex flex-wrap justify-center gap-4">
-                {active.map((a, i) => <ScoreRing key={a.agentId} score={a.score} agentId={a.agentId} color={COLORS[i % COLORS.length]} />)}
+                {active.map((a, i) => <div key={a.agentId} style={{ animation: `fade-in 0.4s ease ${i * 0.1}s both` }}><ScoreRing score={a.score} agentId={a.agentId} color={COLORS[i % COLORS.length]} /></div>)}
               </div>
             </div>
           )}

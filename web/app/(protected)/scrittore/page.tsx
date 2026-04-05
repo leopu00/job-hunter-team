@@ -187,11 +187,11 @@ export default function ScrittorePage() {
 
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Scrittore</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Scrittore</span>
+        </nav>
         <div className="mt-3 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Scrittore</h1>
@@ -212,8 +212,8 @@ export default function ScrittorePage() {
           { label: 'Scritti oggi', val: data?.writing_today ?? '—', color: 'var(--color-yellow)' },
           { label: 'Completati', val: data?.completed_today ?? '—', color: 'var(--color-green)' },
           { label: 'Media critico', val: data?.avg_critic_score != null ? `${data.avg_critic_score}/10` : '—', color: avgColor },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2 text-[var(--color-dim)]">{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>

@@ -62,11 +62,11 @@ export default function ChangelogPage() {
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Changelog</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Changelog</span>
+        </nav>
         <div className="mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Changelog</h1>
           {data && (
@@ -111,8 +111,8 @@ export default function ChangelogPage() {
       {/* Timeline */}
       {!loading && filteredDays.length > 0 && (
         <div className="flex flex-col gap-6">
-          {filteredDays.map(day => (
-            <div key={day.date}>
+          {filteredDays.map((day, i) => (
+            <div key={day.date} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
               {/* Data header */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" aria-hidden="true" />
@@ -129,7 +129,7 @@ export default function ChangelogPage() {
                 {day.commits.map(commit => {
                   const cfg = TYPE_CFG[commit.type]
                   return (
-                    <div key={commit.hash} className="flex items-start gap-2.5 py-1.5">
+                    <div key={commit.hash} className="flex items-start gap-2.5 py-1.5 px-2 -mx-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.02)]">
                       <span
                         className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-px"
                         role="img"

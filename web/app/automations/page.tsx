@@ -40,7 +40,7 @@ function AutoRow({ a, onToggle }: { a: Automation; onToggle: (id: string, enable
       <span className="text-[9px] font-mono text-[var(--color-dim)] w-14 text-right">{a.runCount}x</span>
       <span className="text-[9px] text-[var(--color-dim)] w-16 text-right">{timeAgo(a.lastRun)}</span>
       <span className="text-[9px] w-16 text-right" style={{ color: a.nextRun ? 'var(--color-muted)' : 'var(--color-dim)' }}>{timeUntil(a.nextRun)}</span>
-      <button onClick={() => onToggle(a.id, !a.enabled)} className="text-[9px] font-bold cursor-pointer w-8"
+      <button onClick={() => onToggle(a.id, !a.enabled)} aria-label={`${a.enabled ? 'Disattiva' : 'Attiva'} ${a.name}`} className="text-[9px] font-bold cursor-pointer w-8"
         style={{ color: a.enabled ? 'var(--color-green)' : 'var(--color-dim)' }}>{a.enabled ? 'ON' : 'OFF'}</button>
     </div>
   )
@@ -54,6 +54,7 @@ export default function AutomationsPage() {
   const [actFilter, setActFilter] = useState('all')
   const [triggers, setTriggers] = useState<string[]>([])
   const [actions, setActions] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -61,10 +62,11 @@ export default function AutomationsPage() {
     if (actFilter !== 'all') params.set('action', actFilter);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/automations${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setAutomations(data.automations ?? []); setEnabled(data.enabled ?? 0); setTotal(data.total ?? 0);
     setTriggers(data.triggers ?? []); setActions(data.actions ?? []);
+    setLoading(false);
   }, [trigFilter, actFilter])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -77,11 +79,11 @@ export default function AutomationsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Automazioni</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Automazioni</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Automazioni</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{enabled} attive · {total} totali</p>
       </div>
@@ -104,12 +106,14 @@ export default function AutomationsPage() {
           <span className="w-2" /><span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AUTOMAZIONE</span>
           <span className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TRIGGER</span>
           <span className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">AZIONE</span>
-          <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RUNS</span>
+          <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ESEC.</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ULTIMO</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">PROSSIMO</span>
           <span className="w-8" />
         </div>
-        {automations.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : automations.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna automazione trovata.</p></div>
           : automations.map(a => <AutoRow key={a.id} a={a} onToggle={toggle} />)}
       </div>

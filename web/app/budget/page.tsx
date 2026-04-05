@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { BarChart, LineChart, DataPoint } from '../components/Chart'
 
@@ -50,12 +51,16 @@ export default function BudgetPage() {
   const usageData: DataPoint[] = velHist.map(v => ({ label: v.ts, value: v.usage }))
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-4xl flex flex-col gap-6">
 
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Budget API</span>
+        </nav>
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>Budget API</h1>
           </div>
           {current && <span className="px-3 py-1 rounded text-[11px] font-bold"
@@ -89,7 +94,9 @@ export default function BudgetPage() {
 
           {/* Daily bar chart */}
           {barData.length > 0 && (
-            <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+            <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
               <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Peak usage giornaliero</p>
               <BarChart data={barData} height={120} color={usageColor} />
             </div>
@@ -98,11 +105,15 @@ export default function BudgetPage() {
           {/* Velocity line chart */}
           {velData.length > 1 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+              <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                 <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Velocità (ultimi 20 tick)</p>
                 <LineChart data={velData} height={100} color="var(--color-blue)" showLabels={false} />
               </div>
-              <div className="rounded-xl px-4 pt-4 pb-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}>
+              <div className="rounded-xl px-4 pt-4 pb-2 transition-colors duration-200" style={{ border: '1px solid var(--color-border)', background: 'var(--color-panel)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                 <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: 'var(--color-dim)' }}>Usage (ultimi 20 tick)</p>
                 <LineChart data={usageData} height={100} color={usageColor} showLabels={false} />
               </div>

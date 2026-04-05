@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 import { Tabs, Tab } from '../components/Tabs'
 import { useToast } from '../components/Toast'
@@ -102,10 +103,14 @@ export default function SettingsPage() {
   ]
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-6 py-10" style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="max-w-2xl flex flex-col gap-6">
         <div>
-          <p className="text-[9px] font-semibold tracking-[0.2em] uppercase mb-1" style={{ color: 'var(--color-green)' }}>sistema</p>
+          <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+            <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
+            <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+            <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Impostazioni</span>
+          </nav>
           <h1 className="text-xl font-bold" style={{ color: 'var(--color-white)' }}>Impostazioni</h1>
         </div>
 
@@ -114,7 +119,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-5 pt-1">
           {tab === 'general' && <>
             <Row label="Nome applicazione">
-              <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} />
+              <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} aria-label="Nome applicazione" />
             </Row>
             <Row label="Lingua default">
               <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))} aria-label="Lingua">

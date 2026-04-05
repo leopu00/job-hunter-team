@@ -15,7 +15,10 @@ const STATUS_CFG: Record<string, { color: string; bg: string }> = {
 
 function MetricCard({ label, value, unit, warn }: { label: string; value: string; unit?: string; warn?: boolean }) {
   return (
-    <div className="flex flex-col p-4 rounded-lg" style={{ background: 'var(--color-row)', border: `1px solid ${warn ? 'rgba(255,69,96,0.3)' : 'var(--color-border)'}` }}>
+    <div className="flex flex-col p-4 rounded-lg transition-colors duration-200"
+      style={{ background: 'var(--color-row)', border: `1px solid ${warn ? 'rgba(255,69,96,0.3)' : 'var(--color-border)'}` }}
+      onMouseEnter={e => { if (!warn) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { if (!warn) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <span className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase">{label}</span>
       <span className="text-xl font-bold font-mono mt-1" style={{ color: warn ? 'var(--color-red)' : 'var(--color-bright)' }}>{value}<span className="text-[10px] text-[var(--color-dim)] ml-1">{unit}</span></span>
     </div>
@@ -47,17 +50,17 @@ export default function MonitoringPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Monitoring</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Monitoring</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Monitoring</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Metriche sistema real-time · {agents.length} agenti · {alerts.length} alert attivi</p>
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <MetricCard label="CPU" value={`${metrics.cpuUsage}`} unit="%" warn={metrics.cpuUsage > 80} />
           <MetricCard label="Memoria" value={`${metrics.memoryUsedMB}/${metrics.memoryTotalMB}`} unit="MB" warn={metrics.memoryPercent > 85} />
           <MetricCard label="Mem %" value={`${metrics.memoryPercent}`} unit="%" warn={metrics.memoryPercent > 85} />

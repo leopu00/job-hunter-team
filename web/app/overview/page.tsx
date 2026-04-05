@@ -101,7 +101,7 @@ export default function OverviewPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
@@ -115,7 +115,7 @@ export default function OverviewPage() {
           <div className="mb-6">
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Sezioni</p>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {SECTIONS.map(s => <SectionLink key={s.href} {...s} />)}
+              {SECTIONS.map((s, i) => <div key={s.href} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}><SectionLink {...s} /></div>)}
             </div>
           </div>
 

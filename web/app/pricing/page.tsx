@@ -269,17 +269,20 @@ function PricingContent() {
 
         {/* Plan cards */}
         <FadeInSection><div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
-          {PLANS.map((plan) => {
+          {PLANS.map((plan, planIdx) => {
             const price = yearly ? plan.priceYearly : plan.priceMonthly
             return (
               <div
                 key={plan.nameKey}
-                className="relative rounded-xl p-6 flex flex-col"
+                className="relative rounded-xl p-6 flex flex-col transition-all duration-200"
                 style={{
                   background: 'var(--color-card)',
                   border: `1px solid ${plan.popular ? 'var(--color-green)' : 'var(--color-border)'}`,
                   boxShadow: plan.popular ? '0 0 24px rgba(0,232,122,0.08)' : 'none',
+                  animation: `fade-in 0.4s ease ${planIdx * 0.08}s both`,
                 }}
+                onMouseEnter={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border-glow)' }}
+                onMouseLeave={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border)' }}
               >
                 {plan.popular && (
                   <span
@@ -358,7 +361,7 @@ function PricingContent() {
               </thead>
               <tbody>
                 {FEATURE_KEYS.map((fk, i) => (
-                  <tr key={fk} style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                  <tr key={fk} className="transition-colors hover:bg-[rgba(255,255,255,0.03)]" style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                     <td className="py-2.5 px-3 font-medium" style={{ color: 'var(--color-muted)' }}>{t(fk)}</td>
                     {PLANS.map((p) => {
                       const feat = p.features.find((f) => f.key === fk)

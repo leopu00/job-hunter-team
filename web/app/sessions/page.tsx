@@ -33,7 +33,7 @@ function SessionRow({ s, onPatch }: { s: Session; onPatch: (id: string, state: S
   const cfg = STATE_CFG[s.state]
   const end = s.lastMessageAtMs ?? s.updatedAtMs
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+    <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
       <span className="text-base flex-shrink-0" aria-hidden="true">{CHANNEL_ICON[s.channelId] ?? '◆'}</span>
       <div className="flex-1 min-w-0">
         <Link href={`/sessions/${s.id}`} className="text-[12px] font-semibold no-underline hover:underline" style={{ color: 'var(--color-bright)' }}>
@@ -79,11 +79,11 @@ export default function SessionsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Sessioni</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Sessioni</span>
+        </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Sessioni</h1>

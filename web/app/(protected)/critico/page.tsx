@@ -143,11 +143,11 @@ export default function CriticoPage() {
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Critico</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Critico</span>
+        </nav>
         <div className="mt-3 flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">⚖️ Critico</h1>
@@ -227,7 +227,7 @@ export default function CriticoPage() {
             </thead>
             <tbody>
               {queue.map((item, i) => (
-                <tr key={item.id}
+                <tr key={item.id} className="transition-colors hover:bg-[rgba(255,255,255,0.015)]"
                   style={{ borderBottom: i < queue.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                   <td className="px-4 py-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>
                     {i + 1}
@@ -282,7 +282,7 @@ export default function CriticoPage() {
             </thead>
             <tbody>
               {feed.map((item, i) => (
-                <tr key={item.id}
+                <tr key={item.id} className="transition-colors hover:bg-[rgba(255,255,255,0.015)]"
                   style={{ borderBottom: i < feed.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                   <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]"
                     title={item.title} style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -324,7 +324,7 @@ export default function CriticoPage() {
               const color  = colors[i % colors.length]
               const pctPass = s.total > 0 ? ((s.pass / s.total) * 100).toFixed(1) : '0'
               return (
-                <div key={s.critico} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
+                <div key={s.critico} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <span className="text-[13px] font-bold" style={{ color }}>{s.critico}</span>
@@ -332,7 +332,7 @@ export default function CriticoPage() {
                     </div>
                     <div className="text-[10px] text-[var(--color-dim)]">{pctPass}% PASS</div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                     {[
                       { label: 'PASS',       val: s.pass,      c: 'var(--color-green)' },
                       { label: 'Needs Work', val: s.needsWork, c: 'var(--color-yellow)' },

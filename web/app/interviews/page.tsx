@@ -23,7 +23,7 @@ function IntRow({ int, expanded, onToggle }: { int: Interview; expanded: boolean
   const upcoming = isUpcoming(int.date);
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} aria-label={`${expanded ? 'Chiudi' : 'Espandi'} colloquio: ${int.jobTitle} — ${int.company}`} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="w-14 text-center flex-shrink-0">
           <p className="text-[10px] font-bold" style={{ color: upcoming ? 'var(--color-green)' : 'var(--color-dim)' }}>{fmtDate(int.date)}</p>
           <p className="text-[9px] font-mono text-[var(--color-dim)]">{fmtTime(int.date)}</p>
@@ -93,11 +93,11 @@ export default function InterviewsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Colloqui</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Colloqui</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Colloqui</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} colloqui · {upcoming} in programma · {passed} superati</p>
       </div>

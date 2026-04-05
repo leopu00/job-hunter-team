@@ -57,11 +57,11 @@ export default function TimelinePage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Timeline</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Timeline</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Timeline</h1>
@@ -96,7 +96,7 @@ export default function TimelinePage() {
               {evts.map(e => {
                 const cfg = TYPE_CFG[e.type] ?? TYPE_CFG.update
                 return (
-                  <div key={e.id} className="flex gap-3 mb-2 relative">
+                  <div key={e.id} className="flex gap-3 mb-2 relative rounded transition-colors hover:bg-[rgba(255,255,255,0.015)]">
                     <div className="flex flex-col items-center">
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ background: cfg.color }} />
                       <div className="w-px flex-1" style={{ background: 'var(--color-border)' }} />

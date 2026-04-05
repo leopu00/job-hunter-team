@@ -26,11 +26,11 @@ export default async function ReadyPage() {
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Pronte all&apos;invio</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Pronte all&apos;invio</span>
+        </nav>
         <div className="mt-3 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Pronte all&apos;invio</h1>
@@ -177,7 +177,7 @@ export default async function ReadyPage() {
 
 function StatCard({ label, value, color, icon }: { label: string; value: string | number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex flex-col gap-2">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex flex-col gap-2 transition-all duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center gap-2">
         <span style={{ color }}>{icon}</span>
         <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)]">{label}</span>

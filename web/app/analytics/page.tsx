@@ -17,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function KPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
-    <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+    <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors">
       <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">{label}</p>
       <p className="text-xl font-bold" style={{ color }}>{value}</p>
       {sub && <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{sub}</p>}
@@ -32,7 +32,7 @@ function LineChart({ data }: { data: TimelinePoint[] }) {
   const points = data.map((d, i) => ({ x: pad + (i / (data.length - 1)) * (W - 2 * pad), y: H - pad - (d.count / max) * (H - 2 * pad) }))
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }} role="img" aria-label="Grafico chiamate API nel tempo">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }} role="img" aria-label={`Candidature nel tempo: ${data.length} punti`}>
       {points.map((p, i) => i % Math.ceil(data.length / 6) === 0 && (
         <text key={i} x={p.x} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--color-dim)">{data[i].date.slice(5)}</text>
       ))}
@@ -59,7 +59,7 @@ function PieChart({ data }: { data: StatusItem[] }) {
   })
   return (
     <div className="flex items-center gap-6">
-      <svg viewBox="0 0 140 140" style={{ width: 140, height: 140 }} role="img" aria-label="Distribuzione chiamate per stato">
+      <svg viewBox="0 0 140 140" style={{ width: 140, height: 140 }} role="img" aria-label={`Distribuzione stati: ${data.length} categorie`}>
         {slices.map(s => <path key={s.status} d={s.path} fill={STATUS_COLORS[s.status] ?? 'var(--color-dim)'} opacity="0.85" />)}
       </svg>
       <div className="space-y-1.5">
@@ -110,11 +110,11 @@ export default function AnalyticsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Analytics</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Analytics</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Analytics</h1>
@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {!jh ? <p className="text-[var(--color-dim)] text-center py-16 text-[12px]" role="status" aria-live="polite">Caricamento...</p> : (
+      {!jh ? <p className="text-[var(--color-dim)] text-center py-16 text-[12px] animate-pulse" role="status" aria-live="polite">Caricamento...</p> : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <KPICard label="Candidature" value={String(jh.kpi.totalApplications)} color="var(--color-bright)" />

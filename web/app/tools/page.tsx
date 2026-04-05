@@ -77,11 +77,11 @@ export default function ToolsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Tool</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Tool</span>
+        </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Tool</h1>
@@ -100,13 +100,13 @@ export default function ToolsPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="alert">Errore nel caricamento.</p>
       ) : tab === 'tools' ? (
         <div className="space-y-4">
-          {data.sections.map(s => (
-            <div key={s.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
+          {data.sections.map((s, i) => (
+            <div key={s.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
               <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
                 <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)]">{s.label}</p>
               </div>
@@ -124,7 +124,7 @@ export default function ToolsPage() {
               {[...data.executions].reverse().map((e, i) => <ExecRow key={i} e={e} />)}
             </div>
           ) : (
-            <p className="text-[var(--color-dim)] text-[11px] text-center py-12">Nessuna esecuzione registrata.</p>
+            <p className="text-[var(--color-dim)] text-[11px] text-center py-12">Nessuna esecuzione registrata. Esegui un tool per vederne i risultati qui.</p>
           )}
         </div>
       )}

@@ -50,11 +50,11 @@ export default function EnvPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Variabili d&apos;ambiente</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Variabili d&apos;ambiente</span>
+        </nav>
         <div className="mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Variabili d&apos;ambiente</h1>
           {data && <p className="text-[var(--color-muted)] text-[11px] mt-1">{data.setCount} impostate · {data.unsetCount} mancanti · {data.total} totali</p>}
@@ -86,7 +86,7 @@ export default function EnvPage() {
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{cat}</h3>
               <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
                 {items.map((v, i) => (
-                  <div key={v.name} className={`flex items-center gap-3 px-5 py-3 ${i < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
+                  <div key={v.name} className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < items.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
                     <span className={`w-2 h-2 rounded-full flex-shrink-0`} style={{ background: v.set ? 'var(--color-green)' : 'var(--color-border)' }} />
                     <span className="text-[11px] font-mono text-[var(--color-bright)] flex-1 truncate">{v.name}</span>
                     <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'var(--color-dim)', minWidth: 120, textAlign: 'right' }}>

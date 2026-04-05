@@ -25,12 +25,14 @@ export default function DatabasePage() {
   const [query, setQuery] = useState('SELECT * LIMIT 20')
   const [result, setResult] = useState<{ columns: string[]; rows: Record<string, unknown>[]; count: number } | null>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const fetchTables = useCallback(async () => {
     const res = await fetch('/api/database').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setTables(data.tables ?? []); setTotalSizeKB(data.totalSizeKB ?? 0); setTotalRows(data.totalRows ?? 0);
+    setLoading(false);
   }, [])
 
   useEffect(() => { fetchTables() }, [fetchTables])
@@ -49,11 +51,11 @@ export default function DatabasePage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Database</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Database</span>
+        </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Database</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{tables.length} tabelle · {totalRows} righe · {totalSizeKB} KB totali</p>
       </div>
@@ -62,12 +64,17 @@ export default function DatabasePage() {
         <div className="flex items-center gap-4 px-5 py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
           <span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TABELLA</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RIGHE</span>
-          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SIZE</span>
-          <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SOURCE</span>
+          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">DIM</span>
+          <span className="w-32 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">ORIGINE</span>
           <span className="w-10" />
         </div>
-        {tables.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna tabella trovata.</p></div>
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : tables.length === 0
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessuna tabella trovata.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Verifica che il database sia connesso e contenga almeno una tabella.</p>
+            </div>
           : tables.map(t => <TableRow key={t.name + t.source} t={t} onQuery={openQuery} />)}
       </div>
 
@@ -79,10 +86,11 @@ export default function DatabasePage() {
           </div>
           <div className="px-5 py-3 flex gap-2 items-center">
             <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && runQuery()}
-              aria-label="Query SQL" className="flex-1 text-[10px] font-mono px-3 py-1.5 rounded" style={{ background: 'var(--color-deep)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
+              aria-label="Query SQL"
+              className="flex-1 text-[10px] font-mono px-3 py-1.5 rounded" style={{ background: 'var(--color-deep)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
             <button onClick={runQuery} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Esegui</button>
           </div>
-          {error && <p className="px-5 pb-3 text-[10px]" role="alert" style={{ color: 'var(--color-red)' }}>{error}</p>}
+          {error && <p role="alert" className="px-5 pb-3 text-[10px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
           {result && (
             <div className="px-5 pb-3 overflow-x-auto">
               <p className="text-[9px] text-[var(--color-dim)] mb-2">{result.count} risultati</p>

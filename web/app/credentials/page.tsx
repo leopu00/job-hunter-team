@@ -74,7 +74,7 @@ function AddForm({ provider, type, onDone }: { provider: string; type: string; o
       <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'} aria-label={isApiKey ? 'API Key' : 'Access Token'}
         value={value} onChange={e => setValue(e.target.value)} autoComplete="off" required
         className="w-full px-3 py-2 rounded text-[12px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
-      {error && <p className="text-[10px] text-[var(--color-red)] mt-1.5" role="alert">{error}</p>}
+      {error && <p role="alert" className="text-[10px] text-[var(--color-red)] mt-1.5">{error}</p>}
       <div className="flex justify-end mt-3">
         <button onClick={handleSave} disabled={!value.trim() || saving}
           className="text-[10px] px-4 py-1.5 rounded font-semibold cursor-pointer transition-colors disabled:opacity-40"
@@ -114,11 +114,11 @@ export default function CredentialsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Credenziali</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Credenziali</span>
+        </nav>
         <div className="mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Credenziali</h1>
           <p className="text-[var(--color-muted)] text-[11px] mt-1">
@@ -130,7 +130,7 @@ export default function CredentialsPage() {
       {adding && <AddForm provider={adding.provider} type={adding.type} onDone={() => { setAdding(null); fetchProviders() }} />}
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : providers.length === 0 ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun provider disponibile.</p>
       ) : (

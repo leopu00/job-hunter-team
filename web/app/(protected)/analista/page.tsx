@@ -189,11 +189,11 @@ export default function AnalistaPage() {
 
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Analista</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Analista</span>
+        </nav>
         <div className="mt-3 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Analista</h1>
@@ -214,8 +214,8 @@ export default function AnalistaPage() {
           { label: 'Checked tot.', val: data?.checked_total ?? '—', color: 'var(--color-green)' },
           { label: 'Elaborate oggi', val: data?.analyzed_today ?? '—', color: 'var(--color-blue)' },
           { label: 'Escluse oggi', val: data?.excluded_today ?? '—', color: 'var(--color-red)' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2 text-[var(--color-dim)]">{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
@@ -226,7 +226,7 @@ export default function AnalistaPage() {
       <div className="grid sm:grid-cols-2 gap-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>
 
         {/* Coda */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">In Coda (prossime 10)</h2>
           {data?.queue.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna posizione in coda</p>
@@ -238,7 +238,7 @@ export default function AnalistaPage() {
         </div>
 
         {/* Ultime checked */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">Ultime 10 Checked</h2>
           {data?.recent_processed.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna posizione checked</p>
@@ -251,7 +251,7 @@ export default function AnalistaPage() {
       </div>
 
       {/* Ultime escluse */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 mb-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
         <h2 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-red)' }}>
           Ultime 10 Escluse — Log
         </h2>
@@ -266,7 +266,7 @@ export default function AnalistaPage() {
 
       {/* Motivi esclusione + ratio */}
       {data && Object.keys(data.exclusion_categories).length > 0 && (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4" style={{ animation: 'fade-in 0.35s ease 0.15s both' }}>
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: 'fade-in 0.35s ease 0.15s both' }}>
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-2">Motivi Esclusione</h2>
 
           {/* Ratio bar */}

@@ -87,11 +87,11 @@ export default function ImportPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Importa</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Importa</span>
+        </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Importa Dati</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Importa dati job hunting e sistema da file JSON o CSV</p>
       </div>
@@ -157,7 +157,7 @@ export default function ImportPage() {
 
         <div className="space-y-4">
           {preview && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
               <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Anteprima</p>
               {preview.ok ? (
                 <div>
@@ -187,7 +187,7 @@ export default function ImportPage() {
           )}
 
           {result && (
-            <div className="rounded-lg border p-3 text-[11px]"
+            <div role="alert" className="rounded-lg border p-3 text-[11px]"
               style={{ borderColor: result.ok ? 'rgba(0,232,122,0.3)' : 'rgba(255,69,96,0.3)', color: result.ok ? 'var(--color-green)' : 'var(--color-red)', background: result.ok ? 'rgba(0,232,122,0.05)' : 'rgba(255,69,96,0.05)' }}>
               {result.msg}
             </div>
