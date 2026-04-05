@@ -55,7 +55,7 @@ export function Pagination({ page, totalPages, perPage, totalItems, onPage, onPe
       {onPerPage && (
         <div className="flex items-center gap-2">
           <span style={{ color: 'var(--color-dim)' }}>per pagina</span>
-          <select value={perPage} onChange={e => onPerPage(Number(e.target.value))}
+          <select value={perPage} onChange={e => onPerPage(Number(e.target.value))} aria-label="Righe per pagina"
             className="px-2 py-1 rounded text-[10px] font-mono cursor-pointer outline-none"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-muted)' }}>
             {perPageOptions.map(n => <option key={n} value={n}>{n}</option>)}
