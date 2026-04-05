@@ -75,7 +75,7 @@ export default function RecommendationsPage() {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">JOB SUGGERITI</h2>
+          <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">LAVORI SUGGERITI</h2>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
             {jobs.map(j => (
               <div key={j.id} className="px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
@@ -83,7 +83,7 @@ export default function RecommendationsPage() {
                   <span className="text-[11px] font-medium text-[var(--color-bright)]">{j.title}</span>
                   <ScoreBadge score={j.score} />
                 </div>
-                <p className="text-[9px] text-[var(--color-muted)]">{j.company} · {j.location} {j.remote && <span style={{ color: 'var(--color-green)' }}>· Remote</span>} · {j.salary}</p>
+                <p className="text-[9px] text-[var(--color-muted)]">{j.company} · {j.location} {j.remote && <span style={{ color: 'var(--color-green)' }}>· Remoto</span>} · {j.salary}</p>
                 <p className="text-[9px] text-[var(--color-dim)] mt-1 italic">{j.reason}</p>
               </div>
             ))}
