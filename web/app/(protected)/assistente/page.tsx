@@ -349,7 +349,7 @@ export default function AssistentePage() {
                   {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                     <div className="flex justify-start mb-3">
                       <div className="px-4 py-3 rounded-lg text-[12px]" style={{ background: '#1c2333', borderBottomLeftRadius: '4px' }}>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1" aria-hidden="true">
                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.2s infinite' }} />
                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.4s infinite' }} />
