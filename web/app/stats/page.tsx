@@ -553,7 +553,7 @@ function StatsContent() {
                             <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 -mb-px" style={{ background: typeColor }} />
                             {c.message}
                           </p>
-                          <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; {c.date}</p>
+                          <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{c.author} &middot; <time dateTime={c.date}>{c.date}</time></p>
                         </div>
                       </div>
                     )
@@ -610,18 +610,18 @@ function StatsContent() {
                   <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
                   <div>
                     <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{t.first}</div>
-                    <div className="text-[13px] font-semibold text-[var(--color-bright)]">
+                    <time dateTime={data.overview.firstCommit} className="text-[13px] font-semibold text-[var(--color-bright)]">
                       {formatDate(data.overview.firstCommit)}
-                    </div>
+                    </time>
                   </div>
                 </div>
                 <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, var(--color-green), var(--color-border))' }} />
                 <div className="flex items-center gap-2">
                   <div>
                     <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider text-right">{t.last}</div>
-                    <div className="text-[13px] font-semibold text-[var(--color-bright)]">
+                    <time dateTime={data.overview.lastCommit} className="text-[13px] font-semibold text-[var(--color-bright)]">
                       {formatDate(data.overview.lastCommit)}
-                    </div>
+                    </time>
                   </div>
                   <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
                 </div>
