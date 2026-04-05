@@ -7,8 +7,15 @@ type Item = { id: string; label: string; detail: string; href: string; category:
 
 const ITEMS: Item[] = [
   { id: 'dashboard',    label: 'Dashboard',      detail: 'Panoramica sistema',                category: 'Pagine' },
+  { id: 'positions',    label: 'Posizioni',      detail: 'Offerte trovate e filtri',           category: 'Pagine' },
+  { id: 'applications', label: 'Candidature',    detail: 'CV e cover letter generate',         category: 'Pagine' },
+  { id: 'ready',        label: 'Pronte',         detail: 'Candidature pronte per invio',       category: 'Pagine' },
+  { id: 'risposte',     label: 'Risposte',       detail: 'Risposte ricevute',                  category: 'Pagine' },
+  { id: 'crescita',     label: 'Crescita',       detail: 'Statistiche e conversion rate',      category: 'Pagine' },
+  { id: 'profile',      label: 'Profilo',        detail: 'Il tuo profilo candidato',           category: 'Pagine' },
+  { id: 'team',         label: 'Team',           detail: 'Agenti e stato online',              category: 'Pagine' },
+  { id: 'assistente',   label: 'Assistente',     detail: 'Chat AI per assistenza',             category: 'Pagine' },
   { id: 'agents',       label: 'Agenti',         detail: 'Lista e stato agenti',               category: 'Pagine' },
-  { id: 'team',         label: 'Team',           detail: 'Worker e stato online',              category: 'Pagine' },
   { id: 'tasks',        label: 'Task',           detail: 'Task in esecuzione e storico',       category: 'Pagine' },
   { id: 'sessions',     label: 'Sessioni',       detail: 'Sessioni e chat',                    category: 'Pagine' },
   { id: 'queue',        label: 'Queue',          detail: 'Job queue e dead-letter',            category: 'Pagine' },
