@@ -91,9 +91,9 @@ export default function TaskDetailPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Task non trovato.</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="alert">Task non trovato.</p>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">

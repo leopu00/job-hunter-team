@@ -82,7 +82,7 @@ export default function DatabasePage() {
               className="flex-1 text-[10px] font-mono px-3 py-1.5 rounded" style={{ background: 'var(--color-deep)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
             <button onClick={runQuery} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Esegui</button>
           </div>
-          {error && <p className="px-5 pb-3 text-[10px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
+          {error && <p className="px-5 pb-3 text-[10px]" role="alert" style={{ color: 'var(--color-red)' }}>{error}</p>}
           {result && (
             <div className="px-5 pb-3 overflow-x-auto">
               <p className="text-[9px] text-[var(--color-dim)] mb-2">{result.count} risultati</p>
