@@ -91,7 +91,7 @@ export default function TaskDetailPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
       ) : !data ? (
         <div className="text-center py-16">
           <p className="text-[var(--color-dim)] text-[12px]">Task non trovato.</p>
