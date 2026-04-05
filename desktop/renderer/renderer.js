@@ -24,6 +24,8 @@ function describeMode(status) {
       return '🟠 stopping'
     case 'external':
       return '🔵 external'
+    case 'blocked':
+      return '🟣 blocked'
     case 'error':
       return '🔴 error'
     default:
@@ -32,6 +34,11 @@ function describeMode(status) {
 }
 
 function updateHint(status) {
+  if (status.message) {
+    hintText.textContent = status.message
+    return
+  }
+
   if (status.lastError) {
     hintText.textContent = `⚠️ ${status.lastError}`
     return
@@ -44,6 +51,11 @@ function updateHint(status) {
 
   if (status.mode === 'external') {
     hintText.textContent = 'ℹ️ La porta è già occupata: sembra esserci già una dashboard attiva.'
+    return
+  }
+
+  if (status.mode === 'blocked') {
+    hintText.textContent = '⚠️ La porta è occupata, ma la dashboard non risponde. Il launcher userà una porta alternativa al prossimo start.'
     return
   }
 
