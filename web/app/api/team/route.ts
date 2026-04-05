@@ -4,6 +4,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const TASKS_DIR = path.join(os.homedir(), '.jht-dev', 'tasks')
 
 const TEAM = [

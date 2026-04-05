@@ -76,11 +76,11 @@ export default function ConfigPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-6 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Config</span>
-        </nav>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Config</span>
+        </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Config</h1>
@@ -101,7 +101,7 @@ export default function ConfigPage() {
         </div>
       </div>
 
-      {!data && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {!data && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
 
       {data && (
         <div className="flex flex-col gap-4">
@@ -114,7 +114,7 @@ export default function ConfigPage() {
               value={text}
               onChange={e => handleChange(e.target.value)}
               spellCheck={false}
-              aria-label="Configurazione JSON"
+              aria-label="Editor configurazione JSON"
               className="w-full resize-none font-mono text-[11px] bg-transparent outline-none px-4 py-4"
               style={{ color: 'var(--color-bright)', minHeight: 400, lineHeight: 1.7 }}
             />

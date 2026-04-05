@@ -63,6 +63,25 @@ export function BottomSheet({
     setTimeout(() => { setClosing(false); onClose() }, 280)
   }, [onClose])
 
+  // ESC chiude + focus trap
+  useEffect(() => {
+    if (!open || !sheetRef.current) return
+    const el = sheetRef.current
+    const sel = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    const focusables = () => Array.from(el.querySelectorAll<HTMLElement>(sel))
+    focusables()[0]?.focus()
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return }
+      if (e.key !== 'Tab') return
+      const fs = focusables()
+      if (!fs.length) { e.preventDefault(); return }
+      if (e.shiftKey) { if (document.activeElement === fs[0]) { e.preventDefault(); fs.at(-1)?.focus() } }
+      else            { if (document.activeElement === fs.at(-1)) { e.preventDefault(); fs[0]?.focus() } }
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [open, close])
+
   const onDragStart = (clientY: number) => {
     startY.current = clientY
     sheetH.current = sheetRef.current?.offsetHeight ?? window.innerHeight
@@ -146,7 +165,7 @@ export function BottomSheet({
               flexShrink: 0, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
             onMouseDown={e => onDragStart(e.clientY)}
             onTouchStart={e => onDragStart(e.touches[0].clientY)}>
-            <div style={{ width: 36, height: 4, borderRadius: 2,
+            <div aria-hidden="true" style={{ width: 36, height: 4, borderRadius: 2,
               background: 'var(--color-border)' }} />
           </div>
         )}

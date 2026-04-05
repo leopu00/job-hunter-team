@@ -89,12 +89,12 @@ export function Checkbox({
               <span className="cb-mark" style={{ color: '#000', lineHeight: 1 }}>
                 {indeterminate ? (
                   // Dash per indeterminate
-                  <svg width={px - 6} height={px - 6} viewBox="0 0 10 10" fill="none">
+                  <svg width={px - 6} height={px - 6} viewBox="0 0 10 10" fill="none" aria-hidden="true">
                     <line x1="2" y1="5" x2="8" y2="5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 ) : (
                   // Checkmark
-                  <svg width={px - 6} height={px - 6} viewBox="0 0 10 10" fill="none">
+                  <svg width={px - 6} height={px - 6} viewBox="0 0 10 10" fill="none" aria-hidden="true">
                     <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}

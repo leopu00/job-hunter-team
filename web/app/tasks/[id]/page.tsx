@@ -91,9 +91,9 @@ export default function TaskDetailPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
-        <div className="text-center py-16">
+        <div className="text-center py-16" role="alert">
           <p className="text-[var(--color-dim)] text-[12px]">Task non trovato.</p>
           <Link href="/tasks" className="text-[11px] text-[var(--color-green)] hover:underline mt-2 inline-block">← Torna ai task</Link>
         </div>

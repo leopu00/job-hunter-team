@@ -30,7 +30,7 @@ function RadarChart({ points }: { points: RadarPoint[] }) {
     return `${i === 0 ? 'M' : 'L'}${CX + r * Math.cos(angle(i))},${CY + r * Math.sin(angle(i))}`
   }).join(' ') + ' Z'
   return (
-    <svg viewBox="0 0 200 200" style={{ width: 220, height: 220 }} role="img" aria-label={`Radar competenze: ${points.length} categorie`}>
+    <svg viewBox="0 0 200 200" style={{ width: 220, height: 220 }} role="img" aria-label="Radar chart competenze">
       {gridLevels.map(lv => {
         const r = (lv / 100) * R
         const path = Array.from({ length: n }, (_, i) => `${i === 0 ? 'M' : 'L'}${CX + r * Math.cos(angle(i))},${CY + r * Math.sin(angle(i))}`).join(' ') + ' Z'
@@ -76,11 +76,11 @@ export default function SkillsPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Competenze</span>
-        </nav>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Competenze</span>
+        </div>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">Competenze</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{skills.length} competenze registrate</p>
       </div>
@@ -92,7 +92,7 @@ export default function SkillsPage() {
         <div className="md:col-span-2 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Aggiungi competenza</p>
           <div className="flex flex-wrap gap-2 items-end">
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome competenza" aria-label="Nome competenza"
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome competenza"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
             <select value={newCat} onChange={e => setNewCat(e.target.value as Category)} aria-label="Categoria competenza"
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
@@ -102,8 +102,8 @@ export default function SkillsPage() {
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
               {LEVELS.map(l => <option key={l} value={l}>{LEVEL_CFG[l].label}</option>)}
             </select>
-            <button onClick={addSkill} disabled={!newName.trim()} className="px-4 py-1.5 rounded-lg text-[11px] font-bold"
-              style={{ background: newName.trim() ? 'var(--color-green)' : 'var(--color-border)', color: newName.trim() ? '#000' : 'var(--color-dim)', border: 'none', cursor: newName.trim() ? 'pointer' : 'default' }}>aggiungi</button>
+            <button onClick={addSkill} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
+              style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>aggiungi</button>
           </div>
         </div>
       </div>
@@ -129,8 +129,7 @@ export default function SkillsPage() {
             <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
               style={{ color: LEVEL_CFG[s.level].color, border: `1px solid var(--color-border)` }}>{LEVEL_CFG[s.level].label}</span>
             <span className="text-[9px] text-[var(--color-dim)] w-10 text-right">{s.endorsements}★</span>
-            <button onClick={() => deleteSkill(s.id)} aria-label={`Elimina competenza ${s.name}`}
-              className="text-[10px] font-bold cursor-pointer transition-colors"
+            <button onClick={() => deleteSkill(s.id)} className="text-[10px] font-bold cursor-pointer transition-colors"
               style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--color-red)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>

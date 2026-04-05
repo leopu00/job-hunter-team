@@ -71,8 +71,8 @@ function AddForm({ provider, type, onDone }: { provider: string; type: string; o
         <p className="text-[11px] font-semibold text-[var(--color-bright)]">Aggiungi — {label}</p>
         <button onClick={onDone} className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] cursor-pointer">Annulla</button>
       </div>
-      <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'}
-        value={value} onChange={e => setValue(e.target.value)}
+      <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'} aria-label={isApiKey ? 'API Key' : 'Access Token'}
+        value={value} onChange={e => setValue(e.target.value)} autoComplete="off" required
         className="w-full px-3 py-2 rounded text-[12px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
       {error && <p role="alert" className="text-[10px] text-[var(--color-red)] mt-1.5">{error}</p>}
       <div className="flex justify-end mt-3">
@@ -130,7 +130,7 @@ export default function CredentialsPage() {
       {adding && <AddForm provider={adding.provider} type={adding.type} onDone={() => { setAdding(null); fetchProviders() }} />}
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : providers.length === 0 ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun provider disponibile.</p>
       ) : (

@@ -7,7 +7,7 @@ type Cluster = { city: string; area: string; count: number; avgSalary: number; t
 
 function MapView({ clusters, selected, onSelect }: { clusters: Cluster[]; selected: Cluster | null; onSelect: (c: Cluster) => void }) {
   return (
-    <svg viewBox="0 0 100 90" className="w-full" style={{ maxHeight: 420 }}>
+    <svg viewBox="0 0 100 90" className="w-full" style={{ maxHeight: 420 }} role="img" aria-label="Mappa cluster offerte di lavoro per localita">
       <rect x={0} y={0} width={100} height={90} fill="var(--color-deep)" rx={4} />
       {/* Grid lines */}
       {[20, 40, 60, 80].map(x => <line key={`vx${x}`} x1={x} y1={0} x2={x} y2={90} stroke="var(--color-border)" strokeWidth={0.2} />)}

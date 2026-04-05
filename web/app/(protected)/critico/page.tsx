@@ -173,7 +173,7 @@ export default function CriticoPage() {
       </div>
 
       {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg text-[11px]"
+        <div className="mb-6 px-4 py-3 rounded-lg text-[11px]" role="alert"
           style={{ background: 'var(--color-red)18', border: '1px solid var(--color-red)40', color: 'var(--color-red)' }}>
           Errore connessione: {error}
         </div>
@@ -205,7 +205,7 @@ export default function CriticoPage() {
       </div>
 
       {!live ? (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10" role="status" aria-live="polite">
           Caricamento…
         </div>
       ) : queue.length === 0 ? (
@@ -260,7 +260,7 @@ export default function CriticoPage() {
       </div>
 
       {!live ? (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10" role="status" aria-live="polite">
           Caricamento…
         </div>
       ) : feed.length === 0 ? (

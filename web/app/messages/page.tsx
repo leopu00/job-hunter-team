@@ -18,7 +18,6 @@ export default function MessagesPage() {
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [filter, setFilter] = useState<Filter>('all')
-  const [loading, setLoading] = useState(true)
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [reply, setReply] = useState('')
   const [showCompose, setShowCompose] = useState(false)
@@ -30,10 +29,9 @@ export default function MessagesPage() {
     const p = new URLSearchParams()
     if (filter !== 'all') p.set('filter', filter)
     const res = await fetch(`/api/messages?${p}`).catch(() => null)
-    if (!res?.ok) { setLoading(false); return }
+    if (!res?.ok) return
     const data = await res.json()
     setThreads(data.threads ?? []); setUnreadCount(data.unreadCount ?? 0)
-    setLoading(false)
   }, [filter])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
@@ -67,11 +65,11 @@ export default function MessagesPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Messaggi</span>
-        </nav>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Messaggi</span>
+        </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Messaggi</h1>
@@ -98,11 +96,11 @@ export default function MessagesPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo messaggio</p>
           <div className="flex flex-wrap gap-2 mb-2">
-            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Contatto" className={`${inputCls} flex-1 min-w-[140px]`} />
-            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Azienda" className={`${inputCls} min-w-[120px]`} />
+            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Nome contatto" className={`${inputCls} flex-1 min-w-[140px]`} autoComplete="name" required />
+            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Nome azienda" className={`${inputCls} min-w-[120px]`} autoComplete="organization" required />
           </div>
           <div className="flex gap-2">
-            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." aria-label="Messaggio" className={`${inputCls} flex-1`}
+            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." aria-label="Testo messaggio" className={`${inputCls} flex-1`}
               onKeyDown={e => e.key === 'Enter' && sendNew()} />
             <button onClick={sendNew} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
               style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>invia</button>
@@ -112,13 +110,8 @@ export default function MessagesPage() {
 
       <div className="grid md:grid-cols-5 gap-4">
         <div className="md:col-span-2 border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-          {loading ? (
-            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
-          ) : threads.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-[var(--color-dim)] text-[12px]">{filter !== 'all' ? `Nessuna conversazione ${filter === 'unread' ? 'non letta' : 'preferita'}.` : 'Nessuna conversazione ancora.'}</p>
-              {filter === 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa <span className="font-bold text-[var(--color-muted)]">+ nuovo messaggio</span> per iniziare.</p>}
-            </div>
+          {threads.length === 0 ? (
+            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna conversazione.</p></div>
           ) : threads.map(t => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => { openThread(t.id); setShowCompose(false) }}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openThread(t.id); setShowCompose(false); } }}
@@ -127,7 +120,7 @@ export default function MessagesPage() {
               <div className="flex items-center gap-2">
                 {t.unread && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'var(--color-green)' }} />}
                 <span className="text-[12px] font-semibold text-[var(--color-bright)] flex-1 truncate">{t.contact}</span>
-                {t.starred && <span className="text-[10px]">⭐</span>}
+                {t.starred && <span className="text-[10px]" aria-hidden="true">⭐</span>}
                 <span className="text-[9px] text-[var(--color-dim)]">{fmtTime(t.lastTimestamp)}</span>
               </div>
               <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{t.company}</p>

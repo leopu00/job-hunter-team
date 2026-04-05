@@ -52,7 +52,7 @@ function ModulesSection() {
     <div className="flex flex-col gap-5">
       {groups.map(g => (
         <div key={g}>
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{g}</h3>
+          <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-dim)] mb-2">{g}</h2>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
             {MODULES.filter(m => m.group === g).map((m, i, arr) => (
               <div key={m.id} className={`flex items-start gap-3 px-5 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < arr.length - 1 ? 'border-b border-[var(--color-border)]' : ''}`}>
@@ -117,9 +117,10 @@ export default function DocsPage() {
         </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Documentazione</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Architettura, moduli, CLI e API del Job Hunter Team.</p>
-        <div className="flex gap-1.5 flex-wrap mt-4">
+        <div className="flex gap-1.5 flex-wrap mt-4" role="tablist" aria-label="Sezioni documentazione">
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => setActive(s.id)}
+              role="tab" aria-selected={active === s.id} aria-controls={`docs-panel-${s.id}`} id={`docs-tab-${s.id}`}
               className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
               style={{ border: `1px solid ${active === s.id ? 'var(--color-green)' : 'var(--color-border)'}`, color: active === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: active === s.id ? 'rgba(0,232,122,0.08)' : 'transparent' }}>
               {s.label}
@@ -127,7 +128,7 @@ export default function DocsPage() {
           ))}
         </div>
       </div>
-      <div style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
+      <div role="tabpanel" id={`docs-panel-${active}`} aria-labelledby={`docs-tab-${active}`} style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
         {CONTENT[active]}
       </div>
     </div>

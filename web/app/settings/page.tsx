@@ -93,7 +93,7 @@ export default function SettingsPage() {
     finally { setBusy(false) }
   }, [toast])
 
-  if (loading) return <main className="p-10"><p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p></main>
+  if (loading) return <main className="p-10" role="status" aria-live="polite"><p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p></main>
 
   const TABS: Tab<TabId>[] = [
     { id: 'general',       label: 'Generale' },

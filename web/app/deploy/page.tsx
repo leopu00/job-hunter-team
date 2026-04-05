@@ -23,7 +23,7 @@ function ServiceRow({ svc }: { svc: ServiceHealth }) {
       <div className="flex-1 min-w-0">
         <span className="text-[12px] font-semibold" style={{ color: svc.ok ? 'var(--color-bright)' : cfg.color }}>{svc.name}</span>
         {svc.url && <span className="ml-2 text-[10px] font-mono text-[var(--color-dim)]">{svc.url}</span>}
-        {svc.error && <p className="text-[10px] text-[var(--color-red)] mt-0.5 truncate">{svc.error}</p>}
+        {svc.error && <p className="text-[10px] text-[var(--color-red)] mt-0.5 truncate" role="alert">{svc.error}</p>}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         {svc.ms != null && <span className="text-[10px] text-[var(--color-dim)]">{svc.ms}ms</span>}
@@ -106,7 +106,7 @@ export default function DeployPage() {
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Health check in corso…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Health check in corso…</span></div>}
 
       {report && (<>
         {/* Servizi HTTP */}

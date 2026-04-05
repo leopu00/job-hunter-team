@@ -70,11 +70,11 @@ export default function EnvPage() {
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
 
       {!loading && data && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">🌿</span>
+          <span className="text-4xl" aria-hidden="true">🌿</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessuna variabile trovata</p>
         </div>
       )}
