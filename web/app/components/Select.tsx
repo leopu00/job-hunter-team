@@ -113,7 +113,7 @@ export function Select({
         {/* Controls */}
         <div className="flex items-center gap-1 ml-auto flex-shrink-0">
           {clearable && hasValue && (
-            <button onClick={clear} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>
+            <button onClick={clear} aria-label="Cancella selezione" style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>
           )}
           <span className="text-[9px]" style={{ color: 'var(--color-dim)' }}>{open ? '▲' : '▼'}</span>
         </div>
