@@ -95,3 +95,59 @@ test('runtime manager starts and stops a local server via custom spawn factory',
   assert.equal(stopped.mode, 'stopped')
   assert.equal(stopped.managed, false)
 })
+
+test('runtime manager treats a reachable port as external runtime', async () => {
+  const repoRoot = makeTempRepo()
+  const webDir = path.join(repoRoot, 'web')
+  writeFile(path.join(webDir, 'package.json'), '{}')
+  fs.mkdirSync(path.join(webDir, 'node_modules'), { recursive: true })
+
+  const manager = createRuntimeManager({
+    repoRoot,
+    isPortOpenFn: () => true,
+    probeHttpFn: () => true,
+  })
+
+  const status = await manager.getStatus()
+  assert.equal(status.mode, 'external')
+  assert.equal(status.running, true)
+})
+
+test('runtime manager falls back to next free port when preferred one is blocked', async () => {
+  const repoRoot = makeTempRepo()
+  const webDir = path.join(repoRoot, 'web')
+  writeFile(path.join(webDir, 'package.json'), '{}')
+  fs.mkdirSync(path.join(webDir, 'node_modules'), { recursive: true })
+  writeFile(path.join(webDir, '.next', 'BUILD_ID'), 'build-123')
+
+  let openPorts = new Set([3000])
+  const manager = createRuntimeManager({
+    repoRoot,
+    logFile: path.join(repoRoot, 'launcher.log'),
+    startTimeoutMs: 5000,
+    isPortOpenFn: (port) => openPorts.has(port),
+    probeHttpFn: (port) => port === 3000 ? false : openPorts.has(port),
+    spawnFn: (command, args, options) => {
+      openPorts.add(3001)
+      return require('node:child_process').spawn(command, args, options)
+    },
+    spawnSpecFactory: () => ({
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+      options: {
+        cwd: webDir,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    }),
+  })
+
+  const started = await manager.startRuntime({ port: 3000, preferredMode: 'production' })
+  assert.equal(started.mode, 'running')
+  assert.equal(started.port, 3001)
+  assert.equal(started.note, 'port-fallback')
+
+  const stopped = await manager.stopRuntime()
+  openPorts = new Set()
+  assert.equal(stopped.mode, 'stopped')
+})

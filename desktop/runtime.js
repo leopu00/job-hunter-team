@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const http = require('node:http')
 const net = require('node:net')
 const os = require('node:os')
 const path = require('node:path')
@@ -88,6 +89,8 @@ function createRuntimeManager(config = {}) {
   const spawnFn = config.spawnFn ?? spawn
   const spawnSpecFactory = config.spawnSpecFactory ?? defaultSpawnSpecFactory
   const isPortOpenFn = config.isPortOpenFn
+  const probeHttpFn = config.probeHttpFn
+  const portFallbackSpan = config.portFallbackSpan ?? 10
   const state = {
     child: null,
     mode: 'stopped',
@@ -132,6 +135,32 @@ function createRuntimeManager(config = {}) {
     })
   }
 
+  function probeHttp(port) {
+    if (probeHttpFn) {
+      return Promise.resolve(probeHttpFn(port))
+    }
+
+    return new Promise((resolve) => {
+      const request = http.request({
+        host: '127.0.0.1',
+        port,
+        path: '/',
+        method: 'GET',
+        timeout: 1200,
+      }, (response) => {
+        response.resume()
+        resolve(response.statusCode >= 200 && response.statusCode < 500)
+      })
+
+      request.on('timeout', () => {
+        request.destroy()
+        resolve(false)
+      })
+      request.on('error', () => resolve(false))
+      request.end()
+    })
+  }
+
   async function waitForPort(port, timeoutMs = startTimeoutMs) {
     const started = Date.now()
     while (Date.now() - started < timeoutMs) {
@@ -139,6 +168,31 @@ function createRuntimeManager(config = {}) {
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
     return false
+  }
+
+  async function inspectPort(port) {
+    const tcpOpen = await isPortOpen(port)
+    if (!tcpOpen) {
+      return { port, tcpOpen: false, httpOk: false, state: 'free' }
+    }
+
+    const httpOk = await probeHttp(port)
+    if (httpOk) {
+      return { port, tcpOpen: true, httpOk: true, state: 'reachable' }
+    }
+
+    return { port, tcpOpen: true, httpOk: false, state: 'blocked' }
+  }
+
+  async function findFallbackPort(startPort) {
+    for (let offset = 1; offset <= portFallbackSpan; offset += 1) {
+      const candidate = startPort + offset
+      const inspection = await inspectPort(candidate)
+      if (inspection.state === 'free') {
+        return candidate
+      }
+    }
+    return null
   }
 
   function buildStatus(extra = {}) {
@@ -170,22 +224,65 @@ function createRuntimeManager(config = {}) {
   }
 
   async function getStatus() {
-    if (!state.child && (await isPortOpen(state.port))) {
-      return buildStatus({ mode: 'external', running: true, managed: false })
+    if (!state.child) {
+      const inspection = await inspectPort(state.port)
+      if (inspection.state === 'reachable') {
+        return buildStatus({
+          mode: 'external',
+          running: true,
+          managed: false,
+          note: 'external-runtime',
+          message: `Dashboard già raggiungibile su ${getUrl()}.`,
+        })
+      }
+      if (inspection.state === 'blocked') {
+        return buildStatus({
+          mode: 'blocked',
+          running: false,
+          managed: false,
+          note: 'port-blocked',
+          message: `La porta ${state.port} è occupata ma non risponde via HTTP.`,
+        })
+      }
     }
     return buildStatus()
   }
 
   async function startRuntime(options = {}) {
-    state.port = resolvePort(options.port)
+    const preferredPort = resolvePort(options.port)
+    state.port = preferredPort
 
     if (state.child) {
       return buildStatus({ note: 'already-managed' })
     }
 
-    if (await isPortOpen(state.port)) {
+    const allowPortFallback = options.allowPortFallback !== false
+    const preferredInspection = await inspectPort(preferredPort)
+    if (preferredInspection.state === 'reachable') {
       state.mode = 'external'
-      return buildStatus({ note: 'port-already-open', running: true, managed: false })
+      return buildStatus({
+        note: 'port-already-open',
+        message: `Dashboard già attiva su ${getUrl(preferredPort)}.`,
+        running: true,
+        managed: false,
+      })
+    }
+
+    if (preferredInspection.state === 'blocked') {
+      if (!allowPortFallback) {
+        state.mode = 'error'
+        state.lastError = `La porta ${preferredPort} è occupata da un processo non raggiungibile.`
+        return buildStatus()
+      }
+
+      const fallbackPort = await findFallbackPort(preferredPort)
+      if (!fallbackPort) {
+        state.mode = 'error'
+        state.lastError = `La porta ${preferredPort} è occupata e non ho trovato una porta libera vicina.`
+        return buildStatus()
+      }
+
+      state.port = fallbackPort
     }
 
     const setup = inspectWebSetup(repoRoot)
@@ -255,7 +352,12 @@ function createRuntimeManager(config = {}) {
     }
 
     state.mode = 'running'
-    return buildStatus()
+    return buildStatus(state.port !== preferredPort
+      ? {
+          note: 'port-fallback',
+          message: `La porta ${preferredPort} era occupata. JHT è partito su ${getUrl(state.port)}.`,
+        }
+      : {})
   }
 
   async function stopRuntime() {
