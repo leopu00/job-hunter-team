@@ -83,22 +83,17 @@ export default function HealthPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">Versione</p>
-              <p className="text-lg font-bold text-[var(--color-bright)]">v{data.version}</p>
-            </div>
-            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">Uptime</p>
-              <p className="text-lg font-bold text-[var(--color-bright)]">{fmtUptime(data.uptime)}</p>
-            </div>
-            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">Moduli OK</p>
-              <p className="text-lg font-bold text-[var(--color-green)]">{data.counts.ok}/{data.modules.length}</p>
-            </div>
-            <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">Ultimo check</p>
-              <p className="text-lg font-bold text-[var(--color-muted)]">{lastCheck}</p>
-            </div>
+            {[
+              { label: 'Versione', val: `v${data.version}`, color: 'var(--color-bright)' },
+              { label: 'Uptime', val: fmtUptime(data.uptime), color: 'var(--color-bright)' },
+              { label: 'Moduli OK', val: `${data.counts.ok}/${data.modules.length}`, color: 'var(--color-green)' },
+              { label: 'Ultimo check', val: lastCheck, color: 'var(--color-muted)' },
+            ].map(({ label, val, color }, i) => (
+              <div key={label} className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
+                <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-1">{label}</p>
+                <p className="text-lg font-bold" style={{ color }}>{val}</p>
+              </div>
+            ))}
           </div>
 
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
