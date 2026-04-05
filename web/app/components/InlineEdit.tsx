@@ -100,7 +100,7 @@ export function InlineEdit({
   const inputStyle: React.CSSProperties = {
     fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-bright)',
     background: 'var(--color-card)', border: `1px solid ${error ? 'var(--color-red)' : 'var(--color-green)'}`,
-    borderRadius: 4, padding: '2px 6px', outline: 'none', width: '100%',
+    borderRadius: 4, padding: '2px 6px', width: '100%',
     resize: type === 'textarea' ? 'vertical' : 'none', lineHeight: 1.5,
   }
 
