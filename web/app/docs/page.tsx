@@ -117,9 +117,10 @@ export default function DocsPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">Documentazione</h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Architettura, moduli, CLI e API del Job Hunter Team.</p>
-        <div className="flex gap-1.5 flex-wrap mt-4">
+        <div className="flex gap-1.5 flex-wrap mt-4" role="tablist" aria-label="Sezioni documentazione">
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => setActive(s.id)}
+              role="tab" aria-selected={active === s.id} aria-controls={`docs-panel-${s.id}`} id={`docs-tab-${s.id}`}
               className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
               style={{ border: `1px solid ${active === s.id ? 'var(--color-green)' : 'var(--color-border)'}`, color: active === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: active === s.id ? 'rgba(0,232,122,0.08)' : 'transparent' }}>
               {s.label}
@@ -127,7 +128,7 @@ export default function DocsPage() {
           ))}
         </div>
       </div>
-      <div style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
+      <div role="tabpanel" id={`docs-panel-${active}`} aria-labelledby={`docs-tab-${active}`} style={{ animation: 'fade-in 0.2s ease both' }} key={active}>
         {CONTENT[active]}
       </div>
     </div>
