@@ -75,7 +75,7 @@ export default function HooksPage() {
           {activeCount}/{total} attivi · {totalEvents} eventi registrati
           {hooksDir && <span className="ml-2 font-mono text-[var(--color-dim)]">{hooksDir}</span>}
         </p>
-        {error && <p className="text-[10px] text-[var(--color-yellow)] mt-1">{error}</p>}
+        {error && <p role="alert" className="text-[10px] text-[var(--color-yellow)] mt-1">{error}</p>}
       </div>
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
