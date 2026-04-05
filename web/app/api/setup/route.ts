@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
+export const dynamic = 'force-dynamic'
+
 const CONFIG_DIR  = path.join(os.homedir(), '.jht')
 const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
 
