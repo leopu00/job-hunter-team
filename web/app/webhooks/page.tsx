@@ -91,10 +91,10 @@ export default function WebhooksPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]" style={{ animation: 'fade-in 0.2s ease both' }}>
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
-              <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
+              <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" />
             </div>
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="url" required />
             <div className="flex flex-wrap gap-1.5">
               {ALL_EVENTS.map(ev => (
                 <button key={ev} onClick={() => toggleEvent(ev)} className="px-2 py-1 rounded text-[9px] font-mono cursor-pointer transition-all"
@@ -112,12 +112,12 @@ export default function WebhooksPage() {
         </div>
       )}
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento…</span></div>}
       {!loading && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {webhooks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <span className="text-4xl">🪝</span>
+              <span className="text-4xl" aria-hidden="true">🪝</span>
               <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessun webhook</p>
               <p className="text-[10px] text-[var(--color-dim)]">Registra webhook per ricevere notifiche sugli eventi.</p>
             </div>

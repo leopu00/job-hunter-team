@@ -77,9 +77,10 @@ export default function ChangelogPage() {
         </div>
 
         {/* Filtri */}
-        <div className="flex gap-1.5 mt-4 flex-wrap">
+        <div className="flex gap-1.5 mt-4 flex-wrap" role="radiogroup" aria-label="Filtra per tipo">
           {FILTERS.map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
+              role="radio" aria-checked={filter === f.key}
               className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
               style={{
                 border: `1px solid ${filter === f.key ? 'var(--color-green)' : 'var(--color-border)'}`,
@@ -94,15 +95,15 @@ export default function ChangelogPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-16">
+        <div className="flex justify-center py-16" role="status" aria-live="polite">
           <span className="text-[var(--color-dim)] text-[12px]">Caricamento...</span>
         </div>
       )}
 
       {/* Empty */}
       {!loading && filteredDays.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-[var(--color-dim)] text-3xl">~</span>
+        <div className="flex flex-col items-center justify-center py-16 gap-3" role="status" aria-live="polite">
+          <span className="text-[var(--color-dim)] text-3xl" aria-hidden="true">~</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessuna modifica trovata</p>
         </div>
       )}
@@ -114,7 +115,7 @@ export default function ChangelogPage() {
             <div key={day.date} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
               {/* Data header */}
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" aria-hidden="true" />
                 <time dateTime={day.date} className="text-[12px] font-semibold text-[var(--color-bright)] capitalize">
                   {formatDate(day.date)}
                 </time>
@@ -131,6 +132,8 @@ export default function ChangelogPage() {
                     <div key={commit.hash} className="flex items-start gap-2.5 py-1.5 px-2 -mx-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.02)]">
                       <span
                         className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-px"
+                        role="img"
+                        aria-label={cfg.label}
                         style={{
                           color: cfg.color,
                           border: `1px solid ${cfg.color}33`,

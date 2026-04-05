@@ -51,24 +51,24 @@ export default function CalendarPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-6 pb-4 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Calendario</span>
-        </nav>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Calendario</span>
+        </div>
         <div className="flex items-center justify-between mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Calendario</h1>
           <div className="flex items-center gap-3">
-            <button onClick={prev} aria-label="Mese precedente" className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&larr;</button>
+            <button onClick={prev} aria-label="Mese precedente" className="px-3 py-2 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&larr;</button>
             <span className="text-[12px] font-semibold text-[var(--color-bright)] w-36 text-center">{MONTHS[month]} {year}</span>
-            <button onClick={next} aria-label="Mese successivo" className="px-2 py-1 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&rarr;</button>
+            <button onClick={next} aria-label="Mese successivo" className="px-3 py-2 rounded text-[12px] cursor-pointer" style={{ color: 'var(--color-muted)', background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>&rarr;</button>
           </div>
           <p className="text-[var(--color-muted)] text-[11px]">{events.length} eventi</p>
         </div>
       </div>
 
-      <div className="border border-[var(--color-border)] rounded-lg overflow-x-auto bg-[var(--color-panel)]">
-        <div className="grid grid-cols-7 min-w-[480px]">
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
+        <div className="grid grid-cols-7">
           {DAYS.map(d => <div key={d} className="text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-center py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>{d}</div>)}
           {grid.map((cell, i) => {
             const evts = cell.inMonth ? (eventsByDay[cell.day] ?? []) : [];
@@ -93,9 +93,9 @@ export default function CalendarPage() {
       {selectedDay && (
         <div className="mt-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-4">
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">{selectedDay} {MONTHS[month]}</p>
-          {dayEvents.length === 0 ? <p className="text-[10px] text-[var(--color-dim)]">Nessun evento per questo giorno.</p>
+          {dayEvents.length === 0 ? <p className="text-[10px] text-[var(--color-dim)]">Nessun evento.</p>
             : dayEvents.map(e => (
-              <div key={e.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
+              <div key={e.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
                 <span className="w-2 h-2 rounded-full" style={{ background: TYPE_CLR[e.type] ?? 'var(--color-dim)' }} />
                 <span className="text-[10px] text-[var(--color-bright)] font-medium flex-1">{e.title}</span>
                 <span className="text-[9px] text-[var(--color-dim)]">{e.company}</span>

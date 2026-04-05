@@ -21,7 +21,7 @@ export default function LandingHero() {
     <section aria-label="Hero" className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
       <div className="relative z-10 text-center max-w-3xl mx-auto" style={{ animation: 'fade-in 0.6s ease both' }}>
         <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+          <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
           <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('hero_badge')}</span>
         </div>
 

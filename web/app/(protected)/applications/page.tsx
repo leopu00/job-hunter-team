@@ -103,7 +103,7 @@ export default async function ApplicationsPage() {
       {/* ── Empty state ─────────────────────────────────────────── */}
       {applications.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center" style={{ animation: 'fade-in 0.35s ease both' }}>
-          <div className="text-4xl mb-4" style={{ opacity: 0.3 }}>📋</div>
+          <div className="text-4xl mb-4" aria-hidden="true" style={{ opacity: 0.3 }}>📋</div>
           <p className="text-[var(--color-muted)] text-[13px]">Nessuna candidatura ancora.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">Le candidature appariranno qui quando gli agenti le creeranno.</p>
         </div>

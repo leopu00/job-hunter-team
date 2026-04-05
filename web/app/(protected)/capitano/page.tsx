@@ -167,10 +167,10 @@ export default function CapitanoPage() {
           </div>
         </div>
 
-        <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
+        <div className="px-4 py-4 overflow-auto" role="log" aria-live="polite" aria-label="Messaggi chat" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="text-3xl mb-3 opacity-30">👨‍✈️</div>
+              <div className="text-3xl mb-3 opacity-30" aria-hidden="true">👨‍✈️</div>
               <p className="text-[var(--color-dim)] text-[11px]">
                 Scrivi un messaggio per iniziare la conversazione.
               </p>
@@ -199,7 +199,7 @@ export default function CapitanoPage() {
           {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
             <div className="flex justify-start mb-3">
               <div className="px-4 py-3 rounded-lg text-[12px]" style={{ background: '#1c2333', borderBottomLeftRadius: '4px' }}>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" aria-hidden="true">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.2s infinite' }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.4s infinite' }} />
@@ -213,7 +213,7 @@ export default function CapitanoPage() {
       </div>
 
       {/* Input chat */}
-      <form onSubmit={(e) => { e.preventDefault(); handleSend() }}
+      <form aria-label="Invia messaggio al capitano" onSubmit={(e) => { e.preventDefault(); handleSend() }}
         className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
         style={{ background: '#0d1117', borderRadius: chatFullscreen ? '0' : '0 0 12px 12px', margin: chatFullscreen ? '0 16px 16px 16px' : undefined }}>
         <input ref={inputRef} type="text" value={input}
@@ -271,7 +271,7 @@ export default function CapitanoPage() {
           <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Capitano</span>
         </nav>
         <div className="mt-4 flex items-start gap-5">
-          <div className="text-5xl leading-none select-none">👨‍✈️</div>
+          <div className="text-5xl leading-none select-none" aria-hidden="true">👨‍✈️</div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Capitano</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
@@ -342,7 +342,7 @@ export default function CapitanoPage() {
       {/* Empty state */}
       {!isActive && status != null && !startMsg && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="text-4xl mb-4 opacity-30">👨‍✈️</div>
+          <div className="text-4xl mb-4 opacity-30" aria-hidden="true">👨‍✈️</div>
           <p className="text-[var(--color-muted)] text-[13px]">Il Capitano non è attivo.</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">
             Premi <span style={{ color: ACCENT }}>Avvia Capitano</span> per avviare la sessione.

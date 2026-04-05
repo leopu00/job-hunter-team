@@ -92,9 +92,9 @@ export function CronForm({ onCreated, onCancel }: Props) {
             </button>
           ))}
         </div>
-        {kind === 'cron'  && <input value={cronExpr} onChange={e => setCronExpr(e.target.value)} placeholder="0 9 * * 1-5" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
-        {kind === 'every' && <input value={everyMin} onChange={e => setEveryMin(e.target.value)} type="number" min="1" placeholder="30" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
-        {kind === 'at'    && <input value={atWhen}   onChange={e => setAtWhen(e.target.value)} placeholder="2026-04-10 09:00" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
+        {kind === 'cron'  && <input value={cronExpr} onChange={e => setCronExpr(e.target.value)} placeholder="0 9 * * 1-5" aria-label="Espressione cron" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
+        {kind === 'every' && <input value={everyMin} onChange={e => setEveryMin(e.target.value)} type="number" min="1" placeholder="30" aria-label="Intervallo in minuti" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
+        {kind === 'at'    && <input value={atWhen}   onChange={e => setAtWhen(e.target.value)} placeholder="2026-04-10 09:00" aria-label="Data e ora esecuzione" className={inputCls} style={{ color: 'var(--color-bright)' }} />}
       </div>
       {error && <p className="text-[11px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
       <div className="flex gap-3">

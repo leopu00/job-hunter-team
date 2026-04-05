@@ -44,7 +44,7 @@ function TypingIndicator() {
   return (
     <div className="flex justify-start mb-3">
       <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 mr-2"
-        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>🤖</div>
+        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}><span aria-hidden="true">🤖</span></div>
       <div className="px-4 py-3 rounded-2xl" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderBottomLeftRadius: 4 }}>
         <div className="flex items-center gap-1">
           {[0, 0.2, 0.4].map((delay, i) => (
@@ -122,7 +122,7 @@ export default function AssistantPage() {
       {/* Header */}
       <div className="border-b border-[var(--color-border)] px-5 py-3 flex items-center gap-3 flex-shrink-0"
         style={{ background: 'var(--color-panel)' }}>
-        <span className="text-xl">🤖</span>
+        <span className="text-xl" aria-hidden="true">🤖</span>
         <div className="flex-1">
           <span className="text-[13px] font-bold text-[var(--color-white)]">Assistente</span>
           <span className="ml-2 text-[9px] font-semibold tracking-widest uppercase"
@@ -135,10 +135,10 @@ export default function AssistantPage() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 overflow-auto px-4 py-4 max-w-2xl w-full mx-auto">
+      <div className="flex-1 overflow-auto px-4 py-4 max-w-2xl w-full mx-auto" role="log" aria-live="polite" aria-label="Messaggi chat">
         {agentStatus === 'inactive' && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="text-4xl mb-4 opacity-30">🤖</div>
+            <div className="text-4xl mb-4 opacity-30" aria-hidden="true">🤖</div>
             <p className="text-[var(--color-muted)] text-[13px] mb-4">L&apos;Assistente non è attivo.</p>
             <button onClick={startAgent}
               className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide"
@@ -149,7 +149,7 @@ export default function AssistantPage() {
         )}
         {messages.length === 0 && agentStatus === 'active' && (
           <div className="flex flex-col items-center py-10 text-center">
-            <div className="text-4xl mb-3">🤖</div>
+            <div className="text-4xl mb-3" aria-hidden="true">🤖</div>
             <p className="text-[var(--color-muted)] text-[12px] mb-6">Ciao! Come posso aiutarti oggi?</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_ACTIONS.map(a => (
@@ -172,7 +172,7 @@ export default function AssistantPage() {
       {/* Input */}
       <div className="border-t border-[var(--color-border)] px-4 py-3 flex-shrink-0 max-w-2xl w-full mx-auto"
         style={{ background: 'var(--color-panel)' }}>
-        <form onSubmit={e => { e.preventDefault(); sendMessage(input) }}
+        <form aria-label="Invia messaggio all'assistente" onSubmit={e => { e.preventDefault(); sendMessage(input) }}
           className="flex items-center gap-2 border border-[var(--color-border)] rounded-2xl px-4 py-2.5"
           style={{ background: 'var(--color-card)' }}>
           <input ref={inputRef} type="text" value={input}
@@ -188,7 +188,7 @@ export default function AssistantPage() {
               background: input.trim() && agentStatus === 'active' ? 'var(--color-green)' : 'var(--color-border)',
               cursor: input.trim() && agentStatus === 'active' ? 'pointer' : 'default',
             }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={input.trim() && agentStatus === 'active' ? '#000' : 'var(--color-dim)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke={input.trim() && agentStatus === 'active' ? '#000' : 'var(--color-dim)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
           </button>

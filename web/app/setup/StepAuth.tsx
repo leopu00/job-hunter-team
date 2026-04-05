@@ -44,13 +44,13 @@ export function StepAuth({ form, set, next, back }: Props) {
         <Field label="API Key" error={err}>
           <input type="password" value={form.apiKey} placeholder={p.keyPlaceholder}
             onChange={e => { set({ apiKey: e.target.value }); setErr(undefined) }}
-            className={inputCls} style={{ color: 'var(--color-bright)' }} />
+            className={inputCls} style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
         </Field>
       ) : (
         <Field label="Email account" error={err}>
           <input type="email" autoComplete="email" value={form.email} placeholder="nome@email.com"
             onChange={e => { set({ email: e.target.value }); setErr(undefined) }}
-            className={inputCls} style={{ color: 'var(--color-bright)' }} />
+            className={inputCls} style={{ color: 'var(--color-bright)' }} autoComplete="email" required />
         </Field>
       )}
 

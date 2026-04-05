@@ -110,7 +110,7 @@ export function Popconfirm({
           }}>
 
           {/* Arrow */}
-          <div style={{
+          <div aria-hidden="true" style={{
             position: 'absolute', width: 10, height: 10,
             background: 'var(--color-deep)',
             border: '1px solid var(--color-border)',
@@ -125,7 +125,7 @@ export function Popconfirm({
             </div>
 
             <div className="flex gap-2 justify-end">
-              <button onClick={cancel}
+              <button onClick={cancel} autoFocus
                 className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
                 {cancelLabel}

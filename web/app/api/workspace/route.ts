@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 
+export const dynamic = 'force-dynamic'
+
 const COOKIE_NAME = 'jht_workspace'
 
 export async function GET(req: NextRequest) {
