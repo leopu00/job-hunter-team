@@ -99,7 +99,8 @@ export function OnboardingTour({ steps, active, onComplete, onSkip }: Onboarding
       )}
 
       {/* Tooltip */}
-      <div style={{ position: 'absolute', top: tp.top, left: tp.left, width: TW,
+      <div role="dialog" aria-label={step.title}
+        style={{ position: 'absolute', top: tp.top, left: tp.left, width: TW,
         background: 'var(--color-card)', border: '1px solid var(--color-border)',
         borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', pointerEvents: 'auto',
         animation: 'tour-pop 0.2s ease' }}>

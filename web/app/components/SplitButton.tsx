@@ -106,13 +106,13 @@ export function SplitButton({
 
         {/* Dropdown */}
         {open && (
-          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 160, zIndex: 50,
+          <div role="menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 160, zIndex: 50,
             background: 'var(--color-card)', border: '1px solid var(--color-border)',
             borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
             animation: 'sb-in .15s ease' }}>
             <style>{`@keyframes sb-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }`}</style>
             {options.map((opt, i) => (
-              <button key={i} type="button" disabled={opt.disabled}
+              <button key={i} type="button" role="menuitem" disabled={opt.disabled}
                 onClick={() => { if (!opt.disabled) { opt.onClick(); setOpen(false) } }}
                 className="w-full flex items-center gap-2 text-left"
                 style={{ padding: `${sz.h * 0.25}px ${sz.px}px`, background: 'none', border: 'none',
