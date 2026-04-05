@@ -40,7 +40,7 @@ function AutoRow({ a, onToggle }: { a: Automation; onToggle: (id: string, enable
       <span className="text-[9px] font-mono text-[var(--color-dim)] w-14 text-right">{a.runCount}x</span>
       <span className="text-[9px] text-[var(--color-dim)] w-16 text-right">{timeAgo(a.lastRun)}</span>
       <span className="text-[9px] w-16 text-right" style={{ color: a.nextRun ? 'var(--color-muted)' : 'var(--color-dim)' }}>{timeUntil(a.nextRun)}</span>
-      <button onClick={() => onToggle(a.id, !a.enabled)} className="text-[9px] font-bold cursor-pointer w-8"
+      <button onClick={() => onToggle(a.id, !a.enabled)} aria-label={`${a.enabled ? 'Disattiva' : 'Attiva'} ${a.name}`} className="text-[9px] font-bold cursor-pointer w-8"
         style={{ color: a.enabled ? 'var(--color-green)' : 'var(--color-dim)' }}>{a.enabled ? 'ON' : 'OFF'}</button>
     </div>
   )
