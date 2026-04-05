@@ -77,7 +77,7 @@ function FeedItem({ p, showStatus }: { p: Position; showStatus: boolean }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {loc && <span className="text-[var(--color-dim)]">{loc}</span>}
