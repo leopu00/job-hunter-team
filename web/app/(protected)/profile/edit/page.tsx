@@ -378,7 +378,7 @@ export default function ProfileEditPage() {
                 onChange={e => set('email', e.target.value)} />
             </FormField>
             <FormField label="Telefono">
-              <input type="text" value={form.phone} placeholder="+39 333 1234567"
+              <input type="tel" value={form.phone} placeholder="+39 333 1234567"
                 onChange={e => set('phone', e.target.value)} />
             </FormField>
           </FormRow>
@@ -393,7 +393,7 @@ export default function ProfileEditPage() {
             </FormField>
           </FormRow>
           <FormField label="Website">
-            <input type="text" value={form.website} placeholder="https://..."
+            <input type="url" value={form.website} placeholder="https://..."
               onChange={e => set('website', e.target.value)} />
           </FormField>
         </FormSection>
@@ -567,7 +567,7 @@ export default function ProfileEditPage() {
               onChange={e => set('proj_description', e.target.value)} />
           </FormField>
           <FormField label="URL (opzionale)">
-            <input type="text" value={form.proj_url} placeholder="https://github.com/..."
+            <input type="url" value={form.proj_url} placeholder="https://github.com/..."
               onChange={e => set('proj_url', e.target.value)} />
           </FormField>
           <button type="button" onClick={addProject} disabled={!form.proj_name.trim()}
@@ -689,7 +689,7 @@ export default function ProfileEditPage() {
               {uploadedFiles.map(f => (
                 <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[12px] text-[var(--color-bright)] truncate">{f.name}</span>
+                    <span className="text-[12px] text-[var(--color-bright)] truncate" title={f.name}>{f.name}</span>
                     <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                   </div>
                   <button type="button" onClick={() => handleDeleteFile(f.name)}

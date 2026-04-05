@@ -78,27 +78,27 @@ export default function SearchBar() {
           onFocus={() => results.length > 0 && setOpen(true)} onKeyDown={handleKeyDown}
           placeholder="Cerca... (⌘K)"
           className="w-full px-3 py-1.5 pl-8 rounded text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
-        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" fill="none" stroke="var(--color-dim)" strokeWidth="2" viewBox="0 0 24 24">
+        <svg aria-hidden="true" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" fill="none" stroke="var(--color-dim)" strokeWidth="2" viewBox="0 0 24 24">
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
         </svg>
         {loading && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[var(--color-dim)] border-t-transparent animate-spin" />}
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg overflow-hidden z-50"
+        <div role="listbox" className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg overflow-hidden z-50"
           style={{ animation: 'fade-in 0.15s ease both' }}>
           {results.map((r, i) => {
             const color = TYPE_COLORS[r.type] ?? 'var(--color-dim)'
             return (
-              <button key={`${r.type}-${r.id}`} onClick={() => navigate(r.href)}
+              <button key={`${r.type}-${r.id}`} role="option" aria-selected={selected === i} onClick={() => navigate(r.href)}
                 onMouseEnter={() => setSelected(i)}
                 className="flex items-center gap-2.5 w-full px-3 py-2 text-left cursor-pointer transition-colors"
                 style={{ background: selected === i ? 'var(--color-row)' : 'transparent' }}>
                 <span className="text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold shrink-0"
                   style={{ background: `${color}22`, color }}>{TYPE_LABELS[r.type] ?? r.type}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-[var(--color-bright)] truncate">{r.title}</p>
-                  <p className="text-[9px] text-[var(--color-dim)] truncate">{r.detail}</p>
+                  <p className="text-[11px] font-semibold text-[var(--color-bright)] truncate" title={r.title}>{r.title}</p>
+                  <p className="text-[9px] text-[var(--color-dim)] truncate" title={r.detail}>{r.detail}</p>
                 </div>
               </button>
             )

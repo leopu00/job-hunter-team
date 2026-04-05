@@ -51,7 +51,9 @@ html[data-theme="light"] {
 /* ── Base ────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+
+::selection { background: rgba(0, 232, 122, 0.25); color: var(--color-white); }
 
 body {
   background-color: var(--color-void);
@@ -264,12 +266,29 @@ label {
   background-clip: text;
 }
 
+/* ── Focus visible ──────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
+}
+
+
 /* ── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-  html { scroll-behavior: auto; }
+}
+
+/* ── Print ──────────────────────────────────────────────────────── */
+@media print {
+  body::before, body::after { display: none !important; }
+  aside[role="navigation"] { display: none !important; }
+  nav[aria-label="breadcrumb"] { display: none !important; }
+  [class*="FloatingChat"], [class*="fixed"][style*="z-index: 60"] { display: none !important; }
+  #main-content { margin-left: 0 !important; }
+  * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
 }

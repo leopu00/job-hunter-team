@@ -51,7 +51,7 @@ function RadarChart({ categories, size = 140 }: { categories: MatchCategory[]; s
   const fill = scoreColor(avg)
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Radar match: ${n} categorie, media ${avg}/100`}>
       {/* Web rings */}
       {[0.25, 0.5, 0.75, 1].map(frac => (
         <polygon key={frac} points={webPoints(cx, cy, r, n, frac)}

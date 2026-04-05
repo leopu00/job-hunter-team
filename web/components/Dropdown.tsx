@@ -91,7 +91,8 @@ export default function Dropdown({ trigger, items, onSelect, align = 'left', min
         role="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, outline: 'none' }}
+        className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded"
+        style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
       >
         {typeof trigger === 'string' ? (
           <button

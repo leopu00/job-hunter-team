@@ -71,7 +71,7 @@ export default function BookmarksPage() {
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
             <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
           </div>
           <div className="flex flex-wrap gap-2 items-end mt-2">
@@ -87,7 +87,7 @@ export default function BookmarksPage() {
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca titolo o azienda..."
-          className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] w-48" />
+          aria-label="Cerca preferiti" className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] w-48" />
         <div className="flex gap-1">
           {['all', ...allTags].map(t => (
             <button key={t} onClick={() => setFilterTag(t)}

@@ -26,7 +26,7 @@ interface State {
 export function DefaultFallback({ error, reset }: FallbackProps) {
   const [detail, setDetail] = useState(false)
   return (
-    <div className="flex flex-col items-center justify-center gap-4 p-8 text-center rounded-lg"
+    <div role="alert" className="flex flex-col items-center justify-center gap-4 p-8 text-center rounded-lg"
       style={{ background: 'color-mix(in srgb, var(--color-red) 8%, var(--color-panel))', border: '1px solid color-mix(in srgb, var(--color-red) 20%, transparent)' }}>
 
       {/* Icon */}

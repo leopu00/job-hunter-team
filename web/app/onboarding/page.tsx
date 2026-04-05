@@ -92,7 +92,7 @@ export default function OnboardingPage() {
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label>
           <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Il tuo nome" /></div>
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">EMAIL</label>
-          <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="email@esempio.com" /></div>
+          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="email@esempio.com" /></div>
         <div className="p-4 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
           <p className="text-[10px] text-[var(--color-dim)]">Trascina il tuo CV qui o clicca per caricare</p>
           <p className="text-[8px] text-[var(--color-dim)] mt-1">PDF, DOC, DOCX (max 5MB)</p>

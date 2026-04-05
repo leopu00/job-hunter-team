@@ -303,7 +303,7 @@ function WorkspaceView({
           <div className="w-full max-w-md bg-[var(--color-panel)] border border-[var(--color-border)] rounded-xl p-6" style={{ animation: 'fade-in 0.2s ease both' }}>
             <div className="flex items-start justify-between gap-4 mb-4">
               <h2 className="text-[14px] font-bold text-[var(--color-white)]">Conferma cartella di lavoro</h2>
-              <button onClick={() => setPendingPath(null)} className="text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors text-[20px] leading-none" style={{ cursor: 'pointer' }}>×</button>
+              <button onClick={() => setPendingPath(null)} aria-label="Chiudi" className="text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors text-[20px] leading-none" style={{ cursor: 'pointer' }}>×</button>
             </div>
             <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mb-4">
               Tutti i dati (database, PDF, documenti) e gli agenti lavoreranno esclusivamente in questa cartella:

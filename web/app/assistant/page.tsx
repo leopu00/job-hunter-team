@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
@@ -128,8 +129,8 @@ export default function AssistantPage() {
             {agentStatus === 'unknown' ? '…' : agentStatus === 'active' ? '● attivo' : agentStatus === 'starting' ? '↻ avvio…' : '○ inattivo'}
           </span>
         </div>
-        <a href="/dashboard" className="text-[10px] no-underline transition-colors"
-          style={{ color: 'var(--color-dim)' }}>← dashboard</a>
+        <Link href="/dashboard" className="text-[10px] no-underline transition-colors"
+          style={{ color: 'var(--color-dim)' }}>← dashboard</Link>
       </div>
 
       {/* Chat area */}

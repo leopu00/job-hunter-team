@@ -58,7 +58,7 @@ export default async function CrescitaPage() {
 
       {/* ── KPI cards ────────────────────────────────────────────── */}
       <div className="section-label mb-4">KPI Chiave</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'Posizioni trovate', val: posTotal, color: 'var(--color-blue)' },
           { label: 'Candidature create', val: appTotal, color: 'var(--color-purple)' },
@@ -74,7 +74,7 @@ export default async function CrescitaPage() {
 
       {/* ── Conversion rates ─────────────────────────────────────── */}
       <div className="section-label mb-4">Tassi di conversione</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10" style={{ animation: 'fade-in 0.35s ease both 0.05s' }}>
         <ConversionCard
           label="Trovate → Inviate"
           numerator={posStats.applied}
@@ -95,7 +95,7 @@ export default async function CrescitaPage() {
 
       {/* ── Pipeline posizioni ───────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline Posizioni — {posTotal} totali</div>
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-10">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-10" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
         <div className="space-y-3">
           {POS_PIPELINE.map(step => {
             const count = (posStats as any)[step.key] ?? 0
@@ -120,7 +120,7 @@ export default async function CrescitaPage() {
 
       {/* ── Pipeline candidature ─────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline Candidature — {appTotal} totali</div>
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-8">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.15s' }}>
         <div className="space-y-3">
           {APP_PIPELINE.map(step => {
             const count = appStats[step.key] ?? 0
@@ -145,7 +145,7 @@ export default async function CrescitaPage() {
 
       {/* ── Tier breakdown (Seria / Practice / Riferimento) ────────── */}
       <div className="section-label mb-4">Tier — Distribuzione Score</div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.2s' }}>
         {[
           { label: 'Seria',        desc: 'score ≥ 70', count: (scoreDist.buckets.find(b => b.label === '76–100')?.count ?? 0) + (scoreDist.buckets.find(b => b.label === '61–75')?.count ?? 0), color: 'var(--color-green)', href: '/positions?tier=seria' },
           { label: 'Practice',     desc: 'score 40–69', count: scoreDist.buckets.find(b => b.label === '41–60')?.count ?? 0, color: 'var(--color-yellow)', href: '/positions?tier=practice' },
@@ -179,7 +179,7 @@ export default async function CrescitaPage() {
                 const max = sourceDist[0]?.count ?? 1
                 return sourceDist.map(s => (
                   <div key={s.source} className="flex items-center gap-3">
-                    <div className="w-32 text-[9.5px] font-semibold text-right shrink-0 text-[var(--color-muted)] truncate">{s.source}</div>
+                    <div className="w-32 text-[9.5px] font-semibold text-right shrink-0 text-[var(--color-muted)] truncate" title={s.source}>{s.source}</div>
                     <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                       <div className="h-full rounded-full" style={{ width: `${(s.count / max) * 100}%`, background: 'var(--color-blue)', opacity: 0.8 }} />
                     </div>

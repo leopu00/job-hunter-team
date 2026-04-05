@@ -94,7 +94,7 @@ export default function WebhooksPage() {
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
               <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
             </div>
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
             <div className="flex flex-wrap gap-1.5">
               {ALL_EVENTS.map(ev => (
                 <button key={ev} onClick={() => toggleEvent(ev)} className="px-2 py-1 rounded text-[9px] font-mono cursor-pointer transition-all"
@@ -145,7 +145,7 @@ export default function WebhooksPage() {
                 <button onClick={() => toggle(wh)} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}>
                   {wh.enabled ? 'off' : 'on'}
                 </button>
-                <button onClick={() => del(wh.id)} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
+                <button onClick={() => del(wh.id)} aria-label="Elimina webhook" className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
               </div>
             </div>
           ))}

@@ -22,14 +22,14 @@ const SHORTCUTS = [
 
 function HelpOverlay({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 px-5"
+    <div role="dialog" aria-label="Scorciatoie tastiera" className="fixed inset-0 flex items-center justify-center z-50 px-5"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', animation: 'fade-in 0.15s ease both' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-sm rounded-xl overflow-hidden"
         style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', animation: 'fade-in 0.2s ease both' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-[12px] font-bold text-[var(--color-white)]">Scorciatoie tastiera</p>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-dim)', fontSize: 16 }}>×</button>
+          <button onClick={onClose} aria-label="Chiudi" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-dim)', fontSize: 16 }}>×</button>
         </div>
         <ul className="px-5 py-4 flex flex-col gap-2.5">
           {SHORTCUTS.map(s => (
