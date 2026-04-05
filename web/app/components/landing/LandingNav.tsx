@@ -7,7 +7,7 @@ import { useLandingI18n, type Lang } from './LandingI18n'
 
 function FlagIT() {
   return (
-    <svg width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
       <rect width="7" height="14" fill="#009246" />
       <rect x="7" width="6" height="14" fill="#fff" />
       <rect x="13" width="7" height="14" fill="#CE2B37" />
@@ -17,7 +17,7 @@ function FlagIT() {
 
 function FlagEN() {
   return (
-    <svg width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
       <rect width="20" height="14" fill="#012169" />
       <path d="M0,0 L20,14 M20,0 L0,14" stroke="#fff" strokeWidth="2.5" />
       <path d="M0,0 L20,14 M20,0 L0,14" stroke="#C8102E" strokeWidth="1.5" />
@@ -60,7 +60,7 @@ function LangDropdown() {
         aria-label={`Lingua: ${current.label}`}
       >
         <current.Flag />
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
           <path d="M2 4L5 7L8 4" stroke="var(--color-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -93,7 +93,7 @@ function LangDropdown() {
               <Flag />
               <span>{label}</span>
               {code === lang && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="ml-auto">
+                <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" className="ml-auto">
                   <path d="M2 5L4 7L8 3" stroke="var(--color-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
