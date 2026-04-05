@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {!jh ? <p className="text-[var(--color-dim)] text-center py-16 text-[12px]">Caricamento...</p> : (
+      {!jh ? <p className="text-[var(--color-dim)] text-center py-16 text-[12px]" role="status" aria-live="polite">Caricamento...</p> : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <KPICard label="Candidature" value={String(jh.kpi.totalApplications)} color="var(--color-bright)" />
