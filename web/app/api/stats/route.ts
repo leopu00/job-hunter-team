@@ -25,6 +25,7 @@ const FALLBACK = {
     pages: 300,
     sharedModules: 36,
     e2eTests: 30,
+    linesOfCode: 50000,
     firstCommit: '2025-07-01',
     lastCommit: new Date().toISOString().slice(0, 10),
   },
@@ -68,6 +69,9 @@ export async function GET() {
     else if (/^test/i.test(line)) typeCounts.test++
     else typeCounts.other++
   }
+
+  // Linee di codice totali (TypeScript + Python)
+  const linesOfCode = parseInt(run('find web/app shared e2e -name "*.ts" -o -name "*.tsx" -o -name "*.py" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk \'{print $1}\''), 10) || 0
 
   // File count per area
   const areas = {
@@ -131,6 +135,7 @@ export async function GET() {
       pages: areas.web,
       sharedModules: areas.shared,
       e2eTests: areas.e2e,
+      linesOfCode,
       firstCommit: firstCommitDate,
       lastCommit: lastCommitDate,
     },
