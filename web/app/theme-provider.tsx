@@ -100,7 +100,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <button
       onClick={toggleTheme}
-      title={isDark ? 'Passa a tema chiaro' : 'Passa a tema scuro'}
+      aria-label={isDark ? 'Passa a tema chiaro' : 'Passa a tema scuro'}
       className={className}
       style={{
         background: 'transparent', border: 'none', cursor: 'pointer',
@@ -125,9 +125,10 @@ export function DarkModeToggle() {
     { value: 'system', label: '⊙ system' },
   ]
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" role="radiogroup" aria-label="Tema">
       {OPTIONS.map(({ value, label }) => (
         <button key={value} onClick={() => setTheme(value)}
+          role="radio" aria-checked={theme === value}
           className="px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
           style={{
             border: `1px solid ${theme === value ? 'var(--color-green)' : 'var(--color-border)'}`,
