@@ -169,7 +169,7 @@ export default function AssistantPage() {
       {/* Input */}
       <div className="border-t border-[var(--color-border)] px-4 py-3 flex-shrink-0 max-w-2xl w-full mx-auto"
         style={{ background: 'var(--color-panel)' }}>
-        <form onSubmit={e => { e.preventDefault(); sendMessage(input) }}
+        <form aria-label="Invia messaggio all'assistente" onSubmit={e => { e.preventDefault(); sendMessage(input) }}
           className="flex items-center gap-2 border border-[var(--color-border)] rounded-2xl px-4 py-2.5"
           style={{ background: 'var(--color-card)' }}>
           <input ref={inputRef} type="text" value={input}

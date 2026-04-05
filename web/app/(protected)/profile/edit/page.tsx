@@ -335,7 +335,7 @@ export default function ProfileEditPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
+      <form aria-label="Modifica profilo" onSubmit={handleSubmit} className="max-w-2xl space-y-8">
 
         {/* ── Info Base ── */}
         <FormSection title="Info Base">
