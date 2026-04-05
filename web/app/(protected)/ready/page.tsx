@@ -253,7 +253,7 @@ function DocBadge({ label, available, href, color }: { label: string; available:
       <a href={href} target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-semibold no-underline transition-colors hover:opacity-80"
         style={{ borderColor: color, color }}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
           <path d="M2 5L4 7L8 3" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         {label} ↗
@@ -263,7 +263,7 @@ function DocBadge({ label, available, href, color }: { label: string; available:
   return (
     <span className="flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-semibold"
       style={{ borderColor: 'var(--color-border)', color: 'var(--color-dim)' }}>
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
         <path d="M2 2L8 8M8 2L2 8" stroke="var(--color-dim)" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
       {label}
