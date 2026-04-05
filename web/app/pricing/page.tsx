@@ -192,6 +192,21 @@ const FEATURE_KEYS: TKey[] = [
 
 /* ── Components ───────────────────────────────────────────────────── */
 
+function PricingJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Job Hunter Team',
+    applicationCategory: 'BusinessApplication',
+    offers: [
+      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'EUR', description: 'Piano gratuito con 3 agenti AI' },
+      { '@type': 'Offer', name: 'Pro', price: '19', priceCurrency: 'EUR', description: 'Piano Pro con 7 agenti AI e supporto prioritario' },
+      { '@type': 'Offer', name: 'Enterprise', price: '0', priceCurrency: 'EUR', description: 'Piano Enterprise personalizzato per team e agenzie' },
+    ],
+  }
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+}
+
 function PricingContent() {
   const { lang } = useLandingI18n()
   const tx = T[lang as 'it' | 'en'] ?? T.it
@@ -209,6 +224,7 @@ function PricingContent() {
 
   return (
     <main style={{ position: 'relative', zIndex: 1 }}>
+      <PricingJsonLd />
       <LandingNav />
 
       <div className="max-w-5xl mx-auto px-5 pt-32 pb-20">
