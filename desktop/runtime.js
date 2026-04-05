@@ -38,6 +38,10 @@ function getNpmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm'
 }
 
+function isPackagedRuntime() {
+  return process.defaultApp !== true && !!process.resourcesPath
+}
+
 function detectStartMode(webDir) {
   const hasNodeModules = fileExists(path.join(webDir, 'node_modules'))
   const hasProductionBuild = fileExists(path.join(webDir, '.next', 'BUILD_ID'))
@@ -74,6 +78,24 @@ function inspectWebSetup(repoRoot = resolveRepoRoot(__dirname)) {
 }
 
 function defaultSpawnSpecFactory({ mode, port, webDir }) {
+  if (isPackagedRuntime()) {
+    const nextBin = path.join(webDir, 'node_modules', 'next', 'dist', 'bin', 'next')
+
+    return {
+      command: process.execPath,
+      args: [nextBin, mode === 'production' ? 'start' : 'dev', '-p', String(port)],
+      options: {
+        cwd: webDir,
+        env: {
+          ...process.env,
+          PORT: String(port),
+          ELECTRON_RUN_AS_NODE: '1',
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    }
+  }
+
   const npmCommand = getNpmCommand()
   const args = mode === 'production'
     ? ['run', 'start', '--', '-p', String(port)]
