@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
   manifest: '/manifest.json',
   other: {
-    'theme-color': '#060608',
+    'theme-color': '#00e87a',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'black-translucent',
   },
