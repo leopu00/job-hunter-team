@@ -256,12 +256,14 @@ function PricingContent() {
             return (
               <div
                 key={plan.nameKey}
-                className="relative rounded-xl p-6 flex flex-col"
+                className="relative rounded-xl p-6 flex flex-col transition-all duration-200"
                 style={{
                   background: 'var(--color-card)',
                   border: `1px solid ${plan.popular ? 'var(--color-green)' : 'var(--color-border)'}`,
                   boxShadow: plan.popular ? '0 0 24px rgba(0,232,122,0.08)' : 'none',
                 }}
+                onMouseEnter={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border-glow)' }}
+                onMouseLeave={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border)' }}
               >
                 {plan.popular && (
                   <span
