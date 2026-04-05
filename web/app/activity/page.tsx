@@ -97,7 +97,7 @@ export default function ActivityPage() {
       {!loading && data && data.items.length > 0 && (
         <div className="flex flex-col gap-0">
           {data.items.map((item, i) => (
-            <div key={item.id} className="flex gap-3 group">
+            <div key={item.id} className="flex gap-3 group rounded transition-colors hover:bg-[rgba(255,255,255,0.015)]">
               <div className="flex flex-col items-center">
                 <TimelineDot type={item.type} />
                 {i < data.items.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--color-border)', minHeight: 20 }} />}

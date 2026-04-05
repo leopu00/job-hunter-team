@@ -122,7 +122,7 @@ export default function WebhooksPage() {
               <p className="text-[10px] text-[var(--color-dim)]">Registra webhook per ricevere notifiche sugli eventi.</p>
             </div>
           ) : webhooks.map((wh, i) => (
-            <div key={wh.id} className={`flex items-start gap-3 px-5 py-4 ${i < webhooks.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
+            <div key={wh.id} className={`flex items-start gap-3 px-5 py-4 transition-colors hover:bg-[rgba(255,255,255,0.015)] ${i < webhooks.length - 1 ? 'border-b' : ''}`} style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[12px] font-semibold text-[var(--color-bright)]">{wh.name}</span>
