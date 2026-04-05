@@ -104,7 +104,7 @@ export default function RemindersPage() {
       {adding && (
         <div className="mb-4 p-4 rounded-lg flex gap-2 items-end flex-wrap" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
           <div className="flex flex-col gap-0.5 w-28"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TIPO</label>
-            <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle}>
+            <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} aria-label="Tipo promemoria" className="text-[10px] px-2 py-1.5 rounded" style={inputStyle}>
               <option value="follow-up">Follow-up</option><option value="interview-prep">Prep colloquio</option><option value="offer-deadline">Scadenza offerta</option><option value="custom">Altro</option>
             </select></div>
           <div className="flex flex-col gap-0.5 flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">TITOLO</label>

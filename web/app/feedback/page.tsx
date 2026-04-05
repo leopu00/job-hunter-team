@@ -79,7 +79,7 @@ export default function FeedbackPage() {
           <div className="flex items-center gap-4 mb-3">
             <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">RATING</label><div className="mt-1"><Stars rating={form.rating} onChange={n => setForm({ ...form, rating: n })} /></div></div>
             <div className="flex-1"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">CATEGORIA</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full text-[10px] px-2 py-1.5 rounded mt-1" style={inputStyle}>
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} aria-label="Categoria feedback" className="w-full text-[10px] px-2 py-1.5 rounded mt-1" style={inputStyle}>
                 <option value="bug">Bug</option><option value="feature">Feature</option><option value="ux">UX</option><option value="other">Altro</option>
               </select></div>
           </div>

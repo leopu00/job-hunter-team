@@ -94,11 +94,11 @@ export default function SkillsPage() {
           <div className="flex flex-wrap gap-2 items-end">
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome competenza"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
-            <select value={newCat} onChange={e => setNewCat(e.target.value as Category)}
+            <select value={newCat} onChange={e => setNewCat(e.target.value as Category)} aria-label="Categoria competenza"
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
               {CATEGORIES.map(c => <option key={c} value={c}>{CAT_CFG[c].label}</option>)}
             </select>
-            <select value={newLevel} onChange={e => setNewLevel(e.target.value as Level)}
+            <select value={newLevel} onChange={e => setNewLevel(e.target.value as Level)} aria-label="Livello competenza"
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
               {LEVELS.map(l => <option key={l} value={l}>{LEVEL_CFG[l].label}</option>)}
             </select>
