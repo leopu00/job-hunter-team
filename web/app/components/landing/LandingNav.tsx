@@ -188,6 +188,8 @@ export default function LandingNav() {
             className="md:hidden flex flex-col gap-1 p-1.5 rounded"
             style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
             aria-label="Menu"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav-menu"
           >
             <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
             <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
@@ -199,6 +201,8 @@ export default function LandingNav() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div
+          id="mobile-nav-menu"
+          role="menu"
           className="md:hidden px-5 pb-4 flex flex-col gap-3"
           style={{ background: 'var(--color-void)', animation: 'fade-in 0.15s ease both' }}
         >
