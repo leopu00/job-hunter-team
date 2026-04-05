@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 import { Tabs, Tab } from '../components/Tabs'
 import { useToast } from '../components/Toast'
+import SettingsProfile from '../components/SettingsProfile'
 
 type NotifKey = 'telegram' | 'email' | 'desktop'
 type Settings = { app_name: string; language: string; notifications: Record<NotifKey, boolean> }
@@ -49,13 +50,13 @@ function SaveBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   )
 }
 
-type TabId = 'general' | 'notifications' | 'security' | 'danger'
+type TabId = 'profile' | 'general' | 'notifications' | 'security' | 'danger'
 
 export default function SettingsPage() {
   const [s, setS]       = useState<Settings>(DEFAULTS)
   const [loading, setL] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [tab, setTab]   = useState<TabId>('general')
+  const [tab, setTab]   = useState<TabId>('profile')
   const { toast }    = useToast()
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function SettingsPage() {
   if (loading) return <main className="p-10" role="status" aria-live="polite"><p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p></main>
 
   const TABS: Tab<TabId>[] = [
+    { id: 'profile',       label: 'Profilo' },
     { id: 'general',       label: 'Generale' },
     { id: 'notifications', label: 'Notifiche' },
     { id: 'security',      label: 'Sicurezza' },
@@ -117,6 +119,8 @@ export default function SettingsPage() {
         <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
         <div className="flex flex-col gap-5 pt-1">
+          {tab === 'profile' && <SettingsProfile />}
+
           {tab === 'general' && <>
             <Row label="Nome applicazione">
               <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} aria-label="Nome applicazione" />
