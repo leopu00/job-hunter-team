@@ -13,10 +13,11 @@ const SHORTCUTS = [
   { keys: 'Esc',    label: 'Chiudi modale / overlay' },
   { keys: '?',      label: 'Mostra questo help' },
   { keys: 'G D',    label: 'Vai a Dashboard' },
-  { keys: 'G A',    label: 'Vai a Agenti' },
-  { keys: 'G T',    label: 'Vai a Task' },
-  { keys: 'G E',    label: 'Vai a Events' },
-  { keys: 'G L',    label: 'Vai a Logs' },
+  { keys: 'G P',    label: 'Vai a Posizioni' },
+  { keys: 'G C',    label: 'Vai a Candidature' },
+  { keys: 'G R',    label: 'Vai a Pronte' },
+  { keys: 'G T',    label: 'Vai a Team' },
+  { keys: 'G F',    label: 'Vai a Profilo' },
 ]
 
 function HelpOverlay({ onClose }: { onClose: () => void }) {
@@ -47,7 +48,7 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
   )
 }
 
-const GOTO: Record<string, string> = { d: '/dashboard', a: '/agents', t: '/tasks', e: '/events', l: '/logs' }
+const GOTO: Record<string, string> = { d: '/dashboard', p: '/positions', c: '/applications', r: '/ready', t: '/team', f: '/profile' }
 
 export function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
   const [showHelp, setShowHelp] = useState(false)
