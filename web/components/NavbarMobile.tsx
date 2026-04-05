@@ -11,6 +11,7 @@ const NAV_ITEMS: { href: string; label: string; accent?: string }[] = [
   { href: '/ready', label: 'Pronte', accent: '#7fffb2' },
   { href: '/risposte', label: 'Risposte', accent: '#58a6ff' },
   { href: '/crescita', label: 'Crescita' },
+  { href: '/reports', label: 'Report' },
   { href: '/team', label: 'Team' },
   { href: '/profile', label: 'Profilo' },
 ]

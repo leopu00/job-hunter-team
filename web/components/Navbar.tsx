@@ -48,6 +48,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/ready" accent="#7fffb2">Pronte</NavLink>
           <NavLink href="/risposte" accent="#58a6ff">Risposte</NavLink>
           <NavLink href="/crescita">Crescita</NavLink>
+          <NavLink href="/reports">Report</NavLink>
           <TeamDropdown />
           <NavLink href="/profile">Profilo</NavLink>
         </div>
