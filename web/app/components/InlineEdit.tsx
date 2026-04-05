@@ -158,7 +158,7 @@ export function InlineEdit({
         >
           {renderDisplay ? renderDisplay(displayValue) : displayValue}
           {!disabled && !loading && (
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.4, flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ opacity: 0.4, flexShrink: 0 }}>
               <path d="M8 1l3 3-7 7H1V8L8 1z" stroke="var(--color-muted)" strokeWidth="1.2" strokeLinejoin="round"/>
             </svg>
           )}
