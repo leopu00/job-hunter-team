@@ -168,6 +168,19 @@ const translations = {
 
   // Footer
   footer_jht:        { it: 'Job Hunter Team',  en: 'Job Hunter Team' },
+  footer_brand_desc: { it: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.', en: 'An AI agent team that searches for jobs for you. Open source, local, private.' },
+  footer_product:    { it: 'Prodotto',          en: 'Product' },
+  footer_resources:  { it: 'Risorse',           en: 'Resources' },
+  footer_contacts:   { it: 'Contatti',          en: 'Contacts' },
+  footer_stats:      { it: 'Statistiche',       en: 'Statistics' },
+  footer_guide:      { it: 'Guida',             en: 'Guide' },
+  footer_docs:       { it: 'Documentazione',    en: 'Documentation' },
+  footer_about:      { it: 'Chi siamo',         en: 'About us' },
+  footer_report_bug: { it: 'Segnala un bug',    en: 'Report a bug' },
+  footer_discussions:{ it: 'Discussioni',        en: 'Discussions' },
+  footer_privacy:    { it: 'Privacy Policy',    en: 'Privacy Policy' },
+  footer_terms:      { it: 'Termini di Servizio', en: 'Terms of Service' },
+  footer_copyright:  { it: 'Open Source sotto licenza MIT', en: 'Open Source under MIT License' },
 
   // Download page
   dl_desc:           {
