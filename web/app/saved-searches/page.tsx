@@ -25,7 +25,7 @@ function SearchRow({ ss, onToggle, onDelete }: { ss: SavedSearch; onToggle: (id:
       </div>
       <span className="text-[9px] text-[var(--color-dim)]">{FREQ_LABEL[ss.frequency] ?? ss.frequency}</span>
       <span className="text-[9px] text-[var(--color-dim)] w-14 text-right">{timeAgo(ss.lastRun)}</span>
-      <button onClick={() => onToggle(ss.id)} className="text-[9px] font-bold cursor-pointer w-8"
+      <button onClick={() => onToggle(ss.id)} aria-label={`${ss.alertEnabled ? 'Disattiva' : 'Attiva'} notifiche per ${ss.name}`} className="text-[9px] font-bold cursor-pointer w-8"
         style={{ color: ss.alertEnabled ? 'var(--color-green)' : 'var(--color-dim)' }}>{ss.alertEnabled ? 'ON' : 'OFF'}</button>
       <button onClick={() => onDelete(ss.id)} aria-label="Elimina ricerca salvata" className="text-[9px] font-bold cursor-pointer" style={{ color: 'var(--color-red)' }}>×</button>
     </div>
