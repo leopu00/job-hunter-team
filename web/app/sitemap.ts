@@ -16,6 +16,7 @@ const PUBLIC_PAGES = [
   { path: '/docs',      priority: 0.7,  changeFrequency: 'monthly' as const },
   { path: '/demo',      priority: 0.7,  changeFrequency: 'monthly' as const },
   { path: '/stats',     priority: 0.6,  changeFrequency: 'weekly'  as const },
+  { path: '/reports',   priority: 0.5,  changeFrequency: 'weekly'  as const },
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
