@@ -214,8 +214,8 @@ export default function AnalistaPage() {
           { label: 'Checked tot.', val: data?.checked_total ?? '—', color: 'var(--color-green)' },
           { label: 'Elaborate oggi', val: data?.analyzed_today ?? '—', color: 'var(--color-blue)' },
           { label: 'Escluse oggi', val: data?.excluded_today ?? '—', color: 'var(--color-red)' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2 text-[var(--color-dim)]">{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
