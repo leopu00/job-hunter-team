@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
 type Status = 'connected' | 'configured' | 'disconnected'
@@ -44,15 +45,14 @@ function IntCard({ i }: { i: Integration }) {
         </div>
       )}
 
-      <button className="self-start px-3 py-1.5 rounded text-[10px] font-semibold cursor-pointer transition-all"
+      <Link href="/settings" className="self-start px-3 py-1.5 rounded text-[10px] font-semibold no-underline transition-all"
         style={{
           border: `1px solid ${i.status === 'connected' ? 'rgba(255,69,96,0.3)' : color + '44'}`,
           color:  i.status === 'connected' ? 'var(--color-red)' : color,
           background: 'transparent',
-        }}
-        onClick={() => window.location.href = '/settings'}>
+        }}>
         {i.status === 'connected' ? 'Disconnetti' : 'Configura'} →
-      </button>
+      </Link>
     </div>
   )
 }
