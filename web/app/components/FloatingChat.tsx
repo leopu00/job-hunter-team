@@ -24,6 +24,13 @@ export default function FloatingChat() {
   useEffect(() => { if (open && messages.length === 0) fetchHistory() }, [open, messages.length, fetchHistory])
   useEffect(() => { if (open) scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [messages, open])
 
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+
   const send = async (text?: string) => {
     const msg = (text ?? input).trim()
     if (!msg || sending) return
@@ -70,6 +77,8 @@ export default function FloatingChat() {
       {/* Chat panel */}
       {open && (
         <div
+          role="complementary"
+          aria-label="AI Assistant chat"
           className="fixed bottom-24 right-6 w-96 flex flex-col rounded-xl overflow-hidden shadow-2xl"
           style={{
             maxHeight: 560, zIndex: 60, animation: 'chat-slide-up 0.25s ease both',
