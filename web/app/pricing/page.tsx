@@ -251,7 +251,7 @@ function PricingContent() {
 
         {/* Plan cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
-          {PLANS.map((plan) => {
+          {PLANS.map((plan, planIdx) => {
             const price = yearly ? plan.priceYearly : plan.priceMonthly
             return (
               <div
@@ -261,6 +261,7 @@ function PricingContent() {
                   background: 'var(--color-card)',
                   border: `1px solid ${plan.popular ? 'var(--color-green)' : 'var(--color-border)'}`,
                   boxShadow: plan.popular ? '0 0 24px rgba(0,232,122,0.08)' : 'none',
+                  animation: `fade-in 0.4s ease ${planIdx * 0.08}s both`,
                 }}
                 onMouseEnter={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border-glow)' }}
                 onMouseLeave={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border)' }}
