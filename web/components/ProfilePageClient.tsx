@@ -368,8 +368,9 @@ export default function ProfilePageClient({ profile }: Props) {
                     <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0">{formatBytes(f.size)}</span>
                     {/\.(pdf|doc|docx|txt|md)$/i.test(f.name) && (
                       <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
+                        aria-label={`Apri ${f.name} in nuova finestra`}
                         className="text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0">
-                        Apri
+                        Apri <span aria-hidden="true">↗</span>
                       </a>
                     )}
                   </div>

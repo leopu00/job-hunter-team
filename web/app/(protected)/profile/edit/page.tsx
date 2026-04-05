@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition, useRef, type FormEvent } from 'react'
+import React, { useState, useEffect, useTransition, useRef, useId, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { CandidateProfile, Language } from '@/lib/types'
@@ -706,7 +706,8 @@ export default function ProfileEditPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                     <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
-                      className="text-[10px] text-[var(--color-blue)] hover:underline no-underline">apri</a>
+                      aria-label={`Apri ${f.name} in nuova finestra`}
+                      className="text-[10px] text-[var(--color-blue)] hover:underline no-underline">apri <span aria-hidden="true">↗</span></a>
                     <button type="button" onClick={() => handleDeleteFile(f.name)}
                       aria-label={`Elimina file ${f.name}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
@@ -771,11 +772,12 @@ function FormRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
 }
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({ label, children }: { label: string; children: React.ReactElement<{ id?: string }> }) {
+  const id = useId()
   return (
     <div>
-      <label>{label}</label>
-      {children}
+      <label htmlFor={id}>{label}</label>
+      {React.cloneElement(children, { id })}
     </div>
   )
 }
