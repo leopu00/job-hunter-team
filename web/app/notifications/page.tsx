@@ -54,7 +54,7 @@ function Btn({ label, color, onClick, ariaLabel }: { label: string; color: strin
     <button onClick={onClick} aria-label={ariaLabel} className="text-[10px] font-bold transition-colors cursor-pointer"
       style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
       onMouseEnter={e => e.currentTarget.style.color = color}
-      onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'} {...rest}>{label}</button>
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>{label}</button>
   )
 }
 

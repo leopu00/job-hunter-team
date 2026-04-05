@@ -74,7 +74,6 @@ export default function SearchPage() {
           ref={inputRef}
           value={query}
           onChange={e => onChange(e.target.value)}
-          aria-label="Cerca nel sito"
           placeholder="Cerca qualcosa… (min 2 caratteri)"
           aria-label="Cerca nel dashboard"
           className="w-full pl-10 pr-4 py-3 text-[13px] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
