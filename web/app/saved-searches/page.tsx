@@ -70,11 +70,11 @@ export default function SavedSearchesPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-1">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Ricerche Salvate</span>
-        </div>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Ricerche Salvate</span>
+        </nav>
         <div className="flex items-center justify-between mt-3">
           <div><h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Ricerche Salvate</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">{total} ricerche · {totalNew} nuovi risultati</p></div>
