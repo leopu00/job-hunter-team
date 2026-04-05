@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 
 /* ── i18n inline (standalone, no provider needed) ─────────────────── */
@@ -132,13 +132,26 @@ export default function OnboardingWizard() {
 
   const back = () => { if (step > 0) setStep(s => s - 1) }
 
-  // ESC chiude
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // ESC + focus trap
   useEffect(() => {
-    if (!visible) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') dismiss() }
+    if (!visible || !dialogRef.current) return
+    const el = dialogRef.current
+    const sel = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    const focusables = () => Array.from(el.querySelectorAll<HTMLElement>(sel))
+    focusables()[0]?.focus()
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { dismiss(); return }
+      if (e.key !== 'Tab') return
+      const fs = focusables()
+      if (!fs.length) { e.preventDefault(); return }
+      if (e.shiftKey) { if (document.activeElement === fs[0]) { e.preventDefault(); fs.at(-1)?.focus() } }
+      else            { if (document.activeElement === fs.at(-1)) { e.preventDefault(); fs[0]?.focus() } }
+    }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [visible])
+  }, [visible, step])
 
   if (!visible) return null
 
@@ -148,7 +161,7 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div role="dialog" aria-modal="true" aria-label={t('title')} className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('title')} className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
 
         {/* Header */}
         <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-[var(--color-border)]">
