@@ -366,6 +366,12 @@ export default function ProfilePageClient({ profile }: Props) {
                     </svg>
                     <span className="text-[11px] text-[var(--color-bright)] flex-1 truncate" title={f.name}>{f.name}</span>
                     <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0">{formatBytes(f.size)}</span>
+                    {/\.(pdf|doc|docx|txt|md)$/i.test(f.name) && (
+                      <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
+                        className="text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0">
+                        Apri
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
