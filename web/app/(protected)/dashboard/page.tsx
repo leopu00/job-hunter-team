@@ -107,7 +107,7 @@ export default async function DashboardPage() {
 
       {/* ── Onboarding (empty state) ──────────────────────────── */}
       {isEmpty && (
-        <div className="mb-10">
+        <div className="mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="section-label mb-5">Inizia da qui</div>
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
             <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
