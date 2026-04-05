@@ -81,7 +81,7 @@ export default function NetworkingPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">Mappa Contatti per Azienda</p>
           <div className="flex flex-col gap-2">
