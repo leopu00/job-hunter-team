@@ -208,7 +208,7 @@ export default function AnalistaPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'In coda', val: data?.queue_size ?? '—', color: 'var(--color-orange)' },
           { label: 'Checked tot.', val: data?.checked_total ?? '—', color: 'var(--color-green)' },
@@ -223,7 +223,7 @@ export default function AnalistaPage() {
       </div>
 
       {/* Feed grid */}
-      <div className="grid sm:grid-cols-2 gap-4 mb-4">
+      <div className="grid sm:grid-cols-2 gap-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>
 
         {/* Coda */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
@@ -251,7 +251,7 @@ export default function AnalistaPage() {
       </div>
 
       {/* Ultime escluse */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 mb-4">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
         <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-red)' }}>
           Ultime 10 Escluse — Log
         </h3>
@@ -266,7 +266,7 @@ export default function AnalistaPage() {
 
       {/* Motivi esclusione + ratio */}
       {data && Object.keys(data.exclusion_categories).length > 0 && (
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4" style={{ animation: 'fade-in 0.35s ease 0.15s both' }}>
           <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-2">Motivi Esclusione</h3>
 
           {/* Ratio bar */}
