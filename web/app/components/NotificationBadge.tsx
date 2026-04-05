@@ -41,6 +41,40 @@ export function NotificationBadge({
 }: NotificationBadgeProps) {
   const visible = showZero ? count >= 0 : count > 0
   const label   = count > max ? `${max}+` : String(count)
+  const badgeStyle: React.CSSProperties & Record<'--nb-color', string> = {
+    '--nb-color': color,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    transform: `translate(calc(50% + ${offset[0]}px), calc(-50% + ${-offset[1]}px))`,
+    zIndex: 1,
+
+    ...(variant === 'dot' ? {
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      background: color,
+      border: '1.5px solid var(--color-card)',
+      animation: pulse ? 'nb-pulse 1.4s ease infinite' : 'nb-pop .25s ease',
+    } : {
+      minWidth: label.length > 2 ? 22 : 18,
+      height: 18,
+      borderRadius: 9,
+      padding: '0 4px',
+      background: color,
+      border: '1.5px solid var(--color-card)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: 'var(--font-mono)',
+      fontSize: 9,
+      fontWeight: 700,
+      color: '#fff',
+      lineHeight: 1,
+      whiteSpace: 'nowrap',
+      animation: pulse ? 'nb-pulse 1.4s ease infinite' : 'nb-pop .25s ease',
+    }),
+  }
 
   return (
     <div className={`relative inline-flex ${className}`} style={{ display: 'inline-flex' }}>
@@ -50,34 +84,7 @@ export function NotificationBadge({
       {visible && (
         <span
           aria-label={`${count} notifiche`}
-          style={{
-            '--nb-color': color,
-            position: 'absolute',
-            top:   0,
-            right: 0,
-            transform: `translate(calc(50% + ${offset[0]}px), calc(-50% + ${-offset[1]}px))`,
-            zIndex: 1,
-
-            /* Dot mode */
-            ...(variant === 'dot' ? {
-              width: 8, height: 8, borderRadius: '50%',
-              background: color,
-              border: '1.5px solid var(--color-card)',
-              animation: pulse ? 'nb-pulse 1.4s ease infinite' : 'nb-pop .25s ease',
-            } : {
-              /* Count mode */
-              minWidth: label.length > 2 ? 22 : 18,
-              height: 18,
-              borderRadius: 9,
-              padding: '0 4px',
-              background: color,
-              border: '1.5px solid var(--color-card)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
-              color: '#fff', lineHeight: 1, whiteSpace: 'nowrap',
-              animation: pulse ? 'nb-pulse 1.4s ease infinite' : 'nb-pop .25s ease',
-            }),
-          } as React.CSSProperties}
+          style={badgeStyle}
         >
           {variant === 'count' ? label : null}
         </span>
