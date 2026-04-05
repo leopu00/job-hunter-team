@@ -337,18 +337,24 @@ export default async function ProfilePage() {
         {/* Preferenze lavoro */}
         <ProfileSection title="Preferenze Lavoro">
           {profile.location_preferences && profile.location_preferences.length > 0 ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               {profile.location_preferences.map((lp, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-[var(--color-green)]/10 text-[var(--color-green)] border border-[var(--color-green)]/20">
-                    {(lp.type ?? '').replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-[11px] text-[var(--color-muted)]">
-                    {lp.region && lp.region}
-                    {lp.cities && lp.cities.join(', ')}
-                    {lp.max_days != null && ` (max ${lp.max_days}gg/sett)`}
-                    {lp.note && lp.note}
-                  </span>
+                <div key={i} className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-green)' }}>
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[var(--color-green)]">
+                      {(lp.type ?? '').replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-[10px] text-[var(--color-muted)] ml-1">
+                      {lp.region && lp.region}
+                      {lp.cities && lp.cities.join(', ')}
+                      {lp.max_days != null && ` (max ${lp.max_days}gg/sett)`}
+                      {lp.note && lp.note}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -357,13 +363,15 @@ export default async function ProfilePage() {
           )}
           {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
             <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Salary target</div>
-              {profile.salary_target.italy_min != null && (
-                <ProfileField label="Italia" value={`€${profile.salary_target.italy_min.toLocaleString()}–${(profile.salary_target.italy_max ?? profile.salary_target.italy_min).toLocaleString()}`} />
-              )}
-              {profile.salary_target.remote_eu_min != null && (
-                <ProfileField label="Remote EU" value={`€${profile.salary_target.remote_eu_min.toLocaleString()}–${(profile.salary_target.remote_eu_max ?? profile.salary_target.remote_eu_min).toLocaleString()}`} />
-              )}
+              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">Salary target</div>
+              <div className="flex flex-col gap-3">
+                {profile.salary_target.italy_min != null && (
+                  <SalaryRange label="Italia" min={profile.salary_target.italy_min} max={profile.salary_target.italy_max ?? profile.salary_target.italy_min} color="var(--color-green)" />
+                )}
+                {profile.salary_target.remote_eu_min != null && (
+                  <SalaryRange label="Remote EU" min={profile.salary_target.remote_eu_min} max={profile.salary_target.remote_eu_max ?? profile.salary_target.remote_eu_min} color="var(--color-blue)" />
+                )}
+              </div>
             </div>
           )}
         </ProfileSection>
@@ -461,6 +469,22 @@ function ProfileSection({ title, children }: { title: string; children: React.Re
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
       <div className="section-label mb-4">{title}</div>
       {children}
+    </div>
+  )
+}
+
+function SalaryRange({ label, min, max, color }: { label: string; min: number; max: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold text-[var(--color-muted)]">{label}</span>
+        <span className="text-[11px] font-bold tabular-nums" style={{ color }}>
+          €{min.toLocaleString('it-IT')} – €{max.toLocaleString('it-IT')}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, (max / 120000) * 100)}%`, background: color, opacity: 0.6 }} />
+      </div>
     </div>
   )
 }
