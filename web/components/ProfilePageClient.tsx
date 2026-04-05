@@ -281,7 +281,7 @@ export default function ProfilePageClient({ profile }: Props) {
       {/* ── Hint assistente ─────────────────────────────────────── */}
       <div className="mb-6 flex items-start gap-4 px-5 py-4 rounded-lg border border-[var(--color-green)]/20 bg-[var(--color-green)]/5">
         <div className="text-[var(--color-green)] mt-0.5 flex-shrink-0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         </div>
@@ -321,7 +321,7 @@ export default function ProfilePageClient({ profile }: Props) {
             <input ref={fileInputRef} type="file" accept={ACCEPTED_EXT} className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
             <div className="flex flex-col items-center gap-2">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+              <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                 style={{ color: selectedFile ? 'var(--color-green)' : 'var(--color-dim)' }}>
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -359,7 +359,7 @@ export default function ProfilePageClient({ profile }: Props) {
               <div className="flex flex-col gap-1.5">
                 {uploadedFiles.map((f, i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                       style={{ color: 'var(--color-dim)', flexShrink: 0 }}>
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
