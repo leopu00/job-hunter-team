@@ -85,7 +85,7 @@ export default function ArchivePage() {
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         <div className="flex items-center gap-3 px-5 py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-          <input type="checkbox" checked={selected.size === items.length && items.length > 0} onChange={selectAll} className="cursor-pointer" />
+          <input type="checkbox" aria-label="Seleziona tutti" checked={selected.size === items.length && items.length > 0} onChange={selectAll} className="cursor-pointer" />
           <span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">POSIZIONE</span>
           <span className="w-20 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">MOTIVO</span>
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">CANDIDATA</span>
@@ -97,7 +97,7 @@ export default function ArchivePage() {
             const cfg = REASON_CFG[a.reason] ?? REASON_CFG.expired
             return (
               <div key={a.id} className="flex items-center gap-3 px-5 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
-                <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleSelect(a.id)} className="cursor-pointer" />
+                <input type="checkbox" aria-label={`Seleziona ${a.jobTitle}`} checked={selected.has(a.id)} onChange={() => toggleSelect(a.id)} className="cursor-pointer" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] text-[var(--color-bright)] font-medium truncate">{a.jobTitle}</p>
                   <p className="text-[9px] text-[var(--color-dim)]">{a.company}{a.salary ? ` · ${a.salary}` : ''}</p>

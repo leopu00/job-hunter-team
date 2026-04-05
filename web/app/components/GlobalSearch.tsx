@@ -124,8 +124,7 @@ export function GlobalSearch() {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 flex items-start justify-center pt-[10vh] px-4 z-[9990]"
-      role="dialog" aria-modal="true" aria-label="Cerca"
+    <div role="dialog" aria-modal="true" aria-label="Ricerca globale" className="fixed inset-0 flex items-start justify-center pt-[10vh] px-4 z-[9990]"
       style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', animation: 'fade-in 0.1s ease both' }}
       onClick={e => { if (e.target === e.currentTarget) closeSearch() }}>
       <div className="w-full max-w-xl rounded-xl overflow-hidden"
@@ -134,7 +133,7 @@ export function GlobalSearch() {
         <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span style={{ color: 'var(--color-dim)', fontSize: 14 }} aria-hidden="true">🔍</span>
           <input ref={inputRef} value={query} placeholder="Cerca pagine, sezioni…"
-            role="combobox" aria-expanded={displayList.length > 0} aria-controls="search-listbox" aria-activedescendant={displayList[selected] ? `search-item-${displayList[selected].id}` : undefined}
+            role="combobox" aria-label="Cerca pagine e sezioni" aria-expanded={displayList.length > 0} aria-controls="search-listbox" aria-activedescendant={displayList[selected] ? `search-item-${displayList[selected].id}` : undefined} aria-autocomplete="list"
             onChange={e => { setQuery(e.target.value); setSelected(0) }}
             onKeyDown={onKey}
             className="flex-1 bg-transparent outline-none text-[13px]"

@@ -21,7 +21,7 @@ function MethodBadge({ method }: { method: string }) {
 function EndpointRow({ ep, expanded, onToggle }: { ep: EndpointInfo; expanded: boolean; onToggle: () => void }) {
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-2.5 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <MethodBadge method={ep.method} />
         <span className="text-[11px] font-mono text-[var(--color-bright)] flex-1">{ep.path}</span>
         {ep.description && <span className="text-[9px] text-[var(--color-dim)] max-w-[40%] truncate">{ep.description}</span>}
@@ -77,7 +77,7 @@ export default function ApiExplorerPage() {
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca endpoint..."
-          className="text-[10px] px-3 py-1.5 rounded w-48" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
+          aria-label="Cerca endpoint" className="text-[10px] px-3 py-1.5 rounded w-48" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
         <div className="flex gap-1">
           {METHODS.map(m => (
             <button key={m} onClick={() => setMethodFilter(m)}
@@ -88,7 +88,7 @@ export default function ApiExplorerPage() {
           ))}
         </div>
         <select value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
-          className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          aria-label="Filtra per modulo" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
           <option value="all">Tutti i moduli</option>
           {modules.map(m => <option key={m} value={m}>{m}</option>)}
         </select>

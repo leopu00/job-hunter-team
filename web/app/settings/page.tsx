@@ -12,7 +12,8 @@ const DEFAULTS: Settings = { app_name: 'Job Hunter Team', language: 'it', notifi
 const inp: React.CSSProperties = {
   border: '1px solid var(--color-border)', background: 'var(--color-card)',
   color: 'var(--color-bright)', borderRadius: 6, fontSize: 11,
-  padding: '6px 10px', outline: 'none', fontFamily: 'var(--font-mono)', width: '100%',
+  padding: '6px 10px', fontFamily: 'var(--font-mono)', width: '100%',
+  transition: 'border-color 0.15s',
 }
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -116,7 +117,7 @@ export default function SettingsPage() {
               <input style={inp} value={s.app_name} onChange={e => setS(p => ({ ...p, app_name: e.target.value }))} />
             </Row>
             <Row label="Lingua default">
-              <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))}>
+              <select style={inp} value={s.language} onChange={e => setS(p => ({ ...p, language: e.target.value }))} aria-label="Lingua">
                 <option value="it">Italiano</option>
                 <option value="en">English</option>
               </select>

@@ -85,7 +85,7 @@ export default function ValidatorsPage() {
             </h1>
           </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca schema…"
-            className="px-3 py-1.5 rounded text-[11px] outline-none font-mono"
+            aria-label="Cerca schema" className="px-3 py-1.5 rounded text-[11px] outline-none font-mono"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-bright)', minWidth: 200 }} />
         </div>
 
@@ -99,11 +99,11 @@ export default function ValidatorsPage() {
               <p className="text-[9px] font-bold uppercase tracking-widest px-1 pb-2"
                 style={{ color: 'var(--color-dim)' }}>modulo: {m.module}</p>
               <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-                <table className="w-full border-collapse">
+                <table className="w-full border-collapse" aria-label="Schema di validazione">
                   <thead>
                     <tr style={{ background: 'var(--color-deep)', borderBottom: '1px solid var(--color-border)' }}>
                       {['Schema', 'Tipo', 'Descrizione', 'Campi', ''].map(h => (
-                        <th key={h} className="px-4 py-2 text-left text-[9px] font-bold uppercase tracking-wider"
+                        <th key={h} scope="col" className="px-4 py-2 text-left text-[9px] font-bold uppercase tracking-wider"
                           style={{ color: 'var(--color-dim)' }}>{h}</th>
                       ))}
                     </tr>

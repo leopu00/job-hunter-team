@@ -94,7 +94,7 @@ function QueueItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {loc && <span className="text-[var(--color-dim)]">{loc}</span>}
@@ -116,7 +116,7 @@ function ProgressItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {loc && <span className="text-[var(--color-dim)]">{loc}</span>}
@@ -145,7 +145,7 @@ function CompletedItem({ p }: { p: PositionItem }) {
     >
       <span className="font-mono text-[var(--color-dim)] shrink-0">#{p.id}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-[var(--color-bright)] truncate">{p.title}</div>
+        <div className="font-medium text-[var(--color-bright)] truncate" title={p.title}>{p.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span className="text-[var(--color-muted)]">{p.company}</span>
           {writerTag && <span style={{ fontSize: '0.85em', color: '#00bcd4', fontWeight: 600 }}>{writerTag}</span>}
@@ -206,7 +206,7 @@ export default function ScrittorePage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'In coda', val: data?.queue_size ?? '—', color: 'var(--color-orange)' },
           { label: 'Scritti oggi', val: data?.writing_today ?? '—', color: 'var(--color-yellow)' },
@@ -221,7 +221,7 @@ export default function ScrittorePage() {
       </div>
 
       {/* Coda + In lavorazione */}
-      <div className="grid sm:grid-cols-2 gap-4 mb-4">
+      <div className="grid sm:grid-cols-2 gap-4 mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>
 
         {/* Coda scored */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
@@ -253,7 +253,7 @@ export default function ScrittorePage() {
       </div>
 
       {/* Ultimi completati */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
         <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-green)' }}>
           Ultimi 10 Completati
         </h3>

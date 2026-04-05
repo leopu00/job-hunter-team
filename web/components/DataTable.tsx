@@ -15,6 +15,7 @@ export interface DataTableProps<T extends { id: string }> {
   rows: T[]
   /** Se presente sovrascrive il download CSV nativo */
   onExport?: (rows: T[]) => void
+  ariaLabel?: string
 }
 
 type SortDir = 'asc' | 'desc' | null
@@ -34,7 +35,7 @@ function downloadCSV(content: string) {
   a.click(); URL.revokeObjectURL(a.href)
 }
 
-export default function DataTable<T extends { id: string }>({ columns, rows, onExport }: DataTableProps<T>) {
+export default function DataTable<T extends { id: string }>({ columns, rows, onExport, ariaLabel }: DataTableProps<T>) {
   const [sortKey, setSortKey]     = useState<string | null>(null)
   const [sortDir, setSortDir]     = useState<SortDir>(null)
   const [selected, setSelected]   = useState<Set<string>>(new Set())
@@ -95,21 +96,21 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
         <span style={{ fontSize: 10, color: 'var(--color-dim)', flex: 1 }}>
           {selCount > 0 ? `${selCount} selezionat${selCount === 1 ? 'o' : 'i'}` : `${sorted.length} righe`}
         </span>
-        <button onClick={handleExport} style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-panel)', color: 'var(--color-muted)', cursor: 'pointer' }}>
+        <button onClick={handleExport} className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]" style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-panel)', color: 'var(--color-muted)', cursor: 'pointer' }}>
           ↓ CSV{selCount > 0 ? ` (${selCount})` : ''}
         </button>
       </div>
 
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--color-border)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <table aria-label={ariaLabel} style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ background: 'var(--color-row)' }}>
-              <th style={{ ...th, width: 36 }}>
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+              <th scope="col" style={{ ...th, width: 36 }}>
+                <input type="checkbox" aria-label="Seleziona tutti" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
               </th>
               {columns.map(col => (
-                <th key={col.key} style={{ ...th, width: colWidths[col.key] }}>
+                <th key={col.key} scope="col" style={{ ...th, width: colWidths[col.key] }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => handleSort(col)}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-muted)', cursor: col.sortable ? 'pointer' : 'default', flex: 1, textAlign: 'left' }}>
                       {col.label}
@@ -127,9 +128,12 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
           </thead>
           <tbody>
             {sorted.map((row, ri) => (
-              <tr key={row.id} style={{ background: selected.has(row.id) ? 'rgba(0,232,122,0.06)' : ri % 2 ? 'var(--color-row)' : 'transparent', transition: 'background 0.1s' }}>
+              <tr key={row.id}
+                style={{ background: selected.has(row.id) ? 'rgba(0,232,122,0.06)' : ri % 2 ? 'var(--color-row)' : 'transparent', transition: 'background 0.1s' }}
+                onMouseEnter={e => { if (!selected.has(row.id)) e.currentTarget.style.background = 'rgba(0,232,122,0.03)' }}
+                onMouseLeave={e => { if (!selected.has(row.id)) e.currentTarget.style.background = ri % 2 ? 'var(--color-row)' : 'transparent' }}>
                 <td style={td}>
-                  <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+                  <input type="checkbox" aria-label="Seleziona riga" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
                 </td>
                 {columns.map(col => (
                   <td key={col.key} style={td}>

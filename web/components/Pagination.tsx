@@ -42,6 +42,7 @@ function PageBtn({ label, active, disabled, onClick }: {
     <button
       onClick={onClick}
       disabled={disabled}
+      className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
       style={{
         minWidth: 30, height: 30, padding: '0 6px',
         borderRadius: 6, border: `1px solid ${active ? 'var(--color-green)' : 'var(--color-border)'}`,

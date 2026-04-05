@@ -26,7 +26,7 @@ export default async function ScoutPage() {
       </div>
 
       {/* ── Totale KPI ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'Posizioni totali', val: total, color: 'var(--color-blue)' },
           { label: 'Scout attivi', val: stats.length, color: 'var(--color-purple)' },
@@ -41,7 +41,7 @@ export default async function ScoutPage() {
       </div>
 
       {/* ── Per agente ───────────────────────────────────────────── */}
-      <div className="section-label mb-4">Attività per Scout</div>
+      <div className="section-label mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>Attività per Scout</div>
       {stats.length === 0 ? (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-8 text-center text-[var(--color-dim)] text-[11px]">
           Nessuna attività registrata.

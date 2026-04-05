@@ -52,10 +52,10 @@ export function LandingFooter() {
   const linkClass = 'text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors no-underline block py-0.5'
 
   return (
-    <footer className="px-6 pt-12 pb-8 border-t border-[var(--color-border)]">
+    <footer role="contentinfo" aria-label="Footer Job Hunter Team" className="px-6 pt-12 pb-8 border-t border-[var(--color-border)]">
       <div className="max-w-5xl mx-auto">
         {/* Columns */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+        <nav aria-label="Link footer" className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -75,6 +75,7 @@ export function LandingFooter() {
             <Link href="/demo" className={linkClass}>Demo</Link>
             <Link href="/changelog" className={linkClass}>Changelog</Link>
             <Link href="/stats" className={linkClass}>{t('footer_stats')}</Link>
+            <Link href="/reports" className={linkClass}>Report</Link>
           </div>
 
           {/* Risorse */}
@@ -96,7 +97,7 @@ export function LandingFooter() {
             <Link href="/privacy" className={linkClass}>{t('footer_privacy')}</Link>
             <Link href="/terms" className={linkClass}>{t('footer_terms')}</Link>
           </div>
-        </div>
+        </nav>
 
         {/* Bottom bar */}
         <div className="pt-6 border-t border-[var(--color-border)] flex flex-col md:flex-row items-center justify-between gap-3">

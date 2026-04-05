@@ -143,12 +143,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
       {/* ── Table ───────────────────────────────────────────────── */}
       <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Lista posizioni">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Stipendio', 'Score', 'Stato'].map(h => (
                 <th
                   key={h}
+                  scope="col"
                   className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
                   style={{ color: 'var(--color-dim)' }}
                 >
@@ -184,7 +185,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {p.title}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate">
+                <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate" title={p.company}>
                   {p.company}
                 </td>
                 <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">

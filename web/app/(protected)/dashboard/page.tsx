@@ -1,10 +1,12 @@
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
-import OnboardingWizard from '@/app/components/OnboardingWizard'
+
+const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
 const STATUS_COLORS: Record<string, string> = {
   new:      'var(--color-muted)',
@@ -107,7 +109,7 @@ export default async function DashboardPage() {
 
       {/* ── Onboarding (empty state) ──────────────────────────── */}
       {isEmpty && (
-        <div className="mb-10">
+        <div className="mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="section-label mb-5">Inizia da qui</div>
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
             <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
@@ -216,7 +218,7 @@ export default async function DashboardPage() {
 
       {/* ── Stats ───────────────────────────────────────────────── */}
       <div className="section-label mb-4">Overview</div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
           { label: 'Trovate',    val: stats.total,   color: 'var(--color-blue)' },
           { label: 'Analizzate', val: stats.checked, color: 'var(--color-purple)' },
@@ -241,7 +243,7 @@ export default async function DashboardPage() {
 
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">Pipeline</div>
-      <div className="overflow-x-auto mb-8">
+      <div className="overflow-x-auto mb-8" style={{ animation: 'fade-in 0.35s ease both 0.05s' }}>
         <div className="flex min-w-max border border-[var(--color-border)] rounded-lg overflow-hidden">
           {pipeline.map((step, i) => (
             <Link
@@ -269,7 +271,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── Charts ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
 
         {/* Score distribution */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
@@ -310,7 +312,7 @@ export default async function DashboardPage() {
               const max = sourceDist[0]?.count ?? 1
               return sourceDist.map(s => (
                 <div key={s.source} className="flex items-center gap-3">
-                  <span className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0">{s.source}</span>
+                  <span className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0" title={s.source}>{s.source}</span>
                   <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                     <div className="h-full rounded-full" style={{ width: `${(s.count / max) * 100}%`, background: 'var(--color-blue)', opacity: 0.7 }} />
                   </div>
@@ -333,12 +335,13 @@ export default async function DashboardPage() {
         </Link>
       </div>
       <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Posizioni recenti">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Score', 'Stato'].map(h => (
                 <th
                   key={h}
+                  scope="col"
                   className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
                   style={{ color: 'var(--color-dim)' }}
                 >
@@ -366,7 +369,7 @@ export default async function DashboardPage() {
                 <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
                   {p.legacy_id ? `JHT-${String(p.legacy_id).padStart(3, '0')}` : p.id.slice(0, 8)}
                 </td>
-                <td className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate">
+                <td className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate" title={p.title}>
                   <Link
                     href={`/positions/${p.id}`}
                     className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"

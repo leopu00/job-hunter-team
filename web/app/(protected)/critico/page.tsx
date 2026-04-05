@@ -180,8 +180,8 @@ export default function CriticoPage() {
       )}
 
       {/* ── Stats bar real-time ───────────────────────────────────── */}
-      <div className="section-label mb-4">Stats real-time</div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10">
+      <div className="section-label mb-4" style={{ animation: 'fade-in 0.35s ease both' }}>Stats real-time</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
         <StatCard label="Revisioni totali" val={stats?.total    ?? '—'} color="var(--color-orange)" />
         <StatCard label="In attesa coda"   val={stats?.pending  ?? '—'} color="#58a6ff" />
         <StatCard label="PASS"             val={stats?.pass     ?? '—'} color="var(--color-green)" />
@@ -196,7 +196,7 @@ export default function CriticoPage() {
       </div>
 
       {/* ── Coda review in attesa ─────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4" style={{ animation: 'fade-in 0.35s ease 0.05s both' }}>
         <div className="section-label">Coda review in attesa</div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded"
           style={{ background: '#58a6ff18', color: '#58a6ff', border: '1px solid #58a6ff40' }}>
@@ -214,11 +214,11 @@ export default function CriticoPage() {
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse" aria-label="Coda revisioni CV">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['#', 'Posizione', 'Azienda', 'Scrittore', 'Scritto il'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
+                  <th key={h} scope="col" className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
                     style={{ color: 'var(--color-dim)' }}>
                     {h}
                   </th>
@@ -232,7 +232,7 @@ export default function CriticoPage() {
                   <td className="px-4 py-3 text-[11px] font-mono" style={{ color: 'var(--color-dim)' }}>
                     {i + 1}
                   </td>
-                  <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]" title={item.title} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.title}
                   </td>
                   <td className="px-4 py-3 text-[11px]" style={{ color: 'var(--color-muted)' }}>
@@ -252,7 +252,7 @@ export default function CriticoPage() {
       )}
 
       {/* ── Feed ultime 10 revisioni ──────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
         <div className="section-label">Ultime revisioni</div>
         <span className="text-[9px]" style={{ color: 'var(--color-dim)' }}>
           ultimi {feed.length} verdetti
@@ -269,11 +269,11 @@ export default function CriticoPage() {
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse" aria-label="Revisioni completate">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['Posizione', 'Azienda', 'Verdetto', 'Voto', 'Round', 'Revisore', 'Data review'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
+                  <th key={h} scope="col" className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
                     style={{ color: 'var(--color-dim)' }}>
                     {h}
                   </th>
@@ -285,7 +285,7 @@ export default function CriticoPage() {
                 <tr key={item.id}
                   style={{ borderBottom: i < feed.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                   <td className="px-4 py-3 text-[12px] font-medium text-[var(--color-white)]"
-                    style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    title={item.title} style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.title}
                   </td>
                   <td className="px-4 py-3 text-[11px]" style={{ color: 'var(--color-muted)' }}>
@@ -316,7 +316,7 @@ export default function CriticoPage() {
 
       {/* ── Stats per agente ──────────────────────────────────────── */}
       {byAgent.length > 0 && (
-        <>
+        <div style={{ animation: 'fade-in 0.35s ease 0.15s both' }}>
           <div className="section-label mb-4">Attività per Critico</div>
           <div className="space-y-4">
             {byAgent.map((s, i) => {
@@ -364,7 +364,7 @@ export default function CriticoPage() {
               )
             })}
           </div>
-        </>
+        </div>
       )}
 
       <AgentInteraction sessionPrefix="CRITICO" color="#f44336" label="Critico" />

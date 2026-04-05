@@ -82,7 +82,7 @@ function TreeNodeRow({ node, depth, expanded, selected, onToggle, onSelect, focu
           visibility: hasChildren ? 'visible' : 'hidden',
         }}>▶</span>
         <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
-        <span style={{ fontSize: 11, color: isSelected ? 'var(--color-green)' : 'var(--color-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span title={node.label} style={{ fontSize: 11, color: isSelected ? 'var(--color-green)' : 'var(--color-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.label}
         </span>
         {hasChildren && (

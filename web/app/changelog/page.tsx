@@ -116,9 +116,9 @@ export default function ChangelogPage() {
               {/* Data header */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" />
-                <span className="text-[12px] font-semibold text-[var(--color-bright)] capitalize">
+                <time dateTime={day.date} className="text-[12px] font-semibold text-[var(--color-bright)] capitalize">
                   {formatDate(day.date)}
-                </span>
+                </time>
                 <span className="text-[10px] text-[var(--color-dim)]">
                   {day.commits.length} {day.commits.length === 1 ? 'modifica' : 'modifiche'}
                 </span>

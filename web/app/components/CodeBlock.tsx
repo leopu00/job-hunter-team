@@ -110,7 +110,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, ma
 
       {/* Code */}
       <div className="overflow-auto" style={{ maxHeight }}>
-        <table className="w-full border-collapse" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65 }}>
+        <table className="w-full border-collapse" aria-label="Codice sorgente" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65 }}>
           <tbody>
             {tokenized.map((tokens, i) => (
               <tr key={i} className="hover:bg-[var(--color-row)] transition-colors">

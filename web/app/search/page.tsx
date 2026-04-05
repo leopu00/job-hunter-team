@@ -75,8 +75,8 @@ export default function SearchPage() {
           value={query}
           onChange={e => onChange(e.target.value)}
           placeholder="Cerca qualcosa… (min 2 caratteri)"
-          className="w-full pl-10 pr-4 py-3 text-[13px] rounded-lg"
-          style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', color: 'var(--color-bright)', outline: 'none' }}
+          className="w-full pl-10 pr-4 py-3 text-[13px] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
+          style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', color: 'var(--color-bright)' }}
         />
         {loading && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-dim)] text-[10px]">…</span>}
       </div>
