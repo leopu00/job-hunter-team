@@ -129,7 +129,7 @@ export default function CollapsibleSidebar({
 
                 {/* Tooltip inline (collapsed) */}
                 {collapsed && tooltip?.id === item.id && (
-                  <div style={{
+                  <div role="tooltip" style={{
                     position: 'fixed', left: collapsedWidth + 6,
                     top: tooltip.y + 2,
                     background: 'var(--color-bright,#fff)', color: 'var(--color-panel,#000)',

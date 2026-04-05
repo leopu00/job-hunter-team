@@ -126,7 +126,7 @@ export function NotesEditor({
           onChange={e => handleChange(e.target.value)}
           placeholder={placeholder}
           rows={8}
-          className="w-full resize-y bg-transparent outline-none p-3 text-[11px] font-mono leading-relaxed"
+          className="w-full resize-y bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] p-3 text-[11px] font-mono leading-relaxed"
           style={{ color: 'var(--color-muted)', minHeight: 120 }}
           spellCheck={false}
         />

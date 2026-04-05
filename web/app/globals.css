@@ -182,6 +182,10 @@ input, textarea, select {
   transition: border-color 0.15s;
 }
 
+input:hover, textarea:hover, select:hover {
+  border-color: var(--color-border-glow);
+}
+
 input:focus, textarea:focus, select:focus {
   border-color: var(--color-green);
   box-shadow: 0 0 0 2px #00e87a12;

@@ -7,10 +7,10 @@ export default function LandingCTA() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="cta" aria-label="Inizia ora" className="px-6 py-24 relative">
+    <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
       <div
         className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
-        style={{ background: 'var(--color-panel)' }}
+        style={{ background: 'var(--color-panel)', animation: 'fade-in 0.5s ease both' }}
       >
         {/* Background glow */}
         <div
@@ -76,7 +76,7 @@ export function LandingFooter() {
             <Link href="/demo" className={linkClass}>Demo</Link>
             <Link href="/changelog" className={linkClass}>Changelog</Link>
             <Link href="/stats" className={linkClass}>{t('footer_stats')}</Link>
-            <Link href="/reports" className={linkClass}>Report</Link>
+            <Link href="/reports" className={linkClass}>{t('footer_report')}</Link>
           </div>
 
           {/* Risorse */}
@@ -93,8 +93,8 @@ export function LandingFooter() {
           {/* Contatti */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_contacts')}</h4>
-            <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_report_bug')}</a>
-            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_discussions')}</a>
+            <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_bug')}</a>
+            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_discuss')}</a>
             <Link href="/privacy" className={linkClass}>{t('footer_privacy')}</Link>
             <Link href="/terms" className={linkClass}>{t('footer_terms')}</Link>
           </div>

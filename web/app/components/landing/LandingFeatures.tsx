@@ -15,7 +15,7 @@ export default function LandingFeatures() {
   const { t } = useLandingI18n()
 
   return (
-    <section id="features" aria-label="Funzionalità" className="px-6 py-24 relative">
+    <section aria-label="Funzionalità" id="features" className="px-6 py-24 relative">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           <span className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-3 block">
@@ -30,12 +30,11 @@ export default function LandingFeatures() {
           {FEATURES_META.map((f, i) => (
             <div
               key={i}
-              className="landing-feature-card group rounded-lg p-6 border border-[var(--color-border)] transition-all duration-300"
+              className="landing-feature-card group relative rounded-lg p-6 border border-[var(--color-border)] transition-all duration-300"
               style={{ background: 'var(--color-panel)', animationDelay: `${i * 0.08}s` }}
             >
               <div
                 className="w-8 h-8 rounded flex items-center justify-center text-[16px] mb-4"
-                aria-hidden="true"
                 style={{ background: `${f.accent}15`, border: `1px solid ${f.accent}30` }}
               >
                 {f.icon}

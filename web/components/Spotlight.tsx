@@ -102,7 +102,7 @@ export default function Spotlight({ steps, active, onFinish, onSkip, padding = 8
   return (
     <>
       {/* Overlay SVG con buco */}
-      <svg style={{ position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none' }} width={vw} height={vh} aria-hidden="true">
+      <svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none' }} width={vw} height={vh}>
         <path d={cutout} fill="rgba(0,0,0,0.65)" fillRule="evenodd" />
         {r && <rect x={r.left} y={r.top} width={r.width} height={r.height} fill="none" stroke="var(--color-green)" strokeWidth={2} rx={6} />}
       </svg>

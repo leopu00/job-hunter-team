@@ -230,7 +230,7 @@ export default function ProfileStats({ profile }: Props) {
             style={{ background: 'rgba(0,0,0,0.6)', cursor: 'pointer', border: 'none' }}
             disabled={avatarUploading}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" aria-hidden="true">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
@@ -272,7 +272,7 @@ export default function ProfileStats({ profile }: Props) {
                   {animatedCompletion}%
                 </span>
               </div>
-              <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+              <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -347,7 +347,7 @@ export default function ProfileStats({ profile }: Props) {
           <div className="flex flex-col gap-2">
             {cvFiles.slice(0, 3).map((f, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-blue)', flexShrink: 0 }} aria-hidden="true">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-blue)', flexShrink: 0 }}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
                 </svg>

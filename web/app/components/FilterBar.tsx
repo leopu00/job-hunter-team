@@ -18,15 +18,14 @@ const inputBase: React.CSSProperties = {
 export function FilterBar({ filters, values, onChange, onClear }: Props) {
   const hasActive = filters.some(f => values[f.key] && values[f.key] !== '')
   return (
-    <div className="flex items-end gap-2 flex-wrap" role="toolbar" aria-label="Filtri">
+    <div className="flex items-end gap-2 flex-wrap">
       {filters.map(f => {
         const val = values[f.key] ?? ''
         const activeBorder = val ? 'rgba(0,232,122,0.3)' : 'var(--color-border)'
-        const inputId = `filter-${f.key}`
         if (f.type === 'select') return (
           <div key={f.key} className="flex flex-col gap-0.5">
-            <label htmlFor={inputId} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
-            <select id={inputId} value={val} onChange={e => onChange(f.key, e.target.value)} style={{ ...inputBase, borderColor: activeBorder }}>
+            <label htmlFor={`filter-${f.key}`} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
+            <select id={`filter-${f.key}`} value={val} onChange={e => onChange(f.key, e.target.value)} style={{ ...inputBase, borderColor: activeBorder }}>
               <option value="">Tutti</option>
               {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -34,16 +33,16 @@ export function FilterBar({ filters, values, onChange, onClear }: Props) {
         )
         if (f.type === 'search') return (
           <div key={f.key} className="flex flex-col gap-0.5">
-            <label htmlFor={inputId} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
-            <input id={inputId} type="search" value={val} placeholder={f.placeholder ?? 'Cerca…'}
+            <label htmlFor={`filter-${f.key}`} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
+            <input id={`filter-${f.key}`} type="search" value={val} placeholder={f.placeholder ?? 'Cerca…'}
               onChange={e => onChange(f.key, e.target.value)}
               style={{ ...inputBase, minWidth: 160, borderColor: activeBorder }} />
           </div>
         )
         if (f.type === 'date') return (
           <div key={f.key} className="flex flex-col gap-0.5">
-            <label htmlFor={inputId} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
-            <input id={inputId} type="date" value={val} onChange={e => onChange(f.key, e.target.value)}
+            <label htmlFor={`filter-${f.key}`} className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-dim)' }}>{f.label}</label>
+            <input id={`filter-${f.key}`} type="date" value={val} onChange={e => onChange(f.key, e.target.value)}
               style={{ ...inputBase, colorScheme: 'dark', borderColor: activeBorder }} />
           </div>
         )

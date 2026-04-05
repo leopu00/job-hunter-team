@@ -156,7 +156,7 @@ export default function OnboardingWizard() {
   if (!visible) return null
 
   const STEPS = [t('s1_title'), t('s2_title'), t('s3_title'), t('s4_title'), t('s5_title')]
-  const inp = 'w-full px-3 py-2 rounded text-[11px] outline-none transition-colors'
+  const inp = 'w-full px-3 py-2 rounded text-[11px] outline-none focus:border-[var(--color-green)] transition-colors'
   const inputStyle = { background: 'var(--color-panel)', color: 'var(--color-bright)', border: '1px solid var(--color-border)' }
 
   return (

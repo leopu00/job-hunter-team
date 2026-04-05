@@ -54,7 +54,7 @@ function AboutContent() {
   const { t } = useLandingI18n()
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--color-bg, #060608)', color: 'var(--color-white, #e8e8e8)', animation: 'fade-in 0.35s ease both' }}>
       <AboutJsonLd />
       <LandingNav />
 
@@ -109,9 +109,11 @@ function AboutContent() {
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {AGENTS.map(({ key, emoji, color }) => (
-              <div key={key} className="rounded-lg p-5 border border-[var(--color-border)] transition-colors hover:border-[var(--color-dim)]"
-                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+            {AGENTS.map(({ key, emoji, color }, i) => (
+              <div key={key} className="rounded-lg p-5 border border-[var(--color-border)] transition-all duration-200 hover:border-[var(--color-border-glow)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))', animation: `fade-in 0.4s ease ${i * 0.08}s both` }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-panel, rgba(255,255,255,0.02))' }}>
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-2xl" aria-hidden="true">{emoji}</span>
                   <h3 className="text-[13px] font-bold" style={{ color }}>
@@ -136,8 +138,8 @@ function AboutContent() {
 
           <div className="flex flex-col gap-3">
             {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)]"
-                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)] transition-all duration-200 hover:border-[var(--color-border-glow)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))', animation: `fade-in 0.4s ease ${i * 0.1}s both` }}>
                 <span className="text-[11px] font-mono font-bold mt-px flex-shrink-0" style={{ color: 'var(--color-green)' }}>
                   {String(i + 1).padStart(2, '0')}
                 </span>
@@ -159,8 +161,8 @@ function AboutContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[0, 1, 2, 3].map(i => (
-              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)]"
-                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))' }}>
+              <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-[var(--color-border)] transition-all duration-200 hover:border-[var(--color-border-glow)]"
+                style={{ background: 'var(--color-panel, rgba(255,255,255,0.02))', animation: `fade-in 0.4s ease ${i * 0.1}s both` }}>
                 <span className="text-[13px] mt-px" aria-hidden="true" style={{ color: 'var(--color-green)' }}>{'\u2192'}</span>
                 <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
                   {t(`about_vision_${i}` as 'about_vision_0')}

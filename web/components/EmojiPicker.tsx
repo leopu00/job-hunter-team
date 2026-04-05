@@ -51,7 +51,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <div onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+      <div role="button" aria-expanded={open} aria-label="Seleziona emoji" onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer', display: 'inline-flex' }}>
         {trigger ?? <button style={{ fontSize: 18, background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>😀</button>}
       </div>
 

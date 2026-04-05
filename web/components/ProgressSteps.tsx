@@ -44,7 +44,7 @@ function resolveStatuses(steps: Step[], activeIndex?: number): StepStatus[] {
 
 function CheckIcon({ size }: { size: number }) {
   return (
-    <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 12 12" fill="none"
+    <svg aria-hidden="true" width={size * 0.55} height={size * 0.55} viewBox="0 0 12 12" fill="none"
       stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
       <polyline points="2 6 5 9 10 3" />
     </svg>
@@ -53,7 +53,7 @@ function CheckIcon({ size }: { size: number }) {
 
 function ErrorIcon({ size }: { size: number }) {
   return (
-    <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 12 12" fill="none"
+    <svg aria-hidden="true" width={size * 0.5} height={size * 0.5} viewBox="0 0 12 12" fill="none"
       stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
       <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
     </svg>
