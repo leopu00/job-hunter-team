@@ -139,7 +139,7 @@ export function ImageGallery({ images, columns = 3, gap = 8, className }: ImageG
           <button key={i} onClick={() => setLightbox(i)}
             className="relative overflow-hidden rounded-lg group transition-transform hover:scale-[1.02]"
             style={{ aspectRatio: '4/3', background: 'var(--color-deep)', border: '1px solid var(--color-border)', cursor: 'zoom-in', padding: 0 }}>
-            <img src={img.src} alt={img.alt ?? ''}
+            <img src={img.src} alt={img.alt ?? ''} loading="lazy"
               className="w-full h-full object-cover transition-opacity group-hover:opacity-80" />
             {img.caption && (
               <div className="absolute bottom-0 left-0 right-0 px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
