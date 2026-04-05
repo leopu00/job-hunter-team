@@ -30,7 +30,7 @@ export default function LandingFeatures() {
           {FEATURES_META.map((f, i) => (
             <div
               key={i}
-              className="landing-feature-card group rounded-lg p-6 border border-[var(--color-border)] transition-all duration-300"
+              className="landing-feature-card group relative rounded-lg p-6 border border-[var(--color-border)] transition-all duration-300"
               style={{ background: 'var(--color-panel)', animationDelay: `${i * 0.08}s` }}
             >
               <div
