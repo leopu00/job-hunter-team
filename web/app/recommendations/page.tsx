@@ -73,7 +73,7 @@ export default function RecommendationsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <h2 className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">LAVORI SUGGERITI</h2>
           <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
