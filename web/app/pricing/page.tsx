@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -394,6 +395,7 @@ function PricingContent() {
           </Link>
         </div>
       </div>
+      <LandingFooter />
     </main>
   )
 }
