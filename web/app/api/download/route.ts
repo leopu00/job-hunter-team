@@ -39,25 +39,37 @@ function getFileSize(filePath: string): string | null {
   }
 }
 
+function findArtifactPath(...relativeCandidates: string[]): string | null {
+  for (const candidate of relativeCandidates) {
+    const absolutePath = path.join(ROOT, candidate);
+    if (fs.existsSync(absolutePath)) return absolutePath;
+  }
+  return null;
+}
+
 function checkLauncherExists(name: string): boolean {
   return fs.existsSync(path.join(ROOT, 'scripts', 'launchers', name));
 }
 
 export async function GET() {
   const version = getVersion();
-  const distDir = path.join(ROOT, 'dist');
 
   const platforms: PlatformInfo[] = [
     {
       id: 'mac',
       label: 'macOS',
-      file: `job-hunter-team-${version}-mac.tar.gz`,
-      size: getFileSize(path.join(distDir, `job-hunter-team-${version}-mac.tar.gz`)),
-      requirements: 'macOS 12+, Node.js 18+',
+      file: `job-hunter-team-${version}-mac.dmg`,
+      size: getFileSize(
+        findArtifactPath(
+          path.join('desktop', 'dist', `job-hunter-team-${version}-mac.dmg`),
+          path.join('dist', `job-hunter-team-${version}-mac.dmg`)
+        ) ?? ''
+      ),
+      requirements: 'macOS 12+',
       instructions: [
-        "Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz",
-        'Entra nella cartella: cd job-hunter-team',
-        'Avvia: ./start.sh',
+        'Apri il file .dmg scaricato',
+        'Trascina JHT Desktop nella cartella Applicazioni',
+        'Avvia JHT Desktop: il launcher aprira la dashboard nel browser',
       ],
     },
     {
@@ -93,6 +105,7 @@ export async function GET() {
   };
 
   const buildReady = fs.existsSync(path.join(ROOT, 'scripts', 'build-release.sh'));
+  const desktopBuildReady = fs.existsSync(path.join(ROOT, 'desktop', 'package.json'));
 
   return NextResponse.json({
     version,
@@ -101,6 +114,7 @@ export async function GET() {
     platforms,
     launchers,
     buildReady,
+    desktopBuildReady,
     releasesUrl: `https://github.com/${REPO}/releases`,
   });
 }

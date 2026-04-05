@@ -15,6 +15,7 @@
   "build": {
     "appId": "ai.jobhunterteam.desktop",
     "productName": "JHT Desktop",
+    "artifactName": "job-hunter-team-${version}-${os}.${ext}",
     "files": [
       "main.js",
       "preload.js",
