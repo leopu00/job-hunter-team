@@ -45,6 +45,8 @@ export default function CookieConsent() {
       style={{ animation: 'fade-in 0.3s ease both', animationDelay: '1s', animationFillMode: 'both' }}
     >
       <div
+        role="dialog"
+        aria-label="Cookie consent"
         className="w-full max-w-xl rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3"
         style={{
           background: 'var(--color-panel)',
