@@ -151,6 +151,9 @@ const translations = {
     en: 'The Critic reviews every document. When everything is ready, you approve the submission. You stay in control, agents execute.',
   },
   demo_cta:          { it: 'Prova ora',              en: 'Try now' },
+  demo_prev:         { it: 'Precedente',             en: 'Previous' },
+  demo_next:         { it: 'Successivo',             en: 'Next' },
+  demo_all_steps:    { it: 'Tutti i passaggi',       en: 'All steps' },
 
   // CTA
   cta_title_1:       { it: 'Pronto a rivoluzionare',           en: 'Ready to revolutionize' },
