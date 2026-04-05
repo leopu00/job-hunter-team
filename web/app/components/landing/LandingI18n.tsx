@@ -20,6 +20,10 @@ const translations = {
   nav_github:        { it: 'GitHub',           en: 'GitHub' },
   nav_download:      { it: 'Download',         en: 'Download' },
   nav_demo:          { it: 'Demo',             en: 'Demo' },
+  nav_guide:         { it: 'Guida',            en: 'Guide' },
+  nav_faq:           { it: 'FAQ',              en: 'FAQ' },
+  nav_pricing:       { it: 'Pricing',          en: 'Pricing' },
+  nav_about:         { it: 'Chi siamo',        en: 'About' },
   nav_login:         { it: 'Accedi',           en: 'Sign in' },
 
   // Hero
