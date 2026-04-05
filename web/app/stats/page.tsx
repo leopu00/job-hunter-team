@@ -217,11 +217,11 @@ function WeeklyChart({ weeks, ariaLabel }: { weeks: { week: string; count: numbe
         const weekDate = new Date(w.week + 'T00:00:00')
         const label = `${weekDate.getDate()}/${weekDate.getMonth() + 1}`
         return (
-          <div key={w.week} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-            <span className="text-[9px] font-mono text-[var(--color-dim)]">{w.count}</span>
+          <div key={w.week} className="flex-1 flex flex-col items-center gap-1 min-w-0 group cursor-default" title={`${w.week}: ${w.count} commit`}>
+            <span className="text-[9px] font-mono text-[var(--color-dim)] group-hover:text-[var(--color-bright)] transition-colors">{w.count}</span>
             <div className="w-full rounded-t relative" style={{ height: `${Math.max(pct, 3)}%`, minHeight: '3px' }}>
               <div
-                className="absolute inset-0 rounded-t transition-all duration-500"
+                className="absolute inset-0 rounded-t transition-all duration-500 group-hover:opacity-100"
                 style={{ background: 'var(--color-green)', opacity: 0.3 + (pct / 100) * 0.7 }}
               />
             </div>
@@ -314,7 +314,7 @@ function Heatmap({ days, lessLabel, moreLabel, ariaLabel }: { days: { date: stri
           {cells.map(cell => (
             <div
               key={cell.date}
-              className="rounded-sm transition-colors"
+              className="rounded-sm transition-all hover:scale-150 hover:z-10 cursor-default"
               style={{
                 gridColumn: cell.col + 1,
                 gridRow: cell.row + 1,
