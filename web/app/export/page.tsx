@@ -105,11 +105,11 @@ export default function ExportPage() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-2">Periodo</p>
             <div className="flex gap-2 items-center">
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)} aria-label="Data inizio"
                 className="flex-1 text-[11px] px-3 py-2 rounded border bg-transparent font-mono"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
-              <span className="text-[9px] text-[var(--color-dim)]">→</span>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              <span className="text-[9px] text-[var(--color-dim)]" aria-hidden="true">→</span>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)} aria-label="Data fine"
                 className="flex-1 text-[11px] px-3 py-2 rounded border bg-transparent font-mono"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
             </div>

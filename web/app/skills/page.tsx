@@ -92,7 +92,7 @@ export default function SkillsPage() {
         <div className="md:col-span-2 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Aggiungi competenza</p>
           <div className="flex flex-wrap gap-2 items-end">
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome competenza"
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome competenza" aria-label="Nome competenza"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
             <select value={newCat} onChange={e => setNewCat(e.target.value as Category)} aria-label="Categoria competenza"
               className="text-[11px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-muted)]">
