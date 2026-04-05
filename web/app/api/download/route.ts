@@ -53,6 +53,7 @@ function checkLauncherExists(name: string): boolean {
 
 export async function GET() {
   const version = getVersion();
+  const distDir = path.join(ROOT, 'dist');
 
   const platforms: PlatformInfo[] = [
     {
