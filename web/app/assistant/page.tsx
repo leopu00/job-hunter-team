@@ -154,8 +154,10 @@ export default function AssistantPage() {
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_ACTIONS.map(a => (
                 <button key={a} onClick={() => sendMessage(a)}
-                  className="px-3 py-1.5 rounded-full text-[11px] border transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-card)' }}>
+                  className="px-3 py-1.5 rounded-full text-[11px] border transition-colors duration-200 cursor-pointer"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-card)' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                   {a}
                 </button>
               ))}
