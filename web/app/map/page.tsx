@@ -90,7 +90,7 @@ export default function MapPage() {
                 <span className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">CITTÀ PER N° POSIZIONI</span>
               </div>
               {clusters.sort((a, b) => b.count - a.count).map(c => (
-                <div key={c.city} onClick={() => setSelected(c)} className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-row)] transition-colors">
+                <div key={c.city} role="button" tabIndex={0} onClick={() => setSelected(c)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(c); } }} className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-row)] transition-colors">
                   <span className="text-[10px] text-[var(--color-muted)]">{c.city}</span>
                   <div className="flex items-center gap-2">
                     <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-deep)' }}>
