@@ -15,7 +15,7 @@ function BarChart({ data, label, value, color }: { data: { [k: string]: unknown 
   const max = Math.max(...data.map(d => Number(d[value]) || 0), 1)
   const w = 320, h = 140, barW = Math.min(36, (w - 20) / data.length - 4), pad = 20
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: 160 }}>
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: 160 }} role="img" aria-label={`Grafico a barre: ${data.length} valori`}>
       {data.map((d, i) => {
         const val = Number(d[value]) || 0
         const barH = (val / max) * (h - pad - 20)
@@ -44,7 +44,7 @@ function LineChart({ data }: { data: SalaryPoint[] }) {
   })
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: 160 }}>
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: 160 }} role="img" aria-label={`Trend stipendio medio: ${data.length} mesi`}>
       <path d={pathD} fill="none" stroke="var(--color-green)" strokeWidth={2} />
       {points.map((p, i) => (
         <g key={i}>

@@ -30,7 +30,7 @@ function RadarChart({ points }: { points: RadarPoint[] }) {
     return `${i === 0 ? 'M' : 'L'}${CX + r * Math.cos(angle(i))},${CY + r * Math.sin(angle(i))}`
   }).join(' ') + ' Z'
   return (
-    <svg viewBox="0 0 200 200" style={{ width: 220, height: 220 }}>
+    <svg viewBox="0 0 200 200" style={{ width: 220, height: 220 }} role="img" aria-label={`Radar competenze: ${points.length} categorie`}>
       {gridLevels.map(lv => {
         const r = (lv / 100) * R
         const path = Array.from({ length: n }, (_, i) => `${i === 0 ? 'M' : 'L'}${CX + r * Math.cos(angle(i))},${CY + r * Math.sin(angle(i))}`).join(' ') + ' Z'
