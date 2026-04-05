@@ -63,7 +63,7 @@ export function StepSummary({ form, back }: Props) {
           </div>
         ))}
       </div>
-      {error && <p className="text-[11px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
+      {error && <p role="alert" className="text-[11px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
       <div className="flex gap-3">
         <button onClick={back} disabled={saving}
           className="flex-1 py-2.5 rounded text-[12px] font-semibold cursor-pointer" style={btnSecondary}>
