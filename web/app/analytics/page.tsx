@@ -32,7 +32,7 @@ function LineChart({ data }: { data: TimelinePoint[] }) {
   const points = data.map((d, i) => ({ x: pad + (i / (data.length - 1)) * (W - 2 * pad), y: H - pad - (d.count / max) * (H - 2 * pad) }))
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }} role="img" aria-label="Grafico chiamate API nel tempo">
       {points.map((p, i) => i % Math.ceil(data.length / 6) === 0 && (
         <text key={i} x={p.x} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--color-dim)">{data[i].date.slice(5)}</text>
       ))}
@@ -59,7 +59,7 @@ function PieChart({ data }: { data: StatusItem[] }) {
   })
   return (
     <div className="flex items-center gap-6">
-      <svg viewBox="0 0 140 140" style={{ width: 140, height: 140 }}>
+      <svg viewBox="0 0 140 140" style={{ width: 140, height: 140 }} role="img" aria-label="Distribuzione chiamate per stato">
         {slices.map(s => <path key={s.status} d={s.path} fill={STATUS_COLORS[s.status] ?? 'var(--color-dim)'} opacity="0.85" />)}
       </svg>
       <div className="space-y-1.5">

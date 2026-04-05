@@ -49,7 +49,7 @@ function ScoreRing({ score, agentId, color }: { score: number; agentId: string; 
   const r = 18; const c = 2 * Math.PI * r; const offset = c - (score / 100) * c
   return (
     <div className="flex flex-col items-center gap-1">
-      <svg width="48" height="48" viewBox="0 0 48 48">
+      <svg width="48" height="48" viewBox="0 0 48 48" role="img" aria-label={`Score ${agentId}: ${score}%`}>
         <circle cx="24" cy="24" r={r} fill="none" stroke="var(--color-border)" strokeWidth="3" />
         <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="3" strokeDasharray={c} strokeDashoffset={offset}
           strokeLinecap="round" transform="rotate(-90 24 24)" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
