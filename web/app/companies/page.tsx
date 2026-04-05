@@ -61,6 +61,7 @@ export default function CompaniesPage() {
   const [sectorFilter, setSectorFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
@@ -68,9 +69,10 @@ export default function CompaniesPage() {
     if (search) params.set('q', search);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/companies${q}`).catch(() => null);
-    if (!res?.ok) return;
+    if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setCompanies(data.companies ?? []); setTotal(data.total ?? 0); setSectors(data.sectors ?? []); setTotalPositions(data.totalPositions ?? 0);
+    setLoading(false);
   }, [sectorFilter, search])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -104,7 +106,9 @@ export default function CompaniesPage() {
           <span className="w-12 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">APERTE</span>
           <span className="w-10 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">STORICO</span>
         </div>
-        {companies.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          : companies.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna azienda trovata.</p></div>
           : companies.map(c => <CompanyRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} />)}
       </div>
