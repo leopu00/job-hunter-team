@@ -155,7 +155,7 @@ export default function FloatingChat() {
             <input value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()} placeholder="Scrivi un messaggio..."
               aria-label="Scrivi un messaggio all'assistente"
-              className="flex-1 text-[11px] px-3 py-2 rounded-lg outline-none"
+              className="flex-1 text-[11px] px-3 py-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
               style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
             <button onClick={() => send()} disabled={sending || !input.trim()}
               aria-label="Invia messaggio"
