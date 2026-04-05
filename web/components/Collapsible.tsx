@@ -114,6 +114,7 @@ export default function Collapsible({
       aria-expanded={open}
       onClick={toggle}
       onKeyDown={handleKey}
+      className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded"
       style={{
         ...headerStyle,
         display: 'flex',
@@ -123,7 +124,6 @@ export default function Collapsible({
         cursor: disabled ? 'default' : 'pointer',
         userSelect: 'none',
         opacity: disabled ? 0.5 : 1,
-        outline: 'none',
         flexDirection: chevronSide === 'left' ? 'row-reverse' : 'row',
       }}
     >
