@@ -12,7 +12,8 @@ const DEFAULTS: Settings = { app_name: 'Job Hunter Team', language: 'it', notifi
 const inp: React.CSSProperties = {
   border: '1px solid var(--color-border)', background: 'var(--color-card)',
   color: 'var(--color-bright)', borderRadius: 6, fontSize: 11,
-  padding: '6px 10px', outline: 'none', fontFamily: 'var(--font-mono)', width: '100%',
+  padding: '6px 10px', fontFamily: 'var(--font-mono)', width: '100%',
+  transition: 'border-color 0.15s',
 }
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
