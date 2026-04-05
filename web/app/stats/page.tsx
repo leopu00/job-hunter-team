@@ -180,8 +180,9 @@ function StatCard({ value, label, accent }: { value: string | number; label: str
 }
 
 function BarChart({ data, maxVal }: { data: { label: string; value: number; color: string }[]; maxVal: number }) {
+  const ariaLabel = data.map(d => `${d.label}: ${d.value}`).join(', ')
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" role="img" aria-label={ariaLabel}>
       {data.map(d => (
         <div key={d.label} className="flex items-center gap-3">
           <span className="text-[10px] text-[var(--color-dim)] w-16 text-right flex-shrink-0">{d.label}</span>
@@ -204,9 +205,10 @@ function BarChart({ data, maxVal }: { data: { label: string; value: number; colo
 
 function WeeklyChart({ weeks }: { weeks: { week: string; count: number }[] }) {
   const max = Math.max(...weeks.map(w => w.count), 1)
+  const totalCommits = weeks.reduce((s, w) => s + w.count, 0)
 
   return (
-    <div className="flex items-end gap-1.5 h-32">
+    <div className="flex items-end gap-1.5 h-32" role="img" aria-label={`${totalCommits} commit in ${weeks.length} settimane`}>
       {weeks.map(w => {
         const pct = (w.count / max) * 100
         const weekDate = new Date(w.week + 'T00:00:00')
@@ -300,8 +302,10 @@ function Heatmap({ days, lessLabel, moreLabel }: { days: { date: string; count: 
     return '#00e87a'
   }
 
+  const totalCommits = days.reduce((s, d) => s + d.count, 0)
+
   return (
-    <div>
+    <div role="img" aria-label={`${totalCommits} commit negli ultimi 90 giorni`}>
       <div className="overflow-x-auto">
         <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${totalCols}, 12px)`, gridTemplateRows: 'repeat(7, 12px)' }}>
           {cells.map(cell => (
