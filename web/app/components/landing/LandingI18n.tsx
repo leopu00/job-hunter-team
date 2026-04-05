@@ -193,6 +193,8 @@ const translations = {
   dl_node_link:      { it: 'Scarica Node.js da',        en: 'Download Node.js from' },
   dl_home:           { it: 'Home',                       en: 'Home' },
   dl_all_releases:   { it: 'Tutte le release',           en: 'All releases' },
+  dl_demo_question:  { it: 'Vuoi vedere come funziona prima di scaricare?', en: 'Want to see how it works before downloading?' },
+  dl_demo_cta:       { it: 'Guarda la demo interattiva', en: 'Watch the interactive demo' },
   dl_mac_instr:      {
     it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
     en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
