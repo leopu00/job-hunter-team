@@ -81,19 +81,19 @@ export default async function ApplicationsPage() {
       {/* ── KPI cards ────────────────────────────────────────────── */}
       {applications.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Totali</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-bright)' }}>{applications.length}</div>
           </div>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Inviate</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-green)' }}>{applied.length}</div>
           </div>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Pronte</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: '#7fffb2' }}>{ready.length + passedDraft.length}</div>
           </div>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>In lavorazione</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-yellow)' }}>{other.length}</div>
           </div>
