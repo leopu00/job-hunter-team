@@ -10,12 +10,12 @@ export default function GlobalError({
   return (
     <html lang="it">
       <body style={{ margin: 0, background: '#060608', fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', maxWidth: 420, padding: '0 20px' }}>
-          <p style={{ fontSize: 80, fontWeight: 800, lineHeight: 1, color: '#1a1a1f', margin: 0, letterSpacing: '-0.04em' }}>
+        <div role="alert" style={{ textAlign: 'center', maxWidth: 420, padding: '0 20px' }}>
+          <p aria-hidden="true" style={{ fontSize: 80, fontWeight: 800, lineHeight: 1, color: '#1a1a1f', margin: 0, letterSpacing: '-0.04em' }}>
             ERR
           </p>
           <div style={{ marginTop: -12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f44336', display: 'inline-block' }} />
+            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: '#f44336', display: 'inline-block' }} />
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase' as const, color: '#f44336' }}>errore critico</span>
           </div>
 
