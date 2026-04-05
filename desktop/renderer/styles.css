@@ -192,3 +192,9 @@ code {
   color: var(--muted);
   background: rgba(4, 8, 6, 0.75);
 }
+
+.badge--accent {
+  color: var(--green);
+  border-color: rgba(89, 240, 160, 0.24);
+  background: rgba(10, 33, 20, 0.92);
+}

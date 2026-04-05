@@ -8,6 +8,7 @@ const logFileValue = document.getElementById('logFileValue')
 const depsBadge = document.getElementById('depsBadge')
 const buildBadge = document.getElementById('buildBadge')
 const modeBadge = document.getElementById('modeBadge')
+const activePortBadge = document.getElementById('activePortBadge')
 
 const startButton = document.getElementById('startButton')
 const stopButton = document.getElementById('stopButton')
@@ -80,12 +81,35 @@ function renderSetup(setup) {
   modeBadge.textContent = `mode: ${setup.suggestedMode ?? 'unavailable'}`
 }
 
+function renderActivePort(status) {
+  if (status.note === 'port-fallback') {
+    activePortBadge.textContent = `active: ${status.port} fallback`
+    return
+  }
+
+  if (status.mode === 'running' || status.mode === 'external') {
+    activePortBadge.textContent = `active: ${status.port}`
+    return
+  }
+
+  if (status.mode === 'blocked') {
+    activePortBadge.textContent = `blocked: ${status.port}`
+    return
+  }
+
+  activePortBadge.textContent = `target: ${status.port}`
+}
+
 function renderStatus(status) {
   modeValue.textContent = describeMode(status)
   portValue.textContent = String(status.port)
   runtimeValue.textContent = status.runtimeKind ?? 'n/a'
   urlValue.textContent = status.url
+  renderActivePort(status)
   renderSetup(status.setup)
+  if (document.activeElement !== portInput || status.mode === 'running' || status.note === 'port-fallback') {
+    portInput.value = String(status.port)
+  }
   updateHint(status)
   updateButtons(status)
 }
