@@ -101,7 +101,7 @@ export function CommandPalette({ commands, open, onClose }: CommandPaletteProps)
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setActive(0) }}
-            placeholder="Cerca comandi…" className="flex-1 bg-transparent outline-none text-[12px]"
+            placeholder="Cerca comandi…" aria-label="Cerca comandi" className="flex-1 bg-transparent outline-none text-[12px]"
             style={{ color: 'var(--color-bright)' }} />
           <kbd className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)' }}>ESC</kbd>
         </div>
