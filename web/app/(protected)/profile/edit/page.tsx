@@ -689,7 +689,7 @@ export default function ProfileEditPage() {
               {uploadedFiles.map(f => (
                 <div key={f.name} className="flex items-center justify-between px-3 py-2 bg-[var(--color-deep)] border border-[var(--color-border)] rounded">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[12px] text-[var(--color-bright)] truncate">{f.name}</span>
+                    <span className="text-[12px] text-[var(--color-bright)] truncate" title={f.name}>{f.name}</span>
                     <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                   </div>
                   <button type="button" onClick={() => handleDeleteFile(f.name)}
