@@ -544,7 +544,7 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
 
 function ProfileField({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]">
       <span className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] flex-shrink-0 pt-0.5">{label}</span>
       <span className="text-[12px] text-[var(--color-bright)] text-right">
         {value ?? <span className="text-[var(--color-dim)]">—</span>}
