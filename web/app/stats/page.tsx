@@ -26,6 +26,7 @@ const T = {
     shared: 'Moduli condivisi',
     tests: 'Test E2E',
     langs: 'Lingue (IT/EN)',
+    loc: 'Linee di codice',
     // Sections
     weekly: 'Attivita settimanale',
     weekly_desc: 'Commit per settimana nelle ultime 12 settimane',
@@ -78,6 +79,7 @@ const T = {
     shared: 'Shared modules',
     tests: 'E2E Tests',
     langs: 'Languages (IT/EN)',
+    loc: 'Lines of code',
     weekly: 'Weekly activity',
     weekly_desc: 'Commits per week over the last 12 weeks',
     types: 'Commit types',
@@ -120,7 +122,7 @@ type StatsData = {
   overview: {
     agents: number; languages: number; totalCommits: number; contributors: number
     devDays: number; apiRoutes: number; pages: number; sharedModules: number
-    e2eTests: number; firstCommit: string; lastCommit: string
+    e2eTests: number; linesOfCode: number; firstCommit: string; lastCommit: string
   }
   weeklyCommits: { week: string; count: number }[]
   typeCounts: { feat: number; fix: number; merge: number; test: number; other: number }
@@ -447,11 +449,12 @@ function StatsContent() {
               <StatCard value={data.overview.languages} label={t.langs} accent="var(--color-yellow)" />
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <StatCard value={data.overview.apiRoutes} label={t.api_routes} accent="var(--color-orange)" />
               <StatCard value={data.overview.pages} label={t.pages} accent="var(--color-blue)" />
               <StatCard value={data.overview.sharedModules} label={t.shared} accent="var(--color-purple)" />
               <StatCard value={data.overview.e2eTests} label={t.tests} accent="var(--color-yellow)" />
+              <StatCard value={data.overview.linesOfCode.toLocaleString()} label={t.loc} accent="var(--color-orange)" />
             </div>
 
             {/* Weekly activity chart */}
