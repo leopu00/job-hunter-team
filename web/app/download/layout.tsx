@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'Download',
@@ -10,5 +11,5 @@ export const metadata: Metadata = {
 }
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (<><BreadcrumbJsonLd items={[{ name: 'Download', path: '/download' }]} />{children}</>)
 }
