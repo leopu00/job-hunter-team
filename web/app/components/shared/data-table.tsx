@@ -53,22 +53,23 @@ export function DataTable<T extends Record<string, unknown>>({
   return (
     <div className="flex flex-col gap-2">
       {searchable && (
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder}
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder}
           className="w-full px-3 py-2 rounded border text-[11px] font-mono outline-none bg-transparent"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-bright)' }}
           onFocus={e => e.currentTarget.style.borderColor = 'var(--color-green)'}
           onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'} />
       )}
-      <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
+      <div className="border rounded-lg overflow-x-auto" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
         <table className="w-full text-[11px]" aria-label={ariaLabel}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               {columns.map(col => (
                 <th key={String(col.key)} scope="col" className="px-4 py-2.5 text-left font-semibold"
                   style={{ color: 'var(--color-dim)', cursor: col.sortable ? 'pointer' : 'default', userSelect: 'none' }}
+                  aria-sort={col.sortable && sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   onClick={() => col.sortable && toggleSort(col.key)}>
                   {col.label}
-                  {col.sortable && sortKey === col.key && <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  {col.sortable && sortKey === col.key && <span className="ml-1" aria-hidden="true">{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
               ))}
             </tr>
@@ -77,7 +78,7 @@ export function DataTable<T extends Record<string, unknown>>({
             {filtered.length === 0
               ? <tr><td colSpan={columns.length} className="px-4 py-6 text-center" style={{ color: 'var(--color-dim)' }}>{emptyText}</td></tr>
               : filtered.map(row => (
-                  <tr key={String(row[keyField])} className="border-t transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
+                  <tr key={String(row[keyField])} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
                     {columns.map(col => (
                       <td key={String(col.key)} className="px-4 py-2.5" style={{ color: 'var(--color-base)' }}>
                         {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '—')}

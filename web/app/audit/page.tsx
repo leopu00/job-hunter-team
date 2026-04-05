@@ -92,7 +92,7 @@ export default function AuditPage() {
         )}
 
         {loading ? (
-          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }} role="status" aria-live="polite">Caricamento…</p>
         ) : visible.length === 0 ? (
           <EmptyState icon="📋" title="Nessun evento trovato" size="sm" />
         ) : (

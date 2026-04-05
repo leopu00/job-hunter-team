@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
 
+export const dynamic = 'force-dynamic'
+
 // Job Hunter agent definitions (session prefix → display info)
 const JH_AGENTS: Record<string, { role: string; emoji: string; color: string; maxInstances: number }> = {
   ALFA:       { role: 'Capitano',  emoji: '👨‍✈️', color: '#ff9100', maxInstances: 1 },

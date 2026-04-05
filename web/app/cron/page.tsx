@@ -92,7 +92,7 @@ export default function CronPage() {
             <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>aggiornamento ogni 8s</p>
           </div>
           {loading ? (
-            <div className="px-6 py-8 text-center text-[11px]" style={{ color: 'var(--color-dim)' }}>Caricamento…</div>
+            <div className="px-6 py-8 text-center text-[11px]" style={{ color: 'var(--color-dim)' }} role="status" aria-live="polite">Caricamento…</div>
           ) : jobs.length === 0 ? (
             <div className="px-6 py-8 text-center">
               <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>Nessun job configurato.</p>

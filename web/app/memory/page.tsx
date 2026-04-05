@@ -96,9 +96,9 @@ export default function MemoryPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Errore nel caricamento.</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="alert">Errore nel caricamento.</p>
       ) : (
         <>
           <div className="flex gap-2 mb-4">

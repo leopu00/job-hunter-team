@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Panoramica' }
+export const metadata: Metadata = {
+  title: 'Overview',
+}
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function OverviewLayout({ children }: { children: React.ReactNode }) {
   return children
 }

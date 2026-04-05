@@ -227,7 +227,7 @@ export default function AnalistaPage() {
 
         {/* Coda */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">In Coda (prossime 10)</h3>
+          <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">In Coda (prossime 10)</h2>
           {data?.queue.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna posizione in coda</p>
           ) : (
@@ -239,7 +239,7 @@ export default function AnalistaPage() {
 
         {/* Ultime checked */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">Ultime 10 Checked</h3>
+          <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">Ultime 10 Checked</h2>
           {data?.recent_processed.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna posizione checked</p>
           ) : (
@@ -252,9 +252,9 @@ export default function AnalistaPage() {
 
       {/* Ultime escluse */}
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 mb-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: 'fade-in 0.35s ease 0.1s both' }}>
-        <h3 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-red)' }}>
+        <h2 className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: 'var(--color-red)' }}>
           Ultime 10 Escluse — Log
-        </h3>
+        </h2>
         {data?.recent_excluded.length === 0 || !data ? (
           <p className="text-[var(--color-dim)] text-[11px] px-3">Nessuna esclusione recente</p>
         ) : (
@@ -267,7 +267,7 @@ export default function AnalistaPage() {
       {/* Motivi esclusione + ratio */}
       {data && Object.keys(data.exclusion_categories).length > 0 && (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]" style={{ animation: 'fade-in 0.35s ease 0.15s both' }}>
-          <h3 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-2">Motivi Esclusione</h3>
+          <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-2">Motivi Esclusione</h2>
 
           {/* Ratio bar */}
           {rTotal > 0 && (

@@ -76,16 +76,17 @@ export default function SearchPage() {
           onChange={e => onChange(e.target.value)}
           aria-label="Cerca nel sito"
           placeholder="Cerca qualcosa… (min 2 caratteri)"
+          aria-label="Cerca nel dashboard"
           className="w-full pl-10 pr-4 py-3 text-[13px] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
           style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', color: 'var(--color-bright)' }}
         />
-        {loading && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-dim)] text-[10px]">…</span>}
+        {loading && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-dim)] text-[10px]" role="status" aria-live="polite">…</span>}
       </div>
 
       {/* Empty state iniziale */}
       {!data && !loading && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">🔍</span>
+          <span className="text-4xl" aria-hidden="true">🔍</span>
           <p className="text-[12px] text-[var(--color-dim)]">Digita per cercare nel dashboard</p>
         </div>
       )}
@@ -93,7 +94,7 @@ export default function SearchPage() {
       {/* No results */}
       {noResults && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <span className="text-4xl">📭</span>
+          <span className="text-4xl" aria-hidden="true">📭</span>
           <p className="text-[12px] font-semibold text-[var(--color-muted)]">Nessun risultato per &ldquo;{data.query}&rdquo;</p>
         </div>
       )}

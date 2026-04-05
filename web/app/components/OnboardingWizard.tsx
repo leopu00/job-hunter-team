@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 
 /* ── i18n inline (standalone, no provider needed) ─────────────────── */
@@ -132,6 +132,27 @@ export default function OnboardingWizard() {
 
   const back = () => { if (step > 0) setStep(s => s - 1) }
 
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // ESC + focus trap
+  useEffect(() => {
+    if (!visible || !dialogRef.current) return
+    const el = dialogRef.current
+    const sel = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    const focusables = () => Array.from(el.querySelectorAll<HTMLElement>(sel))
+    focusables()[0]?.focus()
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { dismiss(); return }
+      if (e.key !== 'Tab') return
+      const fs = focusables()
+      if (!fs.length) { e.preventDefault(); return }
+      if (e.shiftKey) { if (document.activeElement === fs[0]) { e.preventDefault(); fs.at(-1)?.focus() } }
+      else            { if (document.activeElement === fs.at(-1)) { e.preventDefault(); fs[0]?.focus() } }
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [visible, step])
+
   if (!visible) return null
 
   const STEPS = [t('s1_title'), t('s2_title'), t('s3_title'), t('s4_title'), t('s5_title')]
@@ -140,12 +161,12 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div role="dialog" aria-modal="true" aria-label={t('title')} className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('title')} className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
 
         {/* Header */}
         <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
+            <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
             <span className="text-[10px] font-bold tracking-[0.15em] uppercase" style={{ color: 'var(--color-green)' }}>
               {t('s1_title') === 'Benvenuto' ? 'setup' : 'setup'}
             </span>
@@ -205,11 +226,11 @@ export default function OnboardingWizard() {
               <div className="flex flex-col gap-3">
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_name')}</label>
-                  <input value={name} onChange={e => setName(e.target.value)} className={inp} style={inputStyle} placeholder="Mario Rossi" />
+                  <input value={name} onChange={e => setName(e.target.value)} className={inp} style={inputStyle} placeholder="Mario Rossi" autoComplete="name" required />
                 </div>
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_role')}</label>
-                  <input value={role} onChange={e => setRole(e.target.value)} className={inp} style={inputStyle} placeholder="Full Stack Developer" />
+                  <input value={role} onChange={e => setRole(e.target.value)} className={inp} style={inputStyle} placeholder="Full Stack Developer" autoComplete="organization-title" />
                 </div>
                 <div>
                   <label className="text-[8px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-dim)' }}>{t('s2_bio')}</label>

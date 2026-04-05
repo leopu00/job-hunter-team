@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── Step data ────────────────────────────────────────────────────── */
 
@@ -41,7 +42,7 @@ function DemoContent() {
           {/* Header */}
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
               <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('demo_badge')}</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-[var(--color-white)] mb-3">
@@ -53,11 +54,16 @@ function DemoContent() {
           </div>
 
           {/* Step selector (horizontal pills) */}
-          <div className="flex flex-wrap justify-center gap-2 mb-10">
+          <div className="flex flex-wrap justify-center gap-2 mb-10" role="tablist" aria-label="Passaggi demo">
             {STEPS.map((s, i) => (
               <button
                 key={i}
                 onClick={() => setActiveStep(i)}
+                role="tab"
+                aria-selected={i === activeStep}
+                aria-controls={`demo-panel-${i}`}
+                id={`demo-tab-${i}`}
+                aria-label={`Passo ${s.n}: ${t(s.titleKey as any)}`}
                 className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all"
                 style={{
                   background: i === activeStep ? 'var(--color-green)' : 'var(--color-panel)',
@@ -75,6 +81,9 @@ function DemoContent() {
           {/* Active step detail */}
           <div
             key={activeStep}
+            role="tabpanel"
+            id={`demo-panel-${activeStep}`}
+            aria-labelledby={`demo-tab-${activeStep}`}
             className="grid md:grid-cols-2 gap-8 items-start"
             style={{ animation: 'fade-in 0.3s ease both' }}
           >
@@ -103,19 +112,21 @@ function DemoContent() {
                 {activeStep > 0 && (
                   <button
                     onClick={() => setActiveStep(activeStep - 1)}
+                    aria-label={`Passo precedente: ${t(STEPS[activeStep - 1].titleKey as any)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'var(--color-panel)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    {'\u2190'} Precedente
+                    {'\u2190'} {t('demo_prev')}
                   </button>
                 )}
                 {activeStep < STEPS.length - 1 ? (
                   <button
                     onClick={() => setActiveStep(activeStep + 1)}
+                    aria-label={`${t('demo_next')}: ${t(STEPS[activeStep + 1].titleKey as any)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    Successivo {'\u2192'}
+                    {t('demo_next')} {'\u2192'}
                   </button>
                 ) : (
                   <Link
@@ -135,9 +146,9 @@ function DemoContent() {
               style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)' }}
             >
               <div className="flex items-center gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#f44336', opacity: 0.6 }} />
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#ffc107', opacity: 0.6 }} />
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#4caf50', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#f44336', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#ffc107', opacity: 0.6 }} />
+                <span className="w-2.5 h-2.5 rounded-full" aria-hidden="true" style={{ background: '#4caf50', opacity: 0.6 }} />
                 <span className="ml-2 text-[9px] text-[var(--color-dim)]">{STEPS[activeStep].titleKey.replace('demo_s', 'step-').replace('_title', '')}</span>
               </div>
               <div className="p-4 sm:p-5 min-h-[220px]">
@@ -147,10 +158,10 @@ function DemoContent() {
           </div>
 
           {/* All steps overview */}
-          <div className="mt-20">
-            <h3 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
-              Tutti i passaggi
-            </h3>
+          <FadeInSection><div className="mt-20">
+            <h2 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
+              {t('demo_all_steps')}
+            </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {STEPS.map((s, i) => (
                 <button
@@ -172,7 +183,7 @@ function DemoContent() {
                 </button>
               ))}
             </div>
-          </div>
+          </div></FadeInSection>
 
           {/* Footer */}
           <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
@@ -240,7 +251,7 @@ function ProfileMockup() {
         </div>
       ))}
       <div className="flex items-center gap-2 mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
         <span className="text-[10px] text-[var(--color-green)]">Profilo completo</span>
       </div>
     </div>
@@ -263,7 +274,7 @@ function TeamMockup() {
           <div className="text-lg mb-1">{a.emoji}</div>
           <div className="text-[9px] font-bold" style={{ color: a.color }}>{a.name}</div>
           <div className="flex justify-center mt-1">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.15)' }} />
+            <span className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{ background: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.15)' }} />
           </div>
         </div>
       ))}
@@ -283,7 +294,7 @@ function PipelineMockup() {
     <div className="space-y-2">
       {steps.map((s, i) => (
         <div key={i} className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" aria-hidden="true" style={{ background: s.color }} />
           <span className="text-[10px] font-bold flex-shrink-0 w-16" style={{ color: s.color }}>{s.agent}</span>
           <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{s.msg}</span>
         </div>
@@ -365,7 +376,7 @@ function ApproveMockup() {
 
 function TerminalIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
     </svg>
   )
@@ -373,7 +384,7 @@ function TerminalIcon() {
 
 function ProfileIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
     </svg>
   )
@@ -381,7 +392,7 @@ function ProfileIcon() {
 
 function TeamIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   )
@@ -389,7 +400,7 @@ function TeamIcon() {
 
 function PipelineIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   )
@@ -397,7 +408,7 @@ function PipelineIcon() {
 
 function DashIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
     </svg>
   )
@@ -405,7 +416,7 @@ function DashIcon() {
 
 function CheckIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   )

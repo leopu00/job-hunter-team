@@ -120,7 +120,7 @@ export function AlertDialog({
 
           {/* Icon strip */}
           <div style={{ padding: '20px 20px 0', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            <div aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 8, flexShrink: 0,
               background: v.bg, border: `1px solid ${v.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 20, color: v.color }}>
@@ -162,7 +162,7 @@ export function AlertDialog({
                   opacity: primary.disabled ? 0.5 : 1, transition: 'opacity .15s',
                   display: 'flex', alignItems: 'center', gap: 6 }}>
                 {primary.loading && (
-                  <span style={{ width: 10, height: 10, border: '2px solid rgba(255,255,255,0.3)',
+                  <span aria-hidden="true" style={{ width: 10, height: 10, border: '2px solid rgba(255,255,255,0.3)',
                     borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block',
                     animation: 'spin 0.7s linear infinite' }} />
                 )}

@@ -2,12 +2,27 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { LandingI18nProvider } from '../components/landing/LandingI18n'
+import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 type FaqItem = { q: string; a: React.ReactNode }
+
+/** Testo puro per JSON-LD (schema.org FAQPage) — indice corrisponde a FAQ_ITEMS */
+const FAQ_TEXTS: string[] = [
+  'Job Hunter Team (JHT) e un sistema open-source che automatizza la ricerca di lavoro usando un team di agenti AI. Ogni agente ha un ruolo specifico: trovare offerte, analizzarle, calcolare il match col tuo profilo, scrivere CV e cover letter personalizzate, e revisionarle. Tutto gira in locale sul tuo computer.',
+  'Configuri il tuo profilo (competenze, esperienza, preferenze) e avvii il team. Gli agenti collaborano in pipeline: lo Scout cerca offerte online, l\'Analista le analizza, lo Scorer calcola il match, lo Scrittore prepara i documenti e il Critico li revisiona. Il Capitano coordina tutto e la Sentinella monitora i costi.',
+  'No. JHT gira interamente in locale. Non c\'e registrazione, non c\'e login a servizi esterni, non c\'e cloud. Avvii il server sul tuo computer e accedi dal browser su localhost:3000.',
+  'Il software e gratuito e open-source. L\'unico costo e la chiave API Anthropic per far funzionare gli agenti AI (Claude). Una ricerca completa tipica consuma circa 1-5$ di API.',
+  'Capitano (coordina il team), Scout (cerca offerte), Analista (analizza requisiti), Scorer (calcola match), Scrittore (genera CV e cover letter), Critico (revisiona documenti), Sentinella (monitora budget API).',
+  'Dalla web app vai su /team e premi Avvia Team. Dalla TUI avvia con cd tui && npm run dev, poi usa /start <agente>.',
+  'Node.js 18+, tmux (per gli agenti), e Claude CLI. Funziona su macOS 12+, Linux (Ubuntu 20.04+) e Windows 10+ (con WSL per tmux).',
+  'Si. Tutti i dati sono salvati nella cartella di lavoro locale sul tuo computer. Nessun dato viene inviato a server esterni.',
+  'Si, ma con funzionalita limitate. Senza chiave API gli agenti AI non possono funzionare, pero puoi usare la web app per gestire candidature manualmente.',
+  'JHT e open-source. Puoi contribuire su GitHub: segnala bug, proponi feature, o invia pull request.',
+]
 
 const FAQ_ITEMS: FaqItem[] = [
   {
@@ -132,16 +147,20 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ]
 
-function FaqAccordion({ item, index, isOpen, onToggle }: { item: FaqItem; index: number; isOpen: boolean; onToggle: () => void }) {
+function FaqAccordion({ item, isOpen, onToggle, index }: { item: FaqItem; isOpen: boolean; onToggle: () => void; index: number }) {
+  const panelId = `faq-panel-${index}`
+  const buttonId = `faq-btn-${index}`
+
   return (
     <div
       className="border-b border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.015)] rounded-sm"
       style={{ transition: 'background 0.2s', animation: `fade-in 0.35s ease ${index * 0.06}s both` }}
     >
       <button
+        id={buttonId}
         onClick={onToggle}
         aria-expanded={isOpen}
-        aria-controls={`faq-panel-${index}`}
+        aria-controls={panelId}
         className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded"
         style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
       >
@@ -156,8 +175,9 @@ function FaqAccordion({ item, index, isOpen, onToggle }: { item: FaqItem; index:
       </button>
       {isOpen && (
         <div
-          id={`faq-panel-${index}`}
+          id={panelId}
           role="region"
+          aria-labelledby={buttonId}
           className="pb-4 px-1 text-[12px] text-[var(--color-muted)] leading-relaxed [&_code]:break-all [&_code]:text-[10px] sm:[&_code]:text-[11px]"
           style={{ animation: 'fade-in 0.15s ease both' }}
         >
@@ -168,11 +188,26 @@ function FaqAccordion({ item, index, isOpen, onToggle }: { item: FaqItem; index:
   )
 }
 
+function FaqJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ_ITEMS.map((item, i) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: FAQ_TEXTS[i] ?? '' },
+    })),
+  }
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+}
+
 function FaqContent() {
+  const { t } = useLandingI18n()
   const [openIndex, setOpenIndex] = useState<number | null>(0)
 
   return (
     <main style={{ position: 'relative', zIndex: 1 }}>
+      <FaqJsonLd />
       <LandingNav />
 
       <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
@@ -183,30 +218,33 @@ function FaqContent() {
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">FAQ</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Domande Frequenti</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{t('faq_title')}</h1>
           <p className="text-[var(--color-muted)] text-[12px] mt-2 leading-relaxed">
-            Tutto quello che devi sapere su Job Hunter Team.
+            {t('faq_subtitle')}
           </p>
         </div>
 
         {/* FAQ list */}
-        <div className="flex flex-col">
-          {FAQ_ITEMS.map((item, i) => (
-            <FaqAccordion
-              key={i}
-              item={item}
-              index={i}
-              isOpen={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
-            />
-          ))}
-        </div>
+        <FadeInSection>
+          <div className="flex flex-col">
+            {FAQ_ITEMS.map((item, i) => (
+              <FaqAccordion
+                key={i}
+                item={item}
+                index={i}
+                isOpen={openIndex === i}
+                onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              />
+            ))}
+          </div>
+        </FadeInSection>
 
         {/* CTA */}
+        <FadeInSection delay={100}>
         <div className="mt-10 rounded-lg p-6 text-center" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-          <p className="text-[13px] text-[var(--color-bright)] font-semibold mb-2">Non trovi la risposta?</p>
+          <p className="text-[13px] text-[var(--color-bright)] font-semibold mb-2">{t('faq_no_answer')}</p>
           <p className="text-[11px] text-[var(--color-muted)] mb-4">
-            Consulta la guida completa o la documentazione tecnica.
+            {t('faq_no_answer_desc')}
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
@@ -214,27 +252,28 @@ function FaqContent() {
               className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
               style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
             >
-              Guida Utente
+              {t('faq_guide_btn')}
             </Link>
             <Link
               href="/docs"
               className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
               style={{ border: '1px solid var(--color-border)', color: 'var(--color-dim)' }}
             >
-              Documentazione
+              {t('faq_docs_btn')}
             </Link>
           </div>
         </div>
+        </FadeInSection>
 
         {/* Footer nav */}
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link href="/guide"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; Guida
+            &larr; {t('nav_guide')}
           </Link>
           <Link href="/download"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            Download &rarr;
+            {t('nav_download')} &rarr;
           </Link>
         </div>
       </div>

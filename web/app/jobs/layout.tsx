@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Offerte Lavoro' }
+export const metadata: Metadata = {
+  title: 'Offerte',
+}
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function JobsLayout({ children }: { children: React.ReactNode }) {
   return children
 }

@@ -34,7 +34,7 @@ function SessionRow({ s, onPatch }: { s: Session; onPatch: (id: string, state: S
   const end = s.lastMessageAtMs ?? s.updatedAtMs
   return (
     <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
-      <span className="text-base flex-shrink-0">{CHANNEL_ICON[s.channelId] ?? '◆'}</span>
+      <span className="text-base flex-shrink-0" aria-hidden="true">{CHANNEL_ICON[s.channelId] ?? '◆'}</span>
       <div className="flex-1 min-w-0">
         <Link href={`/sessions/${s.id}`} className="text-[12px] font-semibold no-underline hover:underline" style={{ color: 'var(--color-bright)' }}>
           {s.label ?? s.id.slice(0, 12) + '…'}
@@ -100,7 +100,7 @@ export default function SessionsPage() {
           ))}
         </div>
       </div>
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento sessioni…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento sessioni…</span></div>}
       {!loading && (
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {sorted.length === 0

@@ -12,7 +12,6 @@ export default function BookmarksPage() {
   const [filterTag, setFilterTag] = useState('all')
   const [sort, setSort] = useState<SortMode>('date')
   const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [company, setCompany] = useState('')
@@ -20,17 +19,15 @@ export default function BookmarksPage() {
   const [note, setNote] = useState('')
   const [tags, setTags] = useState('')
 
-  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
-
   const fetchData = useCallback(async () => {
     const p = new URLSearchParams(); p.set('sort', sort)
     if (filterTag !== 'all') p.set('tag', filterTag)
-    if (debouncedSearch.trim()) p.set('q', debouncedSearch.trim())
+    if (search.trim()) p.set('q', search.trim())
     const res = await fetch(`/api/bookmarks?${p}`).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
     setBookmarks(data.bookmarks ?? []); setAllTags(data.allTags ?? [])
-  }, [filterTag, sort, debouncedSearch])
+  }, [filterTag, sort, search])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -49,11 +46,11 @@ export default function BookmarksPage() {
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Segnalibri</span>
-        </nav>
+          <span className="text-[var(--color-border)]">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Segnalibri</span>
+        </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Segnalibri</h1>
@@ -70,17 +67,17 @@ export default function BookmarksPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo segnalibro</p>
           <div className="flex flex-wrap gap-2 items-end">
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titolo posizione *" aria-label="Titolo posizione"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" />
-            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *" aria-label="Azienda"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)" aria-label="URL posizione"
-              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" />
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titolo posizione *"
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[140px]" required />
+            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Azienda *"
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" required />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (opzionale)"
+              className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[120px]" autoComplete="url" />
           </div>
           <div className="flex flex-wrap gap-2 items-end mt-2">
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note personali" aria-label="Note personali"
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note personali"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] flex-1 min-w-[200px]" />
-            <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tag (virgola-separati)" aria-label="Tag"
+            <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tag (virgola-separati)"
               className="text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)] min-w-[140px]" />
             <button onClick={addBookmark} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
               style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>salva</button>
@@ -116,7 +113,7 @@ export default function BookmarksPage() {
           <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun segnalibro trovato.</p></div>
         ) : bookmarks.map(b => (
           <div key={b.id} className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
-            <span className="text-sm flex-shrink-0">⭐</span>
+            <span className="text-sm flex-shrink-0" aria-hidden="true">⭐</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 {b.url ? <a href={b.url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-semibold text-[var(--color-bright)] hover:underline">{b.jobTitle}</a>
@@ -132,7 +129,7 @@ export default function BookmarksPage() {
               )}
             </div>
             <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">{fmtDate(b.savedAt)}</span>
-            <button onClick={() => remove(b.id)} className="text-[10px] font-bold cursor-pointer transition-colors flex-shrink-0"
+            <button onClick={() => remove(b.id)} aria-label="Rimuovi segnalibro" className="text-[10px] font-bold cursor-pointer transition-colors flex-shrink-0"
               style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--color-red)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--color-dim)'}>×</button>

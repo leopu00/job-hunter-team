@@ -24,7 +24,7 @@ function IntCard({ i }: { i: Integration }) {
 
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{ICONS[i.id] ?? '🔌'}</span>
+          <span className="text-2xl" aria-hidden="true">{ICONS[i.id] ?? '🔌'}</span>
           <div>
             <p className="text-[13px] font-bold" style={{ color: 'var(--color-white)' }}>{i.name}</p>
             <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>{i.description}</p>
@@ -93,7 +93,7 @@ export default function IntegrationsPage() {
         </div>
 
         {loading ? (
-          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }} role="status" aria-live="polite">Caricamento…</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {integrations.map((intg, i) => <div key={intg.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><IntCard i={intg} /></div>)}

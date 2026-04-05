@@ -83,7 +83,7 @@ export default function StatusPage() {
 
       {maintenance.active && (
         <div className="mb-6 px-5 py-3 rounded-lg" style={{ background: 'rgba(255,193,7,0.08)', border: '1px solid rgba(255,193,7,0.3)' }}>
-          <p className="text-[11px] font-semibold" style={{ color: 'var(--color-yellow)' }}>⚠ Manutenzione in corso</p>
+          <p className="text-[11px] font-semibold" style={{ color: 'var(--color-yellow)' }}><span aria-hidden="true">⚠</span> Manutenzione in corso</p>
           <p className="text-[10px] text-[var(--color-muted)] mt-1">{maintenance.message}</p>
         </div>
       )}

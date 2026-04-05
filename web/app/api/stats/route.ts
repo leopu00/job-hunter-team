@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'node:child_process'
 
+export const dynamic = 'force-dynamic'
+
 function run(cmd: string): string {
   try {
     return execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim()
@@ -25,12 +27,16 @@ const FALLBACK = {
     pages: 300,
     sharedModules: 36,
     e2eTests: 30,
+    linesOfCode: 50000,
     firstCommit: '2025-07-01',
     lastCommit: new Date().toISOString().slice(0, 10),
   },
   weeklyCommits: [],
   typeCounts: { feat: 180, fix: 90, merge: 120, test: 30, other: 80 },
   areas: { web: 300, api: 100, shared: 36, e2e: 30 },
+  recentCommits: [] as { hash: string; date: string; message: string; author: string }[],
+  topContributors: [] as { name: string; commits: number }[],
+  dailyCommits: [] as { date: string; count: number }[],
 }
 
 export async function GET() {
@@ -66,6 +72,9 @@ export async function GET() {
     else typeCounts.other++
   }
 
+  // Linee di codice totali (TypeScript + Python)
+  const linesOfCode = parseInt(run('find web/app shared e2e -name "*.ts" -o -name "*.tsx" -o -name "*.py" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk \'{print $1}\''), 10) || 0
+
   // File count per area
   const areas = {
     web: parseInt(run('find web/app -name "*.tsx" -o -name "*.ts" | wc -l'), 10) || 0,
@@ -80,6 +89,35 @@ export async function GET() {
 
   // Contributori unici
   const contributors = parseInt(run('git log --format="%aN" | sort -u | wc -l'), 10) || 0
+
+  // Ultimi 8 commit
+  const recentRaw = run('git log --format="%h|%aI|%s|%aN" -8 HEAD')
+  const recentCommits = recentRaw.split('\n').filter(Boolean).map(line => {
+    const [hash, date, message, author] = line.split('|')
+    return { hash, date: date.slice(0, 10), message, author }
+  })
+
+  // Commit giornalieri (ultimi 90 giorni) per heatmap
+  const dailyRaw = run('git log --since="90 days ago" --format="%aI" HEAD')
+  const dailyMap = new Map<string, number>()
+  for (const line of dailyRaw.split('\n').filter(Boolean)) {
+    const key = line.slice(0, 10)
+    dailyMap.set(key, (dailyMap.get(key) ?? 0) + 1)
+  }
+  const dailyCommits = [...dailyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }))
+
+  // Top contributori (commit count per autore)
+  const contribRaw = run('git log --format="%aN" HEAD')
+  const contribMap = new Map<string, number>()
+  for (const name of contribRaw.split('\n').filter(Boolean)) {
+    contribMap.set(name, (contribMap.get(name) ?? 0) + 1)
+  }
+  const topContributors = [...contribMap.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([name, commits]) => ({ name, commits }))
 
   // Giorni di sviluppo
   const first = new Date(firstCommitDate || '2025-07-01')
@@ -99,11 +137,15 @@ export async function GET() {
       pages: areas.web,
       sharedModules: areas.shared,
       e2eTests: areas.e2e,
+      linesOfCode,
       firstCommit: firstCommitDate,
       lastCommit: lastCommitDate,
     },
     weeklyCommits,
     typeCounts,
     areas,
+    recentCommits,
+    topContributors,
+    dailyCommits,
   })
 }

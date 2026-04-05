@@ -105,7 +105,7 @@ export default function RateLimiterPage() {
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Rate Limiter</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
               {data ? `${data.providers.length} provider · finestra globale: ${data.globalWindow.maxRequests} req/${fmt(data.globalWindow.windowMs)}` : 'Caricamento…'}
-              {data && !data.configLoaded && <span className="ml-2 text-[var(--color-yellow)]">⚠ jht.config.json non trovato</span>}
+              {data && !data.configLoaded && <span className="ml-2 text-[var(--color-yellow)]"><span aria-hidden="true">⚠</span> jht.config.json non trovato</span>}
             </p>
           </div>
           <button onClick={fetchData}
@@ -118,7 +118,7 @@ export default function RateLimiterPage() {
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento configurazione…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento configurazione…</span></div>}
 
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
