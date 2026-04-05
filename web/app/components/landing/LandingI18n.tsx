@@ -160,6 +160,7 @@ const translations = {
     en: 'Stop sending generic applications. Let a team of AI agents work for you, smart and personalized.',
   },
   cta_button:        { it: 'Inizia ora — è gratis',            en: 'Start now — it\'s free' },
+  cta_team:          { it: 'Vedi il team',                      en: 'Meet the team' },
   cta_note:          { it: 'Nessuna carta di credito richiesta · Beta pubblica', en: 'No credit card required · Public beta' },
 
   // Footer
