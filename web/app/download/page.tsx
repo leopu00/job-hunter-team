@@ -50,8 +50,8 @@ const FALLBACK_BASE_URL = `https://github.com/${FALLBACK_REPO}/releases/latest/d
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
-    id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.tar.gz`, size: null,
-    requirements: 'macOS 12+, Node.js 18+',
+    id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.dmg`, size: null,
+    requirements: 'macOS 12+',
     instructions: [],
   },
   {
