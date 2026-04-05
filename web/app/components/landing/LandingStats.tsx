@@ -22,7 +22,7 @@ export default function LandingStats() {
   const items = STATS[lang as 'it' | 'en'] ?? STATS.it
 
   return (
-    <section className="py-16 px-5">
+    <section aria-label="Statistiche" className="py-16 px-5">
       <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
         {items.map((stat) => (
           <div key={stat.label} className="text-center">
