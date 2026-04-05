@@ -37,6 +37,9 @@ export default function LanguageSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
+        aria-label={`Lingua: ${currentInfo?.label ?? 'Italiano'}`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer w-full"
         style={{ background: open ? 'var(--color-row)' : 'transparent', border: '1px solid var(--color-border)' }}>
         <span className="text-[10px] font-bold tracking-wide" style={{ color: 'var(--color-muted)' }}>
@@ -47,10 +50,10 @@ export default function LanguageSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 w-full rounded overflow-hidden shadow-lg"
+        <div role="listbox" aria-label="Seleziona lingua" className="absolute bottom-full left-0 mb-1 w-full rounded overflow-hidden shadow-lg"
           style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', zIndex: 100 }}>
           {locales.map(l => (
-            <button key={l.code} onClick={() => switchLocale(l.code)}
+            <button key={l.code} role="option" aria-selected={l.code === current} onClick={() => switchLocale(l.code)}
               className="flex items-center gap-2 px-3 py-2 w-full transition-colors cursor-pointer text-left"
               style={{
                 background: l.code === current ? 'rgba(0,232,122,0.08)' : 'transparent',
