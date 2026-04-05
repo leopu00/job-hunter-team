@@ -365,19 +365,22 @@ function PricingContent() {
               <div key={i} className="border-b border-[var(--color-border)]">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  aria-expanded={openFaq === i}
+                  aria-controls={`pricing-faq-${i}`}
                   className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
                   style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
                 >
                   <span className="text-[12px] font-semibold text-[var(--color-white)]">{faq.q}</span>
                   <span
                     className="text-[var(--color-dim)] text-[14px] flex-shrink-0"
+                    aria-hidden="true"
                     style={{ transform: openFaq === i ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
                   >
                     +
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed" style={{ animation: 'fade-in 0.15s ease both' }}>
+                  <div id={`pricing-faq-${i}`} role="region" aria-labelledby={`pricing-faq-btn-${i}`} className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed" style={{ animation: 'fade-in 0.15s ease both' }}>
                     {faq.a}
                   </div>
                 )}
