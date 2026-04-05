@@ -59,7 +59,10 @@ function LineChart({ data }: { data: SalaryPoint[] }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="px-4 py-3 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
+    <div className="px-4 py-3 rounded-lg transition-colors duration-200"
+      style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
       <p className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">{label}</p>
       <p className="text-xl font-bold text-[var(--color-white)] mt-1">{value}</p>
       {sub && <p className="text-[9px] text-[var(--color-dim)] mt-0.5">{sub}</p>}
