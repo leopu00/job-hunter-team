@@ -120,7 +120,7 @@ export function AlertDialog({
 
           {/* Icon strip */}
           <div style={{ padding: '20px 20px 0', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            <div aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 8, flexShrink: 0,
               background: v.bg, border: `1px solid ${v.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 20, color: v.color }}>
