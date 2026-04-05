@@ -5,6 +5,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
@@ -454,25 +455,25 @@ function StatsContent() {
             </div>
 
             {/* Weekly activity chart */}
-            {data.weeklyCommits.length > 0 && (
+            <FadeInSection>{data.weeklyCommits.length > 0 && (
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.weekly}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.weekly_desc}</p>
                 <WeeklyChart weeks={data.weeklyCommits} />
               </section>
-            )}
+            )}</FadeInSection>
 
             {/* Daily heatmap */}
-            {data.dailyCommits && data.dailyCommits.length > 0 && (
+            <FadeInSection>{data.dailyCommits && data.dailyCommits.length > 0 && (
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.heatmap}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.heatmap_desc}</p>
                 <Heatmap days={data.dailyCommits} lessLabel={t.less} moreLabel={t.more} />
               </section>
-            )}
+            )}</FadeInSection>
 
             {/* Two columns: commit types + code areas */}
-            <div className="grid md:grid-cols-2 gap-6">
+            <FadeInSection><div className="grid md:grid-cols-2 gap-6">
               {/* Commit types donut */}
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.types}</h2>
@@ -502,10 +503,10 @@ function StatsContent() {
                   ]}
                 />
               </section>
-            </div>
+            </div></FadeInSection>
 
             {/* Recent commits */}
-            {data.recentCommits && data.recentCommits.length > 0 && (
+            <FadeInSection delay={100}>{data.recentCommits && data.recentCommits.length > 0 && (
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.recent}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.recent_desc}</p>
@@ -533,10 +534,10 @@ function StatsContent() {
                   })}
                 </div>
               </section>
-            )}
+            )}</FadeInSection>
 
             {/* Top contributors */}
-            {data.topContributors && data.topContributors.length > 0 && (
+            <FadeInSection delay={100}>{data.topContributors && data.topContributors.length > 0 && (
               <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
                 <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.top_contributors}</h2>
                 <p className="text-[11px] text-[var(--color-dim)] mb-4">{t.top_contributors_desc}</p>
@@ -573,10 +574,10 @@ function StatsContent() {
                   })}
                 </div>
               </section>
-            )}
+            )}</FadeInSection>
 
             {/* Timeline */}
-            <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+            <FadeInSection delay={100}><section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
               <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-4">{t.timeline}</h2>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -599,10 +600,10 @@ function StatsContent() {
                   <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
                 </div>
               </div>
-            </section>
+            </section></FadeInSection>
 
             {/* Tech Stack */}
-            <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+            <FadeInSection delay={100}><section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
               <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.stack}</h2>
               <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.stack_desc}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -626,9 +627,9 @@ function StatsContent() {
                   </div>
                 ))}
               </div>
-            </section>
+            </section></FadeInSection>
             {/* Contribute CTA */}
-            <section className="text-center py-10 px-6 rounded-xl border border-[var(--color-border)] relative overflow-hidden"
+            <FadeInSection delay={100}><section className="text-center py-10 px-6 rounded-xl border border-[var(--color-border)] relative overflow-hidden"
               style={{ background: 'var(--color-panel)' }}>
               <div className="absolute inset-0 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, rgba(0,232,122,0.04) 0%, transparent 70%)' }} />
@@ -645,7 +646,7 @@ function StatsContent() {
                   {t.contribute_cta}
                 </a>
               </div>
-            </section>
+            </section></FadeInSection>
           </div>
         )}
       </main>
