@@ -272,7 +272,7 @@ export default function ProfileStats({ profile }: Props) {
                   {animatedCompletion}%
                 </span>
               </div>
-              <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+              <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
