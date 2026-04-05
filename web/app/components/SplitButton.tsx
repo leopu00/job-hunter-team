@@ -45,7 +45,7 @@ const SZ = {
 const SPIN = `@keyframes sb-spin { to { transform: rotate(360deg) } }`
 
 const Spinner = ({ color }: { color: string }) => (
-  <span style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
+  <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
     border: `2px solid ${color}33`, borderTopColor: color, animation: 'sb-spin .7s linear infinite' }} />
 )
 
