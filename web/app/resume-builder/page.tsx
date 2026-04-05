@@ -69,7 +69,7 @@ export default function ResumeBuilderPage() {
       {loading ? (
         <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
       ) : tab === 'edit' ? (
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5">
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <SectionTitle title="Dati Personali" />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{PERSONAL_FIELDS.map(f => <Field key={f.key} label={f.label} value={data.personal[f.key] ?? ''} onChange={v => updatePersonal(f.key, v)} />)}</div>
 
@@ -92,7 +92,7 @@ export default function ResumeBuilderPage() {
           ))}
         </div>
       ) : (
-        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-6">
+        <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-6 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <div className="text-center mb-4 pb-3 border-b border-[var(--color-border)]">
             <p className="text-[16px] font-bold text-[var(--color-white)]">{data.personal.nome} {data.personal.cognome}</p>
             <p className="text-[11px] text-[var(--color-green)] font-medium">{data.personal.titolo}</p>
