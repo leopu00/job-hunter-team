@@ -68,8 +68,8 @@ export default function MapPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           <MapView clusters={clusters} selected={selected} onSelect={setSelected} />
         </div>
 

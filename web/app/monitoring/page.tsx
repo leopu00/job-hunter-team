@@ -57,7 +57,7 @@ export default function MonitoringPage() {
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <MetricCard label="CPU" value={`${metrics.cpuUsage}`} unit="%" warn={metrics.cpuUsage > 80} />
           <MetricCard label="Memoria" value={`${metrics.memoryUsedMB}/${metrics.memoryTotalMB}`} unit="MB" warn={metrics.memoryPercent > 85} />
           <MetricCard label="Mem %" value={`${metrics.memoryPercent}`} unit="%" warn={metrics.memoryPercent > 85} />
