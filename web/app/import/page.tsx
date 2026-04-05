@@ -157,7 +157,7 @@ export default function ImportPage() {
 
         <div className="space-y-4">
           {preview && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
               <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Anteprima</p>
               {preview.ok ? (
                 <div>
