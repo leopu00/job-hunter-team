@@ -119,7 +119,7 @@ export default function SecretsPage() {
               <p className="text-[10px] text-[var(--color-dim)]">Salva qui le tue API key e token cifrati.</p>
             </div>
           ) : secrets.map(s => (
-            <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+            <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 transition-colors hover:bg-[rgba(255,255,255,0.015)]" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-base flex-shrink-0">{TYPE_ICON[s.type]}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-semibold text-[var(--color-bright)] truncate">{s.name}</p>
