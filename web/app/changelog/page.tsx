@@ -115,7 +115,7 @@ export default function ChangelogPage() {
             <div key={day.date}>
               {/* Data header */}
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" aria-hidden="true" />
                 <time dateTime={day.date} className="text-[12px] font-semibold text-[var(--color-bright)] capitalize">
                   {formatDate(day.date)}
                 </time>
@@ -132,6 +132,8 @@ export default function ChangelogPage() {
                     <div key={commit.hash} className="flex items-start gap-2.5 py-1.5">
                       <span
                         className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-px"
+                        role="img"
+                        aria-label={cfg.label}
                         style={{
                           color: cfg.color,
                           border: `1px solid ${cfg.color}33`,
