@@ -62,12 +62,12 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
           {index + 1} / {images.length}
         </span>
         <div className="flex items-center gap-3">
-          <button onClick={() => setZoom(v => !v)} title="Zoom (Z)"
+          <button onClick={() => setZoom(v => !v)} title="Zoom (Z)" aria-label={zoom ? 'Riduci zoom' : 'Ingrandisci'}
             className="text-[11px] px-2 py-1 rounded transition-opacity hover:opacity-70"
             style={{ background: zoom ? 'var(--color-blue)22' : 'transparent', color: zoom ? 'var(--color-blue)' : 'var(--color-dim)', border: `1px solid ${zoom ? 'var(--color-blue)44' : 'var(--color-border)'}` }}>
             {zoom ? '⊖' : '⊕'}
           </button>
-          <button onClick={onClose} title="Chiudi (Esc)"
+          <button onClick={onClose} title="Chiudi (Esc)" aria-label="Chiudi lightbox"
             className="text-[18px] leading-none hover:opacity-70 transition-opacity"
             style={{ color: 'var(--color-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
         </div>
@@ -75,7 +75,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
 
       {/* Prev */}
       {hasPrev && (
-        <button onClick={() => onNav(index - 1)}
+        <button onClick={() => onNav(index - 1)} aria-label="Immagine precedente"
           className="absolute left-3 text-[24px] w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
           style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>‹</button>
       )}
@@ -96,7 +96,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
 
       {/* Next */}
       {hasNext && (
-        <button onClick={() => onNav(index + 1)}
+        <button onClick={() => onNav(index + 1)} aria-label="Immagine successiva"
           className="absolute right-3 text-[24px] w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
           style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>›</button>
       )}
@@ -109,7 +109,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
         )}
         <div className="flex gap-1.5">
           {images.map((_, i) => (
-            <button key={i} onClick={() => onNav(i)}
+            <button key={i} onClick={() => onNav(i)} aria-label={`Vai all'immagine ${i + 1}`}
               className="rounded-full transition-all"
               style={{ width: i === index ? 16 : 6, height: 6, background: i === index ? 'var(--color-blue)' : 'var(--color-dim)', border: 'none', cursor: 'pointer' }} />
           ))}
