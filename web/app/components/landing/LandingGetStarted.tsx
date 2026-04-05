@@ -30,7 +30,7 @@ export default function LandingGetStarted() {
           {STEPS.map((s, i) => (
             <div key={i} className="relative group">
               <div className="border border-[var(--color-border)] rounded-xl p-6 h-full transition-all duration-200"
-                style={{ background: 'var(--color-panel)' }}>
+                style={{ background: 'var(--color-panel)', animation: `fade-in 0.4s ease ${i * 0.12}s both` }}>
                 {/* Step number + icon */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[var(--color-border)] flex-shrink-0"
