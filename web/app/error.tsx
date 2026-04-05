@@ -14,7 +14,7 @@ export default function Error({
   }, [error])
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-5" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
+    <main role="alert" className="min-h-screen flex items-center justify-center px-5" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
       <div className="text-center max-w-md">
 
         {/* Error code */}
