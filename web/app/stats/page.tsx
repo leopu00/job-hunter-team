@@ -50,6 +50,8 @@ const T = {
     top_contributors: 'Top contributori',
     top_contributors_desc: 'I contributori piu attivi per numero di commit',
     commit_label: 'commit',
+    stack: 'Tech Stack',
+    stack_desc: 'Le tecnologie che alimentano Job Hunter Team',
   },
   en: {
     title: 'Project Statistics',
@@ -89,6 +91,8 @@ const T = {
     top_contributors: 'Top contributors',
     top_contributors_desc: 'Most active contributors by commit count',
     commit_label: 'commits',
+    stack: 'Tech Stack',
+    stack_desc: 'The technologies powering Job Hunter Team',
   },
 }
 
@@ -489,6 +493,33 @@ function StatsContent() {
                   </div>
                   <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
                 </div>
+              </div>
+            </section>
+
+            {/* Tech Stack */}
+            <section className="p-6 rounded-xl border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
+              <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-1">{t.stack}</h2>
+              <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.stack_desc}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {[
+                  { name: 'Next.js', cat: 'Framework', color: '#fff' },
+                  { name: 'React', cat: 'UI', color: '#61dafb' },
+                  { name: 'TypeScript', cat: 'Language', color: '#3178c6' },
+                  { name: 'Python', cat: 'Language', color: '#3776ab' },
+                  { name: 'Tailwind CSS', cat: 'Styling', color: '#06b6d4' },
+                  { name: 'Supabase', cat: 'Database', color: '#3ecf8e' },
+                  { name: 'Claude API', cat: 'AI', color: '#d97757' },
+                  { name: 'Zod', cat: 'Validation', color: '#3068b7' },
+                ].map(tech => (
+                  <div key={tech.name} className="flex items-center gap-2.5 p-3 rounded-lg border border-[var(--color-border)] transition-all hover:border-[var(--color-border-glow)]"
+                    style={{ background: 'var(--color-card)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: tech.color }} />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-[var(--color-bright)] truncate">{tech.name}</div>
+                      <div className="text-[9px] text-[var(--color-dim)] uppercase tracking-wider">{tech.cat}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           </div>
