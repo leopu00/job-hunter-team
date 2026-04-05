@@ -273,3 +273,13 @@ label {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Print ──────────────────────────────────────────────────────── */
+@media print {
+  body::before, body::after { display: none !important; }
+  aside[role="navigation"] { display: none !important; }
+  nav[aria-label="breadcrumb"] { display: none !important; }
+  [class*="FloatingChat"], [class*="fixed"][style*="z-index: 60"] { display: none !important; }
+  #main-content { margin-left: 0 !important; }
+  * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
+}
