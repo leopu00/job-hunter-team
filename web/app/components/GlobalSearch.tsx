@@ -136,7 +136,7 @@ export function GlobalSearch() {
             aria-autocomplete="list"
             onChange={e => { setQuery(e.target.value); setSelected(0) }}
             onKeyDown={onKey}
-            className="flex-1 bg-transparent outline-none text-[13px]"
+            className="flex-1 bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] rounded text-[13px]"
             style={{ color: 'var(--color-bright)' }} />
           <kbd className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-dim)' }}>esc</kbd>
         </div>
