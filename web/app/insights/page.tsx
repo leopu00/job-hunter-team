@@ -112,22 +112,30 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
+        <div className="p-4 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">TEMPO MEDIO PER FASE (GIORNI)</p>
           <BarChart data={phases.map(p => ({ label: PHASE_LABEL[p.phase] ?? p.phase, val: p.avgDays }))} label="label" value="val" color="var(--color-green)" />
         </div>
-        <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
+        <div className="p-4 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">MIGLIOR GIORNO PER CANDIDARSI</p>
           <BarChart data={days} label="day" value="count" color="#61affe" />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
+        <div className="p-4 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">TREND SALARI</p>
           <LineChart data={salary} />
         </div>
-        <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
+        <div className="p-4 rounded-lg transition-colors duration-200" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">TASSO RISPOSTA PER SETTORE</p>
           <BarChart data={sectors.map(s => ({ label: s.sector, val: s.rate }))} label="label" value="val" color="#49cc90" />
         </div>
