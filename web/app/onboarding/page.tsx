@@ -152,6 +152,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-8" style={{ animation: 'fade-in 0.35s ease both' }}>
+      <h1 className="sr-only">Configurazione iniziale</h1>
       <Stepper current={step} completed={completed} />
       <div className="min-h-[320px]">{stepContent[step]}</div>
       {step > 0 && (
