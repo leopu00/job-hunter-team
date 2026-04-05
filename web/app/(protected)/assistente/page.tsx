@@ -218,7 +218,7 @@ export default function AssistentePage() {
 
           {/* Assistente */}
           <div className="mb-6">
-            <div role="button" tabIndex={0} className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle('step3'); } }} aria-expanded={!collapsed.step3}>
+            <div role="button" tabIndex={0} aria-label={`${collapsed.step3 ? 'Espandi' : 'Chiudi'} sezione Assistente`} className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle('step3'); } }} aria-expanded={!collapsed.step3}>
               <div className="section-label">Assistente</div>
               <div className="flex items-center gap-3">
                 {isActive && !collapsed.step3 && (
