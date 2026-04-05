@@ -32,8 +32,8 @@ export default async function ScoutPage() {
           { label: 'Scout attivi', val: stats.length, color: 'var(--color-purple)' },
           { label: 'Inviate', val: stats.reduce((a, s) => a + s.applied, 0), color: 'var(--color-green)' },
           { label: 'Risposte', val: stats.reduce((a, s) => a + s.responded, 0), color: '#58a6ff' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        ].map(({ label, val, color }, i) => (
+          <div key={label} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
             <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>{label}</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color }}>{val}</div>
           </div>
@@ -54,7 +54,7 @@ export default async function ScoutPage() {
           const pctApplied = s.total > 0 ? ((s.applied / s.total) * 100).toFixed(1) : '0'
           const pctResponded = s.applied > 0 ? ((s.responded / s.applied) * 100).toFixed(1) : '0'
           return (
-            <div key={s.scout} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+            <div key={s.scout} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors" style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <span className="text-[13px] font-bold" style={{ color }}>{s.scout}</span>
