@@ -82,7 +82,7 @@ export default function Tabs({
       border: 'none', cursor: tab.disabled ? 'default' : 'pointer',
       opacity: tab.disabled ? 0.4 : 1,
       transition: 'color 0.15s, background 0.15s',
-      outline: 'none', position: 'relative',
+      position: 'relative',
       borderRadius: variant === 'pills' ? 20 : variant === 'boxed' ? 6 : 0,
       whiteSpace: 'nowrap',
     }
@@ -121,6 +121,7 @@ export default function Tabs({
               tabIndex={isActive ? 0 : -1}
               onClick={() => !tab.disabled && onTabChange(tab.id)}
               onKeyDown={e => handleKeyDown(e, i)}
+              className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
               style={tabStyle(tab, isActive)}
               onMouseEnter={e => { if (!isActive && !tab.disabled) e.currentTarget.style.color = 'var(--color-muted)' }}
               onMouseLeave={e => { if (!isActive && !tab.disabled) e.currentTarget.style.color = 'var(--color-dim)' }}
