@@ -227,6 +227,9 @@ function PricingContent() {
             <span className="text-[11px]" style={{ color: !yearly ? 'var(--color-white)' : 'var(--color-dim)' }}>{t('monthly')}</span>
             <button
               onClick={() => setYearly((v) => !v)}
+              aria-label={yearly ? t('monthly') : t('yearly')}
+              role="switch"
+              aria-checked={yearly}
               className="relative w-11 h-6 rounded-full cursor-pointer transition-colors"
               style={{ background: yearly ? 'var(--color-green)' : 'var(--color-border)', border: 'none' }}
             >
