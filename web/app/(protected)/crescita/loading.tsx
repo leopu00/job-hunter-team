@@ -1,6 +1,6 @@
 export default function CrescitaLoading() {
   return (
-    <div style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div aria-busy="true" aria-label="Caricamento crescita" style={{ animation: 'fade-in 0.2s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-4 w-24 rounded bg-[var(--color-border)] mb-3 animate-pulse" />

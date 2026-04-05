@@ -1,6 +1,6 @@
 export default function SetupLoading() {
   return (
-    <main className="min-h-screen flex items-center justify-center px-5 py-10">
+    <main aria-busy="true" aria-label="Caricamento setup" className="min-h-screen flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.2s ease both' }}>
         {/* Header */}
         <div className="mb-8 text-center">
