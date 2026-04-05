@@ -145,19 +145,19 @@ export default function LandingNav() {
             {t('nav_download')}
           </Link>
           <Link href="/guide" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            Guida
+            {t('nav_guide')}
           </Link>
           <Link href="/faq" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            FAQ
+            {t('nav_faq')}
           </Link>
           <Link href="/pricing" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            Pricing
+            {t('nav_pricing')}
           </Link>
           <Link href="/demo" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_demo')}
           </Link>
           <Link href="/about" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            About
+            {t('nav_about')}
           </Link>
         </div>
 
@@ -209,19 +209,19 @@ export default function LandingNav() {
             {t('nav_download')}
           </Link>
           <Link href="/guide" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            Guida
+            {t('nav_guide')}
           </Link>
           <Link href="/faq" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            FAQ
+            {t('nav_faq')}
           </Link>
           <Link href="/pricing" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            Pricing
+            {t('nav_pricing')}
           </Link>
           <Link href="/demo" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_demo')}
           </Link>
           <Link href="/about" onClick={() => setMobileOpen(false)} className="text-[12px] py-2 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            About
+            {t('nav_about')}
           </Link>
           <Link
             href="/?login=true"
