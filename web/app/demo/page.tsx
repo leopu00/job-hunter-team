@@ -6,6 +6,7 @@ import { LandingI18nProvider, useLandingI18n } from '../components/landing/Landi
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+import FadeInSection from '../components/landing/FadeInSection'
 
 /* ── Step data ────────────────────────────────────────────────────── */
 
@@ -157,7 +158,7 @@ function DemoContent() {
           </div>
 
           {/* All steps overview */}
-          <div className="mt-20">
+          <FadeInSection><div className="mt-20">
             <h3 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
               {t('demo_all_steps')}
             </h3>
@@ -182,7 +183,7 @@ function DemoContent() {
                 </button>
               ))}
             </div>
-          </div>
+          </div></FadeInSection>
 
           {/* Footer */}
           <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
