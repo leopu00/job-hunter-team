@@ -171,7 +171,7 @@ function StatCard({ value, label, accent }: { value: string | number; label: str
       style={{ background: 'var(--color-panel)' }}
     >
       <div className="text-2xl font-bold mb-1" style={{ color: accent ?? 'var(--color-green)' }}>
-        {isNumber ? count : value}
+        {isNumber ? count.toLocaleString() : value}
       </div>
       <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wider">{label}</div>
     </div>
@@ -454,7 +454,7 @@ function StatsContent() {
               <StatCard value={data.overview.pages} label={t.pages} accent="var(--color-blue)" />
               <StatCard value={data.overview.sharedModules} label={t.shared} accent="var(--color-purple)" />
               <StatCard value={data.overview.e2eTests} label={t.tests} accent="var(--color-yellow)" />
-              <StatCard value={data.overview.linesOfCode.toLocaleString()} label={t.loc} accent="var(--color-orange)" />
+              <StatCard value={data.overview.linesOfCode} label={t.loc} accent="var(--color-orange)" />
             </div>
 
             {/* Weekly activity chart */}
