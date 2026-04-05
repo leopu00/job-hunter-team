@@ -138,6 +138,7 @@ export default function MemoryPage() {
               <div className="p-4">
                 {editing ? (
                   <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={20}
+                    aria-label="Contenuto memoria"
                     className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-3 text-[11px] text-[var(--color-bright)] font-mono resize-y outline-none focus:border-[var(--color-border-glow)] transition-colors" />
                 ) : current?.exists ? (
                   <pre className="text-[11px] text-[var(--color-muted)] font-mono whitespace-pre-wrap leading-relaxed">{current.content}</pre>

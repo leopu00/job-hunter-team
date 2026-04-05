@@ -176,6 +176,7 @@ export default function AssistantPage() {
             onChange={e => setInput(e.target.value)}
             placeholder={agentStatus !== 'active' ? 'Avvia prima l\'assistente…' : 'Scrivi un messaggio…'}
             disabled={sending || agentStatus !== 'active'}
+            aria-label="Scrivi un messaggio"
             className="flex-1 bg-transparent outline-none text-[12px]"
             style={{ color: 'var(--color-bright)' }} />
           <button type="submit" disabled={!input.trim() || sending || agentStatus !== 'active'}
