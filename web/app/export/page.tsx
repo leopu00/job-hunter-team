@@ -127,7 +127,7 @@ export default function ExportPage() {
 
         {/* Colonna destra — anteprima e azione */}
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Riepilogo export</p>
             <div className="space-y-2">
               <div className="flex justify-between text-[11px]">
