@@ -17,12 +17,13 @@ type Props<T extends Record<string, unknown>> = {
   searchPlaceholder?: string
   emptyText?: string
   maxRows?: number
+  ariaLabel?: string
 }
 
 type SortDir = 'asc' | 'desc'
 
 export function DataTable<T extends Record<string, unknown>>({
-  columns, rows, keyField, searchable, searchPlaceholder = 'Cerca…', emptyText = 'Nessun risultato', maxRows,
+  columns, rows, keyField, searchable, searchPlaceholder = 'Cerca…', emptyText = 'Nessun risultato', maxRows, ariaLabel,
 }: Props<T>) {
   const [query, setQuery]     = useState('')
   const [sortKey, setSortKey] = useState<keyof T | null>(null)
@@ -52,14 +53,14 @@ export function DataTable<T extends Record<string, unknown>>({
   return (
     <div className="flex flex-col gap-2">
       {searchable && (
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder}
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder}
           className="w-full px-3 py-2 rounded border text-[11px] font-mono outline-none bg-transparent"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-bright)' }}
           onFocus={e => e.currentTarget.style.borderColor = 'var(--color-green)'}
           onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'} />
       )}
       <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}>
-        <table className="w-full text-[11px]">
+        <table className="w-full text-[11px]" aria-label={ariaLabel}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               {columns.map(col => (
