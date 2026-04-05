@@ -63,6 +63,14 @@ export function BottomSheet({
     setTimeout(() => { setClosing(false); onClose() }, 280)
   }, [onClose])
 
+  // ESC chiude
+  useEffect(() => {
+    if (!open) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [open, close])
+
   const onDragStart = (clientY: number) => {
     startY.current = clientY
     sheetH.current = sheetRef.current?.offsetHeight ?? window.innerHeight
@@ -146,7 +154,7 @@ export function BottomSheet({
               flexShrink: 0, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
             onMouseDown={e => onDragStart(e.clientY)}
             onTouchStart={e => onDragStart(e.touches[0].clientY)}>
-            <div style={{ width: 36, height: 4, borderRadius: 2,
+            <div aria-hidden="true" style={{ width: 36, height: 4, borderRadius: 2,
               background: 'var(--color-border)' }} />
           </div>
         )}
