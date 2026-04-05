@@ -40,7 +40,6 @@ export default function robots(): MetadataRoute.Robots {
           '/sentinel',
           '/forum',
           '/audit',
-          '/reports',
           '/integrations',
           '/settings',
           '/credentials',
