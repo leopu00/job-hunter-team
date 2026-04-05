@@ -85,7 +85,7 @@ export default function NetworkingPage() {
         <div>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">Mappa Contatti per Azienda</p>
           <div className="flex flex-col gap-2">
-            {network.map(n => <CompanyCard key={n.company} n={n} />)}
+            {network.map((n, i) => <div key={n.company} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><CompanyCard n={n} /></div>)}
           </div>
         </div>
         <div>
