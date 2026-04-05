@@ -18,6 +18,7 @@ export default function MessagesPage() {
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [filter, setFilter] = useState<Filter>('all')
+  const [loading, setLoading] = useState(true)
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [reply, setReply] = useState('')
   const [showCompose, setShowCompose] = useState(false)
@@ -29,9 +30,10 @@ export default function MessagesPage() {
     const p = new URLSearchParams()
     if (filter !== 'all') p.set('filter', filter)
     const res = await fetch(`/api/messages?${p}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setThreads(data.threads ?? []); setUnreadCount(data.unreadCount ?? 0)
+    setLoading(false)
   }, [filter])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
@@ -110,7 +112,9 @@ export default function MessagesPage() {
 
       <div className="grid md:grid-cols-5 gap-4">
         <div className="md:col-span-2 border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-          {threads.length === 0 ? (
+          {loading ? (
+            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+          ) : threads.length === 0 ? (
             <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna conversazione.</p></div>
           ) : threads.map(t => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => { openThread(t.id); setShowCompose(false) }}

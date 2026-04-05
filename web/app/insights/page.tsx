@@ -73,13 +73,15 @@ export default function InsightsPage() {
   const [sectors, setSectors] = useState<Sector[]>([])
   const [salary, setSalary] = useState<SalaryPoint[]>([])
   const [days, setDays] = useState<DayCount[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/insights').catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const d = await res.json()
     setSummary(d.summary ?? {}); setPhases(d.phaseTimings ?? []); setSectors(d.responseBySector ?? [])
     setSalary(d.salaryTrend ?? []); setDays(d.bestDays ?? [])
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -96,6 +98,9 @@ export default function InsightsPage() {
         <p className="text-[var(--color-muted)] text-[11px] mt-1">Analytics avanzate sulla tua ricerca lavoro</p>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="grid grid-cols-4 gap-3 mb-6">
         <StatCard label="CANDIDATURE" value={summary.total} />
         <StatCard label="ATTIVE" value={summary.active} />
@@ -124,6 +129,7 @@ export default function InsightsPage() {
           <BarChart data={sectors.map(s => ({ label: s.sector, val: s.rate }))} label="label" value="val" color="#49cc90" />
         </div>
       </div>
+      </>)}
     </div>
   )
 }
