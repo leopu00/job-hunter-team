@@ -41,7 +41,7 @@ export function Pagination({ page, totalPages, perPage, totalItems, onPage, onPe
   const start = (page - 1) * perPage + 1
   const end   = Math.min(page * perPage, totalItems)
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3 text-[10px]">
+    <nav aria-label="Paginazione" className="flex items-center justify-between flex-wrap gap-3 text-[10px]">
       <span style={{ color: 'var(--color-dim)' }}>{start}–{end} di {totalItems}</span>
       <div className="flex items-center gap-1">
         <PageBtn label="←" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Pagina precedente" />
@@ -62,6 +62,6 @@ export function Pagination({ page, totalPages, perPage, totalItems, onPage, onPe
           </select>
         </div>
       )}
-    </div>
+    </nav>
   )
 }
