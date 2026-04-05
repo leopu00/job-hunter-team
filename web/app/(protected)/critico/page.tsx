@@ -214,7 +214,7 @@ export default function CriticoPage() {
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse" aria-label="Coda revisioni CV">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['#', 'Posizione', 'Azienda', 'Scrittore', 'Scritto il'].map(h => (
@@ -269,7 +269,7 @@ export default function CriticoPage() {
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse" aria-label="Revisioni completate">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                 {['Posizione', 'Azienda', 'Verdetto', 'Voto', 'Round', 'Revisore', 'Data review'].map(h => (

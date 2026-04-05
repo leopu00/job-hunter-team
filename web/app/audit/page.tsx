@@ -93,7 +93,7 @@ export default function AuditPage() {
         ) : (
           <>
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse" aria-label="Log di audit">
                 <thead>
                   <tr style={{ background: 'var(--color-deep)', borderBottom: '1px solid var(--color-border)' }}>
                     {['Severity', 'Timestamp', 'Attore', 'Azione', 'Dettaglio'].map(h => (
