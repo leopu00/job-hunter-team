@@ -15,7 +15,7 @@ const PER_PAGE_DEFAULTS = [10, 25, 50, 100]
 function PageBtn({ label, onClick, active, disabled, 'aria-label': ariaLabel }: { label: string | number; onClick: () => void; active?: boolean; disabled?: boolean; 'aria-label'?: string }) {
   return (
     <button onClick={onClick} disabled={disabled} aria-label={ariaLabel}
-      className="min-w-[30px] h-[30px] px-2 rounded text-[10px] font-mono font-semibold cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+      className="min-w-[30px] h-[30px] px-2 rounded text-[10px] font-mono font-semibold cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-void)]"
       style={{
         border: `1px solid ${active ? 'var(--color-green)' : 'var(--color-border)'}`,
         color: active ? 'var(--color-green)' : 'var(--color-muted)',
@@ -56,7 +56,7 @@ export function Pagination({ page, totalPages, perPage, totalItems, onPage, onPe
         <div className="flex items-center gap-2">
           <span style={{ color: 'var(--color-dim)' }}>per pagina</span>
           <select aria-label="Righe per pagina" value={perPage} onChange={e => onPerPage(Number(e.target.value))}
-            className="px-2 py-1 rounded text-[10px] font-mono cursor-pointer outline-none"
+            className="px-2 py-1 rounded text-[10px] font-mono cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-void)]"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-muted)' }}>
             {perPageOptions.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
