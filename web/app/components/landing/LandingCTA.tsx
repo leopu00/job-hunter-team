@@ -73,6 +73,7 @@ export function LandingFooter() {
             <Link href="/pricing" className={linkClass}>Pricing</Link>
             <Link href="/demo" className={linkClass}>Demo</Link>
             <Link href="/changelog" className={linkClass}>Changelog</Link>
+            <Link href="/stats" className={linkClass}>Statistiche</Link>
           </div>
 
           {/* Risorse */}
