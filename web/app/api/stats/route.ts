@@ -33,6 +33,7 @@ const FALLBACK = {
   areas: { web: 300, api: 100, shared: 36, e2e: 30 },
   recentCommits: [] as { hash: string; date: string; message: string; author: string }[],
   topContributors: [] as { name: string; commits: number }[],
+  dailyCommits: [] as { date: string; count: number }[],
 }
 
 export async function GET() {
@@ -90,6 +91,17 @@ export async function GET() {
     return { hash, date: date.slice(0, 10), message, author }
   })
 
+  // Commit giornalieri (ultimi 90 giorni) per heatmap
+  const dailyRaw = run('git log --since="90 days ago" --format="%aI" HEAD')
+  const dailyMap = new Map<string, number>()
+  for (const line of dailyRaw.split('\n').filter(Boolean)) {
+    const key = line.slice(0, 10)
+    dailyMap.set(key, (dailyMap.get(key) ?? 0) + 1)
+  }
+  const dailyCommits = [...dailyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }))
+
   // Top contributori (commit count per autore)
   const contribRaw = run('git log --format="%aN" HEAD')
   const contribMap = new Map<string, number>()
@@ -127,5 +139,6 @@ export async function GET() {
     areas,
     recentCommits,
     topContributors,
+    dailyCommits,
   })
 }
