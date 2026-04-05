@@ -46,6 +46,8 @@ const SPINNER_SIZE: Record<ButtonSize, number> = { sm: 10, md: 12, lg: 14 }
 function Spinner({ size }: { size: number }) {
   return (
     <span
+      role="status"
+      aria-label="Caricamento"
       className="inline-block rounded-full border-2 flex-shrink-0 animate-spin"
       style={{
         width: size, height: size,
