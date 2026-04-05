@@ -115,7 +115,10 @@ export default function MessagesPage() {
           {loading ? (
             <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
           ) : threads.length === 0 ? (
-            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna conversazione.</p></div>
+            <div className="py-16 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">{filter !== 'all' ? `Nessuna conversazione ${filter === 'unread' ? 'non letta' : 'preferita'}.` : 'Nessuna conversazione ancora.'}</p>
+              {filter === 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa <span className="font-bold text-[var(--color-muted)]">+ nuovo messaggio</span> per iniziare.</p>}
+            </div>
           ) : threads.map(t => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => { openThread(t.id); setShowCompose(false) }}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openThread(t.id); setShowCompose(false); } }}

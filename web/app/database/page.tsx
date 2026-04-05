@@ -67,7 +67,10 @@ export default function DatabasePage() {
           <span className="w-10" />
         </div>
         {tables.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna tabella trovata.</p></div>
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessuna tabella trovata.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Verifica che il database sia connesso e contenga almeno una tabella.</p>
+            </div>
           : tables.map(t => <TableRow key={t.name + t.source} t={t} onQuery={openQuery} />)}
       </div>
 
