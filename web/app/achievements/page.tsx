@@ -28,15 +28,17 @@ export default function AchievementsPage() {
   const [unlocked, setUnlocked] = useState(0)
   const [total, setTotal] = useState(0)
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     const p = new URLSearchParams()
     if (filterCat !== 'all') p.set('category', filterCat)
     const res = await fetch(`/api/achievements?${p}`).catch(() => null)
-    if (!res?.ok) return
+    if (!res?.ok) { setLoading(false); return }
     const data = await res.json()
     setAchievements(data.achievements ?? []); setByCategory(data.byCategory ?? {})
     setUnlocked(data.unlocked ?? 0); setTotal(data.total ?? 0)
+    setLoading(false)
   }, [filterCat])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -56,6 +58,9 @@ export default function AchievementsPage() {
         <p className="text-[var(--color-muted)] text-[11px] mt-1">{unlocked}/{total} sbloccati</p>
       </div>
 
+      {loading ? (
+        <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
+      ) : (<>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {CATEGORIES.map(c => {
           const info = byCategory[c]
@@ -115,6 +120,7 @@ export default function AchievementsPage() {
           )
         })}
       </div>
+      </>)}
     </div>
   )
 }
