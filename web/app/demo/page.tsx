@@ -159,9 +159,9 @@ function DemoContent() {
 
           {/* All steps overview */}
           <FadeInSection><div className="mt-20">
-            <h3 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
+            <h2 className="text-[10px] font-semibold tracking-[0.25em] uppercase text-[var(--color-green)] mb-6 text-center">
               {t('demo_all_steps')}
-            </h3>
+            </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {STEPS.map((s, i) => (
                 <button
