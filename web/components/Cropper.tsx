@@ -128,7 +128,7 @@ export default function Cropper({ src, aspectRatio = 1, onCrop, onCancel, output
         style={{ borderRadius: 8, border: '1px solid var(--color-border)', cursor: dragging ? 'grabbing' : 'crosshair', width: '100%', maxWidth: CANVAS_SIZE }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 10, color: 'var(--color-dim)', flexShrink: 0 }}>🔍</span>
-        <input type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={e => setZoom(+e.target.value)} style={{ flex: 1, accentColor: 'var(--color-green)' }} />
+        <input aria-label="Zoom" type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={e => setZoom(+e.target.value)} style={{ flex: 1, accentColor: 'var(--color-green)' }} />
         <button aria-label="Ruota a sinistra" onClick={() => setRotate(r => r - 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↺</button>
         <button aria-label="Ruota a destra" onClick={() => setRotate(r => r + 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↻</button>
       </div>
