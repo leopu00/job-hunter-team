@@ -151,7 +151,7 @@ export default function ExportPage() {
           </div>
 
           {result && (
-            <div className="rounded-lg border p-3 text-[11px]"
+            <div role="alert" className="rounded-lg border p-3 text-[11px]"
               style={{ borderColor: result.ok ? 'rgba(0,232,122,0.3)' : 'rgba(255,69,96,0.3)', color: result.ok ? 'var(--color-green)' : 'var(--color-red)', background: result.ok ? 'rgba(0,232,122,0.05)' : 'rgba(255,69,96,0.05)' }}>
               {result.msg}
             </div>
