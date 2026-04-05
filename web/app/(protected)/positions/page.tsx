@@ -143,7 +143,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
 
       {/* ── Table ───────────────────────────────────────────────── */}
       <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Lista posizioni">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {['ID', 'Titolo', 'Azienda', 'Location', 'Company', 'Stipendio', 'Score', 'Stato'].map(h => (
