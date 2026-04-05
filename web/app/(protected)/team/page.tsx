@@ -89,7 +89,7 @@ function AgentCard({
 
   return (
     <div
-      className="rounded-xl p-4 transition-all duration-150"
+      className="rounded-xl p-4 transition-all duration-150 hover:border-[var(--color-border-glow)]"
       role="article"
       aria-label={`${agent.name} — ${status === 'running' ? 'online' : status === 'pending' ? 'in avvio' : 'offline'}`}
       style={{
@@ -360,7 +360,7 @@ export default function TeamPage() {
       {/* Agent Grid */}
       <div
         className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', animation: 'fade-in 0.35s ease both' }}
       >
         {AGENTS.map(agent => (
           <AgentCard
