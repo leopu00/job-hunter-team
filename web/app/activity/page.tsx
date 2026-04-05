@@ -37,7 +37,7 @@ function TimelineDot({ type }: { type: ActivityType }) {
     <div className="flex flex-col items-center flex-shrink-0" style={{ width: 32 }}>
       <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0"
         style={{ background: `${TYPE_COLOR[type]}18`, border: `1px solid ${TYPE_COLOR[type]}44` }}>
-        {TYPE_ICON[type]}
+        <span aria-hidden="true">{TYPE_ICON[type]}</span>
       </div>
     </div>
   )

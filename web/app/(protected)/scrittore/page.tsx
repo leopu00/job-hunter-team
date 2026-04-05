@@ -79,7 +79,7 @@ function WritingTag() {
 function CriticoActiveTag() {
   return (
     <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: '0.65em', background: '#b388ff', color: '#fff', fontWeight: 700 }}>
-      ⚖️ CRITICO
+      <span aria-hidden="true">⚖️</span> CRITICO
     </span>
   )
 }
