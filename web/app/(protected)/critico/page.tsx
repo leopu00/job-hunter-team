@@ -332,7 +332,7 @@ export default function CriticoPage() {
                     </div>
                     <div className="text-[10px] text-[var(--color-dim)]">{pctPass}% PASS</div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                     {[
                       { label: 'PASS',       val: s.pass,      c: 'var(--color-green)' },
                       { label: 'Needs Work', val: s.needsWork, c: 'var(--color-yellow)' },
