@@ -98,6 +98,7 @@ export default function ProfilePageClient({ profile }: Props) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadSuccess, setUploadSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Extract state
@@ -216,6 +217,8 @@ export default function ProfilePageClient({ profile }: Props) {
         const filesData = await filesRes.json()
         if (Array.isArray(filesData.files)) setUploadedFiles(filesData.files)
         setSelectedFile(null)
+        setUploadSuccess(true)
+        setTimeout(() => setUploadSuccess(false), 2500)
       }
     } catch {
       setUploadError('Impossibile raggiungere il server.')
@@ -349,6 +352,7 @@ export default function ProfilePageClient({ profile }: Props) {
             </button>
           </div>
           {uploadError && <p className="text-[10px] text-[var(--color-red)]">{uploadError}</p>}
+          {uploadSuccess && <p className="text-[10px] text-[var(--color-green)] font-semibold">File caricato con successo ✓</p>}
 
           {/* File list + extract */}
           {uploadedFiles.length > 0 && (
