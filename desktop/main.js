@@ -25,8 +25,15 @@ function createWindow() {
 
 async function openRuntimeInBrowser() {
   const status = await runtime.getStatus()
-  await shell.openExternal(status.url)
-  return status
+  const launchableStatus = status.mode === 'running' || status.mode === 'external'
+    ? status
+    : await runtime.startRuntime({ port: status.port })
+
+  if (launchableStatus.running) {
+    await shell.openExternal(launchableStatus.url)
+  }
+
+  return launchableStatus
 }
 
 app.whenReady().then(() => {
