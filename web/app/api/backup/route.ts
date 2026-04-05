@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 const BACKUP_DIR = path.join(homedir(), '.jht', 'backups');
 const CATALOG_PATH = path.join(BACKUP_DIR, 'catalog.json');
@@ -33,6 +34,11 @@ const DEFAULT_SOURCES = [
   path.join(JHT_DIR, 'notifications'),
 ];
 
+async function loadBackupRunner() {
+  const modulePath = path.join(process.cwd(), '..', 'shared', 'backup', 'runner.ts');
+  return import(pathToFileURL(modulePath).href);
+}
+
 // GET — lista backup
 export async function GET() {
   const entries = loadCatalog().sort((a, b) => b.createdAt - a.createdAt);
@@ -53,7 +59,7 @@ export async function POST(req: Request) {
     }
 
     // Importa dinamicamente per evitare problemi con webpack/next
-    const { createBackup } = await import('../../../../shared/backup/runner.js');
+    const { createBackup } = await loadBackupRunner();
     const result = createBackup(existing, { backupDir: BACKUP_DIR, compress: true, sources: existing });
 
     if (!result.ok) {
@@ -80,7 +86,7 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
 
   try {
-    const { restoreBackup } = await import('../../../../shared/backup/runner.js');
+    const { restoreBackup } = await loadBackupRunner();
     const targetDir = path.join(homedir(), '.jht', 'restored', id);
     const result = restoreBackup(id, targetDir, { backupDir: BACKUP_DIR });
 
