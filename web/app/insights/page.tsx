@@ -101,7 +101,7 @@ export default function InsightsPage() {
       {loading ? (
         <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
       ) : (<>
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard label="CANDIDATURE" value={summary.total} />
         <StatCard label="ATTIVE" value={summary.active} />
         <StatCard label="OFFERTE" value={summary.offers} />
