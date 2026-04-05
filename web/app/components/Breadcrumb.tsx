@@ -148,8 +148,8 @@ export default function Breadcrumb() {
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-deep)', position: 'sticky', top: 0, zIndex: 40 }}>
 
       {/* Home icon */}
-      <Link href="/dashboard" title="Dashboard" className="no-underline transition-opacity hover:opacity-80 flex items-center"
-        style={{ color: 'var(--color-dim)', fontSize: 12 }}>🏠</Link>
+      <Link href="/dashboard" title="Dashboard" aria-label="Dashboard" className="no-underline transition-opacity hover:opacity-80 flex items-center"
+        style={{ color: 'var(--color-dim)', fontSize: 12 }}><span aria-hidden="true">🏠</span></Link>
 
       {/* Crumbs */}
       {visible.map((item, i) => {
