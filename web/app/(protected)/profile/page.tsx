@@ -272,18 +272,35 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Progetti personali */}
-        <ProfileSection title="Progetti Personali">
+        <ProfileSection title={`Progetti Personali${hasProjects ? ` (${projects.length})` : ''}`}>
           {hasProjects ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {projects.map((p, i) => (
-                <div key={i} className="pb-2 border-b border-[var(--color-border)] last:border-0 last:pb-0">
+                <div key={i} className="px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)] transition-colors hover:border-[var(--color-border-glow)]">
                   <div className="flex items-start justify-between gap-2 mb-0.5">
-                    <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name || '—'}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0" style={{ color: 'var(--color-purple)' }}>
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <span className="text-[12px] font-semibold text-[var(--color-bright)] truncate">{p.name || '—'}</span>
+                    </div>
                     {p.url && (
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--color-blue)] hover:underline font-mono flex-shrink-0">link</a>
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                        link
+                      </a>
                     )}
                   </div>
-                  {p.description && <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">{p.description}</p>}
+                  {p.description && <p className="text-[10px] text-[var(--color-dim)] leading-relaxed mt-1 ml-5">{p.description}</p>}
                 </div>
               ))}
             </div>
@@ -293,16 +310,25 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Ruoli target */}
-        <ProfileSection title="Ruoli target">
+        <ProfileSection title={`Ruoli target${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ''}`}>
           {profile.job_titles && profile.job_titles.length > 0 ? (
-            <ol className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               {profile.job_titles.map((r, i) => (
-                <li key={r} className="flex items-center gap-2 text-[12px]">
-                  <span className="text-[10px] text-[var(--color-dim)] w-4 text-right">{i + 1}.</span>
-                  <span className="text-[var(--color-bright)]">{r}</span>
-                </li>
+                <div key={r} className="flex items-center gap-3 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                    style={{
+                      background: i === 0 ? 'var(--color-green)' : 'var(--color-border)',
+                      color: i === 0 ? '#000' : 'var(--color-dim)',
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="text-[12px] text-[var(--color-bright)] font-semibold">{r}</span>
+                  {i === 0 && <span className="text-[8px] font-bold tracking-[0.15em] uppercase text-[var(--color-green)] ml-auto">TOP</span>}
+                </div>
               ))}
-            </ol>
+            </div>
           ) : (
             <span className="text-[var(--color-dim)] text-[11px]">Nessun ruolo inserito</span>
           )}
