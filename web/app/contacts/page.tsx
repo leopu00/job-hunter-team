@@ -44,6 +44,7 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -52,14 +53,16 @@ export default function ContactsPage() {
   const [newEmail, setNewEmail] = useState('')
   const [loading, setLoading] = useState(true)
 
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
+
   const fetchData = useCallback(async () => {
-    const params = search ? `?q=${encodeURIComponent(search)}` : '';
+    const params = debouncedSearch ? `?q=${encodeURIComponent(debouncedSearch)}` : '';
     const res = await fetch(`/api/contacts${params}`).catch(() => null);
     if (!res?.ok) { setLoading(false); return; }
     const data = await res.json();
     setContacts(data.contacts ?? []); setTotal(data.total ?? 0);
     setLoading(false);
-  }, [search])
+  }, [debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 

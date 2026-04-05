@@ -12,6 +12,7 @@ export default function BookmarksPage() {
   const [filterTag, setFilterTag] = useState('all')
   const [sort, setSort] = useState<SortMode>('date')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [company, setCompany] = useState('')
@@ -19,15 +20,17 @@ export default function BookmarksPage() {
   const [note, setNote] = useState('')
   const [tags, setTags] = useState('')
 
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
+
   const fetchData = useCallback(async () => {
     const p = new URLSearchParams(); p.set('sort', sort)
     if (filterTag !== 'all') p.set('tag', filterTag)
-    if (search.trim()) p.set('q', search.trim())
+    if (debouncedSearch.trim()) p.set('q', debouncedSearch.trim())
     const res = await fetch(`/api/bookmarks?${p}`).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
     setBookmarks(data.bookmarks ?? []); setAllTags(data.allTags ?? [])
-  }, [filterTag, sort, search])
+  }, [filterTag, sort, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
