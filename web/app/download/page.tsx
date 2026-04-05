@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 
 type OS = 'mac' | 'linux' | 'windows' | null
 
@@ -263,6 +264,7 @@ function DownloadContent() {
           </div>
         </div>
       </main>
+      <LandingFooter />
     </>
   )
 }
