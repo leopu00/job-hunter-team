@@ -213,7 +213,7 @@ export default function CapitanoPage() {
       </div>
 
       {/* Input chat */}
-      <form onSubmit={(e) => { e.preventDefault(); handleSend() }}
+      <form aria-label="Invia messaggio al capitano" onSubmit={(e) => { e.preventDefault(); handleSend() }}
         className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
         style={{ background: '#0d1117', borderRadius: chatFullscreen ? '0' : '0 0 12px 12px', margin: chatFullscreen ? '0 16px 16px 16px' : undefined }}>
         <input ref={inputRef} type="text" value={input}
