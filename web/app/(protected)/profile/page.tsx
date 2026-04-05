@@ -26,7 +26,7 @@ export default async function ProfilePage() {
     if (!user) {
       return (
         <div className="p-12 text-center text-[var(--color-muted)]">
-          Sessione scaduta. <a href="/" className="text-[var(--color-green)]">Accedi di nuovo</a>
+          Sessione scaduta. <Link href="/" className="text-[var(--color-green)]">Accedi di nuovo</Link>
         </div>
       )
     }

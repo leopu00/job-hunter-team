@@ -111,7 +111,8 @@ export default function RemindersPage() {
             <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
           <div className="flex flex-col gap-0.5 w-28"><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCADENZA</label>
             <input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="text-[10px] px-2 py-1.5 rounded" style={inputStyle} /></div>
-          <button onClick={add} className="px-3 py-1.5 rounded text-[10px] font-bold cursor-pointer" style={{ background: 'var(--color-green)', color: '#000' }}>Crea</button>
+          <button onClick={add} disabled={!form.title.trim() || !form.dueDate} className="px-3 py-1.5 rounded text-[10px] font-bold"
+            style={{ background: form.title.trim() && form.dueDate ? 'var(--color-green)' : 'var(--color-border)', color: form.title.trim() && form.dueDate ? '#000' : 'var(--color-dim)', cursor: form.title.trim() && form.dueDate ? 'pointer' : 'default' }}>Crea</button>
         </div>
       )}
 
