@@ -23,7 +23,7 @@ function IntRow({ int, expanded, onToggle }: { int: Interview; expanded: boolean
   const upcoming = isUpcoming(int.date);
   return (
     <div className="border-b border-[var(--color-border)]">
-      <div className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle}>
+      <div role="button" tabIndex={0} aria-expanded={expanded} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--color-row)] transition-colors cursor-pointer" onClick={onToggle} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="w-14 text-center flex-shrink-0">
           <p className="text-[10px] font-bold" style={{ color: upcoming ? 'var(--color-green)' : 'var(--color-dim)' }}>{fmtDate(int.date)}</p>
           <p className="text-[9px] font-mono text-[var(--color-dim)]">{fmtTime(int.date)}</p>
