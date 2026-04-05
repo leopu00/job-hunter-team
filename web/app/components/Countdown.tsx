@@ -144,7 +144,7 @@ export function Countdown({
   return (
     <>
       <style>{FLIP_STYLE}</style>
-      <div className={`inline-flex items-center gap-2 ${className}`}>
+      <div role="timer" aria-label="Conto alla rovescia" className={`inline-flex items-center gap-2 ${className}`}>
         {visible.map((u, i) => (
           <div key={u.label} className="flex items-center gap-2">
             <Unit n={u.n} label={u.label} color={color} compact={compact} />
