@@ -31,7 +31,7 @@ function ToastItem({ t, onRemove }: { t: Toast; onRemove: (id: string) => void }
   const dismiss = () => { setVisible(false); setTimeout(() => onRemove(t.id), 300) }
 
   return (
-    <div className="flex flex-col rounded-lg overflow-hidden max-w-sm w-full text-[11px]"
+    <div role="alert" aria-live="assertive" className="flex flex-col rounded-lg overflow-hidden max-w-sm w-full text-[11px]"
       style={{
         background: 'var(--color-panel)',
         border: `1px solid ${cfg.border}`,
@@ -45,7 +45,7 @@ function ToastItem({ t, onRemove }: { t: Toast; onRemove: (id: string) => void }
       <div className="flex items-start gap-3 px-4 py-3">
         <span className="flex-shrink-0 font-bold text-[13px]" style={{ color: cfg.color }}>{cfg.icon}</span>
         <span className="flex-1" style={{ color: 'var(--color-bright)' }}>{t.message}</span>
-        <button onClick={dismiss}
+        <button onClick={dismiss} aria-label="Chiudi notifica"
           className="flex-shrink-0 text-[14px] leading-none cursor-pointer"
           style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}
           onMouseEnter={e => e.currentTarget.style.color = 'var(--color-muted)'}
