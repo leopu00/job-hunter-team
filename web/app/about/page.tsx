@@ -168,7 +168,7 @@ function AboutContent() {
             </Link>
             <Link href="/team" className="px-6 py-2.5 rounded text-[11px] font-bold tracking-wider no-underline transition-all"
               style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-              {t('nav_download') === 'Download' ? 'Meet the team' : 'Vedi il team'}
+              {t('cta_team')}
             </Link>
           </div>
         </section>
