@@ -23,7 +23,9 @@ function LogRow({ entry }: { entry: LogEntry }) {
   const timeShort = entry.time?.slice(11, 23) ?? ''
   return (
     <div className="px-4 py-1.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors font-mono text-[11px] cursor-pointer"
-      onClick={() => entry.data && setExpanded(v => !v)}>
+      role={entry.data ? 'button' : undefined} tabIndex={entry.data ? 0 : undefined} aria-expanded={entry.data ? expanded : undefined}
+      onClick={() => entry.data && setExpanded(v => !v)}
+      onKeyDown={e => { if (entry.data && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpanded(v => !v); } }}>
       <div className="flex items-center gap-3">
         <span className="text-[var(--color-dim)] flex-shrink-0" style={{ minWidth: 80 }}>{timeShort}</span>
         <LevelBadge level={entry.level} />

@@ -21,9 +21,11 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
 
 function Stars({ rating, onChange }: { rating: number; onChange?: (n: number) => void }) {
   return (
-    <span className="flex gap-0.5">
+    <span className="flex gap-0.5" role={onChange ? 'radiogroup' : undefined} aria-label={onChange ? 'Valutazione' : undefined}>
       {[1, 2, 3, 4, 5].map(n => (
-        <span key={n} onClick={() => onChange?.(n)} className={onChange ? 'cursor-pointer' : ''} style={{ color: n <= rating ? '#fca130' : 'var(--color-border)', fontSize: onChange ? 16 : 11 }}>★</span>
+        <span key={n} role={onChange ? 'radio' : undefined} tabIndex={onChange ? 0 : undefined} aria-checked={onChange ? n === rating : undefined} aria-label={onChange ? `${n} ${n === 1 ? 'stella' : 'stelle'}` : undefined}
+          onClick={() => onChange?.(n)} onKeyDown={onChange ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(n); } } : undefined}
+          className={onChange ? 'cursor-pointer' : ''} style={{ color: n <= rating ? '#fca130' : 'var(--color-border)', fontSize: onChange ? 16 : 11 }}>★</span>
       ))}
     </span>
   )
