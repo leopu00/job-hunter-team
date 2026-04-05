@@ -184,7 +184,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {p.title}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate">
+                <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate" title={p.company}>
                   {p.company}
                 </td>
                 <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">

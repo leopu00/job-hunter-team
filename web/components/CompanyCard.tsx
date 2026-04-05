@@ -90,7 +90,7 @@ export default function CompanyCard({ company, showDescription = false, compact 
         <div className="flex-1 min-w-0">
           {/* Nome + followed */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[13px] font-semibold text-[var(--color-bright)] truncate">{company.name}</span>
+            <span className="text-[13px] font-semibold text-[var(--color-bright)] truncate" title={company.name}>{company.name}</span>
             {company.followed && (
               <span className="text-[8px] px-1.5 py-0.5 rounded font-mono"
                 style={{ background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.2)', color: 'var(--color-green)' }}>
