@@ -58,9 +58,10 @@ export default function ReportsPage() {
         </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Report</h1>
-          <div className="flex gap-1">
+          <div className="flex gap-1" role="radiogroup" aria-label="Periodo">
             {PERIODS.map(p => (
               <button key={p.key} onClick={() => setPeriod(p.key)}
+                role="radio" aria-checked={period === p.key}
                 className="px-3 py-1 rounded text-[10px] font-semibold tracking-widest uppercase cursor-pointer transition-colors"
                 style={{ background: period === p.key ? 'var(--color-row)' : 'transparent', color: period === p.key ? 'var(--color-bright)' : 'var(--color-dim)', border: `1px solid ${period === p.key ? 'var(--color-border-glow)' : 'transparent'}` }}>
                 {p.label}
