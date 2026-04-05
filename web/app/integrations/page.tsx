@@ -96,7 +96,7 @@ export default function IntegrationsPage() {
           <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {integrations.map(i => <IntCard key={i.id} i={i} />)}
+            {integrations.map((intg, i) => <div key={intg.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><IntCard i={intg} /></div>)}
           </div>
         )}
       </div>
