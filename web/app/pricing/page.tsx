@@ -314,7 +314,7 @@ function PricingContent() {
                     if (val === false) return null
                     return (
                       <li key={f.key} className="flex items-start gap-2 text-[11px]">
-                        <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-green)' }}>
+                        <span className="mt-0.5 flex-shrink-0" aria-hidden="true" style={{ color: 'var(--color-green)' }}>
                           {val === true ? '✓' : '▸'}
                         </span>
                         <span style={{ color: 'var(--color-muted)' }}>
@@ -365,8 +365,8 @@ function PricingContent() {
                       const val = feat?.value
                       return (
                         <td key={p.nameKey} className="text-center py-2.5 px-3">
-                          {val === true && <span style={{ color: 'var(--color-green)' }}>✓</span>}
-                          {val === false && <span style={{ color: 'var(--color-dim)' }}>—</span>}
+                          {val === true && <span aria-label="Incluso" style={{ color: 'var(--color-green)' }}>✓</span>}
+                          {val === false && <span aria-label="Non incluso" style={{ color: 'var(--color-dim)' }}>—</span>}
                           {typeof val === 'string' && <span style={{ color: 'var(--color-bright)' }}>{t(val)}</span>}
                         </td>
                       )
