@@ -125,7 +125,10 @@ export default function RetryPage() {
       {loading ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16 animate-pulse">Caricamento...</p>
       ) : !data || data.breakers.length === 0 ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun circuit breaker registrato.</p>
+        <div className="text-center py-16">
+          <p className="text-[var(--color-dim)] text-[12px]">Nessun circuit breaker registrato.</p>
+          <p className="text-[var(--color-dim)] text-[10px] mt-1">I circuit breaker appariranno qui quando i servizi esterni vengono monitorati.</p>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

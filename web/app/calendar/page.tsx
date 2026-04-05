@@ -93,7 +93,7 @@ export default function CalendarPage() {
       {selectedDay && (
         <div className="mt-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-4">
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] uppercase mb-2">{selectedDay} {MONTHS[month]}</p>
-          {dayEvents.length === 0 ? <p className="text-[10px] text-[var(--color-dim)]">Nessun evento.</p>
+          {dayEvents.length === 0 ? <p className="text-[10px] text-[var(--color-dim)]">Nessun evento per questo giorno.</p>
             : dayEvents.map(e => (
               <div key={e.id} className="flex items-center gap-3 py-2 border-b border-[var(--color-border)] last:border-0">
                 <span className="w-2 h-2 rounded-full" style={{ background: TYPE_CLR[e.type] ?? 'var(--color-dim)' }} />

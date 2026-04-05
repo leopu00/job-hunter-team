@@ -131,7 +131,10 @@ export default function PluginsPage() {
           <p className="text-[var(--color-dim)] text-[10px] mt-2">I plugin vanno in <code className="text-[var(--color-muted)]">~/.jht/plugins/</code> con un file <code className="text-[var(--color-muted)]">jht.plugin.json</code></p>
         </div>
       ) : filtered.length === 0 ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Nessun plugin per il filtro selezionato.</p>
+        <div className="text-center py-16">
+          <p className="text-[var(--color-dim)] text-[12px]">Nessun plugin per il filtro selezionato.</p>
+          <p className="text-[var(--color-dim)] text-[10px] mt-1">Prova a selezionare una categoria diversa.</p>
+        </div>
       ) : (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">

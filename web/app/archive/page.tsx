@@ -92,7 +92,10 @@ export default function ArchivePage() {
           <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">CHIUSA</span>
         </div>
         {items.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna candidatura archiviata.</p></div>
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessuna candidatura archiviata.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Le candidature chiuse o scadute appariranno qui.</p>
+            </div>
           : items.map(a => {
             const cfg = REASON_CFG[a.reason] ?? REASON_CFG.expired
             return (

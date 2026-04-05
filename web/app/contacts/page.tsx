@@ -110,7 +110,10 @@ export default function ContactsPage() {
         {loading
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
           : contacts.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun contatto trovato.</p></div>
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">{search ? 'Nessun contatto corrisponde alla ricerca.' : 'Nessun contatto ancora.'}</p>
+              {!search && <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa il pulsante <span className="font-bold text-[var(--color-muted)]">+ Nuovo</span> per aggiungere il primo contatto.</p>}
+            </div>
           : contacts.map(c => <ContactRow key={c.id} c={c} expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)} onDelete={deleteContact} />)}
       </div>
     </div>

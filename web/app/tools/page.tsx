@@ -124,7 +124,7 @@ export default function ToolsPage() {
               {[...data.executions].reverse().map((e, i) => <ExecRow key={i} e={e} />)}
             </div>
           ) : (
-            <p className="text-[var(--color-dim)] text-[11px] text-center py-12">Nessuna esecuzione registrata.</p>
+            <p className="text-[var(--color-dim)] text-[11px] text-center py-12">Nessuna esecuzione registrata. Esegui un tool per vederne i risultati qui.</p>
           )}
         </div>
       )}

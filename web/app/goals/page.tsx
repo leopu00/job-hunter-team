@@ -112,7 +112,10 @@ export default function GoalsPage() {
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {goals.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun obiettivo impostato.</p></div>
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">Nessun obiettivo impostato.</p>
+              <p className="text-[var(--color-dim)] text-[10px] mt-1">Usa <span className="font-bold text-[var(--color-muted)]">+ Nuovo obiettivo</span> per definire un traguardo da raggiungere.</p>
+            </div>
           : goals.map(g => <GoalRow key={g.id} goal={g} onUpdate={update} />)}
       </div>
     </div>
