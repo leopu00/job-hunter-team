@@ -132,6 +132,14 @@ export default function OnboardingWizard() {
 
   const back = () => { if (step > 0) setStep(s => s - 1) }
 
+  // ESC chiude
+  useEffect(() => {
+    if (!visible) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') dismiss() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [visible])
+
   if (!visible) return null
 
   const STEPS = [t('s1_title'), t('s2_title'), t('s3_title'), t('s4_title'), t('s5_title')]
