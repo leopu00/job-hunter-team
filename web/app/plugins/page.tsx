@@ -124,7 +124,7 @@ export default function PluginsPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
       ) : !data || data.total === 0 ? (
         <div className="text-center py-16">
           <p className="text-[var(--color-dim)] text-[12px]">Nessun plugin trovato.</p>

@@ -89,7 +89,7 @@ export default function IntegrationsPage() {
         </div>
 
         {loading ? (
-          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }} role="status" aria-live="polite">Caricamento…</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {integrations.map(i => <IntCard key={i.id} i={i} />)}

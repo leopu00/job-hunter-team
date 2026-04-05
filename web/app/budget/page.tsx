@@ -64,7 +64,7 @@ export default function BudgetPage() {
           </span>}
         </div>
 
-        {loading ? <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Caricamento…</p>
+        {loading ? <p className="text-[11px]" style={{ color: 'var(--color-muted)' }} role="status" aria-live="polite">Caricamento…</p>
         : !current ? <p className="text-[11px]" style={{ color: 'var(--color-dim)' }}>Nessun dato.</p>
         : <>
           {/* Usage bar */}

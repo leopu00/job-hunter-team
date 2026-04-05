@@ -100,7 +100,7 @@ export default function DaemonPage() {
           </button>
         </div>
       </div>
-      {loading && <div className="flex justify-center py-16"><span className="text-[var(--color-dim)] text-[12px]">Caricamento daemon…</span></div>}
+      {loading && <div className="flex justify-center py-16" role="status" aria-live="polite"><span className="text-[var(--color-dim)] text-[12px]">Caricamento daemon…</span></div>}
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {data.services.map(s => <ServiceCard key={s.name} svc={s} onAction={handleAction} />)}

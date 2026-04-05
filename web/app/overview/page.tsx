@@ -101,7 +101,7 @@ export default function OverviewPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
       ) : data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">

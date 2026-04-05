@@ -77,7 +77,7 @@ export default function HealthPage() {
       </div>
 
       {loading ? (
-        <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Caricamento...</p>
+        <p className="text-[var(--color-dim)] text-[12px] text-center py-16" role="status" aria-live="polite">Caricamento...</p>
       ) : !data ? (
         <p className="text-[var(--color-dim)] text-[12px] text-center py-16">Errore nel caricamento.</p>
       ) : (
