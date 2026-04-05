@@ -108,7 +108,7 @@ export default function InsightsPage() {
         <StatCard label="TASSO RISPOSTA" value={`${summary.responseRate}%`} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">TEMPO MEDIO PER FASE (GIORNI)</p>
           <BarChart data={phases.map(p => ({ label: PHASE_LABEL[p.phase] ?? p.phase, val: p.avgDays }))} label="label" value="val" color="var(--color-green)" />
@@ -119,7 +119,7 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
           <p className="text-[9px] font-bold tracking-widest text-[var(--color-dim)] mb-3">TREND SALARI</p>
           <LineChart data={salary} />
