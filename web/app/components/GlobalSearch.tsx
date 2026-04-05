@@ -37,6 +37,7 @@ const ITEMS: Item[] = [
   { id: 'health',       label: 'Health',         detail: 'Semafori 7 moduli',                  category: 'Sistema' },
   { id: 'validators',   label: 'Validators',     detail: 'Schemi Zod registrati',              category: 'Sistema' },
   { id: 'skills',       label: 'Skills',         detail: 'Script disponibili',                 category: 'Sistema' },
+  { id: 'stats',        label: 'Statistiche',    detail: 'Statistiche pubbliche del progetto',  category: 'Pagine' },
 ].map(i => ({ ...i, href: `/${i.id}` }))
 
 const RECENT_KEY = 'jht:search:recent'
