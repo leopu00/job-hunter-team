@@ -63,7 +63,7 @@ export function Field({ label, error, children }: { label: string; error?: strin
       <label className="text-[10px] font-semibold tracking-widest uppercase"
         style={{ color: 'var(--color-muted)' }}>{label}</label>
       {children}
-      {error && <p className="text-[10px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
+      {error && <p role="alert" className="text-[10px]" style={{ color: 'var(--color-red)' }}>{error}</p>}
     </div>
   )
 }

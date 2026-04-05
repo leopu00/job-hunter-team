@@ -74,7 +74,7 @@ function AddForm({ provider, type, onDone }: { provider: string; type: string; o
       <input type="password" placeholder={isApiKey ? 'API Key...' : 'Access Token...'}
         value={value} onChange={e => setValue(e.target.value)}
         className="w-full px-3 py-2 rounded text-[12px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
-      {error && <p className="text-[10px] text-[var(--color-red)] mt-1.5">{error}</p>}
+      {error && <p role="alert" className="text-[10px] text-[var(--color-red)] mt-1.5">{error}</p>}
       <div className="flex justify-end mt-3">
         <button onClick={handleSave} disabled={!value.trim() || saving}
           className="text-[10px] px-4 py-1.5 rounded font-semibold cursor-pointer transition-colors disabled:opacity-40"
