@@ -95,15 +95,18 @@ export default function JobsPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         <div className="flex items-center gap-3 px-5 py-2 border-b border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
           <span className="flex-1 text-[8px] font-bold tracking-widest text-[var(--color-dim)]">POSIZIONE</span>
-          <span className="w-24 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SALARY</span>
-          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">SOURCE</span>
+          <span className="w-24 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">RAL</span>
+          <span className="w-16 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">FONTE</span>
           <span className="w-14 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-right">DATA</span>
           <span className="w-20 text-[8px] font-bold tracking-widest text-[var(--color-dim)] text-center">STATO</span>
         </div>
         {loading
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento...</p></div>
           : jobs.length === 0
-          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna offerta trovata.</p></div>
+          ? <div className="py-12 text-center">
+              <p className="text-[var(--color-dim)] text-[12px]">{search || statusFilter !== 'all' ? 'Nessuna offerta corrisponde ai filtri.' : 'Nessuna offerta ancora.'}</p>
+              {!search && statusFilter === 'all' && <p className="text-[var(--color-dim)] text-[10px] mt-1">Le offerte lavoro appariranno qui quando vengono aggiunte.</p>}
+            </div>
           : jobs.map(j => <JobRow key={j.id} j={j} />)}
       </div>
     </div>
