@@ -140,7 +140,7 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
+      <div role="dialog" aria-modal="true" aria-label={t('title')} className="w-full max-w-lg mx-4 rounded-xl overflow-hidden" style={{ background: 'var(--color-card, #0d0d11)', border: '1px solid var(--color-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', animation: 'fade-in 0.3s ease both' }}>
 
         {/* Header */}
         <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-[var(--color-border)]">
@@ -232,7 +232,7 @@ export default function OnboardingWizard() {
                       {g.items.map(s => {
                         const active = skills.has(s)
                         return (
-                          <button key={s} onClick={() => toggleSkill(s)} className="px-2.5 py-1 rounded text-[10px] cursor-pointer transition-all"
+                          <button key={s} onClick={() => toggleSkill(s)} aria-pressed={active} className="px-2.5 py-1 rounded text-[10px] cursor-pointer transition-all"
                             style={{
                               background: active ? 'rgba(0,232,122,0.15)' : 'var(--color-panel)',
                               color: active ? 'var(--color-green)' : 'var(--color-muted)',
