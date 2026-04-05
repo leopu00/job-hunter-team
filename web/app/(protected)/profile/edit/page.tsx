@@ -425,6 +425,7 @@ export default function ProfileEditPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--color-muted)]">{l.level}</span>
                     <button type="button" onClick={() => setLanguages(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi lingua ${l.language}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
                       × rimuovi
                     </button>
@@ -466,6 +467,7 @@ export default function ProfileEditPage() {
                       {e.period && <span className="text-[10px] text-[var(--color-dim)] ml-2 font-mono">{e.period}</span>}
                     </div>
                     <button type="button" onClick={() => setExperience(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi esperienza ${e.role}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0">
                       × rimuovi
                     </button>
@@ -512,6 +514,7 @@ export default function ProfileEditPage() {
                     {e.year && <span className="text-[10px] text-[var(--color-dim)] ml-2 font-mono">{e.year}</span>}
                   </div>
                   <button type="button" onClick={() => setEducation(prev => prev.filter((_, j) => j !== i))}
+                    aria-label={`Rimuovi titolo ${e.title}`}
                     className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
                     × rimuovi
                   </button>
@@ -555,6 +558,7 @@ export default function ProfileEditPage() {
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[12px] font-semibold text-[var(--color-bright)]">{p.name}</span>
                     <button type="button" onClick={() => setProjects(prev => prev.filter((_, j) => j !== i))}
+                      aria-label={`Rimuovi progetto ${p.name}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0 flex-shrink-0">
                       × rimuovi
                     </button>
@@ -704,6 +708,7 @@ export default function ProfileEditPage() {
                     <a href={`/api/profile/files/${encodeURIComponent(f.name)}`} target="_blank" rel="noopener noreferrer"
                       className="text-[10px] text-[var(--color-blue)] hover:underline no-underline">apri</a>
                     <button type="button" onClick={() => handleDeleteFile(f.name)}
+                      aria-label={`Elimina file ${f.name}`}
                       className="text-[10px] text-[var(--color-red)] hover:opacity-70 cursor-pointer bg-transparent border-0 p-0">
                       × elimina
                     </button>
