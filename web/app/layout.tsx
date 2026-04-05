@@ -8,8 +8,10 @@ import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
-import { GlobalSearch } from './components/GlobalSearch'
-import FloatingChat from './components/FloatingChat'
+import dynamic from 'next/dynamic'
+
+const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch), { ssr: false })
+const FloatingChat = dynamic(() => import('./components/FloatingChat'), { ssr: false })
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
