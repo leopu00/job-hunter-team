@@ -91,10 +91,10 @@ export default function WebhooksPage() {
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]" style={{ animation: 'fade-in 0.2s ease both' }}>
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
-              <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome…" aria-label="Nome webhook" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" required />
+              <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret HMAC (opzionale)" aria-label="Secret HMAC" className="flex-1 text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="off" />
             </div>
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} />
+            <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" aria-label="URL webhook" className="text-[12px]" style={{ color: 'var(--color-bright)' }} autoComplete="url" required />
             <div className="flex flex-wrap gap-1.5">
               {ALL_EVENTS.map(ev => (
                 <button key={ev} onClick={() => toggleEvent(ev)} className="px-2 py-1 rounded text-[9px] font-mono cursor-pointer transition-all"
