@@ -244,8 +244,21 @@ function GuideContent() {
   const { t } = useLandingI18n()
   const [active, setActive] = useState<SectionId>('install')
 
+  const guideJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: 'Come installare Job Hunter Team',
+    description: 'Guida passo-passo per installare e configurare Job Hunter Team sul tuo computer.',
+    step: [
+      { '@type': 'HowToStep', name: 'Scarica il pacchetto', text: 'Vai alla pagina /download e scarica l\'archivio per il tuo sistema operativo.' },
+      { '@type': 'HowToStep', name: 'Estrai e avvia', text: 'Estrai l\'archivio e avvia lo script start.sh (macOS/Linux) o start.bat (Windows).' },
+      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Lo script installa le dipendenze e apre il browser su localhost:3000 con la dashboard.' },
+    ],
+  }
+
   return (
     <main style={{ position: 'relative', zIndex: 1 }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(guideJsonLd) }} />
       <LandingNav />
 
       <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
