@@ -185,17 +185,30 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Esperienza lavorativa */}
-        <ProfileSection title="Esperienza Lavorativa">
+        <ProfileSection title={`Esperienza Lavorativa${hasExperience ? ` (${experience.length})` : ''}`}>
           {hasExperience ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col">
               {experience.map((e, i) => (
-                <div key={i} className="pb-3 border-b border-[var(--color-border)] last:border-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-[12px] font-semibold text-[var(--color-bright)]">{e.role || '—'}</span>
-                    {e.period && <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0 font-mono">{e.period}</span>}
+                <div key={i} className="flex gap-3">
+                  {/* Timeline */}
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: '16px' }}>
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1"
+                      style={{ background: i === 0 ? 'var(--color-green)' : 'var(--color-border)', boxShadow: i === 0 ? '0 0 8px rgba(0,232,122,0.4)' : 'none' }}
+                    />
+                    {i < experience.length - 1 && (
+                      <div className="w-px flex-1 min-h-[16px]" style={{ background: 'var(--color-border)' }} />
+                    )}
                   </div>
-                  {e.company && <span className="text-[11px] text-[var(--color-muted)]">{e.company}</span>}
-                  {e.description && <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">{e.description}</p>}
+                  {/* Content */}
+                  <div className="pb-4 flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-0.5">
+                      <span className="text-[12px] font-semibold text-[var(--color-bright)]">{e.role || '—'}</span>
+                      {e.period && <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0 font-mono">{e.period}</span>}
+                    </div>
+                    {e.company && <span className="text-[11px] text-[var(--color-muted)]">{e.company}</span>}
+                    {e.description && <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">{e.description}</p>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -205,20 +218,33 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Formazione */}
-        <ProfileSection title="Formazione & Certificazioni">
+        <ProfileSection title={`Formazione & Certificazioni${hasEducation ? ` (${education.length + certifications.length})` : ''}`}>
           {hasEducation ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col">
               {education.map((e, i) => (
-                <div key={i} className="flex items-start justify-between gap-2 pb-2 border-b border-[var(--color-border)] last:border-0 last:pb-0">
-                  <div>
-                    <span className="text-[12px] text-[var(--color-bright)]">{e.title || '—'}</span>
-                    {e.institution && <div className="text-[10px] text-[var(--color-muted)]">{e.institution}</div>}
+                <div key={i} className="flex gap-3">
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: '16px' }}>
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1"
+                      style={{ background: i === 0 ? 'var(--color-blue)' : 'var(--color-border)' }}
+                    />
+                    {(i < education.length - 1 || certifications.length > 0) && (
+                      <div className="w-px flex-1 min-h-[16px]" style={{ background: 'var(--color-border)' }} />
+                    )}
                   </div>
-                  {e.year && <span className="text-[10px] text-[var(--color-dim)] font-mono flex-shrink-0">{e.year}</span>}
+                  <div className="pb-3 flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[12px] text-[var(--color-bright)]">{e.title || '—'}</span>
+                        {e.institution && <div className="text-[10px] text-[var(--color-muted)]">{e.institution}</div>}
+                      </div>
+                      {e.year && <span className="text-[10px] text-[var(--color-dim)] font-mono flex-shrink-0">{e.year}</span>}
+                    </div>
+                  </div>
                 </div>
               ))}
               {certifications.length > 0 && (
-                <div className="mt-2">
+                <div className="mt-1">
                   <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Certificazioni</div>
                   <div className="flex flex-wrap gap-1.5">
                     {certifications.map((c, i) => (
