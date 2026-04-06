@@ -39,22 +39,54 @@ function timeAgo(ts: number): string {
 export default function FeedbackPage() {
   const [items, setItems] = useState<Feedback[]>([])
   const [summary, setSummary] = useState<Summary>({ total: 0, open: 0, inProgress: 0, resolved: 0 })
+  const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ rating: 0, category: 'other', description: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null)
+  const [form, setForm] = useState({ rating: 0, category: 'other', description: '', screenshot: '' })
 
   const fetchData = useCallback(async () => {
-    const res = await fetch('/api/feedback').catch(() => null)
-    if (!res?.ok) return
+    setErrorMsg(null)
+    const res = await fetch('/api/feedback', { cache: 'no-store' }).catch(() => null)
+    if (!res?.ok) {
+      setItems([])
+      setSummary({ total: 0, open: 0, inProgress: 0, resolved: 0 })
+      setErrorMsg('Ticketing non disponibile al momento. Riprova tra poco.')
+      setLoading(false)
+      return
+    }
     const d = await res.json()
-    setItems(d.feedback ?? []); setSummary(d.summary ?? {})
+    setItems(d.feedback ?? [])
+    setSummary(d.summary ?? { total: 0, open: 0, inProgress: 0, resolved: 0 })
+    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   const submit = async () => {
     if (!form.description.trim() || !form.rating) return
-    await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }).catch(() => null)
-    setForm({ rating: 0, category: 'other', description: '' }); setAdding(false); fetchData()
+    setSubmitting(true)
+    setSubmitMsg(null)
+
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    }).catch(() => null)
+
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => null)
+      setSubmitMsg(data?.error ?? 'Invio non riuscito.')
+      setSubmitting(false)
+      return
+    }
+
+    setForm({ rating: 0, category: 'other', description: '', screenshot: '' })
+    setAdding(false)
+    setSubmitting(false)
+    setSubmitMsg('Feedback inviato.')
+    fetchData()
   }
 
   const inputStyle = { background: 'var(--color-deep)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' } as const
@@ -76,6 +108,18 @@ export default function FeedbackPage() {
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="mb-4 px-3 py-2 rounded-lg text-[11px]" style={{ background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.35)', color: 'var(--color-red)' }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {submitMsg && (
+        <div className="mb-4 px-3 py-2 rounded-lg text-[11px]" style={{ background: submitMsg === 'Feedback inviato.' ? 'rgba(0,232,122,0.08)' : 'rgba(255,82,82,0.08)', border: submitMsg === 'Feedback inviato.' ? '1px solid rgba(0,232,122,0.35)' : '1px solid rgba(255,82,82,0.35)', color: submitMsg === 'Feedback inviato.' ? 'var(--color-green)' : 'var(--color-red)' }}>
+          {submitMsg}
+        </div>
+      )}
+
       {adding && (
         <div className="mb-4 p-4 rounded-lg" style={{ background: 'var(--color-row)', border: '1px solid var(--color-border)' }}>
           <div className="flex items-center gap-4 mb-3">
@@ -87,15 +131,17 @@ export default function FeedbackPage() {
           </div>
           <div className="mb-3"><label htmlFor="feedback-desc" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">DESCRIZIONE</label>
             <textarea id="feedback-desc" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1 resize-none" style={inputStyle} placeholder="Descrivi il tuo feedback..." /></div>
-          <div className="mb-3 p-3 rounded-lg text-center" style={{ background: 'var(--color-deep)', border: '2px dashed var(--color-border)' }}>
-            <p className="text-[9px] text-[var(--color-dim)]">Trascina screenshot qui (opzionale)</p></div>
-          <button onClick={submit} disabled={!form.description.trim() || !form.rating} className="px-4 py-1.5 rounded text-[10px] font-bold"
+          <div className="mb-3"><label htmlFor="feedback-shot" className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">SCREENSHOT URL</label>
+            <input id="feedback-shot" value={form.screenshot} onChange={e => setForm({ ...form, screenshot: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="https://..." /></div>
+          <button onClick={submit} disabled={!form.description.trim() || !form.rating || submitting} className="px-4 py-1.5 rounded text-[10px] font-bold"
             style={{ background: form.description.trim() && form.rating ? 'var(--color-green)' : 'var(--color-border)', color: form.description.trim() && form.rating ? '#000' : 'var(--color-dim)', cursor: form.description.trim() && form.rating ? 'pointer' : 'default' }}>Invia feedback</button>
         </div>
       )}
 
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
-        {items.length === 0
+        {loading
+          ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Caricamento ticket…</p></div>
+          : items.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun feedback inviato.</p></div>
           : items.map(fb => {
             const cat = CAT_CFG[fb.category] ?? CAT_CFG.other
