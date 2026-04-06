@@ -14,16 +14,15 @@ async function openLoginEntry(page: Parameters<typeof test>[0]['page']) {
 
 async function getEntryMode(page: Parameters<typeof test>[0]['page']) {
   const cloudView = page.getByRole('button', { name: 'Login with Google' });
-  if (await cloudView.count()) {
-    await expect(cloudView).toBeVisible();
-    return 'cloud';
-  }
-
   const localView = page.getByText('Seleziona la tua cartella di lavoro', { exact: false });
-  if (await localView.count()) {
-    await expect(localView).toBeVisible();
-    return 'local';
-  }
+
+  const mode = await Promise.race([
+    cloudView.waitFor({ state: 'visible', timeout: 3000 }).then(() => 'cloud' as const),
+    localView.waitFor({ state: 'visible', timeout: 3000 }).then(() => 'local' as const),
+  ]).catch(() => 'unknown' as const);
+
+  if (mode === 'cloud') return 'cloud';
+  if (mode === 'local') return 'local';
 
   return 'unknown';
 }
