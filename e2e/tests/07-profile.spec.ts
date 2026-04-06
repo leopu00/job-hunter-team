@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-profile';
 
 /**
  * FLUSSO 7 — PAGINA PROFILO CANDIDATO /profile
@@ -10,20 +13,25 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Profilo Candidato', () => {
-  test('pagina /profile risponde senza errore 500', async ({ page }) => {
-    // Test senza auth — verifica che la pagina esista e non dia errori server
-    const response = await page.goto('/profile');
-    expect(response?.status()).toBeLessThan(500);
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
   });
 
-  test.skip('/profile con sessione mostra dati candidato', async ({ page }) => {
-    // SKIP: dipende da sessione autenticata + migrazione profilo (Max)
-    // BUG-E2E-03: attualmente mostra "Nessun profilo configurato"
+  test.beforeEach(async ({ page }) => {
+    await loginToSeededWorkspace(page, WORKSPACE);
+  });
+
+  test('pagina /profile risponde senza errore 500', async ({ page }) => {
+    const response = await page.goto('/profile');
+    expect(response?.status()).toBeLessThan(500);
+    await expect(page.getByRole('heading', { name: /profilo candidato/i })).toBeVisible();
+  });
+
+  test('/profile con sessione mostra dati candidato', async ({ page }) => {
     await page.goto('/profile');
-    // Non deve mostrare il messaggio di errore
     await expect(page.getByText(/nessun profilo configurato/i)).not.toBeVisible();
-    // Deve mostrare almeno nome o email del candidato
-    await expect(page.locator('[data-testid="candidate-name"], .candidate-name, h1, h2').first())
-      .toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('heading', { name: /leone test/i })).toBeVisible();
+    await expect(page.getByText(/frontend engineer/i).first()).toBeVisible();
+    await expect(page.getByText(/leone\.test@example\.com/i).first()).toBeVisible();
   });
 });
