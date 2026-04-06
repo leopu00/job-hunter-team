@@ -214,12 +214,12 @@ export default function DemoPage() {
 
 function TerminalMockup() {
   const lines = [
-    { c: 'var(--color-dim)', t: '$ tar -xzf job-hunter-team-0.1.0-mac.tar.gz' },
-    { c: 'var(--color-dim)', t: '$ cd job-hunter-team' },
-    { c: 'var(--color-dim)', t: '$ ./start.sh' },
-    { c: 'var(--color-green)', t: '[ok] Node.js 22.x rilevato' },
-    { c: 'var(--color-green)', t: '[ok] Dipendenze installate' },
-    { c: 'var(--color-green)', t: '[ok] Build completata' },
+    { c: 'var(--color-dim)', t: '> Open job-hunter-team-0.1.0-mac.dmg' },
+    { c: 'var(--color-dim)', t: '> Drag JHT Desktop to Applications' },
+    { c: 'var(--color-dim)', t: '> Launch JHT Desktop' },
+    { c: 'var(--color-green)', t: '[ok] Bundled web payload verified' },
+    { c: 'var(--color-green)', t: '[ok] Local runtime bootstrapped' },
+    { c: 'var(--color-green)', t: '[ok] Browser handoff ready' },
     { c: 'var(--color-white)', t: '> Server attivo su http://localhost:3000' },
     { c: 'var(--color-green)', t: '> Browser aperto automaticamente' },
   ]

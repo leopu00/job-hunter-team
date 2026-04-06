@@ -1,13 +1,13 @@
 # BACKLOG — Job Hunter Team
 
-Ultimo aggiornamento: 2026-04-04
+Ultimo aggiornamento: 2026-04-06
 
 ---
 
 ## VISIONE PRODOTTO
 
 Job Hunter Team diventa un'applicazione desktop scaricabile da chiunque — anche utenti non tecnici.
-L'utente scarica un installer (.dmg / .exe / .AppImage), lo installa, e un launcher desktop prepara l'ambiente, avvia JHT in background e apre la GUI web locale nel browser.
+L'utente scarica un installer (.dmg / .exe / .AppImage / .deb), lo installa, e un launcher desktop prepara l'ambiente, avvia JHT in background e apre la GUI web locale nel browser.
 La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desktop fa da installer, orchestratore e punto di ingresso zero-terminale.
 
 **Tre modalità di esecuzione (scelta utente):**
@@ -33,6 +33,10 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 - ✅ Google OAuth funzionante
 - ✅ Next.js app (web/) si builda, login funziona
 - ✅ CI/CD Vercel pipeline scritta (`.github/workflows/deploy.yml`)
+- ✅ Launcher desktop Electron in `desktop/`
+- ✅ Packaging desktop cross-platform (`.dmg`, `.exe`, `.AppImage`, `.deb`) via `electron-builder`
+- ✅ Workflow release GitHub con runner nativi macOS / Windows / Linux
+- ✅ Pagina download allineata ai pacchetti desktop reali
 - ✅ Documentazione setup: `docs/supabase-setup.md`
 - ✅ Maturità stimata: ~65%
 
@@ -103,10 +107,10 @@ Obiettivo: la web app funziona end-to-end con dati reali.
 Obiettivo: un installer scaricabile che rende JHT usabile da chiunque.
 
 #### [JHT-DESKTOP-01] Scaffolding progetto Electron
-- Creare `desktop/` nella root del progetto
-- Setup electron-builder per packaging desktop
-- Creare un launcher shell con finestra minima/tray + lifecycle manager
-- Il processo main di Electron installa il payload JHT, avvia i servizi locali e apre il browser su `http://localhost:3000`
+- ✅ `desktop/` creato nella root del progetto
+- ✅ Setup `electron-builder` per packaging desktop
+- ✅ Launcher shell con finestra minima + lifecycle manager base
+- ✅ Il processo main di Electron avvia il payload JHT e apre il browser su `http://localhost:<porta>`
 
 #### [JHT-DESKTOP-02] Setup Wizard integrato
 - Wizard first-run nell'app: lingua, profilo candidato, provider AI, credenziali
@@ -115,26 +119,28 @@ Obiettivo: un installer scaricabile che rende JHT usabile da chiunque.
 - Nessun terminale necessario — tutto da interfaccia grafica
 
 #### [JHT-DESKTOP-03] Lifecycle manager e background runtime
-- L'app Electron avvia/ferma JHT come processo locale in background
-- MVP: riuso del flusso esistente, senza obbligare l'utente al terminale
-- Esporre start / stop / restart / status / log dalla shell desktop
-- Aprire automaticamente il browser quando `localhost` è pronto
-- Tray icon con stato del team (icona verde/giallo/rosso)
-- Notifiche desktop native (posizione trovata, candidatura pronta, errore)
+- ✅ L'app Electron avvia/ferma JHT come processo locale in background
+- ✅ MVP senza obbligare l'utente al terminale
+- ✅ Start / stop / status / log dalla shell desktop
+- ✅ Apertura automatica del browser quando `localhost` è pronto
+- ⬜ Tray icon con stato del team (icona verde/giallo/rosso)
+- ⬜ Notifiche desktop native (posizione trovata, candidatura pronta, errore)
 
 #### [JHT-DESKTOP-04] Payload prebuildato e bootstrap silenzioso
-- Le release includono la build web già pronta e il payload runtime di JHT
-- Nessun `npm install` o `next build` sul computer dell'utente
-- L'app verifica e installa solo le dipendenze davvero mancanti per il provider scelto
-- Node.js bundlato o incluso nel payload; Python embedded o rilevato dal sistema
-- Progress bar durante l'installazione iniziale
-- Nessun requisito manuale per l'utente finale salvo casi eccezionali
+- ✅ Le release includono la build web già pronta e il payload runtime di JHT
+- ✅ Nessun `npm install` o `next build` sul computer dell'utente
+- ✅ Il launcher verifica il payload e sceglie la modalità di avvio corretta
+- ⬜ Verifica/installazione dipendenze opzionali per provider scelto
+- ⬜ Node.js bundlato o incluso nel payload completo
+- ⬜ Python embedded o rilevato dal sistema
+- ⬜ Progress bar durante l'installazione iniziale
+- ⬜ Nessun requisito manuale per l'utente finale salvo casi eccezionali
 
 #### [JHT-DESKTOP-05] Installer cross-platform e auto-update
-- Build con electron-builder: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
-- Code signing per macOS e Windows (evitare warning "app non verificata")
-- Auto-update via electron-updater (check update al lancio, install silenzioso)
-- Release tramite GitHub Releases
+- ✅ Build con electron-builder: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
+- ⬜ Code signing per macOS e Windows (evitare warning "app non verificata")
+- ⬜ Auto-update via electron-updater (check update al lancio, install silenzioso)
+- ✅ Release tramite GitHub Releases
 
 #### [JHT-DESKTOP-06] Modalità "Computer dedicato"
 - Dall'app, opzione per configurare un altro PC in rete locale come runner
@@ -215,10 +221,10 @@ Obiettivo: landing page, download, onboarding per utenti non tecnici.
 - Responsive, ottimizzata per SEO
 
 #### [JHT-WEB-02] Pagina download con rilevamento OS
-- Rileva automaticamente il sistema operativo del visitatore
-- Bottone principale per il download corretto del launcher (.dmg / .exe / .AppImage)
-- Link alternativi per altri OS
-- Checksum SHA256 per verifica integrità
+- ✅ Rileva automaticamente il sistema operativo del visitatore
+- ✅ Bottone principale per il download corretto del launcher (.dmg / .exe / .AppImage / .deb)
+- ✅ Link alternativi per altri OS
+- ⬜ Checksum SHA256 per verifica integrità
 
 #### [JHT-WEB-03] Documentazione utente (non-dev, in inglese)
 - Guide visuali: "How to install JHT", "How to set up your profile", "How the launcher starts your local dashboard"

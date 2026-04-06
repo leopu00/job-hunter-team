@@ -1,5 +1,5 @@
 {
-  "name": "backend-3",
+  "name": "job-hunter-team",
   "version": "0.1.0",
   "description": "> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.",
   "main": "index.js",
@@ -12,11 +12,15 @@
     "lint": "npm run lint --prefix web",
     "format:check": "npx prettier --check 'web/app/**/*.{ts,tsx}' 'shared/**/*.ts'",
     "desktop:dev": "npm --prefix desktop run dev",
-    "desktop:dist": "npm --prefix desktop run dist"
+    "desktop:test": "npm --prefix desktop run test",
+    "desktop:dist": "npm --prefix desktop run dist",
+    "desktop:dist:mac": "npm --prefix desktop run dist:mac",
+    "desktop:dist:win": "npm --prefix desktop run dist:win",
+    "desktop:dist:linux": "npm --prefix desktop run dist:linux"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Leone Emanuele Puglisi",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "next": "16.1.6",

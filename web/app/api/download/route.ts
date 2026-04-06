@@ -53,7 +53,6 @@ function checkLauncherExists(name: string): boolean {
 
 export async function GET() {
   const version = getVersion();
-  const distDir = path.join(ROOT, 'dist');
 
   const platforms: PlatformInfo[] = [
     {
@@ -76,25 +75,35 @@ export async function GET() {
     {
       id: 'linux',
       label: 'Linux',
-      file: `job-hunter-team-${version}-linux.tar.gz`,
-      size: getFileSize(path.join(distDir, `job-hunter-team-${version}-linux.tar.gz`)),
-      requirements: 'Ubuntu 20.04+ / Fedora 36+ / Debian 11+, Node.js 18+',
+      file: `job-hunter-team-${version}-linux.AppImage`,
+      size: getFileSize(
+        findArtifactPath(
+          path.join('desktop', 'dist', `job-hunter-team-${version}-linux.AppImage`),
+          path.join('dist', `job-hunter-team-${version}-linux.AppImage`)
+        ) ?? ''
+      ),
+      requirements: 'Ubuntu 22.04+ / Debian 12+ / Fedora 39+ (x64)',
       instructions: [
-        "Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz",
-        'Entra nella cartella: cd job-hunter-team',
-        'Avvia: ./start.sh',
+        'Scarica il file .AppImage e rendilo eseguibile',
+        'Avvialo con doppio click oppure: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage',
+        'Il launcher apre la dashboard locale nel browser',
       ],
     },
     {
       id: 'windows',
       label: 'Windows',
-      file: `job-hunter-team-${version}-windows.zip`,
-      size: getFileSize(path.join(distDir, `job-hunter-team-${version}-windows.zip`)),
-      requirements: 'Windows 10+, Node.js 18+, PowerShell 5.1+',
+      file: `job-hunter-team-${version}-windows.exe`,
+      size: getFileSize(
+        findArtifactPath(
+          path.join('desktop', 'dist', `job-hunter-team-${version}-windows.exe`),
+          path.join('dist', `job-hunter-team-${version}-windows.exe`)
+        ) ?? ''
+      ),
+      requirements: 'Windows 10/11 (x64)',
       instructions: [
-        'Estrai lo ZIP in una cartella',
-        'Doppio click su start.bat',
-        'Oppure: PowerShell > .\\start.ps1',
+        'Apri il file .exe scaricato',
+        'Segui il wizard NSIS e installa JHT Desktop',
+        'Avvia JHT Desktop dal menu Start: il launcher apre la dashboard nel browser',
       ],
     },
   ];

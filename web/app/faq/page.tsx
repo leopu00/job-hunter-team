@@ -18,7 +18,7 @@ const FAQ_TEXTS: string[] = [
   'Il software e gratuito e open-source. L\'unico costo e la chiave API Anthropic per far funzionare gli agenti AI (Claude). Una ricerca completa tipica consuma circa 1-5$ di API.',
   'Capitano (coordina il team), Scout (cerca offerte), Analista (analizza requisiti), Scorer (calcola match), Scrittore (genera CV e cover letter), Critico (revisiona documenti), Sentinella (monitora budget API).',
   'Dalla web app vai su /team e premi Avvia Team. Dalla TUI avvia con cd tui && npm run dev, poi usa /start <agente>.',
-  'Node.js 18+, tmux (per gli agenti), e Claude CLI. Funziona su macOS 12+, Linux (Ubuntu 20.04+) e Windows 10+ (con WSL per tmux).',
+  'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Per eseguire gli agenti servono tmux e Claude CLI; su Windows tmux richiede WSL.',
   'Si. Tutti i dati sono salvati nella cartella di lavoro locale sul tuo computer. Nessun dato viene inviato a server esterni.',
   'Si, ma con funzionalita limitate. Senza chiave API gli agenti AI non possono funzionare, pero puoi usare la web app per gestire candidature manualmente.',
   'JHT e open-source. Puoi contribuire su GitHub: segnala bug, proponi feature, o invia pull request.',
@@ -107,9 +107,9 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'Quali sono i requisiti di sistema?',
     a: (
       <>
-        <strong>Node.js 18+</strong>, <strong>tmux</strong> (per gli agenti),
-        e <strong>Claude CLI</strong> (<code>npm i -g @anthropic-ai/claude-code</code>).
-        Funziona su macOS 12+, Linux (Ubuntu 20.04+, Fedora 36+) e Windows 10+ (con WSL per tmux).
+        Il <strong>launcher desktop</strong> funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+.
+        Per far lavorare gli agenti servono anche <strong>tmux</strong> e <strong>Claude CLI</strong> (<code>npm i -g @anthropic-ai/claude-code</code>);
+        su Windows, <code>tmux</code> richiede ancora <strong>WSL</strong>.
         Serve una connessione internet per le chiamate API agli agenti AI.
       </>
     ),

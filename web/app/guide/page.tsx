@@ -77,28 +77,30 @@ function InstallSection() {
     <div className="flex flex-col gap-1">
       <H2>Requisiti</H2>
       <ul className="flex flex-col gap-1.5 mb-4">
-        <Li><strong>Node.js 18+</strong> &mdash; <a href="https://nodejs.org" className="text-[var(--color-green)] underline-offset-2 hover:underline">nodejs.org</a></Li>
-        <Li><strong>macOS 12+</strong>, <strong>Linux</strong> (Ubuntu 20.04+, Fedora 36+) o <strong>Windows 10+</strong></Li>
+        <Li><strong>macOS 12+</strong>, <strong>Linux</strong> (Ubuntu 22.04+, Debian 12+, Fedora 39+) o <strong>Windows 10+</strong></Li>
         <Li><strong>tmux</strong> (opzionale, necessario per la TUI e gli agenti)</Li>
+        <Li><strong>Node.js 18+</strong> &mdash; richiesto solo se installi da sorgente invece di usare il launcher desktop</Li>
       </ul>
 
       <H2>Installazione rapida</H2>
       <H3>1. Scarica il pacchetto</H3>
-      <P>Vai alla pagina <Link href="/download" className="text-[var(--color-green)] hover:underline">/download</Link> e scarica l&apos;archivio per il tuo sistema operativo.</P>
+      <P>Vai alla pagina <Link href="/download" className="text-[var(--color-green)] hover:underline">/download</Link> e scarica l&apos;installer desktop per il tuo sistema operativo.</P>
 
-      <H3>2. Estrai e avvia</H3>
-      <P>macOS / Linux:</P>
-      <Code>{`tar -xzf job-hunter-team-*.tar.gz
-cd job-hunter-team
-./start.sh`}</Code>
+      <H3>2. Installa e avvia</H3>
+      <P>macOS:</P>
+      <Code>{`Apri job-hunter-team-*.dmg
+Trascina JHT Desktop in Applicazioni
+Avvia JHT Desktop`}</Code>
+      <P>Linux:</P>
+      <Code>{`chmod +x job-hunter-team-*.AppImage
+./job-hunter-team-*.AppImage`}</Code>
       <P>Windows:</P>
-      <Code>{`# Estrai lo ZIP, poi:
-start.bat
-# oppure PowerShell:
-.\\start.ps1`}</Code>
+      <Code>{`Apri job-hunter-team-*.exe
+Completa il setup NSIS
+Avvia JHT Desktop dal menu Start`}</Code>
 
       <H3>3. Primo avvio</H3>
-      <P>Lo script di avvio installa le dipendenze e apre il browser su <code className="text-[var(--color-green)]">localhost:3000</code> con la dashboard.</P>
+      <P>Il launcher desktop prepara il runtime locale e apre il browser su <code className="text-[var(--color-green)]">localhost:3000</code> con la dashboard.</P>
       <P>Al primo avvio ti viene chiesto di selezionare una cartella di lavoro. Tutti i dati (database, CV, documenti) restano nella cartella scelta.</P>
 
       <H2>Installazione da sorgente</H2>
@@ -251,9 +253,9 @@ function GuideContent() {
     name: 'Come installare Job Hunter Team',
     description: 'Guida passo-passo per installare e configurare Job Hunter Team sul tuo computer.',
     step: [
-      { '@type': 'HowToStep', name: 'Scarica il pacchetto', text: 'Vai alla pagina /download e scarica l\'archivio per il tuo sistema operativo.' },
-      { '@type': 'HowToStep', name: 'Estrai e avvia', text: 'Estrai l\'archivio e avvia lo script start.sh (macOS/Linux) o start.bat (Windows).' },
-      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Lo script installa le dipendenze e apre il browser su localhost:3000 con la dashboard.' },
+      { '@type': 'HowToStep', name: 'Scarica il pacchetto', text: 'Vai alla pagina /download e scarica l\'installer desktop per il tuo sistema operativo.' },
+      { '@type': 'HowToStep', name: 'Installa e avvia', text: 'Apri il pacchetto desktop: .dmg su macOS, .AppImage su Linux, .exe su Windows.' },
+      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Il launcher prepara il runtime locale e apre il browser su localhost:3000 con la dashboard.' },
     ],
   }
 
