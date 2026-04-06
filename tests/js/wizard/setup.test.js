@@ -10,6 +10,14 @@ vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => {
     readConfigFileSnapshot: vi.fn(() => ({ exists: false, config: null })),
   };
 });
+vi.mock('../../../cli/wizard/setup-checks.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    checkPrerequisites: vi.fn(async () => true),
+    runHealthCheck: vi.fn(async () => true),
+  };
+});
 
 import * as fs from 'node:fs';
 import { writeConfigFile, readConfigFileSnapshot } from '../../../cli/wizard/setup-helpers.js';

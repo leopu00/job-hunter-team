@@ -113,7 +113,8 @@ describe("NotificationBadge", () => {
 
   it("dot: variant dot width 8 height 8 + count mode minWidth/height 18 + offset transform + aria-label notifiche", () => {
     expect(src).toContain("variant === 'dot'");
-    expect(src).toContain("width: 8, height: 8");
+    expect(src).toContain("width: 8");
+    expect(src).toContain("height: 8");
     expect(src).toContain("height: 18");
     expect(src).toContain("offset[0]}px)");
     expect(src).toContain("aria-label={`${count} notifiche`}");

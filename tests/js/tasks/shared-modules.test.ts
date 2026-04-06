@@ -22,17 +22,17 @@ function getTypes(n: string) { return Object.entries(typesAll).find(([k]) => mod
 const EXPECTED_BARRELS = [
   "agents", "analytics", "assistant", "backup", "cache", "channels",
   "config", "context-engine", "events", "history", "hooks", "i18n",
-  "logger", "migrations", "notifications", "plugins", "queue",
-  "rate-limiter", "retry", "sessions", "tasks", "telegram",
+  "logger", "migrations", "monitoring", "notifications", "plugins", "queue",
+  "rate-limiter", "retry", "scheduler", "sessions", "tasks", "telegram",
   "templates", "tools", "validators",
 ];
 
 // --- 1. Barrel exports ---
 
 describe("shared/ barrel — importabilità", () => {
-  it("glob trova esattamente 25 barrel index.ts", () => {
+  it("glob trova esattamente 27 barrel index.ts", () => {
     const found = Object.keys(barrels).map(modName).sort();
-    expect(found).toHaveLength(25);
+    expect(found).toHaveLength(27);
     for (const m of EXPECTED_BARRELS) expect(found, `manca ${m}`).toContain(m);
   });
 
@@ -155,9 +155,9 @@ describe("shared/ cross-module — barrel riesporta types", () => {
 // --- 6. No circular deps ---
 
 describe("shared/ — no circular dependency", () => {
-  it("tutti i 25 moduli caricati eager senza errori", () => {
+  it("tutti i 27 moduli caricati eager senza errori", () => {
     const names = Object.keys(barrels).map(modName).sort();
-    expect(names).toHaveLength(25);
+    expect(names).toHaveLength(27);
     for (const [, mod] of Object.entries(barrels)) {
       expect(mod).toBeDefined();
       expect(typeof mod).toBe("object");

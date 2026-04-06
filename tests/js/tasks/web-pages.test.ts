@@ -30,7 +30,8 @@ describe("API /api/monitoring — metriche e heartbeat", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.metrics).toBeDefined();
-    expect(data.metrics.cpuUsage).toBeGreaterThanOrEqual(0);
+    expect(data.metrics.cpu).toBeGreaterThanOrEqual(0);
+    expect(data.metrics.memoryMb).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(data.agents)).toBe(true);
   });
 
@@ -92,7 +93,7 @@ describe("API /api/scheduler — task queue", () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.id).toBe("t1");
-    expect(["pending", "running"]).toContain(data.status);
+    expect(["queued", "pending", "running"]).toContain(data.status);
   });
 
   it("POST cancel senza id → 400", async () => {

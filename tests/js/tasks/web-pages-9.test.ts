@@ -10,7 +10,11 @@ vi.mock("next/server", () => {
 
 const WEB = path.resolve(__dirname, "../../../web");
 function read(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
-function req(url: string, init?: RequestInit) { return new Request(url, init); }
+function req(url: string, init?: RequestInit) {
+  const r = new Request(url, init) as any;
+  r.nextUrl = new URL(url);
+  return r;
+}
 
 /* ── API: goals ── */
 describe("API goals", () => {
@@ -64,16 +68,16 @@ describe("API onboarding", () => {
 
 /* ── API: compare ── */
 describe("API compare", () => {
-  it("GET → jobs array (id, title, company)", async () => {
+  it("GET senza ids → available array (id, title, company)", async () => {
     const { GET } = await import("../../../web/app/api/compare/route.js");
-    const res = await GET();
+    const res = await GET(req("http://h/api/compare") as any);
     expect(res.status).toBe(200);
     const j = await res.json();
-    expect(Array.isArray(j.jobs)).toBe(true);
+    expect(Array.isArray(j.available)).toBe(true);
   });
-  it("POST con <2 ids → 400", async () => {
-    const { POST } = await import("../../../web/app/api/compare/route.js");
-    const res = await POST(req("http://h/api/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: ["j1"] }) }));
+  it("GET con <2 ids → 400", async () => {
+    const { GET } = await import("../../../web/app/api/compare/route.js");
+    const res = await GET(req("http://h/api/compare?ids=j1") as any);
     expect(res.status).toBe(400);
   });
 });
@@ -116,7 +120,7 @@ describe("Rendering pagine batch 9", () => {
     { name: "goals", file: "app/goals/page.tsx", heading: "Obiettivi", api: "/api/goals" },
     { name: "reminders", file: "app/reminders/page.tsx", heading: "Promemoria", api: "/api/reminders" },
     { name: "onboarding", file: "app/onboarding/page.tsx", heading: "Benvenuto", api: "/api/onboarding" },
-    { name: "compare", file: "app/compare/page.tsx", heading: "Compara Offerte", api: "/api/compare" },
+    { name: "compare", file: "app/compare/page.tsx", heading: "Confronto Candidature", api: "/api/compare" },
     { name: "recommendations", file: "app/recommendations/page.tsx", heading: "Raccomandazioni", api: "/api/recommendations" },
     { name: "feedback", file: "app/feedback/page.tsx", heading: "Feedback", api: "/api/feedback" },
     { name: "cover-letters", file: "app/cover-letters/page.tsx", heading: "Cover Letter", api: "/api/cover-letters" },

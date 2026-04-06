@@ -84,32 +84,24 @@ describe("API /api/webhooks", () => {
 });
 
 describe("API /api/reports", () => {
-  it("GET → 200 con modules array", async () => {
+  it("GET → 200 con period, kpi, monthly e topCompanies", async () => {
     const { GET } = await import("../../../web/app/api/reports/route.js");
-    const res = await GET();
+    const res = await GET(nreq("http://localhost/api/reports"));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(Array.isArray(data.modules)).toBe(true);
-    expect(data.modules.length).toBeGreaterThan(0);
+    expect(data.period).toBe("30d");
+    expect(data.kpi).toBeDefined();
+    expect(Array.isArray(data.monthly)).toBe(true);
+    expect(Array.isArray(data.topCompanies)).toBe(true);
   });
-  it("POST senza parametri → 400", async () => {
-    const { POST } = await import("../../../web/app/api/reports/route.js");
-    const res = await POST(nreq("http://localhost", {
-      method: "POST", body: JSON.stringify({}),
-    }));
-    expect(res.status).toBe(400);
-  });
-  it("POST valido → 200 con report e period", async () => {
-    const { POST } = await import("../../../web/app/api/reports/route.js");
-    const res = await POST(nreq("http://localhost", {
-      method: "POST",
-      body: JSON.stringify({ from: "2026-01-01", to: "2026-12-31", modules: ["tasks"] }),
-    }));
+  it("GET con period=90d → 200 con days coerente", async () => {
+    const { GET } = await import("../../../web/app/api/reports/route.js");
+    const res = await GET(nreq("http://localhost/api/reports?period=90d"));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.report).toBeDefined();
-    expect(data.report.period.from).toBe("2026-01-01");
-    expect(Array.isArray(data.report.rows)).toBe(true);
+    expect(data.period).toBe("90d");
+    expect(data.days).toBe(90);
+    expect(Array.isArray(data.phaseTimes)).toBe(true);
   });
 });
 

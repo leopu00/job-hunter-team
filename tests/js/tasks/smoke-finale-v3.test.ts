@@ -54,7 +54,7 @@ describe("Pagine", () => {
     expect(empty.map(f => path.relative(WEB, f))).toEqual([]);
   });
   it("pagine chiave presenti", () => {
-    const rel = pages.map(p => path.relative(path.join(WEB, "app"), p));
+    const rel = pages.map(p => path.relative(path.join(WEB, "app"), p).replace(/^\(protected\)\//, ""));
     for (const pg of ["dashboard/page.tsx","settings/page.tsx","setup/page.tsx","timeline/page.tsx","map/page.tsx",
       "calendar/page.tsx","jobs/page.tsx","companies/page.tsx","insights/page.tsx","budget/page.tsx"])
       expect(rel).toContain(pg);
