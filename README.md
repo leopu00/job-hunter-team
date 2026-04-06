@@ -79,6 +79,12 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | Layer | Tecnologie |
 |-------|-----------|
 | **Agenti** | Claude Code sessions · tmux · SQLite |
+
+## Runbook
+
+- [Quickstart](docs/quickstart.md)
+- [Supabase Setup](docs/supabase-setup.md)
+- [Feedback Ticketing](docs/feedback-ticketing.md)
 | **Backend** | Node.js · TypeScript · Zod |
 | **Frontend** | Next.js · Tailwind CSS |
 | **Database** | Supabase (PostgreSQL, Frankfurt) · SQLite (locale) |

@@ -49,7 +49,7 @@ function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => v
   )
 }
 
-function Btn({ label, color, onClick, ariaLabel }: { label: string; color: string; onClick: () => void; ariaLabel?: string }) {
+function Btn({ label, color, onClick, ariaLabel, ...rest }: { label: string; color: string; onClick: () => void; ariaLabel?: string } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'>) {
   return (
     <button onClick={onClick} aria-label={ariaLabel} className="text-[10px] font-bold transition-colors cursor-pointer"
       style={{ color: 'var(--color-dim)', background: 'none', border: 'none' }}

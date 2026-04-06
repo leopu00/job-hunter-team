@@ -14,7 +14,7 @@ const NAV: [string, [string, string, number?][]][] = [
   ['JOB HUNTING', [['/jobs','Offerte'],['/applications','Candidature',3],['/interviews','Colloqui',1],['/companies','Aziende'],['/cover-letters','Cover Letter'],['/profiles','Profili'],['/alerts','Alert',5]]],
   ['AGENTI',      [['/agents','Agenti'],['/assistant','Assistente'],['/tasks','Task'],['/queue','Queue'],['/workers','Workers']]],
   ['DATI',        [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
-  ['TOOLS',       [['/api-explorer','API Explorer'],['/automations','Automazioni'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errori'],['/performance','Performance'],['/git','Git']]],
+  ['TOOLS',       [['/api-explorer','API Explorer'],['/automations','Automazioni'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errori'],['/feedback','Feedback'],['/performance','Performance'],['/git','Git']]],
   ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
 ]
 

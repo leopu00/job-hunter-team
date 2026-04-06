@@ -41,6 +41,7 @@ describe("Sidebar", () => {
     expect(src).toMatch(/export default function Sidebar/);
     for (const g of ["SISTEMA", "JOB HUNTING", "AGENTI", "DATI", "TOOLS", "CONFIG"])
       expect(src).toContain(`'${g}'`);
+    expect(src).toContain("['/feedback','Feedback']");
   });
   it("collapsed state + toggleCollapse + localStorage persistence", () => {
     expect(src).toContain("collapsed");
