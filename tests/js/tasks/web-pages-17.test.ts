@@ -79,26 +79,28 @@ describe("/api/skills", () => {
 describe("/api/history", () => {
   const src = readSrc("app/api/history/route.ts");
 
-  it("GET + POST + DELETE + Conversation type + HistoryStore version:1", () => {
+  it("GET + POST + DELETE + Activity type + ActivityStore version:1", () => {
     expect(src).toMatch(/export async function GET\b/);
     expect(src).toMatch(/export async function POST\b/);
     expect(src).toMatch(/export async function DELETE\b/);
-    expect(src).toContain("type Conversation");
-    expect(src).toContain("type HistoryStore");
+    expect(src).toContain("interface Activity");
+    expect(src).toContain("interface ActivityStore");
   });
 
-  it("GET filtro agentId + sort updatedAt desc + POST crea o aggiunge messaggio", () => {
-    expect(src).toContain("searchParams.get('agentId')");
-    expect(src).toContain("b.updatedAt - a.updatedAt");
-    expect(src).toContain("body.conversationId");
-    expect(src).toContain("conv.messages.push({ role, content, ts: now })");
+  it("GET filtri action/entity/days + sort timestamp desc + POST registra activity", () => {
+    expect(src).toContain("sp.get('action')");
+    expect(src).toContain("sp.get('entity')");
+    expect(src).toContain("sp.get('days')");
+    expect(src).toContain("b.timestamp - a.timestamp");
+    expect(src).toContain("entityName obbligatori");
+    expect(src).toContain("store.activities.push(activity)");
   });
 
-  it("DELETE per id + store tmp+rename + 404 se non trovata", () => {
+  it("DELETE per id o all=true + store tmp+rename + 404 se non trovata", () => {
     expect(src).toContain("searchParams.get('id')");
-    expect(src).toContain("store.conversations.filter(c => c.id !== id)");
-    expect(src).toContain("renameSync(tmp, HISTORY_PATH)");
-    expect(src).toContain("conversazione non trovata");
+    expect(src).toContain("searchParams.get('all')");
+    expect(src).toContain("fs.renameSync(tmp, STORE_PATH)");
+    expect(src).toContain("non trovata");
   });
 });
 

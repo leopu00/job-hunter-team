@@ -21,6 +21,11 @@ vi.mock("next/server", () => ({
 }));
 
 const WEB = path.resolve(__dirname, "../../../web/app");
+function nreq(url: string, init?: RequestInit) {
+  const r = new Request(url, init) as any;
+  r.nextUrl = new URL(url);
+  return r;
+}
 
 describe("API /api/budget", () => {
   it("GET → 200 con daily array e velocity_history", async () => {
@@ -60,12 +65,12 @@ describe("API /api/pipelines", () => {
 });
 
 describe("API /api/changelog", () => {
-  it("GET → 200 con releases array e total", async () => {
+  it("GET → 200 con days array e total", async () => {
     const { GET } = await import("../../../web/app/api/changelog/route.js");
     const res = await GET();
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(Array.isArray(data.releases)).toBe(true);
+    expect(Array.isArray(data.days)).toBe(true);
     expect(typeof data.total).toBe("number");
   });
 });
@@ -110,7 +115,7 @@ describe("API /api/validators", () => {
 describe("API /api/skills", () => {
   it("GET → 200 con skills array", async () => {
     const { GET } = await import("../../../web/app/api/skills/route.js");
-    const res = await GET();
+    const res = await GET(nreq("http://localhost/api/skills"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data.skills)).toBe(true);

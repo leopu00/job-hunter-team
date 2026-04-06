@@ -60,23 +60,24 @@ describe("Sidebar", () => {
 /* ── NotificationCenter ── */
 describe("NotificationCenter", () => {
   const src = read("app/components/NotificationCenter.tsx");
-  it("export NotificationCenter + 'use client' + PRIORITY_COLOR 4 livelli", () => {
+  it("export NotificationCenter + 'use client' + TYPE_CFG con 5 tipi", () => {
     expect(src).toContain("use client");
     expect(src).toMatch(/export function NotificationCenter/);
-    for (const p of ["urgent", "high", "normal", "low"])
+    for (const p of ["agent_start", "agent_stop", "task_done", "error", "info"])
       expect(src).toContain(`${p}:`);
   });
-  it("timeAgo helper (s/m/h/g) + markRead + fetch /api/notifications", () => {
+  it("timeAgo helper (s/m/h/g) + markRead + storage locale notifiche", () => {
     expect(src).toContain("function timeAgo");
     expect(src).toContain("markRead");
-    expect(src).toContain("/api/notifications");
-    expect(src).toContain("PATCH");
+    expect(src).toContain("loadNotifications");
+    expect(src).toContain("saveNotifications");
+    expect(src).toContain("localStorage");
   });
   it("bell button + dropdown + 'Segna tutte lette' + 'Nessuna notifica'", () => {
-    expect(src).toContain("🔔");
+    expect(src).toContain("aria-label={t.title}");
     expect(src).toContain("Segna tutte lette");
     expect(src).toContain("Nessuna notifica");
-    expect(src).toContain("Vedi tutte le notifiche");
+    expect(src).toContain("Cancella tutto");
   });
 });
 
