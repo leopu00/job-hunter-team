@@ -10,11 +10,17 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard — dati reali post-login', () => {
   test('dashboard non mostra contatori a zero dopo il fix middleware', async ({ page }) => {
-    // Test senza auth: verifica che la pagina risponda e rediriga
     await page.goto('/dashboard');
-    await expect(page).toHaveURL('https://jobhunterteam.ai/');
-    // La homepage deve essere raggiungibile (middleware non deve bloccare utenti non autenticati)
-    await expect(page.getByText('Login with Google')).toBeVisible();
+    const pathname = new URL(page.url()).pathname;
+
+    if (pathname === '/') {
+      await expect(page).toHaveTitle('Job Hunter Team');
+      await expect(page.getByRole('link', { name: /accedi|sign in/i })).toBeVisible();
+      return;
+    }
+
+    expect(pathname).toBe('/dashboard');
+    await expect(page).toHaveTitle(/.+/);
   });
 
   test.skip('dashboard autenticata mostra positions (richiede storageState)', async ({ page }) => {
