@@ -109,6 +109,7 @@ export default function LandingNav() {
   const { t } = useLandingI18n()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const homeAnchor = (id: string) => pathname === '/' ? `#${id}` : `/#${id}`
 
   const navLinkStyle = (href: string) => ({
     color: pathname === href ? 'var(--color-green)' : 'var(--color-muted)',
@@ -136,10 +137,10 @@ export default function LandingNav() {
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
-          <a href="#features" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <a href={homeAnchor('features')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_features')}
           </a>
-          <a href="#how" className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <a href={homeAnchor('how')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_how')}
           </a>
           <a
@@ -208,10 +209,10 @@ export default function LandingNav() {
           className="md:hidden px-5 pb-4 flex flex-col gap-3"
           style={{ background: 'var(--color-void)', animation: 'fade-in 0.15s ease both' }}
         >
-          <a href="#features" onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <a href={homeAnchor('features')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_features')}
           </a>
-          <a href="#how" onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+          <a href={homeAnchor('how')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_how')}
           </a>
           <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"

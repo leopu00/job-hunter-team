@@ -2,12 +2,12 @@
 
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
+import { isMarketingRoute } from '../marketing-routes'
 
-const PROTECTED_PREFIXES = [
+const APP_CHROME_HIDDEN_PREFIXES = [
   '/dashboard', '/profile', '/capitano', '/scout', '/analista',
   '/scorer', '/scrittore', '/critico', '/sentinella', '/team',
-  '/applications', '/positions', '/ready', '/risposte', '/crescita',
-  '/assistente', '/setup', '/download', '/about', '/demo', '/pricing', '/privacy',
+  '/applications', '/positions', '/ready', '/risposte', '/crescita', '/assistente', '/setup',
 ]
 
 export default function MainContent({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export default function MainContent({ children }: { children: React.ReactNode })
     }
   }, [pathname])
 
-  const hasSidebar = pathname !== '/' && !PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const hasSidebar = !isMarketingRoute(pathname) && !APP_CHROME_HIDDEN_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
   const marginLeft = hasSidebar && !isMobile ? 'var(--sidebar-w, 200px)' : 0
 
   return (

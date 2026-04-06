@@ -4,6 +4,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { isMarketingRoute } from '../marketing-routes'
 
 const NotificationCenter = dynamic(() => import('./NotificationCenter').then(m => m.NotificationCenter))
 
@@ -120,12 +121,12 @@ function CopyPath({ path }: { path: string }) {
 
 // ── Breadcrumb ─────────────────────────────────────────────────────────────
 
-const HIDDEN_PATHS = ['/', '/setup']
+const HIDDEN_PATHS = ['/setup']
 const MAX_VISIBLE  = 3   // mostra max N segmenti, collassa il resto
 
 export default function Breadcrumb() {
   const pathname = usePathname()
-  if (!pathname || HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/auth')) return null
+  if (!pathname || HIDDEN_PATHS.includes(pathname) || isMarketingRoute(pathname) || pathname.startsWith('/auth')) return null
 
   const segments = pathname.split('/').filter(Boolean)
   if (segments.length === 0) return null
