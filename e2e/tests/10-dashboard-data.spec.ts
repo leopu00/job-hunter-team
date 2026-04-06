@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-dashboard-data';
 
 /**
  * FLUSSO 10 — DASHBOARD CON DATI REALI (post-login)
@@ -9,28 +12,26 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Dashboard — dati reali post-login', () => {
-  test('dashboard non mostra contatori a zero dopo il fix middleware', async ({ page }) => {
-    await page.goto('/dashboard');
-    const pathname = new URL(page.url()).pathname;
-
-    if (pathname === '/') {
-      await expect(page).toHaveTitle('Job Hunter Team');
-      await expect(page.getByRole('link', { name: /accedi|sign in/i })).toBeVisible();
-      return;
-    }
-
-    expect(pathname).toBe('/dashboard');
-    await expect(page).toHaveTitle(/.+/);
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
   });
 
-  test.skip('dashboard autenticata mostra positions (richiede storageState)', async ({ page }) => {
-    // SKIP: richiede sessione autenticata + fix middleware deployato
-    // Attivare con: test.use({ storageState: 'auth-state.json' })
+  test.beforeEach(async ({ page }) => {
+    await loginToSeededWorkspace(page, WORKSPACE);
+  });
+
+  test('dashboard non mostra contatori a zero dopo il fix middleware', async ({ page }) => {
     await page.goto('/dashboard');
-    // NON deve mostrare "0 positions" o contatori vuoti
-    await expect(page.getByText(/0 position|nessun risultato|no results/i)).not.toBeVisible();
-    // Deve mostrare almeno una riga di dati
-    const rows = page.locator('table tbody tr, [data-testid="position-row"], .position-item');
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
+    await expect(page.getByText(/3 posizioni totali/i).first()).toBeVisible();
+  });
+
+  test('dashboard autenticata mostra positions', async ({ page }) => {
+    await page.goto('/dashboard');
+    await expect(page.getByRole('table', { name: /posizioni recenti/i })).toBeVisible();
+    const rows = page.locator('table[aria-label="Posizioni recenti"] tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: /frontend engineer/i })).toBeVisible();
   });
 });
