@@ -276,7 +276,7 @@ function DownloadContent() {
           {/* Footer */}
           <div className="text-center">
             <p className="text-[10px] text-[var(--color-dim)]">
-              v{version}-alpha &middot; Job Hunter Team &middot;{' '}
+              v{version} &middot; Job Hunter Team &middot;{' '}
               <Link href="/" className="text-[var(--color-green)] hover:underline">{t('dl_home')}</Link>
               {' '}&middot;{' '}
               <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
