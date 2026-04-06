@@ -155,6 +155,8 @@ describe("/feedback", () => {
     expect(s).toContain("STATUS_CFG");
     expect(s).toContain("function Stars");
     expect(s).toContain("function timeAgo");
+    expect(s).toContain("SCREENSHOT URL");
+    expect(s).toContain("Ticketing non disponibile al momento");
   });
 });
 
