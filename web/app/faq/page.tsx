@@ -13,12 +13,12 @@ type FaqItem = { q: string; a: React.ReactNode }
 /** Testo puro per JSON-LD (schema.org FAQPage) — indice corrisponde a FAQ_ITEMS */
 const FAQ_TEXTS: string[] = [
   'Job Hunter Team (JHT) e un sistema open-source che automatizza la ricerca di lavoro usando un team di agenti AI. Ogni agente ha un ruolo specifico: trovare offerte, analizzarle, calcolare il match col tuo profilo, scrivere CV e cover letter personalizzate, e revisionarle. Tutto gira in locale sul tuo computer.',
-  'Configuri il tuo profilo (competenze, esperienza, preferenze) e avvii il team. Gli agenti collaborano in pipeline: lo Scout cerca offerte online, l\'Analista le analizza, lo Scorer calcola il match, lo Scrittore prepara i documenti e il Critico li revisiona. Il Capitano coordina tutto e la Sentinella monitora i costi.',
-  'No. JHT gira interamente in locale. Non c\'e registrazione, non c\'e login a servizi esterni, non c\'e cloud. Avvii il server sul tuo computer e accedi dal browser su localhost:3000.',
-  'Il software e gratuito e open-source. L\'unico costo e la chiave API Anthropic per far funzionare gli agenti AI (Claude). Una ricerca completa tipica consuma circa 1-5$ di API.',
+  'Configuri il tuo profilo e avvii il team dalla dashboard locale aperta dal launcher desktop. Gli agenti collaborano in pipeline: Scout trova offerte, Analista le legge, Scorer le ordina, Scrittore prepara i documenti e Critico li revisiona. Capitano coordina e Sentinella monitora costi e salute del sistema.',
+  'Per usare JHT in locale non serve creare un account. Scarichi il launcher desktop, completi il setup iniziale e lavori dal browser sulla dashboard locale aperta sul tuo computer.',
+  'Il software e gratuito e open-source. Non c\'e abbonamento JHT: l\'unico costo eventuale e il consumo dei provider AI o dei servizi esterni che decidi di collegare.',
   'Capitano (coordina il team), Scout (cerca offerte), Analista (analizza requisiti), Scorer (calcola match), Scrittore (genera CV e cover letter), Critico (revisiona documenti), Sentinella (monitora budget API).',
-  'Dalla web app vai su /team e premi Avvia Team. Dalla TUI avvia con cd tui && npm run dev, poi usa /start <agente>.',
-  'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Per eseguire gli agenti servono tmux e Claude CLI; su Windows tmux richiede WSL.',
+  'Apri JHT Desktop, completa il setup iniziale e dalla dashboard locale vai su /team per avviare gli agenti. Gli strumenti terminali restano disponibili soprattutto per sviluppo e troubleshooting avanzato.',
+  'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Una connessione internet serve per le chiamate ai provider AI. Per workflow avanzati o di sviluppo possono servire dipendenze aggiuntive come tmux, CLI provider o WSL.',
   'Si. Tutti i dati sono salvati nella cartella di lavoro locale sul tuo computer. Nessun dato viene inviato a server esterni.',
   'Si, ma con funzionalita limitate. Senza chiave API gli agenti AI non possono funzionare, pero puoi usare la web app per gestire candidature manualmente.',
   'JHT e open-source. Puoi contribuire su GitHub: segnala bug, proponi feature, o invia pull request.',
@@ -45,7 +45,7 @@ const FAQ_ITEMS: FaqItem[] = [
         l&apos;<strong>Analista</strong> le analizza, lo <strong>Scorer</strong> calcola il match,
         lo <strong>Scrittore</strong> prepara i documenti e il <strong>Critico</strong> li revisiona.
         Il <strong>Capitano</strong> coordina tutto e la <strong>Sentinella</strong> monitora i costi.
-        Puoi seguire il lavoro dalla web app o dalla TUI (terminale).
+        Il flusso principale passa dalla dashboard locale aperta dal launcher desktop.
       </>
     ),
   },
@@ -53,9 +53,10 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'Serve creare un account?',
     a: (
       <>
-        No. JHT gira interamente in locale. Non c&apos;e registrazione, non c&apos;e login
-        a servizi esterni, non c&apos;e cloud. Avvii il server sul tuo computer e accedi
-        dal browser su <code>localhost:3000</code>.
+        Per usare JHT in locale no. Scarichi il launcher desktop, completi il setup
+        iniziale e lavori dal browser sulla dashboard locale aperta sul tuo computer.
+        Se colleghi provider AI o altri servizi esterni, valgono naturalmente le regole
+        e gli account richiesti da quei servizi.
       </>
     ),
   },
@@ -63,11 +64,10 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'Quanto costa?',
     a: (
       <>
-        Il software e gratuito e open-source. L&apos;unico costo e la chiave API Anthropic
-        per far funzionare gli agenti AI (Claude). Una ricerca completa tipica consuma circa
-        1-5$ di API a seconda del volume di offerte. La Sentinella monitora i costi in tempo
-        reale e puoi impostare un budget massimo. Senza chiave API puoi comunque usare la
-        dashboard e gestire candidature manualmente.
+        Il software e gratuito e open-source. JHT non ti fattura un abbonamento:
+        l&apos;unico costo eventuale e il consumo dei provider AI o dei servizi esterni che scegli
+        di collegare. La Sentinella monitora i costi in tempo reale e puoi impostare un budget
+        massimo. Senza chiave API puoi comunque usare la dashboard e gestire candidature manualmente.
       </>
     ),
   },
@@ -89,14 +89,13 @@ const FAQ_ITEMS: FaqItem[] = [
     q: 'Come si avvia il team?',
     a: (
       <>
-        <strong>Dalla web app:</strong> vai su{' '}
+        <strong>Flusso principale:</strong> apri JHT Desktop, completa il setup iniziale e vai su{' '}
         <Link href="/team" className="text-[var(--color-green)] hover:underline no-underline">/team</Link>{' '}
-        e premi &quot;Avvia Team&quot;. Servono: una cartella di lavoro configurata,{' '}
-        <code>tmux</code> installato, e <code>Claude CLI</code> con una chiave API Anthropic.
+        per avviare il team dalla dashboard locale. Servono una cartella di lavoro configurata
+        e le credenziali dei provider che vuoi usare.
         <br /><br />
-        <strong>Dalla TUI:</strong> avvia con <code>cd tui &amp;&amp; npm run dev</code>,
-        poi usa il comando <code>/start &lt;agente&gt;</code> per avviare i singoli agenti,
-        oppure avviali tutti dalla vista Team.
+        <strong>Modalita avanzata:</strong> gli strumenti terminali restano disponibili soprattutto
+        per sviluppo e troubleshooting, ma non sono il percorso consigliato per l&apos;uso quotidiano.
         <br /><br />
         Consulta la <Link href="/guide" className="text-[var(--color-green)] hover:underline no-underline">guida</Link> per
         istruzioni dettagliate.
@@ -108,9 +107,9 @@ const FAQ_ITEMS: FaqItem[] = [
     a: (
       <>
         Il <strong>launcher desktop</strong> funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+.
-        Per far lavorare gli agenti servono anche <strong>tmux</strong> e <strong>Claude CLI</strong> (<code>npm i -g @anthropic-ai/claude-code</code>);
-        su Windows, <code>tmux</code> richiede ancora <strong>WSL</strong>.
         Serve una connessione internet per le chiamate API agli agenti AI.
+        Per alcuni workflow avanzati o di sviluppo possono servire dipendenze aggiuntive
+        come <strong>tmux</strong>, CLI provider dedicate o <strong>WSL</strong> su Windows.
       </>
     ),
   },
