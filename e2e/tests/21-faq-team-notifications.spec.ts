@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
  * Suite 3: toast notifiche agenti — sistema [role="alert"] / [aria-live]
  */
 
-const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:3000';
 const WORKSPACE_PATH = '/tmp/jht-test-workspace';
 
 /**
@@ -33,6 +33,18 @@ async function doWorkspaceAuth(page: any): Promise<boolean> {
   return true;
 }
 
+async function getBulkTeamAction(page: any) {
+  const stopAll = page.getByRole('button', { name: /ferma tutti/i });
+  if (await stopAll.count()) {
+    await expect(stopAll).toBeVisible({ timeout: 5000 });
+    return stopAll;
+  }
+
+  const startAll = page.getByRole('button', { name: /avvia tutti|tutti attivi/i });
+  await expect(startAll).toBeVisible({ timeout: 5000 });
+  return startAll;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SUITE 1 — /faq  (pagina pubblica, no auth)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,8 +60,7 @@ test.describe('/faq — Domande Frequenti', () => {
   });
 
   test('mostra tutte e 10 le domande FAQ come bottoni accordion', async ({ page }) => {
-    // Ogni domanda è un <button> con testo della domanda
-    const faqButtons = page.locator('button').filter({ hasText: /cos.e|come funziona|account|costa|agenti|avvia|requisiti|dati|senza chiave|contribui/i });
+    const faqButtons = page.locator('button[aria-controls^="faq-panel-"]');
     await expect(faqButtons).toHaveCount(10);
   });
 
@@ -113,11 +124,11 @@ test.describe('/faq — Domande Frequenti', () => {
     await expect(page.getByText(/tmux/i).first()).toBeVisible({ timeout: 3000 });
   });
 
-  test('risposta "Requisiti di sistema" menziona Node.js e tmux', async ({ page }) => {
+  test('risposta "Requisiti di sistema" menziona tmux e Claude CLI', async ({ page }) => {
     const btn = page.locator('button').filter({ hasText: /requisiti di sistema/i }).first();
     await btn.click();
-    const answer = page.getByText(/node\.js/i).first();
-    await expect(answer).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/tmux/i).first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/claude cli/i).first()).toBeVisible({ timeout: 3000 });
   });
 
 });
@@ -136,26 +147,22 @@ test.describe('/team — Pipeline e diagnostico agenti', () => {
     await expect(page.locator('h1')).toHaveText(/job hunter team/i);
   });
 
-  test('sottotitolo "Pipeline e comunicazione tra agenti" visibile', async ({ page }) => {
-    await expect(page.getByText(/pipeline e comunicazione tra agenti/i)).toBeVisible();
+  test('counter agenti attivi è visibile nell’header', async ({ page }) => {
+    await expect(page.getByText(/\d+\/8 agenti attivi/i).first()).toBeVisible();
   });
 
-  test('bottone "▶ Avvia Team" è presente e cliccabile', async ({ page }) => {
-    const avviaBtn = page.getByText('▶ Avvia Team');
+  test('bottone "▶ Avvia tutti" è presente e cliccabile', async ({ page }) => {
+    const avviaBtn = page.getByRole('button', { name: /avvia tutti|tutti attivi/i });
     await expect(avviaBtn).toBeVisible({ timeout: 5000 });
-    await expect(avviaBtn).toBeEnabled();
   });
 
-  test('pipeline SVG è visibile con le connessioni tra agenti', async ({ page }) => {
-    const svg = page.locator('svg').first();
-    await expect(svg).toBeVisible({ timeout: 5000 });
-    // Il testo "feedback" è presente nell'SVG come label del loop di ritorno
-    const feedbackLabel = page.getByText('feedback').first();
-    await expect(feedbackLabel).toBeVisible({ timeout: 5000 });
+  test('griglia agenti è visibile con card cliccabili', async ({ page }) => {
+    await expect(page.getByRole('article', { name: /Alfa/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('article', { name: /Assistente/i })).toBeVisible({ timeout: 5000 });
   });
 
-  test('tutti e 7 gli agenti sono visualizzati con nome e icona', async ({ page }) => {
-    const agents = ['Capitano', 'Sentinella', 'Scout', 'Analista', 'Scorer', 'Scrittore', 'Critico'];
+  test('tutti e 8 gli agenti sono visualizzati con nome e icona', async ({ page }) => {
+    const agents = ['Capitano', 'Sentinella', 'Scout', 'Analista', 'Scorer', 'Scrittore', 'Critico', 'Assistente'];
     for (const name of agents) {
       await expect(page.getByText(name).first()).toBeVisible({ timeout: 5000 });
     }
@@ -168,29 +175,27 @@ test.describe('/team — Pipeline e diagnostico agenti', () => {
   });
 
   test('ogni agente ha un status dot (indicatore di stato)', async ({ page }) => {
-    // Status dot: elemento span con dimensioni ridotte come pallino
-    // Dall'HTML: <span style="width:6px; height:6px; border-radius:50%">
-    const dots = page.locator('span[style*="border-radius: 50%"], span[style*="border-radius:50%"]');
+    const dots = page.locator('[role="status"]');
     const count = await dots.count();
-    expect(count, 'Attesi almeno 7 status dot (uno per agente)').toBeGreaterThanOrEqual(7);
+    expect(count, 'Attesi almeno 8 status dot (uno per agente)').toBeGreaterThanOrEqual(8);
   });
 
-  test('click su "▶ Avvia Team" non produce errori JavaScript critici', async ({ page }) => {
+  test('click su un controllo bulk non produce errori JavaScript critici', async ({ page }) => {
     const jsErrors: string[] = [];
     page.on('pageerror', (e) => jsErrors.push(e.message));
 
-    await page.getByText('▶ Avvia Team').click();
+    await (await getBulkTeamAction(page)).click();
     await page.waitForTimeout(2000);
 
     const critical = jsErrors.filter(e => !/expected|warning|chunk/i.test(e));
-    expect(critical, `Errori JS dopo click Avvia Team: ${critical.join(', ')}`).toHaveLength(0);
+    expect(critical, `Errori JS dopo click bulk action: ${critical.join(', ')}`).toHaveLength(0);
   });
 
-  test('click su "▶ Avvia Team" non causa navigazione o crash della pagina', async ({ page }) => {
+  test('click su un controllo bulk non causa navigazione o crash della pagina', async ({ page }) => {
     const jsErrors: string[] = [];
     page.on('pageerror', (e) => jsErrors.push(e.message));
 
-    await page.getByText('▶ Avvia Team').click();
+    await (await getBulkTeamAction(page)).click();
     // Aspetta stabilizzazione — la pagina non deve navigare altrove o crashare
     await page.waitForLoadState('domcontentloaded').catch(() => null);
     await page.waitForTimeout(2000);
@@ -198,7 +203,7 @@ test.describe('/team — Pipeline e diagnostico agenti', () => {
     // H1 ancora presente → pagina non crashata
     await expect(page.locator('h1')).toBeVisible({ timeout: 5000 });
     const critical = jsErrors.filter(e => !/expected|warning|chunk|network/i.test(e));
-    expect(critical, `Errori JS critici dopo click Avvia Team: ${critical.join(', ')}`).toHaveLength(0);
+    expect(critical, `Errori JS critici dopo click bulk action: ${critical.join(', ')}`).toHaveLength(0);
   });
 
 });
@@ -251,7 +256,7 @@ test.describe('Toast notifiche agenti — /agents', () => {
     const badges = page.locator('.badge');
     await expect(badges.first()).toBeVisible({ timeout: 5000 });
     const count = await badges.count();
-    expect(count, 'Attesi almeno 7 badge status (uno per agente)').toBeGreaterThanOrEqual(7);
+    expect(count, 'Attesi almeno 7 badge status (uno per agente principale)').toBeGreaterThanOrEqual(7);
     // Il testo di ogni badge deve essere leggibile (OFFLINE, ONLINE, RUNNING, ecc.)
     const badgeText = await badges.first().innerText();
     expect(badgeText.trim().length).toBeGreaterThan(0);
@@ -262,10 +267,10 @@ test.describe('Toast notifiche agenti — /agents', () => {
     await expect(counter).toBeVisible({ timeout: 5000 });
   });
 
-  test('ogni agente ha un bottone ▶ Start', async ({ page }) => {
-    const startBtns = page.getByText('▶ Start');
-    const count = await startBtns.count();
-    expect(count, 'Attesi almeno 7 bottoni ▶ Start').toBeGreaterThanOrEqual(7);
+  test('ogni agente ha un bottone di azione Start o Stop', async ({ page }) => {
+    const actionBtns = page.locator('button').filter({ hasText: /▶ Start|■ Stop/ });
+    const count = await actionBtns.count();
+    expect(count, 'Attesi almeno 7 bottoni azione agenti').toBeGreaterThanOrEqual(7);
   });
 
 });
