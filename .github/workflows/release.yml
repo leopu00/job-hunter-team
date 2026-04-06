@@ -19,6 +19,8 @@ jobs:
             label: macOS
             build_script: dist:mac
             artifact_name: desktop-mac-release
+            required_glob: desktop/dist/*.dmg
+            required_label: .dmg
             artifact_glob: |
               desktop/dist/*.dmg
               desktop/dist/*.blockmap
@@ -27,6 +29,8 @@ jobs:
             label: Windows
             build_script: dist:win
             artifact_name: desktop-windows-release
+            required_glob: desktop/dist/*.exe
+            required_label: .exe
             artifact_glob: |
               desktop/dist/*.exe
               desktop/dist/*.blockmap
@@ -35,6 +39,8 @@ jobs:
             label: Linux
             build_script: dist:linux
             artifact_name: desktop-linux-release
+            required_glob: desktop/dist/*.AppImage
+            required_label: .AppImage
             artifact_glob: |
               desktop/dist/*.AppImage
               desktop/dist/*.deb
@@ -72,6 +78,14 @@ jobs:
         run: npm run ${{ matrix.build_script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify expected desktop artifact
+        run: |
+          if ! compgen -G "${{ matrix.required_glob }}" > /dev/null; then
+            echo "Missing expected desktop artifact: ${{ matrix.required_label }}"
+            find desktop/dist -maxdepth 1 -type f | sort || true
+            exit 1
+          fi
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
@@ -139,7 +153,7 @@ jobs:
             ${{ steps.changelog.outputs.notes }}
 
             ---
-            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) per la storia completa.
+            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/fullstack/CHANGELOG.md) per la storia completa.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
