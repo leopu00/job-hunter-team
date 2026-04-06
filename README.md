@@ -69,7 +69,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | Interfaccia | Avvio | Stack |
 |-------------|-------|-------|
 | **Web Dashboard** | `cd web && npm run dev` | Next.js · 56 pagine |
-| **Desktop Launcher** | `JHT Desktop` *(roadmap)* | Installer `.dmg/.exe/.AppImage` · avvio background · browser su `localhost` |
+| **Desktop Launcher** | `JHT Desktop` | Installer `.dmg/.exe/.AppImage/.deb` · runtime locale · browser su `localhost` |
 | **CLI** | `jht team start` | Node.js · 15+ comandi |
 | **TUI** | `jht tui` | Terminal UI interattiva |
 | **Telegram** | Bot bridge bidirezionale | Grammy |
@@ -84,7 +84,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | **Database** | Supabase (PostgreSQL, Frankfurt) · SQLite (locale) |
 | **Auth** | Google OAuth · credenziali AES-256 |
 | **LLM** | Claude · OpenAI · Minimax (factory pattern) |
-| **CI/CD** | GitHub Actions · 5 workflow · Vercel |
+| **CI/CD** | GitHub Actions · 6 workflow · Vercel |
 | **Test** | Vitest · 800+ test case · 168 file |
 
 ---
@@ -114,6 +114,19 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 
 ## Installazione
 
+### Desktop Launcher
+
+- **macOS**: pacchetto `.dmg`
+- **Windows**: installer `.exe` (NSIS)
+- **Linux**: `.AppImage` e `.deb`
+
+Scarica il pacchetto corretto dalla pagina [`/download`](https://jobhunterteam.ai/download) o da GitHub Releases.
+Il launcher include il payload web gia compilato, avvia il runtime locale e apre la dashboard nel browser.
+
+### Installazione da Sorgente
+
+Questa modalita e pensata per sviluppo locale, hacking del repo e uso power-user da terminale.
+
 ### Prerequisiti
 
 - **Node.js** 18+ e npm
@@ -122,7 +135,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 - **Provider LLM a scelta** — OpenAI / Minimax / Anthropic API key; **Claude CLI** opzionale solo per flusso Claude Max
 - **pandoc + typst** (opzionale, per generazione PDF)
 
-### Quick Start
+### Quick Start da Sorgente
 
 ```bash
 git clone https://github.com/leopu00/job-hunter-team.git
@@ -196,14 +209,15 @@ cd web && docker compose up  # Docker
 | **Config** | Settings · Credenziali · Plugin · Tools · Templates · Provider · Migrazioni |
 | **Sistema** | Overview · Memory · Gateway · Canali · Notifiche · Cron · Deploy |
 
-### Desktop Launcher — roadmap
+### Desktop Launcher
 
 📦 La direzione prodotto per utenti non tecnici non è una riscrittura completa della UI in desktop native.
 
-- Il launcher desktop installerà JHT e le dipendenze necessarie in background.
-- Il launcher avvierà i servizi locali e aprirà automaticamente la GUI web nel browser su `http://localhost:3000`.
-- Le release desktop includeranno una build web già pronta: niente `npm install` o `next build` sul computer dell'utente.
-- `Claude CLI` non sarà obbligatorio: verrà richiesto solo se l'utente seleziona il flusso Claude Max invece di provider API-based.
+- Il launcher desktop usa Electron come shell minima e apre la GUI web locale nel browser.
+- Le release desktop includono il payload web gia compilato: niente `npm install` o `next build` sul computer dell'utente.
+- Il runtime locale parte sulla prima porta libera vicina a `3000` e apre automaticamente la dashboard.
+- Le release vengono prodotte in CI con pacchetti nativi per macOS, Windows e Linux.
+- `Claude CLI` resta opzionale: serve solo per i flussi che usano Claude Max invece di provider API-based.
 
 ---
 
@@ -225,7 +239,8 @@ cd tests/js && npx vitest run
 | `ci.yml` | Push / PR | Build Next.js, lint, type-check |
 | `lint.yml` | Push / PR | ESLint + Prettier su tutti i moduli |
 | `security.yml` | Schedule / PR | Audit dipendenze, scan segreti |
-| `deploy.yml` | Tag release | Deploy produzione con health-check |
+| `release.yml` | Tag release | Build desktop cross-platform (`.dmg`, `.exe`, `.AppImage`, `.deb`) + GitHub Release |
+| `deploy.yml` | Push su `master` / manuale | Deploy produzione con health-check |
 
 ---
 
@@ -263,7 +278,7 @@ curl http://localhost:3000/api/health
 - [x] Canali: Web, CLI, Telegram
 - [x] Credenziali AES-256, memoria agenti (SOUL/IDENTITY/MEMORY)
 - [x] Logger strutturato, analytics token/costi, notifiche multi-canale
-- [x] CI/CD con 5 workflow, 800+ test su 168 file
+- [x] CI/CD con 6 workflow, 800+ test su 168 file
 - [x] i18n it/en
 - [x] Supabase cloud (Frankfurt), Google OAuth, schema PostgreSQL V2
 
@@ -275,13 +290,15 @@ curl http://localhost:3000/api/health
 - [ ] Deploy Vercel con CI/CD
 - [ ] API layer agenti → Supabase (multi-tenant)
 
-### Fase 2 — Desktop Launcher (in pianificazione)
+### Fase 2 — Desktop Launcher (in corso)
 
-- [ ] Installer desktop (`.dmg` / `.exe` / `.AppImage`) per utenti non tecnici
-- [ ] Launcher/orchestratore locale che installa JHT, avvia tutto in background e apre il browser su `localhost`
-- [ ] Payload prebuildato: GUI web già compilata, niente rebuild sul computer dell'utente
+- [x] Installer desktop (`.dmg` / `.exe` / `.AppImage` / `.deb`) per utenti non tecnici
+- [x] Launcher/orchestratore locale che avvia JHT in background e apre il browser su `localhost`
+- [x] Payload prebuildato: GUI web gia compilata, niente rebuild sul computer dell'utente
+- [x] Release workflow cross-platform con GitHub Releases
 - [ ] Setup wizard grafico con scelta provider AI (`Claude CLI` solo se serve davvero)
-- [ ] Auto-update e code signing cross-platform
+- [ ] Code signing completo macOS/Windows
+- [ ] Auto-update cross-platform
 
 ### Fase 3 — Cloud Provisioning
 
@@ -298,7 +315,7 @@ curl http://localhost:3000/api/health
 
 ### Fase 5 — Sito Web Pubblico
 
-- [ ] Landing page con download e rilevamento OS
+- [x] Landing page con download e rilevamento OS
 - [ ] Documentazione visuale (guide, FAQ, video tutorial)
 
 ---

@@ -20,12 +20,12 @@ function GuideJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'HowTo',
     name: 'Come installare e configurare Job Hunter Team',
-    description: 'Guida passo-passo per installare Job Hunter Team, configurare la TUI e avviare la web app.',
+    description: 'Guida passo-passo per installare Job Hunter Team con il launcher desktop, configurare la TUI e avviare la web app.',
     step: [
-      { '@type': 'HowToStep', name: 'Installa i prerequisiti', text: 'Assicurati di avere Node.js 18+, Python 3.10+ e tmux installati.' },
-      { '@type': 'HowToStep', name: 'Clona il repository', text: 'git clone https://github.com/leopu00/job-hunter-team && cd job-hunter-team' },
+      { '@type': 'HowToStep', name: 'Scarica il launcher desktop', text: 'Vai alla pagina /download e scarica il pacchetto .dmg, .exe, .AppImage o .deb adatto al tuo sistema operativo.' },
+      { '@type': 'HowToStep', name: 'Installa e avvia', text: 'Apri il launcher desktop e completa il bootstrap iniziale per aprire la dashboard locale.' },
       { '@type': 'HowToStep', name: 'Configura la API key', text: 'Imposta la chiave Anthropic tramite la pagina di setup o il file di configurazione.' },
-      { '@type': 'HowToStep', name: 'Avvia il team', text: 'Lancia la TUI con ./start.sh oppure avvia la web app con npm run dev.' },
+      { '@type': 'HowToStep', name: 'Avvia il team', text: 'Dalla dashboard apri la pagina Team, oppure usa la TUI se preferisci una gestione da terminale.' },
     ],
   }
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />

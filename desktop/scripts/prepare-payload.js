@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process')
 const repoRoot = path.resolve(__dirname, '..', '..')
 const desktopRoot = path.join(repoRoot, 'desktop')
 const payloadRoot = path.join(desktopRoot, 'app-payload')
+const webRoot = path.join(repoRoot, 'web')
 
 const payloadDirs = ['web', 'shared', 'cli', 'scripts', '.launcher', 'agents']
 const payloadFiles = ['package.json', 'package-lock.json', 'requirements.txt', '.env.example']
@@ -42,10 +43,20 @@ function copyFile(name) {
   fs.copyFileSync(from, path.join(payloadRoot, name))
 }
 
+function ensureWebDependencies() {
+  if (fs.existsSync(path.join(webRoot, 'node_modules'))) return
+
+  console.log('[payload] installing web dependencies...')
+  execFileSync('npm', ['ci'], {
+    cwd: webRoot,
+    stdio: 'inherit',
+  })
+}
+
 function ensureWebBuild() {
   console.log('[payload] building web production bundle...')
   execFileSync('npm', ['run', 'build'], {
-    cwd: path.join(repoRoot, 'web'),
+    cwd: webRoot,
     stdio: 'inherit',
   })
 }
@@ -53,6 +64,7 @@ function ensureWebBuild() {
 function main() {
   rm(payloadRoot)
   mkdir(payloadRoot)
+  ensureWebDependencies()
   ensureWebBuild()
 
   for (const dir of payloadDirs) copyDir(dir)

@@ -122,8 +122,8 @@ const translations = {
   },
   demo_s0_title:     { it: 'Scarica e avvia',        en: 'Download and launch' },
   demo_s0_desc:      {
-    it: 'Scarica il pacchetto, estrai e lancia start.sh. Il server si avvia su localhost:3000 e il browser si apre automaticamente.',
-    en: 'Download the package, extract and run start.sh. The server starts on localhost:3000 and the browser opens automatically.',
+    it: 'Scarica l\'installer desktop per il tuo sistema operativo, completa il primo avvio e lascia che il launcher apra la dashboard locale nel browser.',
+    en: 'Download the desktop installer for your operating system, complete first launch, and let the launcher open the local dashboard in your browser.',
   },
   demo_s1_title:     { it: 'Configura il profilo',   en: 'Configure your profile' },
   demo_s1_desc:      {
@@ -201,8 +201,8 @@ const translations = {
   dl_step3_desc:     { it: 'Il browser si apre su localhost con l\'interfaccia del team', en: 'The browser opens on localhost with the team interface' },
   dl_setup_title:    { it: 'Nota installazione',        en: 'Install note' },
   dl_setup_desc:     {
-    it: 'Su macOS il launcher nel file .dmg gestisce il bootstrap in background. Su Linux e Windows i pacchetti attuali possono ancora richiedere Node.js 18+.',
-    en: 'On macOS the launcher inside the .dmg handles bootstrap in the background. On Linux and Windows, the current packages may still require Node.js 18+.',
+    it: 'I pacchetti desktop per macOS, Windows e Linux includono il launcher Electron e il payload web gia pronto. Su Linux possono servire librerie di sistema standard per AppImage.',
+    en: 'The macOS, Windows, and Linux desktop packages include the Electron launcher and a prebuilt web payload. On Linux you may still need standard system libraries for AppImage support.',
   },
   dl_setup_link:     { it: 'Node.js disponibile su',    en: 'Node.js available at' },
   dl_home:           { it: 'Home',                       en: 'Home' },
@@ -213,6 +213,14 @@ const translations = {
     it: ['Apri il file .dmg scaricato', 'Trascina JHT Desktop nella cartella Applicazioni', 'Avvia JHT Desktop: il launcher aprira la dashboard nel browser'],
     en: ['Open the downloaded .dmg file', 'Drag JHT Desktop into the Applications folder', 'Launch JHT Desktop: the launcher will open the dashboard in your browser'],
   },
+  dl_linux_instr:    {
+    it: ['Scarica il file .AppImage', 'Rendilo eseguibile e avvialo: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage', 'JHT Desktop apre la dashboard locale nel browser'],
+    en: ['Download the .AppImage file', 'Make it executable and launch it: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage', 'JHT Desktop opens the local dashboard in your browser'],
+  },
+  dl_windows_instr:  {
+    it: ['Scarica il file .exe', 'Esegui il setup guidato NSIS e completa l\'installazione', 'Apri JHT Desktop dal menu Start: il launcher avvia la dashboard locale nel browser'],
+    en: ['Download the .exe file', 'Run the NSIS setup wizard and complete the installation', 'Open JHT Desktop from the Start menu: the launcher starts the local dashboard in your browser'],
+  },
   dl_mac_guide_title: {
     it: 'Guida installazione macOS',
     en: 'macOS Installation Guide',
@@ -222,34 +230,34 @@ const translations = {
     en: 'Requirements',
   },
   dl_mac_prereq: {
-    it: ['macOS 12 Monterey o successivo', 'Node.js 18 o successivo (vedi sotto come installarlo)', 'Circa 500 MB di spazio libero', 'Connessione internet (solo per la prima installazione)'],
-    en: ['macOS 12 Monterey or later', 'Node.js 18 or later (see below how to install it)', 'About 500 MB of free disk space', 'Internet connection (only for the first install)'],
+    it: ['macOS 12 Monterey o successivo', 'Circa 500 MB di spazio libero', 'Connessione internet per scaricare il pacchetto e il primo bootstrap', 'Permesso per aprire il browser locale quando richiesto'],
+    en: ['macOS 12 Monterey or later', 'About 500 MB of free disk space', 'Internet connection to download the package and complete first bootstrap', 'Permission to open the local browser when prompted'],
   },
   dl_mac_node_title: {
-    it: 'Passo 1 — Installa Node.js',
-    en: 'Step 1 — Install Node.js',
+    it: 'Passo 1 — Apri il pacchetto',
+    en: 'Step 1 — Open the package',
   },
   dl_mac_node_desc: {
-    it: 'Se non hai gia\' Node.js, il metodo piu\' semplice e\' con Homebrew:',
-    en: 'If you don\'t have Node.js yet, the easiest method is with Homebrew:',
+    it: 'Il launcher desktop non richiede Node.js separato. Per iniziare:',
+    en: 'The desktop launcher does not require a separate Node.js install. To begin:',
   },
   dl_mac_node_steps: {
     it: [
-      'Apri il Terminale (Applicazioni > Utility > Terminale, oppure cerca "Terminale" in Spotlight con Cmd+Spazio)',
-      'Se non hai Homebrew, installalo: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
-      'Installa Node.js: brew install node',
-      'Verifica: node -v (deve mostrare v18 o superiore)',
+      'Scarica il pacchetto macOS dal bottone qui sopra',
+      'Apri il file .dmg scaricato',
+      'Trascina JHT Desktop nella cartella Applicazioni',
+      'Se macOS chiede conferma, consenti l\'apertura dell\'app',
     ],
     en: [
-      'Open Terminal (Applications > Utilities > Terminal, or search "Terminal" in Spotlight with Cmd+Space)',
-      'If you don\'t have Homebrew, install it: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
-      'Install Node.js: brew install node',
-      'Verify: node -v (should show v18 or higher)',
+      'Download the macOS package from the button above',
+      'Open the downloaded .dmg file',
+      'Drag JHT Desktop into Applications',
+      'If macOS asks for confirmation, allow the app to open',
     ],
   },
   dl_mac_node_alt: {
-    it: 'In alternativa, scarica l\'installer da nodejs.org e segui la procedura guidata.',
-    en: 'Alternatively, download the installer from nodejs.org and follow the setup wizard.',
+    it: 'Se Gatekeeper blocca l\'app, vai in Impostazioni di Sistema > Privacy e Sicurezza e scegli "Apri comunque".',
+    en: 'If Gatekeeper blocks the app, go to System Settings > Privacy & Security and choose "Open Anyway".',
   },
   dl_mac_install_title: {
     it: 'Passo 2 — Scarica e avvia',
@@ -257,20 +265,16 @@ const translations = {
   },
   dl_mac_install_steps: {
     it: [
-      'Scarica il pacchetto macOS dal bottone qui sopra',
-      'Apri il Terminale e vai nella cartella Downloads: cd ~/Downloads',
-      'Estrai l\'archivio: tar -xzf job-hunter-team-*.tar.gz',
-      'Entra nella cartella: cd job-hunter-team',
-      'Rendi eseguibile lo script: chmod +x start.sh',
-      'Avvia: ./start.sh',
+      'Apri JHT Desktop dalla cartella Applicazioni',
+      'Attendi il bootstrap iniziale del runtime locale',
+      'Se richiesto, consenti all\'app di aprire il browser',
+      'La dashboard verra aperta automaticamente su localhost',
     ],
     en: [
-      'Download the macOS package from the button above',
-      'Open Terminal and go to your Downloads folder: cd ~/Downloads',
-      'Extract the archive: tar -xzf job-hunter-team-*.tar.gz',
-      'Enter the folder: cd job-hunter-team',
-      'Make the script executable: chmod +x start.sh',
-      'Launch: ./start.sh',
+      'Open JHT Desktop from the Applications folder',
+      'Wait for the first local runtime bootstrap',
+      'If prompted, allow the app to open the browser',
+      'The dashboard will open automatically on localhost',
     ],
   },
   dl_mac_expect_title: {
@@ -279,29 +283,21 @@ const translations = {
   },
   dl_mac_expect_steps: {
     it: [
-      'Lo script verifica che Node.js sia installato',
-      'Installa le dipendenze automaticamente (solo la prima volta)',
-      'Compila l\'applicazione (solo la prima volta, richiede qualche minuto)',
-      'Avvia il server locale sulla porta 3000',
-      'Apre automaticamente Safari su http://localhost:3000',
-      'Per fermare il server: premi Ctrl+C nel Terminale',
+      'Il launcher verifica il payload web incluso nell\'app',
+      'Avvia il runtime locale su una porta libera, di default 3000',
+      'Apre automaticamente il browser sulla dashboard locale',
+      'Puoi fermare o riaprire JHT dal launcher desktop',
+      'Se la porta 3000 e occupata, il launcher usa una porta vicina libera',
+      'I log restano salvati localmente per il debug',
     ],
     en: [
-      'The script checks that Node.js is installed',
-      'Installs dependencies automatically (first time only)',
-      'Builds the application (first time only, takes a few minutes)',
-      'Starts the local server on port 3000',
-      'Automatically opens Safari at http://localhost:3000',
-      'To stop the server: press Ctrl+C in the Terminal',
+      'The launcher verifies the web payload bundled inside the app',
+      'It starts the local runtime on a free port, defaulting to 3000',
+      'It automatically opens the browser on the local dashboard',
+      'You can stop or reopen JHT from the desktop launcher',
+      'If port 3000 is busy, the launcher picks a nearby free port',
+      'Logs stay on disk locally for debugging',
     ],
-  },
-  dl_linux_instr:    {
-    it: ["Estrai l'archivio: tar -xzf job-hunter-team-*.tar.gz", 'Entra nella cartella: cd job-hunter-team', 'Avvia: ./start.sh'],
-    en: ['Extract the archive: tar -xzf job-hunter-team-*.tar.gz', 'Enter the folder: cd job-hunter-team', 'Launch: ./start.sh'],
-  },
-  dl_windows_instr:  {
-    it: ['Estrai lo ZIP in una cartella', 'Doppio click su start.bat', 'Oppure: PowerShell > .\\start.ps1'],
-    en: ['Extract the ZIP to a folder', 'Double-click start.bat', 'Or: PowerShell > .\\start.ps1'],
   },
 
   // Guide page

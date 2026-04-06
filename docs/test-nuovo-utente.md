@@ -6,6 +6,14 @@
 
 ---
 
+## Nota Storica
+
+Questo documento descrive il test dell'alpha pre-launcher desktop.
+I riferimenti a `start.sh`, `setup.sh` e al bootstrap manuale da terminale vanno letti come contesto storico e non come flusso installativo corrente.
+Il flusso attuale per utenti non tecnici passa dal launcher desktop (`.dmg`, `.exe`, `.AppImage`, `.deb`).
+
+---
+
 ## Sommario
 
 Test end-to-end della piattaforma Job Hunter Team simulando un utente nuovo (Marco Rossi) che esegue l'onboarding completo e la pipeline di ricerca lavoro.
@@ -42,7 +50,7 @@ Test end-to-end della piattaforma Job Hunter Team simulando un utente nuovo (Mar
 | 3 | `cp candidate_profile.example.yml candidate_profile.yml` | BUG | README diceva `candidate_profile.example.yml` ma il file si chiama `candidate_profile.yml.example` — **FIXATO in PR #3** |
 | 4 | Edit `candidate_profile.yml` | WARN | Il profilo ha struttura complessa: campi top-level per scout/analista/scorer + sezione `candidate` nested per scrittore. Manca documentazione inline sulla struttura attesa |
 | 5 | `python3 shared/skills/db_init.py` | OK | DB creato correttamente con tutte le tabelle |
-| 6 | `./start.sh` | NON TESTATO | Script di avvio team non presente nell'alpha pubblica |
+| 6 | `./start.sh` | NON TESTATO | Script di avvio team non presente nell'alpha pubblica dell'epoca |
 
 ### 2.2 Dipendenze
 
@@ -59,7 +67,7 @@ Test end-to-end della piattaforma Job Hunter Team simulando un utente nuovo (Mar
 1. **Manca `requirements.txt`** — **FIXATO** in PR #4 (requirements.txt + setup.sh aggiornato)
 2. **Naming mismatch README** — **FIXATO** in PR #3
 3. **`candidate_profile.yml` ha schema complesso** — la struttura mescola campi top-level (per scout/analista/scorer) con sezione `candidate` nested (per scrittore). Serve documentazione
-4. **`start.sh` non presente** — il README lo menziona ma non esiste nell'alpha. **setup.sh** aggiunto in PR #1/#4
+4. **`start.sh` non presente** — il README lo menzionava ma non esisteva nell'alpha. Documento storico: il flusso attuale usa il launcher desktop.
 5. **DB seed data** — `ensure_schema()` inserisce 3 posizioni di esempio, non documentato
 6. **`db_update.py` messaggio confuso** — mostra "status = ?" invece del valore reale (QA finding)
 7. **`interview_round` mancante da schema** — documentato in db-schema.md ma non in _db.py (QA finding)
@@ -158,7 +166,7 @@ Report dettagliato: `shared/data/e2e-edge-cases-report.txt`
 
 ### Priorita Media
 7. **Documentare la struttura di `candidate_profile.yml`** — schema complesso non ovvio
-8. ~~**Aggiungere `setup.sh`**~~ — **FIXATO** (PR #1 + PR #4)
+8. ~~**Aggiungere `setup.sh`**~~ — **FIXATO** (PR #1 + PR #4, rilevante solo per il flusso alpha storico)
 9. **DB di test separato** per evitare interferenze in test paralleli
 10. **Validazione input centralizzata** (modulo validators.py in shared/skills/)
 

@@ -58,13 +58,13 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
     instructions: [],
   },
   {
-    id: 'linux', label: 'Linux', file: `job-hunter-team-${FALLBACK_VERSION}-linux.tar.gz`, size: null,
-    requirements: 'Ubuntu 20.04+ / Fedora 36+ / Debian 11+, Node.js 18+',
+    id: 'linux', label: 'Linux', file: `job-hunter-team-${FALLBACK_VERSION}-linux.AppImage`, size: null,
+    requirements: 'Ubuntu 22.04+ / Debian 12+ / Fedora 39+ (x64)',
     instructions: [],
   },
   {
-    id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.zip`, size: null,
-    requirements: 'Windows 10+, Node.js 18+, PowerShell 5.1+',
+    id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.exe`, size: null,
+    requirements: 'Windows 10/11 (x64)',
     instructions: [],
   },
 ]
@@ -235,10 +235,7 @@ function DownloadContent() {
               <div>
                 <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_setup_title')}</p>
                 <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
-                  {t('dl_setup_desc')}{' '}
-                  {t('dl_setup_link')}{' '}
-                  <a href="https://nodejs.org" target="_blank" rel="noopener noreferrer"
-                    className="text-[var(--color-green)] hover:underline">nodejs.org</a>.
+                  {t('dl_setup_desc')}
                 </p>
               </div>
             </div>

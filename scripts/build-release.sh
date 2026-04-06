@@ -1,89 +1,95 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────
-# Job Hunter Team — Build Release Archives
-# Genera pacchetti scaricabili per Mac, Linux e Windows
-# Output: dist/job-hunter-team-{mac,linux,windows}.{tar.gz,zip}
+# Job Hunter Team — Desktop Release Builder
+# Costruisce i pacchetti Electron nativi per il sistema corrente
+# o per un target esplicito supportato dall'host.
 # ──────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
-BUILD_NAME="job-hunter-team"
-VERSION=$(node -p "require('$ROOT_DIR/web/package.json').version" 2>/dev/null || echo "0.1.0")
+DESKTOP_DIR="$ROOT_DIR/desktop"
+TARGET="${1:-auto}"
 
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
 info() { echo -e "${CYAN}[build]${NC} $1"; }
 ok()   { echo -e "${GREEN}[done]${NC}  $1"; }
+warn() { echo -e "${YELLOW}[warn]${NC}  $1"; }
+fail() { echo -e "${RED}[err]${NC}   $1"; exit 1; }
+
+detect_host_target() {
+  case "$(uname -s)" in
+    Darwin) echo "mac" ;;
+    Linux) echo "linux" ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) echo "windows" ;;
+    *) fail "Host non supportato: $(uname -s)" ;;
+  esac
+}
+
+resolve_target() {
+  case "$1" in
+    auto) detect_host_target ;;
+    mac|linux|windows) echo "$1" ;;
+    win) echo "windows" ;;
+    all)
+      fail "Build cross-platform complete: usa il workflow GitHub Release, che compila macOS/Windows/Linux sui runner nativi."
+      ;;
+    *)
+      fail "Target non valido: $1 (usa: auto, mac, linux, windows)"
+      ;;
+  esac
+}
+
+run_build() {
+  case "$1" in
+    mac) npm --prefix "$DESKTOP_DIR" run dist:mac ;;
+    linux) npm --prefix "$DESKTOP_DIR" run dist:linux ;;
+    windows) npm --prefix "$DESKTOP_DIR" run dist:win ;;
+    *) fail "Target non gestito: $1" ;;
+  esac
+}
+
+FINAL_TARGET="$(resolve_target "$TARGET")"
 
 echo ""
-echo -e "${GREEN}${BOLD}Build Release — Job Hunter Team v$VERSION${NC}"
+echo -e "${GREEN}${BOLD}Desktop Release Build — target: ${FINAL_TARGET}${NC}"
 echo ""
 
-# ── Pulizia ──
-rm -rf "$DIST_DIR"
-mkdir -p "$DIST_DIR/staging"
+if ! command -v npm >/dev/null 2>&1; then
+  fail "npm non trovato. Installa Node.js 20+ prima di creare i pacchetti desktop."
+fi
 
-STAGE="$DIST_DIR/staging/$BUILD_NAME"
-mkdir -p "$STAGE"
+if [ ! -f "$DESKTOP_DIR/package.json" ]; then
+  fail "Directory desktop/ non trovata in $ROOT_DIR"
+fi
 
-# ── Copia file del progetto ──
-info "Copia file del progetto..."
+case "$FINAL_TARGET" in
+  mac)
+    [ "$(uname -s)" = "Darwin" ] || fail "Il pacchetto macOS va generato da macOS."
+    ;;
+  linux)
+    [ "$(uname -s)" = "Linux" ] || fail "Il pacchetto Linux va generato da Linux."
+    ;;
+  windows)
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*|Windows_NT) ;;
+      *) fail "Il pacchetto Windows va generato da Windows oppure dal workflow GitHub Release." ;;
+    esac
+    ;;
+esac
 
-# Directories principali
-for dir in web shared cli; do
-  if [ -d "$ROOT_DIR/$dir" ]; then
-    rsync -a --exclude='node_modules' --exclude='.next' --exclude='.turbo' \
-      "$ROOT_DIR/$dir/" "$STAGE/$dir/"
-  fi
-done
+info "Eseguo il build desktop per ${FINAL_TARGET}..."
+run_build "$FINAL_TARGET"
 
-# File root
-for f in package.json package-lock.json requirements.txt; do
-  [ -f "$ROOT_DIR/$f" ] && cp "$ROOT_DIR/$f" "$STAGE/"
-done
-
-ok "File copiati"
-
-# ── Build Mac (.tar.gz) ──
-info "Build pacchetto macOS..."
-cp "$ROOT_DIR/scripts/launchers/start-mac.sh" "$STAGE/start.sh"
-chmod +x "$STAGE/start.sh"
-cd "$DIST_DIR/staging"
-tar -czf "$DIST_DIR/${BUILD_NAME}-${VERSION}-mac.tar.gz" "$BUILD_NAME"
-rm "$STAGE/start.sh"
-ok "${BUILD_NAME}-${VERSION}-mac.tar.gz"
-
-# ── Build Linux (.tar.gz) ──
-info "Build pacchetto Linux..."
-cp "$ROOT_DIR/scripts/launchers/start-linux.sh" "$STAGE/start.sh"
-chmod +x "$STAGE/start.sh"
-cd "$DIST_DIR/staging"
-tar -czf "$DIST_DIR/${BUILD_NAME}-${VERSION}-linux.tar.gz" "$BUILD_NAME"
-rm "$STAGE/start.sh"
-ok "${BUILD_NAME}-${VERSION}-linux.tar.gz"
-
-# ── Build Windows (.zip) ──
-info "Build pacchetto Windows..."
-cp "$ROOT_DIR/scripts/launchers/start-windows.bat" "$STAGE/start.bat"
-cp "$ROOT_DIR/scripts/launchers/start-windows.ps1" "$STAGE/start.ps1"
-cd "$DIST_DIR/staging"
-zip -rq "$DIST_DIR/${BUILD_NAME}-${VERSION}-windows.zip" "$BUILD_NAME"
-rm "$STAGE/start.bat" "$STAGE/start.ps1"
-ok "${BUILD_NAME}-${VERSION}-windows.zip"
-
-# ── Pulizia staging ──
-rm -rf "$DIST_DIR/staging"
-
-# ── Report ──
 echo ""
-echo -e "${GREEN}${BOLD}Build completata!${NC}"
+ok "Build completata. Artefatti in $DESKTOP_DIR/dist"
 echo ""
-echo "  Pacchetti in $DIST_DIR:"
-ls -lh "$DIST_DIR"/*.{tar.gz,zip} 2>/dev/null | awk '{print "    " $NF " (" $5 ")"}'
+find "$DESKTOP_DIR/dist" -maxdepth 1 -type f | sort | sed 's#^#  - #'
 echo ""
-echo "  Carica questi file su GitHub Releases per renderli scaricabili."
+warn "Per pubblicare tutti i pacchetti insieme usa il workflow GitHub Release, che crea macOS, Windows e Linux in parallelo."
 echo ""

@@ -2,12 +2,27 @@
 
 Guida per avviare il sistema in 5 minuti.
 
+## Percorso Consigliato
+
+Per utenti finali: scarica il launcher desktop dalla pagina `/download` o da GitHub Releases.
+
+- macOS: `.dmg`
+- Windows: `.exe`
+- Linux: `.AppImage` oppure `.deb`
+
+Il launcher avvia il runtime locale e apre automaticamente la dashboard nel browser.
+
+## Setup da Sorgente
+
+Questa sezione e' per sviluppo locale e uso power-user.
+
 ## Prerequisiti
 
 - Python 3.10+
 - tmux
 - git
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
+- Node.js 18+
 
 ## Setup
 
@@ -24,7 +39,8 @@ cp candidate_profile.yml.example candidate_profile.yml
 cp .env.example .env
 # Inserisci la tua ANTHROPIC_API_KEY in .env
 
-# 4. Inizializza il database
+# 4. Installa dipendenze e inizializza il database
+npm install
 mkdir -p shared/data
 python3 shared/skills/db_init.py
 ```
