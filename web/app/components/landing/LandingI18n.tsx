@@ -192,6 +192,8 @@ const translations = {
   dl_instructions:   { it: 'Istruzioni',                en: 'Instructions' },
   dl_close:          { it: 'Chiudi',                     en: 'Close' },
   dl_download:       { it: 'Scarica',                    en: 'Download' },
+  dl_view_release:   { it: 'Vedi release',               en: 'View release' },
+  dl_asset_pending:  { it: 'Installer non ancora presente nella latest release: apro la pagina release invece del download diretto.', en: 'Installer not yet present in the latest release: opening the release page instead of a direct download.' },
   dl_how_title:      { it: 'Come funziona',              en: 'How it works' },
   dl_step1_title:    { it: 'Scarica',                    en: 'Download' },
   dl_step1_desc:     { it: 'Scegli il pacchetto per il tuo sistema operativo', en: 'Choose the package for your operating system' },
@@ -484,11 +486,7 @@ export function useLandingI18n() {
 }
 
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('it')
-
-  useEffect(() => {
-    setLangState(getSavedLang())
-  }, [])
+  const [lang, setLangState] = useState<Lang>(() => getSavedLang())
 
   useEffect(() => {
     document.documentElement.lang = lang
