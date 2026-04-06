@@ -8,190 +8,141 @@ import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 import FadeInSection from '../components/landing/FadeInSection'
 
-/* ── i18n ─────────────────────────────────────────────────────────── */
-
 const T = {
   it: {
-    title: 'Prezzi',
-    subtitle: 'Scegli il piano adatto a te. Tutti i piani includono aggiornamenti gratuiti.',
-    monthly: 'Mensile',
-    yearly: 'Annuale',
-    yearly_save: 'Risparmi 20%',
-    month: '/mese',
-    year: '/anno',
-    free_name: 'Free',
-    free_desc: 'Per iniziare a cercare lavoro con gli agenti AI.',
-    pro_name: 'Pro',
-    pro_desc: 'Per chi cerca lavoro seriamente e vuole risultati veloci.',
-    ent_name: 'Enterprise',
-    ent_desc: 'Per team HR, agenzie e uso professionale ad alto volume.',
-    popular: 'Popolare',
-    cta_free: 'Inizia gratis',
-    cta_pro: 'Scegli Pro',
-    cta_ent: 'Contattaci',
-    features_title: 'Confronto funzionalita',
-    faq_title: 'Domande sui prezzi',
-    feature_agents: 'Agenti AI',
-    feature_searches: 'Ricerche al mese',
-    feature_cv: 'CV e cover letter',
-    feature_analytics: 'Analytics',
-    feature_priority: 'Supporto prioritario',
-    feature_api: 'Accesso API',
-    feature_custom: 'Agenti personalizzati',
-    feature_sla: 'SLA garantito',
-    feature_onboarding: 'Onboarding dedicato',
-    val_3agents: '3 agenti',
-    val_7agents: '7 agenti',
-    val_unlimited: 'Illimitati',
-    val_10: '10',
-    val_100: '100',
-    val_unlimited_s: 'Illimitate',
-    val_5: '5 / mese',
-    val_50: '50 / mese',
-    val_basic: 'Base',
-    val_advanced: 'Avanzato',
-    val_full: 'Completo',
-    faq1_q: 'Posso cambiare piano in qualsiasi momento?',
-    faq1_a: 'Si, puoi fare upgrade o downgrade in qualsiasi momento. Il cambio e immediato e il costo viene calcolato pro-rata.',
-    faq2_q: 'Cosa succede quando finiscono le ricerche mensili?',
-    faq2_a: 'Nel piano Free le ricerche si fermano fino al mese successivo. Nei piani a pagamento puoi acquistare ricerche aggiuntive oppure fare upgrade.',
-    faq3_q: 'Serve una carta di credito per il piano Free?',
-    faq3_a: 'No, il piano Free non richiede nessun metodo di pagamento. Puoi usarlo quanto vuoi senza impegno.',
-    faq4_q: 'Come funziona il piano Enterprise?',
-    faq4_a: 'Il piano Enterprise e personalizzato per le esigenze della tua organizzazione. Contattaci per una demo e un preventivo su misura.',
-    faq5_q: 'I miei dati sono al sicuro?',
-    faq5_a: 'Tutti i dati vengono processati in locale sul tuo computer. Nessun dato personale viene inviato ai nostri server. Le uniche chiamate esterne sono verso le API AI per gli agenti.',
+    title: 'Costi',
+    subtitle: 'Job Hunter Team non ha piani SaaS. Scarichi il launcher desktop gratis e paghi solo gli eventuali servizi esterni che scegli di collegare.',
+    badge: 'trasparenza costi',
+    card_software: 'Software JHT',
+    card_software_price: '€0',
+    card_software_desc: 'Launcher desktop, dashboard locale, aggiornamenti e codice open source.',
+    card_software_cta: 'Scarica JHT',
+    card_api: 'API AI',
+    card_api_price: 'A consumo',
+    card_api_desc: 'Porti la tua chiave provider e paghi direttamente il consumo reale dei modelli.',
+    card_api_cta: 'Leggi la guida',
+    card_infra: 'Infra locale',
+    card_infra_price: 'Il tuo computer',
+    card_infra_desc: 'Nessun cloud JHT obbligatorio: runtime, log e dati restano in locale.',
+    card_infra_cta: 'Vedi FAQ',
+    included_title: 'Cosa e incluso, cosa no',
+    included_name: 'Voce',
+    included_yes: 'Incluso in JHT',
+    included_no: 'Costo esterno possibile',
+    row_launcher: 'Launcher desktop e dashboard locale',
+    row_updates: 'Aggiornamenti del progetto',
+    row_agents: 'Team di agenti e workflow applicativo',
+    row_storage: 'Dati, log e workspace locali',
+    row_ai: 'Token API dei modelli AI',
+    row_provider: 'Account provider AI / billing',
+    yes_free: 'Si, gratis',
+    yes_local: 'Si, sul tuo computer',
+    no_none: 'No',
+    no_usage: 'Si, solo se usi provider esterni',
+    no_provider: 'Si, dipende dal provider scelto',
+    faq_title: 'FAQ costi',
+    faq1_q: 'JHT e gratuito?',
+    faq1_a: 'Si. Il software, il launcher desktop e la dashboard locale sono gratuiti e open source.',
+    faq2_q: 'Allora cosa pago davvero?',
+    faq2_a: 'Solo l eventuale consumo dei provider AI che colleghi, per esempio Anthropic o OpenAI. JHT non ti fattura un abbonamento.',
+    faq3_q: 'Serve carta di credito per scaricarlo?',
+    faq3_a: 'No. Per scaricare e installare JHT non serve nessun pagamento. Una carta puo servire solo sul provider AI scelto da te.',
+    faq4_q: 'I miei dati passano dai server di JHT?',
+    faq4_a: 'No. Workspace, log, profilo e dashboard restano locali. Le sole chiamate esterne dipendono dai provider e servizi che configuri.',
+    footer_prev: '← FAQ',
+    footer_next: 'Download →',
   },
   en: {
-    title: 'Pricing',
-    subtitle: 'Choose the plan that fits you. All plans include free updates.',
-    monthly: 'Monthly',
-    yearly: 'Yearly',
-    yearly_save: 'Save 20%',
-    month: '/mo',
-    year: '/yr',
-    free_name: 'Free',
-    free_desc: 'Get started with AI-powered job hunting.',
-    pro_name: 'Pro',
-    pro_desc: 'For serious job seekers who want fast results.',
-    ent_name: 'Enterprise',
-    ent_desc: 'For HR teams, agencies, and high-volume professional use.',
-    popular: 'Popular',
-    cta_free: 'Start free',
-    cta_pro: 'Choose Pro',
-    cta_ent: 'Contact us',
-    features_title: 'Feature comparison',
-    faq_title: 'Pricing FAQ',
-    feature_agents: 'AI Agents',
-    feature_searches: 'Searches / month',
-    feature_cv: 'CV & cover letters',
-    feature_analytics: 'Analytics',
-    feature_priority: 'Priority support',
-    feature_api: 'API access',
-    feature_custom: 'Custom agents',
-    feature_sla: 'Guaranteed SLA',
-    feature_onboarding: 'Dedicated onboarding',
-    val_3agents: '3 agents',
-    val_7agents: '7 agents',
-    val_unlimited: 'Unlimited',
-    val_10: '10',
-    val_100: '100',
-    val_unlimited_s: 'Unlimited',
-    val_5: '5 / month',
-    val_50: '50 / month',
-    val_basic: 'Basic',
-    val_advanced: 'Advanced',
-    val_full: 'Full',
-    faq1_q: 'Can I change plans anytime?',
-    faq1_a: 'Yes, you can upgrade or downgrade at any time. Changes take effect immediately with pro-rata billing.',
-    faq2_q: 'What happens when I run out of monthly searches?',
-    faq2_a: 'On Free, searches pause until next month. On paid plans, you can purchase additional searches or upgrade.',
-    faq3_q: 'Do I need a credit card for the Free plan?',
-    faq3_a: 'No, the Free plan requires no payment method. Use it as long as you want, no strings attached.',
-    faq4_q: 'How does the Enterprise plan work?',
-    faq4_a: 'Enterprise is customized for your organization. Contact us for a demo and a tailored quote.',
-    faq5_q: 'Is my data safe?',
-    faq5_a: 'All data is processed locally on your computer. No personal data is sent to our servers. The only external calls are to AI APIs for the agents.',
+    title: 'Costs',
+    subtitle: 'Job Hunter Team does not use SaaS plans. You download the desktop launcher for free and only pay for any external services you choose to connect.',
+    badge: 'cost transparency',
+    card_software: 'JHT software',
+    card_software_price: '€0',
+    card_software_desc: 'Desktop launcher, local dashboard, updates, and open-source code.',
+    card_software_cta: 'Download JHT',
+    card_api: 'AI APIs',
+    card_api_price: 'Usage-based',
+    card_api_desc: 'Bring your own provider key and pay providers directly for actual model usage.',
+    card_api_cta: 'Read the guide',
+    card_infra: 'Local infra',
+    card_infra_price: 'Your computer',
+    card_infra_desc: 'No mandatory JHT cloud: runtime, logs, and data stay local.',
+    card_infra_cta: 'View FAQ',
+    included_title: 'What is included and what is not',
+    included_name: 'Item',
+    included_yes: 'Included in JHT',
+    included_no: 'Possible external cost',
+    row_launcher: 'Desktop launcher and local dashboard',
+    row_updates: 'Project updates',
+    row_agents: 'Agent team and app workflow',
+    row_storage: 'Local data, logs, and workspace',
+    row_ai: 'AI model API tokens',
+    row_provider: 'AI provider account / billing',
+    yes_free: 'Yes, free',
+    yes_local: 'Yes, on your computer',
+    no_none: 'No',
+    no_usage: 'Yes, only if you use external providers',
+    no_provider: 'Yes, depends on the provider you choose',
+    faq_title: 'Cost FAQ',
+    faq1_q: 'Is JHT free?',
+    faq1_a: 'Yes. The software, desktop launcher, and local dashboard are free and open source.',
+    faq2_q: 'So what do I actually pay for?',
+    faq2_a: 'Only the usage of any AI providers you connect, such as Anthropic or OpenAI. JHT does not bill you a subscription.',
+    faq3_q: 'Do I need a credit card to download it?',
+    faq3_a: 'No. Downloading and installing JHT requires no payment. A card may only be needed for the AI provider you choose.',
+    faq4_q: 'Do my data go through JHT servers?',
+    faq4_a: 'No. Your workspace, logs, profile, and dashboard stay local. External calls only depend on the providers and services you configure.',
+    footer_prev: '← FAQ',
+    footer_next: 'Download →',
   },
 }
 
 type TKey = keyof typeof T.it
 
-/* ── Plan data ────────────────────────────────────────────────────── */
-
-type Plan = {
-  nameKey: TKey
-  descKey: TKey
-  priceMonthly: number | null
-  priceYearly: number | null
-  ctaKey: TKey
-  ctaHref: string
-  popular?: boolean
+type CardDef = {
+  title: TKey
+  price: TKey
+  desc: TKey
+  cta: TKey
+  href: string
   accent: string
-  features: { key: TKey; value: TKey | true | false }[]
 }
 
-const PLANS: Plan[] = [
+const CARDS: CardDef[] = [
   {
-    nameKey: 'free_name', descKey: 'free_desc',
-    priceMonthly: 0, priceYearly: 0,
-    ctaKey: 'cta_free', ctaHref: '/download',
-    accent: 'var(--color-dim)',
-    features: [
-      { key: 'feature_agents', value: 'val_3agents' },
-      { key: 'feature_searches', value: 'val_10' },
-      { key: 'feature_cv', value: 'val_5' },
-      { key: 'feature_analytics', value: 'val_basic' },
-      { key: 'feature_priority', value: false },
-      { key: 'feature_api', value: false },
-      { key: 'feature_custom', value: false },
-      { key: 'feature_sla', value: false },
-      { key: 'feature_onboarding', value: false },
-    ],
-  },
-  {
-    nameKey: 'pro_name', descKey: 'pro_desc',
-    priceMonthly: 19, priceYearly: 15,
-    ctaKey: 'cta_pro', ctaHref: '/download',
-    popular: true,
+    title: 'card_software',
+    price: 'card_software_price',
+    desc: 'card_software_desc',
+    cta: 'card_software_cta',
+    href: '/download',
     accent: 'var(--color-green)',
-    features: [
-      { key: 'feature_agents', value: 'val_7agents' },
-      { key: 'feature_searches', value: 'val_100' },
-      { key: 'feature_cv', value: 'val_50' },
-      { key: 'feature_analytics', value: 'val_advanced' },
-      { key: 'feature_priority', value: true },
-      { key: 'feature_api', value: true },
-      { key: 'feature_custom', value: false },
-      { key: 'feature_sla', value: false },
-      { key: 'feature_onboarding', value: false },
-    ],
   },
   {
-    nameKey: 'ent_name', descKey: 'ent_desc',
-    priceMonthly: null, priceYearly: null,
-    ctaKey: 'cta_ent', ctaHref: 'mailto:info@jobhunterteam.ai',
+    title: 'card_api',
+    price: 'card_api_price',
+    desc: 'card_api_desc',
+    cta: 'card_api_cta',
+    href: '/guide',
     accent: 'var(--color-blue)',
-    features: [
-      { key: 'feature_agents', value: 'val_unlimited' },
-      { key: 'feature_searches', value: 'val_unlimited_s' },
-      { key: 'feature_cv', value: 'val_unlimited_s' },
-      { key: 'feature_analytics', value: 'val_full' },
-      { key: 'feature_priority', value: true },
-      { key: 'feature_api', value: true },
-      { key: 'feature_custom', value: true },
-      { key: 'feature_sla', value: true },
-      { key: 'feature_onboarding', value: true },
-    ],
+  },
+  {
+    title: 'card_infra',
+    price: 'card_infra_price',
+    desc: 'card_infra_desc',
+    cta: 'card_infra_cta',
+    href: '/faq',
+    accent: 'var(--color-yellow)',
   },
 ]
 
-const FEATURE_KEYS: TKey[] = [
-  'feature_agents', 'feature_searches', 'feature_cv', 'feature_analytics',
-  'feature_priority', 'feature_api', 'feature_custom', 'feature_sla', 'feature_onboarding',
+const ROWS: { label: TKey; included: TKey; external: TKey }[] = [
+  { label: 'row_launcher', included: 'yes_free', external: 'no_none' },
+  { label: 'row_updates', included: 'yes_free', external: 'no_none' },
+  { label: 'row_agents', included: 'yes_free', external: 'no_none' },
+  { label: 'row_storage', included: 'yes_local', external: 'no_none' },
+  { label: 'row_ai', included: 'no_none', external: 'no_usage' },
+  { label: 'row_provider', included: 'no_none', external: 'no_provider' },
 ]
-
-/* ── Components ───────────────────────────────────────────────────── */
 
 function PricingJsonLd() {
   const jsonLd = {
@@ -199,28 +150,29 @@ function PricingJsonLd() {
     '@type': 'SoftwareApplication',
     name: 'Job Hunter Team',
     applicationCategory: 'BusinessApplication',
-    offers: [
-      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'EUR', description: 'Piano gratuito con 3 agenti AI' },
-      { '@type': 'Offer', name: 'Pro', price: '19', priceCurrency: 'EUR', description: 'Piano Pro con 7 agenti AI e supporto prioritario' },
-      { '@type': 'Offer', name: 'Enterprise', price: '0', priceCurrency: 'EUR', description: 'Piano Enterprise personalizzato per team e agenzie' },
-    ],
+    operatingSystem: 'macOS, Windows, Linux',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'EUR',
+      description: 'Open-source desktop launcher and local dashboard',
+    },
   }
+
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 }
 
 function PricingContent() {
   const { lang } = useLandingI18n()
   const tx = T[lang as 'it' | 'en'] ?? T.it
-  const t = (k: TKey) => tx[k] ?? k
-  const [yearly, setYearly] = useState(false)
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const t = (key: TKey) => tx[key] ?? key
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   const faqs = [
     { q: t('faq1_q'), a: t('faq1_a') },
     { q: t('faq2_q'), a: t('faq2_a') },
     { q: t('faq3_q'), a: t('faq3_a') },
     { q: t('faq4_q'), a: t('faq4_a') },
-    { q: t('faq5_q'), a: t('faq5_a') },
   ]
 
   return (
@@ -229,207 +181,137 @@ function PricingContent() {
       <LandingNav />
 
       <div className="max-w-5xl mx-auto px-5 pt-32 pb-20">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
-            <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] text-[var(--color-muted)]">{t('title')}</span>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)]">
+            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('badge')}</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)]">{t('title')}</h1>
-          <p className="text-[var(--color-muted)] text-[12px] mt-2 max-w-md mx-auto leading-relaxed">{t('subtitle')}</p>
-
-          {/* Toggle */}
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <span className="text-[11px]" style={{ color: !yearly ? 'var(--color-white)' : 'var(--color-dim)' }}>{t('monthly')}</span>
-            <button
-              onClick={() => setYearly((v) => !v)}
-              role="switch"
-              aria-checked={yearly}
-              aria-label={yearly ? t('yearly') : t('monthly')}
-              className="relative w-11 h-6 rounded-full cursor-pointer transition-colors"
-              style={{ background: yearly ? 'var(--color-green)' : 'var(--color-border)', border: 'none' }}
-            >
-              <span
-                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform"
-                aria-hidden="true"
-                style={{ left: yearly ? 22 : 2 }}
-              />
-            </button>
-            <span className="text-[11px]" style={{ color: yearly ? 'var(--color-white)' : 'var(--color-dim)' }}>
-              {t('yearly')}
-            </span>
-            {yearly && (
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)' }}>
-                {t('yearly_save')}
-              </span>
-            )}
-          </div>
+          <p className="text-[var(--color-muted)] text-[12px] mt-3 max-w-2xl mx-auto leading-relaxed">{t('subtitle')}</p>
         </div>
 
-        {/* Plan cards */}
-        <FadeInSection><div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
-          {PLANS.map((plan, planIdx) => {
-            const price = yearly ? plan.priceYearly : plan.priceMonthly
-            return (
+        <FadeInSection>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+            {CARDS.map((card, index) => (
               <div
-                key={plan.nameKey}
-                className="relative rounded-xl p-6 flex flex-col transition-all duration-200"
+                key={card.title}
+                className="rounded-xl p-6 flex flex-col border border-[var(--color-border)] transition-all duration-200"
                 style={{
                   background: 'var(--color-card)',
-                  border: `1px solid ${plan.popular ? 'var(--color-green)' : 'var(--color-border)'}`,
-                  boxShadow: plan.popular ? '0 0 24px rgba(0,232,122,0.08)' : 'none',
-                  animation: `fade-in 0.4s ease ${planIdx * 0.08}s both`,
+                  animation: `fade-in 0.4s ease ${index * 0.08}s both`,
                 }}
-                onMouseEnter={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border-glow)' }}
-                onMouseLeave={e => { if (!plan.popular) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
               >
-                {plan.popular && (
-                  <span
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold px-3 py-1 rounded-full"
-                    style={{ background: 'var(--color-green)', color: 'var(--color-void)' }}
-                  >
-                    {t('popular')}
-                  </span>
-                )}
-
-                <h3 className="text-[16px] font-bold" style={{ color: plan.accent }}>{t(plan.nameKey)}</h3>
-                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--color-dim)' }}>{t(plan.descKey)}</p>
-
-                <div className="mt-5 mb-5">
-                  {price !== null ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold text-[var(--color-white)]">
-                        {price === 0 ? '0' : `${price}`}
-                      </span>
-                      <span className="text-[11px] text-[var(--color-dim)]">
-                        {price === 0 ? '' : yearly ? t('year') : t('month')}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-2xl font-bold text-[var(--color-white)]">Custom</span>
-                  )}
-                </div>
-
-                <ul className="flex flex-col gap-2 mb-6 flex-1">
-                  {plan.features.map((f) => {
-                    const val = f.value
-                    if (val === false) return null
-                    return (
-                      <li key={f.key} className="flex items-start gap-2 text-[11px]">
-                        <span className="mt-0.5 flex-shrink-0" aria-hidden="true" style={{ color: 'var(--color-green)' }}>
-                          {val === true ? '✓' : '▸'}
-                        </span>
-                        <span style={{ color: 'var(--color-muted)' }}>
-                          {t(f.key)}{val !== true ? `: ${t(val)}` : ''}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-
+                <p className="text-[11px] font-semibold tracking-widest uppercase mb-3" style={{ color: card.accent }}>
+                  {t(card.title)}
+                </p>
+                <p className="text-3xl font-bold text-[var(--color-white)] mb-3">{t(card.price)}</p>
+                <p className="text-[11px] leading-relaxed text-[var(--color-dim)] mb-6 flex-1">{t(card.desc)}</p>
                 <Link
-                  href={plan.ctaHref}
+                  href={card.href}
                   className="block text-center py-2.5 rounded-lg text-[11px] font-semibold tracking-wide no-underline transition-all"
                   style={{
-                    background: plan.popular ? 'var(--color-green)' : 'transparent',
-                    color: plan.popular ? 'var(--color-void)' : plan.accent,
-                    border: `1px solid ${plan.popular ? 'var(--color-green)' : plan.accent}`,
+                    border: `1px solid ${card.accent}`,
+                    color: card.accent,
                   }}
                 >
-                  {t(plan.ctaKey)}
+                  {t(card.cta)}
                 </Link>
-              </div>
-            )
-          })}
-        </div></FadeInSection>
-
-        {/* Feature comparison table */}
-        <FadeInSection delay={100}><div className="mb-16">
-          <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('features_title')}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }} aria-label="Confronto funzionalità piani">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-dim)', width: '40%' }} />
-                  {PLANS.map((p) => (
-                    <th key={p.nameKey} scope="col" className="text-center py-3 px-3 font-bold" style={{ color: p.accent }}>
-                      {t(p.nameKey)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {FEATURE_KEYS.map((fk, i) => (
-                  <tr key={fk} className="transition-colors hover:bg-[rgba(255,255,255,0.03)]" style={{ borderBottom: '1px solid var(--color-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                    <td className="py-2.5 px-3 font-medium" style={{ color: 'var(--color-muted)' }}>{t(fk)}</td>
-                    {PLANS.map((p) => {
-                      const feat = p.features.find((f) => f.key === fk)
-                      const val = feat?.value
-                      return (
-                        <td key={p.nameKey} className="text-center py-2.5 px-3">
-                          {val === true && <span aria-label="Incluso" style={{ color: 'var(--color-green)' }}>✓</span>}
-                          {val === false && <span aria-label="Non incluso" style={{ color: 'var(--color-dim)' }}>—</span>}
-                          {typeof val === 'string' && <span style={{ color: 'var(--color-bright)' }}>{t(val)}</span>}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div></FadeInSection>
-
-        {/* FAQ */}
-        <FadeInSection delay={200}><div className="max-w-2xl mx-auto">
-          <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('faq_title')}</h2>
-          <div className="flex flex-col">
-            {faqs.map((faq, i) => (
-              <div key={i} className="border-b border-[var(--color-border)]">
-                <button
-                  id={`pricing-faq-btn-${i}`}
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  aria-expanded={openFaq === i}
-                  aria-controls={`pricing-faq-panel-${i}`}
-                  className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
-                  style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
-                >
-                  <span className="text-[12px] font-semibold text-[var(--color-white)]">{faq.q}</span>
-                  <span
-                    className="text-[var(--color-dim)] text-[14px] flex-shrink-0"
-                    aria-hidden="true"
-                    style={{ transform: openFaq === i ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-                  >
-                    +
-                  </span>
-                </button>
-                {openFaq === i && (
-                  <div
-                    id={`pricing-faq-panel-${i}`}
-                    role="region"
-                    aria-labelledby={`pricing-faq-btn-${i}`}
-                    className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed"
-                    style={{ animation: 'fade-in 0.15s ease both' }}
-                  >
-                    {faq.a}
-                  </div>
-                )}
               </div>
             ))}
           </div>
-        </div></FadeInSection>
+        </FadeInSection>
 
-        {/* Footer nav */}
+        <FadeInSection delay={100}>
+          <div className="mb-16">
+            <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('included_title')}</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }} aria-label={t('included_title')}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-dim)', width: '40%' }}>
+                      {t('included_name')}
+                    </th>
+                    <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-green)' }}>
+                      {t('included_yes')}
+                    </th>
+                    <th scope="col" className="text-left py-3 px-3 font-semibold" style={{ color: 'var(--color-yellow)' }}>
+                      {t('included_no')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROWS.map((row, index) => (
+                    <tr
+                      key={row.label}
+                      className="transition-colors hover:bg-[rgba(255,255,255,0.03)]"
+                      style={{
+                        borderBottom: '1px solid var(--color-border)',
+                        background: index % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                      }}
+                    >
+                      <td className="py-2.5 px-3 font-medium text-[var(--color-muted)]">{t(row.label)}</td>
+                      <td className="py-2.5 px-3 text-[var(--color-bright)]">{t(row.included)}</td>
+                      <td className="py-2.5 px-3 text-[var(--color-dim)]">{t(row.external)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </FadeInSection>
+
+        <FadeInSection delay={200}>
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-[16px] font-bold text-[var(--color-white)] mb-5 text-center">{t('faq_title')}</h2>
+            <div className="flex flex-col">
+              {faqs.map((faq, index) => (
+                <div key={faq.q} className="border-b border-[var(--color-border)]">
+                  <button
+                    id={`pricing-faq-btn-${index}`}
+                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                    aria-expanded={openFaq === index}
+                    aria-controls={`pricing-faq-panel-${index}`}
+                    className="w-full flex items-center justify-between gap-4 py-4 px-1 cursor-pointer text-left"
+                    style={{ background: 'none', border: 'none', fontFamily: 'inherit' }}
+                  >
+                    <span className="text-[12px] font-semibold text-[var(--color-white)]">{faq.q}</span>
+                    <span
+                      className="text-[var(--color-dim)] text-[14px] flex-shrink-0"
+                      aria-hidden="true"
+                      style={{ transform: openFaq === index ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                    >
+                      +
+                    </span>
+                  </button>
+                  {openFaq === index && (
+                    <div
+                      id={`pricing-faq-panel-${index}`}
+                      role="region"
+                      aria-labelledby={`pricing-faq-btn-${index}`}
+                      className="pb-4 px-1 text-[11px] text-[var(--color-muted)] leading-relaxed"
+                      style={{ animation: 'fade-in 0.15s ease both' }}
+                    >
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeInSection>
+
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link href="/faq" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; FAQ
+            {t('footer_prev')}
           </Link>
           <Link href="/download" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            Download &rarr;
+            {t('footer_next')}
           </Link>
         </div>
       </div>
+
       <LandingFooter />
       <ScrollToTop />
     </main>
