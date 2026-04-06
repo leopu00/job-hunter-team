@@ -3,7 +3,7 @@
 import { useLandingI18n } from './LandingI18n'
 
 const STEPS_META = [
-  { n: '01', titleKey: 'step_0_title', descKey: 'step_0_desc', code: 'jht profile set --role "Senior Dev" --stack "React, Node"' },
+  { n: '01', titleKey: 'step_0_title', descKey: 'step_0_desc', code: '[launcher] Profilo → Ruolo: Senior Dev → Stack: React, Node' },
   { n: '02', titleKey: 'step_1_title', descKey: 'step_1_desc', code: '[scout] 47 found → [analista] 12 relevant → [scorer] 5 top matches' },
   { n: '03', titleKey: 'step_2_title', descKey: 'step_2_desc', code: '[capitano] 3 applications ready — awaiting your review ✓' },
 ] as const
