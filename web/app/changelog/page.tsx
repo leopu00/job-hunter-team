@@ -129,7 +129,7 @@ export default function ChangelogPage() {
                 {day.commits.map(commit => {
                   const cfg = TYPE_CFG[commit.type]
                   return (
-                    <div key={commit.hash} className="flex items-start gap-2.5 py-1.5 px-2 -mx-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                    <div key={commit.hash} className="flex items-start gap-2.5 py-1.5 px-2 mx-0 sm:-mx-2 rounded transition-colors hover:bg-[rgba(255,255,255,0.02)]">
                       <span
                         className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-px"
                         role="img"
@@ -142,7 +142,7 @@ export default function ChangelogPage() {
                       >
                         {cfg.icon}
                       </span>
-                      <span className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                      <span className="min-w-0 flex-1 text-[11px] text-[var(--color-muted)] leading-relaxed break-words">
                         {cleanMessage(commit.message)}
                       </span>
                       <span className="text-[9px] font-mono text-[var(--color-dim)] ml-auto flex-shrink-0 mt-0.5">
