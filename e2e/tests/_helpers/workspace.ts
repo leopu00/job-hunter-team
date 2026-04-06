@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
@@ -89,6 +90,52 @@ VALUES
 PRAGMA foreign_keys = ON;
 `
 
+const SEEDED_PROFILE_YAML = `candidate:
+  name: Leone Test
+  target_role: Frontend Engineer
+  contacts:
+    email: leone.test@example.com
+    linkedin: https://linkedin.com/in/leone-test
+    github: leone-test
+  strengths:
+    - TypeScript
+    - Testing
+  experience:
+    - role: Frontend Engineer
+      company: Acme Remote Labs
+      period: 2022-2026
+      description: Built product-facing dashboards and automation flows.
+  education:
+    - title: BSc Computer Science
+      institution: Universita di Catania
+      year: 2021
+  certifications:
+    - Playwright Advanced
+  projects:
+    - name: Job Hunter Team
+      description: Desktop-first workflow automation for job search.
+      url: https://jobhunterteam.ai
+  career_goals:
+    direction: Product engineering
+    target_job: Senior Frontend Engineer
+  aspirations:
+    short_term: Build robust frontend platforms
+  free_notes: Seeded profile for e2e coverage
+skills:
+  frontend:
+    - React
+    - TypeScript
+    - Playwright
+languages:
+  - language: Italian
+    level: Native
+  - language: English
+    level: C1
+location: Rome, Italy
+experience_years: 5
+has_degree: true
+`
+
 export async function ensureSeededWorkspace(
   request: APIRequestContext,
   workspacePath = SEEDED_WORKSPACE_PATH,
@@ -103,6 +150,10 @@ export async function ensureSeededWorkspace(
 
   const dbPath = path.join(workspacePath, 'jobs.db')
   execFileSync('sqlite3', [dbPath], { input: SEED_SQL })
+
+  const profileDir = path.join(workspacePath, 'profile')
+  fs.mkdirSync(profileDir, { recursive: true })
+  fs.writeFileSync(path.join(profileDir, 'candidate_profile.yml'), SEEDED_PROFILE_YAML, 'utf8')
 }
 
 export async function loginToSeededWorkspace(
