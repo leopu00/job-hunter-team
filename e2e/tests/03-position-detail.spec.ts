@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-position-detail';
 
 /**
  * FLUSSO 3 — PAGINA DINAMICA JOB OFFER /positions/[id]
@@ -7,25 +10,33 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Pagina Dinamica Job Offer', () => {
-  test.skip('pagina /positions/[id] carica dati company e position', async ({ page }) => {
-    // SKIP: dipende da Dot Fase 4
-    // Usa un ID noto dopo migrazione — placeholder
-    await page.goto('/positions/1');
-    await expect(page.getByRole('heading')).toBeVisible();
-    // Deve mostrare almeno: nome azienda, titolo posizione, score
-    await expect(page.locator('[data-testid="company-name"], .company-name')).toBeVisible();
-    await expect(page.locator('[data-testid="position-title"], .position-title')).toBeVisible();
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
   });
 
-  test.skip('pagina position mostra score e highlights', async ({ page }) => {
-    // SKIP: dipende da migrazione scores e highlights (Max Fase 2)
-    await page.goto('/positions/1');
-    await expect(page.locator('[data-testid="score"], .score')).toBeVisible();
-    await expect(page.locator('[data-testid="highlights"], .highlights')).toBeVisible();
+  test.beforeEach(async ({ page }) => {
+    await loginToSeededWorkspace(page, WORKSPACE);
   });
 
-  test.skip('URL /positions/[id-inesistente] restituisce 404', async ({ page }) => {
-    const response = await page.goto('/positions/999999');
-    expect(response?.status()).toBe(404);
+  test('pagina /positions/[id] carica dati company e position', async ({ page }) => {
+    await page.goto('/positions/1');
+    await expect(page.getByRole('heading', { name: /frontend engineer/i })).toBeVisible();
+    await expect(page.getByText(/acme remote labs/i)).toBeVisible();
+    await expect(page.getByText(/remote \/ italy/i)).toBeVisible();
+  });
+
+  test('pagina position mostra score e highlights', async ({ page }) => {
+    await page.goto('/positions/1');
+    await expect(page.getByText('88').first()).toBeVisible();
+    await expect(page.getByText(/score breakdown/i)).toBeVisible();
+    await expect(page.getByText(/remote-first team with strong typescript stack/i)).toBeVisible();
+    await expect(page.getByText(/fast-paced roadmap with tight weekly releases/i)).toBeVisible();
+  });
+
+  test('URL /positions/[id-inesistente] mostra la pagina 404', async ({ page }) => {
+    await page.goto('/positions/999999');
+    await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+    await expect(page.getByText(/pagina non trovata/i)).toBeVisible();
+    await expect(page.getByText('/positions/999999')).toBeVisible();
   });
 });

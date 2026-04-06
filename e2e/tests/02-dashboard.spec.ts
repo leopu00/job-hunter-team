@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-dashboard';
 
 /**
  * FLUSSO 2 — DASHBOARD JOB OFFERS
@@ -7,32 +10,35 @@ import { test, expect } from '@playwright/test';
  * DATI ATTESI: ~530 positions, ~255 companies migrate da legacy
  */
 
-// TODO: sostituire con storageState autenticato quando disponibile
-// test.use({ storageState: 'auth-state.json' });
-
 test.describe('Dashboard Job Offers', () => {
-  test.skip('dashboard carica lista positions', async ({ page }) => {
-    // SKIP: dipende da autenticazione e Supabase migrato
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await loginToSeededWorkspace(page, WORKSPACE);
+  });
+
+  test('dashboard carica lista positions', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: /dashboard|positions|job/i })).toBeVisible();
-    // Lista posizioni visibile
-    const positionRows = page.locator('[data-testid="position-row"], table tbody tr, .position-item');
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
+    await expect(page.getByText(/3 posizioni totali/i)).toBeVisible();
+    await expect(page.getByRole('table', { name: /posizioni recenti/i })).toBeVisible();
+    const positionRows = page.locator('table[aria-label="Posizioni recenti"] tbody tr');
     await expect(positionRows.first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: /frontend engineer/i })).toBeVisible();
   });
 
-  test.skip('dashboard mostra filtro per stato pipeline', async ({ page }) => {
-    // SKIP: dipende da frontend Dot (Fase 4)
+  test('dashboard mostra filtro per stato pipeline', async ({ page }) => {
     await page.goto('/dashboard');
-    // Filtri: new, checked, scored, writing, review, ready, applied, response
-    const statusFilter = page.getByRole('combobox', { name: /stato|status/i })
-      .or(page.locator('[data-testid="status-filter"]'));
-    await expect(statusFilter).toBeVisible();
+    for (const status of ['new', 'ready', 'applied']) {
+      await expect(page.locator(`a[href="/positions?status=${status}"]`).first()).toBeVisible();
+    }
   });
 
-  test.skip('dashboard mostra score per ogni position', async ({ page }) => {
-    // SKIP: dipende da migrazione scores (Max Fase 2)
+  test('dashboard mostra score per ogni position', async ({ page }) => {
     await page.goto('/dashboard');
-    const scoreCell = page.locator('[data-testid="score"], .score-badge').first();
-    await expect(scoreCell).toBeVisible();
+    await expect(page.getByText('88').first()).toBeVisible();
+    await expect(page.getByText('72').first()).toBeVisible();
   });
 });

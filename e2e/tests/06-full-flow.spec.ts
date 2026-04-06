@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-full-flow';
 
 /**
  * FLUSSO 6 — FLUSSO COMPLETO END-TO-END
@@ -8,29 +11,27 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Flusso Completo E2E', () => {
-  test.skip('flusso completo: homepage → login → dashboard → position detail', async ({ page }) => {
-    // SKIP: dipende da TUTTE le fasi
-    // Step 1: Homepage accessibile
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
+  });
+
+  test('flusso completo: homepage → login → dashboard → position detail', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/.+/);
 
-    // Step 2: Bottone login visibile
-    const loginButton = page.getByRole('link', { name: /login|sign in|accedi/i })
-      .or(page.getByRole('button', { name: /google/i }));
+    const loginButton = page.getByRole('link', { name: /login|sign in|accedi/i });
     await expect(loginButton).toBeVisible();
 
-    // Step 3 (simulato con storageState): dashboard carica
-    // In test reale: await page.goto('/dashboard') con sessione attiva
-    // await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
+    await loginToSeededWorkspace(page, WORKSPACE);
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
+    const firstPosition = page.getByRole('link', { name: /frontend engineer/i }).first();
+    await expect(firstPosition).toBeVisible();
+    await firstPosition.click();
 
-    // Step 4: click su una position
-    // const firstPosition = page.locator('[data-testid="position-row"]').first();
-    // await firstPosition.click();
-    // await expect(page).toHaveURL(/\/positions\/\d+/);
-
-    // Step 5: pagina position ha link Drive
-    // const driveLink = page.locator('a[href*="drive.google.com"]').first();
-    // await expect(driveLink).toBeVisible();
+    await expect(page).toHaveURL(/\/positions\/1$/);
+    await expect(page.getByRole('heading', { name: /frontend engineer/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /annuncio originale/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /cv \(drive\)/i })).toBeVisible();
   });
 
   test('piattaforma risponde su URL base (smoke test)', async ({ page }) => {
