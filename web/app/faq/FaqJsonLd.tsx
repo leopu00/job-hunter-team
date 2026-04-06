@@ -5,15 +5,15 @@ const FAQ_DATA = [
   },
   {
     q: 'Come funziona?',
-    a: "Configuri il tuo profilo (competenze, esperienza, preferenze) e avvii il team. Gli agenti collaborano in pipeline: lo Scout cerca offerte online, l'Analista le analizza, lo Scorer calcola il match, lo Scrittore prepara i documenti e il Critico li revisiona. Il Capitano coordina tutto e la Sentinella monitora i costi.",
+    a: "Configuri il tuo profilo e avvii il team dalla dashboard locale aperta dal launcher desktop. Gli agenti collaborano in pipeline: Scout trova offerte, Analista le legge, Scorer le ordina, Scrittore prepara i documenti e Critico li revisiona. Capitano coordina e Sentinella monitora costi e salute del sistema.",
   },
   {
     q: 'Serve creare un account?',
-    a: 'No. JHT gira interamente in locale. Non c\'e registrazione, non c\'e login a servizi esterni, non c\'e cloud. Avvii il server sul tuo computer e accedi dal browser su localhost:3000.',
+    a: 'Per usare JHT in locale non serve creare un account. Scarichi il launcher desktop, completi il setup iniziale e lavori dal browser sulla dashboard locale aperta sul tuo computer.',
   },
   {
     q: 'Quanto costa?',
-    a: "Il software e gratuito e open-source. L'unico costo e la chiave API Anthropic per far funzionare gli agenti AI (Claude). Una ricerca completa tipica consuma circa 1-5$ di API. La Sentinella monitora i costi in tempo reale e puoi impostare un budget massimo.",
+    a: "Il software e gratuito e open-source. JHT non ti fattura un abbonamento: l'unico costo eventuale e il consumo dei provider AI o dei servizi esterni che scegli di collegare. La Sentinella monitora i costi in tempo reale e puoi impostare un budget massimo.",
   },
   {
     q: 'Quali agenti ci sono?',
@@ -21,7 +21,7 @@ const FAQ_DATA = [
   },
   {
     q: 'Quali sono i requisiti di sistema?',
-    a: 'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Per eseguire gli agenti servono anche tmux e Claude CLI; su Windows tmux richiede ancora WSL. Serve una connessione internet per le chiamate API.',
+    a: 'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Serve una connessione internet per le chiamate ai provider AI. Per workflow avanzati o di sviluppo possono servire dipendenze aggiuntive come tmux, CLI provider dedicate o WSL su Windows.',
   },
   {
     q: 'I miei dati sono al sicuro?',

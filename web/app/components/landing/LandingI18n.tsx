@@ -304,7 +304,7 @@ const translations = {
 
   // Guide page
   guide_title:       { it: 'Guida Utente',           en: 'User Guide' },
-  guide_subtitle:    { it: 'Come installare, configurare e usare Job Hunter Team — dalla TUI alla web app.', en: 'How to install, configure and use Job Hunter Team — from the TUI to the web app.' },
+  guide_subtitle:    { it: 'Come installare, configurare e usare Job Hunter Team con launcher desktop, dashboard locale e strumenti avanzati.', en: 'How to install, configure and use Job Hunter Team with the desktop launcher, local dashboard, and advanced tools.' },
   guide_docs_link:   { it: 'Documentazione tecnica', en: 'Technical documentation' },
 
   // FAQ page
@@ -332,14 +332,14 @@ const translations = {
   },
   about_tl_0:       { it: 'Idea iniziale — sistema multi-agente per job hunting',    en: 'Initial idea — multi-agent system for job hunting' },
   about_tl_1:       { it: 'Primo prototipo con pipeline Scout → Analista → Scorer',  en: 'First prototype with Scout → Analyst → Scorer pipeline' },
-  about_tl_2:       { it: 'Aggiunta TUI terminale e interfaccia web',                en: 'Added terminal TUI and web interface' },
-  about_tl_3:       { it: 'Beta pubblica — team completo di 8 agenti',               en: 'Public beta — complete team of 8 agents' },
+  about_tl_2:       { it: 'Aggiunta dashboard locale e strumenti terminali avanzati', en: 'Added local dashboard and advanced terminal tooling' },
+  about_tl_3:       { it: 'Beta pubblica — launcher desktop e team operativo',        en: 'Public beta — desktop launcher and production-ready team' },
 
   about_agents_label:  { it: 'il team',            en: 'the team' },
   about_agents_title:  { it: 'Gli agenti',         en: 'The agents' },
   about_agents_desc:   {
-    it: 'Ogni agente e un\'istanza Claude specializzata con personalita\', competenze e obiettivi unici. Comunicano tra loro via tmux e collaborano in una pipeline coordinata.',
-    en: 'Each agent is a specialized Claude instance with unique personality, skills and goals. They communicate via tmux and collaborate in a coordinated pipeline.',
+    it: 'Il sistema include 7 agenti operativi specializzati e un assistente di supporto. Lavorano in locale, coordinati da un runtime comune e da una pipeline strutturata.',
+    en: 'The system includes 7 specialized operational agents plus a support assistant. They work locally, coordinated by a shared runtime and a structured pipeline.',
   },
 
   about_agent_alfa_name:  { it: 'Alfa (Capitano)',     en: 'Alfa (Captain)' },
@@ -386,11 +386,11 @@ const translations = {
   about_how_label:   { it: 'architettura',         en: 'architecture' },
   about_how_title:   { it: 'Come funziona il sistema', en: 'How the system works' },
   about_how_desc:    {
-    it: 'Job Hunter Team usa un\'architettura multi-agente dove ogni agente e un processo indipendente che gira in una sessione tmux. Gli agenti comunicano tra loro attraverso messaggi strutturati e un file system condiviso.',
-    en: 'Job Hunter Team uses a multi-agent architecture where each agent is an independent process running in a tmux session. Agents communicate through structured messages and a shared file system.',
+    it: 'Job Hunter Team usa un\'architettura multi-agente locale: ogni agente gira come worker indipendente, mentre il runtime coordina passaggi, stato e comunicazione tra i moduli.',
+    en: 'Job Hunter Team uses a local multi-agent architecture: each agent runs as an independent worker while the runtime coordinates handoffs, state, and communication between modules.',
   },
-  about_how_0:       { it: 'Ogni agente gira in una sessione tmux isolata',          en: 'Each agent runs in an isolated tmux session' },
-  about_how_1:       { it: 'Comunicazione via messaggi strutturati [@agent -> @agent]', en: 'Communication via structured messages [@agent -> @agent]' },
+  about_how_0:       { it: 'Ogni agente gira come worker locale isolato',            en: 'Each agent runs as an isolated local worker' },
+  about_how_1:       { it: 'Il runtime orchestra passaggi e messaggi strutturati tra i moduli', en: 'The runtime orchestrates handoffs and structured messages between modules' },
   about_how_2:       { it: 'Pipeline coordinata: Scout → Analista → Scorer → Scrittore → Critico', en: 'Coordinated pipeline: Scout → Analyst → Scorer → Writer → Critic' },
   about_how_3:       { it: 'Task system con stato (pending → in-progress → done)',   en: 'Task system with state (pending → in-progress → done)' },
   about_how_4:       { it: 'Sentinella monitora costi e salute in tempo reale',      en: 'Sentinel monitors costs and health in real-time' },

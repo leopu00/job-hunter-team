@@ -12,8 +12,8 @@ type SectionId = 'install' | 'tui' | 'webapp'
 
 const TABS: { id: SectionId; label: string }[] = [
   { id: 'install', label: 'Installazione' },
-  { id: 'tui',     label: 'TUI' },
-  { id: 'webapp',  label: 'Web App' },
+  { id: 'webapp',  label: 'Dashboard' },
+  { id: 'tui',     label: 'Avanzato' },
 ]
 
 function Code({ children }: { children: string }) {
@@ -78,8 +78,8 @@ function InstallSection() {
       <H2>Requisiti</H2>
       <ul className="flex flex-col gap-1.5 mb-4">
         <Li><strong>macOS 12+</strong>, <strong>Linux</strong> (Ubuntu 22.04+, Debian 12+, Fedora 39+) o <strong>Windows 10+</strong></Li>
-        <Li><strong>tmux</strong> (opzionale, necessario per la TUI e gli agenti)</Li>
-        <Li><strong>Node.js 18+</strong> &mdash; richiesto solo se installi da sorgente invece di usare il launcher desktop</Li>
+        <Li><strong>Connessione internet</strong> per i provider AI e i servizi esterni che decidi di collegare</Li>
+        <Li><strong>Node.js 18+</strong> solo se installi da sorgente; per workflow avanzati o di sviluppo possono servire anche strumenti come <strong>tmux</strong> o CLI provider dedicate</Li>
       </ul>
 
       <H2>Installazione rapida</H2>
@@ -100,7 +100,7 @@ Completa il setup NSIS
 Avvia JHT Desktop dal menu Start`}</Code>
 
       <H3>3. Primo avvio</H3>
-      <P>Il launcher desktop prepara il runtime locale e apre il browser su <code className="text-[var(--color-green)]">localhost:3000</code> con la dashboard.</P>
+      <P>Il launcher desktop prepara il runtime locale e apre il browser sulla dashboard locale, in genere su <code className="text-[var(--color-green)]">localhost:3000</code> o su una porta libera vicina.</P>
       <P>Al primo avvio ti viene chiesto di selezionare una cartella di lavoro. Tutti i dati (database, CV, documenti) restano nella cartella scelta.</P>
 
       <H2>Installazione da sorgente</H2>
@@ -108,14 +108,11 @@ Avvia JHT Desktop dal menu Start`}</Code>
 cd job-hunter-team
 npm install
 cd web && npm install && npm run dev`}</Code>
-      <P>La web app sara disponibile su <code className="text-[var(--color-green)]">localhost:3000</code>.</P>
+      <P>La dashboard locale sara disponibile su <code className="text-[var(--color-green)]">localhost:3000</code> o sulla porta mostrata dal runtime.</P>
 
-      <H2>Configurazione API (opzionale)</H2>
-      <P>Per usare gli agenti AI serve una chiave API Anthropic:</P>
-      <Code>{`# Nella TUI:
-/setup sk-ant-api03-...
-
-# Oppure via variabile d'ambiente:
+      <H2>Configurazione provider (opzionale)</H2>
+      <P>Per usare gli agenti AI completa il setup iniziale dal launcher o configura le credenziali via ambiente se lavori da sorgente:</P>
+      <Code>{`# Esempio via variabile d'ambiente:
 export ANTHROPIC_API_KEY=sk-ant-api03-...`}</Code>
       <P>La chiave viene salvata localmente in <code className="text-[var(--color-green)]">~/.jht/secrets/</code> e non viene mai condivisa.</P>
     </div>
@@ -125,8 +122,8 @@ export ANTHROPIC_API_KEY=sk-ant-api03-...`}</Code>
 function TuiSection() {
   return (
     <div className="flex flex-col gap-1">
-      <H2>Cos&apos;e la TUI</H2>
-      <P>La TUI (Terminal User Interface) e il pannello di controllo del team direttamente nel terminale. Permette di monitorare gli agenti, chattare via tmux, gestire i task e interagire con l&apos;AI.</P>
+      <H2>Console avanzata</H2>
+      <P>La TUI resta disponibile come interfaccia avanzata da terminale per sviluppo, debugging e ispezione del runtime. Non e il percorso principale per l&apos;uso quotidiano del prodotto.</P>
 
       <H2>Avvio</H2>
       <Code>{`cd tui
@@ -136,8 +133,8 @@ npm run dev`}</Code>
       <H2>Viste</H2>
       <P>La TUI ha 5 viste navigabili con <code className="text-[var(--color-green)]">Tab</code> o i comandi slash:</P>
       <CmdTable rows={[
-        ['Team',      'Panoramica agenti tmux attivi, stato, ultimo output'],
-        ['Chat',      'Chat diretta con un agente via tmux (invio/ricezione messaggi)'],
+        ['Team',      'Panoramica runtime, agenti attivi, stato e ultimo output'],
+        ['Chat',      'Chat diretta con un agente o con il runtime di controllo'],
         ['Tasks',     'Dashboard task del team, raggruppati per stato'],
         ['Dashboard', 'Budget sentinella, stato deploy, riepilogo task'],
         ['AI',        'Chat con Anthropic API (Claude)'],
@@ -146,9 +143,9 @@ npm run dev`}</Code>
       <H2>Comandi</H2>
       <CmdTable rows={[
         ['/team',           'Passa alla vista team'],
-        ['/chat <agente>',  'Apri chat tmux con un agente (es. /chat gatekeeper)'],
-        ['/start <agente>', 'Avvia sessione tmux per un agente'],
-        ['/stop <agente>',  'Ferma sessione tmux di un agente'],
+        ['/chat <agente>',  'Apri chat con un agente (es. /chat gatekeeper)'],
+        ['/start <agente>', 'Avvia il runtime di un agente'],
+        ['/stop <agente>',  'Ferma il runtime di un agente'],
         ['/tasks',          'Passa alla vista task'],
         ['/dashboard',      'Passa alla vista dashboard (alias /dash)'],
         ['/ai',             'Passa alla chat AI'],
@@ -185,12 +182,12 @@ function WebAppSection() {
   return (
     <div className="flex flex-col gap-1">
       <H2>Panoramica</H2>
-      <P>La web app e una dashboard completa costruita con Next.js. Funziona interamente in locale sul tuo computer &mdash; nessun dato viene inviato a server esterni (tranne le chiamate API agli agenti AI, se configurati).</P>
+      <P>La dashboard locale e l&apos;interfaccia principale di Job Hunter Team. Si apre dal launcher desktop e funziona sul tuo computer: i dati restano locali, mentre le chiamate esterne dipendono solo dai provider che scegli di collegare.</P>
 
       <H2>Pagine principali</H2>
       <CmdTable rows={[
         ['/dashboard',     'Vista principale: metriche, attivita recente, stato agenti'],
-        ['/team',          'Gestione team agenti: avvio, stop, monitoraggio, terminale'],
+        ['/team',          'Gestione team agenti: avvio, stop, monitoraggio e handoff'],
         ['/applications',  'Lista candidature: stato, azienda, ruolo, match score'],
         ['/jobs',          'Offerte di lavoro trovate dagli agenti scout'],
         ['/profile',       'Il tuo profilo professionale: competenze, esperienza, CV'],
@@ -201,7 +198,7 @@ function WebAppSection() {
       ]} />
 
       <H2>Agenti</H2>
-      <P>Il sistema include 8 agenti AI specializzati che collaborano come un team:</P>
+      <P>Il sistema include 7 agenti AI operativi piu un Assistente di supporto che collaborano come un team:</P>
       <CmdTable rows={[
         ['Scout',      'Scansiona job board e canali per trovare offerte rilevanti'],
         ['Analista',   'Analizza requisiti, azienda, fit con il tuo profilo'],
@@ -219,7 +216,7 @@ function WebAppSection() {
         <Li><strong>2. Avvia gli agenti</strong> &mdash; Da /team, avvia Scout e gli altri agenti necessari</Li>
         <Li><strong>3. Monitora</strong> &mdash; La dashboard mostra le offerte trovate, i match score e le candidature in preparazione</Li>
         <Li><strong>4. Revisiona</strong> &mdash; In /applications trovi le candidature pronte. Approva, modifica o scarta</Li>
-        <Li><strong>5. Controlla il budget</strong> &mdash; /analytics e la TUI Dashboard mostrano l&apos;utilizzo API in tempo reale</Li>
+        <Li><strong>5. Controlla il budget</strong> &mdash; /analytics e /status mostrano utilizzo API, salute e stato del sistema in tempo reale</Li>
       </ul>
 
       <H2>Dati e privacy</H2>
@@ -255,7 +252,7 @@ function GuideContent() {
     step: [
       { '@type': 'HowToStep', name: 'Scarica il pacchetto', text: 'Vai alla pagina /download e scarica l\'installer desktop per il tuo sistema operativo.' },
       { '@type': 'HowToStep', name: 'Installa e avvia', text: 'Apri il pacchetto desktop: .dmg su macOS, .AppImage su Linux, .exe su Windows.' },
-      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Il launcher prepara il runtime locale e apre il browser su localhost:3000 con la dashboard.' },
+      { '@type': 'HowToStep', name: 'Primo avvio', text: 'Il launcher prepara il runtime locale e apre il browser sulla dashboard locale, di solito su localhost:3000 o su una porta libera vicina.' },
     ],
   }
 
