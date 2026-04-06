@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   images: {
     remotePatterns: [

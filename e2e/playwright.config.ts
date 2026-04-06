@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// URL del deploy — da aggiornare con l'URL Vercel quando disponibile
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+// In locale usiamo IPv4 esplicito per evitare che `localhost` risolva su ::1
+// mentre `next start` ascolta solo su 127.0.0.1.
+const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:3000';
 
 export default defineConfig({
   testDir: './tests',
