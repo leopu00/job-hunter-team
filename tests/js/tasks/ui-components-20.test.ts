@@ -34,8 +34,8 @@ describe("EmojiPicker", () => {
 
   it("grid 8 colonne + category tabs con icon + trigger default 😀", () => {
     expect(src).toContain("repeat(8, 1fr)");
-    expect(src).toContain("setCat(key)");
-    expect(src).toContain(">😀<");
+    expect(src).toContain("setCat(key as CategoryKey)");
+    expect(src).toContain("😀</button>");
   });
 });
 

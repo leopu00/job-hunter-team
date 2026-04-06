@@ -21,6 +21,12 @@ vi.mock("next/server", () => ({
 }));
 
 const WEB = path.resolve(__dirname, "../../../web/app");
+function readPage(file: string) {
+  const direct = path.join(WEB, file);
+  if (fs.existsSync(direct)) return fs.readFileSync(direct, "utf-8");
+  const protectedPath = path.join(WEB, "(protected)", file);
+  return fs.readFileSync(protectedPath, "utf-8");
+}
 function nreq(url: string, init?: RequestInit) {
   const r = new Request(url, init) as any;
   r.nextUrl = new URL(url);
@@ -171,7 +177,7 @@ describe("pagine web batch 2 — rendering e struttura", () => {
   ];
   for (const p of pages) {
     it(`/${p.route}: 'use client', heading "${p.heading}", fetch ${p.fetch}`, () => {
-      const content = fs.readFileSync(path.join(WEB, p.file), "utf-8");
+      const content = readPage(p.file);
       expect(content).toContain("use client");
       expect(content).toContain(p.heading);
       expect(content).toContain(p.fetch);

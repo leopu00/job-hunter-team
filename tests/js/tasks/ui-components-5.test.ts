@@ -121,7 +121,8 @@ describe("EmptyState", () => {
     expect(src).toContain("icon");
     expect(src).toContain("title");
     expect(src).toContain("description");
-    expect(src).toContain("action");
+    expect(src).toContain("actionLabel");
+    expect(src).toContain("onAction");
   });
   it("3 size sm/md/lg con padding differenziato", () => {
     expect(src).toContain("'sm'");
@@ -132,10 +133,10 @@ describe("EmptyState", () => {
     expect(src).toContain("py-20");
   });
   it("action button con label + onClick + hover state", () => {
-    expect(src).toContain("action.label");
-    expect(src).toContain("action.onClick");
-    expect(src).toContain("onMouseEnter");
-    expect(src).toContain("onMouseLeave");
+    expect(src).toContain("actionLabel");
+    expect(src).toContain("onAction");
+    expect(src).toContain("hover:opacity-80");
+    expect(src).toContain("secondaryLabel");
   });
 });
 
