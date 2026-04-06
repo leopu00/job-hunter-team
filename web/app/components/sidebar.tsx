@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import LanguageSwitcher from './LanguageSwitcher'
 import { ThemeToggle } from '../theme-provider'
+import { isMarketingRoute } from '../marketing-routes'
 
 // ── Nav data: [group, [[href, label, badge?][]]] ───────────────────────────
 
@@ -17,7 +18,7 @@ const NAV: [string, [string, string, number?][]][] = [
   ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
 ]
 
-const PROTECTED = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup','/download','/about','/demo','/pricing','/privacy']
+const APP_CHROME_HIDDEN = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup']
 
 export default function Sidebar() {
   const pathname    = usePathname()
@@ -27,7 +28,7 @@ export default function Sidebar() {
   const [favs,       setFavs]       = useState<string[]>([])
   const [hovered,    setHovered]    = useState<string | null>(null)
 
-  const isProtected = pathname === '/' || PROTECTED.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const isProtected = isMarketingRoute(pathname) || APP_CHROME_HIDDEN.some(p => pathname === p || pathname.startsWith(p + '/'))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
