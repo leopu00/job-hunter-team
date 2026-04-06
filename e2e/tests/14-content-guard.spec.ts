@@ -47,7 +47,7 @@ test.describe('Content guard — pagine pubbliche', () => {
     await page.goto('/');
     // Deve parlare di ricerca lavoro, non di sviluppo software
     await expect(page.getByText(/job|lavoro|candidatura|posizione|career/i).first()).toBeVisible();
-    await expect(page.getByText('Login with Google')).toBeVisible();
+    await expect(page.getByRole('link', { name: /accedi|sign in/i })).toBeVisible();
   });
 
   test('/auth/callback non espone contenuto interno dev team', async ({ page }) => {
