@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
  * Suite 3: API /api/changelog — risposta JSON valida
  */
 
-const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:3000';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUITE 1 — /changelog
@@ -39,9 +39,8 @@ test.describe('/changelog — Pagina storico commit', () => {
   });
 
   test('filtri tipo commit visibili (tutti, feature, fix, merge, test)', async ({ page }) => {
-    // I filtri sono button con testo: tutti, feature, fix, merge, test
-    for (const label of ['tutti', 'feature', 'fix']) {
-      const btn = page.getByRole('button', { name: new RegExp(label, 'i') }).first();
+    for (const label of ['tutti', 'feature', 'fix', 'merge', 'test']) {
+      const btn = page.getByRole('radio', { name: new RegExp(label, 'i') }).first();
       await expect(btn, `Filtro "${label}" non visibile`).toBeVisible({ timeout: 5000 });
     }
   });
@@ -72,20 +71,16 @@ test.describe('/changelog — Pagina storico commit', () => {
 
   test('click filtro "feature" mostra solo commit feat', async ({ page }) => {
     await page.waitForTimeout(1500); // attesa dati API
-    const featBtn = page.getByRole('button', { name: /feature/i }).first();
+    const featBtn = page.getByRole('radio', { name: /feature/i }).first();
     await expect(featBtn).toBeVisible({ timeout: 5000 });
     await featBtn.click();
     await page.waitForTimeout(500);
-    // Dopo il filtro, il bottone deve risultare attivo (stile diverso)
-    // Verifichiamo che il filtro sia stato applicato senza errori JS
-    const jsErrors: string[] = [];
-    page.on('pageerror', (e) => jsErrors.push(e.message));
-    expect(jsErrors).toHaveLength(0);
+    await expect(featBtn).toHaveAttribute('aria-checked', 'true');
   });
 
   test('click filtro "fix" non crashar la pagina', async ({ page }) => {
     await page.waitForTimeout(1500);
-    const fixBtn = page.getByRole('button', { name: /^fix$/i }).first();
+    const fixBtn = page.getByRole('radio', { name: /^fix$/i }).first();
     await expect(fixBtn).toBeVisible({ timeout: 5000 });
     await fixBtn.click();
     await page.waitForTimeout(500);
@@ -96,13 +91,14 @@ test.describe('/changelog — Pagina storico commit', () => {
   test('click filtro "tutti" ricarica tutti i commit', async ({ page }) => {
     await page.waitForTimeout(1500);
     // Prima filtra per fix
-    const fixBtn = page.getByRole('button', { name: /^fix$/i }).first();
+    const fixBtn = page.getByRole('radio', { name: /^fix$/i }).first();
     await fixBtn.click();
     await page.waitForTimeout(300);
     // Poi torna a "tutti"
-    const tuttiBtn = page.getByRole('button', { name: /tutti/i }).first();
+    const tuttiBtn = page.getByRole('radio', { name: /tutti/i }).first();
     await tuttiBtn.click();
     await page.waitForTimeout(500);
+    await expect(tuttiBtn).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 3000 });
   });
 

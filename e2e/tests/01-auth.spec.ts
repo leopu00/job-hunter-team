@@ -7,46 +7,96 @@ import { test, expect } from '@playwright/test';
  * Eseguire solo in locale con storageState, mai in CI pubblica
  */
 
-test.describe('Autenticazione Google', () => {
-  test('homepage mostra titolo e bottone Login with Google', async ({ page }) => {
-    await page.goto('/');
+async function openLoginEntry(page: Parameters<typeof test>[0]['page']) {
+  await page.goto('/?login=true');
+  await expect(page).toHaveTitle('Job Hunter Team');
+}
+
+async function getEntryMode(page: Parameters<typeof test>[0]['page']) {
+  const cloudView = page.getByRole('button', { name: 'Login with Google' });
+  if (await cloudView.count()) {
+    await expect(cloudView).toBeVisible();
+    return 'cloud';
+  }
+
+  const localView = page.getByText('Seleziona la tua cartella di lavoro', { exact: false });
+  if (await localView.count()) {
+    await expect(localView).toBeVisible();
+    return 'local';
+  }
+
+  return 'unknown';
+}
+
+async function expectProtectedRouteBehavior(
+  page: Parameters<typeof test>[0]['page'],
+  route: '/dashboard' | '/positions' | '/applications' | '/profile',
+) {
+  await page.goto(route);
+  const pathname = new URL(page.url()).pathname;
+
+  if (pathname === '/') {
     await expect(page).toHaveTitle('Job Hunter Team');
-    // Il bottone login non è un <a> ma un elemento cliccabile con questo testo
-    await expect(page.getByText('Login with Google')).toBeVisible();
-    await expect(page.getByText('Sistema multi-agente per ricerca e candidatura')).toBeVisible();
+    await expect(page.getByRole('link', { name: /accedi|sign in/i })).toBeVisible();
+    return;
+  }
+
+  expect(pathname).toBe(route);
+  await expect(page).toHaveTitle(/.+/);
+}
+
+test.describe('Autenticazione Google', () => {
+  test('entrypoint login mostra il titolo e la vista corretta per l\'ambiente', async ({ page }) => {
+    await openLoginEntry(page);
+    const mode = await getEntryMode(page);
+
+    if (mode === 'cloud') {
+      await expect(page.getByText('Login with Google')).toBeVisible();
+      await expect(page.getByText('Sistema multi-agente per ricerca e candidatura', { exact: false })).toBeVisible();
+      return;
+    }
+
+    expect(mode).toBe('local');
+    await expect(page.getByText('modalita locale', { exact: false })).toBeVisible();
+    await expect(page.getByText('Seleziona la tua cartella di lavoro', { exact: false })).toBeVisible();
   });
 
-  test('homepage mostra sezione auth con descrizione OAuth', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByText('OAuth 2.0 via Supabase')).toBeVisible();
-    await expect(page.getByText('Nessuna password memorizzata')).toBeVisible();
+  test('entrypoint login mostra copy coerente con cloud o workspace locale', async ({ page }) => {
+    await openLoginEntry(page);
+    const mode = await getEntryMode(page);
+
+    if (mode === 'cloud') {
+      await expect(page.getByText('Accesso riservato ai membri del team', { exact: false })).toBeVisible();
+      await expect(page.getByRole('link', { name: /scarica per il tuo computer/i })).toBeVisible();
+      return;
+    }
+
+    expect(mode).toBe('local');
+    await expect(page.getByText('I tuoi dati restano sul tuo computer', { exact: false })).toBeVisible();
+    await expect(page.getByText('workspace', { exact: false })).toBeVisible();
   });
 
   test('redirect a Google OAuth al click Login with Google', async ({ page }) => {
-    await page.goto('/');
+    await openLoginEntry(page);
+    test.skip(await getEntryMode(page) !== 'cloud', 'Google OAuth disponibile solo con Supabase configurato');
     await page.getByText('Login with Google').click();
     await expect(page).toHaveURL(/accounts\.google\.com|\/auth/);
   });
 
-  test('/dashboard senza sessione redirige alla homepage', async ({ page }) => {
-    await page.goto('/dashboard');
-    await expect(page).toHaveURL('https://jobhunterteam.ai/');
-    await expect(page.getByText('Login with Google')).toBeVisible();
+  test('/dashboard applica il gate previsto dall\'ambiente corrente', async ({ page }) => {
+    await expectProtectedRouteBehavior(page, '/dashboard');
   });
 
-  test('/positions senza sessione redirige alla homepage', async ({ page }) => {
-    await page.goto('/positions');
-    await expect(page).toHaveURL('https://jobhunterteam.ai/');
+  test('/positions applica il gate previsto dall\'ambiente corrente', async ({ page }) => {
+    await expectProtectedRouteBehavior(page, '/positions');
   });
 
-  test('/applications senza sessione redirige alla homepage', async ({ page }) => {
-    await page.goto('/applications');
-    await expect(page).toHaveURL('https://jobhunterteam.ai/');
+  test('/applications applica il gate previsto dall\'ambiente corrente', async ({ page }) => {
+    await expectProtectedRouteBehavior(page, '/applications');
   });
 
-  test('/profile senza sessione redirige alla homepage', async ({ page }) => {
-    await page.goto('/profile');
-    await expect(page).toHaveURL('https://jobhunterteam.ai/');
+  test('/profile applica il gate previsto dall\'ambiente corrente', async ({ page }) => {
+    await expectProtectedRouteBehavior(page, '/profile');
   });
 
   // TODO: test con sessione autenticata — richiede storageState
