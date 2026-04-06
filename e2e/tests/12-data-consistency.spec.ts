@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+
+const WORKSPACE = '/tmp/jht-e2e-data-consistency';
 
 /**
  * TEST CONSISTENZA DATI — Verifica che UI mostri dati coerenti col DB
@@ -17,23 +20,26 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Consistenza dati UI vs DB', () => {
-  test.skip('dashboard mostra 3 "pronte all\'invio" (applications.ready — corretto)', async ({ page }) => {
-    // SKIP: richiede sessione autenticata
-    // VALORE CORRETTO: 3 (applications con CV scritto + revisionato, pronti da inviare)
-    // DISTINTO da positions.ready=58 (posizioni dove scrittore deve ancora lavorare)
-    await page.goto('/dashboard');
-    const readyCount = page.locator('[data-testid="ready-count"], .ready-count, .stat-ready');
-    const countText = await readyCount.textContent();
-    const count = parseInt(countText || '0');
-    expect(count).toBe(3);
+  test.beforeAll(async ({ request }) => {
+    await ensureSeededWorkspace(request, WORKSPACE);
   });
 
-  test.skip('/positions con filtro ready mostra 58 posizioni (scrittore backlog)', async ({ page }) => {
-    // SKIP: richiede sessione autenticata
-    // 58 positions.ready = backlog scrittore, NON CV pronti da inviare
+  test.beforeEach(async ({ page }) => {
+    await loginToSeededWorkspace(page, WORKSPACE);
+  });
+
+  test('/applications mostra 1 candidatura pronta e 1 inviata nel workspace seedato', async ({ page }) => {
+    await page.goto('/applications');
+    await expect(page.getByText(/2 totali · 1 inviate · 1 pronte/i)).toBeVisible();
+    await expect(page.getByText(/pronte all'invio — 1/i)).toBeVisible();
+    await expect(page.getByText(/inviate — 1/i)).toBeVisible();
+  });
+
+  test('/positions con filtro ready mostra 1 posizione pronta nel workspace seedato', async ({ page }) => {
     await page.goto('/positions?status=ready');
-    const rows = page.locator('table tbody tr, [data-testid="position-row"], .position-item');
-    const count = await rows.count();
-    expect(count).toBe(58);
+    await expect(page.getByText(/1 risultati · status: ready/i)).toBeVisible();
+    const rows = page.locator('table[aria-label="Lista posizioni"] tbody tr');
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByRole('link', { name: /frontend engineer/i })).toBeVisible();
   });
 });
