@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
+  "author": "Leone Emanuele Puglisi",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
+    "test": "node --test runtime.test.js",
     "prepare:payload": "node ./scripts/prepare-payload.js",
-    "dist": "npm run prepare:payload && electron-builder"
+    "dist": "npm run prepare:payload && electron-builder",
+    "dist:mac": "npm run dist -- --mac dmg",
+    "dist:win": "npm run dist -- --win nsis",
+    "dist:linux": "npm run dist -- --linux AppImage deb"
   },
   "devDependencies": {
     "electron": "^37.2.6",
@@ -16,7 +22,6 @@
   "build": {
     "appId": "ai.jobhunterteam.desktop",
     "productName": "JHT Desktop",
-    "artifactName": "job-hunter-team-${version}-${os}.${ext}",
     "files": [
       "main.js",
       "preload.js",
@@ -30,22 +35,35 @@
       }
     ],
     "directories": {
+      "buildResources": "assets",
       "output": "dist"
     },
     "mac": {
+      "artifactName": "job-hunter-team-${version}-mac.${ext}",
+      "icon": "assets/icon.icns",
       "target": [
         "dmg"
       ],
       "category": "public.app-category.productivity"
     },
     "win": {
+      "artifactName": "job-hunter-team-${version}-windows.${ext}",
       "target": [
         "nsis"
       ]
     },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always"
+    },
     "linux": {
+      "artifactName": "job-hunter-team-${version}-linux.${ext}",
+      "icon": "assets/icon.png",
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
       "category": "Utility"
     }

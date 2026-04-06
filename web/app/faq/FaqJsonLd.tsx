@@ -21,7 +21,7 @@ const FAQ_DATA = [
   },
   {
     q: 'Quali sono i requisiti di sistema?',
-    a: 'Node.js 18+, tmux (per gli agenti) e Claude CLI. Funziona su macOS 12+, Linux (Ubuntu 20.04+, Fedora 36+) e Windows 10+ (con WSL per tmux). Serve una connessione internet per le chiamate API.',
+    a: 'Il launcher desktop funziona su macOS 12+, Linux (Ubuntu 22.04+, Debian 12+, Fedora 39+) e Windows 10+. Per eseguire gli agenti servono anche tmux e Claude CLI; su Windows tmux richiede ancora WSL. Serve una connessione internet per le chiamate API.',
   },
   {
     q: 'I miei dati sono al sicuro?',

@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Ultimo aggiornamento: 2026-04-04
+> Ultimo aggiornamento: 2026-04-06
 
 ---
 
@@ -83,18 +83,19 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 > _"Scarichi, installi, parte tutto in background, poi lavori dal browser."_
 
 ```
-⚪ Stato: ROADMAP
-░░░░░░░░░░░░░░░░░░░░ 0%
+🟡 Stato: IN CORSO
+━━━━━━━━━━━░░░░░░░░░ ~45%
 
-⬜ Scaffolding `desktop/` + electron-builder
-⬜ Launcher/orchestratore locale con tray e browser opener
+✅ Scaffolding `desktop/` + electron-builder
+✅ Launcher/orchestratore locale con browser opener e runtime manager
+✅ Payload prebuildato: GUI web gia' compilata, niente rebuild lato utente
+✅ Installer: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
+✅ Release workflow con GitHub Releases e runner nativi per OS
 ⬜ Setup wizard grafico (lingua, profilo, provider AI, credenziali)
-⬜ Payload prebuildato: GUI web gia' compilata, niente rebuild lato utente
 ⬜ Bootstrap silenzioso dipendenze in base al provider scelto
 ⬜ Tray icon + notifiche desktop native
-⬜ Installer: .dmg (macOS), .exe (Windows), .AppImage (Linux)
-⬜ Code signing (macOS + Windows)
-⬜ Auto-update via electron-updater + GitHub Releases
+⬜ Code signing completo (macOS + Windows)
+⬜ Auto-update via electron-updater
 ⬜ Modalita' "computer dedicato" (SSH + mDNS discovery)
 ```
 
@@ -145,16 +146,16 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 > _"Landing page, download, onboarding per utenti non tecnici."_
 
 ```
-⚪ Stato: ROADMAP
-░░░░░░░░░░░░░░░░░░░░ 0%
+🟡 Stato: IN CORSO
+━━━━━━━━━━━━░░░░░░░░ ~55%
 
 ✅ Dominio acquistato: **jobhunterteam.ai** (Cloudflare)
 ✅ DNS configurato: Record A → Vercel (216.198.79.1), DNS only
 ✅ Dominio collegato a Vercel, SSL auto-generato
 ✅ Supabase Auth: Site URL e redirect aggiornati a jobhunterteam.ai
+✅ Landing page pubblica
+✅ Pagina download con rilevamento OS automatico
 ⬜ Configurazione sottodomini (app, docs, api)
-⬜ Landing page (hero, features, 3 step, download, FAQ)
-⬜ Pagina download con rilevamento OS automatico
 ⬜ Documentazione utente visuale (guide, screenshot, FAQ)
 ⬜ Video tutorial (opzionale)
 ```
@@ -187,7 +188,7 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 | | |
 |---|---|
 | 🎯 **Target** | Chiunque — utenti non tecnici inclusi |
-| 📥 **Installazione** | Scarica il launcher (.dmg/.exe/.AppImage), doppio click |
+| 📥 **Installazione** | Scarica il launcher (.dmg/.exe/.AppImage/.deb), installa e avvia |
 | ⚙️ **Setup** | Wizard grafico: lingua → profilo → provider AI → credenziali |
 | 🤖 **Runtime** | JHT gira in background; il launcher controlla start/stop/status |
 | 💾 **Storage** | SQLite locale + sync opzionale con Supabase |

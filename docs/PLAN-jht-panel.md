@@ -28,7 +28,7 @@ Il piano attivo e' ora quello descritto in:
 
 In sintesi:
 
-- 📦 installer desktop (`.dmg`, `.exe`, `.AppImage`)
+- 📦 installer desktop (`.dmg`, `.exe`, `.AppImage`, `.deb`)
 - 🛠️ bootstrap silenzioso del runtime locale
 - 🧠 provider AI a scelta; `Claude CLI` solo se serve davvero
 - 🌍 nessun terminale per l'utente finale
@@ -40,5 +40,5 @@ In sintesi:
 
 - Evita di duplicare la UI gia' esistente in `web/`
 - Riduce drasticamente il codice da mantenere
-- Permette di arrivare prima a un `.dmg` realmente utile
+- Permette di arrivare prima a pacchetti desktop realmente utili (`.dmg`, `.exe`, `.AppImage`, `.deb`)
 - Mantiene la web dashboard come single source of truth della UX
