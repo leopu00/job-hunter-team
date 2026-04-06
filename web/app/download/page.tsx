@@ -17,11 +17,13 @@ interface PlatformData {
   size: string | null
   requirements: string
   instructions: string[]
+  downloadUrl: string
+  available: boolean
+  format: string
 }
 
 interface ReleaseData {
   version: string
-  downloadBaseUrl: string
   platforms: PlatformData[]
   releasesUrl: string
 }
@@ -49,46 +51,53 @@ function detectOS(): OS {
 
 const FALLBACK_VERSION = '0.1.0'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
-const FALLBACK_BASE_URL = `https://github.com/${FALLBACK_REPO}/releases/latest/download`
+const FALLBACK_RELEASES_URL = `https://github.com/${FALLBACK_REPO}/releases`
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
     id: 'mac', label: 'macOS', file: `job-hunter-team-${FALLBACK_VERSION}-mac.dmg`, size: null,
     requirements: 'macOS 12+',
     instructions: [],
+    downloadUrl: `https://github.com/${FALLBACK_REPO}/releases/latest/download/job-hunter-team-${FALLBACK_VERSION}-mac.dmg`,
+    available: true,
+    format: 'dmg',
   },
   {
     id: 'linux', label: 'Linux', file: `job-hunter-team-${FALLBACK_VERSION}-linux.AppImage`, size: null,
     requirements: 'Ubuntu 22.04+ / Debian 12+ / Fedora 39+ (x64)',
     instructions: [],
+    downloadUrl: `https://github.com/${FALLBACK_REPO}/releases/latest/download/job-hunter-team-${FALLBACK_VERSION}-linux.AppImage`,
+    available: true,
+    format: 'AppImage',
   },
   {
     id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.exe`, size: null,
     requirements: 'Windows 10/11 (x64)',
     instructions: [],
+    downloadUrl: `https://github.com/${FALLBACK_REPO}/releases/latest/download/job-hunter-team-${FALLBACK_VERSION}-windows.exe`,
+    available: true,
+    format: 'exe',
   },
 ]
 
 function DownloadContent() {
   const { t, ta } = useLandingI18n()
-  const [detectedOS, setDetectedOS] = useState<OS>(null)
+  const [detectedOS] = useState<OS>(() => detectOS())
   const [expanded, setExpanded] = useState<OS>(null)
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
-    downloadBaseUrl: FALLBACK_BASE_URL,
     platforms: FALLBACK_PLATFORMS,
-    releasesUrl: `https://github.com/${FALLBACK_REPO}/releases`,
+    releasesUrl: FALLBACK_RELEASES_URL,
   })
 
   useEffect(() => {
-    setDetectedOS(detectOS())
     fetch('/api/download')
       .then(r => r.json())
       .then((data: ReleaseData) => setRelease(data))
       .catch(() => {})
   }, [])
 
-  const { version, downloadBaseUrl, platforms, releasesUrl } = release
+  const { version, platforms, releasesUrl } = release
 
   const sorted = [...platforms].sort((a, b) => {
     if (a.id === detectedOS) return -1
@@ -124,7 +133,10 @@ function DownloadContent() {
               const isExpanded = expanded === platform.id as OS
               const Icon = ICONS[platform.id] || (() => null)
               const instrKey = INSTR_KEYS[platform.id]
-              const instructions = instrKey ? ta(instrKey) : platform.instructions
+              const instructions = platform.instructions.length > 0
+                ? platform.instructions
+                : instrKey ? ta(instrKey) : []
+              const ctaHref = platform.available ? platform.downloadUrl : releasesUrl
 
               return (
                 <div key={platform.id} className="border rounded-lg overflow-hidden transition-all duration-200"
@@ -173,17 +185,22 @@ function DownloadContent() {
                         }}>
                         {isExpanded ? t('dl_close') : t('dl_instructions')}
                       </button>
-                      <a href={`${downloadBaseUrl}/${platform.file}`}
+                      <a href={ctaHref}
                         className="flex-1 sm:flex-none text-center px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                         style={{
-                          background: isDetected ? 'var(--color-green)' : 'var(--color-card)',
-                          color: isDetected ? '#000' : 'var(--color-green)',
-                          border: isDetected ? 'none' : '1px solid var(--color-green)',
+                          background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
+                          color: platform.available && isDetected ? '#000' : 'var(--color-green)',
+                          border: platform.available && isDetected ? 'none' : '1px solid var(--color-green)',
                           cursor: 'pointer',
                         }}>
-                        {t('dl_download')}
+                        {platform.available ? t('dl_download') : t('dl_view_release')}
                       </a>
                     </div>
+                    {!platform.available && (
+                      <p className="mt-2 text-[10px] text-[var(--color-yellow)]">
+                        {t('dl_asset_pending')}
+                      </p>
+                    )}
                   </div>
 
                   {/* Expandable instructions */}

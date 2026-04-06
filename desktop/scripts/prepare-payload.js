@@ -8,6 +8,8 @@ const repoRoot = path.resolve(__dirname, '..', '..')
 const desktopRoot = path.join(repoRoot, 'desktop')
 const payloadRoot = path.join(desktopRoot, 'app-payload')
 const webRoot = path.join(repoRoot, 'web')
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const npmNeedsShell = process.platform === 'win32'
 
 const payloadDirs = ['web', 'shared', 'cli', 'scripts', '.launcher', 'agents']
 const payloadFiles = ['package.json', 'package-lock.json', 'requirements.txt', '.env.example']
@@ -43,22 +45,24 @@ function copyFile(name) {
   fs.copyFileSync(from, path.join(payloadRoot, name))
 }
 
+function runNpm(args, cwd) {
+  execFileSync(npmCommand, args, {
+    cwd,
+    stdio: 'inherit',
+    shell: npmNeedsShell,
+  })
+}
+
 function ensureWebDependencies() {
   if (fs.existsSync(path.join(webRoot, 'node_modules'))) return
 
   console.log('[payload] installing web dependencies...')
-  execFileSync('npm', ['ci'], {
-    cwd: webRoot,
-    stdio: 'inherit',
-  })
+  runNpm(['ci'], webRoot)
 }
 
 function ensureWebBuild() {
   console.log('[payload] building web production bundle...')
-  execFileSync('npm', ['run', 'build'], {
-    cwd: webRoot,
-    stdio: 'inherit',
-  })
+  runNpm(['run', 'build'], webRoot)
 }
 
 function main() {
