@@ -19,6 +19,9 @@ function formatTokens(total: number | null | undefined, context: number | null |
 
 const QUICK_COMMANDS = [
   ["Tab", "viste"],
+  ["↑↓", "seleziona"],
+  ["←→", "domande"],
+  ["Enter", "apri"],
   ["/chat", "agente"],
   ["/start", "agente"],
   ["Ctrl+C", "esci"],
@@ -40,8 +43,9 @@ export class StatusBar {
     activityStatus: string;
     selectedAgent: JhtAgent | null;
     workingAgents: number;
+    currentView?: string;
   }): void {
-    const { connectionStatus, activityStatus, selectedAgent, workingAgents } = params;
+    const { connectionStatus, activityStatus, selectedAgent, workingAgents, currentView } = params;
 
     const parts: string[] = [];
 
@@ -65,6 +69,10 @@ export class StatusBar {
     }
 
     const statusLine = parts.join(theme.dim(" │ "));
+    if (currentView === "profile") {
+      this.textNode.setText(statusLine);
+      return;
+    }
 
     // Comandi rapidi
     const cmdParts = QUICK_COMMANDS.map(

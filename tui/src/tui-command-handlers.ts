@@ -41,6 +41,7 @@ export type CommandHandlerContext = {
   requestRender: () => void;
   switchView: (view: TuiView) => void;
   refreshCurrentView: () => void;
+  startProfileWizard?: () => void;
   noteLocalRunId?: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
   reconnect?: (apiKey: string) => boolean;
@@ -123,7 +124,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /ai              — chat AI (Anthropic)",
     "  /send <msg>      — invia messaggio all'agente selezionato",
     "  /setup <key>     — configura API key Anthropic",
-    "  /profile         — mostra/modifica profilo utente",
+    "  /profile         — apre il wizard profilo",
     "  /refresh         — aggiorna vista corrente",
     "  /status          — stato connessione",
     "  /abort           — interrompi run AI attivo",
@@ -275,48 +276,14 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
 
       case "profile": {
-        const profile = loadProfile();
-        if (!args) {
-          // Mostra profilo corrente
+        if (args === "show") {
+          const profile = loadProfile();
           chatLog.addSystem("profilo utente:");
           for (const line of formatProfile(profile)) chatLog.addSystem(line);
-          chatLog.addSystem(profile.completato ? "  Stato: completo" : "  Stato: incompleto — usa /profile <campo> <valore>");
-          chatLog.addSystem("  campi: nome, eta, competenze, zona, tipo");
+          chatLog.addSystem(profile.completato ? "  Stato: completo" : "  Stato: incompleto");
           break;
         }
-        // Modifica campo: /profile nome Mario
-        const spaceIdx = args.indexOf(" ");
-        if (spaceIdx === -1) {
-          chatLog.addSystem("uso: /profile <campo> <valore>");
-          chatLog.addSystem("  campi: nome, eta, competenze, zona, tipo");
-          break;
-        }
-        const field = args.slice(0, spaceIdx).toLowerCase();
-        const value = args.slice(spaceIdx + 1).trim();
-        switch (field) {
-          case "nome":
-            profile.nome = value;
-            break;
-          case "eta":
-            profile.eta = value;
-            break;
-          case "competenze":
-            profile.competenze = value.split(",").map((s) => s.trim()).filter(Boolean);
-            break;
-          case "zona":
-            profile.zona = value;
-            break;
-          case "tipo":
-            profile.tipoLavoro = value;
-            break;
-          default:
-            chatLog.addSystem(`campo "${field}" non riconosciuto — usa: nome, eta, competenze, zona, tipo`);
-            break;
-        }
-        profile.completato = isProfileComplete(profile);
-        saveProfile(profile);
-        chatLog.addSystem("profilo aggiornato:");
-        for (const line of formatProfile(profile)) chatLog.addSystem(line);
+        context.startProfileWizard?.();
         break;
       }
 

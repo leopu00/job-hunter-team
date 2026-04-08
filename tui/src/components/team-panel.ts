@@ -11,6 +11,7 @@ import type { JhtTask } from "../tui-tasks.js";
 import { getMissingProfileFields, isProfileComplete, loadProfile } from "../tui-profile.js";
 
 type AgentDef = { id: string; label: string; emoji: string; desc: string; aliases: string[] };
+export type TeamAction = { id: string; label: string; hint: string; command: string };
 
 const KNOWN_AGENTS: AgentDef[] = [
   { id: "scout", label: "Scout", emoji: "🕵️", desc: "ricerca opportunita", aliases: ["scout"] },
@@ -33,12 +34,17 @@ function findAgentTask(agent: AgentDef, tasks: JhtTask[]): JhtTask | null {
 }
 
 export class TeamPanel extends Container {
-  refresh(sessions: TmuxSession[], tasks: JhtTask[] = []) {
+  private actions: TeamAction[] = [];
+  private selectedActionIndex = 0;
+
+  refresh(sessions: TmuxSession[], tasks: JhtTask[] = [], options?: { selectedActionIndex?: number }) {
     this.clear();
     const sessionMap = new Map(sessions.map((s) => [s.agentId, s]));
     const profile = loadProfile();
     const profileReady = isProfileComplete(profile);
     const missingFields = getMissingProfileFields(profile);
+    this.actions = this.buildActions(profileReady, sessions);
+    this.selectedActionIndex = this.normalizeSelectedIndex(options?.selectedActionIndex ?? this.selectedActionIndex);
 
     this.add(theme.accent("  TEAM JHT — Stato Agenti"));
     this.add(theme.border("  " + "\u2500".repeat(60)));
@@ -48,6 +54,14 @@ export class TeamPanel extends Container {
       this.add(theme.warning("  ⚠ PROFILO NON CONFIGURATO"));
       this.add(theme.dim(`  Mancano: ${missingFields.join(", ") || "dati profilo"}`));
       this.add(theme.dim("  Usa /profile per completarlo prima di avviare il team."));
+      this.add("");
+    }
+
+    if (this.actions.length > 0) {
+      this.add(theme.accent("  AZIONI"));
+      for (const [index, action] of this.actions.entries()) {
+        this.add(this.renderAction(action, index === this.selectedActionIndex));
+      }
       this.add("");
     }
 
@@ -108,7 +122,92 @@ export class TeamPanel extends Container {
       `${theme.success(String(done))} completati`,
     );
     this.add("");
-    this.add(theme.dim("  /start <id>  avvia  \u2502  /stop <id>  ferma  \u2502  /chat <id>  parla"));
+    this.add(theme.dim("  ↑/↓ seleziona  │  Enter esegue  │  /start <id>  │  /chat <id>"));
+  }
+
+  hasActions(): boolean {
+    return this.actions.length > 0;
+  }
+
+  getSelectedActionIndex(): number {
+    return this.selectedActionIndex;
+  }
+
+  moveSelection(delta: number): boolean {
+    if (this.actions.length === 0) return false;
+    const next = this.normalizeSelectedIndex(this.selectedActionIndex + delta);
+    if (next === this.selectedActionIndex) return false;
+    this.selectedActionIndex = next;
+    return true;
+  }
+
+  activateSelectedAction(): TeamAction | null {
+    return this.actions[this.selectedActionIndex] ?? null;
+  }
+
+  private normalizeSelectedIndex(index: number): number {
+    if (this.actions.length === 0) return 0;
+    if (index < 0) return this.actions.length - 1;
+    if (index >= this.actions.length) return 0;
+    return index;
+  }
+
+  private buildActions(profileReady: boolean, sessions: TmuxSession[]): TeamAction[] {
+    const assistenteActive = sessions.some((s) => s.agentId === "assistente");
+    const scoutActive = sessions.some((s) => s.agentId === "scout");
+    const actions: TeamAction[] = [];
+
+    if (!profileReady) {
+      actions.push({
+        id: "profile",
+        label: "Configura profilo",
+        hint: "completa nome, competenze, zona e tipo lavoro",
+        command: "/profile",
+      });
+    }
+
+    actions.push({
+      id: "dashboard",
+      label: "Apri dashboard",
+      hint: "riepilogo profilo, task e team",
+      command: "/dashboard",
+    });
+
+    actions.push(assistenteActive
+      ? {
+          id: "assistente-chat",
+          label: "Apri chat Assistente",
+          hint: "entra nella sessione assistente",
+          command: "/chat assistente",
+        }
+      : {
+          id: "assistente-start",
+          label: "Avvia Assistente",
+          hint: "crea la sessione tmux dell'assistente",
+          command: "/start assistente",
+        });
+
+    actions.push(scoutActive
+      ? {
+          id: "scout-chat",
+          label: "Apri chat Scout",
+          hint: "entra nella sessione scout",
+          command: "/chat scout",
+        }
+      : {
+          id: "scout-start",
+          label: "Avvia Scout",
+          hint: "crea la sessione tmux dello scout",
+          command: "/start scout",
+        });
+
+    return actions;
+  }
+
+  private renderAction(action: TeamAction, selected: boolean): string {
+    const line = `  ${selected ? "❯" : " "} ${action.label} · ${action.hint}`;
+    if (!selected) return theme.dim(line);
+    return theme.selectedRow(theme.bold(line));
   }
 
   private add(text: string) {
