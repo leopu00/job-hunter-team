@@ -15,6 +15,9 @@ type AssistantBootstrap = {
   model?: string
 }
 
+type Message = AssistantChatMessage
+type Suggestion = AssistantSuggestion
+
 export default function FloatingChat() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<AssistantChatMessage[]>([])
