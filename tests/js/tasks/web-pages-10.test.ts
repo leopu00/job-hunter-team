@@ -9,7 +9,12 @@ vi.mock("next/server", () => {
 });
 
 const WEB = path.resolve(__dirname, "../../../web");
-function read(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function read(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 function req(url: string) { return new Request(url); }
 
 /* ── API: map ── */
@@ -49,10 +54,11 @@ describe("Sidebar", () => {
     expect(src).toContain("jht:sb-coll");
     expect(src).toContain("localStorage");
   });
-  it("favs toggle + PROTECTED array + mobile detection", () => {
+  it("favs toggle + hidden app chrome + mobile detection", () => {
     expect(src).toContain("toggleFav");
     expect(src).toContain("jht:sb-favs");
-    expect(src).toContain("PROTECTED");
+    expect(src).toContain("APP_CHROME_HIDDEN");
+    expect(src).toContain("isProtected");
     expect(src).toContain("isMobile");
     expect(src).toContain("768");
   });

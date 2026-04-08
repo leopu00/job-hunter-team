@@ -4,21 +4,23 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── FloatingChat ── */
 describe("FloatingChat", () => {
   const src = readSrc("app/components/FloatingChat.tsx");
 
-  it("export default FloatingChat + Message type user/assistant + Suggestion type", () => {
+  it("export default FloatingChat + usa i tipi condivisi dell'assistente", () => {
     expect(src).toMatch(/export default function FloatingChat\b/);
-    expect(src).toContain("type Message");
-    expect(src).toContain("role: 'user' | 'assistant'");
-    expect(src).toContain("content: string");
-    expect(src).toContain("timestamp: number");
-    expect(src).toContain("type Suggestion");
-    expect(src).toContain("label: string");
-    expect(src).toContain("prompt: string");
+    expect(src).toContain("type AssistantChatMessage");
+    expect(src).toContain("type AssistantSuggestion");
+    expect(src).toContain("const [messages, setMessages] = useState<AssistantChatMessage[]>([])");
+    expect(src).toContain("const [suggestions, setSuggestions] = useState<AssistantSuggestion[]>(AI_ASSISTANT_SUGGESTIONS)");
   });
 
   it("open/close: toggle state + aria-label Chiudi/Apri + chat-slide-up animation", () => {
@@ -30,22 +32,24 @@ describe("FloatingChat", () => {
     expect(src).toContain("chat-slide-up 0.25s ease both");
   });
 
-  it("input: Enter invia + placeholder 'Scrivi un messaggio...' + sending disabilita + indicatore 'Sto pensando...'", () => {
+  it("input: Enter invia + placeholder dinamico + sending disabilita + indicatore 'Sto pensando...'", () => {
     expect(src).toContain("e.key === 'Enter' && send()");
-    expect(src).toContain('placeholder="Scrivi un messaggio..."');
+    expect(src).toContain("placeholder={configured === false ? 'Chatbot non configurato' : 'Scrivi un messaggio...'}");
     expect(src).toContain("const [sending, setSending] = useState(false)");
-    expect(src).toContain("disabled={sending || !input.trim()}");
+    expect(src).toContain("disabled={sending || !input.trim() || configured === false}");
     expect(src).toContain("Sto pensando...");
   });
 
-  it("fetch /api/ai-assistant GET history + POST message + scrollTo bottom + suggestions", () => {
+  it("fetch /api/ai-assistant GET bootstrap + POST message con history/path + scrollTo bottom + suggestions", () => {
     expect(src).toContain("fetch('/api/ai-assistant')");
-    expect(src).toContain("data.history");
+    expect(src).toContain("loadStoredAssistantHistory()");
     expect(src).toContain("data.suggestions");
+    expect(src).toContain("data.configured");
+    expect(src).toContain("data.model");
     expect(src).toContain("method: 'POST'");
-    expect(src).toContain("JSON.stringify({ message: msg })");
+    expect(src).toContain("JSON.stringify({ message: msg, history: previousHistory, path: window.location.pathname })");
     expect(src).toContain("scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)");
-    expect(src).toContain("Come posso aiutarti nella tua ricerca lavoro?");
+    expect(src).toContain("Ti aiuto a capire la piattaforma e da dove iniziare.");
   });
 });
 

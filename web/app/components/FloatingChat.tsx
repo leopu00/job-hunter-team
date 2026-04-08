@@ -1,28 +1,46 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  AI_ASSISTANT_SUGGESTIONS,
+  loadStoredAssistantHistory,
+  saveStoredAssistantHistory,
+  type AssistantChatMessage,
+  type AssistantSuggestion,
+} from '@/lib/ai-assistant'
 
-type Message = { role: 'user' | 'assistant'; content: string; timestamp: number }
-type Suggestion = { label: string; prompt: string }
+type AssistantBootstrap = {
+  suggestions?: AssistantSuggestion[]
+  configured?: boolean
+  model?: string
+}
+
+type Message = AssistantChatMessage
+type Suggestion = AssistantSuggestion
 
 export default function FloatingChat() {
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [messages, setMessages] = useState<AssistantChatMessage[]>([])
+  const [suggestions, setSuggestions] = useState<AssistantSuggestion[]>(AI_ASSISTANT_SUGGESTIONS)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [configured, setConfigured] = useState<boolean | null>(null)
+  const [model, setModel] = useState<string>('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchHistory = useCallback(async () => {
+    setMessages(loadStoredAssistantHistory())
     const res = await fetch('/api/ai-assistant').catch(() => null)
     if (!res?.ok) return
-    const data = await res.json()
-    setMessages(data.history ?? [])
-    setSuggestions(data.suggestions ?? [])
+    const data = await res.json() as AssistantBootstrap
+    setSuggestions(data.suggestions ?? AI_ASSISTANT_SUGGESTIONS)
+    setConfigured(data.configured ?? false)
+    setModel(data.model ?? '')
   }, [])
 
-  useEffect(() => { if (open && messages.length === 0) fetchHistory() }, [open, messages.length, fetchHistory])
+  useEffect(() => { if (open) fetchHistory() }, [open, fetchHistory])
   useEffect(() => { if (open) scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [messages, open])
+  useEffect(() => { saveStoredAssistantHistory(messages) }, [messages])
 
   useEffect(() => {
     if (!open) return
@@ -34,15 +52,27 @@ export default function FloatingChat() {
   const send = async (text?: string) => {
     const msg = (text ?? input).trim()
     if (!msg || sending) return
+    if (configured === false) return
+
+    const previousHistory = messages
+    const userMessage: AssistantChatMessage = { role: 'user', content: msg, timestamp: Date.now() }
     setInput(''); setSending(true)
-    setMessages(prev => [...prev, { role: 'user', content: msg, timestamp: Date.now() }])
+    setMessages(prev => [...prev, userMessage])
     const res = await fetch('/api/ai-assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
+      body: JSON.stringify({ message: msg, history: previousHistory, path: window.location.pathname }),
     }).catch(() => null)
     if (res?.ok) {
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: data.timestamp }])
+    } else {
+      const data = await res?.json().catch(() => null)
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data?.error ?? 'Il chatbot non è riuscito a rispondere in questo momento.',
+        timestamp: Date.now(),
+      }])
+      if (typeof data?.configured === 'boolean') setConfigured(data.configured)
     }
     setSending(false)
   }
@@ -94,6 +124,9 @@ export default function FloatingChat() {
                 AI Assistant
               </span>
             </div>
+            <div className="text-[9px]" style={{ color: configured === false ? 'var(--color-yellow)' : 'var(--color-dim)' }}>
+              {configured === false ? 'offline' : model || 'online'}
+            </div>
             <button onClick={() => setOpen(false)} className="cursor-pointer bg-transparent border-0 p-0 flex items-center"
               style={{ color: 'var(--color-dim)' }} aria-label="Chiudi">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
@@ -104,14 +137,20 @@ export default function FloatingChat() {
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 min-h-0" aria-live="polite" style={{ minHeight: 200 }}>
+            {configured === false && (
+              <div className="mb-4 rounded-lg p-3 text-[11px]" style={{ background: 'rgba(245,197,24,0.08)', color: 'var(--color-muted)', border: '1px solid rgba(245,197,24,0.24)' }}>
+                Chatbot non attivo: manca `OPENAI_API_KEY` sul server.
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-[12px] mb-4" style={{ color: 'var(--color-dim)' }}>Come posso aiutarti nella tua ricerca lavoro?</p>
+                <p className="text-[12px] mb-4" style={{ color: 'var(--color-dim)' }}>Ti aiuto a capire la piattaforma e da dove iniziare.</p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {suggestions.map(s => (
                     <button key={s.label} onClick={() => send(s.prompt)}
+                      disabled={configured === false}
                       className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer transition-colors"
-                      style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+                      style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', opacity: configured === false ? 0.45 : 1 }}>
                       {s.label}
                     </button>
                   ))}
@@ -142,8 +181,9 @@ export default function FloatingChat() {
             <div className="flex gap-1 px-3 pb-2 flex-wrap">
               {suggestions.map(s => (
                 <button key={s.label} onClick={() => send(s.prompt)}
+                  disabled={configured === false}
                   className="px-2 py-0.5 rounded text-[8px] cursor-pointer"
-                  style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)' }}>
+                  style={{ background: 'var(--color-row)', color: 'var(--color-dim)', border: '1px solid var(--color-border)', opacity: configured === false ? 0.45 : 1 }}>
                   {s.label}
                 </button>
               ))}
@@ -153,14 +193,15 @@ export default function FloatingChat() {
           {/* Input */}
           <div className="p-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid var(--color-border)' }}>
             <input value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && send()} placeholder="Scrivi un messaggio..."
+              onKeyDown={e => e.key === 'Enter' && send()} placeholder={configured === false ? 'Chatbot non configurato' : 'Scrivi un messaggio...'}
               aria-label="Scrivi un messaggio all'assistente"
+              disabled={configured === false}
               className="flex-1 text-[11px] px-3 py-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
-              style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} />
-            <button onClick={() => send()} disabled={sending || !input.trim()}
+              style={{ background: 'var(--color-row)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', opacity: configured === false ? 0.55 : 1 }} />
+            <button onClick={() => send()} disabled={sending || !input.trim() || configured === false}
               aria-label="Invia messaggio"
               className="px-4 py-2 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
-              style={{ background: input.trim() ? 'var(--color-green)' : 'var(--color-border)', color: input.trim() ? '#000' : 'var(--color-dim)' }}>
+              style={{ background: input.trim() && configured !== false ? 'var(--color-green)' : 'var(--color-border)', color: input.trim() && configured !== false ? '#000' : 'var(--color-dim)' }}>
               <span aria-hidden="true">↑</span>
             </button>
           </div>
