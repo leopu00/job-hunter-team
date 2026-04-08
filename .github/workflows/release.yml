@@ -122,16 +122,32 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
-      - name: Generate changelog
+      - name: Generate release notes
         id: changelog
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="${PREV_TAG}..HEAD"
-          else
-            RANGE="HEAD"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v version="$TAG_VERSION" '
+            $0 ~ "^## \\[" version "\\]" { capture=1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            if [ -n "$PREV_TAG" ]; then
+              RANGE="${PREV_TAG}..HEAD"
+            else
+              RANGE="HEAD"
+            fi
+            NOTES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --first-parent)
           fi
-          NOTES=$(git log $RANGE --pretty=format:"- %s (%h)" --no-merges)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="- Release prepared without curated notes."
+          else
+            NOTES=$(printf "%s\n" "$NOTES" | sed '/^[[:space:]]*$/d')
+          fi
+
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

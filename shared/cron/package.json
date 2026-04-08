@@ -1,6 +1,6 @@
 {
   "name": "jht-cron",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "description": "JHT scheduling system per task ricorrenti",
   "type": "module",
   "main": "index.js",
