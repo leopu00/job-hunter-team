@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useLandingI18n } from './LandingI18n'
 
 const STORAGE_KEY = 'jht:cookie-consent'
+const LANG_KEY = 'jht-lang'
 
 const T = {
   it: {
@@ -21,12 +21,22 @@ const T = {
   },
 }
 
+function getLang(): 'it' | 'en' {
+  if (typeof window === 'undefined') return 'it'
+  const saved = localStorage.getItem(LANG_KEY)
+  if (saved === 'en') return 'en'
+  const browser = navigator.language.slice(0, 2)
+  if (browser === 'en') return 'en'
+  return 'it'
+}
+
 export default function CookieConsent() {
-  const { lang } = useLandingI18n()
+  const [lang, setLang] = useState<'it' | 'en'>('it')
   const t = T[lang]
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    setLang(getLang())
     try {
       if (!localStorage.getItem(STORAGE_KEY)) setVisible(true)
     } catch { /* SSR / privacy mode */ }
