@@ -82,29 +82,26 @@ function LoginPage({ authError }: { authError: boolean }) {
           </p>
         </div>
 
-        {/* Card */}
-        <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
-          {/* Errori */}
-          {authError && (
-            <div className="mb-4 px-3 py-2 border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
-              Autenticazione fallita.
-            </div>
-          )}
-          {configError && (
-            <div className="mb-4 px-3 py-2 border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
-              Configurazione mancante.
-            </div>
-          )}
+        {/* Errori */}
+        {authError && (
+          <div className="mb-4 px-3 py-2 border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
+            Autenticazione fallita.
+          </div>
+        )}
+        {configError && (
+          <div className="mb-4 px-3 py-2 border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
+            Configurazione mancante.
+          </div>
+        )}
 
-          {/* Pulsante Google */}
-          <button 
-            onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-bright)] text-[12px] font-medium hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
-          >
-            <GoogleIcon />
-            Login with Google
-          </button>
-        </div>
+        {/* Pulsante Google */}
+        <button 
+          onClick={handleGoogleLogin}
+          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-bright)] text-[12px] font-medium hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
+        >
+          <GoogleIcon />
+          Login with Google
+        </button>
 
         {/* Torna indietro */}
         <div className="mt-4 text-center">
