@@ -123,8 +123,13 @@ export default function LandingHero() {
           Una squadra di agenti AI per la ricerca lavoro.
         </p>
 
-        <div className="inline-flex items-center mb-10 px-3 py-1.5 rounded-full" style={{ background: 'var(--color-deep)' }}>
-          <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">BETA</span>
+        <div className="inline-flex items-center mb-10">
+          <span
+            className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]"
+            style={{ textDecoration: 'underline', textUnderlineOffset: '5px', textDecorationThickness: '1px' }}
+          >
+            BETA
+          </span>
         </div>
 
       </div>
@@ -188,14 +193,14 @@ export default function LandingHero() {
                 <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-2">
                   <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                   <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
-                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                     {SENTINEL_AGENT.desc}
                   </span>
                 </span>
                 <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
                   <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                   <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
-                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                     {CAPTAIN_AGENT.desc}
                   </span>
                 </span>
@@ -215,7 +220,7 @@ export default function LandingHero() {
                       {agent.emoji}
                     </span>
                     <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
-                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                       {agent.desc}
                     </span>
                   </span>
@@ -230,14 +235,14 @@ export default function LandingHero() {
               <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-2">
                 <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                 <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   {SENTINEL_AGENT.desc}
                 </span>
               </span>
               <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
                 <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                 <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   {CAPTAIN_AGENT.desc}
                 </span>
               </span>
@@ -249,7 +254,7 @@ export default function LandingHero() {
               <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
                 <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{agent.emoji}</span>
                 <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   {agent.desc}
                 </span>
               </span>
@@ -264,14 +269,14 @@ export default function LandingHero() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
           <Link
             href="/download"
-            className="px-6 py-3 rounded text-[12px] font-bold tracking-wider no-underline transition-all"
+            className="px-6 py-3 text-[12px] font-bold tracking-wider no-underline transition-all"
             style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
           >
             {t('hero_cta')}
           </Link>
           <Link
             href="/stats"
-            className="px-6 py-3 rounded text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)]"
+            className="px-6 py-3 text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)]"
           >
             <span className="inline-flex items-center gap-2">
               <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
