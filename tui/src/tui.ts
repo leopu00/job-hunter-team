@@ -9,14 +9,16 @@ import { createJhtLayout } from "./tui-layout.js";
 import { ChatPanel } from "./components/chat-panel.js";
 import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
+import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { runSetupWizard, saveApiKey } from "./tui-setup.js";
+import { ensureWorkspaceConfigured, runSetupWizard, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
 import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
-import type { JhtAgent, JhtTuiState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
+import { isProfileComplete, loadProfile, saveProfile, validateProfileField } from "./tui-profile.js";
+import type { JhtAgent, JhtTuiState, ProfileWizardState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
 const KNOWN_AGENTS: JhtAgent[] = [
   { id: "scout", name: "scout", role: "scout", status: "idle" },
@@ -29,9 +31,19 @@ const KNOWN_AGENTS: JhtAgent[] = [
   { id: "alfa", name: "alfa", role: "alfa", status: "idle" },
 ];
 
-const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "ai"];
+const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "profile", "ai"];
+const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
+  { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Anna", required: true },
+  { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Verdi", required: true },
+  { field: "dataNascita", title: "Data di nascita", question: "Inserisci data di nascita", hint: "Formato: GG/MM/AAAA", required: true },
+  { field: "competenze", title: "Competenze", question: "Inserisci competenze professionali", hint: "Separate da virgola. Es: assistenza clienti, organizzazione, analisi dati", required: true },
+  { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Roma, provincia, disponibilita nazionale", required: true },
+  { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, Part-time, Contratto a tempo determinato", required: true },
+];
 
 export async function runJhtTui() {
+  await ensureWorkspaceConfigured();
+
   // Setup wizard se API key non configurata
   let resolvedApiKey = loadApiKey();
   if (!resolvedApiKey) {
@@ -51,6 +63,8 @@ export async function runJhtTui() {
     activeTmuxCount: listUserSessions().length,
     currentView: "team",
     chatTargetSession: null,
+    teamSelectedActionIndex: 0,
+    profileWizard: null,
     currentAgentId: "assistente",
     currentSessionKey: `jht-${randomUUID()}`,
     activeChatRunId: null,
@@ -61,6 +75,7 @@ export async function runJhtTui() {
   };
 
   const tui = new TUI(new ProcessTerminal());
+  tui.setClearOnShrink(true);
   const layout = createJhtLayout(tui);
 
   // Pannelli per ogni vista
@@ -68,15 +83,132 @@ export async function runJhtTui() {
   const chatPanel = new ChatPanel();
   const taskPanel = new TaskPanel();
   const dashboardPanel = new DashboardPanel();
+  const profileWizardPanel = new ProfileWizardPanel();
   const aiChatPanel = new ChatPanel();
 
   // Chat tmux: container per output catturato
   const tmuxOutputPanel = new Container();
 
-  // Input line in fondo (ispirato a OpenClaw CustomEditor, semplificato)
+  const startProfileWizard = () => {
+    const profile = loadProfile();
+    state.profileWizard = {
+      stepIndex: 0,
+      steps: PROFILE_WIZARD_STEPS,
+      draft: {
+        nome: profile.nome,
+        cognome: profile.cognome,
+        dataNascita: profile.dataNascita,
+        competenze: [...profile.competenze],
+        zona: profile.zona,
+        tipoLavoro: profile.tipoLavoro,
+      },
+      lastMessage: null,
+    };
+    switchView("profile");
+    setActivityStatus("configura profilo");
+  };
+
+  const persistProfileDraftValue = (wizard: ProfileWizardState, rawValue: string) => {
+    const currentStep = wizard.steps[wizard.stepIndex];
+    const raw = rawValue.trim();
+    if (currentStep.field === "competenze") {
+      if (!raw) return;
+      const validation = validateProfileField("competenze", raw);
+      if (validation.ok && Array.isArray(validation.value)) {
+        wizard.draft.competenze = validation.value;
+      }
+      return;
+    }
+    if (!raw) return;
+    const validation = validateProfileField(currentStep.field, raw);
+    if (validation.ok && typeof validation.value === "string") {
+      wizard.draft[currentStep.field] = validation.value as never;
+    }
+  };
+
+  const moveProfileWizardStep = (delta: number) => {
+    const wizard = state.profileWizard;
+    if (!wizard) return;
+    persistProfileDraftValue(wizard, inputBuffer);
+    inputBuffer = "";
+    wizard.lastMessage = null;
+    const nextIndex = Math.max(0, Math.min(wizard.steps.length - 1, wizard.stepIndex + delta));
+    wizard.stepIndex = nextIndex;
+    updateInputLine();
+    switchView("profile");
+  };
+
+  const submitProfileWizardAnswer = () => {
+    const wizard = state.profileWizard;
+    if (!wizard) return;
+
+    const currentStep = wizard.steps[wizard.stepIndex];
+    const raw = inputBuffer.trim();
+    inputBuffer = "";
+
+    const fallbackValue = currentStep.field === "competenze"
+      ? wizard.draft.competenze.join(", ")
+      : String(wizard.draft[currentStep.field] ?? "");
+    const nextRaw = raw || fallbackValue;
+
+    if (currentStep.required && !nextRaw.trim()) {
+      wizard.lastMessage = "Questo campo e obbligatorio.";
+      updateInputLine();
+      switchView("profile");
+      return;
+    }
+
+    const validation = validateProfileField(currentStep.field, nextRaw);
+    if (!validation.ok) {
+      wizard.lastMessage = validation.error;
+      updateInputLine();
+      switchView("profile");
+      return;
+    }
+
+    if (currentStep.field === "competenze") {
+      wizard.draft.competenze = validation.value as string[];
+    } else {
+      wizard.draft[currentStep.field] = validation.value as never;
+    }
+
+    wizard.lastMessage = null;
+    if (wizard.stepIndex < wizard.steps.length - 1) {
+      wizard.stepIndex += 1;
+      updateInputLine();
+      switchView("profile");
+      return;
+    }
+
+    const savedProfile = {
+      ...wizard.draft,
+      completato: false,
+    };
+    savedProfile.completato = isProfileComplete(savedProfile);
+    saveProfile(savedProfile);
+    state.profileWizard = null;
+    setActivityStatus("profilo salvato");
+    updateInputLine();
+    switchView("team");
+    aiChatPanel.addSystem(savedProfile.completato
+      ? "profilo completato"
+      : "profilo salvato ma ancora incompleto");
+  };
+
+  // Input line — visibile solo quando serve (non in team)
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
   const updateInputLine = () => {
+    // In team: nessun input visibile (navigazione pura)
+    if (state.currentView === "team") {
+      inputLine.setText("");
+      return;
+    }
+    // In profile wizard: nessun prompt, input silenzioso
+    if (state.currentView === "profile") {
+      inputLine.setText("");
+      return;
+    }
     const viewLabel = state.currentView === "chat" && state.chatTargetSession
       ? state.chatTargetSession
       : state.currentView;
@@ -105,13 +237,24 @@ export async function runJhtTui() {
     }
   };
 
+  const refreshProfileWizard = () => {
+    if (!state.profileWizard) return;
+    layout.mainSlot.clear();
+    profileWizardPanel.refresh(state.profileWizard, inputBuffer);
+    layout.mainSlot.addChild(profileWizardPanel);
+    layout.updateHeader(state);
+    updateInputLine();
+    tui.requestRender();
+  };
+
   /** Switch view — aggiorna mainSlot */
   const switchView = (view: TuiView) => {
+    const previousView = state.currentView;
     state.currentView = view;
     layout.mainSlot.clear();
     switch (view) {
       case "team":
-        teamPanel.refresh(listUserSessions(), loadTasks());
+        teamPanel.refresh(listUserSessions());
         layout.mainSlot.addChild(teamPanel);
         break;
       case "chat":
@@ -126,13 +269,20 @@ export async function runJhtTui() {
         dashboardPanel.refresh();
         layout.mainSlot.addChild(dashboardPanel);
         break;
+      case "profile":
+        if (!state.profileWizard) startProfileWizard();
+        if (state.profileWizard) {
+          refreshProfileWizard();
+          return;
+        }
+        break;
       case "ai":
         layout.mainSlot.addChild(aiChatPanel);
         break;
     }
     layout.updateHeader(state);
     updateInputLine();
-    tui.requestRender();
+    tui.requestRender(previousView !== view);
   };
 
   /** Refresh vista corrente */
@@ -183,6 +333,7 @@ export async function runJhtTui() {
     requestRender: () => tui.requestRender(),
     switchView,
     refreshCurrentView,
+    startProfileWizard,
     reconnect: (apiKey: string) => {
       if (!apiKey.startsWith("sk-ant-")) return false;
       try {
@@ -241,6 +392,11 @@ export async function runJhtTui() {
   // Input handling (ispirato a OpenClaw tui.ts input listeners)
   tui.addInputListener((data) => {
     if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
+      if (state.currentView === "profile" && state.profileWizard) {
+        submitProfileWizardAnswer();
+        tui.requestRender();
+        return { consume: true };
+      }
       const text = inputBuffer.trim();
       if (text) {
         inputBuffer = "";
@@ -248,12 +404,22 @@ export async function runJhtTui() {
         tui.requestRender();
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
+      } else if (state.currentView === "team") {
+        const action = teamPanel.getSelectedAction();
+        if (action) {
+          setActivityStatus(action.label.toLowerCase());
+          void handleCommand(action.cmd);
+        }
       }
       return { consume: true };
     }
     if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) {
       if (inputBuffer.length > 0) {
         inputBuffer = inputBuffer.slice(0, -1);
+        if (state.currentView === "profile" && state.profileWizard) {
+          refreshProfileWizard();
+          return { consume: true };
+        }
         updateInputLine();
         tui.requestRender();
       }
@@ -270,6 +436,10 @@ export async function runJhtTui() {
     }
     if (matchesKey(data, Key.ctrl("u"))) {
       inputBuffer = "";
+      if (state.currentView === "profile" && state.profileWizard) {
+        refreshProfileWizard();
+        return { consume: true };
+      }
       updateInputLine();
       tui.requestRender();
       return { consume: true };
@@ -279,6 +449,28 @@ export async function runJhtTui() {
       const idx = VIEWS.indexOf(state.currentView);
       const next = VIEWS[(idx + 1) % VIEWS.length]!;
       switchView(next);
+      return { consume: true };
+    }
+    if (state.currentView === "profile" && state.profileWizard) {
+      if (matchesKey(data, Key.left) || matchesKey(data, Key.up)) {
+        moveProfileWizardStep(-1);
+        return { consume: true };
+      }
+      if (matchesKey(data, Key.right) || matchesKey(data, Key.down)) {
+        moveProfileWizardStep(1);
+        return { consume: true };
+      }
+    }
+    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(-1)) {
+        switchView("team");
+      }
+      return { consume: true };
+    }
+    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(1)) {
+        switchView("team");
+      }
       return { consume: true };
     }
     // Ctrl+O — toggle tools expand (AI view)
@@ -292,6 +484,10 @@ export async function runJhtTui() {
     const str = typeof data === "string" ? data : "";
     if (str && str.length === 1 && str.charCodeAt(0) >= 32) {
       inputBuffer += str;
+      if (state.currentView === "profile" && state.profileWizard) {
+        refreshProfileWizard();
+        return { consume: true };
+      }
       updateInputLine();
       tui.requestRender();
       return { consume: true };

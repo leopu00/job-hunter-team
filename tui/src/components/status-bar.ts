@@ -17,11 +17,20 @@ function formatTokens(total: number | null | undefined, context: number | null |
   return `tok ${totalStr}`;
 }
 
-const QUICK_COMMANDS = [
-  ["Tab", "agente"],
+const QUICK_COMMANDS_TEAM = [
+  ["↑/↓", "naviga"],
+  ["Enter", "attiva"],
+  ["Tab", "cambia vista"],
   ["Ctrl+C", "esci"],
-  ["Ctrl+O", "tool"],
-  ["Ctrl+L", "modello"],
+];
+
+const QUICK_COMMANDS_DEFAULT = [
+  ["Tab", "viste"],
+  ["↑↓", "seleziona"],
+  ["Enter", "apri"],
+  ["/chat", "agente"],
+  ["/start", "agente"],
+  ["Ctrl+C", "esci"],
 ];
 
 export class StatusBar {
@@ -39,10 +48,10 @@ export class StatusBar {
     connectionStatus: string;
     activityStatus: string;
     selectedAgent: JhtAgent | null;
-    totalAgents: number;
     workingAgents: number;
+    currentView?: string;
   }): void {
-    const { connectionStatus, activityStatus, selectedAgent, totalAgents, workingAgents } = params;
+    const { connectionStatus, activityStatus, selectedAgent, workingAgents, currentView } = params;
 
     const parts: string[] = [];
 
@@ -66,9 +75,14 @@ export class StatusBar {
     }
 
     const statusLine = parts.join(theme.dim(" │ "));
+    if (currentView === "profile") {
+      this.textNode.setText(statusLine);
+      return;
+    }
 
-    // Comandi rapidi
-    const cmdParts = QUICK_COMMANDS.map(
+    // Comandi rapidi in base alla vista
+    const commands = currentView === "team" ? QUICK_COMMANDS_TEAM : QUICK_COMMANDS_DEFAULT;
+    const cmdParts = commands.map(
       ([key, label]) => `${theme.accent(key!)} ${theme.dim(label!)}`,
     );
     const cmdLine = cmdParts.join("  ");

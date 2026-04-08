@@ -8,7 +8,7 @@ import path from "node:path";
 import * as readline from "node:readline";
 import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
 import { sendToSession, resolveSessionName, startSession, stopSession, listJhtSessions } from "./tui-tmux.js";
-import { loadProfile, saveProfile, isProfileComplete, formatProfile, type UserProfile } from "./tui-profile.js";
+import { loadProfile, loadWorkspacePath, saveProfile, isProfileComplete, formatProfile, saveWorkspacePath, validateWorkspacePath, ensureWorkspaceInitialized, type UserProfile } from "./tui-profile.js";
 
 export type JhtChatClient = {
   sendChat: (params: {
@@ -41,6 +41,7 @@ export type CommandHandlerContext = {
   requestRender: () => void;
   switchView: (view: TuiView) => void;
   refreshCurrentView: () => void;
+  startProfileWizard?: () => void;
   noteLocalRunId?: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
   reconnect?: (apiKey: string) => boolean;
@@ -123,7 +124,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /ai              — chat AI (Anthropic)",
     "  /send <msg>      — invia messaggio all'agente selezionato",
     "  /setup <key>     — configura API key Anthropic",
-    "  /profile         — mostra/modifica profilo utente",
+    "  /profile         — apre il wizard profilo",
+    "  /workspace       — cambia cartella di lavoro",
     "  /refresh         — aggiorna vista corrente",
     "  /status          — stato connessione",
     "  /abort           — interrompi run AI attivo",
@@ -199,7 +201,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
           break;
         }
-        const startResult = startSession(args);
+        const startResult = startSession(args, loadWorkspacePath() || undefined);
         if (startResult.ok) {
           sysLog.addSystem(`sessione ${startResult.name} avviata`);
           setActivityStatus(`avviato ${startResult.name}`);
@@ -275,48 +277,44 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
 
       case "profile": {
-        const profile = loadProfile();
-        if (!args) {
-          // Mostra profilo corrente
+        if (args === "show") {
+          const profile = loadProfile();
           chatLog.addSystem("profilo utente:");
           for (const line of formatProfile(profile)) chatLog.addSystem(line);
-          chatLog.addSystem(profile.completato ? "  Stato: completo" : "  Stato: incompleto — usa /profile <campo> <valore>");
-          chatLog.addSystem("  campi: nome, eta, competenze, zona, tipo");
+          chatLog.addSystem(profile.completato ? "  Stato: completo" : "  Stato: incompleto");
           break;
         }
-        // Modifica campo: /profile nome Mario
-        const spaceIdx = args.indexOf(" ");
-        if (spaceIdx === -1) {
-          chatLog.addSystem("uso: /profile <campo> <valore>");
-          chatLog.addSystem("  campi: nome, eta, competenze, zona, tipo");
+        context.startProfileWizard?.();
+        break;
+      }
+
+      case "workspace": {
+        const currentWorkspace = loadWorkspacePath();
+        if (!args) {
+          sysLog.addSystem(`cartella di lavoro attuale: ${currentWorkspace || "(non impostata)"}`);
+          sysLog.addSystem("uso: /workspace <percorso>  (es. /workspace C:\\Progetti\\jobs)");
           break;
         }
-        const field = args.slice(0, spaceIdx).toLowerCase();
-        const value = args.slice(spaceIdx + 1).trim();
-        switch (field) {
-          case "nome":
-            profile.nome = value;
-            break;
-          case "eta":
-            profile.eta = value;
-            break;
-          case "competenze":
-            profile.competenze = value.split(",").map((s) => s.trim()).filter(Boolean);
-            break;
-          case "zona":
-            profile.zona = value;
-            break;
-          case "tipo":
-            profile.tipoLavoro = value;
-            break;
-          default:
-            chatLog.addSystem(`campo "${field}" non riconosciuto — usa: nome, eta, competenze, zona, tipo`);
-            break;
+        const validation = validateWorkspacePath(args);
+        if (!validation.ok) {
+          sysLog.addSystem(`errore: ${validation.error}`);
+          break;
         }
-        profile.completato = isProfileComplete(profile);
-        saveProfile(profile);
-        chatLog.addSystem("profilo aggiornato:");
-        for (const line of formatProfile(profile)) chatLog.addSystem(line);
+        try {
+          const init = ensureWorkspaceInitialized(validation.value);
+          saveWorkspacePath(validation.value);
+          sysLog.addSystem(`cartella di lavoro aggiornata: ${validation.value}`);
+          if (init.createdDb || init.createdProfileDir) {
+            const parts: string[] = [];
+            if (init.createdDb) parts.push("database");
+            if (init.createdProfileDir) parts.push("cartella profilo");
+            if (init.createdUploadsDir) parts.push("uploads");
+            sysLog.addSystem(`inizializzato: ${parts.join(", ")}`);
+          }
+          context.refreshCurrentView();
+        } catch (err) {
+          sysLog.addSystem(`errore: ${err instanceof Error ? err.message : "impossibile inizializzare"}`);
+        }
         break;
       }
 
