@@ -33,12 +33,12 @@ const KNOWN_AGENTS: JhtAgent[] = [
 
 const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "profile", "ai"];
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
-  { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Leone", required: true },
-  { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Puglisi", required: true },
+  { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Anna", required: true },
+  { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Verdi", required: true },
   { field: "dataNascita", title: "Data di nascita", question: "Inserisci data di nascita", hint: "Formato: GG/MM/AAAA", required: true },
-  { field: "competenze", title: "Competenze", question: "Inserisci competenze professionali", hint: "Separate da virgola. Es: React, TypeScript, Python", required: true },
-  { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Milano, remoto, Europa", required: true },
-  { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, freelance, stage", required: true },
+  { field: "competenze", title: "Competenze", question: "Inserisci competenze professionali", hint: "Separate da virgola. Es: assistenza clienti, organizzazione, analisi dati", required: true },
+  { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Roma, provincia, disponibilita nazionale", required: true },
+  { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, Part-time, Contratto a tempo determinato", required: true },
 ];
 
 export async function runJhtTui() {
@@ -73,6 +73,7 @@ export async function runJhtTui() {
   };
 
   const tui = new TUI(new ProcessTerminal());
+  tui.setClearOnShrink(true);
   const layout = createJhtLayout(tui);
 
   // Pannelli per ogni vista
@@ -240,6 +241,7 @@ export async function runJhtTui() {
 
   /** Switch view — aggiorna mainSlot */
   const switchView = (view: TuiView) => {
+    const previousView = state.currentView;
     state.currentView = view;
     layout.mainSlot.clear();
     switch (view) {
@@ -273,7 +275,7 @@ export async function runJhtTui() {
     }
     layout.updateHeader(state);
     updateInputLine();
-    tui.requestRender();
+    tui.requestRender(previousView !== view);
   };
 
   /** Refresh vista corrente */
