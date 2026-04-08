@@ -17,10 +17,16 @@ function formatTokens(total: number | null | undefined, context: number | null |
   return `tok ${totalStr}`;
 }
 
-const QUICK_COMMANDS = [
+const QUICK_COMMANDS_TEAM = [
+  ["↑/↓", "naviga"],
+  ["Enter", "attiva"],
+  ["Tab", "cambia vista"],
+  ["Ctrl+C", "esci"],
+];
+
+const QUICK_COMMANDS_DEFAULT = [
   ["Tab", "viste"],
   ["↑↓", "seleziona"],
-  ["←→", "domande"],
   ["Enter", "apri"],
   ["/chat", "agente"],
   ["/start", "agente"],
@@ -74,8 +80,9 @@ export class StatusBar {
       return;
     }
 
-    // Comandi rapidi
-    const cmdParts = QUICK_COMMANDS.map(
+    // Comandi rapidi in base alla vista
+    const commands = currentView === "team" ? QUICK_COMMANDS_TEAM : QUICK_COMMANDS_DEFAULT;
+    const cmdParts = commands.map(
       ([key, label]) => `${theme.accent(key!)} ${theme.dim(label!)}`,
     );
     const cmdLine = cmdParts.join("  ");
