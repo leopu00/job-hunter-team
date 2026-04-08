@@ -41,8 +41,7 @@ function DemoContent() {
 
           {/* Header */}
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <div className="inline-flex items-center mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
               <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('demo_badge')}</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-[var(--color-white)] mb-3">
@@ -250,8 +249,7 @@ function ProfileMockup() {
           </div>
         </div>
       ))}
-      <div className="flex items-center gap-2 mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
+      <div className="flex items-center mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
         <span className="text-[10px] text-[var(--color-green)]">Profilo completo</span>
       </div>
     </div>
@@ -273,9 +271,7 @@ function TeamMockup() {
         <div key={i} className="text-center p-2 rounded-lg" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)' }}>
           <div className="text-lg mb-1">{a.emoji}</div>
           <div className="text-[9px] font-bold" style={{ color: a.color }}>{a.name}</div>
-          <div className="flex justify-center mt-1">
-            <span className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{ background: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.15)' }} />
-          </div>
+          <div className="mt-1 text-[8px]" style={{ color: a.status === 'online' ? '#22c55e' : a.status === 'avvio...' ? '#f59e0b' : 'rgba(255,255,255,0.45)' }}>{a.status}</div>
         </div>
       ))}
     </div>
@@ -294,7 +290,6 @@ function PipelineMockup() {
     <div className="space-y-2">
       {steps.map((s, i) => (
         <div key={i} className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" aria-hidden="true" style={{ background: s.color }} />
           <span className="text-[10px] font-bold flex-shrink-0 w-16" style={{ color: s.color }}>{s.agent}</span>
           <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{s.msg}</span>
         </div>

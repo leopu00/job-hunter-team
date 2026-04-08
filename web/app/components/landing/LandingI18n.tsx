@@ -37,7 +37,7 @@ const translations = {
     it: 'Un sistema multi-agente che automatizza ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.',
     en: 'A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.',
   },
-  hero_cta:          { it: 'Inizia gratis',            en: 'Start for free' },
+  hero_cta:          { it: 'Scarica app desktop',      en: 'Download desktop app' },
   hero_cta2:         { it: 'Scopri come funziona',     en: 'See how it works' },
 
   // Features

@@ -28,8 +28,7 @@ const TIMELINE = ['2025 Q3', '2025 Q4', '2026 Q1', '2026 Q2']
 
 function SectionLabel({ text }: { text: string }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
+    <div className="flex items-center mb-3">
       <span className="text-[9px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>{text}</span>
     </div>
   )
@@ -62,8 +61,7 @@ function AboutContent() {
 
         {/* ── Hero ──────────────────────────────────────────────── */}
         <section className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 mb-5">
-            <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+          <div className="inline-flex items-center mb-5">
             <span className="text-[9px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>
               {t('about_badge')}
             </span>
@@ -89,8 +87,6 @@ function AboutContent() {
           <div className="relative pl-6 border-l border-[var(--color-border)]">
             {TIMELINE.map((date, i) => (
               <div key={i} className="mb-6 last:mb-0 relative">
-                <div className="absolute -left-[25px] w-2.5 h-2.5 rounded-full border-2" aria-hidden="true"
-                  style={{ borderColor: 'var(--color-green)', background: i === TIMELINE.length - 1 ? 'var(--color-green)' : 'var(--color-bg, #060608)' }} />
                 <span className="text-[9px] font-bold tracking-widest text-[var(--color-green)] uppercase">{date}</span>
                 <p className="text-[11px] text-[var(--color-muted)] mt-1">
                   {t(`about_tl_${i}` as 'about_tl_0')}
