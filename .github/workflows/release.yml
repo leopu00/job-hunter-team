@@ -153,7 +153,7 @@ jobs:
             ${{ steps.changelog.outputs.notes }}
 
             ---
-            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/fullstack/CHANGELOG.md) per la storia completa.
+            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) per la storia completa.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |

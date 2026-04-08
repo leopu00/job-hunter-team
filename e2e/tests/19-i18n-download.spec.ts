@@ -149,7 +149,7 @@ test.describe('Download — link funzionanti', () => {
   test('3 card OS mostrano nome file e bottone Scarica', async ({ page }) => {
     await page.goto(`${BASE}/download`, { waitUntil: 'networkidle' });
 
-    // Ogni card deve avere un nome file (es. job-hunter-team-0.1.0-mac.tar.gz)
+    // Ogni card deve avere un nome file release coerente (es. job-hunter-team-0.1.0-mac.dmg)
     const fileNames = page.locator('[class*="filename"], [class*="file-name"], code, .font-mono')
       .or(page.getByText(/\.tar\.gz|\.dmg|\.exe|\.zip|\.AppImage|\.deb/i));
     await expect(fileNames.first()).toBeVisible({ timeout: 10000 });
