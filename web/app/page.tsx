@@ -5,15 +5,8 @@ import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import LandingNav from './components/landing/LandingNav'
 import LandingHero from './components/landing/LandingHero'
-import LandingFeatures from './components/landing/LandingFeatures'
-import LandingSteps from './components/landing/LandingSteps'
-import LandingGetStarted from './components/landing/LandingGetStarted'
-import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
-import LandingStats from './components/landing/LandingStats'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
-import FadeInSection from './components/landing/FadeInSection'
 import JsonLd from './components/landing/JsonLd'
-import ScrollToTop from './components/landing/ScrollToTop'
 
 function PageContent() {
   const params = useSearchParams()
@@ -30,13 +23,6 @@ function PageContent() {
           <main style={{ position: 'relative', zIndex: 1 }}>
             <LandingNav />
             <LandingHero />
-            <FadeInSection><LandingStats /></FadeInSection>
-            <FadeInSection><LandingFeatures /></FadeInSection>
-            <FadeInSection delay={100}><LandingSteps /></FadeInSection>
-            <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
-            <FadeInSection delay={100}><LandingCTA /></FadeInSection>
-            <LandingFooter />
-            <ScrollToTop />
           </main>
         </>
       )}
