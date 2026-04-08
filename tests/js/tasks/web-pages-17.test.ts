@@ -36,7 +36,7 @@ describe("/api/templates", () => {
   it("GET: filtro ?name + ?category + categories unique + POST: preview rendered + unresolvedVars", () => {
     expect(src).toContain("searchParams.get('name')");
     expect(src).toContain("searchParams.get('category')");
-    expect(src).toContain("new Set(templates.map((t) => t.category))");
+    expect(src).toContain("new Set(templates.map(t => t.category))");
     expect(src).toContain("rendered");
     expect(src).toContain("unresolvedVars");
   });

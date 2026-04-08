@@ -34,7 +34,7 @@ describe("ScrollToTop", () => {
 
   it("smooth: scrollTo behavior smooth/instant + scrollUp function + ArrowUp SVG default icon", () => {
     expect(src).toContain("smooth = true");
-    expect(src).toContain("behavior: smooth ? 'smooth' : ('instant' as ScrollBehavior)");
+    expect(src).toContain("behavior: smooth ? 'smooth' : 'instant' as ScrollBehavior");
     expect(src).toContain("const scrollUp");
     expect(src).toContain("scrollTo({ top: 0");
     expect(src).toContain("const ArrowUp");

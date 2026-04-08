@@ -26,7 +26,8 @@ function fromForum(): AuditEvent[] {
     if (!m) continue
     const [, ts, actor, text] = m
     const lo = text.toLowerCase()
-    let action = '', detail = text, severity: Severity = 'info'
+    let action = '', severity: Severity = 'info'
+    const detail = text
     if (lo.includes('[merged]') || lo.includes('mergiato'))     { action = 'PR Merged';   severity = 'info' }
     else if (lo.includes('[rejected]'))                          { action = 'PR Rejected'; severity = 'warning' }
     else if (lo.includes('[pr]'))                                { action = 'PR Aperta';   severity = 'info' }
