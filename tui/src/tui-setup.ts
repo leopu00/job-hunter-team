@@ -1,13 +1,24 @@
 /**
  * Setup wizard — onboarding completo al primo avvio.
- * Step: benvenuto → scelta configurazione → profilo manuale o assistito AI.
+ * Step: cartella di lavoro → scelta configurazione → profilo manuale o assistito AI.
  */
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import * as readline from "node:readline";
 import chalk from "chalk";
-import { saveProfile, isProfileComplete, formatProfile, validateProfileField, type UserProfile } from "./tui-profile.js";
+import {
+  ensureWorkspaceInitialized,
+  saveProfile,
+  isProfileComplete,
+  formatProfile,
+  validateProfileField,
+  loadWorkspacePath,
+  saveWorkspacePath,
+  validateWorkspacePath,
+  type UserProfile,
+} from "./tui-profile.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
@@ -29,15 +40,31 @@ type AssistantProfileDraft = {
 function printBanner() {
   console.clear();
   console.log("");
-  console.log(chalk.green("  ┌─────────────────────────────────────────┐"));
-  console.log(chalk.green("  │") + chalk.bold.white("   Job Hunter Team — Setup Iniziale    ") + chalk.green("│"));
-  console.log(chalk.green("  └─────────────────────────────────────────┘"));
+  console.log(chalk.green("   ╔══════════════════════════════════════════════╗"));
+  console.log(chalk.green("   ║      ██╗ ███████╗██╗  ██╗████████╗          ║"));
+  console.log(chalk.green("   ║      ██║ ██╔════╝██║  ██║╚══██╔══╝          ║"));
+  console.log(chalk.green("   ║      ██║ ███████╗███████║   ██║             ║"));
+  console.log(chalk.green("   ║ ██   ██║ ╚════██║██╔══██║   ██║             ║"));
+  console.log(chalk.green("   ║ ╚█████╔╝ ███████║██║  ██║   ██║             ║"));
+  console.log(chalk.green("   ║  ╚════╝  ╚══════╝╚═╝  ╚═╝   ╚═╝             ║"));
+  console.log(chalk.green("   ║            Job Hunter Team                  ║"));
+  console.log(chalk.green("   ║             Setup Iniziale                  ║"));
+  console.log(chalk.green("   ╚══════════════════════════════════════════════╝"));
   console.log("");
+}
+
+function formatWorkspaceInitSummary(init: ReturnType<typeof ensureWorkspaceInitialized>): string | null {
+  const created: string[] = [];
+  if (init.createdDb) created.push("database");
+  if (init.createdProfileDir) created.push("cartella profilo");
+  if (init.createdUploadsDir) created.push("cartella uploads");
+  if (created.length === 0) return null;
+  return created.join(", ");
 }
 
 function printWelcomeOverview() {
   console.log(chalk.white("  Benvenuto nel portale Job Hunter Team."));
-  console.log(chalk.dim("  Qui configuri il tuo spazio di lavoro e poi puoi usare:"));
+  console.log(chalk.dim("  Qui completi la configurazione iniziale e poi puoi usare:"));
   console.log("");
   console.log(chalk.white("    • Dashboard") + chalk.dim("  riepilogo profilo, task e stato team"));
   console.log(chalk.white("    • Team") + chalk.dim("       agenti attivi e sessioni runtime"));
@@ -91,6 +118,97 @@ async function askValidatedField(
     const raw = await askWithDefault(rl, label, fallback);
     const validation = validateProfileField(field, raw);
     if (validation.ok) return validation.value;
+    console.log(chalk.yellow(`  ${validation.error}`));
+  }
+}
+
+function openWorkspaceFolderPicker(initialPath: string): string | null {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const escapedPath = initialPath.replace(/'/g, "''");
+  const script = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+    "$dialog.Title = 'Seleziona la cartella di lavoro'",
+    "$dialog.Filter = 'Cartelle|*.folder'",
+    "$dialog.CheckFileExists = $false",
+    "$dialog.CheckPathExists = $true",
+    "$dialog.ValidateNames = $false",
+    "$dialog.DereferenceLinks = $true",
+    "$dialog.FileName = 'Seleziona questa cartella'",
+    `$initialPath = '${escapedPath}'`,
+    "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
+    "$result = $dialog.ShowDialog()",
+    "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+    "  $selected = Split-Path -Path $dialog.FileName -Parent",
+    "  if (-not $selected) { $selected = $dialog.FileName }",
+    "  Write-Output $selected",
+    "}",
+  ].join("; ");
+
+  const result = spawnSync("powershell.exe", [
+    "-NoLogo",
+    "-NoProfile",
+    "-STA",
+    "-Command",
+    script,
+  ], {
+    encoding: "utf-8",
+    timeout: 120_000,
+  });
+
+  if (result.status !== 0) {
+    return null;
+  }
+
+  const selected = result.stdout.trim();
+  return selected || null;
+}
+
+async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
+  printBanner();
+  console.log(chalk.white("  Prima di entrare nella TUI devi scegliere una cartella di lavoro."));
+  console.log(chalk.dim("  La useremo come contesto iniziale per le sessioni degli agenti."));
+  console.log(chalk.dim("  Premi Enter per aprire Esplora file oppure inserisci un percorso."));
+  if (reason) {
+    console.log("");
+    console.log(chalk.yellow(`  ${reason}`));
+  }
+  console.log("");
+
+  while (true) {
+    const answer = await ask(rl, chalk.green("  > Cartella di lavoro: "));
+    const candidate = answer || openWorkspaceFolderPicker(fallback);
+    if (!candidate) {
+      console.log(chalk.yellow("  Nessuna cartella selezionata."));
+      continue;
+    }
+    const normalizedCandidate = resolve(candidate);
+    let initSummary: string | null = null;
+    let validation = validateWorkspacePath(normalizedCandidate);
+    if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
+      try {
+        initSummary = formatWorkspaceInitSummary(ensureWorkspaceInitialized(normalizedCandidate));
+        validation = validateWorkspacePath(normalizedCandidate);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "impossibile inizializzare la cartella";
+        console.log(chalk.yellow(`  ${message}`));
+        continue;
+      }
+    }
+    if (validation.ok) {
+      const init = ensureWorkspaceInitialized(validation.value);
+      saveWorkspacePath(validation.value);
+      console.log(chalk.green(`  ✓ Cartella di lavoro salvata: ${validation.value}`));
+      const currentSummary = formatWorkspaceInitSummary(init);
+      if (currentSummary || initSummary) {
+        console.log(chalk.green(`  ✓ Workspace inizializzato: ${currentSummary ?? initSummary}`));
+      }
+      console.log("");
+      return validation.value;
+    }
     console.log(chalk.yellow(`  ${validation.error}`));
   }
 }
@@ -382,6 +500,25 @@ export async function runSetupWizard(): Promise<string | null> {
   rl.close();
   await sleep(1500);
   return apiKey;
+}
+
+export async function ensureWorkspaceConfigured(): Promise<string> {
+  const savedWorkspace = loadWorkspacePath();
+  const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
+  if (validation?.ok) {
+    ensureWorkspaceInitialized(validation.value);
+    return validation.value;
+  }
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const workspace = await promptWorkspacePath(
+    rl,
+    savedWorkspace || homedir(),
+    savedWorkspace ? "La cartella di lavoro salvata non e piu disponibile." : undefined,
+  );
+  rl.close();
+  await sleep(800);
+  return workspace;
 }
 
 async function testApiKey(key: string): Promise<boolean> {

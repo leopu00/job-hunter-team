@@ -1,9 +1,10 @@
 /**
- * Profilo utente — load/save da ~/.jht/jht.config.json.
- * Usato dal wizard onboarding e dal comando /profile.
+ * Profilo utente + config runtime — load/save da ~/.jht/jht.config.json.
+ * Usato dal wizard onboarding, dalla TUI e dalla cartella di lavoro.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const CONFIG_DIR = join(homedir(), ".jht");
@@ -23,6 +24,17 @@ export type ProfileFieldValidationResult =
   | { ok: true; value: string | string[] }
   | { ok: false; error: string };
 
+export type WorkspaceValidationResult =
+  | { ok: true; value: string }
+  | { ok: false; error: string };
+
+export type WorkspaceInitResult = {
+  createdWorkspaceDir: boolean;
+  createdProfileDir: boolean;
+  createdUploadsDir: boolean;
+  createdDb: boolean;
+};
+
 const EMPTY_PROFILE: UserProfile = {
   nome: "",
   cognome: "",
@@ -32,6 +44,110 @@ const EMPTY_PROFILE: UserProfile = {
   tipoLavoro: "",
   completato: false,
 };
+
+const WORKSPACE_DB_SCHEMA = `
+CREATE TABLE IF NOT EXISTS companies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  website TEXT,
+  hq_country TEXT,
+  sector TEXT,
+  size TEXT,
+  glassdoor_rating REAL,
+  red_flags TEXT,
+  culture_notes TEXT,
+  analyzed_by TEXT,
+  analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  verdict TEXT
+);
+
+CREATE TABLE IF NOT EXISTS positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  company_id INTEGER,
+  location TEXT,
+  remote_type TEXT,
+  salary_declared_min INTEGER,
+  salary_declared_max INTEGER,
+  salary_declared_currency TEXT DEFAULT 'EUR',
+  salary_estimated_min INTEGER,
+  salary_estimated_max INTEGER,
+  salary_estimated_currency TEXT DEFAULT 'EUR',
+  salary_estimated_source TEXT,
+  url TEXT,
+  source TEXT,
+  jd_text TEXT,
+  requirements TEXT,
+  found_by TEXT,
+  found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deadline TEXT,
+  status TEXT DEFAULT 'new',
+  notes TEXT,
+  last_checked TIMESTAMP,
+  FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
+CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
+
+CREATE TABLE IF NOT EXISTS position_highlights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  position_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  text TEXT NOT NULL,
+  FOREIGN KEY (position_id) REFERENCES positions(id)
+);
+
+CREATE TABLE IF NOT EXISTS scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  position_id INTEGER NOT NULL UNIQUE,
+  total_score INTEGER NOT NULL,
+  stack_match INTEGER,
+  remote_fit INTEGER,
+  salary_fit INTEGER,
+  experience_fit INTEGER,
+  strategic_fit INTEGER,
+  breakdown TEXT,
+  notes TEXT,
+  scored_by TEXT,
+  scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (position_id) REFERENCES positions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
+
+CREATE TABLE IF NOT EXISTS applications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  position_id INTEGER NOT NULL UNIQUE,
+  cv_path TEXT,
+  cl_path TEXT,
+  cv_pdf_path TEXT,
+  cl_pdf_path TEXT,
+  critic_verdict TEXT,
+  critic_score REAL,
+  critic_notes TEXT,
+  status TEXT DEFAULT 'draft',
+  written_at TIMESTAMP,
+  applied_at TIMESTAMP,
+  applied_via TEXT,
+  response TEXT,
+  response_at TIMESTAMP,
+  written_by TEXT,
+  reviewed_by TEXT,
+  critic_reviewed_at TIMESTAMP,
+  applied BOOLEAN DEFAULT 0,
+  interview_round INTEGER DEFAULT NULL,
+  cv_drive_id TEXT,
+  cl_drive_id TEXT,
+  FOREIGN KEY (position_id) REFERENCES positions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+
+PRAGMA user_version = 2;
+`;
 
 function loadConfig(): Record<string, unknown> {
   try {
@@ -44,6 +160,108 @@ function loadConfig(): Record<string, unknown> {
 function saveConfig(cfg: Record<string, unknown>): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+}
+
+function normalizeWorkspaceInput(value: string): string {
+  return value.trim().replace(/^"(.*)"$/, "$1");
+}
+
+export function validateWorkspacePath(value: string): WorkspaceValidationResult {
+  const normalized = normalizeWorkspaceInput(value);
+  if (!normalized) {
+    return { ok: false, error: "inserisci una cartella di lavoro" };
+  }
+
+  const resolved = resolve(normalized);
+  if (!existsSync(resolved)) {
+    return { ok: false, error: "cartella non trovata" };
+  }
+
+  try {
+    if (!statSync(resolved).isDirectory()) {
+      return { ok: false, error: "il percorso indicato non e una cartella" };
+    }
+  } catch {
+    return { ok: false, error: "cartella non accessibile" };
+  }
+
+  return { ok: true, value: resolved };
+}
+
+export function loadWorkspacePath(): string {
+  const cfg = loadConfig();
+  const nested = cfg.workspace as Record<string, unknown> | undefined;
+  const raw = typeof cfg.workspacePath === "string"
+    ? cfg.workspacePath
+    : typeof nested?.path === "string"
+      ? nested.path
+      : "";
+  return raw.trim();
+}
+
+export function hasValidWorkspacePath(): boolean {
+  const workspace = loadWorkspacePath();
+  return validateWorkspacePath(workspace).ok;
+}
+
+export function saveWorkspacePath(workspacePath: string): void {
+  const validation = validateWorkspacePath(workspacePath);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
+
+  const cfg = loadConfig();
+  const workspace = cfg.workspace && typeof cfg.workspace === "object"
+    ? cfg.workspace as Record<string, unknown>
+    : {};
+  workspace.path = validation.value;
+  cfg.workspace = workspace;
+  cfg.workspacePath = validation.value;
+  saveConfig(cfg);
+}
+
+function initWorkspaceDb(dbPath: string): void {
+  const script = [
+    "const { DatabaseSync } = require('node:sqlite');",
+    `const db = new DatabaseSync(${JSON.stringify(dbPath)});`,
+    "db.exec('PRAGMA journal_mode = WAL;');",
+    "db.exec('PRAGMA foreign_keys = ON;');",
+    `db.exec(${JSON.stringify(WORKSPACE_DB_SCHEMA)});`,
+    "db.close();",
+  ].join("");
+
+  const result = spawnSync(process.execPath, ["-e", script], {
+    encoding: "utf-8",
+    timeout: 15_000,
+  });
+
+  if (result.status !== 0) {
+    const details = result.stderr?.trim() || result.stdout?.trim() || "errore inizializzazione database";
+    throw new Error(details);
+  }
+}
+
+export function ensureWorkspaceInitialized(workspacePath: string): WorkspaceInitResult {
+  const resolved = resolve(workspacePath);
+  const profileDir = join(resolved, "profile");
+  const uploadsDir = join(profileDir, "uploads");
+  const dbPath = join(resolved, "jobs.db");
+
+  const createdWorkspaceDir = !existsSync(resolved);
+  mkdirSync(resolved, { recursive: true });
+
+  const createdProfileDir = !existsSync(profileDir);
+  mkdirSync(profileDir, { recursive: true });
+
+  const createdUploadsDir = !existsSync(uploadsDir);
+  mkdirSync(uploadsDir, { recursive: true });
+
+  const createdDb = !existsSync(dbPath);
+  if (createdDb) {
+    initWorkspaceDb(dbPath);
+  }
+
+  return { createdWorkspaceDir, createdProfileDir, createdUploadsDir, createdDb };
 }
 
 export function loadProfile(): UserProfile {
