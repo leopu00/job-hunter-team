@@ -115,7 +115,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
   const HELP = [
     "comandi:",
-    "  /home            — pagina iniziale",
+    "  /config          — pagina configurazione",
+    "  /home            — alias di /config",
     "  /team            — pagina dedicata al team",
     "  /chat <agente>   — chat diretta con agente (tmux)",
     "  /start <agente>  — avvia sessione tmux per un agente",
@@ -151,6 +152,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         context.switchView("team");
         break;
 
+      case "config":
       case "home":
         context.switchView("home");
         break;
