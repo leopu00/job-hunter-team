@@ -7,7 +7,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
-import { loadProfile, isProfileComplete, formatProfile } from "../tui-profile.js";
+import { loadProfile, loadWorkspacePath, isProfileComplete, formatProfile, getMissingProfileFields } from "../tui-profile.js";
 import { listJhtSessions } from "../tui-tmux.js";
 
 // ── Paths ─────────────────────────────────────────────────────────
@@ -45,8 +45,21 @@ export class DashboardPanel extends Container {
     this.add(theme.header("  \u25A0 DASHBOARD"));
     this.add(hr);
 
+    const workspacePath = loadWorkspacePath();
+    this.add(theme.accent("  CARTELLA DI LAVORO"));
+    this.add(`  ${workspacePath || theme.dim("(non impostata)")}`);
+    this.add("");
+
     // ── Profilo Utente ──
     const profile = loadProfile();
+    const missingFields = getMissingProfileFields(profile);
+    if (!isProfileComplete(profile)) {
+      this.add(theme.warning("  ⚠ PROFILO NON CONFIGURATO"));
+      this.add(theme.dim(`  Mancano: ${missingFields.join(", ") || "dati profilo"}`));
+      this.add(theme.dim("  Completa il profilo con /profile prima di usare il team."));
+      this.add("");
+    }
+
     this.add(theme.accent("  IL TUO PROFILO"));
     if (profile.nome) {
       for (const line of formatProfile(profile)) this.add(line);
