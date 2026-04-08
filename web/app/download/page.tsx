@@ -130,8 +130,8 @@ function DownloadContent() {
             <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-6">
               download
             </div>
-            <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-              Job Hunter <span className="text-[var(--color-green)]">Team</span>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
+              Configura il tuo team <span className="text-[var(--color-green)]">sul tuo PC</span>
             </h1>
             <p className="text-[var(--color-muted)] text-[12px] md:text-[13px] leading-relaxed max-w-4xl mx-auto mb-2">
               {t('dl_desc')}
@@ -170,14 +170,14 @@ function DownloadContent() {
 
           {installMode === 'desktop' ? (
             <>
-              <div className="flex flex-col gap-4 mb-10">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
                 {sorted.map((platform, i) => {
                   const isDetected = platform.id === detectedOS
                   const Icon = ICONS[platform.id] || (() => null)
                   const ctaHref = platform.available ? platform.downloadUrl : releasesUrl
 
                   return (
-                    <div key={platform.id} className="border overflow-hidden transition-all duration-200"
+                    <div key={platform.id} className="border overflow-hidden transition-all duration-200 h-full"
                       style={{
                         borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
                         background: 'var(--color-panel)',
@@ -186,7 +186,7 @@ function DownloadContent() {
                       }}
                       onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
                       onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
-                      <div className="px-4 sm:px-5 py-4">
+                      <div className="px-4 sm:px-5 py-4 h-full flex flex-col">
                         <div className="flex items-center gap-3 sm:gap-4">
                           <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"
                             style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
@@ -208,9 +208,9 @@ function DownloadContent() {
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="mt-4 pt-1">
                           <a href={ctaHref}
-                            className="w-full sm:w-auto text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
+                            className="block w-full text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                             style={{
                               background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
                               color: platform.available && isDetected ? '#000' : 'var(--color-green)',
@@ -343,8 +343,13 @@ function AppleIcon() {
 
 function LinuxIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
-      <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.199.023.4-.002.64-.092.66-.26.869-.6.778-1.2-.046-.268-.177-.533-.301-.67-.124-.201-.17-.401-.24-.7-.064-.334-.163-.469-.16-.867.266-.073.536-.267.735-.467.227-.2.418-.468.576-.77.318-.601.465-1.33.377-2.099-.039-.4-.123-.467-.2-.868-.082-.465.008-.533.022-1.07 0-.068.005-.2-.023-.335a.622.622 0 00-.105-.197c-.133-.2-.333-.395-.6-.464-.273-.067-.56-.066-.846-.067-.283 0-.518-.133-.666-.267-.15-.132-.28-.267-.453-.267-.166 0-.367.133-.467.267l-.235.268a.73.73 0 01-.65.333c-.347 0-.467-.2-.532-.401a.963.963 0 01-.043-.199v-.133c0-.1.024-.2.067-.301.167-.467.5-.867.867-1.067.367-.197.8-.133 1.067.133.167.168.267.4.333.667.067.267.126.533.126.802 0 .267-.059.533-.192.733-.133.2-.333.401-.534.534a2.098 2.098 0 01-.733.267c-.267.066-.533.066-.733-.067a.844.844 0 01-.313-.412L12.71 18.3c.133-.266.28-.47.413-.668.27-.4.54-.734.665-1.134.135-.4.2-.867.127-1.333a.844.844 0 00-.106-.333c-.159-.267-.4-.467-.667-.6l-.1-.067c.07-.333.12-.667.12-1 0-.534-.107-1.067-.334-1.534-.226-.466-.6-.866-1.066-1.066-.467-.2-1-.267-1.534-.134-.133.034-.267.1-.4.2 0-.868.134-1.734.534-2.401.4-.667 1.067-1.133 2-1.133h.133c.534.067.934.4 1.334.734.4.333.8.733 1.266.733.134 0 .267-.034.4-.1.534-.267.734-.8.734-1.334 0-.266-.067-.533-.2-.733a1.06 1.06 0 00-.534-.4 1.773 1.773 0 00-.467-.066z"/>
+    <svg width="20" height="20" viewBox="0 0 15 15" fill="none" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M4.53918 2.40715C4.82145 1.0075 6.06066 0 7.49996 0C8.93926 0 10.1785 1.0075 10.4607 2.40715L10.798 4.07944C10.9743 4.9539 11.3217 5.78562 11.8205 6.52763L12.4009 7.39103C12.7631 7.92978 12.9999 8.5385 13.0979 9.17323C13.6747 9.22167 14.1803 9.58851 14.398 10.1283L14.8897 11.3474C15.1376 11.962 14.9583 12.665 14.4455 13.0887L12.5614 14.6458C12.0128 15.0992 11.2219 15.1193 10.6506 14.6944L9.89192 14.1301C9.88189 14.1227 9.87197 14.1151 9.86216 14.1074C9.48973 14.2075 9.09793 14.261 8.69355 14.261H6.30637C5.90201 14.261 5.51023 14.2076 5.13782 14.1074C5.12802 14.1151 5.11811 14.1227 5.10808 14.1301L4.34942 14.6944C3.77811 15.1193 2.98725 15.0992 2.43863 14.6458L0.55446 13.0887C0.0417175 12.665 -0.1376 11.962 0.110281 11.3474L0.602025 10.1283C0.819715 9.58854 1.32527 9.2217 1.90198 9.17324C2 8.5385 2.2368 7.92978 2.59897 7.39103L3.17938 6.52763C3.67818 5.78562 4.02557 4.9539 4.20193 4.07944L4.53918 2.40715ZM10.8445 9.47585C10.6345 9.63293 10.4642 9.84382 10.3561 10.0938L9.58799 11.8713C9.20026 12.0979 8.75209 12.2237 8.28465 12.2237H6.7153C6.24789 12.2237 5.79975 12.0979 5.41203 11.8714L4.64386 10.0938C4.53581 9.8438 4.36552 9.6329 4.15546 9.47582C4.18121 9.15355 4.2689 8.83503 4.41853 8.53826L5.67678 6.04259L5.68433 6.05007C6.68715 7.04458 8.31304 7.04458 9.31585 6.05007L9.32324 6.04274L10.5814 8.53825C10.7311 8.83504 10.8187 9.15357 10.8445 9.47585ZM9.04068 4.26906V3.05592H8.01353V3.85713C8.23151 3.90123 8.44506 3.97371 8.64848 4.07458L9.04068 4.26906ZM6.98638 3.85718V3.05592H5.95923V4.26919L6.3517 4.07458C6.55504 3.97375 6.7685 3.90129 6.98638 3.85718ZM2.03255 10.1864C1.82255 10.1864 1.6337 10.3132 1.55571 10.5066L1.06397 11.7257C0.981339 11.9306 1.04111 12.1649 1.21203 12.3062L3.0962 13.8633C3.27907 14.0144 3.54269 14.0211 3.73313 13.8795L4.49179 13.3152C4.6813 13.1743 4.74901 12.923 4.6557 12.7071L3.69976 10.4951C3.61884 10.3078 3.43316 10.1864 3.22771 10.1864H2.03255ZM13.4443 10.5066C13.3663 10.3132 13.1775 10.1864 12.9674 10.1864H11.7723C11.5668 10.1864 11.3812 10.3078 11.3002 10.4951L10.3443 12.7071C10.251 12.923 10.3187 13.1743 10.5082 13.3152L11.2669 13.8795C11.4573 14.0211 11.7209 14.0144 11.9038 13.8633L13.788 12.3062C13.9589 12.1649 14.0187 11.9306 13.936 11.7257L13.4443 10.5066ZM6.81106 4.98568C7.24481 4.7706 7.75537 4.7706 8.18912 4.98568L8.68739 5.23275L8.58955 5.32978C7.98786 5.92649 7.01232 5.92649 6.41063 5.32978L6.31279 5.23275L6.81106 4.98568Z"
+        fill="currentColor"
+      />
     </svg>
   )
 }
