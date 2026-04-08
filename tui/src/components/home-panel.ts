@@ -1,52 +1,45 @@
 /**
- * HomePanel — landing iniziale della TUI.
- * Mostra profilo, cartella di lavoro e menu rapido.
+ * HomePanel — pagina Config iniziale della TUI.
+ * Mostra solo gli elementi necessari per completare il setup.
  */
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
 import type { TmuxSession } from "../tui-tmux.js";
 import { getMissingProfileFields, getProfileCompletion, isProfileComplete, loadProfile, loadWorkspacePath } from "../tui-profile.js";
+import { loadApiKey, loadProviderConfig } from "../tui-client.js";
 
-type AgentDef = { id: string; label: string; emoji: string; aliases: string[] };
+const DEFAULT_TERMINAL_WIDTH = 100;
+const MAX_BOX_WIDTH = 54;
 
-const AGENTS: AgentDef[] = [
-  { id: "scout", label: "Scout", emoji: "🕵️", aliases: ["scout"] },
-  { id: "analista", label: "Analista", emoji: "👨‍🔬", aliases: ["analista"] },
-  { id: "assistente", label: "Assistente", emoji: "🧑‍💼", aliases: ["assistente"] },
-  { id: "critico", label: "Critico", emoji: "👨‍⚖️", aliases: ["critico"] },
-  { id: "scorer", label: "Scorer", emoji: "👨‍💻", aliases: ["scorer"] },
-  { id: "scrittore", label: "Scrittore", emoji: "👨‍🏫", aliases: ["scrittore"] },
-  { id: "sentinella", label: "Sentinella", emoji: "💂", aliases: ["sentinella"] },
-  { id: "alfa", label: "Alfa", emoji: "👨‍✈️", aliases: ["alfa"] },
-];
-
-const ACTIONS = [
-  { id: "profile", label: "👤 Configura profilo", cmd: "/profile" },
-  { id: "dashboard", label: "📊 Dashboard", cmd: "/dashboard" },
-  { id: "team", label: "👥 Team", cmd: "/team" },
-  { id: "assistente", label: "🤖 Assistente", cmd: "/start assistente" },
-  { id: "scout", label: "🔍 Scout", cmd: "/start scout" },
-] as const;
-
-const LEFT_COL_WIDTH = 36;
-const MERGE_GAP = "    ";
-
-function calcProfilePercent(): number {
-  return getProfileCompletion(loadProfile()).percent;
+function getTerminalWidth(): number {
+  return Math.max(process.stdout.columns ?? DEFAULT_TERMINAL_WIDTH, 60);
 }
 
-function stripAnsi(value: string): string {
-  return value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "");
+function truncatePath(value: string, width: number): string {
+  if (width <= 0) return "";
+  if (value.length <= width) return value;
+  if (width === 1) return "…";
+  return `…${value.slice(-(width - 1))}`;
 }
 
-function visibleLength(value: string): number {
-  return stripAnsi(value).length;
-}
+function wrapPlain(value: string, width: number): string[] {
+  if (width <= 0) return [""];
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
 
-function padVisible(value: string, width: number): string {
-  const len = visibleLength(value);
-  if (len >= width) return value;
-  return value + " ".repeat(width - len);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= width) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 function padPlain(value: string, width: number): string {
@@ -54,9 +47,10 @@ function padPlain(value: string, width: number): string {
   return value + " ".repeat(width - value.length);
 }
 
-function createWorkspaceBox(workspace: string, isSelected: boolean): string[] {
+function createWorkspaceBox(workspace: string, isSelected: boolean, maxWidth: number): string[] {
   const title = isSelected ? "❯ 📁 Cartella di lavoro" : "📁 Cartella di lavoro";
-  const innerWidth = Math.max(title.length, (workspace || "(non impostata)").length);
+  const workspaceText = workspace ? truncatePath(workspace, maxWidth) : "(non impostata)";
+  const innerWidth = Math.max(title.length, workspaceText.length);
   const border = isSelected ? theme.borderSelected : theme.border;
   const titleText = isSelected
     ? theme.bold(theme.accent(padPlain(title, innerWidth)))
@@ -65,83 +59,63 @@ function createWorkspaceBox(workspace: string, isSelected: boolean): string[] {
     ` ${border("┌" + "─".repeat(innerWidth + 2) + "┐")}`,
     ` ${border("│")} ${titleText} ${border("│")}`,
     ` ${border("├" + "─".repeat(innerWidth + 2) + "┤")}`,
-    ` ${border("│")} ${theme.dim(padPlain(workspace || "(non impostata)", innerWidth))} ${border("│")}`,
+    ` ${border("│")} ${theme.dim(padPlain(workspaceText, innerWidth))} ${border("│")}`,
     ` ${border("└" + "─".repeat(innerWidth + 2) + "┘")}`,
   ];
 }
 
-function mergeColumns(leftLines: string[], rightLines: string[]): string[] {
-  const rows = Math.max(leftLines.length, rightLines.length);
-  const out: string[] = [];
-  for (let i = 0; i < rows; i++) {
-    const left = padVisible(leftLines[i] ?? "", LEFT_COL_WIDTH);
-    const right = rightLines[i] ?? "";
-    out.push(`${left}${MERGE_GAP}${right}`.trimEnd());
-  }
-  return out;
+function checklistRow(done: boolean, label: string): string {
+  const icon = done ? theme.accent("✓") : theme.dim("○");
+  const text = done ? theme.text(label) : theme.dim(label);
+  return `     ${icon} ${text}`;
 }
 
 export class HomePanel extends Container {
-  private selectedIndex = 0;
-
-  refresh(sessions: TmuxSession[]) {
+  refresh(_sessions: TmuxSession[]) {
     this.clear();
 
     const workspace = loadWorkspacePath();
     const profile = loadProfile();
-    const profilePct = calcProfilePercent();
+    const profileCompletion = getProfileCompletion(profile);
     const profileComplete = isProfileComplete(profile);
-    const missing = getMissingProfileFields(profile);
-    const sessionSet = new Set(sessions.map((s) => s.agentId));
+    const missingFields = getMissingProfileFields(profile);
+    const providerConfig = loadProviderConfig();
+    const apiConfigured = Boolean(loadApiKey());
+    const terminalWidth = getTerminalWidth();
+    const contentWidth = Math.max(terminalWidth - 8, 24);
+    const boxWidth = Math.min(MAX_BOX_WIDTH, Math.max(contentWidth - 4, 28));
 
-    const profileColor = profileComplete ? theme.success : profilePct > 50 ? theme.warning : theme.dim;
-    const profileSummary = profileComplete
-      ? `${theme.accent("Profilo")} ${profileColor(`${profilePct}%`)} ${theme.success("✓ Completato")}`
-      : `${theme.accent("Profilo")} ${profileColor(`${profilePct}%`)}`;
-    const profileLines = [
-      "",
-      `  ${profileSummary}`,
-      profileComplete ? "" : `     ${theme.dim("Manca: " + missing.join(", "))}`,
-    ];
-    const workspaceBox = createWorkspaceBox(workspace, this.selectedIndex === 0);
-    for (const line of mergeColumns(profileLines, workspaceBox)) {
+    this.add("");
+    for (const line of createWorkspaceBox(workspace, true, boxWidth)) {
       this.add(line);
     }
     this.add("");
-    this.add("");
 
-    this.add(`  ${theme.accent("Menu")}`);
-    for (let i = 0; i < ACTIONS.length; i++) {
-      const act = ACTIONS[i];
-      const selected = i + 1 === this.selectedIndex;
-      const prefix = selected ? "❯ " : "  ";
-      this.add(`     ${prefix}${selected ? theme.bold(act.label) : theme.dim(act.label)}`);
+    this.add(`  ${theme.accent("Setup")}`);
+    this.add(checklistRow(Boolean(workspace), "Cartella di lavoro configurata"));
+    this.add(checklistRow(Boolean(providerConfig), providerConfig ? `Provider ${providerConfig.provider} configurato` : "Provider AI configurato"));
+    this.add(checklistRow(apiConfigured, "API key configurata per questa cartella"));
+    this.add(checklistRow(profileComplete, profileComplete ? "Profilo completo" : `Profilo ${profileCompletion.percent}%`));
+
+    if (!providerConfig || !apiConfigured) {
+      this.add(`       ${theme.dim("Usa il wizard setup per completare provider e chiave")}`);
     }
-    this.add("");
-
-    this.add(`  ${theme.accent("Team Snapshot")}`);
-    const agentLine = AGENTS.map((a) => {
-      const active = sessionSet.has(a.id);
-      const status = active ? theme.success("●") : theme.dim("○");
-      return `${status} ${a.emoji} ${active ? theme.text(a.label) : theme.dim(a.label)}`;
-    }).join("  ");
-    this.add(`     ${agentLine}`);
+    if (!profileComplete) {
+      this.add(`       ${theme.dim("Usa /profile per completare il profilo")}`);
+      for (const line of wrapPlain(`Manca: ${missingFields.join(", ")}`, contentWidth - 7)) {
+        this.add(`       ${theme.dim(line)}`);
+      }
+    }
   }
 
-  moveSelection(delta: number): boolean {
-    const next = this.selectedIndex + delta;
-    if (next < 0 || next > ACTIONS.length) return false;
-    this.selectedIndex = next;
-    return true;
+  moveSelection(_delta: number): boolean {
+    return false;
   }
 
   getSelectedItem():
     | { type: "workspace"; label: string }
-    | { type: "action"; id: string; label: string; cmd: string }
     | null {
-    if (this.selectedIndex === 0) return { type: "workspace", label: "cambia cartella" };
-    const action = ACTIONS[this.selectedIndex - 1];
-    return action ? { type: "action", ...action } : null;
+    return { type: "workspace", label: "cambia cartella" };
   }
 
   private add(text: string) {

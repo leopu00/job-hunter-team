@@ -21,18 +21,32 @@ type JhtConfig = {
   providers?: Record<string, ProviderConfig>
 }
 
+function normalizeProviderId(value: string | undefined): string | null {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === 'claude') return 'anthropic'
+  if (normalized === 'anthropic' || normalized === 'openai' || normalized === 'kimi' || normalized === 'minimax') return normalized
+  return null
+}
+
 const KNOWN_PROVIDERS = [
   {
-    id: 'claude',
-    label: 'Claude (Anthropic)',
-    models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+    id: 'anthropic',
+    label: 'Anthropic',
+    models: ['claude-sonnet-4-20250514', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'],
     envKey: 'ANTHROPIC_API_KEY',
   },
   {
     id: 'openai',
     label: 'OpenAI',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini'],
+    models: ['gpt-4o-mini', 'gpt-4o', 'o1', 'o1-mini'],
     envKey: 'OPENAI_API_KEY',
+  },
+  {
+    id: 'kimi',
+    label: 'Kimi K2',
+    models: ['kimi-k2-0711-preview'],
+    envKey: 'MOONSHOT_API_KEY',
   },
   {
     id: 'minimax',
@@ -58,10 +72,13 @@ function loadConfig(): JhtConfig {
 
 export async function GET() {
   const config = loadConfig()
-  const activeProvider = config.active_provider ?? process.env.JHT_LLM_PROVIDER ?? 'claude'
+  const activeProvider =
+    normalizeProviderId(config.active_provider) ??
+    normalizeProviderId(process.env.JHT_LLM_PROVIDER) ??
+    'anthropic'
 
   const providers = KNOWN_PROVIDERS.map(p => {
-    const providerCfg = config.providers?.[p.id]
+    const providerCfg = config.providers?.[p.id] ?? (p.id === 'anthropic' ? config.providers?.claude : undefined)
     const hasEnvKey = !!process.env[p.envKey]
     const hasConfigKey = !!(providerCfg?.api_key || providerCfg?.subscription)
     const available = hasEnvKey || hasConfigKey
