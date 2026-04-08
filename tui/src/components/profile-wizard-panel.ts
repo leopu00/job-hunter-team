@@ -12,6 +12,22 @@ function truncate(text: string, max: number): string {
   return text.slice(text.length - max);
 }
 
+function hasValue(value: string | string[]): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return value.trim().length > 0;
+}
+
+function renderCheckpoints(wizard: ProfileWizardState): string {
+  return wizard.steps.map((step, index) => {
+    const completed = hasValue(wizard.draft[step.field]);
+    const current = index === wizard.stepIndex;
+    if (current && completed) return theme.accent("◉");
+    if (current) return theme.accent("◎");
+    if (completed) return theme.success("●");
+    return theme.dim("○");
+  }).join(theme.dim(" "));
+}
+
 export class ProfileWizardPanel extends Container {
   refresh(wizard: ProfileWizardState, currentInput: string): void {
     this.clear();
@@ -28,6 +44,8 @@ export class ProfileWizardPanel extends Container {
     this.add(theme.header("  ■ CONFIGURA PROFILO"));
     this.add(theme.border("  " + "─".repeat(60)));
     this.add("");
+    this.add(`  ${renderCheckpoints(wizard)}`);
+    this.add("");
     this.add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)}`);
     this.add("");
     this.add(`  ${theme.text(current.question)}`);
@@ -35,6 +53,10 @@ export class ProfileWizardPanel extends Container {
     this.add(`  ${theme.border("┌" + "─".repeat(contentWidth + 2) + "┐")}`);
     this.add(`  ${theme.border("│")} ${theme.text(padded)} ${theme.border("│")}`);
     this.add(`  ${theme.border("└" + "─".repeat(contentWidth + 2) + "┘")}`);
+    if (current.hint) {
+      this.add("");
+      this.add(`  ${theme.dim(current.hint)}`);
+    }
 
     if (wizard.lastMessage) {
       this.add("");

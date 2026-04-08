@@ -17,7 +17,7 @@ import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
 import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
-import { isProfileComplete, loadProfile, saveProfile } from "./tui-profile.js";
+import { isProfileComplete, loadProfile, saveProfile, validateProfileField } from "./tui-profile.js";
 import type { JhtAgent, JhtTuiState, ProfileWizardState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
 const KNOWN_AGENTS: JhtAgent[] = [
@@ -110,11 +110,17 @@ export async function runJhtTui() {
     const raw = rawValue.trim();
     if (currentStep.field === "competenze") {
       if (!raw) return;
-      wizard.draft.competenze = raw.split(",").map((item) => item.trim()).filter(Boolean);
+      const validation = validateProfileField("competenze", raw);
+      if (validation.ok && Array.isArray(validation.value)) {
+        wizard.draft.competenze = validation.value;
+      }
       return;
     }
     if (!raw) return;
-    wizard.draft[currentStep.field] = raw as never;
+    const validation = validateProfileField(currentStep.field, raw);
+    if (validation.ok && typeof validation.value === "string") {
+      wizard.draft[currentStep.field] = validation.value as never;
+    }
   };
 
   const moveProfileWizardStep = (delta: number) => {
@@ -137,26 +143,30 @@ export async function runJhtTui() {
     const raw = inputBuffer.trim();
     inputBuffer = "";
 
+    const fallbackValue = currentStep.field === "competenze"
+      ? wizard.draft.competenze.join(", ")
+      : String(wizard.draft[currentStep.field] ?? "");
+    const nextRaw = raw || fallbackValue;
+
+    if (currentStep.required && !nextRaw.trim()) {
+      wizard.lastMessage = "Questo campo e obbligatorio.";
+      updateInputLine();
+      switchView("profile");
+      return;
+    }
+
+    const validation = validateProfileField(currentStep.field, nextRaw);
+    if (!validation.ok) {
+      wizard.lastMessage = validation.error;
+      updateInputLine();
+      switchView("profile");
+      return;
+    }
+
     if (currentStep.field === "competenze") {
-      const nextSkills = raw
-        ? raw.split(",").map((item) => item.trim()).filter(Boolean)
-        : wizard.draft.competenze;
-      if (currentStep.required && nextSkills.length === 0) {
-        wizard.lastMessage = "Le competenze sono obbligatorie.";
-        updateInputLine();
-        switchView("profile");
-        return;
-      }
-      wizard.draft.competenze = nextSkills;
+      wizard.draft.competenze = validation.value as string[];
     } else {
-      const nextValue = raw || wizard.draft[currentStep.field];
-      if (currentStep.required && !String(nextValue).trim()) {
-        wizard.lastMessage = "Questo campo e obbligatorio.";
-        updateInputLine();
-        switchView("profile");
-        return;
-      }
-      wizard.draft[currentStep.field] = String(nextValue).trim() as never;
+      wizard.draft[currentStep.field] = validation.value as never;
     }
 
     wizard.lastMessage = null;

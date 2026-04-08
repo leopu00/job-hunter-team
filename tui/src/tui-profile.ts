@@ -19,6 +19,10 @@ export type UserProfile = {
   completato: boolean;
 };
 
+export type ProfileFieldValidationResult =
+  | { ok: true; value: string | string[] }
+  | { ok: false; error: string };
+
 const EMPTY_PROFILE: UserProfile = {
   nome: "",
   cognome: "",
@@ -100,4 +104,135 @@ export function formatProfile(profile: UserProfile): string[] {
   lines.push(`  Zona: ${profile.zona || "(non impostata)"}`);
   lines.push(`  Tipo lavoro: ${profile.tipoLavoro || "(non impostato)"}`);
   return lines;
+}
+
+function normalizeSpaces(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function validatePersonName(value: string, label: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (normalized.length < 2) {
+    return { ok: false, error: `${label} troppo corto` };
+  }
+  if (normalized.length > 50) {
+    return { ok: false, error: `${label} troppo lungo` };
+  }
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/.test(normalized)) {
+    return { ok: false, error: `${label} contiene caratteri non validi` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function validateBirthDate(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) {
+    return { ok: false, error: "usa il formato GG/MM/AAAA" };
+  }
+  const [, dd, mm, yyyy] = match;
+  const day = Number(dd);
+  const month = Number(mm);
+  const year = Number(yyyy);
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return { ok: false, error: "data di nascita non valida" };
+  }
+  const now = new Date();
+  if (date > now) {
+    return { ok: false, error: "data di nascita nel futuro" };
+  }
+  if (year < 1900) {
+    return { ok: false, error: "anno non valido" };
+  }
+  return { ok: true, value: `${dd}/${mm}/${yyyy}` };
+}
+
+function validateSkills(value: string): ProfileFieldValidationResult {
+  const skills = value
+    .split(",")
+    .map((item) => normalizeSpaces(item))
+    .filter(Boolean);
+  if (skills.length === 0) {
+    return { ok: false, error: "inserisci almeno una competenza" };
+  }
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const skill of skills) {
+    if (skill.length < 2) return { ok: false, error: "una competenza e troppo corta" };
+    if (skill.length > 40) return { ok: false, error: "una competenza e troppo lunga" };
+    if (!/^[A-Za-zÀ-ÖØ-öø-ÿ0-9+#./ -]+$/.test(skill)) {
+      return { ok: false, error: "una competenza contiene caratteri non validi" };
+    }
+    const key = skill.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(skill);
+  }
+  return { ok: true, value: normalized };
+}
+
+function validateZona(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (normalized.length < 2) {
+    return { ok: false, error: "zona troppo corta" };
+  }
+  if (normalized.length > 80) {
+    return { ok: false, error: "zona troppo lunga" };
+  }
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ0-9,./()' -]+$/.test(normalized)) {
+    return { ok: false, error: "zona contiene caratteri non validi" };
+  }
+  return { ok: true, value: normalized };
+}
+
+const TIPO_LAVORO_MAP: Record<string, string> = {
+  "full-time": "Full-time",
+  "full time": "Full-time",
+  "part-time": "Part-time",
+  "part time": "Part-time",
+  freelance: "Freelance",
+  stage: "Stage",
+  internship: "Stage",
+  apprendistato: "Apprendistato",
+  "tempo determinato": "Contratto a tempo determinato",
+  determinato: "Contratto a tempo determinato",
+  "contratto a tempo determinato": "Contratto a tempo determinato",
+  "tempo indeterminato": "Contratto a tempo indeterminato",
+  indeterminato: "Contratto a tempo indeterminato",
+  "contratto a tempo indeterminato": "Contratto a tempo indeterminato",
+};
+
+function validateTipoLavoro(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value).toLowerCase();
+  const canonical = TIPO_LAVORO_MAP[normalized];
+  if (!canonical) {
+    return {
+      ok: false,
+      error: "tipo non valido: usa Full-time, Part-time, Freelance, Stage, Apprendistato, Tempo determinato o Tempo indeterminato",
+    };
+  }
+  return { ok: true, value: canonical };
+}
+
+export function validateProfileField(field: keyof Pick<UserProfile, "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro">, value: string): ProfileFieldValidationResult {
+  switch (field) {
+    case "nome":
+      return validatePersonName(value, "nome");
+    case "cognome":
+      return validatePersonName(value, "cognome");
+    case "dataNascita":
+      return validateBirthDate(value);
+    case "competenze":
+      return validateSkills(value);
+    case "zona":
+      return validateZona(value);
+    case "tipoLavoro":
+      return validateTipoLavoro(value);
+  }
 }
