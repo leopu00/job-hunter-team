@@ -33,14 +33,14 @@ describe("/api/bookmarks", () => {
     expect(src).toContain("sort === 'company'");
     expect(src).toContain("a.company.localeCompare(b.company)");
     expect(src).toContain("b.savedAt - a.savedAt");
-    expect(src).toContain("new Set(store.bookmarks.flatMap((b) => b.tags))");
+    expect(src).toContain("new Set(store.bookmarks.flatMap(b => b.tags))");
   });
 
   it("POST: jobTitle+company obbligatori + randomUUID + tags array trim", () => {
     expect(src).toContain("body.jobTitle?.trim() || !body.company?.trim()");
     expect(src).toContain("'jobTitle e company obbligatori'");
     expect(src).toContain("randomUUID()");
-    expect(src).toContain("body.tags.map((t) => t.trim()).filter(Boolean)");
+    expect(src).toContain("body.tags.map(t => t.trim()).filter(Boolean)");
   });
 
   it("DELETE: ?id singolo + ?all=true clear tutto + store tmp+rename + SAMPLE 8", () => {

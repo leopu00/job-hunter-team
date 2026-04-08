@@ -81,7 +81,7 @@ describe("AvatarGroup", () => {
     expect(src).toContain("function AvatarItem");
     expect(src).toContain("function Tip");
     expect(src).toContain("showTooltip = true");
-    expect(src).toContain("overflow.map((o) => o.name");
+    expect(src).toContain("overflow.map(o => o.name");
   });
 });
 
@@ -98,7 +98,7 @@ describe("SpeedDial", () => {
   });
 
   it("open/close: FAB toggle + icon default '+' + iconOpen '✕' + rotate(135deg) + aria-expanded", () => {
-    expect(src).toContain("setOpen((o) => !o)");
+    expect(src).toContain("setOpen(o => !o)");
     expect(src).toContain("icon = '+'");
     expect(src).toContain("iconOpen = '✕'");
     expect(src).toContain("rotate(135deg)");

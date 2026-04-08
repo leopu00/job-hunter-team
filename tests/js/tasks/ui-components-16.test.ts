@@ -43,7 +43,7 @@ describe("Slider", () => {
   it("range mode: lo/hi thumbs + marks con label + showValue display", () => {
     expect(src).toContain("isRange");
     expect(src).toContain("props.range === true");
-    expect(src).toContain("marks.map((m) =>");
+    expect(src).toContain("marks.map(m =>");
     expect(src).toContain("m.label");
     expect(src).toContain("showValue");
   });

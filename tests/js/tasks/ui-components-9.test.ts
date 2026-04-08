@@ -103,7 +103,7 @@ describe("TextArea", () => {
   });
 
   it("focus/blur border + error/help messaggio + disabled opacity", () => {
-    expect(src).toContain("onFocus={(e) => {"); expect(src).toContain("onBlur={(e) => {");
+    expect(src).toContain("onFocus={e => {"); expect(src).toContain("onBlur={e => {");
     expect(src).toContain("focusColor"); expect(src).toContain("borderColor");
     expect(src).toContain("error ?? help"); // error prioritario
     expect(src).toContain("opacity-45"); expect(src).toContain("cursor-not-allowed");
