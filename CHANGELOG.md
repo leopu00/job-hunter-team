@@ -5,6 +5,22 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.4] — 2026-04-08
+
+### Accesso web e setup
+- Login web riorganizzato con accesso cloud-first e fallback immediato al workspace locale
+- Aggiunta `NEXT_PUBLIC_APP_URL` per comporre correttamente il redirect OAuth in ambienti deployati
+- Ignorati file temporanei Supabase e log locali del dev server
+
+### TUI
+- Nuovo profilo guidato con validazioni, checkpoint e banner di setup iniziale
+- Vista team ripulita con layout orizzontale, banner ASCII corretto e comando `/workspace`
+- Migliorati prompt, esempi e redraw del wizard profilo
+
+### Sito pubblico
+- Landing semplificata e resa piu leggibile nelle sezioni hero e CTA
+- Pulizia diffusa delle pagine marketing e forte riduzione del contenuto nella pagina stats
+
 ## [0.1.3] — 2026-04-08
 
 ### Desktop Windows
