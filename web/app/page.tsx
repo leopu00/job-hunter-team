@@ -20,12 +20,10 @@ function PageContent() {
   const authError = params.get('error') === 'auth_failed'
   const wantsLogin = params.get('login') === 'true'
 
-  // --- Login page ---
   if (wantsLogin) {
     return <LoginPage authError={authError} />
   }
 
-  // --- Landing page ---
   return (
     <LandingI18nProvider>
       <JsonLd />
@@ -52,8 +50,6 @@ export default function LandingPage() {
   )
 }
 
-// ── Login Page ─────────────────────────────────────────────────────
-
 function LoginPage({ authError }: { authError: boolean }) {
   const [configError, setConfigError] = useState(false)
 
@@ -78,48 +74,43 @@ function LoginPage({ authError }: { authError: boolean }) {
       <div className="w-full max-w-sm" style={{ animation: 'fade-in 0.5s ease both' }}>
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-6">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-1.5 h-1.5 bg-[var(--color-green)]" aria-hidden="true" />
+            <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-[var(--color-green)]">
               sistema attivo
             </span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mb-2">
+          <h1 className="text-xl font-medium tracking-tight text-[var(--color-white)] mb-1">
             Job Hunter <span className="text-[var(--color-green)]">Team</span>
           </h1>
-          <p className="text-[var(--color-muted)] text-[12px]">
-            Accedi con il tuo account Google per continuare.
+          <p className="text-[var(--color-dim)] text-[11px]">
+            Accedi per continuare
           </p>
         </div>
 
         {/* Card */}
-        <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)] p-6">
+        <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
           {/* Errori */}
           {authError && (
-            <div className="mb-4 px-4 py-3 rounded-lg border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
-              Autenticazione fallita. Verifica di usare un account autorizzato.
+            <div className="mb-4 px-3 py-2 border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
+              Autenticazione fallita.
             </div>
           )}
           {configError && (
-            <div className="mb-4 px-4 py-3 rounded-lg border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
-              Login Google non disponibile. Verifica la configurazione Supabase.
+            <div className="mb-4 px-3 py-2 border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
+              Configurazione mancante.
             </div>
           )}
 
           {/* Pulsante Google */}
           <button 
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-5 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg text-[var(--color-bright)] text-[13px] font-semibold tracking-wide hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-bright)] text-[12px] font-medium hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
           >
             <GoogleIcon />
             Login with Google
           </button>
         </div>
-
-        {/* Footer */}
-        <p className="mt-6 text-center text-[10px] text-[var(--color-dim)]">
-          Accesso riservato ai membri del team.
-        </p>
 
         {/* Torna indietro */}
         <div className="mt-4 text-center">
@@ -144,28 +135,16 @@ function BackButton() {
   return (
     <button
       onClick={handleBack}
-      className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-muted)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+      className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
     >
-      <ArrowLeftIcon />
-      Torna indietro
+      ← Torna indietro
     </button>
   )
 }
 
-function ArrowLeftIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12 19 5 12 12 5" />
-    </svg>
-  )
-}
-
-// ── Icons ───────────────────────────────────────────────────────────
-
 function GoogleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
