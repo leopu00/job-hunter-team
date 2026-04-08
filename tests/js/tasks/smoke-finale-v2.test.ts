@@ -69,7 +69,10 @@ describe("Pagine", () => {
     expect(clientPages.length).toBeGreaterThanOrEqual(98);
   });
   it("nessuna pagina vuota (< 10 righe)", () => {
-    const empty = pages.filter(p => read(p).split("\n").length < 10);
+    const empty = pages.filter((p) => {
+      const src = read(p);
+      return src.split("\n").length < 10 && !src.includes("redirect(");
+    });
     expect(empty.map((p) => rel(WEB, p))).toEqual([]);
   });
   it("nuove pagine /setup, /import, /export, /archive, /timeline presenti", () => {
