@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── AlertDialog ── */
 describe("AlertDialog", () => {
@@ -15,7 +20,7 @@ describe("AlertDialog", () => {
     expect(src).toContain("export interface AlertDialogProps");
     expect(src).toContain("export type AlertVariant = 'danger' | 'warning' | 'info' | 'success'");
     expect(src).toContain("export interface AlertDialogAction");
-    expect(src).toContain("loading?:  boolean");
+    expect(src).toContain("loading?: boolean");
   });
 
   it("varianti: V_CFG 4 con color/bg/border/icon + primaryBg per variant + role alertdialog aria-modal", () => {

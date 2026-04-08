@@ -1,8 +1,12 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
-const JHT_DIR = join(homedir(), '.jht');
+function resolveHomeDir() {
+  return process.env.JHT_HOME || process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
+const JHT_DIR = join(resolveHomeDir(), '.jht');
 
 const SOURCES = {
   sessions:  { path: join(JHT_DIR, 'sessions', 'sessions.json'), key: 'sessions' },
@@ -66,7 +70,7 @@ async function writeOutput(items, source, options) {
   const outPath = options.output || `jht-${source}-${date}.${format}`;
   const content = format === 'csv' ? toCsv(items) : JSON.stringify({ source, count: items.length, exportedAt: new Date().toISOString(), data: items }, null, 2);
 
-  await mkdir(resolve(outPath, '..'), { recursive: true }).catch(() => {});
+  await mkdir(dirname(outPath), { recursive: true }).catch(() => {});
   await writeFile(outPath, content, 'utf-8');
   console.log(`\n  Esportati ${items.length} record → ${outPath} (${format.toUpperCase()})`);
 }

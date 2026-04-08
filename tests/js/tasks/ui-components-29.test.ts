@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── ScrollToTop ── */
 describe("ScrollToTop", () => {
@@ -29,7 +34,7 @@ describe("ScrollToTop", () => {
 
   it("smooth: scrollTo behavior smooth/instant + scrollUp function + ArrowUp SVG default icon", () => {
     expect(src).toContain("smooth = true");
-    expect(src).toContain("behavior: smooth ? 'smooth' : 'instant'");
+    expect(src).toContain("behavior: smooth ? 'smooth' : 'instant' as ScrollBehavior");
     expect(src).toContain("const scrollUp");
     expect(src).toContain("scrollTo({ top: 0");
     expect(src).toContain("const ArrowUp");
