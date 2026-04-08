@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { CopyButton } from '../components/CopyButton'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
@@ -9,6 +10,8 @@ import ScrollToTop from '../components/landing/ScrollToTop'
 
 type PlatformId = 'mac' | 'linux' | 'windows'
 type OS = PlatformId | null
+type TerminalMode = 'source' | 'cli'
+type InstallMode = 'desktop' | 'terminal'
 
 interface PlatformData {
   id: PlatformId
@@ -34,12 +37,6 @@ const ICONS: Record<PlatformId, () => React.ReactNode> = {
   windows: WindowsIcon,
 }
 
-const INSTR_KEYS: Record<PlatformId, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_windows_instr'> = {
-  mac: 'dl_mac_instr',
-  linux: 'dl_linux_instr',
-  windows: 'dl_windows_instr',
-}
-
 function detectOS(): OS {
   if (typeof navigator === 'undefined') return null
   const ua = navigator.userAgent.toLowerCase()
@@ -52,6 +49,17 @@ function detectOS(): OS {
 const FALLBACK_VERSION = '0.1.0'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
 const FALLBACK_RELEASES_URL = `https://github.com/${FALLBACK_REPO}/releases`
+const SOURCE_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
+cd job-hunter-team
+npm install
+cd web && npm install && npm run dev`
+
+const CLI_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
+cd job-hunter-team
+npm install
+npm install --prefix shared/cron
+npm install --prefix cli
+node cli/bin/jht.js setup`
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
@@ -81,9 +89,10 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 ]
 
 function DownloadContent() {
-  const { t, ta } = useLandingI18n()
+  const { t } = useLandingI18n()
   const [detectedOS, setDetectedOS] = useState<OS>(null)
-  const [expanded, setExpanded] = useState<OS>(null)
+  const [installMode, setInstallMode] = useState<InstallMode>('desktop')
+  const [terminalMode, setTerminalMode] = useState<TerminalMode>('source')
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
     platforms: FALLBACK_PLATFORMS,
@@ -108,6 +117,7 @@ function DownloadContent() {
     if (b.id === detectedOS) return 1
     return 0
   })
+  const terminalCommand = terminalMode === 'source' ? SOURCE_SETUP_CMD : CLI_SETUP_CMD
 
   return (
     <>
@@ -117,160 +127,179 @@ function DownloadContent() {
 
           {/* Header */}
           <div className="mb-12 text-center">
-            <Link href="/" className="inline-flex items-center mb-6 no-underline hover:no-underline">
-              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">download</span>
-            </Link>
-            <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-              Job Hunter<br /><span className="text-[var(--color-green)]">Team</span>
+            <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-6">
+              download
+            </div>
+            <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
+              Job Hunter <span className="text-[var(--color-green)]">Team</span>
             </h1>
-            <p className="text-[var(--color-muted)] text-[12px] leading-relaxed max-w-md mx-auto mb-2">
+            <p className="text-[var(--color-muted)] text-[12px] md:text-[13px] leading-relaxed max-w-4xl mx-auto mb-2">
               {t('dl_desc')}
             </p>
             <span className="text-[10px] text-[var(--color-dim)]">v{version} &middot; open source</span>
           </div>
 
-          {/* OS Cards */}
-          <div className="flex flex-col gap-4 mb-10">
-            {sorted.map((platform, i) => {
-              const isDetected = platform.id === detectedOS
-              const isExpanded = expanded === platform.id as OS
-              const Icon = ICONS[platform.id] || (() => null)
-              const instrKey = INSTR_KEYS[platform.id]
-              const instructions = platform.instructions.length > 0
-                ? platform.instructions
-                : instrKey ? ta(instrKey) : []
-              const ctaHref = platform.available ? platform.downloadUrl : releasesUrl
-
-              return (
-                <div key={platform.id} className="border rounded-lg overflow-hidden transition-all duration-200"
-                  style={{
-                    borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
-                    background: 'var(--color-panel)',
-                    boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
-                    animation: `fade-in 0.4s ease ${i * 0.12}s both`,
-                  }}
-                  onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
-                  onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
-                  {/* Card header */}
-                  <div className="px-4 sm:px-5 py-4">
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-                        <Icon />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
-                          {isDetected && (
-                            <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
-                              style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
-                              {t('dl_detected')}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[9px] sm:text-[10px] text-[var(--color-dim)] break-all">
-                          {platform.file}
-                          {platform.size && <> &middot; {platform.size}</>}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-3">
-                      <button
-                        onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
-                        aria-expanded={isExpanded}
-                        aria-controls={`dl-instr-${platform.id}`}
-                        className="flex-1 sm:flex-none px-3 py-2 rounded text-[11px] font-semibold transition-colors"
-                        style={{
-                          background: 'var(--color-card)',
-                          color: 'var(--color-muted)',
-                          border: '1px solid var(--color-border)',
-                          cursor: 'pointer',
-                        }}>
-                        {isExpanded ? t('dl_close') : t('dl_instructions')}
-                      </button>
-                      <a href={ctaHref}
-                        className="flex-1 sm:flex-none text-center px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
-                        style={{
-                          background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
-                          color: platform.available && isDetected ? '#000' : 'var(--color-green)',
-                          border: platform.available && isDetected ? 'none' : '1px solid var(--color-green)',
-                          cursor: 'pointer',
-                        }}>
-                        {platform.available ? t('dl_download') : t('dl_view_release')}
-                      </a>
-                    </div>
-                    {!platform.available && (
-                      <p className="mt-2 text-[10px] text-[var(--color-yellow)]">
-                        {t('dl_asset_pending')}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Expandable instructions */}
-                  {isExpanded && (
-                    <div id={`dl-instr-${platform.id}`} role="region" aria-label={`${platform.label} ${t('dl_instructions')}`} className="px-5 pb-4 pt-0" style={{ animation: 'fade-in 0.15s ease both' }}>
-                      <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-                        <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-3">{t('dl_instructions')}</p>
-                        <ol className="space-y-2 mb-4">
-                          {instructions.map((step, i) => (
-                            <li key={i} className="flex gap-2 text-[11px]">
-                              <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
-                              <code className="text-[var(--color-bright)] font-mono">{step}</code>
-                            </li>
-                          ))}
-                        </ol>
-                        <p className="text-[10px] text-[var(--color-dim)]">
-                          <span className="font-semibold">Requirements:</span> {platform.requirements}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* How it works */}
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8">
-            <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-4">{t('dl_how_title')}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {([
-                { step: '01', titleKey: 'dl_step1_title', descKey: 'dl_step1_desc' },
-                { step: '02', titleKey: 'dl_step2_title', descKey: 'dl_step2_desc' },
-                { step: '03', titleKey: 'dl_step3_title', descKey: 'dl_step3_desc' },
-              ] as const).map(({ step, titleKey, descKey }) => (
-                <div key={step} className="text-center">
-                  <div className="text-[20px] font-bold text-[var(--color-green)] mb-1">{step}</div>
-                  <div className="text-[12px] font-bold text-[var(--color-white)] mb-1">{t(titleKey)}</div>
-                  <div className="text-[10px] text-[var(--color-muted)] leading-relaxed">{t(descKey)}</div>
-                </div>
-              ))}
+          <div className="mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => setInstallMode('desktop')}
+                className="px-4 py-4 text-left transition-colors"
+                style={{
+                  background: installMode === 'desktop' ? 'var(--color-card)' : 'transparent',
+                  color: installMode === 'desktop' ? 'var(--color-bright)' : 'var(--color-muted)',
+                  border: `1px solid ${installMode === 'desktop' ? 'var(--color-green)' : 'var(--color-border)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <div className="text-[12px] font-semibold tracking-wide">{t('dl_mode_desktop_title')}</div>
+              </button>
+              <button
+                onClick={() => setInstallMode('terminal')}
+                className="px-4 py-4 text-left transition-colors"
+                style={{
+                  background: installMode === 'terminal' ? 'var(--color-card)' : 'transparent',
+                  color: installMode === 'terminal' ? 'var(--color-bright)' : 'var(--color-muted)',
+                  border: `1px solid ${installMode === 'terminal' ? 'var(--color-green)' : 'var(--color-border)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <div className="text-[12px] font-semibold tracking-wide">{t('dl_mode_terminal_title')}</div>
+              </button>
             </div>
           </div>
 
-          {/* Install note */}
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] px-5 py-4 mb-8">
-            <div className="flex items-start gap-3">
-              <span className="text-[var(--color-yellow)] text-[16px] flex-shrink-0" aria-hidden="true">!</span>
-              <div>
-                <p className="text-[11px] text-[var(--color-bright)] font-semibold mb-1">{t('dl_setup_title')}</p>
-                <p className="text-[10px] text-[var(--color-muted)] leading-relaxed">
-                  {t('dl_setup_desc')}
+          {installMode === 'desktop' ? (
+            <>
+              <div className="flex flex-col gap-4 mb-10">
+                {sorted.map((platform, i) => {
+                  const isDetected = platform.id === detectedOS
+                  const Icon = ICONS[platform.id] || (() => null)
+                  const ctaHref = platform.available ? platform.downloadUrl : releasesUrl
+
+                  return (
+                    <div key={platform.id} className="border overflow-hidden transition-all duration-200"
+                      style={{
+                        borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
+                        background: 'var(--color-panel)',
+                        boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
+                        animation: `fade-in 0.4s ease ${i * 0.12}s both`,
+                      }}
+                      onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                      onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
+                      <div className="px-4 sm:px-5 py-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"
+                            style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
+                            <Icon />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
+                              {isDetected && (
+                                <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5"
+                                  style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
+                                  {t('dl_detected')}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[9px] sm:text-[10px] text-[var(--color-dim)] break-all">
+                              {platform.file}
+                              {platform.size && <> &middot; {platform.size}</>}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <a href={ctaHref}
+                            className="w-full sm:w-auto text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
+                            style={{
+                              background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
+                              color: platform.available && isDetected ? '#000' : 'var(--color-green)',
+                              border: platform.available && isDetected ? 'none' : '1px solid var(--color-green)',
+                              cursor: 'pointer',
+                            }}>
+                            {platform.available ? t('dl_download') : t('dl_view_release')}
+                          </a>
+                        </div>
+                        {!platform.available && (
+                          <p className="mt-2 text-[10px] text-[var(--color-yellow)]">
+                            {t('dl_asset_pending')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5 mb-8">
+              <div className="mb-4">
+                <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                  {t('dl_terminal_title')}
+                </p>
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                  {t('dl_terminal_desc')}
                 </p>
               </div>
-            </div>
-          </div>
 
-          {/* Mac detailed guide */}
-          <MacGuide />
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <button
+                  onClick={() => setTerminalMode('source')}
+                  className="px-3 py-2 text-[11px] font-semibold transition-colors text-left"
+                  style={{
+                    background: terminalMode === 'source' ? 'var(--color-card)' : 'transparent',
+                    color: terminalMode === 'source' ? 'var(--color-bright)' : 'var(--color-muted)',
+                    border: `1px solid ${terminalMode === 'source' ? 'var(--color-green)' : 'var(--color-border)'}`,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('dl_terminal_source_tab')}
+                </button>
+                <button
+                  onClick={() => setTerminalMode('cli')}
+                  className="px-3 py-2 text-[11px] font-semibold transition-colors text-left"
+                  style={{
+                    background: terminalMode === 'cli' ? 'var(--color-card)' : 'transparent',
+                    color: terminalMode === 'cli' ? 'var(--color-bright)' : 'var(--color-muted)',
+                    border: `1px solid ${terminalMode === 'cli' ? 'var(--color-green)' : 'var(--color-border)'}`,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('dl_terminal_cli_tab')}
+                </button>
+              </div>
+
+              <div className="border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[var(--color-bright)]">
+                      {terminalMode === 'source' ? t('dl_terminal_source_title') : t('dl_terminal_cli_title')}
+                    </p>
+                    <p className="text-[10px] text-[var(--color-dim)] mt-1">
+                      {terminalMode === 'source' ? t('dl_terminal_source_desc') : t('dl_terminal_cli_desc')}
+                    </p>
+                  </div>
+                  <CopyButton text={terminalCommand} size="sm" className="rounded-none">Copia comando</CopyButton>
+                </div>
+
+                <pre className="px-4 py-4 overflow-x-auto text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
+                  {terminalCommand}
+                </pre>
+              </div>
+
+              <p className="text-[10px] text-[var(--color-dim)] leading-relaxed mt-3">
+                {terminalMode === 'source' ? t('dl_terminal_source_note') : t('dl_terminal_cli_note')}
+              </p>
+            </div>
+          )}
 
           {/* Demo CTA */}
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 mb-8 text-center">
+          <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5 mb-8 text-center">
             <p className="text-[12px] text-[var(--color-muted)] mb-3">
               {t('dl_demo_question')}
             </p>
             <Link href="/demo"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold tracking-wide transition-all no-underline"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-[12px] font-semibold tracking-wide transition-all no-underline"
               style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}>
               {t('dl_demo_cta')} &rarr;
             </Link>
@@ -299,96 +328,6 @@ export default function DownloadPage() {
     <LandingI18nProvider>
       <DownloadContent />
     </LandingI18nProvider>
-  )
-}
-
-/* ── Mac Installation Guide ── */
-
-function MacGuide() {
-  const { t, ta } = useLandingI18n()
-  const [open, setOpen] = useState(false)
-
-  return (
-    <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] overflow-hidden mb-8">
-      <button
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-controls="dl-mac-guide-panel"
-        className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors"
-        style={{ cursor: 'pointer', background: 'transparent', border: 'none' }}>
-        <div className="flex items-center gap-3">
-          <AppleIcon />
-          <span className="text-[13px] font-bold text-[var(--color-white)]">{t('dl_mac_guide_title')}</span>
-        </div>
-        <span className="text-[var(--color-dim)] text-[14px]" aria-hidden="true">{open ? '\u25B2' : '\u25BC'}</span>
-      </button>
-
-      {open && (
-        <div id="dl-mac-guide-panel" role="region" aria-label={t('dl_mac_guide_title')} className="px-5 pb-5 space-y-5" style={{ animation: 'fade-in 0.15s ease both' }}>
-          <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-
-            {/* Requisiti */}
-            <GuideSection title={t('dl_mac_prereq_title')}>
-              <ul className="space-y-1.5">
-                {ta('dl_mac_prereq').map((item, i) => (
-                  <li key={i} className="flex gap-2 text-[11px]">
-                    <span className="text-[var(--color-green)] flex-shrink-0">{'\u2713'}</span>
-                    <span className="text-[var(--color-bright)]">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </GuideSection>
-
-            {/* Passo 1: Node.js */}
-            <GuideSection title={t('dl_mac_node_title')}>
-              <p className="text-[10px] text-[var(--color-muted)] mb-3">{t('dl_mac_node_desc')}</p>
-              <ol className="space-y-2 mb-3">
-                {ta('dl_mac_node_steps').map((step, i) => (
-                  <li key={i} className="flex gap-2 text-[11px]">
-                    <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
-                    <code className="text-[var(--color-bright)] font-mono text-[10px] leading-relaxed">{step}</code>
-                  </li>
-                ))}
-              </ol>
-              <p className="text-[10px] text-[var(--color-dim)] italic">{t('dl_mac_node_alt')}</p>
-            </GuideSection>
-
-            {/* Passo 2: Download e avvio */}
-            <GuideSection title={t('dl_mac_install_title')}>
-              <ol className="space-y-2">
-                {ta('dl_mac_install_steps').map((step, i) => (
-                  <li key={i} className="flex gap-2 text-[11px]">
-                    <span className="text-[var(--color-green)] font-bold flex-shrink-0">{i + 1}.</span>
-                    <code className="text-[var(--color-bright)] font-mono text-[10px] leading-relaxed">{step}</code>
-                  </li>
-                ))}
-              </ol>
-            </GuideSection>
-
-            {/* Cosa succede */}
-            <GuideSection title={t('dl_mac_expect_title')} last>
-              <ol className="space-y-1.5">
-                {ta('dl_mac_expect_steps').map((step, i) => (
-                  <li key={i} className="flex gap-2 text-[11px]">
-                    <span className="text-[var(--color-dim)] flex-shrink-0">{'\u25B8'}</span>
-                    <span className="text-[var(--color-muted)]">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </GuideSection>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function GuideSection({ title, children, last }: { title: string; children: React.ReactNode; last?: boolean }) {
-  return (
-    <div className={last ? '' : 'mb-5'}>
-      <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] mb-2">{title}</p>
-      {children}
-    </div>
   )
 }
 
