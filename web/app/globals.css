@@ -19,7 +19,7 @@
   --color-base:   #b8b8d0;
   --color-bright: #e0e0f0;
   --color-white:  #f0f0fa;
-  --color-grid:   rgba(44, 44, 68, 0.08);
+  --color-grid:   rgba(44, 44, 68, 0.06);
 
   /* Accents */
   --color-green:  #00e87a;
@@ -47,7 +47,7 @@ html[data-theme="light"] {
   --color-base:         #282848;
   --color-bright:       #18183a;
   --color-white:        #0a0a20;
-  --color-grid:         rgba(92, 92, 128, 0.12);
+  --color-grid:         rgba(92, 92, 128, 0.1);
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
