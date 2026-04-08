@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useLandingI18n } from './LandingI18n'
 
@@ -16,6 +17,78 @@ const PIPELINE_AGENTS = [
 
 export default function LandingHero() {
   const { t } = useLandingI18n()
+  const desktopFlowRef = useRef<HTMLDivElement | null>(null)
+  const captainNameRef = useRef<HTMLSpanElement | null>(null)
+  const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[] }>({
+    width: 0,
+    height: 0,
+    paths: [],
+  })
+
+  useEffect(() => {
+    let frame = 0
+
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const flow = desktopFlowRef.current
+        const captainName = captainNameRef.current
+        if (!flow || !captainName) return
+
+        const flowRect = flow.getBoundingClientRect()
+        const captainRect = captainName.getBoundingClientRect()
+        const startX = captainRect.left + captainRect.width / 2 - flowRect.left
+        const startY = captainRect.bottom - flowRect.top + 6
+
+        const paths = agentEmojiRefs.current
+          .map((node) => {
+            if (!node) return null
+
+            const rect = node.getBoundingClientRect()
+            const endX = rect.left + rect.width / 2 - flowRect.left
+            const endY = rect.top - flowRect.top - 6
+            const deltaX = endX - startX
+            const controlY = startY + Math.max(16, (endY - startY) * 0.5)
+
+            return `M ${startX} ${startY} C ${startX + deltaX * 0.18} ${controlY}, ${endX - deltaX * 0.22} ${endY - 8}, ${endX} ${endY}`
+          })
+          .filter((path): path is string => path !== null)
+
+        setArrowOverlay((prev) => {
+          const width = Math.round(flowRect.width)
+          const height = Math.round(flowRect.height)
+          if (
+            prev.width === width &&
+            prev.height === height &&
+            prev.paths.length === paths.length &&
+            prev.paths.every((path, index) => path === paths[index])
+          ) {
+            return prev
+          }
+
+          return { width, height, paths }
+        })
+      })
+    }
+
+    measure()
+
+    const resizeObserver = new ResizeObserver(measure)
+    if (desktopFlowRef.current) resizeObserver.observe(desktopFlowRef.current)
+    if (captainNameRef.current) resizeObserver.observe(captainNameRef.current)
+    agentEmojiRefs.current.forEach((node) => {
+      if (node) resizeObserver.observe(node)
+    })
+
+    window.addEventListener('resize', measure)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   return (
     <section aria-label="Hero" className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
@@ -38,26 +111,104 @@ export default function LandingHero() {
         className="relative z-10 w-full max-w-6xl mt-14 px-2"
         style={{ animation: 'fade-in 0.8s ease 0.2s both' }}
       >
-        <div className="flex justify-center mb-8">
-          <div className="w-full max-w-[520px] grid grid-cols-5 items-end gap-x-6 md:gap-x-8">
-            <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
-              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
-              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
-            </span>
-            <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
-              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
-              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
-            </span>
+        <div className="hidden md:block">
+          <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[520px]">
+            {arrowOverlay.width > 0 && arrowOverlay.height > 0 && arrowOverlay.paths.length > 0 && (
+              <svg
+                aria-hidden="true"
+                viewBox={`0 0 ${arrowOverlay.width} ${arrowOverlay.height}`}
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              >
+                <defs>
+                  <marker
+                    id="captain-arrowhead"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="5"
+                    markerHeight="5"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
+                  </marker>
+                </defs>
+                {arrowOverlay.paths.map((path, index) => (
+                  <path
+                    key={path}
+                    d={path}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.28)"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    markerEnd="url(#captain-arrowhead)"
+                    strokeDasharray="4 8"
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      values="0;-72"
+                      dur="14s"
+                      begin={`${index * 0.3}s`}
+                      repeatCount="indefinite"
+                    />
+                  </path>
+                ))}
+              </svg>
+            )}
+
+            <div className="flex justify-center">
+              <div className="w-full max-w-[520px] grid grid-cols-5 justify-items-center items-end">
+                <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
+                  <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                  <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+                </span>
+                <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
+                  <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                  <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-5 justify-items-center items-start mt-10">
+                {PIPELINE_AGENTS.map((agent, index) => (
+                  <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
+                    <span
+                      ref={(node) => {
+                        agentEmojiRefs.current[index] = node
+                      }}
+                      className="text-2xl md:text-3xl leading-none"
+                      aria-hidden="true"
+                    >
+                      {agent.emoji}
+                    </span>
+                    <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
+                  </span>
+                ))}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-start justify-start md:justify-center gap-x-6 md:gap-x-8 gap-y-4 overflow-x-auto pb-3">
-          {PIPELINE_AGENTS.map((agent) => (
-            <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
-              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{agent.emoji}</span>
-              <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
-            </span>
-          ))}
+        <div className="md:hidden">
+          <div className="flex justify-center mb-8">
+            <div className="w-full max-w-[520px] grid grid-cols-5 justify-items-center items-end gap-x-6 md:gap-x-8">
+              <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
+                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+              </span>
+              <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
+                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start justify-start gap-x-6 gap-y-4 overflow-x-auto pb-3">
+            {PIPELINE_AGENTS.map((agent) => (
+              <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
+                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{agent.emoji}</span>
+                <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
+              </span>
+            ))}
+          </div>
         </div>
 
         <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
