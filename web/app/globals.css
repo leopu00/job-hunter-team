@@ -19,6 +19,7 @@
   --color-base:   #b8b8d0;
   --color-bright: #e0e0f0;
   --color-white:  #f0f0fa;
+  --color-grid:   rgba(44, 44, 68, 0.06);
 
   /* Accents */
   --color-green:  #00e87a;
@@ -46,6 +47,7 @@ html[data-theme="light"] {
   --color-base:         #282848;
   --color-bright:       #18183a;
   --color-white:        #0a0a20;
+  --color-grid:         rgba(92, 92, 128, 0.1);
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
@@ -89,8 +91,8 @@ body::after {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(78, 78, 120, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(78, 78, 120, 0.035) 1px, transparent 1px);
+    linear-gradient(var(--color-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;

@@ -59,8 +59,7 @@ export function LandingFooter() {
         <nav aria-label="Link footer" className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
+            <div className="flex items-center mb-3">
               <span className="text-[11px] font-bold tracking-widest text-[var(--color-muted)]">JHT</span>
             </div>
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
