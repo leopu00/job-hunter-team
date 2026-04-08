@@ -1,11 +1,12 @@
 /**
  * JHT TUI — Pannello di Controllo del Team.
  * Struttura ispirata a OpenClaw: header, main area, status bar, editor.
- * Viste: Team (agenti tmux), Chat (tmux), Tasks, AI (Anthropic).
+ * Viste: Home, Team (agenti tmux), Chat (tmux), Tasks, AI (Anthropic).
  */
 import { randomUUID } from "node:crypto";
 import { Container, Key, matchesKey, ProcessTerminal, Text, TUI } from "@mariozechner/pi-tui";
 import { createJhtLayout } from "./tui-layout.js";
+import { HomePanel } from "./components/home-panel.js";
 import { ChatPanel } from "./components/chat-panel.js";
 import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
@@ -17,7 +18,7 @@ import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
 import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
-import { isProfileComplete, loadProfile, saveProfile, validateProfileField } from "./tui-profile.js";
+import { isProfileComplete, loadProfile, loadWorkspacePath, saveProfile, validateProfileField } from "./tui-profile.js";
 import type { JhtAgent, JhtTuiState, ProfileWizardState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
 const KNOWN_AGENTS: JhtAgent[] = [
@@ -31,7 +32,7 @@ const KNOWN_AGENTS: JhtAgent[] = [
   { id: "alfa", name: "alfa", role: "alfa", status: "idle" },
 ];
 
-const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "profile", "ai"];
+const VIEWS: TuiView[] = ["home", "team", "chat", "tasks", "dashboard", "profile", "ai"];
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
   { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Anna", required: true },
   { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Verdi", required: true },
@@ -40,6 +41,10 @@ const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
   { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Roma, provincia, disponibilita nazionale", required: true },
   { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, Part-time, Contratto a tempo determinato", required: true },
 ];
+
+function clearTerminalScreen() {
+  process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+}
 
 export async function runJhtTui() {
   await ensureWorkspaceConfigured();
@@ -61,7 +66,7 @@ export async function runJhtTui() {
     toolsExpanded: false,
     isConnected: true,
     activeTmuxCount: listUserSessions().length,
-    currentView: "team",
+    currentView: "home",
     chatTargetSession: null,
     teamSelectedActionIndex: 0,
     profileWizard: null,
@@ -76,9 +81,11 @@ export async function runJhtTui() {
 
   const tui = new TUI(new ProcessTerminal());
   tui.setClearOnShrink(true);
+  clearTerminalScreen();
   const layout = createJhtLayout(tui);
 
   // Pannelli per ogni vista
+  const homePanel = new HomePanel();
   const teamPanel = new TeamPanel();
   const chatPanel = new ChatPanel();
   const taskPanel = new TaskPanel();
@@ -189,24 +196,29 @@ export async function runJhtTui() {
     state.profileWizard = null;
     setActivityStatus("profilo salvato");
     updateInputLine();
-    switchView("team");
+    switchView("home");
     aiChatPanel.addSystem(savedProfile.completato
       ? "profilo completato"
       : "profilo salvato ma ancora incompleto");
   };
 
-  // Input line — visibile solo quando serve (non in team)
+  // Input line — visibile solo quando serve (non in home/team)
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
+  let isEditingWorkspace = false;
   const updateInputLine = () => {
-    // In team: nessun input visibile (navigazione pura)
-    if (state.currentView === "team") {
+    // In home/team: nessun input visibile (navigazione pura), salvo editor cartella
+    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace) {
       inputLine.setText("");
       return;
     }
     // In profile wizard: nessun prompt, input silenzioso
     if (state.currentView === "profile") {
       inputLine.setText("");
+      return;
+    }
+    if (state.currentView === "home" && isEditingWorkspace) {
+      inputLine.setText(`\x1b[32m  workspace > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     const viewLabel = state.currentView === "chat" && state.chatTargetSession
@@ -250,9 +262,16 @@ export async function runJhtTui() {
   /** Switch view — aggiorna mainSlot */
   const switchView = (view: TuiView) => {
     const previousView = state.currentView;
+    if (view !== "home") {
+      isEditingWorkspace = false;
+    }
     state.currentView = view;
     layout.mainSlot.clear();
     switch (view) {
+      case "home":
+        homePanel.refresh(listUserSessions());
+        layout.mainSlot.addChild(homePanel);
+        break;
       case "team":
         teamPanel.refresh(listUserSessions());
         layout.mainSlot.addChild(teamPanel);
@@ -378,8 +397,8 @@ export async function runJhtTui() {
 
   const { handleCommand, sendMessage } = createCommandHandlers(commandContext);
 
-  // Vista iniziale: team
-  switchView("team");
+  // Vista iniziale: home
+  switchView("home");
 
   let exitRequested = false;
   const requestExit = () => {
@@ -397,6 +416,20 @@ export async function runJhtTui() {
         tui.requestRender();
         return { consume: true };
       }
+      if (state.currentView === "home" && isEditingWorkspace) {
+        const nextWorkspace = inputBuffer.trim();
+        inputBuffer = "";
+        isEditingWorkspace = false;
+        updateInputLine();
+        tui.requestRender();
+        if (nextWorkspace) {
+          setActivityStatus("aggiorna cartella");
+          void handleCommand(`/workspace ${nextWorkspace}`);
+        } else {
+          setActivityStatus("idle");
+        }
+        return { consume: true };
+      }
       const text = inputBuffer.trim();
       if (text) {
         inputBuffer = "";
@@ -404,11 +437,17 @@ export async function runJhtTui() {
         tui.requestRender();
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
-      } else if (state.currentView === "team") {
-        const action = teamPanel.getSelectedAction();
-        if (action) {
-          setActivityStatus(action.label.toLowerCase());
-          void handleCommand(action.cmd);
+      } else if (state.currentView === "home") {
+        const selectedItem = homePanel.getSelectedItem();
+        if (selectedItem?.type === "workspace") {
+          isEditingWorkspace = true;
+          inputBuffer = loadWorkspacePath();
+          setActivityStatus(selectedItem.label);
+          updateInputLine();
+          tui.requestRender();
+        } else if (selectedItem?.type === "action") {
+          setActivityStatus(selectedItem.label.toLowerCase());
+          void handleCommand(selectedItem.cmd);
         }
       }
       return { consume: true };
@@ -461,15 +500,15 @@ export async function runJhtTui() {
         return { consume: true };
       }
     }
-    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team") {
-      if (teamPanel.moveSelection(-1)) {
-        switchView("team");
+    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "home") {
+      if (homePanel.moveSelection(-1)) {
+        switchView("home");
       }
       return { consume: true };
     }
-    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team") {
-      if (teamPanel.moveSelection(1)) {
-        switchView("team");
+    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "home") {
+      if (homePanel.moveSelection(1)) {
+        switchView("home");
       }
       return { consume: true };
     }

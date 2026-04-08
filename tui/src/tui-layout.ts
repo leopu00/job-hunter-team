@@ -1,7 +1,7 @@
 /**
  * Layout TUI — struttura ispirata a OpenClaw.
  * Header → mainSlot (view switching) → statusBar.
- * Supporta viste multiple: team, chat, tasks, ai.
+ * Supporta viste multiple: home, team, chat, tasks, ai.
  */
 import { Container, Text, TUI } from "@mariozechner/pi-tui";
 import { StatusBar } from "./components/status-bar.js";
@@ -9,6 +9,7 @@ import { theme } from "./tui-theme.js";
 import type { JhtTuiState, TuiView } from "./tui-types.js";
 
 const VIEW_LABELS: Record<TuiView, string> = {
+  home: "Home",
   team: "Team",
   chat: "Chat",
   tasks: "Tasks",
