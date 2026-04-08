@@ -61,8 +61,7 @@ export default function AiAssistantPage() {
           <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
           <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">AI Assistant</span>
         </nav>
-        <div className="flex items-center gap-2 mt-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-green)]" />
+        <div className="flex items-center mt-2">
           <h1 className="text-lg font-bold tracking-tight text-[var(--color-white)]">AI Assistant</h1>
         </div>
       </div>
