@@ -195,10 +195,16 @@ export async function runJhtTui() {
       : "profilo salvato ma ancora incompleto");
   };
 
-  // Input line in fondo (ispirato a OpenClaw CustomEditor, semplificato)
+  // Input line — visibile solo quando serve (non in team)
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
   const updateInputLine = () => {
+    // In team: nessun input visibile (navigazione pura)
+    if (state.currentView === "team") {
+      inputLine.setText("");
+      return;
+    }
+    // In profile wizard: nessun prompt, input silenzioso
     if (state.currentView === "profile") {
       inputLine.setText("");
       return;
@@ -248,8 +254,7 @@ export async function runJhtTui() {
     layout.mainSlot.clear();
     switch (view) {
       case "team":
-        teamPanel.refresh(listUserSessions(), loadTasks(), { selectedActionIndex: state.teamSelectedActionIndex });
-        state.teamSelectedActionIndex = teamPanel.getSelectedActionIndex();
+        teamPanel.refresh(listUserSessions());
         layout.mainSlot.addChild(teamPanel);
         break;
       case "chat":
@@ -399,11 +404,11 @@ export async function runJhtTui() {
         tui.requestRender();
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
-      } else if (state.currentView === "team" && teamPanel.hasActions()) {
-        const action = teamPanel.activateSelectedAction();
+      } else if (state.currentView === "team") {
+        const action = teamPanel.getSelectedAction();
         if (action) {
           setActivityStatus(action.label.toLowerCase());
-          void handleCommand(action.command);
+          void handleCommand(action.cmd);
         }
       }
       return { consume: true };
@@ -456,16 +461,14 @@ export async function runJhtTui() {
         return { consume: true };
       }
     }
-    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team" && teamPanel.hasActions()) {
+    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team") {
       if (teamPanel.moveSelection(-1)) {
-        state.teamSelectedActionIndex = teamPanel.getSelectedActionIndex();
         switchView("team");
       }
       return { consume: true };
     }
-    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team" && teamPanel.hasActions()) {
+    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team") {
       if (teamPanel.moveSelection(1)) {
-        state.teamSelectedActionIndex = teamPanel.getSelectedActionIndex();
         switchView("team");
       }
       return { consume: true };
