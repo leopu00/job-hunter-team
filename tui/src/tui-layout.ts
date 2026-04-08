@@ -6,7 +6,6 @@
 import { Container, Text, TUI } from "@mariozechner/pi-tui";
 import { StatusBar } from "./components/status-bar.js";
 import { theme } from "./tui-theme.js";
-import { loadWorkspacePath } from "./tui-profile.js";
 import type { JhtTuiState, TuiView } from "./tui-types.js";
 
 const VIEW_LABELS: Record<TuiView, string> = {
@@ -26,12 +25,23 @@ export type JhtLayout = {
   updateStatusBar(state: JhtTuiState): void;
 };
 
+const BANNER = [
+  "     ██╗ ██████╗ ████████╗    ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗ ",
+  "     ██║ ██╔══██╗╚══██╔══╝    ██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗",
+  "     ██║ ██████╔╝   ██║       ███████║██║   ██║██╔██╗ ██║   ██║   █████╗  ██████╔╝",
+  "██   ██║ ██╔══██╗   ██║       ██╔══██║██║   ██║██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗",
+  "╚█████╔╝ ██║  ██║   ██║       ██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║",
+  " ╚════╝  ╚═╝  ╚═╝   ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝",
+  "",
+  "                        T E A M   C O N T R O L   P A N E L                        ",
+].join("\n");
+
 export function createJhtLayout(_tui: TUI): JhtLayout {
   const root = new Container();
 
-  // Header
-  const header = new Text("", 1, 0);
-  root.addChild(header);
+  // Big ASCII Banner
+  const banner = new Text(theme.accent(BANNER), 1, 0);
+  root.addChild(banner);
 
   // Divider + tab bar
   const tabBar = new Text("", 1, 0);
@@ -50,18 +60,6 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
   root.addChild(statusBar.getNode());
 
   const updateHeader = (state: JhtTuiState) => {
-    const activeCount = state.activeTmuxCount;
-    const connLabel = state.isConnected ? theme.success("API") : theme.dim("no API");
-    const workspacePath = loadWorkspacePath();
-    const workspaceLabel = workspacePath ? theme.dim(`\u2502 ${workspacePath} `) : "";
-    header.setText(
-      theme.header(` JHT Control Panel`) +
-      theme.dim(` \u2502 `) +
-      connLabel +
-      theme.dim(` \u2502 ${activeCount} agenti attivi `) +
-      workspaceLabel,
-    );
-
     // Tab bar: evidenzia la vista corrente
     const tabs = (Object.keys(VIEW_LABELS) as TuiView[]).map((v) => {
       const label = VIEW_LABELS[v];
