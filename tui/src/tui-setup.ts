@@ -3,7 +3,7 @@
  * Step: cartella di lavoro → scelta configurazione → profilo manuale o assistito AI.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import * as readline from "node:readline";
@@ -149,6 +149,34 @@ async function askValidatedField(
 }
 
 function openWorkspaceFolderPicker(initialPath: string): string | null {
+  if (process.platform === "darwin") {
+    const resolvedPath = resolve(initialPath);
+    const scriptLines = [
+      'tell application "Finder" to activate',
+      ...(existsSync(resolvedPath)
+        ? [
+            `set startFolder to POSIX file ${JSON.stringify(resolvedPath)}`,
+            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro" default location startFolder',
+          ]
+        : [
+            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"',
+          ]),
+      'POSIX path of selectedFolder',
+    ];
+
+    const result = spawnSync("osascript", scriptLines.flatMap((line) => ["-e", line]), {
+      encoding: "utf-8",
+      timeout: 120_000,
+    });
+
+    if (result.status !== 0) {
+      return null;
+    }
+
+    const selected = result.stdout.trim();
+    return selected || null;
+  }
+
   if (process.platform !== "win32") {
     return null;
   }
@@ -195,9 +223,7 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
 
 async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
   printBanner();
-  console.log(chalk.white("  Prima di entrare nella TUI devi scegliere una cartella di lavoro."));
-  console.log(chalk.dim("  La useremo come contesto iniziale per le sessioni degli agenti."));
-  console.log(chalk.dim("  Premi Enter per aprire Esplora file oppure inserisci un percorso."));
+  console.log(chalk.white("  📁 Premi Enter per selezionare la tua cartella di lavoro."));
   if (reason) {
     console.log("");
     console.log(chalk.yellow(`  ${reason}`));
@@ -205,7 +231,7 @@ async function promptWorkspacePath(rl: readline.Interface, fallback: string, rea
   console.log("");
 
   while (true) {
-    const answer = await ask(rl, chalk.green("  > Cartella di lavoro: "));
+    const answer = await ask(rl, chalk.green("  > "));
     const candidate = answer || openWorkspaceFolderPicker(fallback);
     if (!candidate) {
       console.log(chalk.yellow("  Nessuna cartella selezionata."));
