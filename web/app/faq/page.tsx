@@ -97,8 +97,7 @@ const FAQ_ITEMS: FaqItem[] = [
         <strong>Modalita avanzata:</strong> gli strumenti terminali restano disponibili soprattutto
         per sviluppo e troubleshooting, ma non sono il percorso consigliato per l&apos;uso quotidiano.
         <br /><br />
-        Consulta la <Link href="/guide" className="text-[var(--color-green)] hover:underline no-underline">guida</Link> per
-        istruzioni dettagliate.
+        Consulta la documentazione per istruzioni dettagliate.
       </>
     ),
   },
@@ -245,18 +244,11 @@ function FaqContent() {
           <p className="text-[11px] text-[var(--color-muted)] mb-4">
             {t('faq_no_answer_desc')}
           </p>
-          <div className="flex items-center justify-center gap-3">
-            <Link
-              href="/guide"
-              className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
-              style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
-            >
-              {t('faq_guide_btn')}
-            </Link>
+          <div className="flex items-center justify-center">
             <Link
               href="/docs"
               className="text-[11px] px-4 py-2 rounded-lg no-underline transition-all"
-              style={{ border: '1px solid var(--color-border)', color: 'var(--color-dim)' }}
+              style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
             >
               {t('faq_docs_btn')}
             </Link>
@@ -265,11 +257,7 @@ function FaqContent() {
         </FadeInSection>
 
         {/* Footer nav */}
-        <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
-          <Link href="/guide"
-            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; {t('nav_guide')}
-          </Link>
+        <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-center">
           <Link href="/download"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
             {t('nav_download')} &rarr;
