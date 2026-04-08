@@ -1,5 +1,5 @@
 /** Test E2E batch 8 — /ai-assistant, /forum, /activity, /search, /docs, /audit */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -14,9 +14,27 @@ function req(url: string, init?: RequestInit) { return new Request(url, init); }
 /** Request con nextUrl (per route che usano req.nextUrl.searchParams) */
 function nreq(url: string) { const r = req(url); (r as any).nextUrl = new URL(url); return r; }
 
+const ORIGINAL_OPENAI_KEY = process.env.OPENAI_API_KEY;
+const ORIGINAL_ASSISTANT_MODEL = process.env.JHT_AI_ASSISTANT_MODEL;
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.stubGlobal("fetch", vi.fn());
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.JHT_AI_ASSISTANT_MODEL;
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  if (ORIGINAL_OPENAI_KEY) process.env.OPENAI_API_KEY = ORIGINAL_OPENAI_KEY;
+  else delete process.env.OPENAI_API_KEY;
+  if (ORIGINAL_ASSISTANT_MODEL) process.env.JHT_AI_ASSISTANT_MODEL = ORIGINAL_ASSISTANT_MODEL;
+  else delete process.env.JHT_AI_ASSISTANT_MODEL;
+});
+
 /* ── API: ai-assistant ── */
 describe("API ai-assistant", () => {
-  it("GET → history array + suggestions", async () => {
+  it("GET → suggestions + stato configurazione", async () => {
     const { GET } = await import("../../../web/app/api/ai-assistant/route.js");
     const res = await GET();
     expect(res.status).toBe(200);
@@ -24,19 +42,36 @@ describe("API ai-assistant", () => {
     expect(Array.isArray(j.history)).toBe(true);
     expect(Array.isArray(j.suggestions)).toBe(true);
     expect(j.suggestions.length).toBeGreaterThanOrEqual(1);
+    expect(typeof j.configured).toBe("boolean");
   });
   it("POST senza message → 400", async () => {
     const { POST } = await import("../../../web/app/api/ai-assistant/route.js");
     const res = await POST(req("http://h/api/ai-assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "" }) }));
     expect(res.status).toBe(400);
   });
-  it("POST messaggio valido → reply string", async () => {
+  it("POST senza OPENAI_API_KEY → 503", async () => {
     const { POST } = await import("../../../web/app/api/ai-assistant/route.js");
     const res = await POST(req("http://h/api/ai-assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "help" }) }));
+    expect(res.status).toBe(503);
+  });
+  it("POST messaggio valido → reply string", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      output: [
+        { type: "message", content: [{ type: "output_text", text: "Ciao, vai su /setup per iniziare." }] },
+      ],
+    }), { status: 200, headers: { "Content-Type": "application/json", "x-request-id": "req_123" } }));
+    const { POST } = await import("../../../web/app/api/ai-assistant/route.js");
+    const res = await POST(req("http://h/api/ai-assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "help", history: [{ role: "user", content: "ciao", timestamp: Date.now() }], path: "/setup" }),
+    }));
     expect(res.status).toBe(200);
     const j = await res.json();
     expect(typeof j.reply).toBe("string");
     expect(j.reply.length).toBeGreaterThan(0);
+    expect(j.model).toBe("gpt-4o-mini");
   });
 });
 
