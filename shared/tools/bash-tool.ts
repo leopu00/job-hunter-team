@@ -5,13 +5,38 @@
  * gestione working directory e variabili ambiente.
  */
 
+import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
-import type { Tool, ToolResult, ExecToolDefaults, ExecToolDetails } from "./types.js";
+import type {
+  Tool,
+  ToolResult,
+  ExecToolDefaults,
+  ExecToolDetails,
+} from "./types.js";
 
 const DEFAULT_TIMEOUT_SEC = 120;
 const DEFAULT_MAX_OUTPUT = 64 * 1024; // 64KB
 
-function textResult(text: string, details: ExecToolDetails): ToolResult<ExecToolDetails> {
+const WINDOWS_BASH_CANDIDATES = [
+  "C:\\Program Files\\Git\\bin\\bash.exe",
+  "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+  "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+  "C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe",
+];
+
+function resolveBashBinary(): string {
+  const envOverride = process.env.JHT_BASH_PATH || process.env.GIT_BASH_PATH;
+  if (envOverride) return envOverride;
+  if (process.platform !== "win32") return "bash";
+  return (
+    WINDOWS_BASH_CANDIDATES.find((candidate) => existsSync(candidate)) ?? "bash"
+  );
+}
+
+function textResult(
+  text: string,
+  details: ExecToolDetails,
+): ToolResult<ExecToolDetails> {
   return { content: [{ type: "text", text }], details };
 }
 
@@ -23,6 +48,17 @@ function truncateOutput(output: string, maxBytes: number): string {
   return `${start}\n\n--- output troncato (${Buffer.byteLength(output)} bytes) ---\n\n${end}`;
 }
 
+function terminateProcess(proc: ReturnType<typeof spawn>, force = false) {
+  if (process.platform === "win32" && proc.pid) {
+    spawn("taskkill", ["/pid", String(proc.pid), "/t", "/f"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return;
+  }
+  proc.kill(force ? "SIGKILL" : "SIGTERM");
+}
+
 function runCommand(
   command: string,
   opts: {
@@ -31,13 +67,19 @@ function runCommand(
     timeoutMs: number;
     signal: AbortSignal;
   },
-): Promise<{ exitCode: number | null; output: string; timedOut: boolean; durationMs: number }> {
+): Promise<{
+  exitCode: number | null;
+  output: string;
+  timedOut: boolean;
+  durationMs: number;
+}> {
   return new Promise((resolve) => {
     const startMs = Date.now();
     let output = "";
     let timedOut = false;
+    const bashBinary = resolveBashBinary();
 
-    const proc = spawn("bash", ["-c", command], {
+    const proc = spawn(bashBinary, ["-c", command], {
       cwd: opts.cwd || process.cwd(),
       env: { ...process.env, ...opts.env },
       stdio: ["ignore", "pipe", "pipe"],
@@ -45,18 +87,22 @@ function runCommand(
 
     const timer = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
-      setTimeout(() => proc.kill("SIGKILL"), 3_000);
+      terminateProcess(proc);
+      setTimeout(() => terminateProcess(proc, true), 3_000);
     }, opts.timeoutMs);
 
     const onAbort = () => {
-      proc.kill("SIGTERM");
+      terminateProcess(proc);
       clearTimeout(timer);
     };
     opts.signal.addEventListener("abort", onAbort, { once: true });
 
-    proc.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
-    proc.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
 
     proc.on("close", (code) => {
       clearTimeout(timer);
@@ -85,7 +131,9 @@ function runCommand(
 /**
  * Crea un tool "exec" per eseguire comandi bash.
  */
-export function createExecTool(defaults?: ExecToolDefaults): Tool<{ command: string }, ExecToolDetails> {
+export function createExecTool(
+  defaults?: ExecToolDefaults,
+): Tool<{ command: string }, ExecToolDetails> {
   const timeoutSec = defaults?.timeoutSec ?? DEFAULT_TIMEOUT_SEC;
 
   return {

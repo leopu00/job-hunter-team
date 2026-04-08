@@ -14,9 +14,21 @@ export type UserProfile = {
   nome: string;
   cognome: string;
   dataNascita: string;
+  headline: string;
+  targetRoles: string[];
+  seniorityTarget: string;
   competenze: string[];
   zona: string;
+  locationPreferences: string[];
   tipoLavoro: string;
+  languages: string[];
+  strengths: string[];
+  email: string;
+  linkedin: string;
+  portfolio: string;
+  salaryTarget: string;
+  availability: string;
+  workAuthorization: string;
   completato: boolean;
 };
 
@@ -39,9 +51,21 @@ const EMPTY_PROFILE: UserProfile = {
   nome: "",
   cognome: "",
   dataNascita: "",
+  headline: "",
+  targetRoles: [],
+  seniorityTarget: "",
   competenze: [],
   zona: "",
+  locationPreferences: [],
   tipoLavoro: "",
+  languages: [],
+  strengths: [],
+  email: "",
+  linkedin: "",
+  portfolio: "",
+  salaryTarget: "",
+  availability: "",
+  workAuthorization: "",
   completato: false,
 };
 
@@ -273,7 +297,7 @@ export function loadProfile(): UserProfile {
   const legacyParts = rawNome.split(/\s+/).filter(Boolean);
   const nome = rawCognome ? rawNome : (legacyParts[0] ?? rawNome);
   const cognome = rawCognome || (legacyParts.length > 1 ? legacyParts.slice(1).join(" ") : "");
-  return {
+  const profile: UserProfile = {
     nome,
     cognome,
     dataNascita: typeof p.dataNascita === "string"
@@ -281,17 +305,61 @@ export function loadProfile(): UserProfile {
       : typeof p.birthDate === "string"
         ? p.birthDate
         : "",
+    headline: typeof p.headline === "string" ? p.headline : "",
+    targetRoles: Array.isArray(p.targetRoles)
+      ? p.targetRoles.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean)
+      : typeof p.targetRole === "string" && p.targetRole.trim()
+        ? [p.targetRole.trim()]
+        : [],
+    seniorityTarget: typeof p.seniorityTarget === "string" ? p.seniorityTarget : "",
     competenze: Array.isArray(p.competenze) ? (p.competenze as string[]) : [],
     zona: typeof p.zona === "string" ? p.zona : "",
+    locationPreferences: Array.isArray(p.locationPreferences)
+      ? p.locationPreferences.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean)
+      : typeof p.zona === "string" && p.zona.trim()
+        ? [p.zona.trim()]
+        : [],
     tipoLavoro: typeof p.tipoLavoro === "string" ? p.tipoLavoro : "",
-    completato: p.completato === true,
+    languages: Array.isArray(p.languages)
+      ? p.languages
+        .map((item) => {
+          if (typeof item === "string") return item.trim();
+          if (item && typeof item === "object") {
+            const lingua = typeof (item as Record<string, unknown>).lingua === "string"
+              ? String((item as Record<string, unknown>).lingua).trim()
+              : "";
+            const livello = typeof (item as Record<string, unknown>).livello === "string"
+              ? String((item as Record<string, unknown>).livello).trim()
+              : "";
+            return [lingua, livello].filter(Boolean).join(" ");
+          }
+          return "";
+        })
+        .filter(Boolean)
+      : [],
+    strengths: Array.isArray(p.strengths)
+      ? p.strengths.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean)
+      : [],
+    email: typeof p.email === "string" ? p.email.trim() : "",
+    linkedin: typeof p.linkedin === "string" ? p.linkedin.trim() : "",
+    portfolio: typeof p.portfolio === "string" ? p.portfolio.trim() : "",
+    salaryTarget: typeof p.salaryTarget === "string" ? p.salaryTarget.trim() : "",
+    availability: typeof p.availability === "string" ? p.availability.trim() : "",
+    workAuthorization: typeof p.workAuthorization === "string" ? p.workAuthorization.trim() : "",
+    completato: false,
   };
+  if (!profile.zona && profile.locationPreferences.length > 0) {
+    profile.zona = profile.locationPreferences.join(", ");
+  }
+  profile.completato = isProfileComplete(profile);
+  return profile;
 }
 
 export function saveProfile(profile: UserProfile): void {
   const cfg = loadConfig();
   cfg.profile = {
     ...profile,
+    zona: profile.zona || profile.locationPreferences.join(", "),
     // Mantiene compatibilita con letture legacy che usano un nome completo singolo.
     nomeCompleto: [profile.nome, profile.cognome].filter(Boolean).join(" ").trim(),
   };
@@ -299,28 +367,63 @@ export function saveProfile(profile: UserProfile): void {
 }
 
 export function isProfileComplete(profile: UserProfile): boolean {
-  return !!(profile.nome && profile.cognome && profile.dataNascita && profile.competenze.length > 0 && profile.zona && profile.tipoLavoro);
+  return !!(
+    profile.nome &&
+    profile.cognome &&
+    profile.targetRoles.length > 0 &&
+    profile.seniorityTarget &&
+    profile.competenze.length > 0 &&
+    profile.locationPreferences.length > 0 &&
+    profile.tipoLavoro
+  );
 }
 
 export function getMissingProfileFields(profile: UserProfile): string[] {
   const missing: string[] = [];
   if (!profile.nome) missing.push("nome");
   if (!profile.cognome) missing.push("cognome");
-  if (!profile.dataNascita) missing.push("data di nascita");
+  if (profile.targetRoles.length === 0) missing.push("ruoli target");
+  if (!profile.seniorityTarget) missing.push("seniority");
   if (profile.competenze.length === 0) missing.push("competenze");
-  if (!profile.zona) missing.push("zona");
+  if (profile.locationPreferences.length === 0) missing.push("preferenze luogo");
   if (!profile.tipoLavoro) missing.push("tipo lavoro");
   return missing;
+}
+
+export function getProfileCompletion(profile: UserProfile): { filled: number; total: number; percent: number } {
+  const checks = [
+    Boolean(profile.nome),
+    Boolean(profile.cognome),
+    profile.targetRoles.length > 0,
+    Boolean(profile.seniorityTarget),
+    profile.competenze.length > 0,
+    profile.locationPreferences.length > 0,
+    Boolean(profile.tipoLavoro),
+  ];
+  const filled = checks.filter(Boolean).length;
+  const total = checks.length;
+  return { filled, total, percent: Math.round((filled / total) * 100) };
 }
 
 export function formatProfile(profile: UserProfile): string[] {
   const lines: string[] = [];
   lines.push(`  Nome: ${profile.nome || "(non impostato)"}`);
   lines.push(`  Cognome: ${profile.cognome || "(non impostato)"}`);
-  lines.push(`  Data di nascita: ${profile.dataNascita || "(non impostata)"}`);
+  if (profile.headline) lines.push(`  Headline: ${profile.headline}`);
+  lines.push(`  Ruoli target: ${profile.targetRoles.length > 0 ? profile.targetRoles.join(", ") : "(non impostati)"}`);
+  lines.push(`  Seniority: ${profile.seniorityTarget || "(non impostata)"}`);
   lines.push(`  Competenze: ${profile.competenze.length > 0 ? profile.competenze.join(", ") : "(nessuna)"}`);
-  lines.push(`  Zona: ${profile.zona || "(non impostata)"}`);
+  lines.push(`  Preferenze luogo: ${profile.locationPreferences.length > 0 ? profile.locationPreferences.join(", ") : "(non impostate)"}`);
   lines.push(`  Tipo lavoro: ${profile.tipoLavoro || "(non impostato)"}`);
+  if (profile.languages.length > 0) lines.push(`  Lingue: ${profile.languages.join(", ")}`);
+  if (profile.strengths.length > 0) lines.push(`  Punti di forza: ${profile.strengths.join(", ")}`);
+  if (profile.email) lines.push(`  Email: ${profile.email}`);
+  if (profile.linkedin) lines.push(`  LinkedIn: ${profile.linkedin}`);
+  if (profile.portfolio) lines.push(`  Portfolio: ${profile.portfolio}`);
+  if (profile.salaryTarget) lines.push(`  Retribuzione target: ${profile.salaryTarget}`);
+  if (profile.availability) lines.push(`  Disponibilita: ${profile.availability}`);
+  if (profile.workAuthorization) lines.push(`  Work authorization: ${profile.workAuthorization}`);
+  if (profile.dataNascita) lines.push(`  Data di nascita: ${profile.dataNascita}`);
   return lines;
 }
 
@@ -395,6 +498,20 @@ function validateSkills(value: string): ProfileFieldValidationResult {
   return { ok: true, value: normalized };
 }
 
+function validateTargetRoles(value: string): ProfileFieldValidationResult {
+  const roles = value
+    .split(",")
+    .map((item) => normalizeSpaces(item))
+    .filter(Boolean);
+  if (roles.length === 0) {
+    return { ok: false, error: "inserisci almeno un ruolo target" };
+  }
+  if (roles.some((role) => role.length < 2 || role.length > 60)) {
+    return { ok: false, error: "uno dei ruoli target non e valido" };
+  }
+  return { ok: true, value: Array.from(new Set(roles)) };
+}
+
 function validateZona(value: string): ProfileFieldValidationResult {
   const normalized = normalizeSpaces(value);
   if (normalized.length < 2) {
@@ -407,6 +524,41 @@ function validateZona(value: string): ProfileFieldValidationResult {
     return { ok: false, error: "zona contiene caratteri non validi" };
   }
   return { ok: true, value: normalized };
+}
+
+function validateLocationPreferences(value: string): ProfileFieldValidationResult {
+  const preferences = value
+    .split(",")
+    .map((item) => normalizeSpaces(item))
+    .filter(Boolean);
+  if (preferences.length === 0) {
+    return { ok: false, error: "inserisci almeno una preferenza di luogo" };
+  }
+  if (preferences.some((item) => item.length < 2 || item.length > 60)) {
+    return { ok: false, error: "una preferenza di luogo non e valida" };
+  }
+  return { ok: true, value: Array.from(new Set(preferences)) };
+}
+
+const SENIORITY_MAP: Record<string, string> = {
+  junior: "Junior",
+  jr: "Junior",
+  mid: "Mid",
+  middle: "Mid",
+  senior: "Senior",
+  sr: "Senior",
+  lead: "Lead",
+  manager: "Manager",
+  head: "Head",
+};
+
+function validateSeniorityTarget(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value).toLowerCase();
+  const canonical = SENIORITY_MAP[normalized];
+  if (!canonical) {
+    return { ok: false, error: "usa Junior, Mid, Senior, Lead, Manager o Head" };
+  }
+  return { ok: true, value: canonical };
 }
 
 const TIPO_LAVORO_MAP: Record<string, string> = {
@@ -438,7 +590,86 @@ function validateTipoLavoro(value: string): ProfileFieldValidationResult {
   return { ok: true, value: canonical };
 }
 
-export function validateProfileField(field: keyof Pick<UserProfile, "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro">, value: string): ProfileFieldValidationResult {
+function validateLanguages(value: string): ProfileFieldValidationResult {
+  const normalized = value
+    .split(",")
+    .map((item) => normalizeSpaces(item))
+    .filter(Boolean);
+  if (normalized.length === 0) return { ok: true, value: [] };
+  if (normalized.some((item) => item.length < 2 || item.length > 40)) {
+    return { ok: false, error: "una lingua o livello non e valido" };
+  }
+  return { ok: true, value: Array.from(new Set(normalized)) };
+}
+
+function validateStrengths(value: string): ProfileFieldValidationResult {
+  const normalized = value
+    .split(",")
+    .map((item) => normalizeSpaces(item))
+    .filter(Boolean);
+  if (normalized.length === 0) return { ok: true, value: [] };
+  if (normalized.some((item) => item.length < 2 || item.length > 60)) {
+    return { ok: false, error: "uno dei punti di forza non e valido" };
+  }
+  return { ok: true, value: Array.from(new Set(normalized)) };
+}
+
+function validateHeadline(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return { ok: true, value: "" };
+  if (normalized.length < 5) return { ok: false, error: "headline troppo corta" };
+  if (normalized.length > 90) return { ok: false, error: "headline troppo lunga" };
+  return { ok: true, value: normalized };
+}
+
+function validateEmail(value: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return { ok: true, value: "" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return { ok: false, error: "email non valida" };
+  }
+  return { ok: true, value: normalized };
+}
+
+function validateUrlField(value: string, label: string): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return { ok: true, value: "" };
+  if (!/^https?:\/\/\S+$/i.test(normalized)) {
+    return { ok: false, error: `${label} non valido: usa un URL completo` };
+  }
+  return { ok: true, value: normalized };
+}
+
+function validateFreeText(value: string, label: string, maxLength: number): ProfileFieldValidationResult {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return { ok: true, value: "" };
+  if (normalized.length > maxLength) return { ok: false, error: `${label} troppo lungo` };
+  return { ok: true, value: normalized };
+}
+
+export function validateProfileField(
+  field: keyof Pick<UserProfile,
+    | "nome"
+    | "cognome"
+    | "dataNascita"
+    | "headline"
+    | "targetRoles"
+    | "seniorityTarget"
+    | "competenze"
+    | "locationPreferences"
+    | "tipoLavoro"
+    | "languages"
+    | "strengths"
+    | "email"
+    | "linkedin"
+    | "portfolio"
+    | "salaryTarget"
+    | "availability"
+    | "workAuthorization"
+    | "zona"
+  >,
+  value: string,
+): ProfileFieldValidationResult {
   switch (field) {
     case "nome":
       return validatePersonName(value, "nome");
@@ -446,11 +677,35 @@ export function validateProfileField(field: keyof Pick<UserProfile, "nome" | "co
       return validatePersonName(value, "cognome");
     case "dataNascita":
       return validateBirthDate(value);
+    case "headline":
+      return validateHeadline(value);
+    case "targetRoles":
+      return validateTargetRoles(value);
+    case "seniorityTarget":
+      return validateSeniorityTarget(value);
     case "competenze":
       return validateSkills(value);
     case "zona":
       return validateZona(value);
+    case "locationPreferences":
+      return validateLocationPreferences(value);
     case "tipoLavoro":
       return validateTipoLavoro(value);
+    case "languages":
+      return validateLanguages(value);
+    case "strengths":
+      return validateStrengths(value);
+    case "email":
+      return validateEmail(value);
+    case "linkedin":
+      return validateUrlField(value, "LinkedIn");
+    case "portfolio":
+      return validateUrlField(value, "portfolio");
+    case "salaryTarget":
+      return validateFreeText(value, "range retributivo", 40);
+    case "availability":
+      return validateFreeText(value, "disponibilita", 50);
+    case "workAuthorization":
+      return validateFreeText(value, "work authorization", 80);
   }
 }

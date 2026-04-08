@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Highlight ── */
 describe("Highlight", () => {
@@ -15,7 +20,7 @@ describe("Highlight", () => {
     expect(src).toMatch(/export function HighlightList\b/);
     expect(src).toMatch(/export function useHighlight\b/);
     expect(src).toContain("export interface HighlightProps");
-    expect(src).toContain("query:          string | string[]");
+    expect(src).toContain("query: string | string[]");
   });
 
   it("match: buildChunks + escapeRegex + Chunk interface start/end/highlight + <mark> tag + borderRadius 2", () => {

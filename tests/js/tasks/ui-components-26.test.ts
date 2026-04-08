@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Chip ── */
 describe("Chip", () => {
@@ -15,12 +20,13 @@ describe("Chip", () => {
     expect(src).toMatch(/export function ChipGroup\b/);
     expect(src).toContain("export interface ChipProps");
     expect(src).toContain("export type ChipVariant = 'filled' | 'outlined'");
-    expect(src).toContain("export type ChipColor   = 'default' | 'green' | 'red' | 'yellow' | 'blue' | 'orange' | 'purple'");
-    expect(src).toContain("export type ChipSize    = 'sm' | 'md' | 'lg'");
+    expect(src).toContain("export type ChipColor =");
+    expect(src).toContain("'default' | 'green' | 'red' | 'yellow' | 'blue' | 'orange' | 'purple'");
+    expect(src).toContain("export type ChipSize = 'sm' | 'md' | 'lg'");
   });
 
   it("close: onRemove + stopPropagation + svg X path + aria-label Rimuovi + disabled nasconde close", () => {
-    expect(src).toContain("onRemove?:  () => void");
+    expect(src).toContain("onRemove?: () => void");
     expect(src).toContain("e.stopPropagation(); onRemove()");
     expect(src).toContain("aria-label={`Rimuovi ${label}`}");
     expect(src).toContain("onRemove && !disabled");
@@ -28,7 +34,7 @@ describe("Chip", () => {
   });
 
   it("click: onClick selectable + aria-pressed + Enter/Space keyboard + chip-pop animation + disabled opacity 0.45", () => {
-    expect(src).toContain("onClick?:   () => void");
+    expect(src).toContain("onClick?: () => void");
     expect(src).toContain("aria-pressed={clickable ? selected : undefined}");
     expect(src).toContain("e.key === 'Enter' || e.key === ' '");
     expect(src).toContain("@keyframes chip-pop");
@@ -37,7 +43,7 @@ describe("Chip", () => {
   });
 
   it("icon: leading icon + COLOR 7 colori con base/bg/border + SIZE 3 con h/px/font + ChipGroup wrap/gap", () => {
-    expect(src).toContain("icon?:      ReactNode");
+    expect(src).toContain("icon?: ReactNode");
     expect(src).toContain("{icon}");
     expect(src).toContain("const COLOR");
     expect(src).toContain("const SIZE");

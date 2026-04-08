@@ -349,7 +349,7 @@ function ApproveMockup() {
           <span className="text-[9px] px-2 py-0.5 rounded" style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.2)' }}>Critico: OK</span>
         </div>
         <div className="text-[10px] text-[var(--color-dim)] mb-3">
-          Revisione completata dal Critico. Nessun problema trovato. Pronto per l'invio.
+          Revisione completata dal Critico. Nessun problema trovato. Pronto per l&apos;invio.
         </div>
         <div className="flex gap-2">
           <div className="flex-1 text-center py-1.5 rounded-lg text-[11px] font-bold" style={{ background: 'var(--color-green)', color: '#000' }}>

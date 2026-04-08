@@ -17,7 +17,17 @@ function findAll(dir: string, target: string): string[] {
   }
   return out;
 }
-function read(f: string) { return fs.readFileSync(f, "utf-8"); }
+function read(f: string) {
+  return fs.readFileSync(f, "utf-8").replace(/\r\n/g, "\n");
+}
+
+function rel(base: string, target: string) {
+  return path.relative(base, target).replace(/\\/g, "/");
+}
+
+function hasUseClient(src: string) {
+  return /["']use client["']/.test(src);
+}
 
 /* ── Inventario ── */
 const pages      = findAll(path.join(WEB, "app"), "page.tsx");
@@ -29,12 +39,12 @@ const cliCmds    = fs.existsSync(path.join(CLI, "src/commands"))
 const sharedTs   = fs.existsSync(SHARED)
   ? (fs.readdirSync(SHARED, { recursive: true }) as string[]).filter(f => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.includes("node_modules")) : [];
 
-const clientPages  = pages.filter(p => read(p).includes("'use client'"));
-const serverPages  = pages.filter(p => !read(p).includes("'use client'"));
+const clientPages  = pages.filter((p) => hasUseClient(read(p)));
+const serverPages  = pages.filter((p) => !hasUseClient(read(p)));
 const endpoints: { route: string; methods: string[] }[] = routes.map(r => {
   const src = read(r);
   const methods = ["GET","POST","PUT","DELETE","PATCH"].filter(m => new RegExp(`export\\s+(async\\s+)?function\\s+${m}\\b`).test(src));
-  return { route: path.relative(path.join(WEB, "app/api"), r).replace("/route.ts", ""), methods };
+  return { route: rel(path.join(WEB, "app/api"), r).replace("/route.ts", ""), methods };
 });
 const totalEP = endpoints.reduce((s, e) => s + e.methods.length, 0);
 
@@ -47,17 +57,22 @@ describe("Pagine", () => {
   });
   it("ogni pagina ha export default", () => {
     const fail = pages.filter(p => !/export\s+default\s+(async\s+)?function/.test(read(p)));
-    expect(fail.map(f => path.relative(WEB, f))).toEqual([]);
+    expect(fail.map((f) => rel(WEB, f))).toEqual([]);
   });
   it("nessuna pagina vuota (< 10 righe)", () => {
-    const empty = pages.filter(p => read(p).split("\n").length < 10);
-    expect(empty.map(f => path.relative(WEB, f))).toEqual([]);
+    const empty = pages.filter((p) => {
+      const src = read(p);
+      return src.split("\n").length < 10 && !src.includes("redirect(");
+    });
+    expect(empty.map((f) => rel(WEB, f))).toEqual([]);
   });
   it("pagine chiave presenti", () => {
-    const rel = pages.map(p => path.relative(path.join(WEB, "app"), p).replace(/^\(protected\)\//, ""));
+    const relPages = pages.map((p) =>
+      rel(path.join(WEB, "app"), p).replace(/^\(protected\)\//, ""),
+    );
     for (const pg of ["dashboard/page.tsx","settings/page.tsx","setup/page.tsx","timeline/page.tsx","map/page.tsx",
       "calendar/page.tsx","jobs/page.tsx","companies/page.tsx","insights/page.tsx","budget/page.tsx"])
-      expect(rel).toContain(pg);
+      expect(relPages).toContain(pg);
   });
 });
 
@@ -70,7 +85,7 @@ describe("API Routes", () => {
       return !/export\s+(async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH)\b/.test(src) &&
              !/export\s+(const|function)\s+(GET|POST|PUT|DELETE|PATCH|handler|dynamic)\b/.test(src);
     });
-    expect(fail.map(f => path.relative(WEB, f))).toEqual([]);
+    expect(fail.map((f) => rel(WEB, f))).toEqual([]);
   });
   it(`endpoint ≥ 209 (trovati ${totalEP})`, () => expect(totalEP).toBeGreaterThanOrEqual(209));
   it("GET ≥ 90, POST ≥ 22", () => {

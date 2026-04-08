@@ -1,8 +1,12 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
-const JHT_DIR = join(homedir(), '.jht');
+function resolveHomeDir() {
+  return process.env.JHT_HOME || process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
+const JHT_DIR = join(resolveHomeDir(), '.jht');
 
 const TARGETS = {
   sessions: { path: join(JHT_DIR, 'sessions', 'sessions.json'), key: 'sessions', idField: 'id' },
@@ -19,7 +23,7 @@ async function readJsonSafe(p) {
 }
 
 async function writeJsonSafe(p, data) {
-  await mkdir(join(p, '..'), { recursive: true }).catch(() => {});
+  await mkdir(dirname(p), { recursive: true }).catch(() => {});
   const tmp = p + '.tmp';
   await writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
   const { rename } = await import('node:fs/promises');

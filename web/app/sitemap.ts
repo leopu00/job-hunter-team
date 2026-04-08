@@ -6,7 +6,6 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 const PUBLIC_PAGES = [
   { path: '/',          priority: 1.0,  changeFrequency: 'weekly'  as const },
   { path: '/download',  priority: 0.9,  changeFrequency: 'weekly'  as const },
-  { path: '/guide',     priority: 0.8,  changeFrequency: 'monthly' as const },
   { path: '/faq',       priority: 0.8,  changeFrequency: 'monthly' as const },
   { path: '/changelog', priority: 0.6,  changeFrequency: 'weekly'  as const },
   { path: '/pricing',   priority: 0.9,  changeFrequency: 'monthly' as const },
@@ -15,7 +14,7 @@ const PUBLIC_PAGES = [
   { path: '/terms',     priority: 0.3,  changeFrequency: 'yearly'  as const },
   { path: '/docs',      priority: 0.7,  changeFrequency: 'monthly' as const },
   { path: '/demo',      priority: 0.7,  changeFrequency: 'monthly' as const },
-  { path: '/stats',     priority: 0.6,  changeFrequency: 'weekly'  as const },
+  { path: '/project',   priority: 0.6,  changeFrequency: 'weekly'  as const },
   { path: '/reports',   priority: 0.5,  changeFrequency: 'weekly'  as const },
 ]
 
