@@ -38,15 +38,17 @@ export class ProfileWizardPanel extends Container {
     const fallback = formatAnswer(currentValue) === "(vuoto)" ? "" : formatAnswer(currentValue);
     const displayValue = currentInput.length > 0 ? currentInput : fallback;
     const cursor = currentInput.length > 0 ? "█" : "";
-    const contentWidth = 42;
+    const contentWidth = 56;
     const padded = truncate(`${displayValue}${cursor}`, contentWidth).padEnd(contentWidth, " ");
+    const badge = current.required ? theme.success("Richiesto") : theme.dim("Opzionale");
 
     this.add(theme.header("  ■ CONFIGURA PROFILO"));
     this.add(theme.border("  " + "─".repeat(60)));
     this.add("");
     this.add(`  ${renderCheckpoints(wizard)}`);
     this.add("");
-    this.add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)}`);
+    this.add(`  ${theme.dim(current.section.toUpperCase())}`);
+    this.add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)} ${theme.dim("·")} ${badge}`);
     this.add("");
     this.add(`  ${theme.text(current.question)}`);
     this.add("");
