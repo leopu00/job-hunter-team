@@ -14,31 +14,32 @@ import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
 import JsonLd from './components/landing/JsonLd'
 import ScrollToTop from './components/landing/ScrollToTop'
-import CookieConsent from './components/landing/CookieConsent'
 
 function PageContent() {
   const params = useSearchParams()
   const authError = params.get('error') === 'auth_failed'
   const wantsLogin = params.get('login') === 'true'
 
-  if (wantsLogin) {
-    return <LoginPage authError={authError} />
-  }
-
   return (
     <LandingI18nProvider>
-      <JsonLd />
-      <main style={{ position: 'relative', zIndex: 1 }}>
-        <LandingNav />
-        <LandingHero />
-        <FadeInSection><LandingStats /></FadeInSection>
-        <FadeInSection><LandingFeatures /></FadeInSection>
-        <FadeInSection delay={100}><LandingSteps /></FadeInSection>
-        <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
-        <FadeInSection delay={100}><LandingCTA /></FadeInSection>
-        <LandingFooter />
-        <ScrollToTop />
-      </main>
+      {wantsLogin ? (
+        <LoginPage authError={authError} />
+      ) : (
+        <>
+          <JsonLd />
+          <main style={{ position: 'relative', zIndex: 1 }}>
+            <LandingNav />
+            <LandingHero />
+            <FadeInSection><LandingStats /></FadeInSection>
+            <FadeInSection><LandingFeatures /></FadeInSection>
+            <FadeInSection delay={100}><LandingSteps /></FadeInSection>
+            <FadeInSection delay={100}><LandingGetStarted /></FadeInSection>
+            <FadeInSection delay={100}><LandingCTA /></FadeInSection>
+            <LandingFooter />
+            <ScrollToTop />
+          </main>
+        </>
+      )}
     </LandingI18nProvider>
   )
 }
@@ -46,10 +47,7 @@ function PageContent() {
 export default function LandingPage() {
   return (
     <Suspense>
-      <>
-        <PageContent />
-        <CookieConsent />
-      </>
+      <PageContent />
     </Suspense>
   )
 }

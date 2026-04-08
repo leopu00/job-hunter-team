@@ -6,6 +6,7 @@ export const MARKETING_ROUTE_PREFIXES = [
   '/docs',
   '/download',
   '/faq',
+  '/guide',
   '/pricing',
   '/privacy',
   '/reports',
