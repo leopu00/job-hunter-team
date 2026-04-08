@@ -1,66 +1,149 @@
-/**
- * API AI Assistant — chat con assistente, risposte simulate, suggerimenti azioni
- */
-import { NextResponse } from 'next/server';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { NextResponse } from 'next/server'
+import {
+  AI_ASSISTANT_SUGGESTIONS,
+  buildAssistantSystemPrompt,
+  normalizeAssistantHistory,
+  type AssistantChatMessage,
+} from '@/lib/ai-assistant'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
-type Message = { role: 'user' | 'assistant'; content: string; timestamp: number };
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
+const DEFAULT_MODEL = 'gpt-4o-mini'
+const MAX_CONTEXT_MESSAGES = 12
+const MAX_OUTPUT_TOKENS = 450
 
-const HISTORY_PATH = path.join(os.homedir(), '.jht', 'ai-assistant-history.json');
-
-function loadHistory(): Message[] {
-  try { return JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf-8')); }
-  catch { return []; }
+type AssistantRequestBody = {
+  message?: string
+  history?: AssistantChatMessage[]
+  path?: string
 }
 
-function saveHistory(msgs: Message[]): void {
-  const dir = path.dirname(HISTORY_PATH);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = HISTORY_PATH + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(msgs.slice(-50), null, 2), 'utf-8');
-  fs.renameSync(tmp, HISTORY_PATH);
+function getAssistantConfig() {
+  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? ''
+  const model = process.env.JHT_AI_ASSISTANT_MODEL?.trim() || DEFAULT_MODEL
+  return { apiKey, model, configured: apiKey.length > 0 }
 }
 
-const RESPONSES: Record<string, string> = {
-  'cover letter': 'Posso aiutarti a scrivere una cover letter. Dimmi per quale posizione e azienda, e preparerò una bozza personalizzata basata sul tuo profilo.',
-  'colloquio': 'Per prepararti al colloquio, posso: 1) Simulare domande tecniche, 2) Analizzare l\'azienda, 3) Suggerire domande da fare. Quale preferisci?',
-  'analizza': 'Condividi il link o la descrizione dell\'offerta e ti fornirò: match con il tuo profilo, punti di forza/debolezza, suggerimenti per la candidatura.',
-  'cv': 'Posso aiutarti a ottimizzare il CV per una posizione specifica. Indica il ruolo target e evidenzierò le esperienze più rilevanti.',
-  'salary': 'Per la negoziazione salariale considero: il tuo livello, il mercato locale, il settore, e il range dell\'offerta. Dammi più dettagli.',
-};
+function buildInput(history: AssistantChatMessage[], message: string) {
+  const conversation = normalizeAssistantHistory(history).slice(-MAX_CONTEXT_MESSAGES)
+  const priorMessages = conversation.map(entry => ({
+    role: entry.role,
+    content: [{ type: 'input_text', text: entry.content }],
+  }))
 
-function generateResponse(message: string): string {
-  const lower = message.toLowerCase();
-  for (const [key, response] of Object.entries(RESPONSES)) {
-    if (lower.includes(key)) return response;
+  return [
+    ...priorMessages,
+    { role: 'user', content: [{ type: 'input_text', text: message }] },
+  ]
+}
+
+function extractResponseText(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+
+  const candidate = payload as {
+    output_text?: unknown
+    output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>
   }
-  return `Ho ricevuto il tuo messaggio. Come assistente AI del Job Hunter, posso aiutarti con:\n\n• Scrivere cover letter personalizzate\n• Preparare colloqui tecnici\n• Analizzare offerte di lavoro\n• Ottimizzare il CV\n• Negoziazione salariale\n\nCosa posso fare per te?`;
+
+  if (typeof candidate.output_text === 'string' && candidate.output_text.trim()) {
+    return candidate.output_text.trim()
+  }
+
+  const chunks = (candidate.output ?? [])
+    .filter(item => item?.type === 'message')
+    .flatMap(item => item.content ?? [])
+    .filter(part => part?.type === 'output_text' && typeof part.text === 'string')
+    .map(part => part.text?.trim() ?? '')
+    .filter(Boolean)
+
+  return chunks.join('\n').trim()
+}
+
+function extractUpstreamError(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const error = (payload as { error?: { message?: unknown } }).error
+  return typeof error?.message === 'string' && error.message.trim()
+    ? error.message.trim()
+    : null
 }
 
 export async function GET() {
-  const history = loadHistory();
-  const suggestions = [
-    { label: 'Scrivi cover letter', prompt: 'Aiutami a scrivere una cover letter per la posizione di Full Stack Developer' },
-    { label: 'Prepara colloquio', prompt: 'Aiutami a prepararmi per un colloquio tecnico' },
-    { label: 'Analizza offerta', prompt: 'Analizza questa offerta di lavoro per me' },
-    { label: 'Ottimizza CV', prompt: 'Come posso migliorare il mio CV per ruoli backend?' },
-  ];
-  return NextResponse.json({ history, suggestions });
+  const { configured, model } = getAssistantConfig()
+  return NextResponse.json({
+    history: [],
+    suggestions: AI_ASSISTANT_SUGGESTIONS,
+    configured,
+    model,
+  })
 }
 
 export async function POST(req: Request) {
+  let body: AssistantRequestBody
   try {
-    const { message } = await req.json() as { message: string };
-    if (!message?.trim()) return NextResponse.json({ error: 'Messaggio richiesto' }, { status: 400 });
-    const history = loadHistory();
-    const userMsg: Message = { role: 'user', content: message.trim(), timestamp: Date.now() };
-    const assistantMsg: Message = { role: 'assistant', content: generateResponse(message), timestamp: Date.now() + 1 };
-    history.push(userMsg, assistantMsg);
-    saveHistory(history);
-    return NextResponse.json({ reply: assistantMsg.content, timestamp: assistantMsg.timestamp });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+    body = await req.json() as AssistantRequestBody
+  } catch {
+    return NextResponse.json({ error: 'JSON non valido' }, { status: 400 })
+  }
+
+  const message = body.message?.trim()
+  if (!message) {
+    return NextResponse.json({ error: 'Messaggio richiesto' }, { status: 400 })
+  }
+
+  const { apiKey, model, configured } = getAssistantConfig()
+  if (!configured) {
+    return NextResponse.json({
+      error: 'Chatbot non configurato sul server. Imposta OPENAI_API_KEY per attivarlo.',
+      configured: false,
+    }, { status: 503 })
+  }
+
+  try {
+    const upstream = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        instructions: buildAssistantSystemPrompt(body.path),
+        input: buildInput(body.history ?? [], message),
+        max_output_tokens: MAX_OUTPUT_TOKENS,
+      }),
+      cache: 'no-store',
+    })
+
+    const requestId = upstream.headers.get('x-request-id')
+    const payload = await upstream.json().catch(() => null)
+
+    if (!upstream.ok) {
+      const detail = extractUpstreamError(payload) ?? `Upstream OpenAI HTTP ${upstream.status}`
+      return NextResponse.json({
+        error: `Il provider AI non ha accettato la richiesta: ${detail}`,
+        configured: true,
+        requestId,
+      }, { status: 502 })
+    }
+
+    const reply = extractResponseText(payload)
+    if (!reply) {
+      return NextResponse.json({
+        error: 'Il provider AI ha restituito una risposta vuota.',
+        configured: true,
+        requestId,
+      }, { status: 502 })
+    }
+
+    return NextResponse.json({
+      reply,
+      timestamp: Date.now(),
+      model,
+      requestId,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Errore sconosciuto'
+    return NextResponse.json({ error: `Richiesta al provider AI fallita: ${message}` }, { status: 500 })
+  }
 }
