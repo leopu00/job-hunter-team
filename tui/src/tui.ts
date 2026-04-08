@@ -11,7 +11,7 @@ import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
 import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { runSetupWizard, saveApiKey } from "./tui-setup.js";
+import { ensureWorkspaceConfigured, runSetupWizard, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
@@ -42,6 +42,8 @@ const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
 ];
 
 export async function runJhtTui() {
+  await ensureWorkspaceConfigured();
+
   // Setup wizard se API key non configurata
   let resolvedApiKey = loadApiKey();
   if (!resolvedApiKey) {

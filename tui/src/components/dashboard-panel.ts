@@ -7,7 +7,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
-import { loadProfile, isProfileComplete, formatProfile, getMissingProfileFields } from "../tui-profile.js";
+import { loadProfile, loadWorkspacePath, isProfileComplete, formatProfile, getMissingProfileFields } from "../tui-profile.js";
 import { listJhtSessions } from "../tui-tmux.js";
 
 // ── Paths ─────────────────────────────────────────────────────────
@@ -44,6 +44,11 @@ export class DashboardPanel extends Container {
 
     this.add(theme.header("  \u25A0 DASHBOARD"));
     this.add(hr);
+
+    const workspacePath = loadWorkspacePath();
+    this.add(theme.accent("  CARTELLA DI LAVORO"));
+    this.add(`  ${workspacePath || theme.dim("(non impostata)")}`);
+    this.add("");
 
     // ── Profilo Utente ──
     const profile = loadProfile();
