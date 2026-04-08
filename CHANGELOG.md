@@ -5,6 +5,14 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.1] — 2026-04-08
+
+### Release desktop
+- Allineate tutte le versioni `package.json` e `package-lock.json` a `0.1.1`
+- Confermato il packaging desktop Electron per macOS, Windows e Linux
+- Workflow GitHub Release pronto a pubblicare installer reali `.dmg`, `.exe`, `.AppImage` e `.deb`
+- Pagina download e API leggono gli asset effettivi della latest release invece di assumere archivi legacy
+
 ## [1.0.0] — 2026-04-04
 
 ### Pipeline multi-agente

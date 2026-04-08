@@ -1,6 +1,6 @@
 {
   "name": "e2e",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An open-source multi-agent AI framework that automates your job search — from finding positions to writing tailored CVs and cover letters.",
   "main": "index.js",
   "scripts": {
