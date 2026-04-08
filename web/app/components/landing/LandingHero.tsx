@@ -263,7 +263,7 @@ export default function LandingHero() {
         </div>
 
         <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
-          Hai una squadra di agenti AI virtuali disponibile 24 ore su 24: lavorano per te, cercano opportunità, analizzano offerte, preparano i materiali e si coordinano tra loro in autonomia, mentre tu mantieni sempre il controllo.
+          Un team di agenti AI segue con continuità ogni fase della ricerca di lavoro, trova opportunità, analizza offerte, prepara i materiali e coordina il processo, mantenendo sempre il controllo nelle tue mani.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
