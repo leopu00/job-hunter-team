@@ -116,7 +116,7 @@ export default function LandingHero() {
     <section aria-label="Hero" className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
       <div className="relative z-10 w-full max-w-6xl mx-auto text-center" style={{ animation: 'fade-in 0.6s ease both' }}>
         <h1 className="w-full text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
-          Job Hunter Team
+          Job Hunter <span className="text-[var(--color-green)]">Team</span>
         </h1>
 
         <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
