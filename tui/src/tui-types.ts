@@ -1,4 +1,4 @@
-export type TuiView = "team" | "chat" | "tasks" | "ai" | "dashboard";
+export type TuiView = "team" | "chat" | "tasks" | "ai" | "dashboard" | "profile";
 
 export type AgentRole =
   | "alfa"
@@ -56,6 +56,9 @@ export type JhtTuiState = {
   currentView: TuiView;
   /** Nome sessione tmux con cui si sta chattando (/chat) */
   chatTargetSession: string | null;
+  /** Selezione corrente delle azioni nella vista Team */
+  teamSelectedActionIndex: number;
+  profileWizard: ProfileWizardState | null;
 };
 
 // --- Tipi per il layer chat/event (tui-event-handlers, tui-command-handlers) ---
@@ -110,4 +113,27 @@ export type TuiStateAccess = JhtTuiState & {
   historyLoaded: boolean;
   sessionInfo: SessionInfo;
   showThinking: boolean;
+};
+
+export type ProfileFieldKey = "nome" | "eta" | "competenze" | "zona" | "tipoLavoro";
+
+export type ProfileWizardStep = {
+  field: ProfileFieldKey;
+  title: string;
+  question: string;
+  hint: string;
+  required?: boolean;
+};
+
+export type ProfileWizardState = {
+  stepIndex: number;
+  steps: ProfileWizardStep[];
+  draft: {
+    nome: string;
+    eta: string;
+    competenze: string[];
+    zona: string;
+    tipoLavoro: string;
+  };
+  lastMessage?: string | null;
 };

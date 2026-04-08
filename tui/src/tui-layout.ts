@@ -13,6 +13,7 @@ const VIEW_LABELS: Record<TuiView, string> = {
   chat: "Chat",
   tasks: "Tasks",
   dashboard: "Dashboard",
+  profile: "Profile",
   ai: "AI",
 };
 
@@ -73,6 +74,7 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
       activityStatus: state.activityStatus,
       selectedAgent,
       workingAgents: state.activeTmuxCount,
+      currentView: state.currentView,
     });
   };
 
