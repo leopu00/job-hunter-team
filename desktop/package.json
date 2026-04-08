@@ -1,9 +1,13 @@
 {
   "name": "jht-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
-  "author": "Leone Emanuele Puglisi",
+  "author": {
+    "name": "Leone Emanuele Puglisi",
+    "email": "leone.puglisi@gmail.com"
+  },
+  "homepage": "https://jobhunterteam.ai",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -61,6 +65,7 @@
     "linux": {
       "artifactName": "job-hunter-team-${version}-linux.${ext}",
       "icon": "assets/icon.png",
+      "maintainer": "Leone Emanuele Puglisi <leone.puglisi@gmail.com>",
       "target": [
         "AppImage",
         "deb"
