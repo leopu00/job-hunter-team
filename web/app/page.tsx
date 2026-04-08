@@ -14,6 +14,7 @@ import { LandingI18nProvider } from './components/landing/LandingI18n'
 import FadeInSection from './components/landing/FadeInSection'
 import JsonLd from './components/landing/JsonLd'
 import ScrollToTop from './components/landing/ScrollToTop'
+import CookieConsent from './components/landing/CookieConsent'
 
 function PageContent() {
   const params = useSearchParams()
@@ -45,7 +46,10 @@ function PageContent() {
 export default function LandingPage() {
   return (
     <Suspense>
-      <PageContent />
+      <>
+        <PageContent />
+        <CookieConsent />
+      </>
     </Suspense>
   )
 }
