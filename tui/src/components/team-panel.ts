@@ -11,13 +11,13 @@ type AgentDef = { id: string; label: string; emoji: string; aliases: string[] };
 
 const AGENTS: AgentDef[] = [
   { id: "scout", label: "Scout", emoji: "🕵️", aliases: ["scout"] },
-  { id: "analista", label: "Analista", emoji: "🔬", aliases: ["analista"] },
-  { id: "assistente", label: "Assistente", emoji: "💼", aliases: ["assistente"] },
-  { id: "critico", label: "Critico", emoji: "⚖️", aliases: ["critico"] },
-  { id: "scorer", label: "Scorer", emoji: "💻", aliases: ["scorer"] },
-  { id: "scrittore", label: "Scrittore", emoji: "📝", aliases: ["scrittore"] },
+  { id: "analista", label: "Analista", emoji: "👨‍🔬", aliases: ["analista"] },
+  { id: "assistente", label: "Assistente", emoji: "🧑‍💼", aliases: ["assistente"] },
+  { id: "critico", label: "Critico", emoji: "👨‍⚖️", aliases: ["critico"] },
+  { id: "scorer", label: "Scorer", emoji: "👨‍💻", aliases: ["scorer"] },
+  { id: "scrittore", label: "Scrittore", emoji: "👨‍🏫", aliases: ["scrittore"] },
   { id: "sentinella", label: "Sentinella", emoji: "💂", aliases: ["sentinella"] },
-  { id: "alfa", label: "Alfa", emoji: "✈️", aliases: ["alfa"] },
+  { id: "alfa", label: "Alfa", emoji: "👨‍✈️", aliases: ["alfa"] },
 ];
 
 const ACTIONS = [
