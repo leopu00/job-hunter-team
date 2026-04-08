@@ -34,13 +34,31 @@ const KNOWN_AGENTS: JhtAgent[] = [
 
 const VIEWS: TuiView[] = ["home", "team", "chat", "tasks", "dashboard", "profile", "ai"];
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
-  { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Anna", required: true },
-  { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Verdi", required: true },
-  { field: "dataNascita", title: "Data di nascita", question: "Inserisci data di nascita", hint: "Formato: GG/MM/AAAA", required: true },
-  { field: "competenze", title: "Competenze", question: "Inserisci competenze professionali", hint: "Separate da virgola. Es: assistenza clienti, organizzazione, analisi dati", required: true },
-  { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Roma, provincia, disponibilita nazionale", required: true },
-  { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, Part-time, Contratto a tempo determinato", required: true },
+  { field: "nome", section: "Profilo Base", title: "Nome", question: "Come ti chiami?", hint: "Es: Anna", required: true },
+  { field: "cognome", section: "Profilo Base", title: "Cognome", question: "Qual e il tuo cognome?", hint: "Es: Verdi", required: true },
+  { field: "targetRoles", section: "Obiettivo", title: "Ruoli target", question: "Quali ruoli stai cercando?", hint: "Separali con virgola. Es: Backend Developer, Python Developer", required: true },
+  { field: "seniorityTarget", section: "Obiettivo", title: "Seniority", question: "Che livello stai cercando?", hint: "Scrivi Junior, Mid, Senior, Lead, Manager o Head", required: true },
+  { field: "competenze", section: "Obiettivo", title: "Skill principali", question: "Quali skill vuoi far emergere?", hint: "Separale con virgola. Es: Python, FastAPI, SQL, customer support", required: true },
+  { field: "locationPreferences", section: "Preferenze", title: "Luogo di lavoro", question: "Dove sei disposto a lavorare?", hint: "Es: Remote Italia, Hybrid Milano, Roma", required: true },
+  { field: "tipoLavoro", section: "Preferenze", title: "Tipo di lavoro", question: "Che formula contrattuale preferisci?", hint: "Es: Full-time, Part-time, Freelance, Stage", required: true },
+  { field: "languages", section: "Profilo Professionale", title: "Lingue", question: "Quali lingue usi nel lavoro?", hint: "Opzionale. Es: Italiano madrelingua, Inglese C1" },
+  { field: "headline", section: "Profilo Professionale", title: "Headline", question: "Come ti presenteresti in una riga?", hint: "Opzionale. Es: Backend Developer | Python | API Design" },
+  { field: "strengths", section: "Profilo Professionale", title: "Punti di forza", question: "Quali punti di forza vuoi evidenziare?", hint: "Opzionale. Es: problem solving, ownership, comunicazione" },
+  { field: "email", section: "Contatti", title: "Email", question: "Qual e la tua email professionale?", hint: "Opzionale. Premi Enter per saltare" },
+  { field: "linkedin", section: "Contatti", title: "LinkedIn", question: "Hai un profilo LinkedIn da inserire?", hint: "Opzionale. Usa URL completo: https://linkedin.com/in/..." },
+  { field: "portfolio", section: "Contatti", title: "Portfolio", question: "Hai portfolio, sito o GitHub?", hint: "Opzionale. Usa URL completo" },
+  { field: "salaryTarget", section: "Vincoli", title: "Range retributivo", question: "Hai un range retributivo target?", hint: "Opzionale. Es: 35k-45k EUR oppure 1800-2200 netti" },
+  { field: "availability", section: "Vincoli", title: "Disponibilita", question: "Quando saresti disponibile a iniziare?", hint: "Opzionale. Es: subito, 30 giorni, da settembre" },
+  { field: "workAuthorization", section: "Vincoli", title: "Work Authorization", question: "Hai vincoli geografici o di autorizzazione al lavoro?", hint: "Opzionale. Es: Italia/UE, no sponsorship needed" },
 ];
+
+const PROFILE_ARRAY_FIELDS = new Set([
+  "targetRoles",
+  "competenze",
+  "locationPreferences",
+  "languages",
+  "strengths",
+]);
 
 function clearTerminalScreen() {
   process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
@@ -104,10 +122,20 @@ export async function runJhtTui() {
       draft: {
         nome: profile.nome,
         cognome: profile.cognome,
-        dataNascita: profile.dataNascita,
+        headline: profile.headline,
+        targetRoles: [...profile.targetRoles],
+        seniorityTarget: profile.seniorityTarget,
         competenze: [...profile.competenze],
-        zona: profile.zona,
+        locationPreferences: [...profile.locationPreferences],
         tipoLavoro: profile.tipoLavoro,
+        languages: [...profile.languages],
+        strengths: [...profile.strengths],
+        email: profile.email,
+        linkedin: profile.linkedin,
+        portfolio: profile.portfolio,
+        salaryTarget: profile.salaryTarget,
+        availability: profile.availability,
+        workAuthorization: profile.workAuthorization,
       },
       lastMessage: null,
     };
@@ -118,17 +146,16 @@ export async function runJhtTui() {
   const persistProfileDraftValue = (wizard: ProfileWizardState, rawValue: string) => {
     const currentStep = wizard.steps[wizard.stepIndex];
     const raw = rawValue.trim();
-    if (currentStep.field === "competenze") {
-      if (!raw) return;
-      const validation = validateProfileField("competenze", raw);
-      if (validation.ok && Array.isArray(validation.value)) {
-        wizard.draft.competenze = validation.value;
-      }
+    if (!raw) {
       return;
     }
-    if (!raw) return;
-    const validation = validateProfileField(currentStep.field, raw);
-    if (validation.ok && typeof validation.value === "string") {
+    const validation = validateProfileField(currentStep.field as never, raw);
+    if (!validation.ok) return;
+    if (PROFILE_ARRAY_FIELDS.has(currentStep.field) && Array.isArray(validation.value)) {
+      wizard.draft[currentStep.field] = validation.value as never;
+      return;
+    }
+    if (typeof validation.value === "string") {
       wizard.draft[currentStep.field] = validation.value as never;
     }
   };
@@ -153,9 +180,10 @@ export async function runJhtTui() {
     const raw = inputBuffer.trim();
     inputBuffer = "";
 
-    const fallbackValue = currentStep.field === "competenze"
-      ? wizard.draft.competenze.join(", ")
-      : String(wizard.draft[currentStep.field] ?? "");
+    const currentValue = wizard.draft[currentStep.field];
+    const fallbackValue = Array.isArray(currentValue)
+      ? currentValue.join(", ")
+      : String(currentValue ?? "");
     const nextRaw = raw || fallbackValue;
 
     if (currentStep.required && !nextRaw.trim()) {
@@ -165,7 +193,7 @@ export async function runJhtTui() {
       return;
     }
 
-    const validation = validateProfileField(currentStep.field, nextRaw);
+    const validation = validateProfileField(currentStep.field as never, nextRaw);
     if (!validation.ok) {
       wizard.lastMessage = validation.error;
       updateInputLine();
@@ -173,8 +201,8 @@ export async function runJhtTui() {
       return;
     }
 
-    if (currentStep.field === "competenze") {
-      wizard.draft.competenze = validation.value as string[];
+    if (PROFILE_ARRAY_FIELDS.has(currentStep.field)) {
+      wizard.draft[currentStep.field] = validation.value as never;
     } else {
       wizard.draft[currentStep.field] = validation.value as never;
     }
@@ -187,8 +215,11 @@ export async function runJhtTui() {
       return;
     }
 
+    const existingProfile = loadProfile();
     const savedProfile = {
+      ...existingProfile,
       ...wizard.draft,
+      zona: wizard.draft.locationPreferences.join(", "),
       completato: false,
     };
     savedProfile.completato = isProfileComplete(savedProfile);

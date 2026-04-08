@@ -236,9 +236,25 @@ function buildProfile(input: Partial<UserProfile>): UserProfile {
     nome: input.nome?.trim() ?? "",
     cognome: input.cognome?.trim() ?? "",
     dataNascita: input.dataNascita?.trim() ?? "",
+    headline: input.headline?.trim() ?? "",
+    targetRoles: Array.isArray(input.targetRoles) ? input.targetRoles.map((s) => s.trim()).filter(Boolean) : [],
+    seniorityTarget: input.seniorityTarget?.trim() ?? "",
     competenze: Array.isArray(input.competenze) ? input.competenze.map((s) => s.trim()).filter(Boolean) : [],
     zona: input.zona?.trim() ?? "",
+    locationPreferences: Array.isArray(input.locationPreferences)
+      ? input.locationPreferences.map((s) => s.trim()).filter(Boolean)
+      : input.zona?.trim()
+        ? [input.zona.trim()]
+        : [],
     tipoLavoro: input.tipoLavoro?.trim() ?? "",
+    languages: Array.isArray(input.languages) ? input.languages.map((s) => s.trim()).filter(Boolean) : [],
+    strengths: Array.isArray(input.strengths) ? input.strengths.map((s) => s.trim()).filter(Boolean) : [],
+    email: input.email?.trim() ?? "",
+    linkedin: input.linkedin?.trim() ?? "",
+    portfolio: input.portfolio?.trim() ?? "",
+    salaryTarget: input.salaryTarget?.trim() ?? "",
+    availability: input.availability?.trim() ?? "",
+    workAuthorization: input.workAuthorization?.trim() ?? "",
     completato: false,
   };
   profile.completato = isProfileComplete(profile);

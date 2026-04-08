@@ -5,7 +5,7 @@
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
 import type { TmuxSession } from "../tui-tmux.js";
-import { getMissingProfileFields, isProfileComplete, loadProfile, loadWorkspacePath } from "../tui-profile.js";
+import { getMissingProfileFields, getProfileCompletion, isProfileComplete, loadProfile, loadWorkspacePath } from "../tui-profile.js";
 
 type AgentDef = { id: string; label: string; emoji: string; aliases: string[] };
 
@@ -28,19 +28,11 @@ const ACTIONS = [
   { id: "scout", label: "🔍 Scout", cmd: "/start scout" },
 ] as const;
 
-const LEFT_COL_WIDTH = 28;
+const LEFT_COL_WIDTH = 36;
 const MERGE_GAP = "    ";
 
 function calcProfilePercent(): number {
-  const profile = loadProfile();
-  let filled = 0;
-  if (profile.nome.trim()) filled++;
-  if (profile.cognome.trim()) filled++;
-  if (profile.dataNascita.trim()) filled++;
-  if (profile.competenze.length > 0) filled++;
-  if (profile.zona.trim()) filled++;
-  if (profile.tipoLavoro.trim()) filled++;
-  return Math.round((filled / 6) * 100);
+  return getProfileCompletion(loadProfile()).percent;
 }
 
 function stripAnsi(value: string): string {

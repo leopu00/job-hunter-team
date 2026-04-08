@@ -115,10 +115,27 @@ export type TuiStateAccess = JhtTuiState & {
   showThinking: boolean;
 };
 
-export type ProfileFieldKey = "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro";
+export type ProfileFieldKey =
+  | "nome"
+  | "cognome"
+  | "headline"
+  | "targetRoles"
+  | "seniorityTarget"
+  | "competenze"
+  | "locationPreferences"
+  | "tipoLavoro"
+  | "languages"
+  | "strengths"
+  | "email"
+  | "linkedin"
+  | "portfolio"
+  | "salaryTarget"
+  | "availability"
+  | "workAuthorization";
 
 export type ProfileWizardStep = {
   field: ProfileFieldKey;
+  section: string;
   title: string;
   question: string;
   hint: string;
@@ -131,10 +148,20 @@ export type ProfileWizardState = {
   draft: {
     nome: string;
     cognome: string;
-    dataNascita: string;
+    headline: string;
+    targetRoles: string[];
+    seniorityTarget: string;
     competenze: string[];
-    zona: string;
+    locationPreferences: string[];
     tipoLavoro: string;
+    languages: string[];
+    strengths: string[];
+    email: string;
+    linkedin: string;
+    portfolio: string;
+    salaryTarget: string;
+    availability: string;
+    workAuthorization: string;
   };
   lastMessage?: string | null;
 };
