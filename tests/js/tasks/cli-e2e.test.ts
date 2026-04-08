@@ -6,6 +6,9 @@ import path from "node:path";
 import os from "node:os";
 
 const CLI = path.resolve(__dirname, "../../../cli/bin/jht.js");
+const CLI_VERSION = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "../../../cli/package.json"), "utf-8")
+).version as string;
 const cmd = (args: string, env?: Record<string, string>) =>
   execSync(`node "${CLI}" ${args}`, {
     encoding: "utf-8", timeout: 10000,
@@ -33,9 +36,9 @@ beforeAll(() => {
 afterAll(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
 
 describe("CLI — versione e help", () => {
-  it("--version mostra 0.1.0", () => {
+  it("--version mostra la versione del package CLI", () => {
     const out = cmd("--version");
-    expect(out.trim()).toBe("0.1.0");
+    expect(out.trim()).toBe(CLI_VERSION);
   });
 
   it("--help mostra comandi principali", () => {

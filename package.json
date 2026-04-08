@@ -10,7 +10,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "npm run lint --prefix web",
-    "format:check": "npx prettier --check 'web/app/**/*.{ts,tsx}' 'shared/**/*.ts'",
+    "format:check": "npx prettier --check \"web/app/**/*.{ts,tsx}\" \"shared/**/*.ts\"",
     "desktop:dev": "npm --prefix desktop run dev",
     "desktop:test": "npm --prefix desktop run test",
     "desktop:dist": "npm --prefix desktop run dist",
@@ -23,7 +23,7 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "next": "16.1.6",
+    "next": "^16.2.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.3.6"
