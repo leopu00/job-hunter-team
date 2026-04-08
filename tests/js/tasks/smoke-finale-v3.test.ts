@@ -60,7 +60,10 @@ describe("Pagine", () => {
     expect(fail.map((f) => rel(WEB, f))).toEqual([]);
   });
   it("nessuna pagina vuota (< 10 righe)", () => {
-    const empty = pages.filter(p => read(p).split("\n").length < 10);
+    const empty = pages.filter((p) => {
+      const src = read(p);
+      return src.split("\n").length < 10 && !src.includes("redirect(");
+    });
     expect(empty.map((f) => rel(WEB, f))).toEqual([]);
   });
   it("pagine chiave presenti", () => {

@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      '@': path.join(__dirname, '../../web'),
       grammy: path.join(__dirname, 'telegram-stubs/grammy.ts'),
       '@grammyjs/auto-retry': path.join(__dirname, 'telegram-stubs/grammy-auto-retry.ts'),
       '@grammyjs/runner': path.join(__dirname, 'telegram-stubs/grammy-runner.ts'),
