@@ -18,10 +18,10 @@ function formatTokens(total: number | null | undefined, context: number | null |
 }
 
 const QUICK_COMMANDS = [
-  ["Tab", "agente"],
+  ["Tab", "viste"],
+  ["/chat", "agente"],
+  ["/start", "agente"],
   ["Ctrl+C", "esci"],
-  ["Ctrl+O", "tool"],
-  ["Ctrl+L", "modello"],
 ];
 
 export class StatusBar {
@@ -39,10 +39,9 @@ export class StatusBar {
     connectionStatus: string;
     activityStatus: string;
     selectedAgent: JhtAgent | null;
-    totalAgents: number;
     workingAgents: number;
   }): void {
-    const { connectionStatus, activityStatus, selectedAgent, totalAgents, workingAgents } = params;
+    const { connectionStatus, activityStatus, selectedAgent, workingAgents } = params;
 
     const parts: string[] = [];
 

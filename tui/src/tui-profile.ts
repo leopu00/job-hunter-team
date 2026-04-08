@@ -64,6 +64,15 @@ export function isProfileComplete(profile: UserProfile): boolean {
   return !!(profile.nome && profile.competenze.length > 0 && profile.zona);
 }
 
+export function getMissingProfileFields(profile: UserProfile): string[] {
+  const missing: string[] = [];
+  if (!profile.nome) missing.push("nome");
+  if (profile.competenze.length === 0) missing.push("competenze");
+  if (!profile.zona) missing.push("zona");
+  if (!profile.tipoLavoro) missing.push("tipo lavoro");
+  return missing;
+}
+
 export function formatProfile(profile: UserProfile): string[] {
   const lines: string[] = [];
   lines.push(`  Nome: ${profile.nome || "(non impostato)"}`);
