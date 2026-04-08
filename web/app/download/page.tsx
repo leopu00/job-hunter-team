@@ -82,13 +82,17 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 
 function DownloadContent() {
   const { t, ta } = useLandingI18n()
-  const [detectedOS] = useState<OS>(() => detectOS())
+  const [detectedOS, setDetectedOS] = useState<OS>(null)
   const [expanded, setExpanded] = useState<OS>(null)
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
     platforms: FALLBACK_PLATFORMS,
     releasesUrl: FALLBACK_RELEASES_URL,
   })
+
+  useEffect(() => {
+    setDetectedOS(detectOS())
+  }, [])
 
   useEffect(() => {
     fetch('/api/download')
