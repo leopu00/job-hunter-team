@@ -72,7 +72,6 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
       connectionStatus: state.connectionStatus,
       activityStatus: state.activityStatus,
       selectedAgent,
-      totalAgents: state.agents.length,
       workingAgents: state.activeTmuxCount,
     });
   };
