@@ -1,7 +1,7 @@
 /** Test unitari — shared/daemon (vitest): install/uninstall scripts, plist, systemd, platform. */
 import { describe, it, expect } from "vitest";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const DAEMON_DIR = path.resolve(__dirname, "../../../shared/daemon");
@@ -9,6 +9,19 @@ const INSTALL = path.join(DAEMON_DIR, "install.sh");
 const UNINSTALL = path.join(DAEMON_DIR, "uninstall.sh");
 const installSrc = readFileSync(INSTALL, "utf-8");
 const uninstallSrc = readFileSync(UNINSTALL, "utf-8");
+const BASH = (() => {
+  const envOverride = process.env.JHT_BASH_PATH || process.env.GIT_BASH_PATH;
+  if (envOverride) return `"${envOverride}"`;
+  if (process.platform !== "win32") return "bash";
+  const candidates = [
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+    "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe",
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  return found ? `"${found}"` : "bash";
+})();
 
 function run(cmd: string): { code: number; out: string } {
   try {
@@ -23,26 +36,26 @@ function run(cmd: string): { code: number; out: string } {
 
 describe("install.sh — argument parsing", () => {
   it("--help esce con codice 0 e mostra usage", () => {
-    const r = run(`bash "${INSTALL}" --help`);
+    const r = run(`${BASH} "${INSTALL}" --help`);
     expect(r.code).toBe(0);
     expect(r.out).toContain("--name");
     expect(r.out).toContain("--cmd");
   });
 
   it("senza --name esce con errore", () => {
-    const r = run(`bash "${INSTALL}" --cmd "echo test"`);
+    const r = run(`${BASH} "${INSTALL}" --cmd "echo test"`);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("--name obbligatorio");
   });
 
   it("senza --cmd esce con errore", () => {
-    const r = run(`bash "${INSTALL}" --name test-svc`);
+    const r = run(`${BASH} "${INSTALL}" --name test-svc`);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("--cmd obbligatorio");
   });
 
   it("opzione sconosciuta esce con errore", () => {
-    const r = run(`bash "${INSTALL}" --unknown-flag`);
+    const r = run(`${BASH} "${INSTALL}" --unknown-flag`);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("Opzione sconosciuta");
   });
@@ -111,20 +124,20 @@ describe("install.sh — platform detection", () => {
 
 describe("uninstall.sh — argument parsing", () => {
   it("--help esce con codice 0 e mostra usage", () => {
-    const r = run(`bash "${UNINSTALL}" --help`);
+    const r = run(`${BASH} "${UNINSTALL}" --help`);
     expect(r.code).toBe(0);
     expect(r.out).toContain("--name");
     expect(r.out).toContain("--purge-logs");
   });
 
   it("senza --name esce con errore", () => {
-    const r = run(`bash "${UNINSTALL}"`);
+    const r = run(`${BASH} "${UNINSTALL}"`);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("--name obbligatorio");
   });
 
   it("opzione sconosciuta esce con errore", () => {
-    const r = run(`bash "${UNINSTALL}" --bad`);
+    const r = run(`${BASH} "${UNINSTALL}" --bad`);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("Opzione sconosciuta");
   });

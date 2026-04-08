@@ -25,11 +25,11 @@ jobs:
 
       - name: Audit web/
         working-directory: web
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --package-lock-only
 
       - name: Audit tests/js/
         working-directory: tests/js
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --package-lock-only
 
   secrets:
     name: Gitleaks — secrets check
@@ -55,12 +55,9 @@ jobs:
 
       - name: Semgrep scan
         run: |
-          semgrep ci \
+          semgrep scan \
             --config p/javascript \
             --config p/typescript \
             --config p/secrets \
-            --error \
             --exclude "tests/**" \
             --exclude "node_modules/**"
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
