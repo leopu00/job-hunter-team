@@ -1,4 +1,4 @@
-export type TuiView = "team" | "chat" | "tasks" | "ai" | "dashboard" | "profile";
+export type TuiView = "home" | "team" | "chat" | "tasks" | "ai" | "dashboard" | "profile";
 
 export type AgentRole =
   | "alfa"
@@ -56,7 +56,7 @@ export type JhtTuiState = {
   currentView: TuiView;
   /** Nome sessione tmux con cui si sta chattando (/chat) */
   chatTargetSession: string | null;
-  /** Selezione corrente delle azioni nella vista Team */
+  /** Selezione corrente delle azioni nella vista Home */
   teamSelectedActionIndex: number;
   profileWizard: ProfileWizardState | null;
 };
