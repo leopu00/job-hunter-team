@@ -32,7 +32,6 @@ function StatusBadge({ status }: { status: AgentStatus }) {
   }[status]
   return (
     <span className="badge" style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}>
-      {status === 'active' && <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--color-green)', marginRight: 5, verticalAlign: 'middle', animation: 'pulse-dot 2s ease-in-out infinite' }} />}
       {cfg.label}
     </span>
   )

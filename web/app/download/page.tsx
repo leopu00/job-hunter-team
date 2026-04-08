@@ -113,8 +113,7 @@ function DownloadContent() {
 
           {/* Header */}
           <div className="mb-12 text-center">
-            <Link href="/" className="inline-flex items-center gap-2 mb-6 no-underline hover:no-underline">
-              <div className="w-2.5 h-2.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <Link href="/" className="inline-flex items-center mb-6 no-underline hover:no-underline">
               <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">download</span>
             </Link>
             <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">

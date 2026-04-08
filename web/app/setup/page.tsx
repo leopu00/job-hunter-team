@@ -66,8 +66,7 @@ export default function SetupPage() {
     <main className="min-h-screen flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.4s ease both' }}>
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-green)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+          <div className="inline-flex items-center mb-4">
             <span className="text-[9px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-green)' }}>setup</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight leading-none mb-2" style={{ color: 'var(--color-white)' }}>

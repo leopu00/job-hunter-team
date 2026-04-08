@@ -115,7 +115,6 @@ export default function ChangelogPage() {
             <div key={day.date} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
               {/* Data header */}
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-2 h-2 rounded-full bg-[var(--color-green)] flex-shrink-0" aria-hidden="true" />
                 <time dateTime={day.date} className="text-[12px] font-semibold text-[var(--color-bright)] capitalize">
                   {formatDate(day.date)}
                 </time>

@@ -182,8 +182,7 @@ function PricingContent() {
 
       <div className="max-w-5xl mx-auto px-5 pt-32 pb-20">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)]">
-            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" aria-hidden="true" />
+          <div className="inline-flex items-center mb-4 px-3 py-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)]">
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t('badge')}</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-white)]">{t('title')}</h1>

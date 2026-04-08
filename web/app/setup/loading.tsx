@@ -4,8 +4,7 @@ export default function SetupLoading() {
       <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.2s ease both' }}>
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-green)] animate-pulse" aria-hidden="true" />
+          <div className="inline-flex items-center mb-4">
             <div className="h-2 w-10 rounded bg-[var(--color-border)] animate-pulse" />
           </div>
           <div className="h-7 w-36 rounded bg-[var(--color-border)] mx-auto mb-1 animate-pulse" />
