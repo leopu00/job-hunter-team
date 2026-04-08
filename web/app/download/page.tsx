@@ -9,7 +9,6 @@ import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
 type PlatformId = 'mac' | 'linux' | 'windows'
-type OS = PlatformId | null
 type TerminalMode = 'source' | 'cli'
 type InstallMode = 'desktop' | 'terminal'
 
@@ -37,13 +36,10 @@ const ICONS: Record<PlatformId, () => React.ReactNode> = {
   windows: WindowsIcon,
 }
 
-function detectOS(): OS {
-  if (typeof navigator === 'undefined') return null
-  const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes('mac')) return 'mac'
-  if (ua.includes('win')) return 'windows'
-  if (ua.includes('linux')) return 'linux'
-  return null
+const PLATFORM_ORDER: Record<PlatformId, number> = {
+  windows: 0,
+  mac: 1,
+  linux: 2,
 }
 
 const FALLBACK_VERSION = '0.1.0'
@@ -90,7 +86,6 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 
 function DownloadContent() {
   const { t } = useLandingI18n()
-  const [detectedOS, setDetectedOS] = useState<OS>(null)
   const [installMode, setInstallMode] = useState<InstallMode>('desktop')
   const [terminalMode, setTerminalMode] = useState<TerminalMode>('source')
   const [release, setRelease] = useState<ReleaseData>({
@@ -100,10 +95,6 @@ function DownloadContent() {
   })
 
   useEffect(() => {
-    setDetectedOS(detectOS())
-  }, [])
-
-  useEffect(() => {
     fetch('/api/download')
       .then(r => r.json())
       .then((data: ReleaseData) => setRelease(data))
@@ -111,12 +102,8 @@ function DownloadContent() {
   }, [])
 
   const { version, platforms, releasesUrl } = release
+  const orderedPlatforms = [...platforms].sort((a, b) => PLATFORM_ORDER[a.id] - PLATFORM_ORDER[b.id])
 
-  const sorted = [...platforms].sort((a, b) => {
-    if (a.id === detectedOS) return -1
-    if (b.id === detectedOS) return 1
-    return 0
-  })
   const terminalCommand = terminalMode === 'source' ? SOURCE_SETUP_CMD : CLI_SETUP_CMD
 
   return (
@@ -171,21 +158,19 @@ function DownloadContent() {
           {installMode === 'desktop' ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-                {sorted.map((platform, i) => {
-                  const isDetected = platform.id === detectedOS
+                {orderedPlatforms.map((platform, i) => {
                   const Icon = ICONS[platform.id] || (() => null)
                   const ctaHref = platform.available ? platform.downloadUrl : releasesUrl
 
                   return (
                     <div key={platform.id} className="border overflow-hidden transition-all duration-200 h-full"
                       style={{
-                        borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
+                        borderColor: 'var(--color-border)',
                         background: 'var(--color-panel)',
-                        boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
                         animation: `fade-in 0.4s ease ${i * 0.12}s both`,
                       }}
-                      onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
-                      onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                       <div className="px-4 sm:px-5 py-4 h-full flex flex-col">
                         <div className="flex items-center gap-3 sm:gap-4">
                           <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"
@@ -195,12 +180,6 @@ function DownloadContent() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
-                              {isDetected && (
-                                <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5"
-                                  style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
-                                  {t('dl_detected')}
-                                </span>
-                              )}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-[var(--color-dim)] break-all">
                               {platform.file}
@@ -212,9 +191,9 @@ function DownloadContent() {
                           <a href={ctaHref}
                             className="block w-full text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                             style={{
-                              background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
-                              color: platform.available && isDetected ? '#000' : 'var(--color-green)',
-                              border: platform.available && isDetected ? 'none' : '1px solid var(--color-green)',
+                              background: 'var(--color-card)',
+                              color: 'var(--color-green)',
+                              border: '1px solid var(--color-green)',
                               cursor: 'pointer',
                             }}>
                             {platform.available ? t('dl_download') : t('dl_view_release')}
