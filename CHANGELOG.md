@@ -5,6 +5,27 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.5] — pending release
+
+### Web app
+- AI Assistant completo con endpoint server, pagina dedicata e floating chat condivisa
+- Nuova pagina pubblica `/project` e riallineamento della landing hero con CTA, auth e footer coerenti
+- Banner cookie coerente su pagine marketing e login, piu fix su download e route marketing
+
+### TUI
+- Home panel e opening banner rivisti
+- Wizard profilo migliorato con bozza persistente, validazioni e inizializzazione workspace piu robusta
+
+### CI, test e tooling
+- Fix cross-platform per Git Bash su Windows e shutdown dei processi shell
+- Workflow CI/test riallineati alle dipendenze reali del progetto
+- Suite Vitest finale aggiornata al nuovo assistant, a `/project` e ai redirect intenzionali
+
+### Release prep
+- Versioni allineate a `0.1.5` in tutti i package tracciati del monorepo
+- Metadati visibili nell'interfaccia allineati alla prossima release
+- Workflow release predisposto per leggere le note curate dal changelog
+
 ## [0.1.4] — 2026-04-08
 
 ### Accesso web e setup
@@ -43,7 +64,7 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 - Workflow GitHub Release pronto a pubblicare installer reali `.dmg`, `.exe`, `.AppImage` e `.deb`
 - Pagina download e API leggono gli asset effettivi della latest release invece di assumere archivi legacy
 
-## [1.0.0] — 2026-04-04
+## [0.1.0] — 2026-04-04
 
 ### Pipeline multi-agente
 - Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Alfa (Capitano)

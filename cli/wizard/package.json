@@ -1,6 +1,6 @@
 {
   "name": "jht-setup-wizard",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "description": "Setup wizard interattivo per Job Hunter Team",
   "type": "module",
   "main": "index.js",

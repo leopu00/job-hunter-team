@@ -110,7 +110,7 @@ export default function OGImage() {
             MIT License
           </span>
           <span style={{ fontSize: '14px', color: '#555' }}>
-            v1.0.0-beta
+            v0.1.5
           </span>
         </div>
       </div>
