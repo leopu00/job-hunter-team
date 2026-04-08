@@ -39,6 +39,7 @@ const translations = {
   },
   hero_cta:          { it: 'Scarica app desktop',      en: 'Download desktop app' },
   hero_cta2:         { it: 'Scopri come funziona',     en: 'See how it works' },
+  hero_project_cta:  { it: 'Progetto',                 en: 'Project' },
 
   // Features
   feat_label:        { it: 'capabilities',     en: 'capabilities' },
@@ -170,7 +171,7 @@ const translations = {
   footer_jht:        { it: 'Job Hunter Team',  en: 'Job Hunter Team' },
   footer_brand_desc: { it: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.', en: 'An AI agent team that job-hunts for you. Open source, local, private.' },
   footer_product:    { it: 'Prodotto',          en: 'Product' },
-  footer_stats:      { it: 'Statistiche',       en: 'Statistics' },
+  footer_stats:      { it: 'Progetto',          en: 'Project' },
   footer_report:     { it: 'Report',             en: 'Reports' },
   footer_resources:  { it: 'Risorse',            en: 'Resources' },
   footer_guide:      { it: 'Guida',              en: 'Guide' },
