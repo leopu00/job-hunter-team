@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import * as readline from "node:readline";
 import chalk from "chalk";
-import { saveProfile, isProfileComplete, formatProfile, type UserProfile } from "./tui-profile.js";
+import { saveProfile, isProfileComplete, formatProfile, validateProfileField, type UserProfile } from "./tui-profile.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
@@ -81,6 +81,20 @@ async function askWithDefault(
   return answer || fallback;
 }
 
+async function askValidatedField(
+  rl: readline.Interface,
+  field: "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro",
+  label: string,
+  fallback: string,
+): Promise<string | string[]> {
+  while (true) {
+    const raw = await askWithDefault(rl, label, fallback);
+    const validation = validateProfileField(field, raw);
+    if (validation.ok) return validation.value;
+    console.log(chalk.yellow(`  ${validation.error}`));
+  }
+}
+
 function loadExistingConfig(): Record<string, unknown> {
   try {
     return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
@@ -121,22 +135,23 @@ async function collectManualProfile(
   console.log(chalk.dim("  Compila i campi principali del profilo."));
   console.log("");
 
-  const nome = await askWithDefault(rl, "Nome", initial?.nome ?? "");
-  const cognome = await askWithDefault(rl, "Cognome", initial?.cognome ?? "");
-  const dataNascita = await askWithDefault(rl, "Data di nascita", initial?.dataNascita ?? "");
-  const competenzeRaw = await askWithDefault(
+  const nome = await askValidatedField(rl, "nome", "Nome", initial?.nome ?? "") as string;
+  const cognome = await askValidatedField(rl, "cognome", "Cognome", initial?.cognome ?? "") as string;
+  const dataNascita = await askValidatedField(rl, "dataNascita", "Data di nascita", initial?.dataNascita ?? "") as string;
+  const competenze = await askValidatedField(
     rl,
+    "competenze",
     "Competenze (separate da virgola)",
-    Array.isArray(initial?.competenze) ? initial!.competenze!.join(", ") : "",
+    Array.isArray(initial?.competenze) ? initial.competenze.join(", ") : "",
   );
-  const zona = await askWithDefault(rl, "Zona", initial?.zona ?? "");
-  const tipoLavoro = await askWithDefault(rl, "Tipo lavoro", initial?.tipoLavoro ?? "");
+  const zona = await askValidatedField(rl, "zona", "Zona", initial?.zona ?? "") as string;
+  const tipoLavoro = await askValidatedField(rl, "tipoLavoro", "Tipo lavoro", initial?.tipoLavoro ?? "") as string;
 
   return buildProfile({
     nome,
     cognome,
     dataNascita,
-    competenze: competenzeRaw.split(",").map((s) => s.trim()).filter(Boolean),
+    competenze: competenze as string[],
     zona,
     tipoLavoro,
   });
