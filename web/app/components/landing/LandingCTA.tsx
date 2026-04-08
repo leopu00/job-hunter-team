@@ -74,14 +74,13 @@ export function LandingFooter() {
             <Link href="/pricing" className={linkClass}>Pricing</Link>
             <Link href="/demo" className={linkClass}>Demo</Link>
             <Link href="/changelog" className={linkClass}>Changelog</Link>
-            <Link href="/stats" className={linkClass}>{t('footer_stats')}</Link>
+            <Link href="/project" className={linkClass}>{t('footer_stats')}</Link>
             <Link href="/reports" className={linkClass}>{t('footer_report')}</Link>
           </div>
 
           {/* Risorse */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_resources')}</h4>
-            <Link href="/guide" className={linkClass}>{t('footer_guide')}</Link>
             <Link href="/faq" className={linkClass}>FAQ</Link>
             <Link href="/docs" className={linkClass}>{t('footer_docs')}</Link>
             <Link href="/about" className={linkClass}>{t('footer_about')}</Link>
@@ -104,7 +103,7 @@ export function LandingFooter() {
           <span className="text-[9px] text-[var(--color-dim)]">
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash; {t('footer_copyright')}
           </span>
-          <span className="text-[9px] text-[var(--color-dim)]">v1.0.0-beta</span>
+          <span className="text-[9px] text-[var(--color-dim)]">v0.1.5</span>
         </div>
       </div>
     </footer>

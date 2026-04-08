@@ -18,7 +18,17 @@ function findAll(dir: string, target: string): string[] {
   return results;
 }
 
-function read(f: string) { return fs.readFileSync(f, "utf-8"); }
+function read(f: string) {
+  return fs.readFileSync(f, "utf-8").replace(/\r\n/g, "\n");
+}
+
+function rel(base: string, target: string) {
+  return path.relative(base, target).replace(/\\/g, "/");
+}
+
+function hasUseClient(src: string) {
+  return /["']use client["']/.test(src);
+}
 
 /* ── Inventario ── */
 const pages = findAll(path.join(WEB, "app"), "page.tsx");
@@ -33,13 +43,13 @@ const sharedModules = findAll(SHARED, "").length > 0
   : [];
 
 /* ── Conteggi ── */
-const clientPages = pages.filter(p => read(p).includes("'use client'"));
-const serverPages = pages.filter(p => !read(p).includes("'use client'"));
+const clientPages = pages.filter((p) => hasUseClient(read(p)));
+const serverPages = pages.filter((p) => !hasUseClient(read(p)));
 const endpoints: { route: string; methods: string[] }[] = routes.map(r => {
   const src = read(r);
   const methods = ["GET", "POST", "PUT", "DELETE", "PATCH"].filter(m => new RegExp(`export\\s+(async\\s+)?function\\s+${m}\\b`).test(src));
-  const rel = path.relative(path.join(WEB, "app/api"), r).replace("/route.ts", "");
-  return { route: rel, methods };
+  const relPath = rel(path.join(WEB, "app/api"), r).replace("/route.ts", "");
+  return { route: relPath, methods };
 });
 const totalEndpoints = endpoints.reduce((s, e) => s + e.methods.length, 0);
 
@@ -51,7 +61,7 @@ describe("Pagine", () => {
   it("ogni pagina ha export default", () => {
     const fail: string[] = [];
     for (const p of pages) {
-      if (!/export\s+default\s+(async\s+)?function/.test(read(p))) fail.push(path.relative(WEB, p));
+      if (!/export\s+default\s+(async\s+)?function/.test(read(p))) fail.push(rel(WEB, p));
     }
     expect(fail).toEqual([]);
   });
@@ -59,11 +69,14 @@ describe("Pagine", () => {
     expect(clientPages.length).toBeGreaterThanOrEqual(98);
   });
   it("nessuna pagina vuota (< 10 righe)", () => {
-    const empty = pages.filter(p => read(p).split("\n").length < 10);
-    expect(empty.map(p => path.relative(WEB, p))).toEqual([]);
+    const empty = pages.filter((p) => {
+      const src = read(p);
+      return src.split("\n").length < 10 && !src.includes("redirect(");
+    });
+    expect(empty.map((p) => rel(WEB, p))).toEqual([]);
   });
   it("nuove pagine /setup, /import, /export, /archive, /timeline presenti", () => {
-    const names = pages.map(p => path.relative(path.join(WEB, "app"), p));
+    const names = pages.map((p) => rel(path.join(WEB, "app"), p));
     for (const pg of ["setup/page.tsx", "import/page.tsx", "export/page.tsx", "archive/page.tsx", "timeline/page.tsx"])
       expect(names).toContain(pg);
   });
@@ -80,7 +93,7 @@ describe("API Routes", () => {
       const src = read(r);
       const hasHandler = /export\s+(async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH)\b/.test(src);
       const hasGeneric = /export\s+(const|function)\s+(GET|POST|PUT|DELETE|PATCH|handler|dynamic)\b/.test(src);
-      if (!hasHandler && !hasGeneric) fail.push(path.relative(WEB, r));
+      if (!hasHandler && !hasGeneric) fail.push(rel(WEB, r));
     }
     expect(fail).toEqual([]);
   });

@@ -96,7 +96,7 @@ export default function CronPage() {
           ) : jobs.length === 0 ? (
             <div className="px-6 py-8 text-center">
               <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>Nessun job configurato.</p>
-              <p className="text-[10px] mt-1" style={{ color: 'var(--color-dim)' }}>Usa "+ Nuovo job" per crearne uno.</p>
+              <p className="text-[10px] mt-1" style={{ color: 'var(--color-dim)' }}>Usa &quot;+ Nuovo job&quot; per crearne uno.</p>
             </div>
           ) : (
             jobs.map(job => (
