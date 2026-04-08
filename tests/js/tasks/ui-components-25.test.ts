@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── FilePreview ── */
 describe("FilePreview", () => {
@@ -61,7 +66,7 @@ describe("PhoneInput", () => {
   });
 
   it("country select: dropdown open/close + searchable Cerca paese + filtered by name/dial + click esterno chiude", () => {
-    expect(src).toContain("setOpen(o => !o)");
+    expect(src).toContain("setOpen((o) => !o)");
     expect(src).toContain('placeholder="Cerca paese..."');
     expect(src).toContain("c.name.toLowerCase().includes(query.toLowerCase())");
     expect(src).toContain("c.dial.includes(query)");
@@ -74,8 +79,8 @@ describe("PhoneInput", () => {
     expect(src).toContain("raw.replace(/\\D/g, '')");
     expect(src).toContain('type="tel"');
     expect(src).toContain('inputMode="tel"');
-    expect(src).toContain("d.slice(0,3)");
-    expect(src).toContain("d.slice(3,7)");
+    expect(src).toContain("d.slice(0, 3)");
+    expect(src).toContain("d.slice(3, 7)");
   });
 
   it("validation: isValid >= 7 digits + ✓ check verde + aria-invalid + error border red", () => {

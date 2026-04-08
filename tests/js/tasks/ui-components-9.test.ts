@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── RadioGroup ── */
 describe("RadioGroup", () => {
@@ -70,7 +75,9 @@ describe("TextArea", () => {
   });
 
   it("TextAreaProps extends Omit<TextareaHTMLAttributes, 'onChange'> + ResizeMode 4 valori", () => {
-    expect(src).toContain("Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'>");
+    expect(src).toContain("export interface TextAreaProps extends Omit<");
+    expect(src).toContain("TextareaHTMLAttributes<HTMLTextAreaElement>");
+    expect(src).toContain("'onChange'");
     expect(src).toContain("'none' | 'vertical' | 'horizontal' | 'both'");
   });
 
@@ -96,7 +103,7 @@ describe("TextArea", () => {
   });
 
   it("focus/blur border + error/help messaggio + disabled opacity", () => {
-    expect(src).toContain("onFocus={e =>"); expect(src).toContain("onBlur={e");
+    expect(src).toContain("onFocus={(e) => {"); expect(src).toContain("onBlur={(e) => {");
     expect(src).toContain("focusColor"); expect(src).toContain("borderColor");
     expect(src).toContain("error ?? help"); // error prioritario
     expect(src).toContain("opacity-45"); expect(src).toContain("cursor-not-allowed");

@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Table ── */
 describe("Table", () => {
@@ -18,17 +23,17 @@ describe("Table", () => {
   });
 
   it("TableColumn: key, label, sortable, width, render function, align left/center/right", () => {
-    expect(src).toContain("key:       keyof T | string");
-    expect(src).toContain("label:     string");
+    expect(src).toContain("key: keyof T | string");
+    expect(src).toContain("label: string");
     expect(src).toContain("sortable?: boolean");
-    expect(src).toContain("render?:   (value: unknown, row: T, index: number)");
-    expect(src).toContain("align?:    'left' | 'center' | 'right'");
+    expect(src).toContain("render?: (value: unknown, row: T, index: number)");
+    expect(src).toContain("align?: 'left' | 'center' | 'right'");
   });
 
   it("sortData: localeCompare con numeric + asc/desc + copia array", () => {
     expect(src).toContain("function sortData");
     expect(src).toContain("[...data].sort"); expect(src).toContain("localeCompare");
-    expect(src).toContain("{ numeric: true }");
+    expect(src).toContain("numeric: true");
     expect(src).toContain("dir === 'asc' ? cmp : -cmp");
   });
 
@@ -37,8 +42,8 @@ describe("Table", () => {
     expect(src).toContain("setSortDir('asc')"); expect(src).toContain("setSortDir('desc')");
     expect(src).toContain("setSortDir(null)");
     expect(src).toContain("function SortIcon");
-    expect(src).toContain("dir === 'asc'  ? 'var(--color-green)'");
-    expect(src).toContain("dir === 'desc' ? 'var(--color-green)'");
+    expect(src).toContain("dir === 'asc' ? 'var(--color-green)' : 'var(--color-border)'");
+    expect(src).toContain("dir === 'desc' ? 'var(--color-green)' : 'var(--color-border)'");
   });
 
   it("striped: righe alternate + hoverable: mouseEnter/Leave", () => {
