@@ -157,6 +157,13 @@ export class TeamPanel extends Container {
     const scoutActive = sessions.some((s) => s.agentId === "scout");
     const actions: TeamAction[] = [];
 
+    actions.push({
+      id: "workspace",
+      label: "Cambia cartella di lavoro",
+      hint: "seleziona workspace per i task",
+      command: "/workspace",
+    });
+
     if (!profileReady) {
       actions.push({
         id: "profile",
