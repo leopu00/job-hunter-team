@@ -6,6 +6,7 @@
 import { Container, Text, TUI } from "@mariozechner/pi-tui";
 import { StatusBar } from "./components/status-bar.js";
 import { theme } from "./tui-theme.js";
+import { loadWorkspacePath } from "./tui-profile.js";
 import type { JhtTuiState, TuiView } from "./tui-types.js";
 
 const VIEW_LABELS: Record<TuiView, string> = {
@@ -51,11 +52,14 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
   const updateHeader = (state: JhtTuiState) => {
     const activeCount = state.activeTmuxCount;
     const connLabel = state.isConnected ? theme.success("API") : theme.dim("no API");
+    const workspacePath = loadWorkspacePath();
+    const workspaceLabel = workspacePath ? theme.dim(`\u2502 ${workspacePath} `) : "";
     header.setText(
       theme.header(` JHT Control Panel`) +
       theme.dim(` \u2502 `) +
       connLabel +
-      theme.dim(` \u2502 ${activeCount} agenti attivi`),
+      theme.dim(` \u2502 ${activeCount} agenti attivi `) +
+      workspaceLabel,
     );
 
     // Tab bar: evidenzia la vista corrente
