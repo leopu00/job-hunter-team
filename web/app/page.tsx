@@ -128,7 +128,7 @@ function BackButton() {
       onClick={handleBack}
       className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
     >
-      ← Torna indietro
+      Indietro
     </button>
   )
 }
