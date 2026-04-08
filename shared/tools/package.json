@@ -1,6 +1,6 @@
 {
   "name": "jht-tools",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "private": true,
   "scripts": {
     "test": "npx tsx --test ./*.test.ts"
