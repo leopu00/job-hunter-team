@@ -5,6 +5,13 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.3] — 2026-04-08
+
+### Desktop Windows
+- Alleggerito il payload web incluso nell'installer desktop, copiando solo asset e dipendenze di produzione
+- Rimossi cache e sourcemap dal payload pacchettizzato per ridurre dimensione e tempi di installazione su Windows
+- Confermato localmente il build `nsis` con installer Windows sensibilmente più piccolo
+
 ## [0.1.2] — 2026-04-08
 
 ### Release desktop
