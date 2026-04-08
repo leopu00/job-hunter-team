@@ -7,7 +7,7 @@ import { useLandingI18n, type Lang } from './LandingI18n'
 
 function FlagIT() {
   return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
       <rect width="7" height="14" fill="#009246" />
       <rect x="7" width="6" height="14" fill="#fff" />
       <rect x="13" width="7" height="14" fill="#CE2B37" />
@@ -17,7 +17,7 @@ function FlagIT() {
 
 function FlagEN() {
   return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: 2 }}>
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
       <rect width="20" height="14" fill="#012169" />
       <path d="M0,0 L20,14 M20,0 L0,14" stroke="#fff" strokeWidth="2.5" />
       <path d="M0,0 L20,14 M20,0 L0,14" stroke="#C8102E" strokeWidth="1.5" />
@@ -51,10 +51,8 @@ function LangDropdown() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-all"
+        className="flex items-center gap-1.5 px-0 py-0 transition-all"
         style={{
-          background: 'var(--color-panel)',
-          border: '1px solid var(--color-border)',
           cursor: 'pointer',
         }}
         aria-label={`Lingua: ${current.label}`}
@@ -67,7 +65,7 @@ function LangDropdown() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1.5 rounded-lg overflow-hidden"
+          className="absolute right-0 top-full mt-1.5 overflow-hidden"
           style={{
             background: 'var(--color-panel)',
             border: '1px solid var(--color-border)',
@@ -128,7 +126,7 @@ export default function LandingNav() {
       <div className="flex items-center justify-between px-5 sm:px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5 no-underline">
           <div
-            className="w-2 h-2 rounded-full"
+            className="w-2 h-2"
             style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
           />
           <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
@@ -176,9 +174,8 @@ export default function LandingNav() {
 
           <Link
             href="/?login=true"
-            className="hidden sm:inline-flex px-4 py-2 rounded text-[11px] font-semibold tracking-wider no-underline transition-all"
+            className="hidden sm:inline-flex px-0 py-0 text-[11px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
             style={{
-              border: '1px solid var(--color-green)',
               color: 'var(--color-green)',
             }}
           >
@@ -188,15 +185,15 @@ export default function LandingNav() {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(v => !v)}
-            className="md:hidden flex flex-col gap-1 p-1.5 rounded"
+            className="md:hidden flex flex-col gap-1 p-1.5"
             style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
             aria-label="Menu"
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-menu"
           >
-            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
-            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
-            <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
           </button>
         </div>
       </div>
@@ -240,8 +237,8 @@ export default function LandingNav() {
           <Link
             href="/?login=true"
             onClick={() => setMobileOpen(false)}
-            className="text-center py-2.5 rounded text-[12px] font-semibold tracking-wider no-underline transition-all"
-            style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}
+            className="text-center py-2.5 text-[12px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
+            style={{ color: 'var(--color-green)' }}
           >
             {t('nav_login')}
           </Link>
