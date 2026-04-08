@@ -74,17 +74,11 @@ function LoginPage({ authError }: { authError: boolean }) {
       <div className="w-full max-w-sm" style={{ animation: 'fade-in 0.5s ease both' }}>
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-1.5 h-1.5 bg-[var(--color-green)]" aria-hidden="true" />
-            <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-[var(--color-green)]">
-              sistema attivo
-            </span>
-          </div>
           <h1 className="text-xl font-medium tracking-tight text-[var(--color-white)] mb-1">
             Job Hunter <span className="text-[var(--color-green)]">Team</span>
           </h1>
           <p className="text-[var(--color-dim)] text-[11px]">
-            Accedi per continuare
+            Accedi per salvare il tuo progresso
           </p>
         </div>
 
