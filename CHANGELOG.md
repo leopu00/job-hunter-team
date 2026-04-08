@@ -5,6 +5,13 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.2] — 2026-04-08
+
+### Release desktop
+- Aggiunti i metadati richiesti da `electron-builder` per il pacchetto Linux `.deb`
+- Confermato il packaging Windows `.exe` e macOS `.dmg` nel workflow release
+- Preparata la release desktop cross-platform pubblicabile via GitHub Actions
+
 ## [0.1.1] — 2026-04-08
 
 ### Release desktop
