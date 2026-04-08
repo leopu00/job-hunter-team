@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Notifications API ── */
 describe("Notifications API", () => {
@@ -44,7 +49,7 @@ describe("Notifications API", () => {
   it("PATCH: mark-as-read by id o all=true + DELETE: by id o read=true", () => {
     expect(src).toContain("all === 'true'"); expect(src).toContain("markedRead: count");
     expect(src).toContain("notifica non trovata"); expect(src).toContain("status: 404");
-    expect(src).toContain("store.notifications.filter(n => !n.read)"); // DELETE read
+    expect(src).toContain("store.notifications.filter((n) => !n.read)"); // DELETE read
     expect(src).toContain("splice(idx, 1)");
   });
 
@@ -135,7 +140,7 @@ describe("LoadingButton", () => {
   });
 
   it("IconButton: aria-label obbligatorio + ICON_SIZE sm/md/lg + spinner on loading", () => {
-    expect(src).toContain("label:     string   // aria-label obbligatorio");
+    expect(src).toContain("label: string; // aria-label obbligatorio");
     expect(src).toContain("aria-label={label}"); expect(src).toContain("ICON_SIZE");
     expect(src).toContain("w-7 h-7"); expect(src).toContain("w-8 h-8"); expect(src).toContain("w-10 h-10");
     expect(src).toContain("loading ? <Spinner");

@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── CommandPalette ── */
 describe("CommandPalette", () => {
@@ -51,7 +56,7 @@ describe("CommandPalette", () => {
 
   it("useCommandPalette: Ctrl+K / metaKey+K toggle + returns open/setOpen/onClose", () => {
     expect(src).toContain("e.ctrlKey || e.metaKey"); expect(src).toContain("e.key === 'k'");
-    expect(src).toContain("e.preventDefault()"); expect(src).toContain("setOpen(v => !v)");
+    expect(src).toContain("e.preventDefault()"); expect(src).toContain("setOpen((v) => !v)");
     expect(src).toContain("onClose: () => setOpen(false)");
   });
 });

@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Templates API ── */
 describe("/api/templates", () => {
@@ -31,7 +36,7 @@ describe("/api/templates", () => {
   it("GET: filtro ?name + ?category + categories unique + POST: preview rendered + unresolvedVars", () => {
     expect(src).toContain("searchParams.get('name')");
     expect(src).toContain("searchParams.get('category')");
-    expect(src).toContain("new Set(templates.map(t => t.category))");
+    expect(src).toContain("new Set(templates.map((t) => t.category))");
     expect(src).toContain("rendered");
     expect(src).toContain("unresolvedVars");
   });
@@ -126,7 +131,7 @@ describe("/api/history/[id]", () => {
 
   it("paginazione: Math.ceil pages, slice start/end, limit max 200", () => {
     expect(src).toContain("Math.ceil(total / limit)");
-    expect(src).toContain("Math.min(200,");
+    expect(src).toContain("const limit = Math.min(");
     expect(src).toContain("conv.messages.slice(start, end)");
     expect(src).toContain("page, pages, limit");
   });

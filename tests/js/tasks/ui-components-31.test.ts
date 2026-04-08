@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const COMP = path.resolve(__dirname, "../../../web/app/components");
-function readSrc(name: string) { return fs.readFileSync(path.join(COMP, name), "utf-8"); }
+function readSrc(name: string) {
+  const raw = fs.readFileSync(path.join(COMP, name), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Truncate ── */
 describe("Truncate", () => {
@@ -28,7 +33,7 @@ describe("Truncate", () => {
   it("expand: Mostra di più / Mostra meno + button toggle + setClamped scrollHeight > clientHeight", () => {
     expect(src).toContain("expandLabel = 'Mostra di più'");
     expect(src).toContain("collapseLabel = 'Mostra meno'");
-    expect(src).toContain("setExpanded(e => !e)");
+    expect(src).toContain("setExpanded((e) => !e)");
     expect(src).toContain("setClamped(el.scrollHeight > el.clientHeight + 2)");
   });
 
@@ -83,7 +88,9 @@ describe("TimeInput", () => {
   const src = readSrc("TimeInput.tsx");
 
   it("props: TimeValue hours/minutes + format 12h/24h + minuteStep + placeholder --:--", () => {
-    expect(src).toContain("export interface TimeValue { hours: number; minutes: number }");
+    expect(src).toContain("export interface TimeValue");
+    expect(src).toContain("hours: number");
+    expect(src).toContain("minutes: number");
     expect(src).toContain("export interface TimeInputProps");
     expect(src).toContain("format?:");
     expect(src).toContain("minuteStep = 1");
