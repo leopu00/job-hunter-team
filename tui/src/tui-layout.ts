@@ -13,6 +13,7 @@ const VIEW_LABELS: Record<TuiView, string> = {
   chat: "Chat",
   tasks: "Tasks",
   dashboard: "Dashboard",
+  profile: "Profile",
   ai: "AI",
 };
 
@@ -24,12 +25,29 @@ export type JhtLayout = {
   updateStatusBar(state: JhtTuiState): void;
 };
 
+const BANNER = [
+  "     ██╗ ██████╗ ███████╗     ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗ ",
+  "     ██║ ██╔══██╗██╔════╝     ██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗",
+  "     ██║ ██║  ██║███████╗     ███████║██║   ██║██╔██╗ ██║   ██║   █████╗  ██████╔╝",
+  "██   ██║ ██║  ██║╚════██║     ██╔══██║██║   ██║██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗",
+  "╚█████╔╝ ██████╔╝███████║     ██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║",
+  " ╚════╝  ╚═════╝ ╚══════╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝",
+  "",
+  "           ████████╗███████╗ █████╗ ███╗   ███╗      ████████╗██╗   ██╗██╗",
+  "           ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║      ╚══██╔══╝██║   ██║██║",
+  "              ██║   █████╗  ███████║██╔████╔██║         ██║   ██║   ██║██║",
+  "              ██║   ██╔══╝  ██╔══██║██║╚██╔╝██║         ██║   ██║   ██║██║",
+  "              ██║   ███████╗██║  ██║██║ ╚═╝ ██║         ██║   ╚██████╔╝██║",
+  "              ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝         ╚═╝    ╚═════╝ ╚═╝",
+  "",
+].join("\n");
+
 export function createJhtLayout(_tui: TUI): JhtLayout {
   const root = new Container();
 
-  // Header
-  const header = new Text("", 1, 0);
-  root.addChild(header);
+  // Big ASCII Banner
+  const banner = new Text(theme.accent(BANNER), 1, 0);
+  root.addChild(banner);
 
   // Divider + tab bar
   const tabBar = new Text("", 1, 0);
@@ -48,15 +66,6 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
   root.addChild(statusBar.getNode());
 
   const updateHeader = (state: JhtTuiState) => {
-    const activeCount = state.activeTmuxCount;
-    const connLabel = state.isConnected ? theme.success("API") : theme.dim("no API");
-    header.setText(
-      theme.header(` JHT Control Panel`) +
-      theme.dim(` \u2502 `) +
-      connLabel +
-      theme.dim(` \u2502 ${activeCount} agenti attivi`),
-    );
-
     // Tab bar: evidenzia la vista corrente
     const tabs = (Object.keys(VIEW_LABELS) as TuiView[]).map((v) => {
       const label = VIEW_LABELS[v];
@@ -72,8 +81,8 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
       connectionStatus: state.connectionStatus,
       activityStatus: state.activityStatus,
       selectedAgent,
-      totalAgents: state.agents.length,
       workingAgents: state.activeTmuxCount,
+      currentView: state.currentView,
     });
   };
 
