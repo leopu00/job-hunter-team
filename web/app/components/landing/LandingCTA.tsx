@@ -81,7 +81,6 @@ export function LandingFooter() {
           {/* Risorse */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_resources')}</h4>
-            <Link href="/guide" className={linkClass}>{t('footer_guide')}</Link>
             <Link href="/faq" className={linkClass}>FAQ</Link>
             <Link href="/docs" className={linkClass}>{t('footer_docs')}</Link>
             <Link href="/about" className={linkClass}>{t('footer_about')}</Link>

@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── /achievements ── */
 describe("/achievements", () => {
@@ -52,7 +57,8 @@ describe("/compare", () => {
 
   it("API: GET ?ids= + SAMPLE_JOBS 6 + JobEntry interface + highlights bestScore/bestSalary + error 400 min 2", () => {
     expect(api).toContain("export async function GET");
-    expect(api).toContain("idsParam.split(',')");
+    expect(api).toContain("const ids = idsParam");
+    expect(api).toContain(".split(',')");
     expect(api).toContain("const SAMPLE_JOBS");
     expect(api).toContain("interface JobEntry");
     expect(api).toContain("bestScoreId");
