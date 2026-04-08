@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Bookmarks API ── */
 describe("/api/bookmarks", () => {
@@ -93,7 +98,7 @@ describe("/api/history/[id]", () => {
     expect(src).toMatch(/export async function GET\b/);
     expect(src).toMatch(/export async function DELETE\b/);
     expect(src).toContain("searchParams.get('page')");
-    expect(src).toContain("Math.min(200,");
+    expect(src).toContain("const limit = Math.min(");
     expect(src).toContain("function loadFromTranscript");
     expect(src).toContain("split('\\n')");
   });

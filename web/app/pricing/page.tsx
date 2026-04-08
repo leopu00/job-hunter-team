@@ -118,14 +118,6 @@ const CARDS: CardDef[] = [
     accent: 'var(--color-green)',
   },
   {
-    title: 'card_api',
-    price: 'card_api_price',
-    desc: 'card_api_desc',
-    cta: 'card_api_cta',
-    href: '/guide',
-    accent: 'var(--color-blue)',
-  },
-  {
     title: 'card_infra',
     price: 'card_infra_price',
     desc: 'card_infra_desc',

@@ -115,7 +115,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
   const HELP = [
     "comandi:",
-    "  /team            — vista panoramica team",
+    "  /home            — pagina iniziale",
+    "  /team            — pagina dedicata al team",
     "  /chat <agente>   — chat diretta con agente (tmux)",
     "  /start <agente>  — avvia sessione tmux per un agente",
     "  /stop <agente>   — ferma sessione tmux di un agente",
@@ -148,6 +149,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
       case "team":
         context.switchView("team");
+        break;
+
+      case "home":
+        context.switchView("home");
         break;
 
       case "tasks":
@@ -298,12 +303,14 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         const validation = validateWorkspacePath(args);
         if (!validation.ok) {
           sysLog.addSystem(`errore: ${validation.error}`);
+          setActivityStatus("errore cartella");
           break;
         }
         try {
           const init = ensureWorkspaceInitialized(validation.value);
           saveWorkspacePath(validation.value);
           sysLog.addSystem(`cartella di lavoro aggiornata: ${validation.value}`);
+          setActivityStatus("cartella aggiornata");
           if (init.createdDb || init.createdProfileDir) {
             const parts: string[] = [];
             if (init.createdDb) parts.push("database");
@@ -314,6 +321,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           context.refreshCurrentView();
         } catch (err) {
           sysLog.addSystem(`errore: ${err instanceof Error ? err.message : "impossibile inizializzare"}`);
+          setActivityStatus("errore cartella");
         }
         break;
       }
