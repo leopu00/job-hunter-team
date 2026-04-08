@@ -160,7 +160,7 @@ export async function proxy(request: NextRequest) {
       pathname.startsWith('/critico')
 
     if (isProtected && !user) {
-      return NextResponse.redirect(new URL('/', request.url))
+      return NextResponse.redirect(new URL('/?login=true', request.url))
     }
 
     // Landing page sempre accessibile — nessun redirect da / a /dashboard
