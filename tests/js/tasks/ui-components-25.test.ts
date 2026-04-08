@@ -66,7 +66,7 @@ describe("PhoneInput", () => {
   });
 
   it("country select: dropdown open/close + searchable Cerca paese + filtered by name/dial + click esterno chiude", () => {
-    expect(src).toContain("setOpen((o) => !o)");
+    expect(src).toContain("setOpen(o => !o)");
     expect(src).toContain('placeholder="Cerca paese..."');
     expect(src).toContain("c.name.toLowerCase().includes(query.toLowerCase())");
     expect(src).toContain("c.dial.includes(query)");
@@ -79,8 +79,8 @@ describe("PhoneInput", () => {
     expect(src).toContain("raw.replace(/\\D/g, '')");
     expect(src).toContain('type="tel"');
     expect(src).toContain('inputMode="tel"');
-    expect(src).toContain("d.slice(0, 3)");
-    expect(src).toContain("d.slice(3, 7)");
+    expect(src).toContain("d.slice(0,3)");
+    expect(src).toContain("d.slice(3,7)");
   });
 
   it("validation: isValid >= 7 digits + ✓ check verde + aria-invalid + error border red", () => {

@@ -28,7 +28,7 @@ describe("FloatingChat", () => {
 
   it("open/close: toggle state + aria-label Chiudi/Apri + chat-slide-up animation", () => {
     expect(src).toContain("const [open, setOpen] = useState(false)");
-    expect(src).toContain("setOpen((v) => !v)");
+    expect(src).toContain("setOpen(v => !v)");
     expect(src).toContain("Chiudi chat");
     expect(src).toContain("Apri AI Assistant");
     expect(src).toContain("@keyframes chat-slide-up");

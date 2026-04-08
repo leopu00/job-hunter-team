@@ -82,8 +82,8 @@ describe("CheckboxGroup", () => {
   it("toggle singolo + toggleAll: allChecked/someChecked + skip disabled", () => {
     expect(src).toContain("const toggle"); expect(src).toContain("const toggleAll");
     expect(src).toContain("allChecked"); expect(src).toContain("someChecked");
-    expect(src).toContain("options.every((o) => value.includes(o.value))");
-    expect(src).toContain("options.filter((o) => !o.disabled).map((o) => o.value)");
+    expect(src).toContain("options.every(o => value.includes(o.value))");
+    expect(src).toContain("options.filter(o => !o.disabled).map(o => o.value)");
   });
 
   it("selectAll checkbox: indeterminate quando someChecked && !allChecked + label 'Seleziona tutti'", () => {
@@ -93,7 +93,7 @@ describe("CheckboxGroup", () => {
   });
 
   it("options.map → Checkbox per ogni opzione con checked/label/description/disabled", () => {
-    expect(src).toContain("options.map((opt) =>");
+    expect(src).toContain("options.map(opt =>");
     expect(src).toContain("key={opt.value}");
     expect(src).toContain("checked={value.includes(opt.value)}");
     expect(src).toContain("label={opt.label}");

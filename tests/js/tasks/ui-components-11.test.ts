@@ -56,7 +56,7 @@ describe("CommandPalette", () => {
 
   it("useCommandPalette: Ctrl+K / metaKey+K toggle + returns open/setOpen/onClose", () => {
     expect(src).toContain("e.ctrlKey || e.metaKey"); expect(src).toContain("e.key === 'k'");
-    expect(src).toContain("e.preventDefault()"); expect(src).toContain("setOpen((v) => !v)");
+    expect(src).toContain("e.preventDefault()"); expect(src).toContain("setOpen(v => !v)");
     expect(src).toContain("onClose: () => setOpen(false)");
   });
 });

@@ -45,7 +45,7 @@ describe("Highlight", () => {
     expect(src).toContain("last[1] = Math.max(last[1], ranges[i][1])");
     expect(src).toContain("export interface HighlightListProps");
     expect(src).toContain("fields:");
-    expect(src).toContain("const hasMatch = chunks.some((c) => c.highlight)");
+    expect(src).toContain("const hasMatch = chunks.some(c => c.highlight)");
   });
 });
 
@@ -101,7 +101,7 @@ describe("SpeedDial", () => {
   });
 
   it("open: FAB toggle + rotate(135deg) + aria-expanded + sd-in animation stagger i*0.04", () => {
-    expect(src).toContain("setOpen((o) => !o)");
+    expect(src).toContain("setOpen(o => !o)");
     expect(src).toContain("rotate(135deg)");
     expect(src).toContain("aria-expanded={open}");
     expect(src).toContain("@keyframes sd-in");
