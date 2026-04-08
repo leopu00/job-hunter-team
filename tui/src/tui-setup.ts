@@ -38,18 +38,44 @@ type AssistantProfileDraft = {
 };
 
 function printBanner() {
+  const centerText = (value: string, width: number): string => {
+    if (value.length >= width) return value;
+    const totalPadding = width - value.length;
+    const leftPadding = Math.floor(totalPadding / 2);
+    const rightPadding = totalPadding - leftPadding;
+    return `${" ".repeat(leftPadding)}${value}${" ".repeat(rightPadding)}`;
+  };
+
+  const logoLines = [
+    "     ██╗██╗  ██╗████████╗",
+    "     ██║██║  ██║╚══██╔══╝",
+    "     ██║███████║   ██║   ",
+    "██   ██║██╔══██║   ██║   ",
+    "╚█████╔╝██║  ██║   ██║   ",
+    " ╚════╝ ╚═╝  ╚═╝   ╚═╝   ",
+  ];
+  const titleLines = [
+    "",
+    "Job Hunter Team",
+    "Setup Iniziale",
+  ];
+  const innerWidth = Math.max(
+    ...logoLines.map((line) => line.length),
+    ...titleLines.map((line) => line.length),
+  );
+  const frameRaw = (line: string) => `   ║ ${line.padEnd(innerWidth, " ")} ║`;
+  const frameCentered = (line: string) => `   ║ ${centerText(line, innerWidth)} ║`;
+
   console.clear();
   console.log("");
-  console.log(chalk.green("   ╔══════════════════════════════════════════════╗"));
-  console.log(chalk.green("   ║      ██╗ ███████╗██╗  ██╗████████╗          ║"));
-  console.log(chalk.green("   ║      ██║ ██╔════╝██║  ██║╚══██╔══╝          ║"));
-  console.log(chalk.green("   ║      ██║ ███████╗███████║   ██║             ║"));
-  console.log(chalk.green("   ║ ██   ██║ ╚════██║██╔══██║   ██║             ║"));
-  console.log(chalk.green("   ║ ╚█████╔╝ ███████║██║  ██║   ██║             ║"));
-  console.log(chalk.green("   ║  ╚════╝  ╚══════╝╚═╝  ╚═╝   ╚═╝             ║"));
-  console.log(chalk.green("   ║            Job Hunter Team                  ║"));
-  console.log(chalk.green("   ║             Setup Iniziale                  ║"));
-  console.log(chalk.green("   ╚══════════════════════════════════════════════╝"));
+  console.log(chalk.green(`   ╔${"═".repeat(innerWidth + 2)}╗`));
+  for (const line of logoLines) {
+    console.log(chalk.green(frameRaw(line)));
+  }
+  for (const line of titleLines) {
+    console.log(chalk.green(frameCentered(line)));
+  }
+  console.log(chalk.green(`   ╚${"═".repeat(innerWidth + 2)}╝`));
   console.log("");
 }
 
