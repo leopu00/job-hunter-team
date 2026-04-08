@@ -37,9 +37,9 @@ const translations = {
     it: 'Un sistema multi-agente che automatizza ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.',
     en: 'A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.',
   },
-  hero_cta:          { it: 'Scarica app desktop',      en: 'Download desktop app' },
+  hero_cta:          { it: 'Inizia qui',               en: 'Start here' },
   hero_cta2:         { it: 'Scopri come funziona',     en: 'See how it works' },
-  hero_project_cta:  { it: 'Progetto',                 en: 'Project' },
+  hero_project_cta:  { it: 'GitHub',                   en: 'GitHub' },
 
   // Features
   feat_label:        { it: 'capabilities',     en: 'capabilities' },
@@ -186,10 +186,12 @@ const translations = {
 
   // Download page
   dl_desc:           {
-    it: 'Scarica il sistema multi-agente che automatizza la tua ricerca di lavoro. Funziona interamente sul tuo computer — i tuoi dati restano tuoi.',
-    en: 'Download the multi-agent system that automates your job search. Runs entirely on your computer — your data stays yours.',
+    it: 'La dashboard web di JHT puo essere avviata dal launcher desktop oppure da terminale tramite setup avanzato con CLI e TUI. Il runtime gira sul tuo computer e i dati restano sotto il tuo controllo.',
+    en: 'JHT web dashboard can be started from the desktop launcher or from the terminal through advanced CLI and TUI setup. The runtime runs on your machine and your data stays under your control.',
   },
   dl_detected:       { it: 'rilevato',                  en: 'detected' },
+  dl_mode_desktop_title: { it: 'Desktop',               en: 'Desktop' },
+  dl_mode_terminal_title: { it: 'CLI',                  en: 'CLI' },
   dl_instructions:   { it: 'Istruzioni',                en: 'Instructions' },
   dl_close:          { it: 'Chiudi',                     en: 'Close' },
   dl_download:       { it: 'Scarica',                    en: 'Download' },
@@ -199,13 +201,38 @@ const translations = {
   dl_step1_title:    { it: 'Scarica',                    en: 'Download' },
   dl_step1_desc:     { it: 'Scegli il pacchetto per il tuo sistema operativo', en: 'Choose the package for your operating system' },
   dl_step2_title:    { it: 'Avvia',                      en: 'Launch' },
-  dl_step2_desc:     { it: 'Apri il launcher o lo script incluso: bootstrap e avvio partono automaticamente', en: 'Open the included launcher or script: bootstrap and startup run automatically' },
+  dl_step2_desc:     { it: 'Apri il launcher desktop e lascia che bootstrap e avvio del runtime partano automaticamente', en: 'Open the desktop launcher and let bootstrap and runtime startup run automatically' },
   dl_step3_title:    { it: 'Usa',                        en: 'Use' },
-  dl_step3_desc:     { it: 'Il browser si apre su localhost con l\'interfaccia del team', en: 'The browser opens on localhost with the team interface' },
+  dl_step3_desc:     { it: 'Il browser si apre su localhost con la dashboard web del team', en: 'The browser opens on localhost with the team web dashboard' },
   dl_setup_title:    { it: 'Nota installazione',        en: 'Install note' },
   dl_setup_desc:     {
-    it: 'I pacchetti desktop per macOS, Windows e Linux includono il launcher Electron e il payload web gia pronto. Su Linux possono servire librerie di sistema standard per AppImage.',
-    en: 'The macOS, Windows, and Linux desktop packages include the Electron launcher and a prebuilt web payload. On Linux you may still need standard system libraries for AppImage support.',
+    it: 'I pacchetti desktop per macOS, Windows e Linux includono il launcher e il payload web gia pronto. CLI e TUI offrono invece un accesso piu avanzato allo stesso runtime locale. Su Linux possono servire librerie di sistema standard per AppImage.',
+    en: 'The macOS, Windows, and Linux desktop packages include the launcher and a prebuilt web payload. CLI and TUI instead provide more advanced access to the same local runtime. On Linux you may still need standard system libraries for AppImage support.',
+  },
+  dl_terminal_title: { it: 'Terminale',                 en: 'Terminal' },
+  dl_terminal_desc:  {
+    it: 'Se preferisci partire da riga di comando, puoi clonare la repository e avviare la dashboard web locale oppure usare CLI e TUI per un controllo piu avanzato del runtime.',
+    en: 'If you prefer the command line, you can clone the repository and start the local web dashboard or use CLI and TUI for more advanced control over the runtime.',
+  },
+  dl_terminal_source_tab: { it: 'Dashboard locale',     en: 'Local dashboard' },
+  dl_terminal_cli_tab:    { it: 'CLI e setup',          en: 'CLI and setup' },
+  dl_terminal_source_title: { it: 'Setup da sorgente',  en: 'Source setup' },
+  dl_terminal_source_desc:  {
+    it: 'Clona il progetto e avvia la dashboard web locale in sviluppo.',
+    en: 'Clone the project and start the local web dashboard in development mode.',
+  },
+  dl_terminal_source_note:  {
+    it: 'Dopo il comando, la dashboard web sara disponibile su localhost:3000. Questo percorso e pensato per sviluppo locale e uso manuale del repo.',
+    en: 'After running the command, the web dashboard will be available on localhost:3000. This path is meant for local development and manual repo usage.',
+  },
+  dl_terminal_cli_title: { it: 'CLI senza installazione globale', en: 'CLI without global install' },
+  dl_terminal_cli_desc:  {
+    it: 'Prepara il progetto e avvia il wizard di setup dal binario CLI. Da qui puoi poi usare anche la TUI e gli altri comandi operativi.',
+    en: 'Prepare the project and launch the setup wizard from the CLI binary. From there you can also use the TUI and the other operational commands.',
+  },
+  dl_terminal_cli_note:  {
+    it: 'Per la TUI puoi poi eseguire npm --prefix tui install && npm --prefix tui run dev dalla root del progetto. CLI e TUI lavorano sullo stesso runtime locale della dashboard web.',
+    en: 'For the TUI you can then run npm --prefix tui install && npm --prefix tui run dev from the project root. CLI and TUI work on the same local runtime as the web dashboard.',
   },
   dl_setup_link:     { it: 'Node.js disponibile su',    en: 'Node.js available at' },
   dl_home:           { it: 'Home',                       en: 'Home' },
