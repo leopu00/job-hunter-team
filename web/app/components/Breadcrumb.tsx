@@ -30,7 +30,7 @@ const LABELS: Record<string, string> = {
   demo: 'Demo', download: 'Download', guide: 'Guida',
   faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
   privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
-  stats: 'Statistiche', reports: 'Report', setup: 'Setup', edit: 'Modifica',
+  stats: 'Statistiche', project: 'Progetto', reports: 'Report', setup: 'Setup', edit: 'Modifica',
   terms: 'Termini di Servizio',
   // Pagine aggiuntive
   achievements: 'Obiettivi', activity: 'Attività', 'ai-assistant': 'Assistente AI',
