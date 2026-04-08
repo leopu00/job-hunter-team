@@ -17,7 +17,7 @@ function formatTokens(total: number | null | undefined, context: number | null |
   return `tok ${totalStr}`;
 }
 
-const QUICK_COMMANDS_TEAM = [
+const QUICK_COMMANDS_NAV = [
   ["↑/↓", "naviga"],
   ["Enter", "attiva"],
   ["Tab", "cambia vista"],
@@ -81,7 +81,9 @@ export class StatusBar {
     }
 
     // Comandi rapidi in base alla vista
-    const commands = currentView === "team" ? QUICK_COMMANDS_TEAM : QUICK_COMMANDS_DEFAULT;
+    const commands = currentView === "home" || currentView === "team"
+      ? QUICK_COMMANDS_NAV
+      : QUICK_COMMANDS_DEFAULT;
     const cmdParts = commands.map(
       ([key, label]) => `${theme.accent(key!)} ${theme.dim(label!)}`,
     );
