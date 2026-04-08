@@ -24,6 +24,14 @@ const QUICK_COMMANDS_NAV = [
   ["Ctrl+C", "esci"],
 ];
 
+const QUICK_COMMANDS_CONFIG = [
+  ["Enter", "cartella"],
+  ["/setup", "api key"],
+  ["/profile", "profilo"],
+  ["Tab", "cambia vista"],
+  ["Ctrl+C", "esci"],
+];
+
 const QUICK_COMMANDS_DEFAULT = [
   ["Tab", "viste"],
   ["↑↓", "seleziona"],
@@ -81,9 +89,11 @@ export class StatusBar {
     }
 
     // Comandi rapidi in base alla vista
-    const commands = currentView === "home" || currentView === "team"
-      ? QUICK_COMMANDS_NAV
-      : QUICK_COMMANDS_DEFAULT;
+    const commands = currentView === "home"
+      ? QUICK_COMMANDS_CONFIG
+      : currentView === "team"
+        ? QUICK_COMMANDS_NAV
+        : QUICK_COMMANDS_DEFAULT;
     const cmdParts = commands.map(
       ([key, label]) => `${theme.accent(key!)} ${theme.dim(label!)}`,
     );

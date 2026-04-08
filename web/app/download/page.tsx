@@ -8,7 +8,6 @@ import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
 type PlatformId = 'mac' | 'linux' | 'windows'
-type OS = PlatformId | null
 
 interface PlatformData {
   id: PlatformId
@@ -38,15 +37,6 @@ const INSTR_KEYS: Record<PlatformId, 'dl_mac_instr' | 'dl_linux_instr' | 'dl_win
   mac: 'dl_mac_instr',
   linux: 'dl_linux_instr',
   windows: 'dl_windows_instr',
-}
-
-function detectOS(): OS {
-  if (typeof navigator === 'undefined') return null
-  const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes('mac')) return 'mac'
-  if (ua.includes('win')) return 'windows'
-  if (ua.includes('linux')) return 'linux'
-  return null
 }
 
 const FALLBACK_VERSION = '0.1.0'
@@ -82,17 +72,12 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 
 function DownloadContent() {
   const { t, ta } = useLandingI18n()
-  const [detectedOS, setDetectedOS] = useState<OS>(null)
-  const [expanded, setExpanded] = useState<OS>(null)
+  const [expanded, setExpanded] = useState<PlatformId | null>(null)
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
     platforms: FALLBACK_PLATFORMS,
     releasesUrl: FALLBACK_RELEASES_URL,
   })
-
-  useEffect(() => {
-    setDetectedOS(detectOS())
-  }, [])
 
   useEffect(() => {
     fetch('/api/download')
@@ -102,12 +87,6 @@ function DownloadContent() {
   }, [])
 
   const { version, platforms, releasesUrl } = release
-
-  const sorted = [...platforms].sort((a, b) => {
-    if (a.id === detectedOS) return -1
-    if (b.id === detectedOS) return 1
-    return 0
-  })
 
   return (
     <>
@@ -131,9 +110,8 @@ function DownloadContent() {
 
           {/* OS Cards */}
           <div className="flex flex-col gap-4 mb-10">
-            {sorted.map((platform, i) => {
-              const isDetected = platform.id === detectedOS
-              const isExpanded = expanded === platform.id as OS
+            {platforms.map((platform, i) => {
+              const isExpanded = expanded === platform.id
               const Icon = ICONS[platform.id] || (() => null)
               const instrKey = INSTR_KEYS[platform.id]
               const instructions = platform.instructions.length > 0
@@ -144,13 +122,12 @@ function DownloadContent() {
               return (
                 <div key={platform.id} className="border rounded-lg overflow-hidden transition-all duration-200"
                   style={{
-                    borderColor: isDetected ? 'var(--color-green)' : 'var(--color-border)',
+                    borderColor: 'var(--color-border)',
                     background: 'var(--color-panel)',
-                    boxShadow: isDetected ? '0 0 20px rgba(0,232,122,0.07)' : 'none',
                     animation: `fade-in 0.4s ease ${i * 0.12}s both`,
                   }}
-                  onMouseEnter={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
-                  onMouseLeave={e => { if (!isDetected) e.currentTarget.style.borderColor = 'var(--color-border)' }}>
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}>
                   {/* Card header */}
                   <div className="px-4 sm:px-5 py-4">
                     <div className="flex items-center gap-3 sm:gap-4">
@@ -161,12 +138,6 @@ function DownloadContent() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[14px] font-bold text-[var(--color-white)]">{platform.label}</span>
-                          {isDetected && (
-                            <span className="text-[9px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
-                              style={{ background: 'rgba(0,232,122,0.12)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)' }}>
-                              {t('dl_detected')}
-                            </span>
-                          )}
                         </div>
                         <span className="text-[9px] sm:text-[10px] text-[var(--color-dim)] break-all">
                           {platform.file}
@@ -176,7 +147,7 @@ function DownloadContent() {
                     </div>
                     <div className="flex items-center gap-2 mt-3">
                       <button
-                        onClick={() => setExpanded(isExpanded ? null : platform.id as OS)}
+                        onClick={() => setExpanded(isExpanded ? null : platform.id)}
                         aria-expanded={isExpanded}
                         aria-controls={`dl-instr-${platform.id}`}
                         className="flex-1 sm:flex-none px-3 py-2 rounded text-[11px] font-semibold transition-colors"
@@ -191,9 +162,9 @@ function DownloadContent() {
                       <a href={ctaHref}
                         className="flex-1 sm:flex-none text-center px-5 py-2 rounded text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                         style={{
-                          background: platform.available && isDetected ? 'var(--color-green)' : 'var(--color-card)',
-                          color: platform.available && isDetected ? '#000' : 'var(--color-green)',
-                          border: platform.available && isDetected ? 'none' : '1px solid var(--color-green)',
+                          background: 'var(--color-card)',
+                          color: 'var(--color-green)',
+                          border: '1px solid var(--color-green)',
                           cursor: 'pointer',
                         }}>
                         {platform.available ? t('dl_download') : t('dl_view_release')}
@@ -404,9 +375,14 @@ function AppleIcon() {
 
 function LinuxIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
-      <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.199.023.4-.002.64-.092.66-.26.869-.6.778-1.2-.046-.268-.177-.533-.301-.67-.124-.201-.17-.401-.24-.7-.064-.334-.163-.469-.16-.867.266-.073.536-.267.735-.467.227-.2.418-.468.576-.77.318-.601.465-1.33.377-2.099-.039-.4-.123-.467-.2-.868-.082-.465.008-.533.022-1.07 0-.068.005-.2-.023-.335a.622.622 0 00-.105-.197c-.133-.2-.333-.395-.6-.464-.273-.067-.56-.066-.846-.067-.283 0-.518-.133-.666-.267-.15-.132-.28-.267-.453-.267-.166 0-.367.133-.467.267l-.235.268a.73.73 0 01-.65.333c-.347 0-.467-.2-.532-.401a.963.963 0 01-.043-.199v-.133c0-.1.024-.2.067-.301.167-.467.5-.867.867-1.067.367-.197.8-.133 1.067.133.167.168.267.4.333.667.067.267.126.533.126.802 0 .267-.059.533-.192.733-.133.2-.333.401-.534.534a2.098 2.098 0 01-.733.267c-.267.066-.533.066-.733-.067a.844.844 0 01-.313-.412L12.71 18.3c.133-.266.28-.47.413-.668.27-.4.54-.734.665-1.134.135-.4.2-.867.127-1.333a.844.844 0 00-.106-.333c-.159-.267-.4-.467-.667-.6l-.1-.067c.07-.333.12-.667.12-1 0-.534-.107-1.067-.334-1.534-.226-.466-.6-.866-1.066-1.066-.467-.2-1-.267-1.534-.134-.133.034-.267.1-.4.2 0-.868.134-1.734.534-2.401.4-.667 1.067-1.133 2-1.133h.133c.534.067.934.4 1.334.734.4.333.8.733 1.266.733.134 0 .267-.034.4-.1.534-.267.734-.8.734-1.334 0-.266-.067-.533-.2-.733a1.06 1.06 0 00-.534-.4 1.773 1.773 0 00-.467-.066z"/>
-    </svg>
+    <img
+      src="/tux.svg"
+      alt=""
+      aria-hidden="true"
+      width={22}
+      height={22}
+      style={{ display: 'block', width: 22, height: 22, objectFit: 'contain' }}
+    />
   )
 }
 

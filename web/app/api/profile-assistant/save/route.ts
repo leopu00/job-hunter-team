@@ -4,10 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import yaml from 'js-yaml'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 
 export const dynamic = 'force-dynamic'
 
 const COOKIE_NAME = 'jht_workspace'
+const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
 
 export async function POST(req: NextRequest) {
   let body: { profile?: Record<string, unknown>; confirmed?: boolean }
@@ -184,9 +186,66 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
   try {
     const yamlStr = yaml.dump(yamlData, { lineWidth: 120, noRefs: true })
     fs.writeFileSync(profilePath, yamlStr, 'utf-8')
+    syncTuiProfileCache(wsPath, profile)
     return NextResponse.json({ ok: true, path: profilePath })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'scrittura YAML fallita'
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function syncTuiProfileCache(workspacePath: string, profile: Record<string, unknown>) {
+  const existing = fs.existsSync(GLOBAL_CONFIG_PATH)
+    ? JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')) as Record<string, unknown>
+    : {}
+
+  const fullName = String(profile.name ?? '').trim()
+  const parts = fullName.split(/\s+/).filter(Boolean)
+  const skills = profile.skills && typeof profile.skills === 'object' && !Array.isArray(profile.skills)
+    ? Object.values(profile.skills as Record<string, string[]>).flat().filter(Boolean)
+    : []
+  const locationPreferences = Array.isArray(profile.location_preferences)
+    ? (profile.location_preferences as Array<string | { type?: string }>).map((item) => typeof item === 'string' ? item : (item.type ?? '')).filter(Boolean)
+    : []
+  const contacts = ((profile.positioning ?? {}) as Record<string, unknown>).contacts as Record<string, unknown> | undefined
+  const salary = profile.salary_target as Record<string, unknown> | undefined
+
+  const tuiProfile = {
+    nome: parts[0] ?? '',
+    cognome: parts.slice(1).join(' '),
+    dataNascita: '',
+    headline: '',
+    targetRoles: Array.isArray(profile.job_titles) ? profile.job_titles : (profile.target_role ? [profile.target_role] : []),
+    seniorityTarget: typeof profile.seniority_target === 'string' ? profile.seniority_target : '',
+    competenze: skills,
+    zona: typeof profile.location === 'string' ? profile.location : '',
+    locationPreferences,
+    tipoLavoro: '',
+    languages: Array.isArray(profile.languages)
+      ? (profile.languages as Array<Record<string, unknown>>).map((item) => [item.language ?? item.lingua, item.level ?? item.livello].filter(Boolean).join(' ').trim()).filter(Boolean)
+      : [],
+    strengths: Array.isArray(((profile.positioning ?? {}) as Record<string, unknown>).strengths)
+      ? (((profile.positioning ?? {}) as Record<string, unknown>).strengths as string[]).filter(Boolean)
+      : [],
+    email: typeof profile.email === 'string' ? profile.email : String(contacts?.email ?? ''),
+    linkedin: String(contacts?.linkedin ?? ''),
+    portfolio: String(contacts?.website ?? contacts?.github ?? ''),
+    salaryTarget: salary && (salary.italy_min != null || salary.min != null)
+      ? `${salary.italy_min ?? salary.min}-${salary.italy_max ?? salary.max} ${salary.currency ?? 'EUR'}`
+      : '',
+    availability: '',
+    workAuthorization: '',
+    completato: Boolean(parts[0] && parts.slice(1).join(' ') && skills.length > 0 && locationPreferences.length > 0 && (Array.isArray(profile.job_titles) ? profile.job_titles.length > 0 : profile.target_role)),
+    nomeCompleto: fullName,
+  }
+
+  const updated = {
+    ...existing,
+    workspace: workspacePath,
+    workspacePath,
+    profile: tuiProfile,
+  }
+
+  fs.mkdirSync(path.dirname(GLOBAL_CONFIG_PATH), { recursive: true })
+  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(updated, null, 2) + '\n', 'utf-8')
 }
