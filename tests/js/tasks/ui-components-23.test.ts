@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Rating ── */
 describe("Rating", () => {
@@ -76,7 +81,7 @@ describe("AvatarGroup", () => {
     expect(src).toContain("function AvatarItem");
     expect(src).toContain("function Tip");
     expect(src).toContain("showTooltip = true");
-    expect(src).toContain("overflow.map(o => o.name");
+    expect(src).toContain("overflow.map((o) => o.name");
   });
 });
 
@@ -93,7 +98,7 @@ describe("SpeedDial", () => {
   });
 
   it("open/close: FAB toggle + icon default '+' + iconOpen '✕' + rotate(135deg) + aria-expanded", () => {
-    expect(src).toContain("setOpen(o => !o)");
+    expect(src).toContain("setOpen((o) => !o)");
     expect(src).toContain("icon = '+'");
     expect(src).toContain("iconOpen = '✕'");
     expect(src).toContain("rotate(135deg)");
