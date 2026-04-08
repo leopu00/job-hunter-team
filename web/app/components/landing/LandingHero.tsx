@@ -18,12 +18,14 @@ const PIPELINE_AGENTS = [
 export default function LandingHero() {
   const { t } = useLandingI18n()
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
+  const sentinelNameRef = useRef<HTMLSpanElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
-  const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[] }>({
+  const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[]; sentinelPath: string | null }>({
     width: 0,
     height: 0,
     paths: [],
+    sentinelPath: null,
   })
 
   useEffect(() => {
@@ -33,10 +35,12 @@ export default function LandingHero() {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const flow = desktopFlowRef.current
+        const sentinelName = sentinelNameRef.current
         const captainName = captainNameRef.current
-        if (!flow || !captainName) return
+        if (!flow || !captainName || !sentinelName) return
 
         const flowRect = flow.getBoundingClientRect()
+        const sentinelRect = sentinelName.getBoundingClientRect()
         const captainRect = captainName.getBoundingClientRect()
         const startX = captainRect.left + captainRect.width / 2 - flowRect.left
         const startY = captainRect.bottom - flowRect.top + 6
@@ -48,12 +52,16 @@ export default function LandingHero() {
             const rect = node.getBoundingClientRect()
             const endX = rect.left + rect.width / 2 - flowRect.left
             const endY = rect.top - flowRect.top - 6
-            const deltaX = endX - startX
-            const controlY = startY + Math.max(16, (endY - startY) * 0.5)
 
-            return `M ${startX} ${startY} C ${startX + deltaX * 0.18} ${controlY}, ${endX - deltaX * 0.22} ${endY - 8}, ${endX} ${endY}`
+            return `M ${startX} ${startY} L ${endX} ${endY}`
           })
           .filter((path): path is string => path !== null)
+
+        const sentinelStartX = sentinelRect.right - flowRect.left + 10
+        const sentinelStartY = sentinelRect.top + sentinelRect.height / 2 - flowRect.top
+        const sentinelEndX = captainRect.left - flowRect.left - 10
+        const sentinelEndY = captainRect.top + captainRect.height / 2 - flowRect.top
+        const sentinelPath = `M ${sentinelStartX} ${sentinelStartY} L ${sentinelEndX} ${sentinelEndY}`
 
         setArrowOverlay((prev) => {
           const width = Math.round(flowRect.width)
@@ -61,13 +69,14 @@ export default function LandingHero() {
           if (
             prev.width === width &&
             prev.height === height &&
+            prev.sentinelPath === sentinelPath &&
             prev.paths.length === paths.length &&
             prev.paths.every((path, index) => path === paths[index])
           ) {
             return prev
           }
 
-          return { width, height, paths }
+          return { width, height, paths, sentinelPath }
         })
       })
     }
@@ -76,6 +85,7 @@ export default function LandingHero() {
 
     const resizeObserver = new ResizeObserver(measure)
     if (desktopFlowRef.current) resizeObserver.observe(desktopFlowRef.current)
+    if (sentinelNameRef.current) resizeObserver.observe(sentinelNameRef.current)
     if (captainNameRef.current) resizeObserver.observe(captainNameRef.current)
     agentEmojiRefs.current.forEach((node) => {
       if (node) resizeObserver.observe(node)
@@ -112,8 +122,8 @@ export default function LandingHero() {
         style={{ animation: 'fade-in 0.8s ease 0.2s both' }}
       >
         <div className="hidden md:block">
-          <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[520px]">
-            {arrowOverlay.width > 0 && arrowOverlay.height > 0 && arrowOverlay.paths.length > 0 && (
+          <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[620px]">
+            {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (arrowOverlay.paths.length > 0 || arrowOverlay.sentinelPath) && (
               <svg
                 aria-hidden="true"
                 viewBox={`0 0 ${arrowOverlay.width} ${arrowOverlay.height}`}
@@ -132,6 +142,25 @@ export default function LandingHero() {
                     <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
                   </marker>
                 </defs>
+                {arrowOverlay.sentinelPath && (
+                  <path
+                    d={arrowOverlay.sentinelPath}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.28)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    markerEnd="url(#captain-arrowhead)"
+                    strokeDasharray="4 8"
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      values="0;-72"
+                      dur="14s"
+                      begin="0s"
+                      repeatCount="indefinite"
+                    />
+                  </path>
+                )}
                 {arrowOverlay.paths.map((path, index) => (
                   <path
                     key={path}
@@ -156,10 +185,10 @@ export default function LandingHero() {
             )}
 
             <div className="flex justify-center">
-              <div className="w-full max-w-[520px] grid grid-cols-5 justify-items-center items-end">
+              <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end">
                 <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
                   <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
-                  <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+                  <span ref={sentinelNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
                 </span>
                 <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
                   <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
@@ -168,7 +197,7 @@ export default function LandingHero() {
               </div>
             </div>
 
-            <div className="grid grid-cols-5 justify-items-center items-start mt-10">
+            <div className="grid grid-cols-5 justify-items-center items-start mt-14">
                 {PIPELINE_AGENTS.map((agent, index) => (
                   <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
                     <span
@@ -189,7 +218,7 @@ export default function LandingHero() {
 
         <div className="md:hidden">
           <div className="flex justify-center mb-8">
-            <div className="w-full max-w-[520px] grid grid-cols-5 justify-items-center items-end gap-x-6 md:gap-x-8">
+            <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end gap-x-6 md:gap-x-8">
               <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
                 <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                 <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
