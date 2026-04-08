@@ -11,7 +11,8 @@ const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
 
 export type UserProfile = {
   nome: string;
-  eta: string;
+  cognome: string;
+  dataNascita: string;
   competenze: string[];
   zona: string;
   tipoLavoro: string;
@@ -20,7 +21,8 @@ export type UserProfile = {
 
 const EMPTY_PROFILE: UserProfile = {
   nome: "",
-  eta: "",
+  cognome: "",
+  dataNascita: "",
   competenze: [],
   zona: "",
   tipoLavoro: "",
@@ -44,9 +46,19 @@ export function loadProfile(): UserProfile {
   const cfg = loadConfig();
   const p = cfg.profile as Record<string, unknown> | undefined;
   if (!p || typeof p !== "object") return { ...EMPTY_PROFILE };
+  const rawNome = typeof p.nome === "string" ? p.nome.trim() : "";
+  const rawCognome = typeof p.cognome === "string" ? p.cognome.trim() : "";
+  const legacyParts = rawNome.split(/\s+/).filter(Boolean);
+  const nome = rawCognome ? rawNome : (legacyParts[0] ?? rawNome);
+  const cognome = rawCognome || (legacyParts.length > 1 ? legacyParts.slice(1).join(" ") : "");
   return {
-    nome: typeof p.nome === "string" ? p.nome : "",
-    eta: typeof p.eta === "string" ? p.eta : "",
+    nome,
+    cognome,
+    dataNascita: typeof p.dataNascita === "string"
+      ? p.dataNascita
+      : typeof p.birthDate === "string"
+        ? p.birthDate
+        : "",
     competenze: Array.isArray(p.competenze) ? (p.competenze as string[]) : [],
     zona: typeof p.zona === "string" ? p.zona : "",
     tipoLavoro: typeof p.tipoLavoro === "string" ? p.tipoLavoro : "",
@@ -56,17 +68,23 @@ export function loadProfile(): UserProfile {
 
 export function saveProfile(profile: UserProfile): void {
   const cfg = loadConfig();
-  cfg.profile = profile;
+  cfg.profile = {
+    ...profile,
+    // Mantiene compatibilita con letture legacy che usano un nome completo singolo.
+    nomeCompleto: [profile.nome, profile.cognome].filter(Boolean).join(" ").trim(),
+  };
   saveConfig(cfg);
 }
 
 export function isProfileComplete(profile: UserProfile): boolean {
-  return !!(profile.nome && profile.competenze.length > 0 && profile.zona);
+  return !!(profile.nome && profile.cognome && profile.dataNascita && profile.competenze.length > 0 && profile.zona && profile.tipoLavoro);
 }
 
 export function getMissingProfileFields(profile: UserProfile): string[] {
   const missing: string[] = [];
   if (!profile.nome) missing.push("nome");
+  if (!profile.cognome) missing.push("cognome");
+  if (!profile.dataNascita) missing.push("data di nascita");
   if (profile.competenze.length === 0) missing.push("competenze");
   if (!profile.zona) missing.push("zona");
   if (!profile.tipoLavoro) missing.push("tipo lavoro");
@@ -76,7 +94,8 @@ export function getMissingProfileFields(profile: UserProfile): string[] {
 export function formatProfile(profile: UserProfile): string[] {
   const lines: string[] = [];
   lines.push(`  Nome: ${profile.nome || "(non impostato)"}`);
-  if (profile.eta) lines.push(`  Eta': ${profile.eta}`);
+  lines.push(`  Cognome: ${profile.cognome || "(non impostato)"}`);
+  lines.push(`  Data di nascita: ${profile.dataNascita || "(non impostata)"}`);
   lines.push(`  Competenze: ${profile.competenze.length > 0 ? profile.competenze.join(", ") : "(nessuna)"}`);
   lines.push(`  Zona: ${profile.zona || "(non impostata)"}`);
   lines.push(`  Tipo lavoro: ${profile.tipoLavoro || "(non impostato)"}`);
