@@ -154,10 +154,7 @@ export default function LandingNav() {
           <Link href="/download" aria-current={currentCompany('/download')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
             {t('nav_download')}
           </Link>
-          <Link href="/guide" aria-current={currentCompany('/guide')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/guide')}>
-            {t('nav_guide')}
-          </Link>
-          <Link href="/faq" aria-current={currentCompany('/faq')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
+          <Link href="/faq" aria-current={currentCompany('/faq')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}
             {t('nav_faq')}
           </Link>
           <Link href="/pricing" aria-current={currentCompany('/pricing')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
@@ -222,10 +219,7 @@ export default function LandingNav() {
           <Link href="/download" aria-current={currentCompany('/download')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
             {t('nav_download')}
           </Link>
-          <Link href="/guide" aria-current={currentCompany('/guide')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/guide')}>
-            {t('nav_guide')}
-          </Link>
-          <Link href="/faq" aria-current={currentCompany('/faq')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
+          <Link href="/faq" aria-current={currentCompany('/faq')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}
             {t('nav_faq')}
           </Link>
           <Link href="/pricing" aria-current={currentCompany('/pricing')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
