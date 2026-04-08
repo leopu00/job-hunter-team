@@ -24,7 +24,7 @@ export default function LandingHero() {
           Job Hunter Team
         </h1>
 
-        <p className="text-[13px] md:text-[15px] text-[var(--color-muted)] leading-relaxed max-w-xl mx-auto mb-4">
+        <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
           Una squadra di agenti AI per la ricerca lavoro.
         </p>
 
@@ -68,6 +68,10 @@ export default function LandingHero() {
             </span>
           ))}
         </div>
+
+        <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
+          Hai una squadra di agenti AI virtuali disponibile 24 ore su 24: lavorano per te, cercano opportunità, analizzano offerte, preparano i materiali e si coordinano tra loro in autonomia, mentre tu mantieni sempre il controllo.
+        </p>
       </div>
     </section>
   )
