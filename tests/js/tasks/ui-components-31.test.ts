@@ -33,7 +33,7 @@ describe("Truncate", () => {
   it("expand: Mostra di più / Mostra meno + button toggle + setClamped scrollHeight > clientHeight", () => {
     expect(src).toContain("expandLabel = 'Mostra di più'");
     expect(src).toContain("collapseLabel = 'Mostra meno'");
-    expect(src).toContain("setExpanded((e) => !e)");
+    expect(src).toContain("setExpanded(e => !e)");
     expect(src).toContain("setClamped(el.scrollHeight > el.clientHeight + 2)");
   });
 

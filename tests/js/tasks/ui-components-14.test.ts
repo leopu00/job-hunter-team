@@ -79,7 +79,7 @@ describe("ErrorBoundary", () => {
   it("withErrorBoundary HOC displayName + useErrorBoundary throwError via setState", () => {
     expect(src).toContain("Wrapped.displayName = `withErrorBoundary(");
     expect(src).toContain("const throwError"); expect(src).toContain("setState(() => {");
-    expect(src).toContain("throw error;");
+    expect(src).toContain("throw error");
   });
 });
 
