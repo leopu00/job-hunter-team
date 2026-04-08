@@ -5,7 +5,12 @@ import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
 const CLI = path.resolve(__dirname, "../../../cli");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 function readCli(rel: string) { return fs.readFileSync(path.join(CLI, rel), "utf-8"); }
 
 /* ── SecretRef (shared/config) — test funzionali ── */

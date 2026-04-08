@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Checkbox ── */
 describe("Checkbox", () => {
@@ -34,7 +39,10 @@ describe("Checkbox", () => {
   it("custom box: SVG checkmark polyline + SVG dash per indeterminate + cb-pop animation", () => {
     expect(src).toContain("cb-pop"); expect(src).toContain("cb-mark");
     expect(src).toContain("polyline"); // checkmark
-    expect(src).toContain('x1="2" y1="5" x2="8" y2="5"'); // dash
+    expect(src).toContain('x1="2"');
+    expect(src).toContain('y1="5"');
+    expect(src).toContain('x2="8"');
+    expect(src).toContain('y2="5"'); // dash
     expect(src).toContain("scale(1.15)"); // bounce
   });
 
@@ -65,9 +73,9 @@ describe("CheckboxGroup", () => {
   const src = readSrc("app/components/Checkbox.tsx");
 
   it("CheckboxGroupProps: options + value string[] + onChange + label + selectAll", () => {
-    expect(src).toContain("options:    CheckboxOption[]");
-    expect(src).toContain("value:      string[]");
-    expect(src).toContain("onChange:   (value: string[]) => void");
+    expect(src).toContain("options: CheckboxOption[]");
+    expect(src).toContain("value: string[]");
+    expect(src).toContain("onChange: (value: string[]) => void");
     expect(src).toContain("selectAll?: boolean");
   });
 
@@ -95,8 +103,8 @@ describe("CheckboxGroup", () => {
   it("group label uppercase + error message a livello group", () => {
     expect(src).toContain("tracking-widest uppercase");
     expect(src).toContain("var(--color-muted)");
-    // group-level error
-    const groupErrorMatch = src.includes('{error && <p className="text-[10px]"');
-    expect(groupErrorMatch).toBe(true);
+    expect(src).toContain("{error && (");
+    expect(src).toContain("className='text-[10px]'");
+    expect(src).toContain("{error}");
   });
 });

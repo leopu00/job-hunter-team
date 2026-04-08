@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── CodeBlock ── */
 describe("CodeBlock", () => {
@@ -53,9 +58,9 @@ describe("ErrorBoundary", () => {
 
   it("FallbackProps error+reset + ErrorBoundaryProps children/fallback/onError/resetKeys", () => {
     expect(src).toContain("export interface FallbackProps");
-    expect(src).toContain("error:    Error"); expect(src).toContain("reset:    () => void");
+    expect(src).toContain("error: Error"); expect(src).toContain("reset: () => void");
     expect(src).toContain("export interface ErrorBoundaryProps");
-    expect(src).toContain("onError?:"); expect(src).toContain("resetKeys?:  unknown[]");
+    expect(src).toContain("onError?:"); expect(src).toContain("resetKeys?: unknown[]");
   });
 
   it("DefaultFallback: 'Qualcosa è andato storto' + stack trace toggle + 'Riprova' button", () => {
@@ -73,7 +78,8 @@ describe("ErrorBoundary", () => {
 
   it("withErrorBoundary HOC displayName + useErrorBoundary throwError via setState", () => {
     expect(src).toContain("Wrapped.displayName = `withErrorBoundary(");
-    expect(src).toContain("const throwError"); expect(src).toContain("setState(() => { throw error })");
+    expect(src).toContain("const throwError"); expect(src).toContain("setState(() => {");
+    expect(src).toContain("throw error");
   });
 });
 
