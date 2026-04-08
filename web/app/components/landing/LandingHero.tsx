@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useLandingI18n } from './LandingI18n'
 
-const CAPTAIN_AGENT = { emoji: '👨‍✈️', name: 'Capitano' }
-const SENTINEL_AGENT = { emoji: '💂', name: 'Sentinella' }
+const CAPTAIN_AGENT = { emoji: '👨‍✈️', name: 'Capitano', desc: 'Coordina il team e assegna le priorita operative.' }
+const SENTINEL_AGENT = { emoji: '💂', name: 'Sentinella', desc: 'Monitora budget, limiti e salute del sistema.' }
 
 const PIPELINE_AGENTS = [
-  { emoji: '🕵️', name: 'Scout' },
-  { emoji: '👨‍🔬', name: 'Analista' },
-  { emoji: '👨‍💻', name: 'Scorer' },
-  { emoji: '👨‍🏫', name: 'Scrittore' },
-  { emoji: '👨‍⚖️', name: 'Critico' },
+  { emoji: '🕵️', name: 'Scout', desc: 'Cerca nuove opportunita sui canali di lavoro.' },
+  { emoji: '👨‍🔬', name: 'Analista', desc: 'Legge i requisiti e valuta il fit col profilo.' },
+  { emoji: '👨‍💻', name: 'Scorer', desc: 'Calcola priorita e match score delle offerte.' },
+  { emoji: '👨‍🏫', name: 'Scrittore', desc: 'Prepara CV e cover letter su misura.' },
+  { emoji: '👨‍⚖️', name: 'Critico', desc: 'Rivede i materiali e segnala cosa correggere.' },
 ]
 
 export default function LandingHero() {
@@ -21,11 +21,12 @@ export default function LandingHero() {
   const sentinelNameRef = useRef<HTMLSpanElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
-  const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[]; sentinelPath: string | null }>({
+  const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[]; sentinelPath: string | null; chainPaths: string[] }>({
     width: 0,
     height: 0,
     paths: [],
     sentinelPath: null,
+    chainPaths: [],
   })
 
   useEffect(() => {
@@ -57,6 +58,27 @@ export default function LandingHero() {
           })
           .filter((path): path is string => path !== null)
 
+        const agentRects = agentEmojiRefs.current
+          .map((node) => {
+            if (!node) return null
+            return node.getBoundingClientRect()
+          })
+          .filter((rect): rect is DOMRect => rect !== null)
+
+        const chainPaths = agentRects
+          .slice(0, -1)
+          .map((rect, index) => {
+            const nextRect = agentRects[index + 1]
+            if (!nextRect) return null
+
+            const startX = rect.right - flowRect.left + 6
+            const endX = nextRect.left - flowRect.left - 6
+            const y = rect.top + rect.height / 2 - flowRect.left + flowRect.left - flowRect.top
+
+            return `M ${startX} ${y} L ${endX} ${y}`
+          })
+          .filter((path): path is string => path !== null)
+
         const sentinelStartX = sentinelRect.right - flowRect.left + 10
         const sentinelStartY = sentinelRect.top + sentinelRect.height / 2 - flowRect.top
         const sentinelEndX = captainRect.left - flowRect.left - 10
@@ -70,13 +92,15 @@ export default function LandingHero() {
             prev.width === width &&
             prev.height === height &&
             prev.sentinelPath === sentinelPath &&
+            prev.chainPaths.length === chainPaths.length &&
+            prev.chainPaths.every((path, index) => path === chainPaths[index]) &&
             prev.paths.length === paths.length &&
             prev.paths.every((path, index) => path === paths[index])
           ) {
             return prev
           }
 
-          return { width, height, paths, sentinelPath }
+          return { width, height, paths, sentinelPath, chainPaths }
         })
       })
     }
@@ -123,7 +147,7 @@ export default function LandingHero() {
       >
         <div className="hidden md:block">
           <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[620px]">
-            {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (arrowOverlay.paths.length > 0 || arrowOverlay.sentinelPath) && (
+            {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (arrowOverlay.paths.length > 0 || arrowOverlay.sentinelPath || arrowOverlay.chainPaths.length > 0) && (
               <svg
                 aria-hidden="true"
                 viewBox={`0 0 ${arrowOverlay.width} ${arrowOverlay.height}`}
@@ -151,15 +175,7 @@ export default function LandingHero() {
                     strokeLinecap="round"
                     markerEnd="url(#captain-arrowhead)"
                     strokeDasharray="4 8"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      values="0;-72"
-                      dur="14s"
-                      begin="0s"
-                      repeatCount="indefinite"
-                    />
-                  </path>
+                  />
                 )}
                 {arrowOverlay.paths.map((path, index) => (
                   <path
@@ -171,45 +187,59 @@ export default function LandingHero() {
                     strokeLinecap="round"
                     markerEnd="url(#captain-arrowhead)"
                     strokeDasharray="4 8"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      values="0;-72"
-                      dur="14s"
-                      begin={`${index * 0.3}s`}
-                      repeatCount="indefinite"
-                    />
-                  </path>
+                  />
+                ))}
+                {arrowOverlay.chainPaths.map((path, index) => (
+                  <path
+                    key={path}
+                    d={path}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.22)"
+                    strokeWidth="1.35"
+                    strokeLinecap="round"
+                    markerStart={index === arrowOverlay.chainPaths.length - 1 ? 'url(#captain-arrowhead)' : undefined}
+                    markerEnd="url(#captain-arrowhead)"
+                    strokeDasharray="4 8"
+                  />
                 ))}
               </svg>
             )}
 
             <div className="flex justify-center">
               <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end">
-                <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
-                  <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-1">
+                  <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                   <span ref={sentinelNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    {SENTINEL_AGENT.desc}
+                  </span>
                 </span>
-                <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
-                  <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
+                  <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                   <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    {CAPTAIN_AGENT.desc}
+                  </span>
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-5 justify-items-center items-start mt-14">
                 {PIPELINE_AGENTS.map((agent, index) => (
-                  <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
+                  <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
                     <span
                       ref={(node) => {
                         agentEmojiRefs.current[index] = node
                       }}
-                      className="text-2xl md:text-3xl leading-none"
+                      className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105"
                       aria-hidden="true"
                     >
                       {agent.emoji}
                     </span>
                     <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      {agent.desc}
+                    </span>
                   </span>
                 ))}
             </div>
@@ -219,22 +249,31 @@ export default function LandingHero() {
         <div className="md:hidden">
           <div className="flex justify-center mb-8">
             <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end gap-x-6 md:gap-x-8">
-              <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
-                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+              <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-1">
+                <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                 <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  {SENTINEL_AGENT.desc}
+                </span>
               </span>
-              <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
-                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+              <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
+                <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                 <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  {CAPTAIN_AGENT.desc}
+                </span>
               </span>
             </div>
           </div>
 
           <div className="flex items-start justify-start gap-x-6 gap-y-4 overflow-x-auto pb-3">
             {PIPELINE_AGENTS.map((agent) => (
-              <span key={agent.name} className="inline-flex flex-col items-center gap-2 shrink-0 min-w-[72px]">
-                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{agent.emoji}</span>
+              <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
+                <span className="text-2xl md:text-3xl leading-none transition-transform duration-150 ease-out group-hover:scale-105" aria-hidden="true">{agent.emoji}</span>
                 <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-40 -translate-x-1/2 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  {agent.desc}
+                </span>
               </span>
             ))}
           </div>
