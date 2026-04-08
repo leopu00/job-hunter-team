@@ -230,7 +230,7 @@ async function collectAssistantProfile(
 ): Promise<UserProfile> {
   printStep(4, 4, "Profilo assistito da AI");
   console.log(chalk.dim("  Descrivi il tuo profilo in linguaggio naturale."));
-  console.log(chalk.dim("  Esempio: Leone Puglisi, nato il 14/02/1994, sviluppatore React, disponibile a Milano e da remoto, cerca full-time."));
+  console.log(chalk.dim("  Esempio: Anna Verdi, nata il 14/02/1994, ha esperienza in assistenza clienti e organizzazione, disponibile a Roma e provincia, cerca un lavoro full-time."));
   console.log("");
 
   let notes = await ask(rl, chalk.green("  > Raccontami chi sei: "));
