@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const COMP = path.resolve(__dirname, "../../../web/components");
-function readSrc(name: string) { return fs.readFileSync(path.join(COMP, name), "utf-8"); }
+function readSrc(name: string) {
+  const raw = fs.readFileSync(path.join(COMP, name), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── InputSlider ── */
 describe("InputSlider", () => {

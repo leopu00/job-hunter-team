@@ -87,7 +87,7 @@ export default function OnboardingPage() {
     /* Profile */
     <div key="profile" className="max-w-md mx-auto">
       <h2 className="text-lg font-bold text-[var(--color-white)] mb-1">Il tuo profilo</h2>
-      <p className="text-[10px] text-[var(--color-dim)] mb-4">Informazioni base per personalizzare l'esperienza.</p>
+      <p className="text-[10px] text-[var(--color-dim)] mb-4">Informazioni base per personalizzare l&apos;esperienza.</p>
       <div className="flex flex-col gap-3">
         <div><label className="text-[8px] font-bold tracking-widest text-[var(--color-dim)]">NOME</label>
           <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full text-[10px] px-3 py-2 rounded-lg mt-1" style={inputStyle} placeholder="Il tuo nome" autoComplete="name" required /></div>

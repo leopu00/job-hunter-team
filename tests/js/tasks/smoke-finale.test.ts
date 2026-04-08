@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web/app");
+const WEB_ROOT = path.resolve(__dirname, "../../../web");
 
 /** Trova ricorsivamente tutti i file con un dato nome */
 function findAll(dir: string, target: string, out: string[] = []): string[] {
@@ -20,7 +21,17 @@ function findAll(dir: string, target: string, out: string[] = []): string[] {
   return out;
 }
 
-function rel(fp: string) { return path.relative(path.resolve(__dirname, "../../../web"), fp); }
+function readText(fp: string) {
+  return fs.readFileSync(fp, "utf-8").replace(/\r\n/g, "\n");
+}
+
+function rel(fp: string) {
+  return path.relative(WEB_ROOT, fp).replace(/\\/g, "/");
+}
+
+function hasUseClient(src: string) {
+  return /["']use client["']/.test(src);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  PAGINE WEB                                                              */
@@ -36,7 +47,7 @@ describe("Pagine web — inventario e validazione", () => {
   it("ogni pagina ha export default function", () => {
     const fail: string[] = [];
     for (const fp of ALL_PAGES) {
-      const src = fs.readFileSync(fp, "utf-8");
+      const src = readText(fp);
       if (!/(export default function|export default )/.test(src)) fail.push(rel(fp));
     }
     expect(fail, `Pagine senza export default: ${fail.join(", ")}`).toEqual([]);
@@ -46,9 +57,9 @@ describe("Pagine web — inventario e validazione", () => {
     const fail: string[] = [];
     // Pagine che usano useState/useEffect/onClick devono avere 'use client'
     for (const fp of ALL_PAGES) {
-      const src = fs.readFileSync(fp, "utf-8");
+      const src = readText(fp);
       const usesClient = /\b(useState|useEffect|useRef|useCallback|onClick)\b/.test(src);
-      if (usesClient && !src.includes("use client")) fail.push(rel(fp));
+      if (usesClient && !hasUseClient(src)) fail.push(rel(fp));
     }
     expect(fail, `Pagine client senza 'use client': ${fail.join(", ")}`).toEqual([]);
   });
@@ -56,7 +67,7 @@ describe("Pagine web — inventario e validazione", () => {
   it("nessuna pagina è vuota (≥50 caratteri)", () => {
     const empty: string[] = [];
     for (const fp of ALL_PAGES) {
-      const src = fs.readFileSync(fp, "utf-8");
+      const src = readText(fp);
       if (src.trim().length < 50) empty.push(rel(fp));
     }
     expect(empty, `Pagine vuote: ${empty.join(", ")}`).toEqual([]);
@@ -78,7 +89,7 @@ describe("API routes — inventario e validazione", () => {
   it("ogni route esporta almeno un handler (GET/POST/PUT/DELETE) o handler generico", () => {
     const fail: string[] = [];
     for (const fp of ALL_ROUTES) {
-      const src = fs.readFileSync(fp, "utf-8");
+      const src = readText(fp);
       const hasHandler = /export\s+async\s+function\s+(GET|POST|PUT|DELETE|PATCH)\b/.test(src);
       const hasGeneric = /export\s+(const|function)\s+(GET|POST|PUT|DELETE|PATCH|handler|dynamic)\b/.test(src);
       if (!hasHandler && !hasGeneric) fail.push(rel(fp));
@@ -89,7 +100,7 @@ describe("API routes — inventario e validazione", () => {
   it("nessuna route è vuota (≥30 caratteri)", () => {
     const empty: string[] = [];
     for (const fp of ALL_ROUTES) {
-      const src = fs.readFileSync(fp, "utf-8");
+      const src = readText(fp);
       if (src.trim().length < 30) empty.push(rel(fp));
     }
     expect(empty, `Routes vuote: ${empty.join(", ")}`).toEqual([]);
@@ -122,12 +133,12 @@ describe("Copertura strutturale", () => {
   it("ogni pagina top-level ha una API route corrispondente (≥80%)", () => {
     // Pagine top-level (non [id], non (protected), non page.tsx root)
     const topPages = ALL_PAGES
-      .map(fp => rel(fp))
+      .map((fp) => rel(fp))
       .filter(r => r.match(/^app\/[a-z][\w-]*\/page\.tsx$/))
       .map(r => r.replace("app/", "").replace("/page.tsx", ""));
 
     const routeNames = new Set(
-      ALL_ROUTES.map(fp => rel(fp))
+      ALL_ROUTES.map((fp) => rel(fp))
         .filter(r => r.match(/^app\/api\/[a-z][\w-]*\/route\.ts$/))
         .map(r => r.replace("app/api/", "").replace("/route.ts", ""))
     );
@@ -164,7 +175,7 @@ describe("Report riassuntivo", () => {
       if (/export\s+async\s+function\s+PUT\b/.test(src)) putCount++;
       if (/export\s+async\s+function\s+DELETE\b/.test(src)) deleteCount++;
     }
-    const clientPages = ALL_PAGES.filter(fp => fs.readFileSync(fp, "utf-8").includes("use client")).length;
+    const clientPages = ALL_PAGES.filter((fp) => hasUseClient(readText(fp))).length;
     const serverPages = ALL_PAGES.length - clientPages;
 
     // Questo test stampa il report e verifica i minimi

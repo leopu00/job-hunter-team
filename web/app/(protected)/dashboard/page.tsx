@@ -204,7 +204,7 @@ export default async function DashboardPage() {
                 className="group flex items-center gap-3 no-underline"
               >
                 <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
-                  Hai bisogno di aiuto? L'assistente può guidarti nella compilazione del profilo.
+                  Hai bisogno di aiuto? L&apos;assistente può guidarti nella compilazione del profilo.
                 </span>
                 <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
                   Apri assistente →

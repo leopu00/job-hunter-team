@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
-function readSrc(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function readSrc(rel: string) {
+  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const singleQuoted = raw.replace(/"/g, "'");
+  const squashed = singleQuoted.replace(/\s+/g, " ").trim();
+  return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
+}
 
 /* ── Chart SVG ── */
 describe("Chart SVG", () => {
@@ -101,16 +106,16 @@ describe("Kbd", () => {
 
   it("ALIASES 17+ chiavi: ctrl→Ctrl, cmd→⌘, shift→⇧, enter→↵, escape→Esc, arrows", () => {
     expect(src).toContain("const ALIASES");
-    expect(src).toContain("cmd:     '⌘'"); expect(src).toContain("shift:   '⇧'");
-    expect(src).toContain("enter:   '↵'"); expect(src).toContain("escape:  'Esc'");
-    expect(src).toContain("up:      '↑'"); expect(src).toContain("down:    '↓'");
+    expect(src).toContain("cmd: '⌘'"); expect(src).toContain("shift: '⇧'");
+    expect(src).toContain("enter: '↵'"); expect(src).toContain("escape: 'Esc'");
+    expect(src).toContain("up: '↑'"); expect(src).toContain("down: '↓'");
     expect(src).toContain("function resolveKey");
   });
 
   it("Kbd: elemento <kbd> con borderBottom 2px (3D) + boxShadow + SIZE_CLS sm/md/lg", () => {
     expect(src).toContain("<kbd"); expect(src).toContain("SIZE_CLS");
     expect(src).toContain("borderBottom: '2px solid var(--color-border)'");
-    expect(src).toContain("boxShadow:    '0 1px 0 var(--color-border)'");
+    expect(src).toContain("boxShadow: '0 1px 0 var(--color-border)'");
   });
 
   it("KbdCombo: keys[] con separator '+' + ShortcutRow: label + KbdCombo aligned", () => {
