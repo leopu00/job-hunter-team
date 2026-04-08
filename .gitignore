@@ -87,3 +87,10 @@ Thumbs.db
 # ── PLAYWRIGHT MCP ───────────────────────────────────────────
 .playwright-mcp/
 .vercel
+
+# ── SUPABASE ─────────────────────────────────────────────────────────────────
+supabase/.temp/
+
+# ── DEV SERVER LOGS ──────────────────────────────────────────────────────────
+.next-dev-*.log
+.next-dev-*.err.log
