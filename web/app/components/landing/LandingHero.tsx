@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useLandingI18n } from './LandingI18n'
 
 const CAPTAIN_AGENT = { emoji: '👨‍✈️', name: 'Capitano' }
+const SENTINEL_AGENT = { emoji: '💂', name: 'Sentinella' }
 
 const PIPELINE_AGENTS = [
   { emoji: '🕵️', name: 'Scout' },
@@ -11,7 +12,6 @@ const PIPELINE_AGENTS = [
   { emoji: '👨‍💻', name: 'Scorer' },
   { emoji: '👨‍🏫', name: 'Scrittore' },
   { emoji: '👨‍⚖️', name: 'Critico' },
-  { emoji: '💂', name: 'Sentinella' },
 ]
 
 export default function LandingHero() {
@@ -32,21 +32,6 @@ export default function LandingHero() {
           <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">BETA</span>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/download"
-            className="px-6 py-3 rounded text-[12px] font-bold tracking-wider no-underline transition-all"
-            style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
-          >
-            {t('hero_cta')}
-          </Link>
-          <a
-            href="#features"
-            className="px-6 py-3 rounded text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-[var(--color-bright)]"
-          >
-            {t('hero_cta2')}
-          </a>
-        </div>
       </div>
 
       <div
@@ -54,10 +39,16 @@ export default function LandingHero() {
         style={{ animation: 'fade-in 0.8s ease 0.2s both' }}
       >
         <div className="flex justify-center mb-8">
-          <span className="inline-flex flex-col items-center gap-2 shrink-0">
-            <span className="text-3xl md:text-4xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
-            <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
-          </span>
+          <div className="w-full max-w-[520px] grid grid-cols-5 items-end gap-x-6 md:gap-x-8">
+            <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-1">
+              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+            </span>
+            <span className="inline-flex flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
+              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+            </span>
+          </div>
         </div>
 
         <div className="flex items-start justify-start md:justify-center gap-x-6 md:gap-x-8 gap-y-4 overflow-x-auto pb-3">
@@ -72,6 +63,22 @@ export default function LandingHero() {
         <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
           Hai una squadra di agenti AI virtuali disponibile 24 ore su 24: lavorano per te, cercano opportunità, analizzano offerte, preparano i materiali e si coordinano tra loro in autonomia, mentre tu mantieni sempre il controllo.
         </p>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
+          <Link
+            href="/download"
+            className="px-6 py-3 rounded text-[12px] font-bold tracking-wider no-underline transition-all"
+            style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
+          >
+            {t('hero_cta')}
+          </Link>
+          <a
+            href="#features"
+            className="px-6 py-3 rounded text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-[var(--color-bright)]"
+          >
+            {t('hero_cta2')}
+          </a>
+        </div>
       </div>
     </section>
   )
