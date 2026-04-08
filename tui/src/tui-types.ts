@@ -115,7 +115,7 @@ export type TuiStateAccess = JhtTuiState & {
   showThinking: boolean;
 };
 
-export type ProfileFieldKey = "nome" | "eta" | "competenze" | "zona" | "tipoLavoro";
+export type ProfileFieldKey = "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro";
 
 export type ProfileWizardStep = {
   field: ProfileFieldKey;
@@ -130,7 +130,8 @@ export type ProfileWizardState = {
   steps: ProfileWizardStep[];
   draft: {
     nome: string;
-    eta: string;
+    cognome: string;
+    dataNascita: string;
     competenze: string[];
     zona: string;
     tipoLavoro: string;

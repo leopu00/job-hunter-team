@@ -17,7 +17,8 @@ type SetupMode = "manual" | "assistant";
 
 type AssistantProfileDraft = {
   nome?: string;
-  eta?: string;
+  cognome?: string;
+  dataNascita?: string;
   competenze?: string[];
   zona?: string;
   tipoLavoro?: string;
@@ -101,7 +102,8 @@ export function saveApiKey(key: string): void {
 function buildProfile(input: Partial<UserProfile>): UserProfile {
   const profile: UserProfile = {
     nome: input.nome?.trim() ?? "",
-    eta: input.eta?.trim() ?? "",
+    cognome: input.cognome?.trim() ?? "",
+    dataNascita: input.dataNascita?.trim() ?? "",
     competenze: Array.isArray(input.competenze) ? input.competenze.map((s) => s.trim()).filter(Boolean) : [],
     zona: input.zona?.trim() ?? "",
     tipoLavoro: input.tipoLavoro?.trim() ?? "",
@@ -120,7 +122,8 @@ async function collectManualProfile(
   console.log("");
 
   const nome = await askWithDefault(rl, "Nome", initial?.nome ?? "");
-  const eta = await askWithDefault(rl, "Eta", initial?.eta ?? "");
+  const cognome = await askWithDefault(rl, "Cognome", initial?.cognome ?? "");
+  const dataNascita = await askWithDefault(rl, "Data di nascita", initial?.dataNascita ?? "");
   const competenzeRaw = await askWithDefault(
     rl,
     "Competenze (separate da virgola)",
@@ -131,7 +134,8 @@ async function collectManualProfile(
 
   return buildProfile({
     nome,
-    eta,
+    cognome,
+    dataNascita,
     competenze: competenzeRaw.split(",").map((s) => s.trim()).filter(Boolean),
     zona,
     tipoLavoro,
@@ -154,7 +158,7 @@ async function generateAssistantProfile(
     "Dato un testo libero dell'utente, estrai un profilo candidato.",
     "Rispondi solo con JSON valido, senza markdown.",
     "Schema:",
-    '{"nome":"","eta":"","competenze":[],"zona":"","tipoLavoro":"","followUpQuestion":"","missing":[]}',
+    '{"nome":"","cognome":"","dataNascita":"","competenze":[],"zona":"","tipoLavoro":"","followUpQuestion":"","missing":[]}',
     "Usa stringhe vuote se un campo non e noto.",
     "followUpQuestion deve contenere una sola domanda breve solo se manca un dato importante.",
   ].join("\n");
@@ -195,7 +199,8 @@ async function generateAssistantProfile(
   const parsed = JSON.parse(jsonText) as AssistantProfileDraft;
   return {
     nome: typeof parsed.nome === "string" ? parsed.nome : "",
-    eta: typeof parsed.eta === "string" ? parsed.eta : "",
+    cognome: typeof parsed.cognome === "string" ? parsed.cognome : "",
+    dataNascita: typeof parsed.dataNascita === "string" ? parsed.dataNascita : "",
     competenze: Array.isArray(parsed.competenze) ? parsed.competenze.filter((v): v is string => typeof v === "string") : [],
     zona: typeof parsed.zona === "string" ? parsed.zona : "",
     tipoLavoro: typeof parsed.tipoLavoro === "string" ? parsed.tipoLavoro : "",
@@ -210,7 +215,7 @@ async function collectAssistantProfile(
 ): Promise<UserProfile> {
   printStep(4, 4, "Profilo assistito da AI");
   console.log(chalk.dim("  Descrivi il tuo profilo in linguaggio naturale."));
-  console.log(chalk.dim("  Esempio: sviluppatore React a Milano, 5 anni di esperienza, cerco full-time remoto."));
+  console.log(chalk.dim("  Esempio: Leone Puglisi, nato il 14/02/1994, sviluppatore React, disponibile a Milano e da remoto, cerca full-time."));
   console.log("");
 
   let notes = await ask(rl, chalk.green("  > Raccontami chi sei: "));
@@ -235,7 +240,8 @@ async function collectAssistantProfile(
 
   const proposed = buildProfile({
     nome: draft.nome,
-    eta: draft.eta,
+    cognome: draft.cognome,
+    dataNascita: draft.dataNascita,
     competenze: draft.competenze,
     zona: draft.zona,
     tipoLavoro: draft.tipoLavoro,

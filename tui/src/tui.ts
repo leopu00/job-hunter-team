@@ -33,11 +33,12 @@ const KNOWN_AGENTS: JhtAgent[] = [
 
 const VIEWS: TuiView[] = ["team", "chat", "tasks", "dashboard", "profile", "ai"];
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
-  { field: "nome", title: "Nome", question: "Come ti chiami?", hint: "Inserisci nome e cognome.", required: true },
-  { field: "eta", title: "Eta'", question: "Quanti anni hai?", hint: "Campo opzionale.", required: false },
-  { field: "competenze", title: "Competenze", question: "Quali competenze vuoi far usare al team?", hint: "Separale con virgola. Es: React, TypeScript, Python.", required: true },
-  { field: "zona", title: "Zona", question: "In che zona cerchi lavoro?", hint: "Es: Milano, Roma, Remoto, Europa.", required: true },
-  { field: "tipoLavoro", title: "Tipo lavoro", question: "Che tipo di lavoro cerchi?", hint: "Es: Full-time, Freelance, Stage, Remoto.", required: true },
+  { field: "nome", title: "Nome", question: "Inserisci nome", hint: "Es: Leone", required: true },
+  { field: "cognome", title: "Cognome", question: "Inserisci cognome", hint: "Es: Puglisi", required: true },
+  { field: "dataNascita", title: "Data di nascita", question: "Inserisci data di nascita", hint: "Formato: GG/MM/AAAA", required: true },
+  { field: "competenze", title: "Competenze", question: "Inserisci competenze professionali", hint: "Separate da virgola. Es: React, TypeScript, Python", required: true },
+  { field: "zona", title: "Zona", question: "Inserisci zona di lavoro", hint: "Es: Milano, remoto, Europa", required: true },
+  { field: "tipoLavoro", title: "Tipo di lavoro", question: "Inserisci tipo di lavoro", hint: "Es: Full-time, freelance, stage", required: true },
 ];
 
 export async function runJhtTui() {
@@ -92,7 +93,8 @@ export async function runJhtTui() {
       steps: PROFILE_WIZARD_STEPS,
       draft: {
         nome: profile.nome,
-        eta: profile.eta,
+        cognome: profile.cognome,
+        dataNascita: profile.dataNascita,
         competenze: [...profile.competenze],
         zona: profile.zona,
         tipoLavoro: profile.tipoLavoro,
