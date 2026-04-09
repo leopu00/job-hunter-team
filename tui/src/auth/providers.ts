@@ -122,7 +122,7 @@ const openaiOAuthAuth: AuthMethod = {
     await ctx.prompt.note(
       [
         "Verrà aperto il browser per l'autenticazione OpenAI.",
-        "Dopo il login, incolla l'URL di redirect qui.",
+        "Dopo il login, verrai reindirizzato automaticamente.",
         "",
         "Nota: OAuth usa localhost:1455 per il callback.",
       ].join("\n"),
@@ -132,37 +132,38 @@ const openaiOAuthAuth: AuthMethod = {
     const spin = ctx.prompt.progress("Avvio OAuth flow...");
     
     try {
-      // Simulazione OAuth - in produzione useremmo @mariozechner/pi-ai/oauth
-      // Per ora facciamo un fallback a input manuale token
-      spin.update("Apertura browser...");
+      const { loginOpenAIOAuth } = await import("../oauth/openai.js");
       
-      const oauthUrl = "https://platform.openai.com/auth/codex"; // URL fittizio
-      if (ctx.openUrl) {
-        await ctx.openUrl(oauthUrl);
-      }
-      
-      ctx.runtime.log(`\nApri questo URL nel browser:\n${oauthUrl}\n`);
-      
-      spin.stop("In attesa di autorizzazione...");
-      
-      const redirectUrl = await ctx.prompt.text({
-        message: "Incolla l'URL di redirect (o il codice):",
-        validate: (v) => v.trim() ? undefined : "Richiesto",
+      const result = await loginOpenAIOAuth({
+        onAuth: async ({ url }) => {
+          spin.update("Apertura browser...");
+          if (ctx.openUrl) {
+            await ctx.openUrl(url);
+          } else {
+            ctx.runtime.log(`\nApri questo URL nel browser:\n${url}\n`);
+          }
+        },
+        onPrompt: async ({ message, placeholder }) => {
+          // Fallback per ambienti headless
+          return ctx.prompt.text({ message, placeholder });
+        },
+        onProgress: (msg) => spin.update(msg),
       });
 
-      // Estrai token dall'URL (semplificato)
-      const token = extractTokenFromRedirect(redirectUrl.trim());
-      if (!token) {
-        return { success: false, error: "Impossibile estrarre token dall'URL" };
+      if (!result.success) {
+        spin.stop("OAuth fallito");
+        return { success: false, error: result.error };
       }
 
-      return { 
-        success: true, 
-        credentials: { 
-          type: "oauth", 
-          token,
-          expiresAt: Date.now() + 3600 * 1000, // 1 ora
-        } 
+      spin.stop("OAuth completato");
+      return {
+        success: true,
+        credentials: {
+          type: "oauth",
+          token: result.credentials.accessToken,
+          refreshToken: result.credentials.refreshToken,
+          expiresAt: result.credentials.expiresAt,
+        },
       };
     } catch (err) {
       spin.stop("OAuth fallito");
@@ -312,18 +313,32 @@ async function testKimiKey(key: string): Promise<boolean> {
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function extractTokenFromRedirect(url: string): string | null {
-  // Estrae token da URL tipo: http://localhost:1455/callback?code=xxx
-  // o direttamente il code se l'utente incolla solo quello
+export async function getValidToken(providerId: ProviderId): Promise<string | null> {
+  const { getProviderCredentials, isTokenExpired } = await import("../oauth/storage.js");
+  const creds = getProviderCredentials(providerId);
   
-  if (url.includes("code=")) {
-    const match = url.match(/[?&]code=([^&]+)/);
-    if (match) return decodeURIComponent(match[1]);
+  if (!creds) return null;
+  
+  if (creds.type === "apiKey") {
+    return creds.key;
   }
   
-  // Se l'utente ha incollato solo il code
-  if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) {
-    return url;
+  // OAuth
+  if (!isTokenExpired(creds)) {
+    return creds.accessToken;
+  }
+  
+  // Token scaduto, prova refresh per OpenAI
+  if (providerId === "openai" && creds.refreshToken) {
+    const { refreshAccessToken } = await import("../oauth/openai.js");
+    const result = await refreshAccessToken(creds.refreshToken);
+    
+    if (result.success) {
+      // Salva nuove credenziali
+      const { saveOAuthCredentials } = await import("../oauth/storage.js");
+      saveOAuthCredentials(providerId, result.credentials);
+      return result.credentials.accessToken;
+    }
   }
   
   return null;
@@ -336,14 +351,21 @@ export async function saveCredentials(
   methodId: string,
   credentials: Credentials
 ): Promise<void> {
-  const { saveWorkspaceApiKey, saveWorkspaceProvider } = await import("../tui-profile.js");
+  const { saveWorkspaceProvider } = await import("../tui-profile.js");
+  const { saveApiKeyCredentials, saveOAuthCredentials } = await import("../oauth/storage.js");
   
+  // Salva provider selezionato nel workspace
   saveWorkspaceProvider(provider, workspace);
   
+  // Salva credenziali nel storage crittografato
   if (credentials.type === "apiKey") {
-    saveWorkspaceApiKey(credentials.key, workspace, provider);
-  } else if (credentials.type === "oauth" || credentials.type === "token") {
-    // Per OAuth/token, salva il token come "oauth:<token>"
-    saveWorkspaceApiKey(`oauth:${credentials.token}`, workspace, provider);
+    saveApiKeyCredentials(provider, credentials.key);
+  } else if (credentials.type === "oauth") {
+    saveOAuthCredentials(provider, {
+      accessToken: credentials.token,
+      refreshToken: credentials.refreshToken,
+      expiresAt: credentials.expiresAt || Date.now() + 3600 * 1000,
+      tokenType: "Bearer",
+    });
   }
 }
