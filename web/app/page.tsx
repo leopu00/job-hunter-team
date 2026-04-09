@@ -66,19 +66,19 @@ function LoginPage({ authError }: { authError: boolean }) {
             Job Hunter <span className="text-[var(--color-green)]">Team</span>
           </h1>
           <p className="text-[var(--color-dim)] text-[11px]">
-            Accedi per salvare il tuo progresso
+            Sign in to save your progress
           </p>
         </div>
 
         {/* Errori */}
         {authError && (
           <div className="mb-4 px-3 py-2 border border-[var(--color-red)] text-[11px]" style={{ color: 'var(--color-red)' }}>
-            Autenticazione fallita.
+            Authentication failed.
           </div>
         )}
         {configError && (
           <div className="mb-4 px-3 py-2 border border-[var(--color-yellow)] text-[11px]" style={{ color: 'var(--color-yellow)' }}>
-            Configurazione mancante.
+            Configuration missing.
           </div>
         )}
 
@@ -116,7 +116,7 @@ function BackButton() {
       onClick={handleBack}
       className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
     >
-      Indietro
+      Back
     </button>
   )
 }
