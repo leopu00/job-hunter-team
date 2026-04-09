@@ -1,7 +1,6 @@
 /**
  * TaskPanel — dashboard task del team JHT.
  * Legge i task da ~/.jht-dev/tasks/ e li mostra raggruppati per stato.
- * Pattern copiato da OpenClaw ChatLog (Container con figli dinamici).
  */
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";

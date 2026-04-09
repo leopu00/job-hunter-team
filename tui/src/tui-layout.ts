@@ -1,5 +1,5 @@
 /**
- * Layout TUI — struttura ispirata a OpenClaw.
+ * Layout TUI — struttura a 3 livelli.
  * Header → mainSlot (view switching) → statusBar.
  * Supporta viste multiple: home, team, chat, tasks, ai.
  */
