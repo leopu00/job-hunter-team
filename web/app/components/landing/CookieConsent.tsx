@@ -47,13 +47,13 @@ export default function CookieConsent() {
 
   return (
     <div
-      className="fixed bottom-4 left-4 right-4 z-[9980] flex justify-center"
+      className="pointer-events-none fixed bottom-4 left-4 right-4 z-[9980] flex justify-end"
       style={{ animation: 'fade-in 0.3s ease both', animationDelay: '1s', animationFillMode: 'both' }}
     >
       <div
         role="dialog"
         aria-label="Cookie consent"
-        className="w-full max-w-xl rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3"
+        className="pointer-events-auto w-full max-w-sm rounded-xl px-5 py-4 flex flex-col gap-3"
         style={{
           background: 'var(--color-panel)',
           border: '1px solid var(--color-border)',
