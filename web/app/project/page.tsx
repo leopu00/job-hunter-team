@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
-import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
 const T = {
@@ -120,7 +119,6 @@ function ProjectContent() {
           <BackLink label={t.back} />
         </div>
       </main>
-      <LandingFooter />
       <ScrollToTop />
     </>
   )
