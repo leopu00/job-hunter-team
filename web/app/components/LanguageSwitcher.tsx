@@ -14,12 +14,22 @@ export default function LanguageSwitcher() {
   const [open, setOpen] = useState(false)
 
   const fetchLocale = useCallback(async () => {
-    const res = await fetch('/api/i18n').catch(() => null)
-    if (!res?.ok) return
+    console.log('[LanguageSwitcher] Fetching locales...')
+    const res = await fetch('/api/i18n?t=' + Date.now()).catch((err) => {
+      console.log('[LanguageSwitcher] Fetch error:', err)
+      return null
+    })
+    if (!res?.ok) {
+      console.log('[LanguageSwitcher] Response not OK:', res?.status)
+      return
+    }
     const data = await res.json()
-    setCurrent(data.current ?? 'en')
+    console.log('[LanguageSwitcher] Received data:', data)
+    console.log('[LanguageSwitcher] Locales count:', data.locales?.length)
+    console.log('[LanguageSwitcher] Locales:', data.locales)
+    setCurrent(data.current ?? currentLocale)
     setLocales(data.locales ?? [])
-  }, [])
+  }, [currentLocale])
 
   useEffect(() => { fetchLocale() }, [fetchLocale])
 

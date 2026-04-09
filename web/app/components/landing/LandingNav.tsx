@@ -27,9 +27,20 @@ function FlagEN() {
   )
 }
 
+function FlagHU() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="4.67" fill="#CD2A3E" />
+      <rect y="4.67" width="20" height="4.66" fill="#fff" />
+      <rect y="9.33" width="20" height="4.67" fill="#436F4D" />
+    </svg>
+  )
+}
+
 const LANGUAGES: { code: Lang; label: string; Flag: () => React.JSX.Element }[] = [
   { code: 'it', label: 'Italiano', Flag: FlagIT },
   { code: 'en', label: 'English', Flag: FlagEN },
+  { code: 'hu', label: 'Magyar', Flag: FlagHU },
 ]
 
 function LangDropdown() {
