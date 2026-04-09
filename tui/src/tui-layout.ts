@@ -9,7 +9,7 @@ import { theme } from "./tui-theme.js";
 import type { JhtTuiState, TuiView } from "./tui-types.js";
 
 const VIEW_LABELS: Record<TuiView, string> = {
-  home: "Home",
+  home: "Config",
   team: "Team",
   chat: "Chat",
   tasks: "Tasks",

@@ -12,7 +12,7 @@ import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
 import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { ensureWorkspaceConfigured, runSetupWizard, saveApiKey } from "./tui-setup.js";
+import { ensureWorkspaceConfigured, saveApiKey } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
@@ -66,12 +66,7 @@ function clearTerminalScreen() {
 
 export async function runJhtTui() {
   await ensureWorkspaceConfigured();
-
-  // Setup wizard se API key non configurata
-  let resolvedApiKey = loadApiKey();
-  if (!resolvedApiKey) {
-    resolvedApiKey = await runSetupWizard();
-  }
+  const resolvedApiKey = loadApiKey();
 
   // Stato completo
   const sessionInfo: SessionInfo = { model: "claude-sonnet-4" };
@@ -332,7 +327,8 @@ export async function runJhtTui() {
     }
     layout.updateHeader(state);
     updateInputLine();
-    tui.requestRender(previousView !== view);
+    const forceFullRedraw = previousView !== view || view === "home" || view === "team";
+    tui.requestRender(forceFullRedraw);
   };
 
   /** Refresh vista corrente */
@@ -476,9 +472,6 @@ export async function runJhtTui() {
           setActivityStatus(selectedItem.label);
           updateInputLine();
           tui.requestRender();
-        } else if (selectedItem?.type === "action") {
-          setActivityStatus(selectedItem.label.toLowerCase());
-          void handleCommand(selectedItem.cmd);
         }
       }
       return { consume: true };
