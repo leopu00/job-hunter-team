@@ -1,3 +1,3 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Crescita', description: 'Statistiche di crescita: andamento candidature, progressi nel tempo e trend di miglioramento.' }
+export const metadata: Metadata = { title: 'Growth', description: 'Track your growth and career statistics.' }
 export default function CrescitaLayout({ children }: { children: React.ReactNode }) { return children }

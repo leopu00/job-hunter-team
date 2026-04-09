@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import createNextIntlPlugin from 'next-intl/plugin';
 
 const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -26,6 +27,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   turbopack: {
     root: process.cwd(),
   },
@@ -49,4 +51,6 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
+export default withNextIntl(nextConfig);
