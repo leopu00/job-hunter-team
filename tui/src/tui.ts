@@ -1,7 +1,6 @@
 /**
  * JHT TUI — Pannello di Controllo del Team.
- * Struttura ispirata a OpenClaw: header, main area, status bar, editor.
- * Viste: Home, Team (agenti tmux), Chat (tmux), Tasks, AI (Anthropic).
+ * Viste: Home, Team (agenti tmux), Chat (tmux), Tasks, AI.
  */
 import { randomUUID } from "node:crypto";
 import { Container, Key, matchesKey, ProcessTerminal, Text, TUI } from "@mariozechner/pi-tui";
@@ -435,7 +434,7 @@ export async function runJhtTui() {
     process.exit(0);
   };
 
-  // Input handling (ispirato a OpenClaw tui.ts input listeners)
+  // Input handling
   tui.addInputListener((data) => {
     if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
       if (state.currentView === "profile" && state.profileWizard) {
@@ -492,7 +491,7 @@ export async function runJhtTui() {
       requestExit();
       return { consume: true };
     }
-    // Ctrl+D — esci (come OpenClaw)
+    // Ctrl+D — esci
     if (matchesKey(data, Key.ctrl("d"))) {
       if (inputBuffer.length === 0) { requestExit(); }
       return { consume: true };
