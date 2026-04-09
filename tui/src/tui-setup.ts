@@ -40,7 +40,8 @@ import { theme } from "./tui-theme.js";
 import { 
   listProviders, 
   getProvider, 
-  getAuthMethods, 
+  getAuthMethods,
+  saveCredentials, 
   type ProviderId,
   type AuthMethod,
 } from "./auth/providers.js";
@@ -326,39 +327,22 @@ export async function runSetupWizard(): Promise<string> {
       return false;
     }
 
-    // Crea API di prompting compatibile con il sistema auth
-    const promptAPI = {
-      text: async (params: { message: string; placeholder?: string; validate?: (v: string) => string | undefined }) => {
-        // Per ora semplifichiamo: usiamo inputBuffer
-        // In una implementazione completa, qui apriremmo un overlay di input
-        state.message = params.message + (params.placeholder ? ` (${params.placeholder})` : "");
-        render();
-        // Attesa input... (semplificato)
-        return inputBuffer.trim();
-      },
-      confirm: async () => true,
-      select: async <T extends string>(params: { options: Array<{ value: T }> }) => params.options[0]?.value as T,
-      progress: (msg: string) => {
-        state.message = msg;
-        render();
-        return { update: (m: string) => { state.message = m; render(); }, stop: () => {} };
-      },
-      note: async (msg: string, title?: string) => {
-        state.message = title ? `${title}: ${msg}` : msg;
-        render();
-      },
-    };
+    // Se è OAuth, esegui direttamente (apre browser)
+    if (method.kind === "oauth") {
+      const result = await executeAuthMethod(method);
+      if (!result.success) {
+        state.message = result.error;
+        return false;
+      }
+      // Salva credenziali
+      await saveCredentials(state.workspace, state.provider as ProviderId, method.id, result.credentials);
+      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key : result.credentials.token;
+      completedApiKey = state.apiKey;
+      state.message = "Autenticazione completata!";
+      return true;
+    }
 
-    const runtimeAPI = {
-      log: (msg: string) => { /* noop in TUI */ },
-      error: (msg: string) => { state.message = msg; render(); },
-    };
-
-    state.message = "Autenticazione in corso...";
-    render();
-
-    // Per ora manteniamo compatibilità con il flusso esistente
-    // Verifica API key semplificata
+    // Per API key, usa inputBuffer
     const key = inputBuffer.trim();
     if (!key) {
       state.message = "Inserisci la chiave API";
@@ -370,17 +354,96 @@ export async function runSetupWizard(): Promise<string> {
       return false;
     }
 
+    state.message = "Verifica in corso...";
+    render();
+
     const valid = await testApiKey(state.provider, key);
     if (!valid) {
       state.message = "Chiave non valida — riprova";
       return false;
     }
 
-    saveWorkspaceApiKey(key, state.workspace, state.provider);
+    // Salva nel nuovo storage
+    await saveCredentials(state.workspace, state.provider as ProviderId, method.id, {
+      type: "apiKey",
+      key,
+    });
+    
     state.apiKey = key;
     completedApiKey = key;
     state.message = null;
     return true;
+  };
+
+  // Esegue un metodo di autenticazione
+  const executeAuthMethod = async (method: AuthMethod): Promise<import("./auth/providers.js").AuthResult> => {
+    const { promptAPI, runtimeAPI } = createAuthAPIs();
+    
+    return method.run({
+      workspace: state.workspace,
+      provider: state.provider as WorkspaceProvider,
+      prompt: promptAPI,
+      openUrl: async (url) => {
+        // Apri URL nel browser di default
+        const { spawn } = await import("node:child_process");
+        const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+        spawn(command, [url], { detached: true, stdio: "ignore" });
+      },
+      runtime: runtimeAPI,
+    });
+  };
+
+  // Crea API compatibili con il sistema auth
+  const createAuthAPIs = () => {
+    let pendingInputResolver: ((value: string) => void) | null = null;
+    let pendingInputRejecter: ((reason: Error) => void) | null = null;
+
+    const promptAPI = {
+      text: async (params: { message: string; placeholder?: string; validate?: (v: string) => string | undefined }): Promise<string> => {
+        state.message = params.message;
+        if (params.placeholder) {
+          state.message += ` (${params.placeholder})`;
+        }
+        render();
+        
+        // Attendi input da tastiera
+        return new Promise((resolve, reject) => {
+          pendingInputResolver = resolve;
+          pendingInputRejecter = reject;
+        });
+      },
+      confirm: async (params: { message: string; initialValue?: boolean }): Promise<boolean> => {
+        state.message = params.message + " (s/n)";
+        render();
+        // Semplificato: sempre true per ora
+        return true;
+      },
+      select: async <T extends string>(params: { message: string; options: Array<{ value: T; label: string; hint?: string }> }): Promise<T> => {
+        state.message = params.message;
+        render();
+        // Semplificato: primo opzione
+        return params.options[0]?.value as T;
+      },
+      progress: (msg: string) => {
+        state.message = msg;
+        render();
+        return { 
+          update: (m: string) => { state.message = m; render(); }, 
+          stop: () => {} 
+        };
+      },
+      note: async (msg: string, title?: string) => {
+        state.message = title ? `${title}: ${msg}` : msg;
+        render();
+      },
+    };
+
+    const runtimeAPI = {
+      log: (msg: string) => { state.message = msg; render(); },
+      error: (msg: string) => { state.message = `Errore: ${msg}`; render(); },
+    };
+
+    return { promptAPI, runtimeAPI, pendingInputResolver, pendingInputRejecter };
   };
 
   // Input handler
