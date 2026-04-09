@@ -6,6 +6,7 @@
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabaseConfig } from '@/lib/supabase/config'
 
 // --- CORS Config ---
 
@@ -117,10 +118,12 @@ export async function proxy(request: NextRequest) {
   // --- Auth Supabase ---
   let supabaseResponse = NextResponse.next({ request })
 
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  const supabaseConfig = getSupabaseConfig()
+
+  if (supabaseConfig.configured) {
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseConfig.url,
+      supabaseConfig.anonKey,
       {
         cookies: {
           getAll() {
