@@ -232,9 +232,9 @@ export async function runSetupWizard(): Promise<string> {
   const handleWorkspace = async (): Promise<boolean> => {
     let path = inputBuffer.trim();
 
-    // Se vuoto, apri picker
+    // Se vuoto, usa home directory come default (in tmux il picker non funziona)
     if (!path) {
-      path = openWorkspaceFolderPicker(state.workspace || homedir()) ?? "";
+      path = homedir();
     }
 
     if (!path) {
@@ -264,14 +264,15 @@ export async function runSetupWizard(): Promise<string> {
     ensureWorkspaceInitialized(validation.value);
     saveWorkspacePath(validation.value);
     state.workspace = validation.value;
-    state.provider = (loadWorkspaceProvider(validation.value) as WorkspaceProvider) || "";
-    state.apiKey = loadWorkspaceApiKey(validation.value) || "";
+    // DEBUG: non caricare provider esistente, forza selezione
+    state.provider = "";
+    state.apiKey = "";
     syncProviderSelection();
     inputBuffer = "";
     state.message = null;
 
-    // Procedi al prossimo step
-    state.step = state.provider ? "authMethod" : "provider";
+    // Procedi sempre allo step provider (DEBUG)
+    state.step = "provider";
     return true;
   };
 
@@ -508,6 +509,8 @@ export async function runSetupWizard(): Promise<string> {
       if (currentStep === "provider" || currentStep === "authMethod") {
         // Per provider e authMethod, lascia che SelectList gestisca la navigazione
         if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+          const selectList = currentStep === "provider" ? providerSelect : authMethodSelect;
+          selectList.handleInput(data);
           state.message = null;
           render();
           return { consume: true };
