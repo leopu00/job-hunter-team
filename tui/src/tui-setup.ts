@@ -431,7 +431,13 @@ async function askValidatedField(
   }
 }
 
+function isWSL(): boolean {
+  // Detect WSL by checking WSL-specific environment variables
+  return !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || process.env.WSLENV);
+}
+
 function openWorkspaceFolderPicker(initialPath: string): string | null {
+  // macOS: use AppleScript
   if (process.platform === "darwin") {
     const resolvedPath = resolve(initialPath);
     const scriptLines = [
@@ -460,48 +466,50 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
     return selected || null;
   }
 
-  if (process.platform !== "win32") {
-    return null;
+  // Windows native or WSL: use PowerShell
+  if (process.platform === "win32" || isWSL()) {
+    const escapedPath = initialPath.replace(/'/g, "''");
+    const script = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+      "$dialog.Title = 'Seleziona la cartella di lavoro'",
+      "$dialog.Filter = 'Cartelle|*.folder'",
+      "$dialog.CheckFileExists = $false",
+      "$dialog.CheckPathExists = $true",
+      "$dialog.ValidateNames = $false",
+      "$dialog.DereferenceLinks = $true",
+      "$dialog.FileName = 'Seleziona questa cartella'",
+      `$initialPath = '${escapedPath}'`,
+      "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
+      "$result = $dialog.ShowDialog()",
+      "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "  $selected = Split-Path -Path $dialog.FileName -Parent",
+      "  if (-not $selected) { $selected = $dialog.FileName }",
+      "  Write-Output $selected",
+      "}",
+    ].join("; ");
+
+    const result = spawnSync("powershell.exe", [
+      "-NoLogo",
+      "-NoProfile",
+      "-STA",
+      "-Command",
+      script,
+    ], {
+      encoding: "utf-8",
+      timeout: 120_000,
+    });
+
+    if (result.status !== 0) {
+      return null;
+    }
+
+    const selected = result.stdout.trim();
+    return selected || null;
   }
 
-  const escapedPath = initialPath.replace(/'/g, "''");
-  const script = [
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-    "$dialog.Title = 'Seleziona la cartella di lavoro'",
-    "$dialog.Filter = 'Cartelle|*.folder'",
-    "$dialog.CheckFileExists = $false",
-    "$dialog.CheckPathExists = $true",
-    "$dialog.ValidateNames = $false",
-    "$dialog.DereferenceLinks = $true",
-    "$dialog.FileName = 'Seleziona questa cartella'",
-    `$initialPath = '${escapedPath}'`,
-    "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
-    "$result = $dialog.ShowDialog()",
-    "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
-    "  $selected = Split-Path -Path $dialog.FileName -Parent",
-    "  if (-not $selected) { $selected = $dialog.FileName }",
-    "  Write-Output $selected",
-    "}",
-  ].join("; ");
-
-  const result = spawnSync("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-STA",
-    "-Command",
-    script,
-  ], {
-    encoding: "utf-8",
-    timeout: 120_000,
-  });
-
-  if (result.status !== 0) {
-    return null;
-  }
-
-  const selected = result.stdout.trim();
-  return selected || null;
+  // Native Linux (non-WSL): no folder picker available
+  return null;
 }
 
 async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
