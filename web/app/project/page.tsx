@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
@@ -10,6 +11,7 @@ const T = {
   it: {
     title: 'Panoramica del progetto',
     subtitle: 'Un team di agenti AI che cerca lavoro per te.',
+    back: '← Indietro',
     open_source: 'open source',
     repo_cta: 'Repository',
     story_title: 'Storia e obiettivo',
@@ -23,6 +25,7 @@ const T = {
   en: {
     title: 'Project overview',
     subtitle: 'An AI agent team that finds jobs for you.',
+    back: '← Back',
     open_source: 'open source',
     repo_cta: 'Repository',
     story_title: 'History and goal',
@@ -40,6 +43,27 @@ function GitHubIcon() {
     <svg aria-hidden="true" viewBox="0 0 16 16" className="w-4 h-4 fill-current">
       <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49C4 14.09 3.48 13.22 3.32 12.77c-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
     </svg>
+  )
+}
+
+function BackLink({ label }: { label: string }) {
+  const router = useRouter()
+  
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push('/')
+    }
+  }
+
+  return (
+    <button
+      onClick={handleBack}
+      className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0"
+    >
+      {label}
+    </button>
   )
 }
 
@@ -91,6 +115,10 @@ function ProjectContent() {
             <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed">{t.story_body_3}</p>
           </div>
         </section>
+
+        <div className="mt-8 flex justify-center">
+          <BackLink label={t.back} />
+        </div>
       </main>
       <LandingFooter />
       <ScrollToTop />
