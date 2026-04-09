@@ -13,14 +13,15 @@ const PREFS_PATH = path.join(homedir(), '.jht', 'i18n-prefs.json');
 const SUPPORTED_LOCALES = [
   { code: 'it', label: 'Italiano', flag: 'IT' },
   { code: 'en', label: 'English', flag: 'EN' },
+  { code: 'hu', label: 'Magyar', flag: 'HU' },
 ] as const;
 
-type Locale = 'it' | 'en';
+type Locale = 'it' | 'en' | 'hu';
 
 function loadPrefs(): { locale: Locale } {
   try {
     const raw = JSON.parse(fs.readFileSync(PREFS_PATH, 'utf-8'));
-    if (raw.locale === 'it' || raw.locale === 'en') return raw;
+    if (raw.locale === 'it' || raw.locale === 'en' || raw.locale === 'hu') return raw;
   } catch { /* default */ }
   return { locale: 'it' };
 }
@@ -48,9 +49,9 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const locale = body.locale as string;
 
-    if (locale !== 'it' && locale !== 'en') {
+    if (locale !== 'it' && locale !== 'en' && locale !== 'hu') {
       return NextResponse.json(
-        { error: `Locale non supportato: ${locale}. Validi: it, en` },
+        { error: `Locale non supportato: ${locale}. Validi: it, en, hu` },
         { status: 400 },
       );
     }
