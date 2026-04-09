@@ -26,7 +26,7 @@ export default async function ProfilePage() {
     if (!user) {
       return (
         <div className="p-12 text-center text-[var(--color-muted)]">
-          Sessione scaduta. <Link href="/" className="text-[var(--color-green)]">Accedi di nuovo</Link>
+          Session expired. <Link href="/" className="text-[var(--color-green)]">Sign in again</Link>
         </div>
       )
     }
@@ -72,16 +72,16 @@ export default async function ProfilePage() {
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Profilo</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Profile</span>
         </nav>
         <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Profilo Candidato
+              Candidate Profile
             </h1>
             {profile?.updated_at && (
               <p className="text-[var(--color-muted)] text-[11px] mt-1">
-                Aggiornato il {new Date(profile.updated_at).toLocaleDateString('it-IT')}
+                Updated on {new Date(profile.updated_at).toLocaleDateString('it-IT')}
               </p>
             )}
           </div>
@@ -95,7 +95,7 @@ export default async function ProfilePage() {
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
-              Modifica
+              Edit
             </Link>
             {profile && (
               <a
@@ -109,7 +109,7 @@ export default async function ProfilePage() {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Esporta JSON
+                Export JSON
               </a>
             )}
           </div>
@@ -121,9 +121,9 @@ export default async function ProfilePage() {
       {!profile && (
         <div className="flex flex-col items-center justify-center py-12 mb-8 text-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-card)]">
           <div className="text-3xl mb-3" style={{ opacity: 0.3 }}>👤</div>
-          <p className="text-[13px] text-[var(--color-muted)] font-semibold">Nessun profilo configurato</p>
+          <p className="text-[13px] text-[var(--color-muted)] font-semibold">No profile configured</p>
           <p className="text-[11px] text-[var(--color-dim)] mt-1 max-w-md">
-            Compila il form qui sotto oppure carica un CV per estrarre i dati automaticamente.
+            Fill out the form below or upload a CV to extract data automatically.
           </p>
         </div>
       )}
@@ -131,17 +131,17 @@ export default async function ProfilePage() {
       {profile && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
-        {/* Info Base */}
+        {/* Basic Info */}
         <ProfileSection title="Info Base">
-          <ProfileField label="Nome" value={profile.name} />
-          <ProfileField label="Ruolo target" value={profile.target_role} />
+          <ProfileField label="Name" value={profile.name} />
+          <ProfileField label="Target role" value={profile.target_role} />
           <ProfileField label="Location" value={profile.location} />
-          <ProfileField label="Esperienza" value={profile.experience_years != null ? `${profile.experience_years} anni` : null} />
-          <ProfileField label="Laurea" value={profile.has_degree ? 'Sì' : 'No'} />
+          <ProfileField label="Experience" value={profile.experience_years != null ? `${profile.experience_years} years` : null} />
+          <ProfileField label="Degree" value={profile.has_degree ? 'Yes' : 'No'} />
           <ProfileField label="Email" value={profile.email} />
         </ProfileSection>
 
-        {/* Contatti */}
+        {/* Contacts */}
         {(profile.email || hasContacts) && (
           <ProfileSection title="Contatti">
             <div className="flex flex-col gap-2.5">
@@ -149,7 +149,7 @@ export default async function ProfilePage() {
                 <ContactRow icon={<><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></>} label="Email" value={profile.email} href={`mailto:${profile.email}`} />
               )}
               {contacts.phone && (
-                <ContactRow icon={<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>} label="Telefono" value={contacts.phone} href={`tel:${contacts.phone}`} />
+                <ContactRow icon={<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>} label="Phone" value={contacts.phone} href={`tel:${contacts.phone}`} />
               )}
               {contacts.linkedin && (
                 <ContactRow icon={<><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></>} label="LinkedIn" value={contacts.linkedin} href={contacts.linkedin.startsWith('http') ? contacts.linkedin : `https://linkedin.com/in/${contacts.linkedin}`} />
@@ -164,7 +164,7 @@ export default async function ProfilePage() {
           </ProfileSection>
         )}
 
-        {/* Lingue */}
+        {/* Languages */}
         <ProfileSection title="Lingue">
           {profile.languages && profile.languages.length > 0 ? (
             <div className="flex flex-col gap-2">
@@ -176,7 +176,7 @@ export default async function ProfilePage() {
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna lingua inserita</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No languages entered</span>
           )}
         </ProfileSection>
 
@@ -205,12 +205,12 @@ export default async function ProfilePage() {
               })}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna skill inserita</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No skills entered</span>
           )}
         </ProfileSection>
 
         {/* Esperienza lavorativa */}
-        <ProfileSection title={`Esperienza Lavorativa${hasExperience ? ` (${experience.length})` : ''}`}>
+        <ProfileSection title={`Work Experience${hasExperience ? ` (${experience.length})` : ''}`}>
           {hasExperience ? (
             <div className="flex flex-col">
               {experience.map((e, i) => (
@@ -238,12 +238,12 @@ export default async function ProfilePage() {
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna esperienza inserita</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No experience entered</span>
           )}
         </ProfileSection>
 
         {/* Formazione */}
-        <ProfileSection title={`Formazione & Certificazioni${hasEducation ? ` (${education.length + certifications.length})` : ''}`}>
+        <ProfileSection title={`Education & Certifications${hasEducation ? ` (${education.length + certifications.length})` : ''}`}>
           {hasEducation ? (
             <div className="flex flex-col">
               {education.map((e, i) => (
@@ -270,7 +270,7 @@ export default async function ProfilePage() {
               ))}
               {certifications.length > 0 && (
                 <div className="mt-1">
-                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Certificazioni</div>
+                  <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">Certifications</div>
                   <div className="flex flex-wrap gap-1.5">
                     {certifications.map((c, i) => (
                       <span key={i} className="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-yellow)]/10 text-[var(--color-yellow)] border border-[var(--color-yellow)]/20">{c}</span>
@@ -280,12 +280,12 @@ export default async function ProfilePage() {
               )}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna formazione inserita</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No education entered</span>
           )}
         </ProfileSection>
 
         {/* Progetti personali */}
-        <ProfileSection title={`Progetti Personali${hasProjects ? ` (${projects.length})` : ''}`}>
+        <ProfileSection title={`Personal Projects${hasProjects ? ` (${projects.length})` : ''}`}>
           {hasProjects ? (
             <div className="flex flex-col gap-2">
               {projects.map((p, i) => (
@@ -318,11 +318,11 @@ export default async function ProfilePage() {
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessun progetto inserito</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No projects entered</span>
           )}
         </ProfileSection>
 
-        {/* Ruoli target */}
+        {/* Target Roles */}
         <ProfileSection title={`Ruoli target${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ''}`}>
           {profile.job_titles && profile.job_titles.length > 0 ? (
             <div className="flex flex-col gap-2">
@@ -343,12 +343,12 @@ export default async function ProfilePage() {
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessun ruolo inserito</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No roles entered</span>
           )}
         </ProfileSection>
 
         {/* Preferenze lavoro */}
-        <ProfileSection title="Preferenze Lavoro">
+        <ProfileSection title="Job Preferences">
           {profile.location_preferences && profile.location_preferences.length > 0 ? (
             <div className="flex flex-wrap gap-2 mb-3">
               {profile.location_preferences.map((lp, i) => (
@@ -372,7 +372,7 @@ export default async function ProfilePage() {
               ))}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna preferenza</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No preferences</span>
           )}
           {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
             <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
@@ -390,14 +390,14 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Obiettivi di carriera */}
-        <ProfileSection title="Obiettivi di Carriera">
+        <ProfileSection title="Career Goals">
           {hasCareerGoals ? (
             <div className="flex flex-col gap-2">
-              <ProfileField label="Direzione" value={careerGoals.direction || null} />
-              <ProfileField label="Job target" value={careerGoals.target_job || null} />
+              <ProfileField label="Direction" value={careerGoals.direction || null} />
+              <ProfileField label="Target job" value={careerGoals.target_job || null} />
               {(careerGoals.specializations?.length ?? 0) > 0 && (
                 <div className="py-1.5 border-b border-[var(--color-border)]">
-                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Specializzazioni</div>
+                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Specializations</div>
                   <div className="flex flex-wrap gap-1.5">
                     {careerGoals.specializations!.map((s, i) => (
                       <span key={i} className="px-2 py-0.5 text-[10px] rounded bg-[var(--color-purple)]/10 text-[var(--color-purple)] border border-[var(--color-purple)]/20 font-semibold">{s}</span>
@@ -407,7 +407,7 @@ export default async function ProfilePage() {
               )}
               {(careerGoals.desired_courses?.length ?? 0) > 0 && (
                 <div className="py-1.5">
-                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Corsi desiderati</div>
+                  <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">Desired courses</div>
                   <div className="flex flex-col gap-1">
                     {careerGoals.desired_courses!.map((c, i) => (
                       <span key={i} className="text-[11px] text-[var(--color-muted)]">· {c}</span>
@@ -417,12 +417,12 @@ export default async function ProfilePage() {
               )}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessun obiettivo inserito</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No goals entered</span>
           )}
         </ProfileSection>
 
         {/* Desideri e aspirazioni */}
-        <ProfileSection title="Desideri & Aspirazioni">
+        <ProfileSection title="Wishes & Aspirations">
           {hasAspirations ? (
             <div className="flex flex-col gap-2">
               {aspirations.short_term && (
@@ -431,7 +431,7 @@ export default async function ProfilePage() {
                     <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                   </svg>
                   <div>
-                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-yellow)] mb-0.5">Breve termine</div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-yellow)] mb-0.5">Short term</div>
                     <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.short_term}</p>
                   </div>
                 </div>
@@ -442,7 +442,7 @@ export default async function ProfilePage() {
                     <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                   </svg>
                   <div>
-                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-blue)] mb-0.5">Lungo termine</div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-blue)] mb-0.5">Long term</div>
                     <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">{aspirations.long_term}</p>
                   </div>
                 </div>
@@ -453,20 +453,20 @@ export default async function ProfilePage() {
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                   <div>
-                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-green)] mb-0.5">Aspirazioni ambiziose</div>
+                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-green)] mb-0.5">Ambitious aspirations</div>
                     <p className="text-[11px] text-[var(--color-bright)] leading-relaxed italic">{aspirations.ambitious}</p>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <span className="text-[var(--color-dim)] text-[11px]">Nessuna aspirazione inserita</span>
+            <span className="text-[var(--color-dim)] text-[11px]">No aspirations entered</span>
           )}
         </ProfileSection>
 
         {/* Strengths */}
         {strengths.length > 0 && (
-          <ProfileSection title={`Punti di forza (${strengths.length})`}>
+          <ProfileSection title={`Strengths (${strengths.length})`}>
             <div className="flex flex-wrap gap-2">
               {strengths.map((s, i) => (
                 <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-[var(--color-green)]/8 text-[var(--color-green)] border border-[var(--color-green)]/20">
@@ -481,7 +481,7 @@ export default async function ProfilePage() {
         {/* Note libere — full width */}
         {freeNotes && (
           <div className="md:col-span-2">
-            <ProfileSection title="Note Libere">
+            <ProfileSection title="Free Notes">
               <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">{freeNotes}</p>
             </ProfileSection>
           </div>
@@ -513,7 +513,7 @@ function SalaryRange({ label, min, max, color }: { label: string; min: number; m
           €{min.toLocaleString('it-IT')} – €{max.toLocaleString('it-IT')}
         </span>
       </div>
-      <div role="progressbar" aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))} aria-valuemin={0} aria-valuemax={100} aria-label="Range stipendio" className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+      <div role="progressbar" aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))} aria-valuemin={0} aria-valuemax={100} aria-label="Salary range" className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, (max / 120000) * 100)}%`, background: color, opacity: 0.6 }} />
       </div>
     </div>
