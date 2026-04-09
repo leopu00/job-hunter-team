@@ -105,20 +105,13 @@ const PROVIDER_OPTIONS: SelectItem[] = listProviders().map(p => ({
 function renderBanner(): string {
   return [
     "",
-    theme.accent("     ██╗██╗  ██╗████████╗"),
-    theme.accent("     ██║██║  ██║╚══██╔══╝"),
-    theme.accent("     ██║███████║   ██║   "),
-    theme.accent("██   ██║██╔══██║   ██║   "),
-    theme.accent("╚█████╔╝██║  ██║   ██║   "),
-    theme.accent(" ╚════╝ ╚═╝  ╚═╝   ╚═╝   "),
-    "",
-    theme.header("  Job Hunter Team — Configurazione"),
+    theme.header("  JHT Setup"),
     "",
   ].join("\n");
 }
 
 function renderFooter(): string {
-  return theme.dim("  ↑/↓ navigate • Enter confirm • Ctrl+C cancel");
+  return theme.dim("  ↑↓ navigate  •  Enter confirm  •  Ctrl+C cancel");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,13 +453,8 @@ export async function runSetupWizard(): Promise<string> {
     };
 
     tui.addInputListener((data) => {
-      // Ctrl+C / Ctrl+D — blocca uscita fino a completamento
+      // Ctrl+C / Ctrl+D — esci in qualsiasi momento
       if (matchesKey(data, Key.ctrl("c")) || matchesKey(data, Key.ctrl("d"))) {
-        if (state.step !== "credentials" || !state.apiKey) {
-          state.message = "Completa la configurazione prima di uscire";
-          render();
-          return { consume: true };
-        }
         finish();
         return { consume: true };
       }
@@ -550,117 +538,45 @@ export async function runSetupWizard(): Promise<string> {
 
 function renderWelcome(panel: Container, state: SetupState) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  add(`  ${theme.text("Benvenuto in Job Hunter Team!")}`);
-  add("");
-  add(`  ${theme.dim("Configuriamo il tuo ambiente di lavoro.")}`);
-  add("");
-  add(`  ${theme.accent("▶ Premi Enter per iniziare")}`);
-
-  if (state.message) {
-    add("");
-    add(`  ${theme.warning(state.message)}`);
-  }
+  add(`  ${theme.accent("▶ Enter per iniziare")}`);
+  if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
 function renderWorkspace(panel: Container, state: SetupState, inputBuffer: string) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  add(`  ${theme.header("📁 Cartella di lavoro")}`);
-  add("");
-  add(`  ${theme.text("Seleziona o digita il percorso della cartella di lavoro.")}`);
-  add(`  ${theme.dim("Premi Enter vuoto per aprire il file picker.")}`);
+  add(`  ${theme.header("Workspace")}`);
   add("");
 
   const display = inputBuffer || state.workspace || "";
-  const cursor = "█";
-  const line = display + cursor;
+  add(`  ${theme.border(">")} ${theme.text(display)}${theme.dim("█")}`);
 
-  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
-  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
-  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
-
-  if (state.message) {
-    add("");
-    add(`  ${theme.warning(state.message)}`);
-  }
+  if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
 function renderProvider(panel: Container, state: SetupState, selectList: SelectList) {
-  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  add(`  ${theme.header("🤖 Provider AI")}`);
-  add("");
-  add(`  ${theme.text("Seleziona il provider per questa cartella:")}`);
-  add("");
-
-  // Aggiungi il SelectList come componente
   panel.addChild(selectList);
-
-  if (state.message) {
-    add("");
-    add(`  ${theme.warning(state.message)}`);
-  }
+  if (state.message) panel.addChild(new Text(`  ${theme.warning(state.message)}`, 0, 0));
 }
 
 function renderAuthMethod(panel: Container, state: SetupState, selectList: SelectList) {
-  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  add(`  ${theme.header("🔐 Metodo di Autenticazione")}`);
-  add("");
-  add(`  ${theme.text(`Provider: ${theme.accent(state.provider)}`)}`);
-  add(`  ${theme.dim("Seleziona come autenticarti con questo provider:")}`);
-  add("");
-
   panel.addChild(selectList);
-
-  if (state.message) {
-    add("");
-    add(`  ${theme.warning(state.message)}`);
-  }
+  if (state.message) panel.addChild(new Text(`  ${theme.warning(state.message)}`, 0, 0));
 }
 
 function renderCredentials(panel: Container, state: SetupState, inputBuffer: string) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
   const provider = getProvider(state.provider);
   const method = provider?.auth.find(m => m.id === state.authMethodId);
 
-  add(`  ${theme.header(method?.kind === "oauth" ? "🔑 OAuth" : "🔑 API Key")}`);
-  add("");
-  add(`  ${theme.text(`Provider: ${theme.accent(state.provider)}`)}`);
-  add(`  ${theme.text(`Metodo: ${theme.accent(method?.label || "API Key")}`)}`);
-  add("");
-
   if (method?.kind === "oauth") {
-    add(`  ${theme.dim("Verrà aperto il browser per l'autenticazione.")}`);
-    add(`  ${theme.dim("Dopo il login, torna qui per completare.")}`);
-    add("");
-    add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
+    add(`  ${theme.accent("▶ Enter per aprire il browser")}`);
   } else {
-    add(`  ${theme.dim("Inserisci la chiave API per questo provider.")}`);
-    add("");
-    
     const display = inputBuffer || "";
     const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
-    const cursor = "█";
-    const line = masked + cursor;
-
-    add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
-    add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
-    add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
-
-    if (state.provider === "anthropic") {
-      add(`  ${theme.dim("Formato atteso: sk-ant-...")}`);
-    } else if (state.provider === "openai" || state.provider === "kimi") {
-      add(`  ${theme.dim("Formato atteso: sk-...")}`);
-    }
+    add(`  ${theme.border(">")} ${theme.text(masked)}${theme.dim("█")}`);
   }
 
-  if (state.message) {
-    add("");
-    add(`  ${theme.warning(state.message)}`);
-  }
+  if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
