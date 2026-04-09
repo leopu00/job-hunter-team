@@ -1,15 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useTranslations, useLocale } from 'next-intl';
 import { localeLabels, type Locale } from '../../i18n/config';
 
-type LocaleInfo = { code: string; label: string; flag: string }
+type LocaleInfo = { code: Locale; label: string; flag: string }
 
 export default function LanguageSwitcher() {
-  const t = useTranslations('language');
-  const currentLocale = useLocale() as Locale;
-  const [current, setCurrent] = useState(currentLocale)
+  const [current, setCurrent] = useState<Locale>('en')
   const [locales, setLocales] = useState<LocaleInfo[]>([])
   const [open, setOpen] = useState(false)
 
@@ -27,13 +24,13 @@ export default function LanguageSwitcher() {
     console.log('[LanguageSwitcher] Received data:', data)
     console.log('[LanguageSwitcher] Locales count:', data.locales?.length)
     console.log('[LanguageSwitcher] Locales:', data.locales)
-    setCurrent(data.current ?? currentLocale)
+    setCurrent(data.current ?? 'en')
     setLocales(data.locales ?? [])
-  }, [currentLocale])
+  }, [])
 
   useEffect(() => { fetchLocale() }, [fetchLocale])
 
-  const switchLocale = async (code: string) => {
+  const switchLocale = async (code: Locale) => {
     setOpen(false)
     if (code === current) return
     const res = await fetch('/api/i18n', {
@@ -56,7 +53,7 @@ export default function LanguageSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        aria-label={t('switch', { language: currentInfo.label })}
+        aria-label={`Language: ${currentInfo.label}`}
         aria-expanded={open}
         aria-haspopup="listbox"
         className="flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer w-full"
@@ -69,7 +66,7 @@ export default function LanguageSwitcher() {
       </button>
 
       {open && (
-        <div role="listbox" aria-label={t('select')} className="absolute bottom-full left-0 mb-1 w-full rounded overflow-hidden shadow-lg"
+        <div role="listbox" aria-label="Select language" className="absolute bottom-full left-0 mb-1 w-full rounded overflow-hidden shadow-lg"
           style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', zIndex: 100 }}>
           {locales.map(l => (
             <button key={l.code} role="option" aria-selected={l.code === current} onClick={() => switchLocale(l.code)}

@@ -12,6 +12,7 @@ const APP_CHROME_HIDDEN_PREFIXES = [
 
 export default function MainContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const currentPath = pathname ?? ''
   const [isMobile, setIsMobile] = useState(false)
   const [fade, setFade] = useState(false)
   const prevPath = useRef(pathname)
@@ -32,7 +33,7 @@ export default function MainContent({ children }: { children: React.ReactNode })
     }
   }, [pathname])
 
-  const hasSidebar = !isMarketingRoute(pathname) && !APP_CHROME_HIDDEN_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const hasSidebar = !isMarketingRoute(currentPath) && !APP_CHROME_HIDDEN_PREFIXES.some((p) => currentPath === p || currentPath.startsWith(p + '/'))
   const marginLeft = hasSidebar && !isMobile ? 'var(--sidebar-w, 200px)' : 0
 
   return (
