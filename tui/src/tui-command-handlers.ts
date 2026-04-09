@@ -1,6 +1,5 @@
 /**
  * Command handlers — gestisce comandi slash e invio messaggi.
- * Ispirato a OpenClaw tui-command-handlers.ts con adattamenti per JHT.
  */
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";

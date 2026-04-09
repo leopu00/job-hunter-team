@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Messaggi — Job Hunter',
-  description: 'Gestione messaggi e comunicazioni',
+  title: 'Messages — Job Hunter',
+  description: 'Message management and communications',
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
