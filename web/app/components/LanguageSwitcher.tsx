@@ -10,7 +10,7 @@ export default function LanguageSwitcher() {
   const [open, setOpen] = useState(false)
 
   const fetchLocale = useCallback(async () => {
-    const res = await fetch('/api/i18n').catch(() => null)
+    const res = await fetch('/api/i18n?t=' + Date.now()).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
     setCurrent(data.current ?? 'it')
