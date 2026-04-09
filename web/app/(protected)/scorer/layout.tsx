@@ -1,3 +1,3 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Scorer', description: 'Agente Scorer: valuta la compatibilità tra profilo candidato e posizioni con punteggi dettagliati.' }
+export const metadata: Metadata = { title: 'Scorer', description: 'Scorer Agent: calculates priority and match score for job offers.' }
 export default function ScorerLayout({ children }: { children: React.ReactNode }) { return children }
