@@ -55,13 +55,13 @@ export default async function ApplicationsPage() {
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Candidature</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Applications</span>
         </nav>
         <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Candidature</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {applications.length} totali · {applied.length} inviate · {ready.length + passedDraft.length} pronte
+              {applications.length} total · {applied.length} sent · {ready.length + passedDraft.length} ready
             </p>
           </div>
           {SHEETS_URL && (
@@ -82,19 +82,19 @@ export default async function ApplicationsPage() {
       {applications.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Totali</div>
+            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Total</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-bright)' }}>{applications.length}</div>
           </div>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Inviate</div>
+            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Sent</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-green)' }}>{applied.length}</div>
           </div>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Pronte</div>
+            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>Ready</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: '#7fffb2' }}>{ready.length + passedDraft.length}</div>
           </div>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>In lavorazione</div>
+            <div className="text-[9px] font-semibold tracking-[0.15em] uppercase mb-2" style={{ color: 'var(--color-dim)' }}>In progress</div>
             <div className="text-3xl font-bold tracking-tight leading-none" style={{ color: 'var(--color-yellow)' }}>{other.length}</div>
           </div>
         </div>
@@ -104,29 +104,29 @@ export default async function ApplicationsPage() {
       {applications.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center" style={{ animation: 'fade-in 0.35s ease both' }}>
           <div className="text-4xl mb-4" aria-hidden="true" style={{ opacity: 0.3 }}>📋</div>
-          <p className="text-[var(--color-muted)] text-[13px]">Nessuna candidatura ancora.</p>
-          <p className="text-[var(--color-dim)] text-[11px] mt-1">Le candidature appariranno qui quando gli agenti le creeranno.</p>
+          <p className="text-[var(--color-muted)] text-[13px]">No applications yet.</p>
+          <p className="text-[var(--color-dim)] text-[11px] mt-1">Applications will appear here when agents create them.</p>
         </div>
       )}
 
       {/* ── Pronte all'invio ─────────────────────────────────────── */}
       {ready.length > 0 && (
         <section className="mb-8" style={{ animation: 'fade-in 0.35s ease both 0.05s' }}>
-          <div className="section-label mb-4" style={{ color: '#7fffb2' }}>Pronte all&apos;invio — {ready.length}</div>
+          <div className="section-label mb-4" style={{ color: '#7fffb2' }}>Ready to send — {ready.length}</div>
           <div className="space-y-3">
             {ready.map(a => <ApplicationCard key={a.id} app={a} highlight />)}
           </div>
         </section>
       )}
 
-      {/* ── Approvate dal critico (workflow legacy) ─────────────── */}
+      {/* ── Approved by critic (workflow legacy) ─────────────── */}
       {passedDraft.length > 0 && (
         <section className="mb-8" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
           <div className="section-label mb-1" style={{ color: 'var(--color-green)' }}>
             Approvate dal critico — {passedDraft.length}
           </div>
           <p className="text-[10px] text-[var(--color-dim)] mb-4">
-            CV approvati (PASS) — status non aggiornato nel legacy. Pronte per l&apos;invio.
+            CVs approved (PASS) — status not updated in legacy. Ready to send.
           </p>
           <div className="space-y-3">
             {passedDraft.map(a => <ApplicationCard key={a.id} app={a} highlight />)}
@@ -134,7 +134,7 @@ export default async function ApplicationsPage() {
         </section>
       )}
 
-      {/* ── Inviate ─────────────────────────────────────────────── */}
+      {/* ── Sent ─────────────────────────────────────────────── */}
       {applied.length > 0 && (
         <section className="mb-8" style={{ animation: 'fade-in 0.35s ease both 0.15s' }}>
           <div className="section-label mb-4">Inviate — {applied.length}</div>
@@ -144,7 +144,7 @@ export default async function ApplicationsPage() {
         </section>
       )}
 
-      {/* ── In lavorazione ──────────────────────────────────────── */}
+      {/* ── In progress ──────────────────────────────────────── */}
       {other.length > 0 && (
         <section className="mb-8" style={{ animation: 'fade-in 0.35s ease both 0.2s' }}>
           <div className="section-label mb-4">In lavorazione — {other.length}</div>
@@ -191,7 +191,7 @@ function ApplicationCard({ app, highlight }: { app: ApplicationWithPosition; hig
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-[11px] text-[var(--color-muted)]">{pos?.company ?? '—'}</span>
             {app.applied_at && (
-              <span className="text-[10px] text-[var(--color-dim)]">inviata {app.applied_at.slice(0, 10)}</span>
+              <span className="text-[10px] text-[var(--color-dim)]">sent {app.applied_at.slice(0, 10)}</span>
             )}
             {app.applied_via && (
               <span className="text-[10px] text-[var(--color-dim)]">via {app.applied_via}</span>
@@ -199,7 +199,7 @@ function ApplicationCard({ app, highlight }: { app: ApplicationWithPosition; hig
           </div>
           {app.response && (
             <div className="mt-2 text-[11px] px-2 py-1 rounded border inline-block" style={{ borderColor: 'var(--color-border)', color: '#58a6ff' }}>
-              Risposta: {app.response}
+              Response: {app.response}
             </div>
           )}
         </div>
@@ -257,7 +257,7 @@ function ApplicationCard({ app, highlight }: { app: ApplicationWithPosition; hig
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-dim)' }}
             >
-              Offerta ↗
+              Job post ↗
             </a>
           )}
         </div>

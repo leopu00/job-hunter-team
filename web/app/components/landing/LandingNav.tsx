@@ -27,9 +27,20 @@ function FlagEN() {
   )
 }
 
+function FlagHU() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="4.67" fill="#CD2A3E" />
+      <rect y="4.67" width="20" height="4.66" fill="#fff" />
+      <rect y="9.33" width="20" height="4.67" fill="#436F4D" />
+    </svg>
+  )
+}
+
 const LANGUAGES: { code: Lang; label: string; Flag: () => React.JSX.Element }[] = [
   { code: 'it', label: 'Italiano', Flag: FlagIT },
   { code: 'en', label: 'English', Flag: FlagEN },
+  { code: 'hu', label: 'Magyar', Flag: FlagHU },
 ]
 
 function LangDropdown() {
@@ -55,7 +66,7 @@ function LangDropdown() {
         style={{
           cursor: 'pointer',
         }}
-        aria-label={`Lingua: ${current.label}`}
+        aria-label={`Language: ${current.label}`}
       >
         <current.Flag />
         <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
@@ -116,7 +127,7 @@ export default function LandingNav() {
 
   return (
     <nav
-      aria-label="Navigazione principale"
+      aria-label="Main navigation"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: 'linear-gradient(180deg, var(--color-void) 60%, transparent)',
@@ -134,6 +145,7 @@ export default function LandingNav() {
           </span>
         </Link>
 
+        {/* Nav links nascosti temporaneamente - pagine incomplete
         <div className="hidden md:flex items-center gap-6">
           <a href={homeAnchor('features')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_features')}
@@ -165,6 +177,7 @@ export default function LandingNav() {
             {t('nav_about')}
           </Link>
         </div>
+        */}
 
         <div className="flex items-center gap-2 sm:gap-3">
           <LangDropdown />
@@ -179,7 +192,7 @@ export default function LandingNav() {
             {t('nav_login')}
           </Link>
 
-          {/* Mobile hamburger */}
+          {/* Mobile hamburger nascosto temporaneamente
           <button
             onClick={() => setMobileOpen(v => !v)}
             className="md:hidden flex flex-col gap-1 p-1.5"
@@ -192,10 +205,11 @@ export default function LandingNav() {
             <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
             <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
           </button>
+          */}
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile dropdown nascosto temporaneamente
       {mobileOpen && (
         <div
           id="mobile-nav-menu"
@@ -238,6 +252,7 @@ export default function LandingNav() {
           </Link>
         </div>
       )}
+      */}
     </nav>
   )
 }

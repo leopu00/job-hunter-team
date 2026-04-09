@@ -19,11 +19,17 @@ const T = {
     decline: 'Necessary only',
     privacy: 'Privacy Policy',
   },
+  hu: {
+    text: 'Ez az oldal technikai cookie-kat használ a működéshez és analitikai cookie-kat a felhasználói élmény javításához.',
+    accept: 'Elfogadás',
+    decline: 'Csak szükséges',
+    privacy: 'Adatvédelmi Irányelvek',
+  },
 }
 
 export default function CookieConsent() {
   const { lang } = useLandingI18n()
-  const t = T[lang]
+  const t = T[lang as keyof typeof T] || T.en
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {

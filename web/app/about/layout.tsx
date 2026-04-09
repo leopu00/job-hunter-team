@@ -3,15 +3,15 @@ import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'About',
-  description: 'Chi siamo, la storia del progetto, i 7 agenti core piu un assistente di supporto e la visione futura di Job Hunter Team.',
+  description: 'About us, the project history, the 7 core agents plus a support assistant, and the future vision of Job Hunter Team.',
   openGraph: {
     title: 'About | Job Hunter Team',
-    description: 'Chi siamo, la storia del progetto, i 7 agenti core piu un assistente di supporto e la visione futura di Job Hunter Team.',
+    description: 'About us, the project history, the 7 core agents plus a support assistant, and the future vision of Job Hunter Team.',
   },
   twitter: {
     card: 'summary',
     title: 'About | Job Hunter Team',
-    description: 'Chi siamo, la storia del progetto, i 7 agenti core piu un assistente di supporto e la visione futura di Job Hunter Team.',
+    description: 'About us, the project history, the 7 core agents plus a support assistant, and the future vision of Job Hunter Team.',
   },
 }
 
@@ -24,7 +24,7 @@ function AboutJsonLd() {
     name: 'Job Hunter Team',
     url: SITE_URL,
     logo: `${SITE_URL}/icon-512.png`,
-    description: 'Un team di agenti AI che automatizza la ricerca di lavoro. Open source, locale, privato.',
+    description: 'A team of AI agents that automates job searching. Open source, local, private.',
     sameAs: ['https://github.com/leopu00/job-hunter-team'],
   }
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />

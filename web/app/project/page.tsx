@@ -1,55 +1,39 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
-import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
 const T = {
   it: {
     title: 'Panoramica del progetto',
-    subtitle: 'Una pagina pubblica per capire cosa contiene la repository, come e organizzata e quali tecnologie muovono Job Hunter Team.',
+    subtitle: 'Un team di agenti AI che cerca lavoro per te.',
+    back: '← Indietro',
     open_source: 'open source',
-    repo_cta: 'Apri il repository GitHub',
-    highlights_title: 'Punti chiave',
-    highlights: [
-      { name: 'Local-first', detail: 'Runtime, dashboard e dati restano sul tuo computer.' },
-      { name: 'Multi-agent', detail: 'Una pipeline coordinata di agenti specializzati per il job hunting.' },
-      { name: 'Open repo', detail: 'Codice pubblico, struttura leggibile e licenza MIT.' },
-      { name: 'Desktop + web', detail: 'Launcher desktop e interfaccia locale nello stesso progetto.' },
-    ],
+    repo_cta: 'Repository',
     story_title: 'Storia e obiettivo',
     story_body_1:
-      'Job Hunter Team nasce come progetto open source per automatizzare la ricerca di lavoro con una pipeline di agenti AI specializzati, eseguita in locale e controllata dall utente.',
+      'Job Hunter Team nasce come progetto open source per automatizzare la ricerca di lavoro con una pipeline di agenti AI specializzati, eseguita in locale e controllata dall\'utente.',
     story_body_2:
-      'L obiettivo della repository e costruire un sistema pratico: trovare offerte, analizzarle, preparare candidature personalizzate e coordinare tutto da un interfaccia unica, senza perdere controllo, privacy e trasparenza sul codice.',
-    stack_title: 'Stack tecnologico',
-    stack_desc: 'Le tecnologie principali del progetto, utili da conoscere prima di leggere il codice o contribuire.',
-    about_link: 'Chi siamo',
-    changelog_link: 'Changelog',
+      'L\'obiettivo è costruire uno strumento accessibile a tutti: chi preferisce semplicità può scaricare il launcher desktop e usare l\'interfaccia web, mentre chi ha competenze tecniche può clonare la repository o utilizzare la TUI per un controllo avanzato.',
+    story_body_3:
+      'Il progetto è interamente gratuito e senza costi nascosti: se usi un provider AI esterno pagherai solo il tuo consumo, ma puoi anche utilizzare modelli locali gratuitamente. Le contribuzioni degli sviluppatori sono benvenute per migliorare insieme uno strumento che usa l\'intelligenza artificiale a favore dei lavoratori, non contro.'
   },
   en: {
     title: 'Project overview',
-    subtitle: 'A public page to understand what the repository contains, how it is organized, and which technologies power Job Hunter Team.',
+    subtitle: 'An AI agent team that finds jobs for you.',
+    back: '← Back',
     open_source: 'open source',
-    repo_cta: 'Open the GitHub repository',
-    highlights_title: 'Key points',
-    highlights: [
-      { name: 'Local-first', detail: 'Runtime, dashboard, and data stay on your machine.' },
-      { name: 'Multi-agent', detail: 'A coordinated pipeline of specialized agents for job hunting.' },
-      { name: 'Open repo', detail: 'Public codebase, readable structure, and MIT license.' },
-      { name: 'Desktop + web', detail: 'Desktop launcher and local interface in one project.' },
-    ],
+    repo_cta: 'Repository',
     story_title: 'History and goal',
     story_body_1:
       'Job Hunter Team started as an open source project to automate job hunting through a pipeline of specialized AI agents, running locally and controlled by the user.',
     story_body_2:
-      'The repository goal is to build a practical system: find listings, analyze them, prepare tailored applications, and coordinate everything from one interface without sacrificing control, privacy, or code transparency.',
-    stack_title: 'Technology stack',
-    stack_desc: 'The main technologies behind the project, worth knowing before reading the code or contributing.',
-    about_link: 'About',
-    changelog_link: 'Changelog',
+      'The goal is to build a tool accessible to everyone: those who prefer simplicity can download the desktop launcher and use the web interface, while technical users can clone the repository or use the TUI for advanced control.',
+    story_body_3:
+      'The project is entirely free with no hidden costs: if you use an external AI provider you only pay for your usage, but you can also use local models for free. Developer contributions are welcome to improve together a tool that uses artificial intelligence in favor of workers, not against them.'
   },
 } as const
 
@@ -61,18 +45,30 @@ function GitHubIcon() {
   )
 }
 
+function BackLink({ label }: { label: string }) {
+  const router = useRouter()
+  
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push('/')
+    }
+  }
+
+  return (
+    <button
+      onClick={handleBack}
+      className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0"
+    >
+      {label}
+    </button>
+  )
+}
+
 function ProjectContent() {
   const { lang } = useLandingI18n()
   const t = T[lang as 'it' | 'en'] ?? T.it
-
-  const stack = [
-    { name: 'Next.js', category: 'Framework' },
-    { name: 'React', category: 'UI' },
-    { name: 'TypeScript', category: 'Language' },
-    { name: 'Python', category: 'Agents runtime' },
-    { name: 'Tailwind CSS', category: 'Styling' },
-    { name: 'Supabase', category: 'Data' },
-  ]
 
   return (
     <>
@@ -90,21 +86,13 @@ function ProjectContent() {
       />
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
-        <div className="flex items-center gap-2 mb-6 justify-center">
-          <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
-            Home
-          </Link>
-          <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">{t.title}</span>
-        </div>
-
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t.open_source}</span>
-          </div>
           <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">{t.title}</h1>
           <p className="text-[13px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed">{t.subtitle}</p>
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
+              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t.open_source}</span>
+            </div>
             <a
               href="https://github.com/leopu00/job-hunter-team"
               target="_blank"
@@ -118,47 +106,19 @@ function ProjectContent() {
           </div>
         </div>
 
-        <section className="p-6 border border-[var(--color-border)] mb-6 grid gap-3 md:grid-cols-2" style={{ background: 'var(--color-panel)' }}>
-          <h2 className="text-[15px] font-bold text-[var(--color-white)] md:col-span-2">{t.highlights_title}</h2>
-          {t.highlights.map((item) => (
-            <div key={item.name} className="border border-[var(--color-border)] p-4" style={{ background: 'var(--color-card)' }}>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-bright)] mb-2">{item.name}</div>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">{item.detail}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="p-6 border border-[var(--color-border)] mb-6" style={{ background: 'var(--color-panel)' }}>
+        <section className="p-6 border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
           <h2 className="text-[15px] font-bold text-[var(--color-white)] mb-4">{t.story_title}</h2>
           <div className="flex flex-col gap-4">
             <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed">{t.story_body_1}</p>
             <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed">{t.story_body_2}</p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed">{t.story_body_3}</p>
           </div>
         </section>
 
-        <section className="p-6 border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
-          <h2 className="text-[15px] font-bold text-[var(--color-white)] mb-2">{t.stack_title}</h2>
-          <p className="text-[11px] text-[var(--color-dim)] mb-5">{t.stack_desc}</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {stack.map((tech) => (
-              <div key={tech.name} className="p-4 border border-[var(--color-border)]" style={{ background: 'var(--color-card)' }}>
-                <div className="text-[11px] font-semibold text-[var(--color-bright)]">{tech.name}</div>
-                <div className="text-[9px] text-[var(--color-dim)] uppercase tracking-wider mt-1">{tech.category}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between max-w-5xl mx-auto">
-          <Link href="/about" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            &larr; {t.about_link}
-          </Link>
-          <Link href="/changelog" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
-            {t.changelog_link} &rarr;
-          </Link>
+        <div className="mt-8 flex justify-center">
+          <BackLink label={t.back} />
         </div>
       </main>
-      <LandingFooter />
       <ScrollToTop />
     </>
   )

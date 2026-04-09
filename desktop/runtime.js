@@ -34,6 +34,10 @@ function fileExists(targetPath) {
   return fs.existsSync(targetPath)
 }
 
+function hasStandaloneServer(webDir) {
+  return fileExists(path.join(webDir, 'server.js'))
+}
+
 function getNpmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm'
 }
@@ -44,7 +48,7 @@ function isPackagedRuntime() {
 
 function detectStartMode(webDir) {
   const hasNodeModules = fileExists(path.join(webDir, 'node_modules'))
-  const hasProductionBuild = fileExists(path.join(webDir, '.next', 'BUILD_ID'))
+  const hasProductionBuild = fileExists(path.join(webDir, '.next', 'BUILD_ID')) || hasStandaloneServer(webDir)
 
   if (hasProductionBuild) return 'production'
   if (hasNodeModules) return 'development'
@@ -54,15 +58,16 @@ function detectStartMode(webDir) {
 function inspectWebSetup(repoRoot = resolveRepoRoot(__dirname)) {
   const webDir = path.join(repoRoot, 'web')
   const hasPackageJson = fileExists(path.join(webDir, 'package.json'))
+  const standaloneServer = hasStandaloneServer(webDir)
   const hasNodeModules = fileExists(path.join(webDir, 'node_modules'))
-  const hasProductionBuild = fileExists(path.join(webDir, '.next', 'BUILD_ID'))
+  const hasProductionBuild = fileExists(path.join(webDir, '.next', 'BUILD_ID')) || standaloneServer
   const suggestedMode = hasProductionBuild ? 'production' : hasNodeModules ? 'development' : null
   const issues = []
 
-  if (!hasPackageJson) {
+  if (!hasPackageJson && !standaloneServer) {
     issues.push(`Directory web/ non trovata in ${webDir}`)
   }
-  if (hasPackageJson && !hasNodeModules) {
+  if (hasPackageJson && !hasNodeModules && !hasProductionBuild) {
     issues.push('Dipendenze web mancanti. Esegui npm install in web/ prima di usare il launcher.')
   }
 
@@ -70,6 +75,7 @@ function inspectWebSetup(repoRoot = resolveRepoRoot(__dirname)) {
     repoRoot,
     webDir,
     hasPackageJson,
+    hasStandaloneServer: standaloneServer,
     hasNodeModules,
     hasProductionBuild,
     suggestedMode,
@@ -79,6 +85,25 @@ function inspectWebSetup(repoRoot = resolveRepoRoot(__dirname)) {
 
 function defaultSpawnSpecFactory({ mode, port, webDir }) {
   if (isPackagedRuntime()) {
+    const standaloneServer = path.join(webDir, 'server.js')
+
+    if (fileExists(standaloneServer)) {
+      return {
+        command: process.execPath,
+        args: [standaloneServer],
+        options: {
+          cwd: webDir,
+          env: {
+            ...process.env,
+            HOSTNAME: '127.0.0.1',
+            PORT: String(port),
+            ELECTRON_RUN_AS_NODE: '1',
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      }
+    }
+
     const nextBin = path.join(webDir, 'node_modules', 'next', 'dist', 'bin', 'next')
 
     return {
@@ -317,13 +342,13 @@ function createRuntimeManager(config = {}) {
     }
 
     const setup = inspectWebSetup(repoRoot)
-    if (!setup.hasPackageJson) {
+    if (!setup.hasPackageJson && !setup.hasStandaloneServer) {
       state.mode = 'error'
       state.lastError = setup.issues[0] ?? `Directory web/ non trovata in ${setup.webDir}`
       return buildStatus()
     }
 
-    if (!setup.hasNodeModules) {
+    if (!setup.hasNodeModules && !setup.hasProductionBuild) {
       state.mode = 'error'
       state.lastError = setup.issues[0] ?? 'Dipendenze web mancanti.'
       return buildStatus()
