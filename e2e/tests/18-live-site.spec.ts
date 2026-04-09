@@ -144,15 +144,16 @@ test.describe('Login via /?login=true', () => {
     expect(page.url()).toMatch(/accounts\.google\.com|supabase\.co\/auth|jobhunterteam\.ai\/auth/);
   });
 
-  test('/?login=true e / mostrano la stessa pagina di accesso', async ({ page }) => {
+  test('/?login=true mostra la login view, mentre / resta la landing pubblica', async ({ page }) => {
     await page.goto(`${BASE}/?login=true`, { waitUntil: 'networkidle' });
     const textWithParam = await page.locator('body').innerText();
+    expect(textWithParam.includes('Login with Google')).toBe(true);
 
     await page.goto(BASE, { waitUntil: 'networkidle' });
     const textWithout = await page.locator('body').innerText();
 
-    // Le due pagine devono avere lo stesso contenuto principale
-    expect(textWithParam.includes('Login with Google')).toBe(textWithout.includes('Login with Google'));
+    expect(textWithout.includes('Login with Google')).toBe(false);
+    expect(textWithout).toMatch(/Job Hunter Team|Features|How it works|Come funziona/i);
   });
 
 });
@@ -235,8 +236,10 @@ test.describe('Navigazione', () => {
     const downloadLink = page.locator('a[href="/download"], a[href*="/download"]').first();
 
     if (await downloadLink.count() > 0) {
-      await downloadLink.click();
-      await page.waitForLoadState('domcontentloaded');
+      await Promise.all([
+        page.waitForURL(/\/download/, { timeout: 10000 }),
+        downloadLink.click(),
+      ]);
       expect(page.url()).toContain('/download');
     } else {
       test.skip();
