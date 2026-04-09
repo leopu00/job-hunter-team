@@ -57,7 +57,9 @@ type AssistantProfileDraft = {
   missing?: string[];
 };
 
-type SetupConfigField = "workspace" | "provider" | "apiKey";
+type SetupConfigField = "workspace" | "provider" | "authMethod" | "apiKey";
+
+type AuthMethod = "codex-oauth" | "api-key";
 
 type SetupConfigStep = {
   field: SetupConfigField;
@@ -74,6 +76,7 @@ type SetupConfigWizardState = {
   draft: {
     workspace: string;
     provider: string;
+    authMethod: AuthMethod | "";
     apiKey: string;
   };
   lastMessage?: string | null;
@@ -91,9 +94,17 @@ const SETUP_CONFIG_STEPS: SetupConfigStep[] = [
   {
     field: "provider",
     section: "Configurazione",
-    title: "🧠 Provider AI",
-    question: "Scegli il provider per questa cartella.",
-    hint: "Anthropic, OpenAI o Kimi K2.",
+    title: "Model/auth provider",
+    question: "Scegli il provider AI per questa cartella.",
+    hint: "↑/↓ per selezionare, Enter per confermare",
+    required: true,
+  },
+  {
+    field: "authMethod",
+    section: "Configurazione",
+    title: "{provider} auth method",
+    question: "Scegli il metodo di autenticazione.",
+    hint: "↑/↓ per selezionare, Enter per confermare, ← per tornare indietro",
     required: true,
   },
   {
@@ -108,19 +119,19 @@ const SETUP_CONFIG_STEPS: SetupConfigStep[] = [
 
 const PROVIDER_OPTIONS: SelectItem[] = [
   {
+    value: "openai",
+    label: "OpenAI",
+    description: "Codex OAuth + API key",
+  },
+  {
     value: "anthropic",
     label: "Anthropic",
     description: "Claude via Messages API",
   },
   {
-    value: "openai",
-    label: "OpenAI",
-    description: "GPT via OpenAI API",
-  },
-  {
     value: "kimi",
-    label: "Kimi K2",
-    description: "Moonshot API compatibile OpenAI",
+    label: "Moonshot AI",
+    description: "Kimi K2.5",
   },
 ];
 
@@ -218,8 +229,23 @@ function setupHasValue(value: string): boolean {
 }
 
 function renderSetupCheckpoints(wizard: SetupConfigWizardState): string {
+  // If authMethod step should be skipped, mark it as completed
+  const isAuthMethodSkipped = wizard.draft.provider && 
+    getAuthMethodOptions(wizard.draft.provider).length === 1;
+  
   return wizard.steps.map((step, index) => {
-    const completed = setupHasValue(wizard.draft[step.field]);
+    // Skip rendering checkpoint for authMethod if provider has only one auth method
+    if (step.field === "authMethod" && isAuthMethodSkipped) {
+      return theme.dim("·");
+    }
+    
+    let completed = setupHasValue(wizard.draft[step.field]);
+    
+    // For authMethod, consider it completed if skipped
+    if (step.field === "authMethod" && isAuthMethodSkipped) {
+      completed = true;
+    }
+    
     const current = index === wizard.stepIndex;
     if (current && completed) return theme.accent("◉");
     if (current) return theme.accent("◎");
@@ -233,11 +259,27 @@ function truncateSetupText(text: string, max: number): string {
   return text.slice(text.length - max);
 }
 
+// Auth method options per provider
+type AuthMethodOption = { value: AuthMethod | "back"; label: string; hint?: string };
+
+function getAuthMethodOptions(provider: string): AuthMethodOption[] {
+  if (provider === "openai") {
+    return [
+      { value: "codex-oauth", label: "OpenAI Codex", hint: "ChatGPT OAuth" },
+      { value: "api-key", label: "OpenAI API key", hint: "" },
+      { value: "back", label: "Back", hint: "" },
+    ];
+  }
+  // Anthropic and Moonshot only support API key
+  return [{ value: "api-key", label: "API key", hint: "" }];
+}
+
 function renderSetupWizard(
   panel: Container,
   wizard: SetupConfigWizardState,
   currentInput: string,
   providerSelect: SelectList,
+  authMethodIndex: number,
 ): void {
   panel.clear();
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
@@ -253,6 +295,11 @@ function renderSetupWizard(
   const contentWidth = 58;
   const padded = truncateSetupText(`${maskedValue}${cursor}`, contentWidth).padEnd(contentWidth, " ");
 
+  // Update title with provider name for authMethod step
+  const displayTitle = current.field === "authMethod" 
+    ? `${wizard.draft.provider} auth method`
+    : current.title;
+
   add(renderSetupBannerText());
   add(theme.header("  ■ CONFIGURA JHT"));
   add(theme.border("  " + "─".repeat(62)));
@@ -260,15 +307,46 @@ function renderSetupWizard(
   add(`  ${renderSetupCheckpoints(wizard)}`);
   add("");
   add(`  ${theme.dim(current.section.toUpperCase())}`);
-  add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)} ${theme.dim("·")} ${theme.accent("Richiesto")}`);
+  add(`  ${theme.accent(displayTitle)} ${theme.dim("· " + progress)} ${theme.dim("·")} ${theme.accent("Richiesto")}`);
   add("");
   add(`  ${theme.text(current.question)}`);
   add("");
 
   if (current.field === "provider") {
-    for (const line of providerSelect.render(contentWidth)) {
-      add(`  ${line}`);
+    // Render provider selection with radio buttons
+    const selectedIndex = providerSelect.getSelectedIndex();
+    const options = [
+      { label: "OpenAI", hint: "Codex OAuth + API key" },
+      { label: "Anthropic", hint: "" },
+      { label: "Moonshot AI", hint: "Kimi K2.5" },
+    ];
+    
+    add("");
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i];
+      const isSelected = i === selectedIndex;
+      const radio = isSelected ? theme.accent("◉") : theme.dim("○");
+      const label = isSelected ? theme.bold(theme.accent(opt.label)) : theme.text(opt.label);
+      const hint = opt.hint ? ` ${theme.dim(`(${opt.hint})`)}` : "";
+      add(`  ${radio} ${label}${hint}`);
     }
+    add("");
+    add(theme.dim(`  ${"─".repeat(contentWidth)}`));
+  } else if (current.field === "authMethod") {
+    // Render auth method selection
+    const options = getAuthMethodOptions(wizard.draft.provider);
+    
+    add("");
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i];
+      const isSelected = i === authMethodIndex;
+      const radio = isSelected ? theme.accent("◉") : theme.dim("○");
+      const label = isSelected ? theme.bold(theme.accent(opt.label)) : theme.text(opt.label);
+      const hint = opt.hint ? ` ${theme.dim(`(${opt.hint})`)}` : "";
+      add(`  ${radio} ${label}${hint}`);
+    }
+    add("");
+    add(theme.dim(`  ${"─".repeat(contentWidth)}`));
   } else {
     add(`  ${theme.border("┌" + "─".repeat(contentWidth + 2) + "┐")}`);
     add(`  ${theme.border("│")} ${theme.text(padded)} ${theme.border("│")}`);
@@ -353,7 +431,13 @@ async function askValidatedField(
   }
 }
 
+function isWSL(): boolean {
+  // Detect WSL by checking WSL-specific environment variables
+  return !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || process.env.WSLENV);
+}
+
 function openWorkspaceFolderPicker(initialPath: string): string | null {
+  // macOS: use AppleScript
   if (process.platform === "darwin") {
     const resolvedPath = resolve(initialPath);
     const scriptLines = [
@@ -382,48 +466,50 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
     return selected || null;
   }
 
-  if (process.platform !== "win32") {
-    return null;
+  // Windows native or WSL: use PowerShell
+  if (process.platform === "win32" || isWSL()) {
+    const escapedPath = initialPath.replace(/'/g, "''");
+    const script = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+      "$dialog.Title = 'Seleziona la cartella di lavoro'",
+      "$dialog.Filter = 'Cartelle|*.folder'",
+      "$dialog.CheckFileExists = $false",
+      "$dialog.CheckPathExists = $true",
+      "$dialog.ValidateNames = $false",
+      "$dialog.DereferenceLinks = $true",
+      "$dialog.FileName = 'Seleziona questa cartella'",
+      `$initialPath = '${escapedPath}'`,
+      "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
+      "$result = $dialog.ShowDialog()",
+      "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "  $selected = Split-Path -Path $dialog.FileName -Parent",
+      "  if (-not $selected) { $selected = $dialog.FileName }",
+      "  Write-Output $selected",
+      "}",
+    ].join("; ");
+
+    const result = spawnSync("powershell.exe", [
+      "-NoLogo",
+      "-NoProfile",
+      "-STA",
+      "-Command",
+      script,
+    ], {
+      encoding: "utf-8",
+      timeout: 120_000,
+    });
+
+    if (result.status !== 0) {
+      return null;
+    }
+
+    const selected = result.stdout.trim();
+    return selected || null;
   }
 
-  const escapedPath = initialPath.replace(/'/g, "''");
-  const script = [
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-    "$dialog.Title = 'Seleziona la cartella di lavoro'",
-    "$dialog.Filter = 'Cartelle|*.folder'",
-    "$dialog.CheckFileExists = $false",
-    "$dialog.CheckPathExists = $true",
-    "$dialog.ValidateNames = $false",
-    "$dialog.DereferenceLinks = $true",
-    "$dialog.FileName = 'Seleziona questa cartella'",
-    `$initialPath = '${escapedPath}'`,
-    "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
-    "$result = $dialog.ShowDialog()",
-    "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
-    "  $selected = Split-Path -Path $dialog.FileName -Parent",
-    "  if (-not $selected) { $selected = $dialog.FileName }",
-    "  Write-Output $selected",
-    "}",
-  ].join("; ");
-
-  const result = spawnSync("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-STA",
-    "-Command",
-    script,
-  ], {
-    encoding: "utf-8",
-    timeout: 120_000,
-  });
-
-  if (result.status !== 0) {
-    return null;
-  }
-
-  const selected = result.stdout.trim();
-  return selected || null;
+  // Native Linux (non-WSL): no folder picker available
+  return null;
 }
 
 async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
@@ -719,6 +805,7 @@ export async function runSetupWizard(): Promise<string> {
     draft: {
       workspace: loadWorkspacePath(),
       provider: "",
+      authMethod: "",
       apiKey: "",
     },
     lastMessage: null,
@@ -747,6 +834,7 @@ export async function runSetupWizard(): Promise<string> {
 
   let inputBuffer = "";
   let completedApiKey = wizard.draft.apiKey;
+  let authMethodIndex = 0;
 
   const syncProviderSelection = () => {
     const index = PROVIDER_OPTIONS.findIndex((option) => option.value === wizard.draft.provider);
@@ -761,12 +849,25 @@ export async function runSetupWizard(): Promise<string> {
     providerSelect.setSelectedIndex(nextIndex);
   };
 
+  const moveAuthMethodSelection = (delta: number) => {
+    const options = getAuthMethodOptions(wizard.draft.provider);
+    authMethodIndex = (authMethodIndex + delta + options.length) % options.length;
+  };
+
   const persistDraftValue = () => {
     const current = wizard.steps[wizard.stepIndex];
     if (current.field === "provider") {
       const selected = providerSelect.getSelectedItem();
       if (selected) {
         wizard.draft.provider = selected.value;
+      }
+      return;
+    }
+    if (current.field === "authMethod") {
+      const options = getAuthMethodOptions(wizard.draft.provider);
+      const selected = options[authMethodIndex];
+      if (selected && selected.value !== "back") {
+        wizard.draft.authMethod = selected.value as AuthMethod;
       }
       return;
     }
@@ -778,8 +879,14 @@ export async function runSetupWizard(): Promise<string> {
   };
 
   const refresh = () => {
-    renderSetupWizard(panel, wizard, inputBuffer, providerSelect);
+    renderSetupWizard(panel, wizard, inputBuffer, providerSelect, authMethodIndex);
     tui.requestRender(true);
+  };
+
+  // Skip authMethod step if provider has only one auth method
+  const shouldSkipAuthMethod = (): boolean => {
+    const options = getAuthMethodOptions(wizard.draft.provider);
+    return options.length === 1;
   };
 
   const moveStep = (delta: number) => {
@@ -843,9 +950,40 @@ export async function runSetupWizard(): Promise<string> {
       }
       saveWorkspaceProvider(provider, wizard.draft.workspace);
       wizard.draft.provider = provider;
+      wizard.draft.authMethod = "";
       wizard.draft.apiKey = loadWorkspaceApiKey(wizard.draft.workspace) ?? "";
       inputBuffer = "";
+      authMethodIndex = 0;
       wizard.lastMessage = "Provider configurato.";
+      return true;
+    }
+
+    if (current.field === "authMethod") {
+      const options = getAuthMethodOptions(wizard.draft.provider);
+      const selected = options[authMethodIndex];
+      
+      if (!selected) {
+        wizard.lastMessage = "Seleziona un metodo di autenticazione.";
+        return false;
+      }
+      
+      if (selected.value === "back") {
+        // Go back to provider selection
+        wizard.stepIndex = 1; // provider step
+        authMethodIndex = 0;
+        wizard.lastMessage = null;
+        refresh();
+        return false; // Don't advance, we manually changed step
+      }
+      
+      wizard.draft.authMethod = selected.value as AuthMethod;
+      wizard.lastMessage = "Metodo di autenticazione configurato.";
+      
+      // For OAuth, we'd handle differently - for now just proceed
+      if (selected.value === "codex-oauth") {
+        wizard.lastMessage = "Codex OAuth selezionato (simulazione).";
+      }
+      
       return true;
     }
 
@@ -889,6 +1027,22 @@ export async function runSetupWizard(): Promise<string> {
     tui.addInputListener((data) => {
       if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
         void (async () => {
+          const currentField = wizard.steps[wizard.stepIndex].field;
+          
+          // Skip authMethod step if provider has only one auth method
+          if (currentField === "provider" && shouldSkipAuthMethod()) {
+            const ok = await validateAndPersistStep();
+            if (!ok) {
+              refresh();
+              return;
+            }
+            // Skip authMethod and go directly to apiKey
+            wizard.stepIndex = 3; // apiKey step
+            wizard.lastMessage = null;
+            refresh();
+            return;
+          }
+          
           const ok = await validateAndPersistStep();
           if (!ok) {
             refresh();
@@ -921,6 +1075,21 @@ export async function runSetupWizard(): Promise<string> {
         }
         if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
           moveProviderSelection(matchesKey(data, Key.up) ? -1 : 1);
+          wizard.lastMessage = null;
+          refresh();
+          return { consume: true };
+        }
+      } else if (current.field === "authMethod") {
+        if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+          moveAuthMethodSelection(matchesKey(data, Key.up) ? -1 : 1);
+          wizard.lastMessage = null;
+          refresh();
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.left)) {
+          // Go back to provider
+          wizard.stepIndex = 1;
+          authMethodIndex = 0;
           wizard.lastMessage = null;
           refresh();
           return { consume: true };
