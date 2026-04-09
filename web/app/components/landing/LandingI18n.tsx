@@ -495,16 +495,17 @@ const translations = {
   about_how_3:       { it: 'Task system con stato (pending → in-progress → done)',   en: 'Task system with state (pending → in-progress → done)', hu: 'Feladat rendszer állapottal (függőben → folyamatban → kész)' },
   about_how_4:       { it: 'Sentinella monitora costi e salute in tempo reale',      en: 'Sentinel monitors costs and health in real-time', hu: 'Az Őrszem valós időben figyeli a költségeket és az egészséget' },
 
-  about_vision_label:  { it: 'visione',            en: 'vision' },
-  about_vision_title:  { it: 'Il futuro',          en: 'The future' },
+  about_vision_label:  { it: 'visione',            en: 'vision', hu: 'vízió' },
+  about_vision_title:  { it: 'Il futuro',          en: 'The future', hu: 'A jövő' },
   about_vision_desc:   {
     it: 'Stiamo costruendo il futuro della ricerca di lavoro automatizzata. La nostra visione e un sistema che impara dalle tue preferenze, migliora ad ogni candidatura, e ti permette di concentrarti su cio\' che conta: prepararti per i colloqui.',
     en: 'We\'re building the future of automated job hunting. Our vision is a system that learns from your preferences, improves with every application, and lets you focus on what matters: preparing for interviews.',
+    hu: 'Az automatizált álláskeresés jövőjét építjük. A víziónk egy olyan rendszer, amely tanul a preferenciáidból, fejlődik minden jelentkezéssel, és lehetővé teszi, hogy a lényegre koncentrálj: felkészülni az interjúkra.',
   },
-  about_vision_0:    { it: 'Apprendimento continuo dal feedback dell\'utente',       en: 'Continuous learning from user feedback' },
-  about_vision_1:    { it: 'Integrazione diretta con portali di candidatura',        en: 'Direct integration with application portals' },
-  about_vision_2:    { it: 'Preparazione automatica ai colloqui con mock interview', en: 'Automatic interview preparation with mock interviews' },
-  about_vision_3:    { it: 'Networking assistito e follow-up automatizzati',         en: 'Assisted networking and automated follow-ups' },
+  about_vision_0:    { it: 'Apprendimento continuo dal feedback dell\'utente',       en: 'Continuous learning from user feedback', hu: 'Folyamatos tanulás a felhasználói visszajelzésekből' },
+  about_vision_1:    { it: 'Integrazione diretta con portali di candidatura',        en: 'Direct integration with application portals', hu: 'Közvetlen integráció a jelentkezési portálokkal' },
+  about_vision_2:    { it: 'Preparazione automatica ai colloqui con mock interview', en: 'Automatic interview preparation with mock interviews', hu: 'Automatikus interjúfelkészítés próbainterjúkkal' },
+  about_vision_3:    { it: 'Networking assistito e follow-up automatizzati',         en: 'Assisted networking and automated follow-ups', hu: 'Támogatott hálózatépítés és automatizált követések' },
 
   // Onboarding wizard
   ob_title:          { it: 'Benvenuto in Job Hunter Team',   en: 'Welcome to Job Hunter Team' },
