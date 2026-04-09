@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useLandingI18n } from './LandingI18n'
 
-const CAPTAIN_AGENT = { emoji: '👨‍✈️', name: 'Capitano', desc: 'Coordina il team e assegna le priorita operative.' }
-const SENTINEL_AGENT = { emoji: '💂', name: 'Sentinella', desc: 'Monitora budget, limiti e salute del sistema.' }
+const CAPTAIN_AGENT = { emoji: '👨‍✈️', name: 'Captain', desc: 'Coordinates the team and assigns operational priorities.' }
+const SENTINEL_AGENT = { emoji: '💂', name: 'Sentinel', desc: 'Monitors budget, limits and system health.' }
 
 const PIPELINE_AGENTS = [
-  { emoji: '🕵️', name: 'Scout', desc: 'Cerca nuove opportunita sui canali di lavoro.' },
-  { emoji: '👨‍🔬', name: 'Analista', desc: 'Legge i requisiti e valuta il fit col profilo.' },
-  { emoji: '👨‍💻', name: 'Scorer', desc: 'Calcola priorita e match score delle offerte.' },
-  { emoji: '👨‍🏫', name: 'Scrittore', desc: 'Prepara CV e cover letter su misura.' },
-  { emoji: '👨‍⚖️', name: 'Critico', desc: 'Rivede i materiali e segnala cosa correggere.' },
+  { emoji: '🕵️', name: 'Scout', desc: 'Searches for new opportunities on job channels.' },
+  { emoji: '👨‍🔬', name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
+  { emoji: '👨‍💻', name: 'Scorer', desc: 'Calculates priority and match score of offers.' },
+  { emoji: '👨‍🏫', name: 'Writer', desc: 'Prepares tailored CV and cover letter.' },
+  { emoji: '👨‍⚖️', name: 'Critic', desc: 'Reviews materials and flags what needs correction.' },
 ]
 
 export default function LandingHero() {

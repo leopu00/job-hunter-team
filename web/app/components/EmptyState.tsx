@@ -8,7 +8,7 @@ export type EmptyVariant = 'default' | 'search' | 'error' | 'empty' | 'locked'
 
 type EmptyStateProps = {
   variant?:      EmptyVariant
-  icon?:         ReactNode      // emoji string o componente
+  icon?:         ReactNode      // emoji string or component
   title?:        string
   description?:  string
   actionLabel?:  string
@@ -22,11 +22,11 @@ type EmptyStateProps = {
 // ── Variant presets ────────────────────────────────────────────────────────
 
 const PRESETS: Record<EmptyVariant, { icon: string; title: string; description: string; color: string }> = {
-  default: { icon: '📭', title: 'Nessun dato',          description: 'Non ci sono elementi da mostrare.',          color: 'var(--color-dim)'    },
-  search:  { icon: '🔍', title: 'Nessun risultato',     description: 'Prova a modificare i filtri o la ricerca.',   color: 'var(--color-muted)'  },
-  error:   { icon: '⚠',  title: 'Qualcosa è andato male', description: 'Si è verificato un errore. Riprova.',       color: 'var(--color-red)'    },
-  empty:   { icon: '✨', title: 'Ancora vuoto',          description: 'Inizia aggiungendo il primo elemento.',       color: 'var(--color-blue)'   },
-  locked:  { icon: '🔒', title: 'Accesso limitato',      description: 'Non hai i permessi per vedere questo contenuto.', color: 'var(--color-dim)' },
+  default: { icon: '📭', title: 'No data',          description: 'No items to display.',          color: 'var(--color-dim)'    },
+  search:  { icon: '🔍', title: 'No results',     description: 'Try changing filters or search.',   color: 'var(--color-muted)'  },
+  error:   { icon: '⚠',  title: 'Something went wrong', description: 'An error occurred. Please try again.',       color: 'var(--color-red)'    },
+  empty:   { icon: '✨', title: 'Still empty',          description: 'Start by adding the first item.',       color: 'var(--color-blue)'   },
+  locked:  { icon: '🔒', title: 'Access restricted',      description: 'You do not have permission to view this content.', color: 'var(--color-dim)' },
 }
 
 // ── Size config ────────────────────────────────────────────────────────────

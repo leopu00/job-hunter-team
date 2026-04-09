@@ -9,10 +9,10 @@ export type Lang = 'it' | 'en'
 const STORAGE_KEY = 'jht-lang'
 
 function getSavedLang(): Lang {
-  if (typeof window === 'undefined') return 'it'
+  if (typeof window === 'undefined') return 'en'
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === 'en') return 'en'
-  return 'it'
+  if (saved === 'it') return 'it'
+  return 'en'
 }
 
 const translations = {

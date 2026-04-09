@@ -1,3 +1,3 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Pronte', description: 'Candidature pronte all\'invio: CV e cover letter generati, revisione superata, documenti su Drive.' }
+export const metadata: Metadata = { title: 'Ready', description: 'Applications with documents ready and positions waiting for CV.' }
 export default function ReadyLayout({ children }: { children: React.ReactNode }) { return children }
