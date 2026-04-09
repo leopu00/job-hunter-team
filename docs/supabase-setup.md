@@ -127,6 +127,8 @@ SUPABASE_SERVICE_ROLE_KEY=<chiave service_role>
 NEXT_PUBLIC_APP_URL=https://jobhunterteam.ai
 ```
 
+> Progetto Vercel canonico: `job-hunter-team`
+
 ---
 
 ## Test Locale
