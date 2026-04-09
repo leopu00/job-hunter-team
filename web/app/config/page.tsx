@@ -43,7 +43,7 @@ export default function ConfigPage() {
     if (res?.ok) {
       const d: ConfigData = await res.json()
       setData(d)
-      setText(d.config ? JSON.stringify(d.config, null, 2) : '{\n  "version": 1,\n  "active_provider": "claude",\n  "providers": {},\n  "channels": {},\n  "workspace": ""\n}')
+      setText(d.config ? JSON.stringify(d.config, null, 2) : '{\n  "version": 1,\n  "active_provider": "anthropic",\n  "providers": {},\n  "channels": {},\n  "workspace": ""\n}')
       setIssues(d.issues)
     }
   }, [])
