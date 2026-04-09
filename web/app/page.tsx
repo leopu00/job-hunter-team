@@ -5,6 +5,9 @@ import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import LandingNav from './components/landing/LandingNav'
 import LandingHero from './components/landing/LandingHero'
+import LandingFeatures from './components/landing/LandingFeatures'
+import LandingSteps from './components/landing/LandingSteps'
+import LandingCTA, { LandingFooter } from './components/landing/LandingCTA'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
 import JsonLd from './components/landing/JsonLd'
 
@@ -23,6 +26,10 @@ function PageContent() {
           <main style={{ position: 'relative', zIndex: 1 }}>
             <LandingNav />
             <LandingHero />
+            <LandingFeatures />
+            <LandingSteps />
+            <LandingCTA />
+            <LandingFooter />
           </main>
         </>
       )}
