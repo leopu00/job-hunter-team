@@ -595,11 +595,15 @@ export function useLandingI18n() {
 }
 
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => getSavedLang())
+  const [lang, setLangState] = useState<Lang>('it')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    document.documentElement.lang = lang
-  }, [lang])
+    setMounted(true)
+    const saved = getSavedLang()
+    setLangState(saved)
+    document.documentElement.lang = saved
+  }, [])
 
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
