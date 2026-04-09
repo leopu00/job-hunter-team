@@ -607,11 +607,19 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const t = useCallback((key: StringKeys) => {
-    return translations[key][lang] as string
+    const value = translations[key][lang]
+    if (!value && lang !== 'it') {
+      return translations[key].it as string
+    }
+    return value as string
   }, [lang])
 
   const ta = useCallback((key: ArrayKeys) => {
-    return Array.from(translations[key][lang])
+    const value = translations[key][lang]
+    if (!value && lang !== 'it') {
+      return Array.from(translations[key].it)
+    }
+    return Array.from(value)
  }, [lang])
 
   return (
