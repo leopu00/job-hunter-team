@@ -9,6 +9,8 @@ import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
 import dynamic from 'next/dynamic'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch))
 const FloatingChat = dynamic(() => import('./components/FloatingChat'))
@@ -96,19 +98,21 @@ export default function RootLayout({
         </a>
         <ThemeProvider>
           <AccessibilityProvider>
-          <ToastProvider>
-            <KeyboardShortcutsProvider>
-              <GlobalSearch />
-              <FloatingChat />
-              <Sidebar />
-              <MainContent>
-                <Breadcrumb />
-                {children}
-              </MainContent>
-            </KeyboardShortcutsProvider>
-          </ToastProvider>
+            <ToastProvider>
+              <KeyboardShortcutsProvider>
+                <GlobalSearch />
+                <FloatingChat />
+                <Sidebar />
+                <MainContent>
+                  <Breadcrumb />
+                  {children}
+                </MainContent>
+              </KeyboardShortcutsProvider>
+            </ToastProvider>
           </AccessibilityProvider>
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
