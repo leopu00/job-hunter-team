@@ -31,6 +31,14 @@ test('detectStartMode prefers production build when BUILD_ID exists', () => {
   assert.equal(detectStartMode(webDir), 'production')
 })
 
+test('detectStartMode treats standalone server output as production', () => {
+  const repoRoot = makeTempRepo()
+  const webDir = path.join(repoRoot, 'web')
+  writeFile(path.join(webDir, 'server.js'), 'console.log("standalone")')
+
+  assert.equal(detectStartMode(webDir), 'production')
+})
+
 test('inspectWebSetup reports missing dependencies and suggested mode', () => {
   const repoRoot = makeTempRepo()
   const webDir = path.join(repoRoot, 'web')
@@ -49,6 +57,19 @@ test('inspectWebSetup reports missing dependencies and suggested mode', () => {
   writeFile(path.join(webDir, '.next', 'BUILD_ID'), 'build-123')
   const production = inspectWebSetup(repoRoot)
   assert.equal(production.suggestedMode, 'production')
+})
+
+test('inspectWebSetup accepts standalone payload without package.json or node_modules', () => {
+  const repoRoot = makeTempRepo()
+  const webDir = path.join(repoRoot, 'web')
+  writeFile(path.join(webDir, 'server.js'), 'console.log("standalone")')
+
+  const setup = inspectWebSetup(repoRoot)
+  assert.equal(setup.hasPackageJson, false)
+  assert.equal(setup.hasStandaloneServer, true)
+  assert.equal(setup.hasProductionBuild, true)
+  assert.equal(setup.suggestedMode, 'production')
+  assert.equal(setup.issues.length, 0)
 })
 
 test('runtime manager starts and stops a local server via custom spawn factory', async () => {
@@ -94,6 +115,41 @@ test('runtime manager starts and stops a local server via custom spawn factory',
   portOpen = false
   assert.equal(stopped.mode, 'stopped')
   assert.equal(stopped.managed, false)
+})
+
+test('runtime manager accepts standalone production payload without node_modules', async () => {
+  const repoRoot = makeTempRepo()
+  const webDir = path.join(repoRoot, 'web')
+  writeFile(path.join(webDir, 'server.js'), 'console.log("standalone")')
+  let portOpen = false
+
+  const manager = createRuntimeManager({
+    repoRoot,
+    logFile: path.join(repoRoot, 'launcher.log'),
+    startTimeoutMs: 5000,
+    isPortOpenFn: () => portOpen,
+    spawnFn: (command, args, options) => {
+      portOpen = true
+      return require('node:child_process').spawn(command, args, options)
+    },
+    spawnSpecFactory: () => ({
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+      options: {
+        cwd: webDir,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    }),
+  })
+
+  const started = await manager.startRuntime({ port: 3124, preferredMode: 'production' })
+  assert.equal(started.mode, 'running')
+  assert.equal(started.runtimeKind, 'production')
+
+  const stopped = await manager.stopRuntime()
+  portOpen = false
+  assert.equal(stopped.mode, 'stopped')
 })
 
 test('runtime manager treats a reachable port as external runtime', async () => {
