@@ -8,9 +8,7 @@ import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
-import { NextIntlClientProvider } from 'next-intl';
 import dynamic from 'next/dynamic'
-import { cookies } from 'next/headers';
 
 const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch))
 const FloatingChat = dynamic(() => import('./components/FloatingChat'))
@@ -77,31 +75,13 @@ export const metadata: Metadata = {
   },
 }
 
-async function getMessages(locale: string) {
-  try {
-    const messages = (await import(`../messages/${locale}.json`)).default;
-    return messages;
-  } catch (error) {
-    // Fallback to English if locale not found
-    const messages = (await import(`../messages/en.json`)).default;
-    return messages;
-  }
-}
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Get locale from cookie or default to English
-  const cookieStore = await cookies();
-  const localeCookie = cookieStore.get('NEXT_LOCALE')?.value;
-  const locale = localeCookie || 'en';
-  
-  const messages = await getMessages(locale);
-
   return (
-    <html lang={locale} className={jetbrainsMono.variable} suppressHydrationWarning>
+    <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('jht-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);else if(t==='system'||!t){var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',d)}}catch(e){}})()` }} />
       </head>
@@ -114,23 +94,21 @@ export default async function RootLayout({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-semibold" style={{ background: 'var(--color-green)', color: 'var(--color-void)' }}>
           Skip to main content
         </a>
-        <NextIntlClientProvider messages={messages} locale={locale}>
-          <ThemeProvider>
-            <AccessibilityProvider>
-            <ToastProvider>
-              <KeyboardShortcutsProvider>
-                <GlobalSearch />
-                <FloatingChat />
-                <Sidebar />
-                <MainContent>
-                  <Breadcrumb />
-                  {children}
-                </MainContent>
-              </KeyboardShortcutsProvider>
-            </ToastProvider>
-            </AccessibilityProvider>
-          </ThemeProvider>
-        </NextIntlClientProvider>
+        <ThemeProvider>
+          <AccessibilityProvider>
+          <ToastProvider>
+            <KeyboardShortcutsProvider>
+              <GlobalSearch />
+              <FloatingChat />
+              <Sidebar />
+              <MainContent>
+                <Breadcrumb />
+                {children}
+              </MainContent>
+            </KeyboardShortcutsProvider>
+          </ToastProvider>
+          </AccessibilityProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
