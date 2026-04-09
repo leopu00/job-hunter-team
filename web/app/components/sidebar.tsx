@@ -22,13 +22,14 @@ const APP_CHROME_HIDDEN = ['/dashboard','/profile','/capitano','/scout','/analis
 
 export default function Sidebar() {
   const pathname    = usePathname()
+  const currentPath = pathname ?? ''
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isMobile,   setIsMobile]   = useState(false)
   const [collapsed,  setCollapsed]  = useState(false)
   const [favs,       setFavs]       = useState<string[]>([])
   const [hovered,    setHovered]    = useState<string | null>(null)
 
-  const isProtected = isMarketingRoute(pathname) || APP_CHROME_HIDDEN.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const isProtected = isMarketingRoute(currentPath) || APP_CHROME_HIDDEN.some((p) => currentPath === p || currentPath.startsWith(p + '/'))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -66,7 +67,7 @@ export default function Sidebar() {
   const favLinks   = allLinks.filter(([h]) => favs.includes(h))
 
   const renderLink = ([href, label, badge]: [string, string, number?]) => {
-    const active = pathname === href || pathname.startsWith(href + '/')
+    const active = currentPath === href || currentPath.startsWith(href + '/')
     const isFav  = favs.includes(href)
     return (
       <li key={href} className="relative" onMouseEnter={() => setHovered(href)} onMouseLeave={() => setHovered(null)}>
