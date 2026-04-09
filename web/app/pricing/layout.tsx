@@ -3,15 +3,15 @@ import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
+  description: 'Job Hunter Team plans and pricing: Free, Pro, and Enterprise. Compare features and choose the plan that fits you.',
   openGraph: {
     title: 'Pricing | Job Hunter Team',
-    description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
+    description: 'Job Hunter Team plans and pricing: Free, Pro, and Enterprise. Compare features and choose the plan that fits you.',
   },
   twitter: {
     card: 'summary',
     title: 'Pricing | Job Hunter Team',
-    description: 'Piani e prezzi di Job Hunter Team: Free, Pro ed Enterprise. Confronta funzionalita e scegli il piano adatto a te.',
+    description: 'Job Hunter Team plans and pricing: Free, Pro, and Enterprise. Compare features and choose the plan that fits you.',
   },
 }
 
@@ -22,7 +22,7 @@ function PricingJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: 'Job Hunter Team',
-    description: 'Sistema multi-agente AI per ricerca e candidatura automatizzata. Open source, locale, privato.',
+    description: 'Multi-agent AI system for automated job search and applications. Open source, local, private.',
     url: `${SITE_URL}/pricing`,
     brand: { '@type': 'Organization', name: 'Job Hunter Team' },
     offers: [
@@ -31,7 +31,7 @@ function PricingJsonLd() {
         name: 'Free',
         price: '0',
         priceCurrency: 'EUR',
-        description: 'Per iniziare a cercare lavoro con gli agenti AI.',
+        description: 'Start searching for jobs with AI agents.',
         url: `${SITE_URL}/download`,
       },
       {
@@ -40,7 +40,7 @@ function PricingJsonLd() {
         price: '19',
         priceCurrency: 'EUR',
         priceSpecification: { '@type': 'UnitPriceSpecification', price: '19', priceCurrency: 'EUR', unitText: 'MONTH' },
-        description: 'Per chi cerca lavoro seriamente e vuole risultati veloci.',
+        description: 'For serious job seekers who want fast results.',
         url: `${SITE_URL}/download`,
       },
     ],

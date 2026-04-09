@@ -14,17 +14,8 @@ const npmNeedsShell = process.platform === 'win32'
 
 const payloadDirs = ['shared', 'cli', 'scripts', '.launcher', 'agents']
 const payloadFiles = ['package.json', 'package-lock.json', 'requirements.txt', '.env.example']
-const webPayloadDirs = ['app', 'components', 'lib', 'public', '.next']
-const webPayloadFiles = [
-  '.env.example',
-  'next-env.d.ts',
-  'next.config.ts',
-  'package-lock.json',
-  'package.json',
-  'postcss.config.mjs',
-  'proxy.ts',
-  'tsconfig.json',
-]
+const standaloneRoot = path.join(webRoot, '.next', 'standalone')
+const standaloneStaticRoot = path.join(webRoot, '.next', 'static')
 
 function rm(target) {
   fs.rmSync(target, { recursive: true, force: true })
@@ -82,6 +73,18 @@ function copyWebFile(name) {
   fs.copyFileSync(from, path.join(webPayloadRoot, name))
 }
 
+function copyTreeContents(from, to) {
+  if (!fs.existsSync(from)) return
+
+  mkdir(to)
+  for (const entry of fs.readdirSync(from)) {
+    fs.cpSync(path.join(from, entry), path.join(to, entry), {
+      recursive: true,
+      dereference: true,
+    })
+  }
+}
+
 function pruneMaps(root) {
   if (!fs.existsSync(root)) return
 
@@ -122,11 +125,15 @@ function prepareWebPayload() {
   rm(webPayloadRoot)
   mkdir(webPayloadRoot)
 
-  for (const dir of webPayloadDirs) copyWebDir(dir)
-  for (const file of webPayloadFiles) copyWebFile(file)
+  if (!fs.existsSync(path.join(standaloneRoot, 'server.js'))) {
+    throw new Error(`Standalone web server not found in ${standaloneRoot}. Expected server.js after next build.`)
+  }
 
-  console.log('[payload] installing production web dependencies...')
-  runNpm(['ci', '--omit=dev'], webPayloadRoot)
+  console.log('[payload] copying standalone web server...')
+  copyTreeContents(standaloneRoot, webPayloadRoot)
+  copyWebDir('public')
+  copyWebFile('.env.example')
+  copyTreeContents(standaloneStaticRoot, path.join(webPayloadRoot, '.next', 'static'))
   pruneMaps(webPayloadRoot)
 }
 

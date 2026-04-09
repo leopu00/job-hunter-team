@@ -41,21 +41,21 @@ export function Pagination({ page, totalPages, perPage, totalItems, onPage, onPe
   const start = (page - 1) * perPage + 1
   const end   = Math.min(page * perPage, totalItems)
   return (
-    <nav aria-label="Paginazione" className="flex items-center justify-between flex-wrap gap-3 text-[10px]">
-      <span style={{ color: 'var(--color-dim)' }}>{start}–{end} di {totalItems}</span>
+    <nav aria-label="Pagination" className="flex items-center justify-between flex-wrap gap-3 text-[10px]">
+      <span style={{ color: 'var(--color-dim)' }}>{start}–{end} of {totalItems}</span>
       <div className="flex items-center gap-1">
-        <PageBtn label="←" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Pagina precedente" />
+        <PageBtn label="←" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page" />
         {pages.map((p, i) =>
           p === '…'
             ? <span key={`e${i}`} className="px-1" style={{ color: 'var(--color-dim)' }}>…</span>
             : <PageBtn key={p} label={p} onClick={() => onPage(p as number)} active={p === page} />
         )}
-        <PageBtn label="→" onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label="Pagina successiva" />
+        <PageBtn label="→" onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label="Next page" />
       </div>
       {onPerPage && (
         <div className="flex items-center gap-2">
-          <span style={{ color: 'var(--color-dim)' }}>per pagina</span>
-          <select aria-label="Righe per pagina" value={perPage} onChange={e => onPerPage(Number(e.target.value))}
+          <span style={{ color: 'var(--color-dim)' }}>per page</span>
+          <select aria-label="Rows per page" value={perPage} onChange={e => onPerPage(Number(e.target.value))}
             className="px-2 py-1 rounded text-[10px] font-mono cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-void)]"
             style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-muted)' }}>
             {perPageOptions.map(n => <option key={n} value={n}>{n}</option>)}

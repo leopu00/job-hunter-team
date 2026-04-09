@@ -10,7 +10,7 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('[JHT] errore pagina:', error)
+    console.error('[JHT] page error:', error)
   }, [error])
 
   return (
@@ -24,16 +24,16 @@ export default function Error({
           </p>
           <div className="mt-[-12px] flex items-center justify-center gap-2">
             <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-red)' }}>errore di runtime</span>
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-red)' }}>runtime error</span>
           </div>
         </div>
 
         {/* Message */}
         <h1 className="text-lg font-bold mb-2" style={{ color: 'var(--color-white)' }}>
-          Qualcosa è andato storto
+          Something went wrong
         </h1>
         <p className="text-[12px] mb-6 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          {error.message || 'Errore imprevisto. Riprova o torna alla dashboard.'}
+          {error.message || 'Unexpected error. Please try again or return to the dashboard.'}
         </p>
 
         {error.digest && (
@@ -50,7 +50,7 @@ export default function Error({
             className="px-5 py-2.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer border-0"
             style={{ background: 'var(--color-green)', color: '#000' }}
           >
-            Riprova
+            Retry
           </button>
           <button
             onClick={() => window.location.href = '/dashboard'}

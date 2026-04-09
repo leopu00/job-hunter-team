@@ -1,6 +1,6 @@
 /**
  * Setup wizard — onboarding completo al primo avvio.
- * Step: cartella di lavoro → scelta configurazione → profilo manuale o assistito AI.
+ * Layout verticale con SelectList per navigazione pulita.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -37,14 +37,45 @@ import {
   type UserProfile,
 } from "./tui-profile.js";
 import { theme } from "./tui-theme.js";
+import { 
+  listProviders, 
+  getProvider, 
+  getAuthMethods,
+  saveCredentials, 
+  type ProviderId,
+  type AuthMethod,
+} from "./auth/providers.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
 const SETUP_MODEL = "claude-sonnet-4-20250514";
-const setupAccent = chalk.hex("#F6C453");
-const setupDim = chalk.hex("#7B7F87");
 
-type SetupMode = "manual" | "assistant";
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMA
+// ─────────────────────────────────────────────────────────────────────────────
+
+const setupSelectTheme: SelectListTheme = {
+  selectedPrefix: (text) => theme.accent(text),
+  selectedText: (text) => theme.bold(theme.accent(text)),
+  description: (text) => theme.dim(text),
+  scrollInfo: (text) => theme.dim(text),
+  noMatch: (text) => theme.warning(text),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIPI
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SetupStep = "welcome" | "workspace" | "provider" | "authMethod" | "credentials";
+
+type SetupState = {
+  step: SetupStep;
+  workspace: string;
+  provider: WorkspaceProvider | "";
+  authMethodId: string;
+  apiKey: string;
+  message: string | null;
+};
 
 type AssistantProfileDraft = {
   nome?: string;
@@ -57,303 +88,542 @@ type AssistantProfileDraft = {
   missing?: string[];
 };
 
-type SetupConfigField = "workspace" | "provider" | "apiKey";
+// ─────────────────────────────────────────────────────────────────────────────
+// PROVIDER OPTIONS (dal registry auth)
+// ─────────────────────────────────────────────────────────────────────────────
 
-type SetupConfigStep = {
-  field: SetupConfigField;
-  section: string;
-  title: string;
-  question: string;
-  hint: string;
-  required: boolean;
-};
+const PROVIDER_OPTIONS: SelectItem[] = listProviders().map(p => ({
+  value: p.id,
+  label: p.label,
+  description: p.description,
+}));
 
-type SetupConfigWizardState = {
-  stepIndex: number;
-  steps: SetupConfigStep[];
-  draft: {
-    workspace: string;
-    provider: string;
-    apiKey: string;
-  };
-  lastMessage?: string | null;
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// UI COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
 
-const SETUP_CONFIG_STEPS: SetupConfigStep[] = [
-  {
-    field: "workspace",
-    section: "Configurazione",
-    title: "📁 Cartella di lavoro",
-    question: "Seleziona o incolla la cartella di lavoro.",
-    hint: "Premi Enter vuoto per aprire Finder oppure incolla un percorso.",
-    required: true,
-  },
-  {
-    field: "provider",
-    section: "Configurazione",
-    title: "🧠 Provider AI",
-    question: "Scegli il provider per questa cartella.",
-    hint: "Anthropic, OpenAI o Kimi K2.",
-    required: true,
-  },
-  {
-    field: "apiKey",
-    section: "Configurazione",
-    title: "🔑 API Key",
-    question: "Inserisci la chiave API per il provider scelto.",
-    hint: "Anthropic: sk-ant- · OpenAI/Kimi: sk-...",
-    required: true,
-  },
-];
-
-const PROVIDER_OPTIONS: SelectItem[] = [
-  {
-    value: "anthropic",
-    label: "Anthropic",
-    description: "Claude via Messages API",
-  },
-  {
-    value: "openai",
-    label: "OpenAI",
-    description: "GPT via OpenAI API",
-  },
-  {
-    value: "kimi",
-    label: "Kimi K2",
-    description: "Moonshot API compatibile OpenAI",
-  },
-];
-
-const setupSelectTheme: SelectListTheme = {
-  selectedPrefix: (text) => theme.accent(text),
-  selectedText: (text) => theme.selectedRow(theme.bold(theme.accent(text))),
-  description: (text) => theme.dim(text),
-  scrollInfo: (text) => theme.dim(text),
-  noMatch: (text) => theme.dim(text),
-};
-
-function printBanner() {
-  const centerText = (value: string, width: number): string => {
-    if (value.length >= width) return value;
-    const totalPadding = width - value.length;
-    const leftPadding = Math.floor(totalPadding / 2);
-    const rightPadding = totalPadding - leftPadding;
-    return `${" ".repeat(leftPadding)}${value}${" ".repeat(rightPadding)}`;
-  };
-
-  const logoLines = [
-    "     ██╗██╗  ██╗████████╗",
-    "     ██║██║  ██║╚══██╔══╝",
-    "     ██║███████║   ██║   ",
-    "██   ██║██╔══██║   ██║   ",
-    "╚█████╔╝██║  ██║   ██║   ",
-    " ╚════╝ ╚═╝  ╚═╝   ╚═╝   ",
-  ];
-  const titleLines = [
-    "",
-    "Job Hunter Team",
-    "Setup Iniziale",
-  ];
-  const innerWidth = Math.max(
-    ...logoLines.map((line) => line.length),
-    ...titleLines.map((line) => line.length),
-  );
-  const frameRaw = (line: string) => `   ║ ${line.padEnd(innerWidth, " ")} ║`;
-  const frameCentered = (line: string) => `   ║ ${centerText(line, innerWidth)} ║`;
-
-  console.clear();
-  console.log("");
-  console.log(setupAccent(`   ╔${"═".repeat(innerWidth + 2)}╗`));
-  for (const line of logoLines) {
-    console.log(setupAccent(frameRaw(line)));
-  }
-  for (const line of titleLines) {
-    console.log(setupAccent(frameCentered(line)));
-  }
-  console.log(setupAccent(`   ╚${"═".repeat(innerWidth + 2)}╝`));
-  console.log("");
-}
-
-function renderSetupBannerText(): string {
-  const centerText = (value: string, width: number): string => {
-    if (value.length >= width) return value;
-    const totalPadding = width - value.length;
-    const leftPadding = Math.floor(totalPadding / 2);
-    const rightPadding = totalPadding - leftPadding;
-    return `${" ".repeat(leftPadding)}${value}${" ".repeat(rightPadding)}`;
-  };
-
-  const logoLines = [
-    "     ██╗██╗  ██╗████████╗",
-    "     ██║██║  ██║╚══██╔══╝",
-    "     ██║███████║   ██║   ",
-    "██   ██║██╔══██║   ██║   ",
-    "╚█████╔╝██║  ██║   ██║   ",
-    " ╚════╝ ╚═╝  ╚═╝   ╚═╝   ",
-  ];
-  const titleLines = [
-    "",
-    "Job Hunter Team",
-    "Configurazione",
-  ];
-  const innerWidth = Math.max(
-    ...logoLines.map((line) => line.length),
-    ...titleLines.map((line) => line.length),
-  );
-  const frameRaw = (line: string) => `   ${theme.accent("║")} ${theme.accent(line.padEnd(innerWidth, " "))} ${theme.accent("║")}`;
-  const frameCentered = (line: string) => `   ${theme.accent("║")} ${theme.accent(centerText(line, innerWidth))} ${theme.accent("║")}`;
-
+function renderBanner(): string {
   return [
     "",
-    `   ${theme.accent(`╔${"═".repeat(innerWidth + 2)}╗`)}`,
-    ...logoLines.map(frameRaw),
-    ...titleLines.map(frameCentered),
-    `   ${theme.accent(`╚${"═".repeat(innerWidth + 2)}╝`)}`,
+    theme.accent("     ██╗██╗  ██╗████████╗"),
+    theme.accent("     ██║██║  ██║╚══██╔══╝"),
+    theme.accent("     ██║███████║   ██║   "),
+    theme.accent("██   ██║██╔══██║   ██║   "),
+    theme.accent("╚█████╔╝██║  ██║   ██║   "),
+    theme.accent(" ╚════╝ ╚═╝  ╚═╝   ╚═╝   "),
+    "",
+    theme.header("  Job Hunter Team — Configurazione"),
     "",
   ].join("\n");
 }
 
-function setupHasValue(value: string): boolean {
-  return value.trim().length > 0;
+function renderFooter(): string {
+  return theme.dim("  ↑↓ navigate  •  Enter confirm  •  Ctrl+C cancel");
 }
 
-function renderSetupCheckpoints(wizard: SetupConfigWizardState): string {
-  return wizard.steps.map((step, index) => {
-    const completed = setupHasValue(wizard.draft[step.field]);
-    const current = index === wizard.stepIndex;
-    if (current && completed) return theme.accent("◉");
-    if (current) return theme.accent("◎");
-    if (completed) return theme.accent("●");
-    return theme.dim("○");
-  }).join(theme.dim(" "));
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP WIZARD — LAYOUT VERTICALE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function runSetupWizard(): Promise<string> {
+  const state: SetupState = {
+    step: "welcome",
+    workspace: loadWorkspacePath(),
+    provider: (loadWorkspaceProvider(loadWorkspacePath()) as WorkspaceProvider) || "",
+    authMethodId: "",
+    apiKey: loadWorkspaceApiKey(loadWorkspacePath()) || "",
+    message: null,
+  };
+
+  // Se già configurato, salta il wizard
+  if (state.workspace && state.provider && state.apiKey) {
+    return state.apiKey;
+  }
+
+  // Determina step iniziale
+  if (!state.workspace) state.step = "workspace";
+  else if (!state.provider) state.step = "provider";
+  else if (!state.apiKey) state.step = "authMethod";
+
+  const tui = new TUI(new ProcessTerminal());
+  tui.setClearOnShrink(true);
+
+  const root = new Container();
+  const contentArea = new Container();
+  root.addChild(new Text(renderBanner(), 0, 0));
+  root.addChild(contentArea);
+  root.addChild(new Text("", 0, 0)); // spacer
+  root.addChild(new Text(renderFooter(), 0, 0));
+  tui.addChild(root);
+
+  let inputBuffer = "";
+  let completedApiKey = "";
+
+  // SelectList per provider
+  const providerSelect = new SelectList(PROVIDER_OPTIONS, 5, setupSelectTheme, {
+    minPrimaryColumnWidth: 14,
+    maxPrimaryColumnWidth: 20,
+  });
+
+  // SelectList per auth method (inizialmente vuoto, popolato dinamicamente)
+  let authMethodSelect = new SelectList([], 5, setupSelectTheme, {
+    minPrimaryColumnWidth: 14,
+    maxPrimaryColumnWidth: 20,
+  });
+
+  // Crea SelectList per i metodi auth del provider selezionato
+  const createAuthMethodSelect = (): SelectList => {
+    const provider = getProvider(state.provider);
+    const methods = provider?.auth ?? [];
+    const options: SelectItem[] = methods.map(m => ({
+      value: m.id,
+      label: m.label,
+      description: m.hint || "",
+    }));
+    return new SelectList(options, 5, setupSelectTheme, {
+      minPrimaryColumnWidth: 14,
+      maxPrimaryColumnWidth: 20,
+    });
+  };
+
+  // Sincronizza selezione provider con stato
+  const syncProviderSelection = () => {
+    const idx = PROVIDER_OPTIONS.findIndex((o) => o.value === state.provider);
+    providerSelect.setSelectedIndex(idx >= 0 ? idx : 0);
+  };
+  syncProviderSelection();
+
+  // Se lo step iniziale è authMethod o credentials, inizializza authMethodSelect
+  if ((state.step === "authMethod" || state.step === "credentials") && state.provider) {
+    authMethodSelect = createAuthMethodSelect();
+  }
+
+  // Render step corrente
+  const render = () => {
+    contentArea.clear();
+
+    switch (state.step) {
+      case "welcome":
+        renderWelcome(contentArea, state);
+        break;
+      case "workspace":
+        renderWorkspace(contentArea, state, inputBuffer);
+        break;
+      case "provider":
+        renderProvider(contentArea, state, providerSelect);
+        break;
+      case "authMethod":
+        renderAuthMethod(contentArea, state, authMethodSelect);
+        break;
+      case "credentials":
+        renderCredentials(contentArea, state, inputBuffer);
+        break;
+    }
+
+    tui.requestRender(true);
+  };
+
+  // Handlers step
+  const handleWelcome = (): boolean => {
+    state.step = "workspace";
+    return true;
+  };
+
+  const handleWorkspace = async (): Promise<boolean> => {
+    let path = inputBuffer.trim();
+
+    // Se vuoto, apri picker
+    if (!path) {
+      path = openWorkspaceFolderPicker(state.workspace || homedir()) ?? "";
+      if (!path) {
+        state.message = "Seleziona una cartella";
+        return false;
+      }
+    }
+
+    if (!path) {
+      state.message = "Seleziona una cartella di lavoro";
+      return false;
+    }
+
+    const normalized = resolve(path);
+    let validation = validateWorkspacePath(normalized);
+
+    // Se non esiste, prova a crearla
+    if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
+      try {
+        ensureWorkspaceInitialized(normalized);
+        validation = validateWorkspacePath(normalized);
+      } catch (err) {
+        state.message = err instanceof Error ? err.message : "Errore creazione cartella";
+        return false;
+      }
+    }
+
+    if (!validation.ok) {
+      state.message = validation.error;
+      return false;
+    }
+
+    ensureWorkspaceInitialized(validation.value);
+    saveWorkspacePath(validation.value);
+    state.workspace = validation.value;
+    // DEBUG: non caricare provider esistente, forza selezione
+    state.provider = "";
+    state.apiKey = "";
+    syncProviderSelection();
+    inputBuffer = "";
+    state.message = null;
+
+    // Procedi sempre allo step provider (DEBUG)
+    state.step = "provider";
+    return true;
+  };
+
+  const handleProvider = (): boolean => {
+    const selected = providerSelect.getSelectedItem();
+    if (!selected) {
+      state.message = "Seleziona un provider";
+      return false;
+    }
+
+    const provider = validateWorkspaceProvider(selected.value);
+    if (!provider) {
+      state.message = "Provider non valido";
+      return false;
+    }
+
+    saveWorkspaceProvider(provider, state.workspace);
+    state.provider = provider;
+    state.apiKey = loadWorkspaceApiKey(state.workspace) || "";
+    state.message = null;
+    
+    // Se il provider ha più metodi di auth, mostra selezione
+    const authMethods = getAuthMethods(provider as ProviderId);
+    if (authMethods.length > 1) {
+      authMethodSelect = createAuthMethodSelect();
+      state.step = "authMethod";
+    } else {
+      // Solo un metodo, procedi direttamente
+      state.authMethodId = authMethods[0]?.id || "";
+      state.step = "credentials";
+    }
+    return true;
+  };
+
+  const handleAuthMethod = (): boolean => {
+    const selected = authMethodSelect.getSelectedItem();
+    if (!selected) {
+      state.message = "Seleziona un metodo di autenticazione";
+      return false;
+    }
+    state.authMethodId = selected.value;
+    state.message = null;
+    state.step = "credentials";
+    return true;
+  };
+
+  const handleCredentials = async (): Promise<boolean> => {
+    if (!state.provider || !state.authMethodId) {
+      state.message = "Configurazione incompleta";
+      return false;
+    }
+
+    const provider = getProvider(state.provider);
+    const method = provider?.auth.find(m => m.id === state.authMethodId);
+    
+    if (!method) {
+      state.message = "Metodo di autenticazione non trovato";
+      return false;
+    }
+
+    // Se è OAuth, esegui direttamente (apre browser)
+    if (method.kind === "oauth") {
+      const result = await executeAuthMethod(method);
+      if (!result.success) {
+        state.message = result.error;
+        return false;
+      }
+      // Salva credenziali
+      await saveCredentials(state.workspace, state.provider as ProviderId, method.id, result.credentials);
+      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key : result.credentials.token;
+      completedApiKey = state.apiKey;
+      state.message = "Autenticazione completata!";
+      return true;
+    }
+
+    // Per API key, usa inputBuffer
+    const key = inputBuffer.trim();
+    if (!key) {
+      state.message = "Inserisci la chiave API";
+      return false;
+    }
+
+    if (state.provider === "anthropic" && !key.startsWith("sk-ant-")) {
+      state.message = "La chiave Anthropic deve iniziare con sk-ant-";
+      return false;
+    }
+
+    state.message = "Verifica in corso...";
+    render();
+
+    const valid = await testApiKey(state.provider, key);
+    if (!valid) {
+      state.message = "Chiave non valida — riprova";
+      return false;
+    }
+
+    // Salva nel nuovo storage
+    await saveCredentials(state.workspace, state.provider as ProviderId, method.id, {
+      type: "apiKey",
+      key,
+    });
+    
+    state.apiKey = key;
+    completedApiKey = key;
+    state.message = null;
+    return true;
+  };
+
+  // Esegue un metodo di autenticazione
+  const executeAuthMethod = async (method: AuthMethod): Promise<import("./auth/providers.js").AuthResult> => {
+    const { promptAPI, runtimeAPI } = createAuthAPIs();
+    
+    return method.run({
+      workspace: state.workspace,
+      provider: state.provider as WorkspaceProvider,
+      prompt: promptAPI,
+      openUrl: async (url) => {
+        // Apri URL nel browser di default
+        const { spawn } = await import("node:child_process");
+        const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+        spawn(command, [url], { detached: true, stdio: "ignore" });
+      },
+      runtime: runtimeAPI,
+    });
+  };
+
+  // Crea API compatibili con il sistema auth
+  const createAuthAPIs = () => {
+    let pendingInputResolver: ((value: string) => void) | null = null;
+    let pendingInputRejecter: ((reason: Error) => void) | null = null;
+
+    const promptAPI = {
+      text: async (params: { message: string; placeholder?: string; validate?: (v: string) => string | undefined }): Promise<string> => {
+        state.message = params.message;
+        if (params.placeholder) {
+          state.message += ` (${params.placeholder})`;
+        }
+        render();
+        
+        // Attendi input da tastiera
+        return new Promise((resolve, reject) => {
+          pendingInputResolver = resolve;
+          pendingInputRejecter = reject;
+        });
+      },
+      confirm: async (params: { message: string; initialValue?: boolean }): Promise<boolean> => {
+        state.message = params.message + " (s/n)";
+        render();
+        // Semplificato: sempre true per ora
+        return true;
+      },
+      select: async <T extends string>(params: { message: string; options: Array<{ value: T; label: string; hint?: string }> }): Promise<T> => {
+        state.message = params.message;
+        render();
+        // Semplificato: primo opzione
+        return params.options[0]?.value as T;
+      },
+      progress: (msg: string) => {
+        state.message = msg;
+        render();
+        return { 
+          update: (m: string) => { state.message = m; render(); }, 
+          stop: () => {} 
+        };
+      },
+      note: async (msg: string, title?: string) => {
+        state.message = title ? `${title}: ${msg}` : msg;
+        render();
+      },
+    };
+
+    const runtimeAPI = {
+      log: (msg: string) => { state.message = msg; render(); },
+      error: (msg: string) => { state.message = `Errore: ${msg}`; render(); },
+    };
+
+    return { promptAPI, runtimeAPI, pendingInputResolver, pendingInputRejecter };
+  };
+
+  // Input handler
+  await new Promise<void>((resolve) => {
+    const finish = () => {
+      try { tui.stop(); } catch {}
+      resolve();
+    };
+
+    tui.addInputListener((data) => {
+      // Ctrl+C / Ctrl+D — esci in qualsiasi momento
+      if (matchesKey(data, Key.ctrl("c")) || matchesKey(data, Key.ctrl("d"))) {
+        finish();
+        return { consume: true };
+      }
+
+      // Enter — conferma step
+      if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
+        void (async () => {
+          let ok = false;
+
+          switch (state.step) {
+            case "welcome":
+              ok = handleWelcome();
+              break;
+            case "workspace":
+              ok = await handleWorkspace();
+              break;
+            case "provider":
+              ok = handleProvider();
+              break;
+            case "authMethod":
+              ok = handleAuthMethod();
+              break;
+            case "credentials":
+              ok = await handleCredentials();
+              if (ok) {
+                finish();
+                return;
+              }
+              break;
+          }
+
+          render();
+        })();
+        return { consume: true };
+      }
+
+      // Gestione input per step specifici
+      const currentStep = state.step;
+
+      if (currentStep === "provider" || currentStep === "authMethod") {
+        // Per provider e authMethod, lascia che SelectList gestisca la navigazione
+        if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+          const selectList = currentStep === "provider" ? providerSelect : authMethodSelect;
+          selectList.handleInput(data);
+          state.message = null;
+          render();
+          return { consume: true };
+        }
+      }
+
+      // Backspace per input testuale (solo per workspace e apiKey)
+      if ((matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) && inputBuffer.length > 0 && currentStep !== "provider") {
+        inputBuffer = inputBuffer.slice(0, -1);
+        state.message = null;
+        render();
+        return { consume: true };
+      }
+
+      // Input testuale (solo per workspace e apiKey)
+      const str = typeof data === "string" ? data : "";
+      if (str && str.length === 1 && str.charCodeAt(0) >= 32 && currentStep !== "provider") {
+        inputBuffer += str;
+        state.message = null;
+        render();
+        return { consume: true };
+      }
+
+      return undefined;
+    });
+
+    tui.start();
+    render();
+  });
+
+  return completedApiKey || state.apiKey;
 }
 
-function truncateSetupText(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(text.length - max);
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER STEP
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderWelcome(panel: Container, state: SetupState) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+  add("");
+  add(`  ${theme.accent("▶ Premi Enter per iniziare")}`);
+  if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
-function renderSetupWizard(
-  panel: Container,
-  wizard: SetupConfigWizardState,
-  currentInput: string,
-  providerSelect: SelectList,
-): void {
-  panel.clear();
+function renderWorkspace(panel: Container, state: SetupState, inputBuffer: string) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
 
-  const current = wizard.steps[wizard.stepIndex];
-  const progress = `${wizard.stepIndex + 1}/${wizard.steps.length}`;
-  const fallback = wizard.draft[current.field];
-  const displayValue = currentInput.length > 0 ? currentInput : fallback;
-  const maskedValue = current.field === "apiKey" && currentInput.length === 0 && fallback
-    ? `${"*".repeat(Math.max(8, Math.min(fallback.length, 24)))}`
-    : displayValue;
+  const display = inputBuffer || state.workspace || "";
   const cursor = "█";
-  const contentWidth = 58;
-  const padded = truncateSetupText(`${maskedValue}${cursor}`, contentWidth).padEnd(contentWidth, " ");
+  const line = display + cursor;
 
-  add(renderSetupBannerText());
-  add(theme.header("  ■ CONFIGURA JHT"));
-  add(theme.border("  " + "─".repeat(62)));
-  add("");
-  add(`  ${renderSetupCheckpoints(wizard)}`);
-  add("");
-  add(`  ${theme.dim(current.section.toUpperCase())}`);
-  add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)} ${theme.dim("·")} ${theme.accent("Richiesto")}`);
-  add("");
-  add(`  ${theme.text(current.question)}`);
-  add("");
+  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
+  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
+  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
 
-  if (current.field === "provider") {
-    for (const line of providerSelect.render(contentWidth)) {
-      add(`  ${line}`);
-    }
-  } else {
-    add(`  ${theme.border("┌" + "─".repeat(contentWidth + 2) + "┐")}`);
-    add(`  ${theme.border("│")} ${theme.text(padded)} ${theme.border("│")}`);
-    add(`  ${theme.border("└" + "─".repeat(contentWidth + 2) + "┘")}`);
-  }
+  if (state.message) add(`  ${theme.warning(state.message)}`);
+}
+
+function renderProvider(panel: Container, state: SetupState, selectList: SelectList) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
 
   add("");
-  add(`  ${theme.dim(current.hint)}`);
+  panel.addChild(selectList);
 
-  if (wizard.lastMessage) {
+  if (state.message) {
     add("");
-    add(theme.warning(`  ${wizard.lastMessage}`));
+    add(`  ${theme.warning(state.message)}`);
   }
 }
 
-function formatWorkspaceInitSummary(init: ReturnType<typeof ensureWorkspaceInitialized>): string | null {
-  const created: string[] = [];
-  if (init.createdDb) created.push("database");
-  if (init.createdProfileDir) created.push("cartella profilo");
-  if (init.createdUploadsDir) created.push("cartella uploads");
-  if (created.length === 0) return null;
-  return created.join(", ");
-}
+function renderAuthMethod(panel: Container, state: SetupState, selectList: SelectList) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
 
-function printWelcomeOverview() {
-  console.log(setupAccent("  Benvenuto nel portale Job Hunter Team."));
-  console.log(setupDim("  Qui completi la configurazione iniziale e poi puoi usare:"));
-  console.log("");
-  console.log(setupAccent("    • Dashboard") + setupDim("  riepilogo profilo, task e stato team"));
-  console.log(setupAccent("    • Team") + setupDim("       agenti attivi e sessioni runtime"));
-  console.log(setupAccent("    • Tasks") + setupDim("      ricerche e lavorazioni in corso"));
-  console.log(setupAccent("    • AI") + setupDim("         assistente per CV, offerte e colloqui"));
-  console.log("");
-  console.log(setupDim("  I dati vengono salvati in ~/.jht/jht.config.json"));
-  console.log("");
-}
+  add("");
+  panel.addChild(selectList);
 
-function printStep(n: number, total: number, text: string) {
-  console.log(setupDim(`  [${n}/${total}]`) + " " + setupAccent(text));
-}
-
-function ask(rl: readline.Interface, question: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => resolve(answer.trim()));
-  });
-}
-
-async function askChoice(
-  rl: readline.Interface,
-  question: string,
-  allowed: string[],
-  fallback?: string,
-): Promise<string> {
-  while (true) {
-    const answer = (await ask(rl, question)) || (fallback ?? "");
-    if (allowed.includes(answer)) return answer;
-    console.log(setupAccent(`  Inserisci una scelta valida: ${allowed.join("/")}`));
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
   }
 }
 
-async function askWithDefault(
-  rl: readline.Interface,
-  label: string,
-  fallback: string,
-): Promise<string> {
-  const suffix = fallback ? ` [${fallback}]` : "";
-  const answer = await ask(rl, setupAccent(`  > ${label}${suffix}: `));
-  return answer || fallback;
-}
+function renderCredentials(panel: Container, state: SetupState, inputBuffer: string) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
 
-async function askValidatedField(
-  rl: readline.Interface,
-  field: "nome" | "cognome" | "dataNascita" | "competenze" | "zona" | "tipoLavoro",
-  label: string,
-  fallback: string,
-): Promise<string | string[]> {
-  while (true) {
-    const raw = await askWithDefault(rl, label, fallback);
-    const validation = validateProfileField(field, raw);
-    if (validation.ok) return validation.value;
-    console.log(setupAccent(`  ${validation.error}`));
+  const provider = getProvider(state.provider);
+  const method = provider?.auth.find(m => m.id === state.authMethodId);
+
+  if (method?.kind === "oauth") {
+    add("");
+    add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
+  } else {
+    const display = inputBuffer || "";
+    const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
+    const cursor = "█";
+    const line = masked + cursor;
+
+    add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
+    add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
+    add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
+  }
+
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────────
 
 function openWorkspaceFolderPicker(initialPath: string): string | null {
+  // macOS: AppleScript
   if (process.platform === "darwin") {
     const resolvedPath = resolve(initialPath);
     const scriptLines = [
@@ -363,9 +633,7 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
             `set startFolder to POSIX file ${JSON.stringify(resolvedPath)}`,
             'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro" default location startFolder',
           ]
-        : [
-            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"',
-          ]),
+        : ['set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"']),
       'POSIX path of selectedFolder',
     ];
 
@@ -374,608 +642,52 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
       timeout: 120_000,
     });
 
-    if (result.status !== 0) {
-      return null;
-    }
-
-    const selected = result.stdout.trim();
-    return selected || null;
+    return result.status === 0 ? result.stdout.trim() || null : null;
   }
 
-  if (process.platform !== "win32") {
-    return null;
+  // Windows / WSL
+  if (process.platform === "win32" || isWSL()) {
+    const escapedPath = initialPath.replace(/'/g, "''");
+    const script = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+      "$dialog.Title = 'Seleziona la cartella di lavoro'",
+      "$dialog.Filter = 'Cartelle|*.folder'",
+      "$dialog.CheckFileExists = $false",
+      "$dialog.CheckPathExists = $true",
+      "$dialog.ValidateNames = $false",
+      "$dialog.FileName = 'Seleziona questa cartella'",
+      `$initialPath = '${escapedPath}'`,
+      "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
+      "$result = $dialog.ShowDialog()",
+      "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "  $selected = Split-Path -Path $dialog.FileName -Parent",
+      "  if (-not $selected) { $selected = $dialog.FileName }",
+      "  Write-Output $selected",
+      "}",
+    ].join("; ");
+
+    const result = spawnSync("powershell.exe", [
+      "-NoLogo",
+      "-NoProfile",
+      "-STA",
+      "-Command",
+      script,
+    ], { encoding: "utf-8", timeout: 120_000 });
+
+    return result.status === 0 ? result.stdout.trim() || null : null;
   }
 
-  const escapedPath = initialPath.replace(/'/g, "''");
-  const script = [
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-    "$dialog.Title = 'Seleziona la cartella di lavoro'",
-    "$dialog.Filter = 'Cartelle|*.folder'",
-    "$dialog.CheckFileExists = $false",
-    "$dialog.CheckPathExists = $true",
-    "$dialog.ValidateNames = $false",
-    "$dialog.DereferenceLinks = $true",
-    "$dialog.FileName = 'Seleziona questa cartella'",
-    `$initialPath = '${escapedPath}'`,
-    "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
-    "$result = $dialog.ShowDialog()",
-    "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
-    "  $selected = Split-Path -Path $dialog.FileName -Parent",
-    "  if (-not $selected) { $selected = $dialog.FileName }",
-    "  Write-Output $selected",
-    "}",
-  ].join("; ");
-
-  const result = spawnSync("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-STA",
-    "-Command",
-    script,
-  ], {
-    encoding: "utf-8",
-    timeout: 120_000,
-  });
-
-  if (result.status !== 0) {
-    return null;
-  }
-
-  const selected = result.stdout.trim();
-  return selected || null;
-}
-
-async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
-  printBanner();
-  console.log(setupAccent("  📁 Premi Enter per selezionare la tua cartella di lavoro."));
-  if (reason) {
-    console.log("");
-    console.log(setupDim(`  ${reason}`));
-  }
-  console.log("");
-
-  while (true) {
-    const answer = await ask(rl, setupAccent("  > "));
-    const candidate = answer || openWorkspaceFolderPicker(fallback);
-    if (!candidate) {
-      console.log(setupDim("  Nessuna cartella selezionata."));
-      continue;
-    }
-    const normalizedCandidate = resolve(candidate);
-    let initSummary: string | null = null;
-    let validation = validateWorkspacePath(normalizedCandidate);
-    if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
-      try {
-        initSummary = formatWorkspaceInitSummary(ensureWorkspaceInitialized(normalizedCandidate));
-        validation = validateWorkspacePath(normalizedCandidate);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "impossibile inizializzare la cartella";
-        console.log(setupAccent(`  ${message}`));
-        continue;
-      }
-    }
-    if (validation.ok) {
-      const init = ensureWorkspaceInitialized(validation.value);
-      saveWorkspacePath(validation.value);
-      console.log(setupAccent(`  ✓ Cartella di lavoro salvata: ${validation.value}`));
-      const currentSummary = formatWorkspaceInitSummary(init);
-      if (currentSummary || initSummary) {
-        console.log(setupAccent(`  ✓ Workspace inizializzato: ${currentSummary ?? initSummary}`));
-      }
-      console.log("");
-      return validation.value;
-    }
-    console.log(setupAccent(`  ${validation.error}`));
-  }
-}
-
-function loadExistingConfig(): Record<string, unknown> {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-export function saveApiKey(key: string): void {
-  saveWorkspaceApiKey(key, loadWorkspacePath());
-}
-
-function buildProfile(input: Partial<UserProfile>): UserProfile {
-  const profile: UserProfile = {
-    nome: input.nome?.trim() ?? "",
-    cognome: input.cognome?.trim() ?? "",
-    dataNascita: input.dataNascita?.trim() ?? "",
-    headline: input.headline?.trim() ?? "",
-    targetRoles: Array.isArray(input.targetRoles) ? input.targetRoles.map((s) => s.trim()).filter(Boolean) : [],
-    seniorityTarget: input.seniorityTarget?.trim() ?? "",
-    competenze: Array.isArray(input.competenze) ? input.competenze.map((s) => s.trim()).filter(Boolean) : [],
-    zona: input.zona?.trim() ?? "",
-    locationPreferences: Array.isArray(input.locationPreferences)
-      ? input.locationPreferences.map((s) => s.trim()).filter(Boolean)
-      : input.zona?.trim()
-        ? [input.zona.trim()]
-        : [],
-    tipoLavoro: input.tipoLavoro?.trim() ?? "",
-    languages: Array.isArray(input.languages) ? input.languages.map((s) => s.trim()).filter(Boolean) : [],
-    strengths: Array.isArray(input.strengths) ? input.strengths.map((s) => s.trim()).filter(Boolean) : [],
-    email: input.email?.trim() ?? "",
-    linkedin: input.linkedin?.trim() ?? "",
-    portfolio: input.portfolio?.trim() ?? "",
-    salaryTarget: input.salaryTarget?.trim() ?? "",
-    availability: input.availability?.trim() ?? "",
-    workAuthorization: input.workAuthorization?.trim() ?? "",
-    completato: false,
-  };
-  profile.completato = isProfileComplete(profile);
-  return profile;
-}
-
-async function collectManualProfile(
-  rl: readline.Interface,
-  initial?: Partial<UserProfile>,
-): Promise<UserProfile> {
-  printStep(4, 4, "Profilo manuale");
-  console.log(chalk.dim("  Compila i campi principali del profilo."));
-  console.log("");
-
-  const nome = await askValidatedField(rl, "nome", "Nome", initial?.nome ?? "") as string;
-  const cognome = await askValidatedField(rl, "cognome", "Cognome", initial?.cognome ?? "") as string;
-  const dataNascita = await askValidatedField(rl, "dataNascita", "Data di nascita", initial?.dataNascita ?? "") as string;
-  const competenze = await askValidatedField(
-    rl,
-    "competenze",
-    "Competenze (separate da virgola)",
-    Array.isArray(initial?.competenze) ? initial.competenze.join(", ") : "",
-  );
-  const zona = await askValidatedField(rl, "zona", "Zona", initial?.zona ?? "") as string;
-  const tipoLavoro = await askValidatedField(rl, "tipoLavoro", "Tipo lavoro", initial?.tipoLavoro ?? "") as string;
-
-  return buildProfile({
-    nome,
-    cognome,
-    dataNascita,
-    competenze: competenze as string[],
-    zona,
-    tipoLavoro,
-  });
-}
-
-function extractJsonObject(text: string): string | null {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  return text.slice(start, end + 1);
-}
-
-async function generateAssistantProfile(
-  apiKey: string,
-  notes: string,
-): Promise<AssistantProfileDraft> {
-  const systemPrompt = [
-    "Sei l'assistente di onboarding del Job Hunter Team.",
-    "Dato un testo libero dell'utente, estrai un profilo candidato.",
-    "Rispondi solo con JSON valido, senza markdown.",
-    "Schema:",
-    '{"nome":"","cognome":"","dataNascita":"","competenze":[],"zona":"","tipoLavoro":"","followUpQuestion":"","missing":[]}',
-    "Usa stringhe vuote se un campo non e noto.",
-    "followUpQuestion deve contenere una sola domanda breve solo se manca un dato importante.",
-  ].join("\n");
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: SETUP_MODEL,
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: notes }],
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`API ${res.status}: ${body.slice(0, 200)}`);
-  }
-
-  const payload = await res.json() as { content?: Array<{ type?: string; text?: string }> };
-  const rawText = (payload.content ?? [])
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text ?? "")
-    .join("\n")
-    .trim();
-
-  const jsonText = extractJsonObject(rawText);
-  if (!jsonText) {
-    throw new Error("risposta AI non parseabile");
-  }
-
-  const parsed = JSON.parse(jsonText) as AssistantProfileDraft;
-  return {
-    nome: typeof parsed.nome === "string" ? parsed.nome : "",
-    cognome: typeof parsed.cognome === "string" ? parsed.cognome : "",
-    dataNascita: typeof parsed.dataNascita === "string" ? parsed.dataNascita : "",
-    competenze: Array.isArray(parsed.competenze) ? parsed.competenze.filter((v): v is string => typeof v === "string") : [],
-    zona: typeof parsed.zona === "string" ? parsed.zona : "",
-    tipoLavoro: typeof parsed.tipoLavoro === "string" ? parsed.tipoLavoro : "",
-    followUpQuestion: typeof parsed.followUpQuestion === "string" ? parsed.followUpQuestion : "",
-    missing: Array.isArray(parsed.missing) ? parsed.missing.filter((v): v is string => typeof v === "string") : [],
-  };
-}
-
-async function collectAssistantProfile(
-  rl: readline.Interface,
-  apiKey: string,
-): Promise<UserProfile> {
-  printStep(4, 4, "Profilo assistito da AI");
-  console.log(chalk.dim("  Descrivi il tuo profilo in linguaggio naturale."));
-  console.log(chalk.dim("  Esempio: Anna Verdi, nata il 14/02/1994, ha esperienza in assistenza clienti e organizzazione, disponibile a Roma e provincia, cerca un lavoro full-time."));
-  console.log("");
-
-  let notes = await ask(rl, chalk.green("  > Raccontami chi sei: "));
-  if (!notes) {
-    console.log(chalk.yellow("  Nessuna descrizione inserita. Passo alla compilazione manuale."));
-    return collectManualProfile(rl);
-  }
-
-  console.log(chalk.dim("  L'assistente sta preparando una proposta profilo..."));
-  let draft = await generateAssistantProfile(apiKey, notes);
-
-  if (draft.followUpQuestion) {
-    console.log("");
-    console.log(chalk.white(`  Domanda assistente: ${draft.followUpQuestion}`));
-    const answer = await ask(rl, chalk.green("  > Risposta: "));
-    if (answer) {
-      notes += `\n\nInformazione aggiuntiva: ${answer}`;
-      console.log(chalk.dim("  Aggiorno la proposta..."));
-      draft = await generateAssistantProfile(apiKey, notes);
-    }
-  }
-
-  const proposed = buildProfile({
-    nome: draft.nome,
-    cognome: draft.cognome,
-    dataNascita: draft.dataNascita,
-    competenze: draft.competenze,
-    zona: draft.zona,
-    tipoLavoro: draft.tipoLavoro,
-  });
-
-  console.log("");
-  console.log(chalk.white("  Proposta profilo:"));
-  for (const line of formatProfile(proposed)) {
-    console.log(chalk.white(line));
-  }
-  console.log("");
-  console.log(chalk.white("    1") + chalk.dim(") Conferma e salva"));
-  console.log(chalk.white("    2") + chalk.dim(") Rifinisci manualmente"));
-  console.log("");
-
-  const choice = await askChoice(rl, chalk.green("  > Scelta (1/2): "), ["1", "2"]);
-  if (choice === "1") return proposed;
-
-  console.log("");
-  return collectManualProfile(rl, proposed);
-}
-
-async function promptApiKey(
-  rl: readline.Interface,
-  step: number,
-  total: number,
-  required: boolean,
-): Promise<string | null> {
-  printStep(step, total, required ? "API key Anthropic (necessaria per assistente AI)" : "API key Anthropic (opzionale)");
-  console.log(chalk.dim("  Puoi trovarla su https://console.anthropic.com/settings/keys"));
-  if (required) {
-    console.log(chalk.white("    1") + chalk.dim(") Inserisci la chiave"));
-    console.log(chalk.white("    2") + chalk.dim(") Torna alla configurazione manuale"));
-  } else {
-    console.log(chalk.white("    1") + chalk.dim(") Inserisci la chiave"));
-    console.log(chalk.white("    2") + chalk.dim(") Salta per ora"));
-  }
-  console.log("");
-
-  const choice = await askChoice(rl, chalk.green("  > Scelta (1/2): "), ["1", "2"]);
-  if (choice === "2") return null;
-
-  const key = await ask(rl, chalk.green("  > API Key: "));
-  if (!key || key.length < 10) {
-    console.log(chalk.yellow("  Chiave vuota o troppo corta."));
-    return required ? promptApiKey(rl, step, total, required) : null;
-  }
-
-  console.log(chalk.dim("  Verifica in corso..."));
-  const valid = await testApiKey("anthropic", key);
-  if (valid) {
-    saveApiKey(key);
-    console.log(chalk.green("  ✓ Chiave valida e salvata."));
-    return key;
-  }
-
-  console.log(chalk.yellow("  Chiave non verificata."));
-  if (required) {
-    console.log(chalk.yellow("  Senza chiave valida l'assistente AI non puo essere usato."));
-    return promptApiKey(rl, step, total, required);
-  }
-
-  const save = await askChoice(rl, chalk.green("  > Salvare comunque? (s/n): "), ["s", "n"], "n");
-  if (save === "s") {
-    saveApiKey(key);
-    return key;
-  }
+  // Linux: nessun picker disponibile
   return null;
 }
 
-export async function runSetupWizard(): Promise<string> {
-  const wizard: SetupConfigWizardState = {
-    stepIndex: 0,
-    steps: SETUP_CONFIG_STEPS,
-    draft: {
-      workspace: loadWorkspacePath(),
-      provider: "",
-      apiKey: "",
-    },
-    lastMessage: null,
-  };
-
-  if (wizard.draft.workspace) {
-    const validation = validateWorkspacePath(wizard.draft.workspace);
-    if (validation.ok) {
-      wizard.draft.workspace = validation.value;
-      wizard.draft.provider = loadWorkspaceProvider(validation.value) ?? "";
-      wizard.draft.apiKey = loadWorkspaceApiKey(validation.value) ?? "";
-      wizard.stepIndex = wizard.draft.apiKey ? 2 : wizard.draft.provider ? 1 : 0;
-    } else {
-      wizard.draft.workspace = "";
-    }
-  }
-
-  const tui = new TUI(new ProcessTerminal());
-  tui.setClearOnShrink(true);
-  const panel = new Container();
-  tui.addChild(panel);
-  const providerSelect = new SelectList(PROVIDER_OPTIONS, 5, setupSelectTheme, {
-    minPrimaryColumnWidth: 14,
-    maxPrimaryColumnWidth: 18,
-  });
-
-  let inputBuffer = "";
-  let completedApiKey = wizard.draft.apiKey;
-
-  const syncProviderSelection = () => {
-    const index = PROVIDER_OPTIONS.findIndex((option) => option.value === wizard.draft.provider);
-    providerSelect.setSelectedIndex(index >= 0 ? index : 0);
-  };
-
-  const moveProviderSelection = (delta: number) => {
-    const selectedValue = providerSelect.getSelectedItem()?.value ?? wizard.draft.provider;
-    const currentIndex = PROVIDER_OPTIONS.findIndex((option) => option.value === selectedValue);
-    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (safeIndex + delta + PROVIDER_OPTIONS.length) % PROVIDER_OPTIONS.length;
-    providerSelect.setSelectedIndex(nextIndex);
-  };
-
-  const persistDraftValue = () => {
-    const current = wizard.steps[wizard.stepIndex];
-    if (current.field === "provider") {
-      const selected = providerSelect.getSelectedItem();
-      if (selected) {
-        wizard.draft.provider = selected.value;
-      }
-      return;
-    }
-
-    const raw = inputBuffer.trim();
-    if (raw) {
-      wizard.draft[current.field] = raw;
-    }
-  };
-
-  const refresh = () => {
-    renderSetupWizard(panel, wizard, inputBuffer, providerSelect);
-    tui.requestRender(true);
-  };
-
-  const moveStep = (delta: number) => {
-    persistDraftValue();
-    wizard.stepIndex = Math.max(0, Math.min(wizard.steps.length - 1, wizard.stepIndex + delta));
-    if (wizard.steps[wizard.stepIndex]?.field === "provider") {
-      syncProviderSelection();
-    }
-    wizard.lastMessage = null;
-    inputBuffer = "";
-    refresh();
-  };
-
-  const validateAndPersistStep = async (): Promise<boolean> => {
-    const current = wizard.steps[wizard.stepIndex];
-    let nextValue = inputBuffer.trim();
-
-    if (current.field === "workspace") {
-      if (!nextValue) {
-        nextValue = openWorkspaceFolderPicker(wizard.draft.workspace || homedir()) ?? "";
-      }
-      if (!nextValue) {
-        wizard.lastMessage = "Seleziona una cartella di lavoro.";
-        return false;
-      }
-
-      const normalizedCandidate = resolve(nextValue);
-      let validation = validateWorkspacePath(normalizedCandidate);
-      if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
-        try {
-          ensureWorkspaceInitialized(normalizedCandidate);
-          validation = validateWorkspacePath(normalizedCandidate);
-        } catch (error) {
-          wizard.lastMessage = error instanceof Error ? error.message : "impossibile inizializzare la cartella";
-          return false;
-        }
-      }
-      if (!validation.ok) {
-        wizard.lastMessage = validation.error;
-        return false;
-      }
-
-      ensureWorkspaceInitialized(validation.value);
-      saveWorkspacePath(validation.value);
-      wizard.draft.workspace = validation.value;
-      wizard.draft.provider = loadWorkspaceProvider(validation.value) ?? wizard.draft.provider;
-      wizard.draft.apiKey = loadWorkspaceApiKey(validation.value) ?? "";
-      syncProviderSelection();
-      inputBuffer = "";
-      wizard.lastMessage = "Cartella configurata.";
-      return true;
-    }
-
-    if (current.field === "provider") {
-      const selected = providerSelect.getSelectedItem();
-      nextValue = selected?.value ?? wizard.draft.provider;
-      const provider = validateWorkspaceProvider(nextValue);
-      if (!provider) {
-        wizard.lastMessage = "Usa anthropic, openai oppure kimi.";
-        return false;
-      }
-      saveWorkspaceProvider(provider, wizard.draft.workspace);
-      wizard.draft.provider = provider;
-      wizard.draft.apiKey = loadWorkspaceApiKey(wizard.draft.workspace) ?? "";
-      inputBuffer = "";
-      wizard.lastMessage = "Provider configurato.";
-      return true;
-    }
-
-    nextValue = nextValue || wizard.draft.apiKey;
-    if (!nextValue) {
-      wizard.lastMessage = "Inserisci la chiave API per il provider scelto.";
-      return false;
-    }
-    const provider = validateWorkspaceProvider(wizard.draft.provider);
-    if (!provider) {
-      wizard.lastMessage = "Configura prima il provider.";
-      return false;
-    }
-    if (provider === "anthropic" && !nextValue.startsWith("sk-ant-")) {
-      wizard.lastMessage = "Per Anthropic la chiave deve iniziare con sk-ant-.";
-      return false;
-    }
-
-    wizard.lastMessage = "Verifica chiave in corso...";
-    refresh();
-    const valid = await testApiKey(provider, nextValue);
-    if (!valid) {
-      wizard.lastMessage = "Chiave non valida o non verificabile.";
-      return false;
-    }
-
-    saveWorkspaceApiKey(nextValue, wizard.draft.workspace, provider);
-    wizard.draft.apiKey = nextValue;
-    completedApiKey = nextValue;
-    inputBuffer = "";
-    wizard.lastMessage = "Chiave salvata per questa cartella.";
-    return true;
-  };
-
-  await new Promise<void>((resolvePromise) => {
-    const finish = () => {
-      try { tui.stop(); } catch {}
-      resolvePromise();
-    };
-
-    tui.addInputListener((data) => {
-      if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
-        void (async () => {
-          const ok = await validateAndPersistStep();
-          if (!ok) {
-            refresh();
-            return;
-          }
-          if (wizard.stepIndex < wizard.steps.length - 1) {
-            wizard.stepIndex += 1;
-            wizard.lastMessage = null;
-            refresh();
-            return;
-          }
-          if (!wizard.draft.workspace || !wizard.draft.provider || !wizard.draft.apiKey) {
-            wizard.lastMessage = "Completa cartella, provider e chiave prima di uscire dal wizard.";
-            refresh();
-            return;
-          }
-          finish();
-        })();
-        return { consume: true };
-      }
-      const current = wizard.steps[wizard.stepIndex];
-      if (current.field === "provider") {
-        if (matchesKey(data, Key.left)) {
-          moveStep(-1);
-          return { consume: true };
-        }
-        if (matchesKey(data, Key.right)) {
-          moveStep(1);
-          return { consume: true };
-        }
-        if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
-          moveProviderSelection(matchesKey(data, Key.up) ? -1 : 1);
-          wizard.lastMessage = null;
-          refresh();
-          return { consume: true };
-        }
-      } else {
-        if (matchesKey(data, Key.up) || matchesKey(data, Key.left)) {
-          moveStep(-1);
-          return { consume: true };
-        }
-        if (matchesKey(data, Key.down) || matchesKey(data, Key.right)) {
-          moveStep(1);
-          return { consume: true };
-        }
-      }
-      if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) {
-        if (current.field !== "provider" && inputBuffer.length > 0) {
-          inputBuffer = inputBuffer.slice(0, -1);
-          refresh();
-        }
-        return { consume: true };
-      }
-      if (matchesKey(data, Key.ctrl("c")) || matchesKey(data, Key.ctrl("d"))) {
-        wizard.lastMessage = "Completa cartella, provider e chiave prima di uscire dal wizard.";
-        refresh();
-        return { consume: true };
-      }
-
-      const str = typeof data === "string" ? data : "";
-      if (current.field !== "provider" && str && str.length === 1 && str.charCodeAt(0) >= 32) {
-        inputBuffer += str;
-        wizard.lastMessage = null;
-        refresh();
-        return { consume: true };
-      }
-      return undefined;
-    });
-
-    syncProviderSelection();
-    tui.start();
-    refresh();
-  });
-
-  return completedApiKey;
+function isWSL(): boolean {
+  return !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || process.env.WSLENV);
 }
 
-export async function ensureWorkspaceConfigured(): Promise<string> {
-  const savedWorkspace = loadWorkspacePath();
-  const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
-  if (!validation?.ok || !loadWorkspaceProvider(validation.value) || !loadWorkspaceApiKey(validation.value)) {
-    await runSetupWizard();
-  }
-  return loadWorkspacePath();
-}
-
-async function testApiKey(provider: WorkspaceProvider, key: string): Promise<boolean> {
+async function testApiKey(provider: WorkspaceProvider | "", key: string): Promise<boolean> {
+  if (!provider) return false;
   try {
     const res = provider === "anthropic"
       ? await fetch("https://api.anthropic.com/v1/messages", {
@@ -1014,6 +726,22 @@ async function testApiKey(provider: WorkspaceProvider, key: string): Promise<boo
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function ensureWorkspaceConfigured(): Promise<string> {
+  const savedWorkspace = loadWorkspacePath();
+  const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
+
+  if (!validation?.ok || !loadWorkspaceProvider(validation.value) || !loadWorkspaceApiKey(validation.value)) {
+    const apiKey = await runSetupWizard();
+    return apiKey;
+  }
+
+  return loadWorkspaceApiKey(validation.value) || "";
+}
+
+export function saveApiKey(key: string): void {
+  saveWorkspaceApiKey(key, loadWorkspacePath());
 }

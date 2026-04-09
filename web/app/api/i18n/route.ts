@@ -13,14 +13,15 @@ const PREFS_PATH = path.join(homedir(), '.jht', 'i18n-prefs.json');
 const SUPPORTED_LOCALES = [
   { code: 'it', label: 'Italiano', flag: 'IT' },
   { code: 'en', label: 'English', flag: 'EN' },
+  { code: 'hu', label: 'Magyar', flag: 'HU' },
 ] as const;
 
-type Locale = 'it' | 'en';
+type Locale = 'it' | 'en' | 'hu';
 
 function loadPrefs(): { locale: Locale } {
   try {
     const raw = JSON.parse(fs.readFileSync(PREFS_PATH, 'utf-8'));
-    if (raw.locale === 'it' || raw.locale === 'en') return raw;
+    if (raw.locale === 'it' || raw.locale === 'en' || raw.locale === 'hu') return raw;
   } catch { /* default */ }
   return { locale: 'it' };
 }
@@ -35,7 +36,10 @@ function savePrefs(prefs: { locale: Locale }): void {
 
 // GET — locale corrente + lista lingue supportate
 export async function GET() {
+  console.log('[API i18n] GET /api/i18n chiamato');
   const prefs = loadPrefs();
+  console.log('[API i18n] Locale caricato:', prefs.locale);
+  console.log('[API i18n] Locales supportate:', SUPPORTED_LOCALES);
   return NextResponse.json({
     current: prefs.locale,
     locales: SUPPORTED_LOCALES,
@@ -47,17 +51,21 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const locale = body.locale as string;
+    console.log('[API i18n] POST /api/i18n - locale richiesto:', locale);
 
-    if (locale !== 'it' && locale !== 'en') {
+    if (locale !== 'it' && locale !== 'en' && locale !== 'hu') {
+      console.log('[API i18n] ERRORE: locale non supportato:', locale);
       return NextResponse.json(
-        { error: `Locale non supportato: ${locale}. Validi: it, en` },
+        { error: `Locale non supportato: ${locale}. Validi: it, en, hu` },
         { status: 400 },
       );
     }
 
     savePrefs({ locale });
+    console.log('[API i18n] Locale salvato:', locale);
     return NextResponse.json({ locale, message: `Lingua cambiata a ${locale}` });
   } catch (err) {
+    console.log('[API i18n] ERRORE:', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

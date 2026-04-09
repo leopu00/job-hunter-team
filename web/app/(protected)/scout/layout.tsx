@@ -1,3 +1,3 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Scout', description: 'Agente Scout: cerca nuove offerte di lavoro su LinkedIn, Indeed e altre piattaforme.' }
+export const metadata: Metadata = { title: 'Scout', description: 'Scout Agent: searches for new opportunities on job channels.' }
 export default function ScoutLayout({ children }: { children: React.ReactNode }) { return children }
