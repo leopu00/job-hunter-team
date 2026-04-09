@@ -5,26 +5,22 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
-## [0.1.5] — pending release
+## [0.1.6] — 2026-04-09
 
 ### Web app
-- AI Assistant completo con endpoint server, pagina dedicata e floating chat condivisa
-- Nuova pagina pubblica `/project` e riallineamento della landing hero con CTA, auth e footer coerenti
-- Banner cookie coerente su pagine marketing e login, piu fix su download e route marketing
+- Rientrodotto il layer i18n completo con supporto `it` / `en` / `hu`, fallback piu robusti e persistenza lingua corretta tra API, landing e dashboard
+- Riallineate landing, pagina `/project`, download e chrome dell'app con metadata e contenuti coerenti alla release corrente
+- Ripristinati messaggi, layout e loading state tradotti nelle principali pagine protette e pubbliche
 
 ### TUI
-- Home panel e opening banner rivisti
-- Wizard profilo migliorato con bozza persistente, validazioni e inizializzazione workspace piu robusta
+- Nuovo setup wizard con flusso verticale pulito, file picker corretto e navigazione delle select ripristinata
+- Aggiunto sistema auth multi-provider con supporto OpenAI OAuth PKCE, API key e storage credenziali cifrato
+- Rifinita l'integrazione del wizard con provider, metodo di autenticazione e bootstrap workspace
 
-### CI, test e tooling
-- Fix cross-platform per Git Bash su Windows e shutdown dei processi shell
-- Workflow CI/test riallineati alle dipendenze reali del progetto
-- Suite Vitest finale aggiornata al nuovo assistant, a `/project` e ai redirect intenzionali
-
-### Release prep
-- Versioni allineate a `0.1.5` in tutti i package tracciati del monorepo
-- Metadati visibili nell'interfaccia allineati alla prossima release
-- Workflow release predisposto per leggere le note curate dal changelog
+### Desktop, test e tooling
+- Aggiornato il payload desktop standalone e la preparazione runtime per packaging locale
+- Sistemati test e script runtime collegati al launcher desktop e alla documentazione di setup
+- Versioni e metadati visibili allineati a `0.1.6` in tutti i package tracciati del monorepo
 
 ## [0.1.4] — 2026-04-08
 
