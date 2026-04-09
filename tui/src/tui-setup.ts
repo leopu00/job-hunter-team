@@ -105,7 +105,14 @@ const PROVIDER_OPTIONS: SelectItem[] = listProviders().map(p => ({
 function renderBanner(): string {
   return [
     "",
-    theme.header("  JHT Setup"),
+    theme.accent("     ██╗██╗  ██╗████████╗"),
+    theme.accent("     ██║██║  ██║╚══██╔══╝"),
+    theme.accent("     ██║███████║   ██║   "),
+    theme.accent("██   ██║██╔══██║   ██║   "),
+    theme.accent("╚█████╔╝██║  ██║   ██║   "),
+    theme.accent(" ╚════╝ ╚═╝  ╚═╝   ╚═╝   "),
+    "",
+    theme.header("  Job Hunter Team — Configurazione"),
     "",
   ].join("\n");
 }
@@ -225,9 +232,13 @@ export async function runSetupWizard(): Promise<string> {
   const handleWorkspace = async (): Promise<boolean> => {
     let path = inputBuffer.trim();
 
-    // Se vuoto, usa home directory come default (in tmux il picker non funziona)
+    // Se vuoto, apri picker
     if (!path) {
-      path = homedir();
+      path = openWorkspaceFolderPicker(state.workspace || homedir()) ?? "";
+      if (!path) {
+        state.message = "Seleziona una cartella";
+        return false;
+      }
     }
 
     if (!path) {
@@ -538,45 +549,73 @@ export async function runSetupWizard(): Promise<string> {
 
 function renderWelcome(panel: Container, state: SetupState) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-  add(`  ${theme.accent("▶ Enter per iniziare")}`);
+  add("");
+  add(`  ${theme.accent("▶ Premi Enter per iniziare")}`);
   if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
 function renderWorkspace(panel: Container, state: SetupState, inputBuffer: string) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-  add(`  ${theme.header("Workspace")}`);
-  add("");
 
   const display = inputBuffer || state.workspace || "";
-  add(`  ${theme.border(">")} ${theme.text(display)}${theme.dim("█")}`);
+  const cursor = "█";
+  const line = display + cursor;
+
+  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
+  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
+  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
 
   if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
 function renderProvider(panel: Container, state: SetupState, selectList: SelectList) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+
+  add("");
   panel.addChild(selectList);
-  if (state.message) panel.addChild(new Text(`  ${theme.warning(state.message)}`, 0, 0));
+
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
+  }
 }
 
 function renderAuthMethod(panel: Container, state: SetupState, selectList: SelectList) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+
+  add("");
   panel.addChild(selectList);
-  if (state.message) panel.addChild(new Text(`  ${theme.warning(state.message)}`, 0, 0));
+
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
+  }
 }
 
 function renderCredentials(panel: Container, state: SetupState, inputBuffer: string) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+
   const provider = getProvider(state.provider);
   const method = provider?.auth.find(m => m.id === state.authMethodId);
 
   if (method?.kind === "oauth") {
-    add(`  ${theme.accent("▶ Enter per aprire il browser")}`);
+    add("");
+    add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
   } else {
     const display = inputBuffer || "";
     const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
-    add(`  ${theme.border(">")} ${theme.text(masked)}${theme.dim("█")}`);
+    const cursor = "█";
+    const line = masked + cursor;
+
+    add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
+    add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
+    add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
   }
 
-  if (state.message) add(`  ${theme.warning(state.message)}`);
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
