@@ -21,8 +21,7 @@ function PageContent() {
         <>
           <JsonLd />
           <main style={{ position: 'relative', zIndex: 1 }}>
-            {/* LandingNav nascosto temporaneamente - pagine incomplete */}
-            {/* <LandingNav /> */}
+            <LandingNav />
             <LandingHero />
           </main>
         </>
