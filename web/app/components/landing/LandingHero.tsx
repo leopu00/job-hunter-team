@@ -120,7 +120,7 @@ export default function LandingHero() {
         </h1>
 
         <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
-          Una squadra di agenti AI per la ricerca lavoro.
+          {t('hero_desc_short')}
         </p>
 
         <div className="inline-flex items-center mb-10">
@@ -263,7 +263,7 @@ export default function LandingHero() {
         </div>
 
         <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
-          Un team di agenti AI segue con continuità ogni fase della ricerca di lavoro, trova opportunità, analizza offerte, prepara i materiali e coordina il processo, mantenendo sempre il controllo nelle tue mani.
+          {t('hero_desc')}
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
