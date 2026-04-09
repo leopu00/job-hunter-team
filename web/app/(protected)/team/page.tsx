@@ -22,14 +22,14 @@ type AgentDef = {
 /* ── Definizioni agenti ───────────────────────────────────────────── */
 
 const AGENTS: AgentDef[] = [
-  { id: 'alfa',       name: 'Alfa',       role: 'Capitano',   emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100', session: 'ALFA',       link: '/capitano',  desc: 'Coordina il team e le priorità' },
-  { id: 'scout',      name: 'Scout',      role: 'Scout',      emoji: '\uD83D\uDD75\uFE0F',         color: '#2196f3', session: 'SCOUT-1',    link: '/scout',     desc: 'Cerca offerte di lavoro' },
-  { id: 'analista',   name: 'Analista',   role: 'Analista',   emoji: '\u{1F468}\u200D\uD83D\uDD2C', color: '#00e676', session: 'ANALISTA-1', link: '/analista',  desc: 'Analizza requisiti e fit' },
-  { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff', session: 'SCORER-1',   link: '/scorer',    desc: 'Calcola il match score' },
-  { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600', session: 'SCRITTORE-1', link: '/scrittore', desc: 'Genera CV e cover letter' },
-  { id: 'critico',    name: 'Critico',    role: 'Critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336', session: 'CRITICO',    link: '/critico',   desc: 'Revisiona i documenti' },
-  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/sentinella', desc: 'Monitora budget e rate limit' },
-  { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\uD83E\uDD16',                color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'Chat AI per l\'utente' },
+  { id: 'alfa',       name: 'Alfa',       role: 'Capitano',   emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100', session: 'ALFA',       link: '/capitano',  desc: 'Coordinates the team and priorities' },
+  { id: 'scout',      name: 'Scout',      role: 'Scout',      emoji: '\uD83D\uDD75\uFE0F',         color: '#2196f3', session: 'SCOUT-1',    link: '/scout',     desc: 'Searches job listings' },
+  { id: 'analista',   name: 'Analista',   role: 'Analista',   emoji: '\u{1F468}\u200D\uD83D\uDD2C', color: '#00e676', session: 'ANALISTA-1', link: '/analista',  desc: 'Analyzes requirements and fit' },
+  { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff', session: 'SCORER-1',   link: '/scorer',    desc: 'Calculates match score' },
+  { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600', session: 'SCRITTORE-1', link: '/scrittore', desc: 'Generates CV and cover letter' },
+  { id: 'critico',    name: 'Critico',    role: 'Critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336', session: 'CRITICO',    link: '/critico',   desc: 'Reviews documents' },
+  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/sentinella', desc: 'Monitors budget and rate limits' },
+  { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\uD83E\uDD16',                color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'AI chat for user' },
 ]
 
 /* ── Componenti ───────────────────────────────────────────────────── */
@@ -45,7 +45,7 @@ function StatusDot({ status }: { status: AgentStatus }) {
     <span
       className={c.pulse ? 'status-pulse' : ''}
       role="status"
-      aria-label={status === 'running' ? 'online' : status === 'pending' ? 'in avvio' : 'offline'}
+      aria-label={status === 'running' ? 'online' : status === 'pending' ? 'starting' : 'offline'}
       style={{
         display: 'inline-block',
         width: 8,
@@ -62,7 +62,7 @@ function StatusDot({ status }: { status: AgentStatus }) {
 function StatusLabel({ status }: { status: AgentStatus }) {
   const labels: Record<AgentStatus, { text: string; color: string }> = {
     running: { text: 'Online', color: '#22c55e' },
-    pending: { text: 'Avvio...', color: '#f59e0b' },
+    pending: { text: 'Starting...', color: '#f59e0b' },
     stopped: { text: 'Offline', color: 'var(--color-dim)' },
   }
   const l = labels[status]
@@ -91,7 +91,7 @@ function AgentCard({
     <div
       className="rounded-xl p-4 transition-all duration-150 hover:border-[var(--color-border-glow)]"
       role="article"
-      aria-label={`${agent.name} — ${status === 'running' ? 'online' : status === 'pending' ? 'in avvio' : 'offline'}`}
+      aria-label={`${agent.name} — ${status === 'running' ? 'online' : status === 'pending' ? 'starting' : 'offline'}`}
       style={{
         background: 'var(--color-panel)',
         border: `1px solid ${isRunning ? `${agent.color}33` : 'var(--color-border)'}`,
@@ -136,7 +136,7 @@ function AgentCard({
         <button
           onClick={() => onAction(agent.id, isRunning ? 'stop' : 'start')}
           disabled={isLoading || status === 'pending'}
-          aria-label={isRunning ? `Ferma ${agent.name}` : `Avvia ${agent.name}`}
+          aria-label={isRunning ? `Stop ${agent.name}` : `Start ${agent.name}`}
           className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
           style={{
             background: isLoading || status === 'pending'
@@ -162,12 +162,12 @@ function AgentCard({
         >
           {isLoading ? (
             <span className="flex items-center gap-1.5">
-              <Spinner size={10} color="var(--color-dim)" /> Attendi...
+              <Spinner size={10} color="var(--color-dim)" /> Wait...
             </span>
           ) : isRunning ? (
-            '\u25A0 Ferma'
+            '\u25A0 Stop'
           ) : (
-            '\u25B6 Avvia'
+            '\u25B6 Start'
           )}
         </button>
       </div>
@@ -221,9 +221,9 @@ export default function TeamPage() {
             const now = next[a.id]
             if (was === now) return
             if (was !== 'running' && now === 'running') {
-              toast(`${a.name} è online`, 'success', 3000)
+              toast(`${a.name} is online`, 'success', 3000)
             } else if (was === 'running' && now === 'stopped') {
-              toast(`${a.name} si è fermato`, 'warning', 3000)
+              toast(`${a.name} stopped`, 'warning', 3000)
             }
           })
         }
@@ -261,7 +261,7 @@ export default function TeamPage() {
       // Refresh status dopo l'azione
       setTimeout(fetchStatus, 1500)
     } catch {
-      toast('Errore di rete', 'error', 4000)
+      toast('Network error', 'error', 4000)
     }
     setActionLoading(null)
   }
@@ -278,7 +278,7 @@ export default function TeamPage() {
       await fetch('/api/team/start-all', { method: 'POST' })
       setTimeout(fetchStatus, 2000)
     } catch {
-      toast('Errore avvio team', 'error')
+      toast('Team start error', 'error')
     }
   }
 
@@ -287,7 +287,7 @@ export default function TeamPage() {
       await fetch('/api/team/stop-all', { method: 'POST' })
       setTimeout(fetchStatus, 2000)
     } catch {
-      toast('Errore stop team', 'error')
+      toast('Team stop error', 'error')
     }
   }
 
@@ -320,7 +320,7 @@ export default function TeamPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Job Hunter Team</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {activeCount}/{AGENTS.length} agenti attivi
+              {activeCount}/{AGENTS.length} agents active
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -336,7 +336,7 @@ export default function TeamPage() {
                 fontFamily: 'inherit',
               }}
             >
-              {activeCount === AGENTS.length ? '\u2713 Tutti attivi' : '\u25B6 Avvia tutti'}
+              {activeCount === AGENTS.length ? '\u2713 All active' : '\u25B6 Start all'}
             </button>
             {activeCount > 0 && (
               <button
@@ -350,7 +350,7 @@ export default function TeamPage() {
                   fontFamily: 'inherit',
                 }}
               >
-                {'\u25A0'} Ferma tutti
+                {'\u25A0'} Stop all
               </button>
             )}
           </div>
@@ -377,7 +377,7 @@ export default function TeamPage() {
       {/* Footer hint */}
       <div className="mt-8 pt-4 border-t border-[var(--color-border)] text-center">
         <p className="text-[10px] text-[var(--color-dim)]">
-          Aggiornamento automatico ogni 5s &middot; Clicca un nome per i dettagli
+          Auto refresh every 5s &middot; Click a name for details
         </p>
       </div>
     </div>
