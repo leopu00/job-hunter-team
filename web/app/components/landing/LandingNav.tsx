@@ -55,7 +55,7 @@ function LangDropdown() {
         style={{
           cursor: 'pointer',
         }}
-        aria-label={`Lingua: ${current.label}`}
+        aria-label={`Language: ${current.label}`}
       >
         <current.Flag />
         <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
@@ -116,7 +116,7 @@ export default function LandingNav() {
 
   return (
     <nav
-      aria-label="Navigazione principale"
+      aria-label="Main navigation"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: 'linear-gradient(180deg, var(--color-void) 60%, transparent)',

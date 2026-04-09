@@ -7,15 +7,15 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { ThemeToggle } from '../theme-provider'
 import { isMarketingRoute } from '../marketing-routes'
 
-// ── Nav data: [group, [[href, label, badge?][]]] ───────────────────────────
+// ── Nav data: [groupKey, [[href, label, badge?][]]] ───────────────────────────
 
 const NAV: [string, [string, string, number?][]][] = [
-  ['SISTEMA',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Stato'],['/download','Download']]],
-  ['JOB HUNTING', [['/jobs','Offerte'],['/applications','Candidature',3],['/interviews','Colloqui',1],['/companies','Aziende'],['/cover-letters','Cover Letter'],['/profiles','Profili'],['/alerts','Alert',5]]],
-  ['AGENTI',      [['/agents','Agenti'],['/assistant','Assistente'],['/tasks','Task'],['/queue','Queue'],['/workers','Workers']]],
-  ['DATI',        [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
-  ['TOOLS',       [['/api-explorer','API Explorer'],['/automations','Automazioni'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errori'],['/feedback','Feedback'],['/performance','Performance'],['/git','Git']]],
-  ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
+  ['SYSTEM',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Status'],['/download','Download']]],
+  ['JOB HUNTING', [['/jobs','Offers'],['/applications','Applications',3],['/interviews','Interviews',1],['/companies','Companies'],['/cover-letters','Cover Letters'],['/profiles','Profiles'],['/alerts','Alerts',5]]],
+  ['AGENTS',     [['/agents','Agents'],['/assistant','Assistant'],['/tasks','Tasks'],['/queue','Queue'],['/workers','Workers']]],
+  ['DATA',       [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
+  ['TOOLS',      [['/api-explorer','API Explorer'],['/automations','Automations'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errors'],['/feedback','Feedback'],['/performance','Performance'],['/git','Git']]],
+  ['CONFIG',     [['/providers','Providers'],['/rate-limiter','Rate Limiter'],['/credentials','Credentials'],['/channels','Channels'],['/plugins','Plugins'],['/templates','Templates'],['/memory','Memory'],['/notifications','Notifications'],['/settings','Settings'],['/cron','Cron']]],
 ]
 
 const APP_CHROME_HIDDEN = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup']
@@ -81,7 +81,7 @@ export default function Sidebar() {
         </Link>
         {!collapsed && hovered === href && (
           <button onClick={() => toggleFav(href)}
-            aria-label={isFav ? `Rimuovi ${label} dai preferiti` : `Aggiungi ${label} ai preferiti`}
+            aria-label={isFav ? `Remove ${label} from favorites` : `Add ${label} to favorites`}
             className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] transition-opacity"
             style={{ color: isFav ? 'var(--color-yellow)' : 'var(--color-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {isFav ? '★' : '☆'}
@@ -92,7 +92,7 @@ export default function Sidebar() {
   }
 
   const sidebarContent = (
-    <aside role="navigation" aria-label="Navigazione principale"
+    <aside role="navigation" aria-label="Main navigation"
       className="flex flex-col h-full overflow-y-auto"
       style={{ width: w, minWidth: w, background: 'var(--color-deep)', borderRight: '1px solid var(--color-border)', transition: 'width 0.2s ease, min-width 0.2s ease' }}>
 
@@ -100,22 +100,22 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
         {!collapsed && <div><p className="text-[11px] font-bold tracking-widest" style={{ color: 'var(--color-white)' }}>JHT</p><p className="text-[9px]" style={{ color: 'var(--color-dim)' }}>Job Hunter Team</p></div>}
         <div className="flex items-center gap-1 ml-auto">
-          {isMobile  && <button onClick={() => setMobileOpen(false)} aria-label="Chiudi menu" style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
-          {!isMobile && <button onClick={toggleCollapse} aria-label={collapsed ? 'Espandi sidebar' : 'Comprimi sidebar'} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
+          {isMobile  && <button onClick={() => setMobileOpen(false)} aria-label="Close menu" style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
+          {!isMobile && <button onClick={toggleCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
         </div>
       </div>
 
       {/* Nav */}
-      <nav aria-label="Menu dashboard" className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+      <nav aria-label="Dashboard menu" className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
         {!collapsed && favLinks.length > 0 && (
           <div>
-            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ PREFERITI</p>
+            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ FAVORITES</p>
             <ul className="flex flex-col gap-0.5">{favLinks.map(renderLink)}</ul>
           </div>
         )}
-        {NAV.map(([group, links]) => (
-          <div key={group}>
-            {!collapsed && <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{group}</p>}
+        {NAV.map(([groupKey, links]) => (
+          <div key={groupKey}>
+            {!collapsed && <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{groupKey}</p>}
             <ul className="flex flex-col gap-0.5">{links.map(renderLink)}</ul>
           </div>
         ))}
@@ -137,7 +137,7 @@ export default function Sidebar() {
 
   if (isMobile) return (
     <>
-      <button onClick={() => setMobileOpen(true)} aria-label="Apri menu"
+      <button onClick={() => setMobileOpen(true)} aria-label="Open menu"
         style={{ position: 'fixed', top: 12, left: 12, zIndex: 60, background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: 'var(--color-muted)', lineHeight: 1 }}>☰</button>
       {mobileOpen && (
         <>
