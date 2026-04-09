@@ -8,6 +8,8 @@ import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import dynamic from 'next/dynamic'
 
 const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch))
@@ -36,8 +38,8 @@ export const metadata: Metadata = {
     default: 'Job Hunter Team',
     template: '%s | Job Hunter Team',
   },
-  description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
-  keywords: ['job hunting', 'AI agents', 'job search', 'candidature automatiche', 'open source'],
+  description: 'A team of AI agents that find jobs for you. Open source, local, private.',
+  keywords: ['job hunting', 'AI agents', 'job search', 'automatic applications', 'open source'],
   authors: [{ name: 'Job Hunter Team' }],
   icons: {
     icon: [
@@ -50,19 +52,19 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    locale: 'it_IT',
+    locale: 'en_US',
     siteName: 'Job Hunter Team',
     title: 'Job Hunter Team',
-    description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
+    description: 'A team of AI agents that find jobs for you. Open source, local, private.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Job Hunter Team',
-    description: 'Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.',
+    description: 'A team of AI agents that find jobs for you. Open source, local, private.',
   },
   alternates: {
     canonical: '/',
-    languages: { 'it-IT': '/', 'en-US': '/' },
+    languages: { 'en-US': '/', 'it-IT': '/' },
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'),
   robots: { index: true, follow: true },
@@ -75,40 +77,45 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="it" className={jetbrainsMono.variable} suppressHydrationWarning>
+    <html lang={locale} className={jetbrainsMono.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('jht-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);else if(t==='system'||!t){var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',d)}}catch(e){}})()` }} />
       </head>
       <body>
         <noscript>
           <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'monospace', background: '#060608', color: '#e0e0f0', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <p>Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser per continuare.</p>
+            <p>Job Hunter Team requires JavaScript to run. Please enable it in your browser to continue.</p>
           </div>
         </noscript>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-semibold" style={{ background: 'var(--color-green)', color: 'var(--color-void)' }}>
-          Vai al contenuto principale
+          Skip to main content
         </a>
-        <ThemeProvider>
-          <AccessibilityProvider>
-          <ToastProvider>
-            <KeyboardShortcutsProvider>
-              <GlobalSearch />
-              <FloatingChat />
-              <Sidebar />
-              <MainContent>
-                <Breadcrumb />
-                {children}
-              </MainContent>
-            </KeyboardShortcutsProvider>
-          </ToastProvider>
-          </AccessibilityProvider>
-        </ThemeProvider>
+        <NextIntlClientProvider messages={messages}>
+          <ThemeProvider>
+            <AccessibilityProvider>
+            <ToastProvider>
+              <KeyboardShortcutsProvider>
+                <GlobalSearch />
+                <FloatingChat />
+                <Sidebar />
+                <MainContent>
+                  <Breadcrumb />
+                  {children}
+                </MainContent>
+              </KeyboardShortcutsProvider>
+            </ToastProvider>
+            </AccessibilityProvider>
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   )
