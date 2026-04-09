@@ -13,7 +13,7 @@ const WORKSPACE_PATH = '/tmp/jht-test-workspace';
 
 /**
  * Helper: workspace auth.
- * Su staging (web-nine-brown-79.vercel.app) usa il workspace selector locale.
+ * Su staging (jht-web-deploy.vercel.app / job-hunter-team.vercel.app) usa il workspace selector locale.
  * Su produzione (jobhunterteam.ai) usa Google OAuth — non autenticabile in headless.
  * Restituisce false e skippa il test corrente se il workspace selector non è disponibile.
  */
