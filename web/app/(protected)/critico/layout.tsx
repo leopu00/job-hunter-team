@@ -1,3 +1,3 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Critico', description: 'Agente Critico: revisiona CV e cover letter, assegna punteggi e verdict di qualità.' }
+export const metadata: Metadata = { title: 'Critic', description: 'Critic Agent: reviews materials and flags what needs to be corrected.' }
 export default function CriticoLayout({ children }: { children: React.ReactNode }) { return children }

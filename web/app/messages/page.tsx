@@ -10,8 +10,8 @@ type Filter = 'all' | 'unread' | 'starred'
 
 function fmtTime(ts: number) {
   const d = new Date(ts), now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-  return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
 }
 
 export default function MessagesPage() {
@@ -57,7 +57,7 @@ export default function MessagesPage() {
   }
 
   const FILTERS: Array<{ key: Filter; label: string }> = [
-    { key: 'all', label: 'tutti' }, { key: 'unread', label: 'non letti' }, { key: 'starred', label: 'preferiti' },
+    { key: 'all', label: 'all' }, { key: 'unread', label: 'unread' }, { key: 'starred', label: 'starred' },
   ]
 
   const inputCls = "text-[11px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-transparent text-[var(--color-bright)]"
@@ -68,16 +68,16 @@ export default function MessagesPage() {
         <div className="flex items-center gap-2 mb-1">
           <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Dashboard</Link>
           <span className="text-[var(--color-border)]">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]">Messaggi</span>
+          <span className="text-[10px] text-[var(--color-muted)]">Messages</span>
         </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Messaggi</h1>
-            <p className="text-[var(--color-muted)] text-[11px] mt-1">{threads.length} conversazioni{unreadCount > 0 && ` · ${unreadCount} non letti`}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Messages</h1>
+            <p className="text-[var(--color-muted)] text-[11px] mt-1">{threads.length} conversations{unreadCount > 0 && ` · ${unreadCount} unread`}</p>
           </div>
           <button onClick={() => { setShowCompose(!showCompose); setActiveThread(null) }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer"
             style={{ background: showCompose ? 'transparent' : 'var(--color-green)', color: showCompose ? 'var(--color-muted)' : '#000', border: showCompose ? '1px solid var(--color-border)' : 'none' }}>
-            {showCompose ? 'annulla' : '+ nuovo messaggio'}
+            {showCompose ? 'cancel' : '+ new message'}
           </button>
         </div>
       </div>
@@ -94,16 +94,16 @@ export default function MessagesPage() {
 
       {showCompose && (
         <div className="mb-6 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-          <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">Nuovo messaggio</p>
+          <p className="text-[10px] uppercase tracking-widest text-[var(--color-dim)] mb-3">New message</p>
           <div className="flex flex-wrap gap-2 mb-2">
-            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contatto *" aria-label="Nome contatto" className={`${inputCls} flex-1 min-w-[140px]`} autoComplete="name" required />
-            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Azienda *" aria-label="Nome azienda" className={`${inputCls} min-w-[120px]`} autoComplete="organization" required />
+            <input value={newContact} onChange={e => setNewContact(e.target.value)} placeholder="Contact *" aria-label="Contact name" className={`${inputCls} flex-1 min-w-[140px]`} autoComplete="name" required />
+            <input value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="Company *" aria-label="Company name" className={`${inputCls} min-w-[120px]`} autoComplete="organization" required />
           </div>
           <div className="flex gap-2">
-            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Scrivi messaggio..." aria-label="Testo messaggio" className={`${inputCls} flex-1`}
+            <input value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Write message..." aria-label="Message text" className={`${inputCls} flex-1`}
               onKeyDown={e => e.key === 'Enter' && sendNew()} />
             <button onClick={sendNew} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
-              style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>invia</button>
+              style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>send</button>
           </div>
         </div>
       )}
@@ -111,7 +111,7 @@ export default function MessagesPage() {
       <div className="grid md:grid-cols-5 gap-4">
         <div className="md:col-span-2 border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
           {threads.length === 0 ? (
-            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessuna conversazione.</p></div>
+            <div className="py-16 text-center"><p className="text-[var(--color-dim)] text-[12px]">No conversations.</p></div>
           ) : threads.map(t => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => { openThread(t.id); setShowCompose(false) }}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openThread(t.id); setShowCompose(false); } }}
@@ -131,7 +131,7 @@ export default function MessagesPage() {
 
         <div className="md:col-span-3 border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] flex flex-col" style={{ minHeight: 300 }}>
           {!activeThread ? (
-            <div className="flex-1 flex items-center justify-center"><p className="text-[var(--color-dim)] text-[12px]">Seleziona una conversazione</p></div>
+            <div className="flex-1 flex items-center justify-center"><p className="text-[var(--color-dim)] text-[12px]">Select a conversation</p></div>
           ) : (<>
             <div className="px-4 py-3 border-b border-[var(--color-border)]">
               <span className="text-[12px] font-semibold text-[var(--color-bright)]">{activeThread.contact}</span>
@@ -147,10 +147,10 @@ export default function MessagesPage() {
               ))}
             </div>
             <div className="px-4 py-3 border-t border-[var(--color-border)] flex gap-2">
-              <input value={reply} onChange={e => setReply(e.target.value)} placeholder="Rispondi..." aria-label="Rispondi al messaggio" className={`${inputCls} flex-1`}
+              <input value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply..." aria-label="Reply to message" className={`${inputCls} flex-1`}
                 onKeyDown={e => e.key === 'Enter' && sendReply()} />
               <button onClick={sendReply} className="px-4 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
-                style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>invia</button>
+                style={{ background: 'var(--color-green)', color: '#000', border: 'none' }}>send</button>
             </div>
           </>)}
         </div>

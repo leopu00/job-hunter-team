@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Team',
-  description: 'Gestisci il tuo team di agenti AI: avvia, monitora e coordina Scout, Analista, Scorer, Scrittore e gli altri.',
+  description: 'Manage your AI agent team: start, monitor and coordinate Scout, Analyst, Scorer, Writer and others.',
   openGraph: {
     title: 'Team | Job Hunter Team',
-    description: 'Gestisci il tuo team di agenti AI: avvia, monitora e coordina Scout, Analista, Scorer, Scrittore e gli altri.',
+    description: 'Manage your AI agent team: start, monitor and coordinate Scout, Analyst, Scorer, Writer and others.',
   },
 }
 
