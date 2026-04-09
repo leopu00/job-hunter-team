@@ -171,13 +171,6 @@ export async function runSetupWizard(): Promise<string> {
     maxPrimaryColumnWidth: 20,
   });
 
-  // Sincronizza selezione provider con stato
-  const syncProviderSelection = () => {
-    const idx = PROVIDER_OPTIONS.findIndex((o) => o.value === state.provider);
-    providerSelect.setSelectedIndex(idx >= 0 ? idx : 0);
-  };
-  syncProviderSelection();
-
   // Crea SelectList per i metodi auth del provider selezionato
   const createAuthMethodSelect = (): SelectList => {
     const provider = getProvider(state.provider);
@@ -192,6 +185,18 @@ export async function runSetupWizard(): Promise<string> {
       maxPrimaryColumnWidth: 20,
     });
   };
+
+  // Sincronizza selezione provider con stato
+  const syncProviderSelection = () => {
+    const idx = PROVIDER_OPTIONS.findIndex((o) => o.value === state.provider);
+    providerSelect.setSelectedIndex(idx >= 0 ? idx : 0);
+  };
+  syncProviderSelection();
+
+  // Se lo step iniziale è authMethod o credentials, inizializza authMethodSelect
+  if ((state.step === "authMethod" || state.step === "credentials") && state.provider) {
+    authMethodSelect = createAuthMethodSelect();
+  }
 
   // Render step corrente
   const render = () => {
