@@ -9,10 +9,10 @@ export type Lang = 'it' | 'en'
 const STORAGE_KEY = 'jht-lang'
 
 function getSavedLang(): Lang {
-  if (typeof window === 'undefined') return 'en'
+  if (typeof window === 'undefined') return 'it'
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === 'it') return 'it'
-  return 'en'
+  if (saved === 'en') return 'en'
+  return 'it'
 }
 
 const translations = {
@@ -33,6 +33,7 @@ const translations = {
   hero_badge:        { it: 'beta pubblica',    en: 'public beta' },
   hero_title_1:      { it: 'Il tuo team di agenti AI', en: 'Your AI agent team' },
   hero_title_2:      { it: 'per trovare lavoro',       en: 'to land your next job' },
+  hero_desc_short:   { it: 'Una squadra di agenti AI per la ricerca lavoro.', en: 'An AI agent team for your job search.' },
   hero_desc:         {
     it: 'Un sistema multi-agente che automatizza ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.',
     en: 'A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.',
@@ -514,7 +515,18 @@ export function useLandingI18n() {
 }
 
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => getSavedLang())
+  // Inizializza sempre con 'it' per evitare hydration mismatch
+  // Dopo il mount, legge il localStorage
+  const [lang, setLangState] = useState<Lang>('it')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const saved = getSavedLang()
+    if (saved !== lang) {
+      setLangState(saved)
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.lang = lang
