@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const CONFIG_DIR  = path.join(os.homedir(), '.jht')
 const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
 
-const VALID_PROVIDERS = ['claude', 'openai', 'minimax'] as const
+const VALID_PROVIDERS = ['anthropic', 'claude', 'openai', 'kimi', 'minimax'] as const
 
 function sanitizeString(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined

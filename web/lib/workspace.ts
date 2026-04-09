@@ -1,16 +1,34 @@
 import { cookies } from 'next/headers'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 
 const COOKIE_NAME = 'jht_workspace'
+const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
+
+function readWorkspaceFromGlobalConfig(): string | null {
+  try {
+    if (!fs.existsSync(CONFIG_PATH)) return null
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) as Record<string, unknown>
+    const workspace =
+      typeof cfg.workspacePath === 'string' ? cfg.workspacePath
+      : typeof cfg.workspace === 'string' ? cfg.workspace
+      : typeof cfg.workspace === 'object' && cfg.workspace && typeof (cfg.workspace as Record<string, unknown>).path === 'string'
+        ? String((cfg.workspace as Record<string, unknown>).path)
+        : ''
+    return workspace.trim() || null
+  } catch {
+    return null
+  }
+}
 
 export async function getWorkspacePath(): Promise<string | null> {
   try {
     const cookieStore = await cookies()
     const cookie = cookieStore.get(COOKIE_NAME)
-    return cookie?.value || null
+    return cookie?.value || readWorkspaceFromGlobalConfig()
   } catch {
-    return null
+    return readWorkspaceFromGlobalConfig()
   }
 }
 
