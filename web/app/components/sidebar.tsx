@@ -6,21 +6,23 @@ import { useState, useEffect } from 'react'
 import LanguageSwitcher from './LanguageSwitcher'
 import { ThemeToggle } from '../theme-provider'
 import { isMarketingRoute } from '../marketing-routes'
+import { useTranslations } from 'next-intl';
 
-// ── Nav data: [group, [[href, label, badge?][]]] ───────────────────────────
+// ── Nav data: [groupKey, [[href, labelKey, badge?][]]] ───────────────────────────
 
 const NAV: [string, [string, string, number?][]][] = [
-  ['SISTEMA',     [['/dashboard','Dashboard'],['/deploy','Deploy'],['/gateway','Gateway'],['/status','Stato'],['/download','Download']]],
-  ['JOB HUNTING', [['/jobs','Offerte'],['/applications','Candidature',3],['/interviews','Colloqui',1],['/companies','Aziende'],['/cover-letters','Cover Letter'],['/profiles','Profili'],['/alerts','Alert',5]]],
-  ['AGENTI',      [['/agents','Agenti'],['/assistant','Assistente'],['/tasks','Task'],['/queue','Queue'],['/workers','Workers']]],
-  ['DATI',        [['/events','Events'],['/history','History'],['/analytics','Analytics'],['/logs','Logs'],['/database','Database']]],
-  ['TOOLS',       [['/api-explorer','API Explorer'],['/automations','Automazioni'],['/scheduler','Scheduler'],['/monitoring','Monitoring'],['/errors','Errori'],['/feedback','Feedback'],['/performance','Performance'],['/git','Git']]],
-  ['CONFIG',      [['/providers','Provider'],['/rate-limiter','Rate Limiter'],['/credentials','Credenziali'],['/channels','Canali'],['/plugins','Plugin'],['/templates','Template'],['/memory','Memory'],['/notifications','Notifiche'],['/settings','Impostazioni'],['/cron','Cron']]],
+  ['system',     [['/dashboard','dashboard'],['/deploy','deploy'],['/gateway','gateway'],['/status','status'],['/download','download']]],
+  ['jobHunting', [['/jobs','offers'],['/applications','applications',3],['/interviews','interviews',1],['/companies','companies'],['/cover-letters','coverLetters'],['/profiles','profiles'],['/alerts','alerts',5]]],
+  ['agents',     [['/agents','agents'],['/assistant','assistant'],['/tasks','tasks'],['/queue','queue'],['/workers','workers']]],
+  ['data',       [['/events','events'],['/history','history'],['/analytics','analytics'],['/logs','logs'],['/database','database']]],
+  ['tools',      [['/api-explorer','apiExplorer'],['/automations','automations'],['/scheduler','scheduler'],['/monitoring','monitoring'],['/errors','errors'],['/feedback','feedback'],['/performance','performance'],['/git','git']]],
+  ['config',     [['/providers','providers'],['/rate-limiter','rateLimiter'],['/credentials','credentials'],['/channels','channels'],['/plugins','plugins'],['/templates','templates'],['/memory','memory'],['/notifications','notifications'],['/settings','settings'],['/cron','cron']]],
 ]
 
 const APP_CHROME_HIDDEN = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup']
 
 export default function Sidebar() {
+  const t = useTranslations('layout.sidebar');
   const pathname    = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isMobile,   setIsMobile]   = useState(false)
@@ -65,9 +67,10 @@ export default function Sidebar() {
   const allLinks   = NAV.flatMap(([, ls]) => ls)
   const favLinks   = allLinks.filter(([h]) => favs.includes(h))
 
-  const renderLink = ([href, label, badge]: [string, string, number?]) => {
+  const renderLink = ([href, labelKey, badge]: [string, string, number?]) => {
     const active = pathname === href || pathname.startsWith(href + '/')
     const isFav  = favs.includes(href)
+    const label = t(`links.${labelKey}`);
     return (
       <li key={href} className="relative" onMouseEnter={() => setHovered(href)} onMouseLeave={() => setHovered(null)}>
         <Link href={href} aria-current={active ? 'page' : undefined}
@@ -81,7 +84,7 @@ export default function Sidebar() {
         </Link>
         {!collapsed && hovered === href && (
           <button onClick={() => toggleFav(href)}
-            aria-label={isFav ? `Rimuovi ${label} dai preferiti` : `Aggiungi ${label} ai preferiti`}
+            aria-label={isFav ? t('removeFromFavorites', { label }) : t('addToFavorites', { label })}
             className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] transition-opacity"
             style={{ color: isFav ? 'var(--color-yellow)' : 'var(--color-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {isFav ? '★' : '☆'}
@@ -92,7 +95,7 @@ export default function Sidebar() {
   }
 
   const sidebarContent = (
-    <aside role="navigation" aria-label="Navigazione principale"
+    <aside role="navigation" aria-label="Main navigation"
       className="flex flex-col h-full overflow-y-auto"
       style={{ width: w, minWidth: w, background: 'var(--color-deep)', borderRight: '1px solid var(--color-border)', transition: 'width 0.2s ease, min-width 0.2s ease' }}>
 
@@ -100,22 +103,22 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
         {!collapsed && <div><p className="text-[11px] font-bold tracking-widest" style={{ color: 'var(--color-white)' }}>JHT</p><p className="text-[9px]" style={{ color: 'var(--color-dim)' }}>Job Hunter Team</p></div>}
         <div className="flex items-center gap-1 ml-auto">
-          {isMobile  && <button onClick={() => setMobileOpen(false)} aria-label="Chiudi menu" style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
-          {!isMobile && <button onClick={toggleCollapse} aria-label={collapsed ? 'Espandi sidebar' : 'Comprimi sidebar'} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
+          {isMobile  && <button onClick={() => setMobileOpen(false)} aria-label={t('closeMenu')} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 18 }}>×</button>}
+          {!isMobile && <button onClick={toggleCollapse} aria-label={collapsed ? t('expandSidebar') : t('collapseSidebar')} style={{ background: 'none', border: 'none', color: 'var(--color-dim)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}>{collapsed ? '→' : '←'}</button>}
         </div>
       </div>
 
       {/* Nav */}
-      <nav aria-label="Menu dashboard" className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+      <nav aria-label="Dashboard menu" className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
         {!collapsed && favLinks.length > 0 && (
           <div>
-            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ PREFERITI</p>
+            <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-yellow)' }}>★ {t('favorites')}</p>
             <ul className="flex flex-col gap-0.5">{favLinks.map(renderLink)}</ul>
           </div>
         )}
-        {NAV.map(([group, links]) => (
-          <div key={group}>
-            {!collapsed && <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{group}</p>}
+        {NAV.map(([groupKey, links]) => (
+          <div key={groupKey}>
+            {!collapsed && <p className="text-[8px] font-bold tracking-widest px-2 mb-1" style={{ color: 'var(--color-dim)' }}>{t(`groups.${groupKey}`)}</p>}
             <ul className="flex flex-col gap-0.5">{links.map(renderLink)}</ul>
           </div>
         ))}
@@ -137,7 +140,7 @@ export default function Sidebar() {
 
   if (isMobile) return (
     <>
-      <button onClick={() => setMobileOpen(true)} aria-label="Apri menu"
+      <button onClick={() => setMobileOpen(true)} aria-label="Open menu"
         style={{ position: 'fixed', top: 12, left: 12, zIndex: 60, background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: 'var(--color-muted)', lineHeight: 1 }}>☰</button>
       {mobileOpen && (
         <>
