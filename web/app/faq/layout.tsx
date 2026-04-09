@@ -4,15 +4,15 @@ import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'FAQ',
-  description: 'Domande frequenti su Job Hunter Team: come funziona, requisiti, privacy, costi e configurazione degli agenti AI.',
+  description: 'Frequently asked questions about Job Hunter Team: how it works, requirements, privacy, costs, and AI agent configuration.',
   openGraph: {
     title: 'FAQ | Job Hunter Team',
-    description: 'Domande frequenti su Job Hunter Team: come funziona, requisiti, privacy, costi e configurazione degli agenti AI.',
+    description: 'Frequently asked questions about Job Hunter Team: how it works, requirements, privacy, costs, and AI agent configuration.',
   },
   twitter: {
     card: 'summary',
     title: 'FAQ | Job Hunter Team',
-    description: 'Domande frequenti su Job Hunter Team: come funziona, requisiti, privacy, costi e configurazione degli agenti AI.',
+    description: 'Frequently asked questions about Job Hunter Team: how it works, requirements, privacy, costs, and AI agent configuration.',
   },
 }
 

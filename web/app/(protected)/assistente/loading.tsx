@@ -1,6 +1,6 @@
 export default function AgentLoading() {
   return (
-    <div aria-busy="true" aria-label="Caricamento assistente" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div aria-busy="true" aria-label="Loading assistant" style={{ animation: 'fade-in 0.2s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-4 w-32 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
         <div className="mt-4 flex items-start gap-5">
