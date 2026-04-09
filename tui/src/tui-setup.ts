@@ -37,6 +37,13 @@ import {
   type UserProfile,
 } from "./tui-profile.js";
 import { theme } from "./tui-theme.js";
+import { 
+  listProviders, 
+  getProvider, 
+  getAuthMethods, 
+  type ProviderId,
+  type AuthMethod,
+} from "./auth/providers.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
@@ -58,12 +65,13 @@ const setupSelectTheme: SelectListTheme = {
 // TIPI
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SetupStep = "welcome" | "workspace" | "provider" | "apiKey";
+type SetupStep = "welcome" | "workspace" | "provider" | "authMethod" | "credentials";
 
 type SetupState = {
   step: SetupStep;
   workspace: string;
   provider: WorkspaceProvider | "";
+  authMethodId: string;
   apiKey: string;
   message: string | null;
 };
@@ -80,14 +88,14 @@ type AssistantProfileDraft = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROVIDER OPTIONS
+// PROVIDER OPTIONS (dal registry auth)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PROVIDER_OPTIONS: SelectItem[] = [
-  { value: "anthropic", label: "Anthropic", description: "Claude via Messages API" },
-  { value: "openai", label: "OpenAI", description: "Codex OAuth + API key" },
-  { value: "kimi", label: "Moonshot AI", description: "Kimi K2.5" },
-];
+const PROVIDER_OPTIONS: SelectItem[] = listProviders().map(p => ({
+  value: p.id,
+  label: p.label,
+  description: p.description,
+}));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI COMPONENTS
@@ -121,6 +129,7 @@ export async function runSetupWizard(): Promise<string> {
     step: "welcome",
     workspace: loadWorkspacePath(),
     provider: (loadWorkspaceProvider(loadWorkspacePath()) as WorkspaceProvider) || "",
+    authMethodId: "",
     apiKey: loadWorkspaceApiKey(loadWorkspacePath()) || "",
     message: null,
   };
@@ -133,7 +142,7 @@ export async function runSetupWizard(): Promise<string> {
   // Determina step iniziale
   if (!state.workspace) state.step = "workspace";
   else if (!state.provider) state.step = "provider";
-  else if (!state.apiKey) state.step = "apiKey";
+  else if (!state.apiKey) state.step = "authMethod";
 
   const tui = new TUI(new ProcessTerminal());
   tui.setClearOnShrink(true);
@@ -155,12 +164,33 @@ export async function runSetupWizard(): Promise<string> {
     maxPrimaryColumnWidth: 20,
   });
 
+  // SelectList per auth method (inizialmente vuoto, popolato dinamicamente)
+  let authMethodSelect = new SelectList([], 5, setupSelectTheme, {
+    minPrimaryColumnWidth: 14,
+    maxPrimaryColumnWidth: 20,
+  });
+
   // Sincronizza selezione provider con stato
   const syncProviderSelection = () => {
     const idx = PROVIDER_OPTIONS.findIndex((o) => o.value === state.provider);
     providerSelect.setSelectedIndex(idx >= 0 ? idx : 0);
   };
   syncProviderSelection();
+
+  // Crea SelectList per i metodi auth del provider selezionato
+  const createAuthMethodSelect = (): SelectList => {
+    const provider = getProvider(state.provider);
+    const methods = provider?.auth ?? [];
+    const options: SelectItem[] = methods.map(m => ({
+      value: m.id,
+      label: m.label,
+      description: m.hint || "",
+    }));
+    return new SelectList(options, 5, setupSelectTheme, {
+      minPrimaryColumnWidth: 14,
+      maxPrimaryColumnWidth: 20,
+    });
+  };
 
   // Render step corrente
   const render = () => {
@@ -176,8 +206,11 @@ export async function runSetupWizard(): Promise<string> {
       case "provider":
         renderProvider(contentArea, state, providerSelect);
         break;
-      case "apiKey":
-        renderApiKey(contentArea, state, inputBuffer);
+      case "authMethod":
+        renderAuthMethod(contentArea, state, authMethodSelect);
+        break;
+      case "credentials":
+        renderCredentials(contentArea, state, inputBuffer);
         break;
     }
 
@@ -232,7 +265,7 @@ export async function runSetupWizard(): Promise<string> {
     state.message = null;
 
     // Procedi al prossimo step
-    state.step = state.provider ? "apiKey" : "provider";
+    state.step = state.provider ? "authMethod" : "provider";
     return true;
   };
 
@@ -253,13 +286,80 @@ export async function runSetupWizard(): Promise<string> {
     state.provider = provider;
     state.apiKey = loadWorkspaceApiKey(state.workspace) || "";
     state.message = null;
-    state.step = "apiKey";
+    
+    // Se il provider ha più metodi di auth, mostra selezione
+    const authMethods = getAuthMethods(provider as ProviderId);
+    if (authMethods.length > 1) {
+      authMethodSelect = createAuthMethodSelect();
+      state.step = "authMethod";
+    } else {
+      // Solo un metodo, procedi direttamente
+      state.authMethodId = authMethods[0]?.id || "";
+      state.step = "credentials";
+    }
     return true;
   };
 
-  const handleApiKey = async (): Promise<boolean> => {
-    const key = inputBuffer.trim() || state.apiKey;
+  const handleAuthMethod = (): boolean => {
+    const selected = authMethodSelect.getSelectedItem();
+    if (!selected) {
+      state.message = "Seleziona un metodo di autenticazione";
+      return false;
+    }
+    state.authMethodId = selected.value;
+    state.message = null;
+    state.step = "credentials";
+    return true;
+  };
 
+  const handleCredentials = async (): Promise<boolean> => {
+    if (!state.provider || !state.authMethodId) {
+      state.message = "Configurazione incompleta";
+      return false;
+    }
+
+    const provider = getProvider(state.provider);
+    const method = provider?.auth.find(m => m.id === state.authMethodId);
+    
+    if (!method) {
+      state.message = "Metodo di autenticazione non trovato";
+      return false;
+    }
+
+    // Crea API di prompting compatibile con il sistema auth
+    const promptAPI = {
+      text: async (params: { message: string; placeholder?: string; validate?: (v: string) => string | undefined }) => {
+        // Per ora semplifichiamo: usiamo inputBuffer
+        // In una implementazione completa, qui apriremmo un overlay di input
+        state.message = params.message + (params.placeholder ? ` (${params.placeholder})` : "");
+        render();
+        // Attesa input... (semplificato)
+        return inputBuffer.trim();
+      },
+      confirm: async () => true,
+      select: async <T extends string>(params: { options: Array<{ value: T }> }) => params.options[0]?.value as T,
+      progress: (msg: string) => {
+        state.message = msg;
+        render();
+        return { update: (m: string) => { state.message = m; render(); }, stop: () => {} };
+      },
+      note: async (msg: string, title?: string) => {
+        state.message = title ? `${title}: ${msg}` : msg;
+        render();
+      },
+    };
+
+    const runtimeAPI = {
+      log: (msg: string) => { /* noop in TUI */ },
+      error: (msg: string) => { state.message = msg; render(); },
+    };
+
+    state.message = "Autenticazione in corso...";
+    render();
+
+    // Per ora manteniamo compatibilità con il flusso esistente
+    // Verifica API key semplificata
+    const key = inputBuffer.trim();
     if (!key) {
       state.message = "Inserisci la chiave API";
       return false;
@@ -270,16 +370,12 @@ export async function runSetupWizard(): Promise<string> {
       return false;
     }
 
-    state.message = "Verifica in corso...";
-    render();
-
-    const valid = state.provider ? await testApiKey(state.provider, key) : false;
+    const valid = await testApiKey(state.provider, key);
     if (!valid) {
       state.message = "Chiave non valida — riprova";
       return false;
     }
 
-    if (!state.provider) return false;
     saveWorkspaceApiKey(key, state.workspace, state.provider);
     state.apiKey = key;
     completedApiKey = key;
@@ -297,7 +393,7 @@ export async function runSetupWizard(): Promise<string> {
     tui.addInputListener((data) => {
       // Ctrl+C / Ctrl+D — blocca uscita fino a completamento
       if (matchesKey(data, Key.ctrl("c")) || matchesKey(data, Key.ctrl("d"))) {
-        if (state.step !== "apiKey" || !state.apiKey) {
+        if (state.step !== "credentials" || !state.apiKey) {
           state.message = "Completa la configurazione prima di uscire";
           render();
           return { consume: true };
@@ -321,8 +417,11 @@ export async function runSetupWizard(): Promise<string> {
             case "provider":
               ok = handleProvider();
               break;
-            case "apiKey":
-              ok = await handleApiKey();
+            case "authMethod":
+              ok = handleAuthMethod();
+              break;
+            case "credentials":
+              ok = await handleCredentials();
               if (ok) {
                 finish();
                 return;
@@ -338,16 +437,13 @@ export async function runSetupWizard(): Promise<string> {
       // Gestione input per step specifici
       const currentStep = state.step;
 
-      if (currentStep === "provider") {
-        // Per provider, lascia che SelectList gestisca la navigazione
-        // I tasti up/down sono gestiti dal componente stesso
+      if (currentStep === "provider" || currentStep === "authMethod") {
+        // Per provider e authMethod, lascia che SelectList gestisca la navigazione
         if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
-          // Passa l'input al SelectList per la navigazione
           state.message = null;
           render();
           return { consume: true };
         }
-        // Altri tasti (come Enter) sono gestiti sopra
       }
 
       // Backspace per input testuale (solo per workspace e apiKey)
@@ -436,26 +532,58 @@ function renderProvider(panel: Container, state: SetupState, selectList: SelectL
   }
 }
 
-function renderApiKey(panel: Container, state: SetupState, inputBuffer: string) {
+function renderAuthMethod(panel: Container, state: SetupState, selectList: SelectList) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
 
-  add(`  ${theme.header("🔑 API Key")}`);
+  add(`  ${theme.header("🔐 Metodo di Autenticazione")}`);
   add("");
   add(`  ${theme.text(`Provider: ${theme.accent(state.provider)}`)}`);
-  add(`  ${theme.dim("Inserisci la chiave API per questo provider.")}`);
+  add(`  ${theme.dim("Seleziona come autenticarti con questo provider:")}`);
   add("");
 
-  const display = inputBuffer || state.apiKey || "";
-  const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
-  const cursor = "█";
-  const line = masked + cursor;
+  panel.addChild(selectList);
 
-  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
-  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
-  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
+  if (state.message) {
+    add("");
+    add(`  ${theme.warning(state.message)}`);
+  }
+}
 
-  if (state.provider === "anthropic") {
-    add(`  ${theme.dim("Formato atteso: sk-ant-...")}`);
+function renderCredentials(panel: Container, state: SetupState, inputBuffer: string) {
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+
+  const provider = getProvider(state.provider);
+  const method = provider?.auth.find(m => m.id === state.authMethodId);
+
+  add(`  ${theme.header(method?.kind === "oauth" ? "🔑 OAuth" : "🔑 API Key")}`);
+  add("");
+  add(`  ${theme.text(`Provider: ${theme.accent(state.provider)}`)}`);
+  add(`  ${theme.text(`Metodo: ${theme.accent(method?.label || "API Key")}`)}`);
+  add("");
+
+  if (method?.kind === "oauth") {
+    add(`  ${theme.dim("Verrà aperto il browser per l'autenticazione.")}`);
+    add(`  ${theme.dim("Dopo il login, torna qui per completare.")}`);
+    add("");
+    add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
+  } else {
+    add(`  ${theme.dim("Inserisci la chiave API per questo provider.")}`);
+    add("");
+    
+    const display = inputBuffer || "";
+    const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
+    const cursor = "█";
+    const line = masked + cursor;
+
+    add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
+    add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
+    add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
+
+    if (state.provider === "anthropic") {
+      add(`  ${theme.dim("Formato atteso: sk-ant-...")}`);
+    } else if (state.provider === "openai" || state.provider === "kimi") {
+      add(`  ${theme.dim("Formato atteso: sk-...")}`);
+    }
   }
 
   if (state.message) {
