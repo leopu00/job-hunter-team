@@ -21,8 +21,10 @@ type ProvidersData = {
 }
 
 const PROVIDER_ICONS: Record<string, string> = {
+  anthropic: '🟠',
   claude: '🟠',
   openai: '🟢',
+  kimi: '🌙',
   minimax: '🔵',
 }
 

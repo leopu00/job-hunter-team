@@ -14,6 +14,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Auth fallita — torna alla home con errore
-  return NextResponse.redirect(`${origin}/?error=auth_failed`)
+  // Auth fallita — torna alla pagina login con errore
+  return NextResponse.redirect(`${origin}/?login=true&error=auth_failed`)
 }

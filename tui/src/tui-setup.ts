@@ -3,26 +3,46 @@
  * Step: cartella di lavoro → scelta configurazione → profilo manuale o assistito AI.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import * as readline from "node:readline";
+import {
+  Container,
+  Key,
+  matchesKey,
+  ProcessTerminal,
+  SelectList,
+  Text,
+  TUI,
+  type SelectItem,
+  type SelectListTheme,
+} from "@mariozechner/pi-tui";
 import chalk from "chalk";
 import {
   ensureWorkspaceInitialized,
+  loadWorkspaceProvider,
   saveProfile,
   isProfileComplete,
   formatProfile,
+  validateWorkspaceProvider,
   validateProfileField,
   loadWorkspacePath,
+  saveWorkspaceApiKey,
+  saveWorkspaceProvider,
   saveWorkspacePath,
+  loadWorkspaceApiKey,
   validateWorkspacePath,
+  type WorkspaceProvider,
   type UserProfile,
 } from "./tui-profile.js";
+import { theme } from "./tui-theme.js";
 
 const CONFIG_DIR = join(homedir(), ".jht");
 const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
 const SETUP_MODEL = "claude-sonnet-4-20250514";
+const setupAccent = chalk.hex("#F6C453");
+const setupDim = chalk.hex("#7B7F87");
 
 type SetupMode = "manual" | "assistant";
 
@@ -37,20 +57,231 @@ type AssistantProfileDraft = {
   missing?: string[];
 };
 
+type SetupConfigField = "workspace" | "provider" | "apiKey";
+
+type SetupConfigStep = {
+  field: SetupConfigField;
+  section: string;
+  title: string;
+  question: string;
+  hint: string;
+  required: boolean;
+};
+
+type SetupConfigWizardState = {
+  stepIndex: number;
+  steps: SetupConfigStep[];
+  draft: {
+    workspace: string;
+    provider: string;
+    apiKey: string;
+  };
+  lastMessage?: string | null;
+};
+
+const SETUP_CONFIG_STEPS: SetupConfigStep[] = [
+  {
+    field: "workspace",
+    section: "Configurazione",
+    title: "📁 Cartella di lavoro",
+    question: "Seleziona o incolla la cartella di lavoro.",
+    hint: "Premi Enter vuoto per aprire Finder oppure incolla un percorso.",
+    required: true,
+  },
+  {
+    field: "provider",
+    section: "Configurazione",
+    title: "🧠 Provider AI",
+    question: "Scegli il provider per questa cartella.",
+    hint: "Anthropic, OpenAI o Kimi K2.",
+    required: true,
+  },
+  {
+    field: "apiKey",
+    section: "Configurazione",
+    title: "🔑 API Key",
+    question: "Inserisci la chiave API per il provider scelto.",
+    hint: "Anthropic: sk-ant- · OpenAI/Kimi: sk-...",
+    required: true,
+  },
+];
+
+const PROVIDER_OPTIONS: SelectItem[] = [
+  {
+    value: "anthropic",
+    label: "Anthropic",
+    description: "Claude via Messages API",
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    description: "GPT via OpenAI API",
+  },
+  {
+    value: "kimi",
+    label: "Kimi K2",
+    description: "Moonshot API compatibile OpenAI",
+  },
+];
+
+const setupSelectTheme: SelectListTheme = {
+  selectedPrefix: (text) => theme.accent(text),
+  selectedText: (text) => theme.selectedRow(theme.bold(theme.accent(text))),
+  description: (text) => theme.dim(text),
+  scrollInfo: (text) => theme.dim(text),
+  noMatch: (text) => theme.dim(text),
+};
+
 function printBanner() {
+  const centerText = (value: string, width: number): string => {
+    if (value.length >= width) return value;
+    const totalPadding = width - value.length;
+    const leftPadding = Math.floor(totalPadding / 2);
+    const rightPadding = totalPadding - leftPadding;
+    return `${" ".repeat(leftPadding)}${value}${" ".repeat(rightPadding)}`;
+  };
+
+  const logoLines = [
+    "     ██╗██╗  ██╗████████╗",
+    "     ██║██║  ██║╚══██╔══╝",
+    "     ██║███████║   ██║   ",
+    "██   ██║██╔══██║   ██║   ",
+    "╚█████╔╝██║  ██║   ██║   ",
+    " ╚════╝ ╚═╝  ╚═╝   ╚═╝   ",
+  ];
+  const titleLines = [
+    "",
+    "Job Hunter Team",
+    "Setup Iniziale",
+  ];
+  const innerWidth = Math.max(
+    ...logoLines.map((line) => line.length),
+    ...titleLines.map((line) => line.length),
+  );
+  const frameRaw = (line: string) => `   ║ ${line.padEnd(innerWidth, " ")} ║`;
+  const frameCentered = (line: string) => `   ║ ${centerText(line, innerWidth)} ║`;
+
   console.clear();
   console.log("");
-  console.log(chalk.green("   ╔══════════════════════════════════════════════╗"));
-  console.log(chalk.green("   ║      ██╗ ███████╗██╗  ██╗████████╗          ║"));
-  console.log(chalk.green("   ║      ██║ ██╔════╝██║  ██║╚══██╔══╝          ║"));
-  console.log(chalk.green("   ║      ██║ ███████╗███████║   ██║             ║"));
-  console.log(chalk.green("   ║ ██   ██║ ╚════██║██╔══██║   ██║             ║"));
-  console.log(chalk.green("   ║ ╚█████╔╝ ███████║██║  ██║   ██║             ║"));
-  console.log(chalk.green("   ║  ╚════╝  ╚══════╝╚═╝  ╚═╝   ╚═╝             ║"));
-  console.log(chalk.green("   ║            Job Hunter Team                  ║"));
-  console.log(chalk.green("   ║             Setup Iniziale                  ║"));
-  console.log(chalk.green("   ╚══════════════════════════════════════════════╝"));
+  console.log(setupAccent(`   ╔${"═".repeat(innerWidth + 2)}╗`));
+  for (const line of logoLines) {
+    console.log(setupAccent(frameRaw(line)));
+  }
+  for (const line of titleLines) {
+    console.log(setupAccent(frameCentered(line)));
+  }
+  console.log(setupAccent(`   ╚${"═".repeat(innerWidth + 2)}╝`));
   console.log("");
+}
+
+function renderSetupBannerText(): string {
+  const centerText = (value: string, width: number): string => {
+    if (value.length >= width) return value;
+    const totalPadding = width - value.length;
+    const leftPadding = Math.floor(totalPadding / 2);
+    const rightPadding = totalPadding - leftPadding;
+    return `${" ".repeat(leftPadding)}${value}${" ".repeat(rightPadding)}`;
+  };
+
+  const logoLines = [
+    "     ██╗██╗  ██╗████████╗",
+    "     ██║██║  ██║╚══██╔══╝",
+    "     ██║███████║   ██║   ",
+    "██   ██║██╔══██║   ██║   ",
+    "╚█████╔╝██║  ██║   ██║   ",
+    " ╚════╝ ╚═╝  ╚═╝   ╚═╝   ",
+  ];
+  const titleLines = [
+    "",
+    "Job Hunter Team",
+    "Configurazione",
+  ];
+  const innerWidth = Math.max(
+    ...logoLines.map((line) => line.length),
+    ...titleLines.map((line) => line.length),
+  );
+  const frameRaw = (line: string) => `   ${theme.accent("║")} ${theme.accent(line.padEnd(innerWidth, " "))} ${theme.accent("║")}`;
+  const frameCentered = (line: string) => `   ${theme.accent("║")} ${theme.accent(centerText(line, innerWidth))} ${theme.accent("║")}`;
+
+  return [
+    "",
+    `   ${theme.accent(`╔${"═".repeat(innerWidth + 2)}╗`)}`,
+    ...logoLines.map(frameRaw),
+    ...titleLines.map(frameCentered),
+    `   ${theme.accent(`╚${"═".repeat(innerWidth + 2)}╝`)}`,
+    "",
+  ].join("\n");
+}
+
+function setupHasValue(value: string): boolean {
+  return value.trim().length > 0;
+}
+
+function renderSetupCheckpoints(wizard: SetupConfigWizardState): string {
+  return wizard.steps.map((step, index) => {
+    const completed = setupHasValue(wizard.draft[step.field]);
+    const current = index === wizard.stepIndex;
+    if (current && completed) return theme.accent("◉");
+    if (current) return theme.accent("◎");
+    if (completed) return theme.accent("●");
+    return theme.dim("○");
+  }).join(theme.dim(" "));
+}
+
+function truncateSetupText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(text.length - max);
+}
+
+function renderSetupWizard(
+  panel: Container,
+  wizard: SetupConfigWizardState,
+  currentInput: string,
+  providerSelect: SelectList,
+): void {
+  panel.clear();
+  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
+
+  const current = wizard.steps[wizard.stepIndex];
+  const progress = `${wizard.stepIndex + 1}/${wizard.steps.length}`;
+  const fallback = wizard.draft[current.field];
+  const displayValue = currentInput.length > 0 ? currentInput : fallback;
+  const maskedValue = current.field === "apiKey" && currentInput.length === 0 && fallback
+    ? `${"*".repeat(Math.max(8, Math.min(fallback.length, 24)))}`
+    : displayValue;
+  const cursor = "█";
+  const contentWidth = 58;
+  const padded = truncateSetupText(`${maskedValue}${cursor}`, contentWidth).padEnd(contentWidth, " ");
+
+  add(renderSetupBannerText());
+  add(theme.header("  ■ CONFIGURA JHT"));
+  add(theme.border("  " + "─".repeat(62)));
+  add("");
+  add(`  ${renderSetupCheckpoints(wizard)}`);
+  add("");
+  add(`  ${theme.dim(current.section.toUpperCase())}`);
+  add(`  ${theme.accent(current.title)} ${theme.dim("· " + progress)} ${theme.dim("·")} ${theme.accent("Richiesto")}`);
+  add("");
+  add(`  ${theme.text(current.question)}`);
+  add("");
+
+  if (current.field === "provider") {
+    for (const line of providerSelect.render(contentWidth)) {
+      add(`  ${line}`);
+    }
+  } else {
+    add(`  ${theme.border("┌" + "─".repeat(contentWidth + 2) + "┐")}`);
+    add(`  ${theme.border("│")} ${theme.text(padded)} ${theme.border("│")}`);
+    add(`  ${theme.border("└" + "─".repeat(contentWidth + 2) + "┘")}`);
+  }
+
+  add("");
+  add(`  ${theme.dim(current.hint)}`);
+
+  if (wizard.lastMessage) {
+    add("");
+    add(theme.warning(`  ${wizard.lastMessage}`));
+  }
 }
 
 function formatWorkspaceInitSummary(init: ReturnType<typeof ensureWorkspaceInitialized>): string | null {
@@ -63,20 +294,20 @@ function formatWorkspaceInitSummary(init: ReturnType<typeof ensureWorkspaceIniti
 }
 
 function printWelcomeOverview() {
-  console.log(chalk.white("  Benvenuto nel portale Job Hunter Team."));
-  console.log(chalk.dim("  Qui completi la configurazione iniziale e poi puoi usare:"));
+  console.log(setupAccent("  Benvenuto nel portale Job Hunter Team."));
+  console.log(setupDim("  Qui completi la configurazione iniziale e poi puoi usare:"));
   console.log("");
-  console.log(chalk.white("    • Dashboard") + chalk.dim("  riepilogo profilo, task e stato team"));
-  console.log(chalk.white("    • Team") + chalk.dim("       agenti attivi e sessioni runtime"));
-  console.log(chalk.white("    • Tasks") + chalk.dim("      ricerche e lavorazioni in corso"));
-  console.log(chalk.white("    • AI") + chalk.dim("         assistente per CV, offerte e colloqui"));
+  console.log(setupAccent("    • Dashboard") + setupDim("  riepilogo profilo, task e stato team"));
+  console.log(setupAccent("    • Team") + setupDim("       agenti attivi e sessioni runtime"));
+  console.log(setupAccent("    • Tasks") + setupDim("      ricerche e lavorazioni in corso"));
+  console.log(setupAccent("    • AI") + setupDim("         assistente per CV, offerte e colloqui"));
   console.log("");
-  console.log(chalk.dim("  I dati vengono salvati in ~/.jht/jht.config.json"));
+  console.log(setupDim("  I dati vengono salvati in ~/.jht/jht.config.json"));
   console.log("");
 }
 
 function printStep(n: number, total: number, text: string) {
-  console.log(chalk.dim(`  [${n}/${total}]`) + " " + chalk.white(text));
+  console.log(setupDim(`  [${n}/${total}]`) + " " + setupAccent(text));
 }
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
@@ -94,7 +325,7 @@ async function askChoice(
   while (true) {
     const answer = (await ask(rl, question)) || (fallback ?? "");
     if (allowed.includes(answer)) return answer;
-    console.log(chalk.yellow(`  Inserisci una scelta valida: ${allowed.join("/")}`));
+    console.log(setupAccent(`  Inserisci una scelta valida: ${allowed.join("/")}`));
   }
 }
 
@@ -104,7 +335,7 @@ async function askWithDefault(
   fallback: string,
 ): Promise<string> {
   const suffix = fallback ? ` [${fallback}]` : "";
-  const answer = await ask(rl, chalk.green(`  > ${label}${suffix}: `));
+  const answer = await ask(rl, setupAccent(`  > ${label}${suffix}: `));
   return answer || fallback;
 }
 
@@ -118,11 +349,39 @@ async function askValidatedField(
     const raw = await askWithDefault(rl, label, fallback);
     const validation = validateProfileField(field, raw);
     if (validation.ok) return validation.value;
-    console.log(chalk.yellow(`  ${validation.error}`));
+    console.log(setupAccent(`  ${validation.error}`));
   }
 }
 
 function openWorkspaceFolderPicker(initialPath: string): string | null {
+  if (process.platform === "darwin") {
+    const resolvedPath = resolve(initialPath);
+    const scriptLines = [
+      'tell application "Finder" to activate',
+      ...(existsSync(resolvedPath)
+        ? [
+            `set startFolder to POSIX file ${JSON.stringify(resolvedPath)}`,
+            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro" default location startFolder',
+          ]
+        : [
+            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"',
+          ]),
+      'POSIX path of selectedFolder',
+    ];
+
+    const result = spawnSync("osascript", scriptLines.flatMap((line) => ["-e", line]), {
+      encoding: "utf-8",
+      timeout: 120_000,
+    });
+
+    if (result.status !== 0) {
+      return null;
+    }
+
+    const selected = result.stdout.trim();
+    return selected || null;
+  }
+
   if (process.platform !== "win32") {
     return null;
   }
@@ -169,20 +428,18 @@ function openWorkspaceFolderPicker(initialPath: string): string | null {
 
 async function promptWorkspacePath(rl: readline.Interface, fallback: string, reason?: string): Promise<string> {
   printBanner();
-  console.log(chalk.white("  Prima di entrare nella TUI devi scegliere una cartella di lavoro."));
-  console.log(chalk.dim("  La useremo come contesto iniziale per le sessioni degli agenti."));
-  console.log(chalk.dim("  Premi Enter per aprire Esplora file oppure inserisci un percorso."));
+  console.log(setupAccent("  📁 Premi Enter per selezionare la tua cartella di lavoro."));
   if (reason) {
     console.log("");
-    console.log(chalk.yellow(`  ${reason}`));
+    console.log(setupDim(`  ${reason}`));
   }
   console.log("");
 
   while (true) {
-    const answer = await ask(rl, chalk.green("  > Cartella di lavoro: "));
+    const answer = await ask(rl, setupAccent("  > "));
     const candidate = answer || openWorkspaceFolderPicker(fallback);
     if (!candidate) {
-      console.log(chalk.yellow("  Nessuna cartella selezionata."));
+      console.log(setupDim("  Nessuna cartella selezionata."));
       continue;
     }
     const normalizedCandidate = resolve(candidate);
@@ -194,22 +451,22 @@ async function promptWorkspacePath(rl: readline.Interface, fallback: string, rea
         validation = validateWorkspacePath(normalizedCandidate);
       } catch (error) {
         const message = error instanceof Error ? error.message : "impossibile inizializzare la cartella";
-        console.log(chalk.yellow(`  ${message}`));
+        console.log(setupAccent(`  ${message}`));
         continue;
       }
     }
     if (validation.ok) {
       const init = ensureWorkspaceInitialized(validation.value);
       saveWorkspacePath(validation.value);
-      console.log(chalk.green(`  ✓ Cartella di lavoro salvata: ${validation.value}`));
+      console.log(setupAccent(`  ✓ Cartella di lavoro salvata: ${validation.value}`));
       const currentSummary = formatWorkspaceInitSummary(init);
       if (currentSummary || initSummary) {
-        console.log(chalk.green(`  ✓ Workspace inizializzato: ${currentSummary ?? initSummary}`));
+        console.log(setupAccent(`  ✓ Workspace inizializzato: ${currentSummary ?? initSummary}`));
       }
       console.log("");
       return validation.value;
     }
-    console.log(chalk.yellow(`  ${validation.error}`));
+    console.log(setupAccent(`  ${validation.error}`));
   }
 }
 
@@ -222,13 +479,7 @@ function loadExistingConfig(): Record<string, unknown> {
 }
 
 export function saveApiKey(key: string): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  const cfg = loadExistingConfig();
-  if (!cfg.providers || typeof cfg.providers !== "object") {
-    (cfg as any).providers = {};
-  }
-  (cfg as any).providers.anthropic = { api_key: key };
-  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
+  saveWorkspaceApiKey(key, loadWorkspacePath());
 }
 
 function buildProfile(input: Partial<UserProfile>): UserProfile {
@@ -440,7 +691,7 @@ async function promptApiKey(
   }
 
   console.log(chalk.dim("  Verifica in corso..."));
-  const valid = await testApiKey(key);
+  const valid = await testApiKey("anthropic", key);
   if (valid) {
     saveApiKey(key);
     console.log(chalk.green("  ✓ Chiave valida e salvata."));
@@ -461,98 +712,302 @@ async function promptApiKey(
   return null;
 }
 
-export async function runSetupWizard(): Promise<string | null> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+export async function runSetupWizard(): Promise<string> {
+  const wizard: SetupConfigWizardState = {
+    stepIndex: 0,
+    steps: SETUP_CONFIG_STEPS,
+    draft: {
+      workspace: loadWorkspacePath(),
+      provider: "",
+      apiKey: "",
+    },
+    lastMessage: null,
+  };
 
-  printBanner();
-  printWelcomeOverview();
-
-  printStep(1, 4, "Avvio configurazione");
-  console.log(chalk.white("    1") + chalk.dim(") Inizia configurazione"));
-  console.log(chalk.white("    2") + chalk.dim(") Esci per ora"));
-  console.log("");
-
-  const startChoice = await askChoice(rl, chalk.green("  > Scelta (1/2): "), ["1", "2"]);
-  if (startChoice === "2") {
-    rl.close();
-    return null;
-  }
-
-  console.log("");
-  printStep(2, 4, "Come vuoi inserire i tuoi dati?");
-  console.log(chalk.white("    1") + chalk.dim(") Manualmente"));
-  console.log(chalk.white("    2") + chalk.dim(") Con l'assistente AI"));
-  console.log("");
-
-  const modeChoice = await askChoice(rl, chalk.green("  > Scelta (1/2): "), ["1", "2"]);
-  const mode: SetupMode = modeChoice === "2" ? "assistant" : "manual";
-
-  console.log("");
-  let apiKey: string | null = null;
-  if (mode === "assistant") {
-    apiKey = await promptApiKey(rl, 3, 4, true);
-    if (!apiKey) {
-      console.log("");
-      console.log(chalk.yellow("  Passo alla configurazione manuale."));
+  if (wizard.draft.workspace) {
+    const validation = validateWorkspacePath(wizard.draft.workspace);
+    if (validation.ok) {
+      wizard.draft.workspace = validation.value;
+      wizard.draft.provider = loadWorkspaceProvider(validation.value) ?? "";
+      wizard.draft.apiKey = loadWorkspaceApiKey(validation.value) ?? "";
+      wizard.stepIndex = wizard.draft.apiKey ? 2 : wizard.draft.provider ? 1 : 0;
+    } else {
+      wizard.draft.workspace = "";
     }
-  } else {
-    apiKey = await promptApiKey(rl, 3, 4, false);
   }
 
-  console.log("");
-  const profile = mode === "assistant" && apiKey
-    ? await collectAssistantProfile(rl, apiKey)
-    : await collectManualProfile(rl);
+  const tui = new TUI(new ProcessTerminal());
+  tui.setClearOnShrink(true);
+  const panel = new Container();
+  tui.addChild(panel);
+  const providerSelect = new SelectList(PROVIDER_OPTIONS, 5, setupSelectTheme, {
+    minPrimaryColumnWidth: 14,
+    maxPrimaryColumnWidth: 18,
+  });
 
-  saveProfile(profile);
+  let inputBuffer = "";
+  let completedApiKey = wizard.draft.apiKey;
 
-  console.log(chalk.green("  ✓ Profilo salvato!"));
-  if (profile.completato) {
-    console.log(chalk.green("  ✓ Setup completato — gli agenti possono iniziare a cercare."));
-  } else {
-    console.log(chalk.yellow("  ⚠ Profilo incompleto — usa /profile nella TUI per completarlo."));
-  }
-  console.log("");
-  rl.close();
-  await sleep(1500);
-  return apiKey;
+  const syncProviderSelection = () => {
+    const index = PROVIDER_OPTIONS.findIndex((option) => option.value === wizard.draft.provider);
+    providerSelect.setSelectedIndex(index >= 0 ? index : 0);
+  };
+
+  const moveProviderSelection = (delta: number) => {
+    const selectedValue = providerSelect.getSelectedItem()?.value ?? wizard.draft.provider;
+    const currentIndex = PROVIDER_OPTIONS.findIndex((option) => option.value === selectedValue);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + delta + PROVIDER_OPTIONS.length) % PROVIDER_OPTIONS.length;
+    providerSelect.setSelectedIndex(nextIndex);
+  };
+
+  const persistDraftValue = () => {
+    const current = wizard.steps[wizard.stepIndex];
+    if (current.field === "provider") {
+      const selected = providerSelect.getSelectedItem();
+      if (selected) {
+        wizard.draft.provider = selected.value;
+      }
+      return;
+    }
+
+    const raw = inputBuffer.trim();
+    if (raw) {
+      wizard.draft[current.field] = raw;
+    }
+  };
+
+  const refresh = () => {
+    renderSetupWizard(panel, wizard, inputBuffer, providerSelect);
+    tui.requestRender(true);
+  };
+
+  const moveStep = (delta: number) => {
+    persistDraftValue();
+    wizard.stepIndex = Math.max(0, Math.min(wizard.steps.length - 1, wizard.stepIndex + delta));
+    if (wizard.steps[wizard.stepIndex]?.field === "provider") {
+      syncProviderSelection();
+    }
+    wizard.lastMessage = null;
+    inputBuffer = "";
+    refresh();
+  };
+
+  const validateAndPersistStep = async (): Promise<boolean> => {
+    const current = wizard.steps[wizard.stepIndex];
+    let nextValue = inputBuffer.trim();
+
+    if (current.field === "workspace") {
+      if (!nextValue) {
+        nextValue = openWorkspaceFolderPicker(wizard.draft.workspace || homedir()) ?? "";
+      }
+      if (!nextValue) {
+        wizard.lastMessage = "Seleziona una cartella di lavoro.";
+        return false;
+      }
+
+      const normalizedCandidate = resolve(nextValue);
+      let validation = validateWorkspacePath(normalizedCandidate);
+      if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
+        try {
+          ensureWorkspaceInitialized(normalizedCandidate);
+          validation = validateWorkspacePath(normalizedCandidate);
+        } catch (error) {
+          wizard.lastMessage = error instanceof Error ? error.message : "impossibile inizializzare la cartella";
+          return false;
+        }
+      }
+      if (!validation.ok) {
+        wizard.lastMessage = validation.error;
+        return false;
+      }
+
+      ensureWorkspaceInitialized(validation.value);
+      saveWorkspacePath(validation.value);
+      wizard.draft.workspace = validation.value;
+      wizard.draft.provider = loadWorkspaceProvider(validation.value) ?? wizard.draft.provider;
+      wizard.draft.apiKey = loadWorkspaceApiKey(validation.value) ?? "";
+      syncProviderSelection();
+      inputBuffer = "";
+      wizard.lastMessage = "Cartella configurata.";
+      return true;
+    }
+
+    if (current.field === "provider") {
+      const selected = providerSelect.getSelectedItem();
+      nextValue = selected?.value ?? wizard.draft.provider;
+      const provider = validateWorkspaceProvider(nextValue);
+      if (!provider) {
+        wizard.lastMessage = "Usa anthropic, openai oppure kimi.";
+        return false;
+      }
+      saveWorkspaceProvider(provider, wizard.draft.workspace);
+      wizard.draft.provider = provider;
+      wizard.draft.apiKey = loadWorkspaceApiKey(wizard.draft.workspace) ?? "";
+      inputBuffer = "";
+      wizard.lastMessage = "Provider configurato.";
+      return true;
+    }
+
+    nextValue = nextValue || wizard.draft.apiKey;
+    if (!nextValue) {
+      wizard.lastMessage = "Inserisci la chiave API per il provider scelto.";
+      return false;
+    }
+    const provider = validateWorkspaceProvider(wizard.draft.provider);
+    if (!provider) {
+      wizard.lastMessage = "Configura prima il provider.";
+      return false;
+    }
+    if (provider === "anthropic" && !nextValue.startsWith("sk-ant-")) {
+      wizard.lastMessage = "Per Anthropic la chiave deve iniziare con sk-ant-.";
+      return false;
+    }
+
+    wizard.lastMessage = "Verifica chiave in corso...";
+    refresh();
+    const valid = await testApiKey(provider, nextValue);
+    if (!valid) {
+      wizard.lastMessage = "Chiave non valida o non verificabile.";
+      return false;
+    }
+
+    saveWorkspaceApiKey(nextValue, wizard.draft.workspace, provider);
+    wizard.draft.apiKey = nextValue;
+    completedApiKey = nextValue;
+    inputBuffer = "";
+    wizard.lastMessage = "Chiave salvata per questa cartella.";
+    return true;
+  };
+
+  await new Promise<void>((resolvePromise) => {
+    const finish = () => {
+      try { tui.stop(); } catch {}
+      resolvePromise();
+    };
+
+    tui.addInputListener((data) => {
+      if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
+        void (async () => {
+          const ok = await validateAndPersistStep();
+          if (!ok) {
+            refresh();
+            return;
+          }
+          if (wizard.stepIndex < wizard.steps.length - 1) {
+            wizard.stepIndex += 1;
+            wizard.lastMessage = null;
+            refresh();
+            return;
+          }
+          if (!wizard.draft.workspace || !wizard.draft.provider || !wizard.draft.apiKey) {
+            wizard.lastMessage = "Completa cartella, provider e chiave prima di uscire dal wizard.";
+            refresh();
+            return;
+          }
+          finish();
+        })();
+        return { consume: true };
+      }
+      const current = wizard.steps[wizard.stepIndex];
+      if (current.field === "provider") {
+        if (matchesKey(data, Key.left)) {
+          moveStep(-1);
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.right)) {
+          moveStep(1);
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+          moveProviderSelection(matchesKey(data, Key.up) ? -1 : 1);
+          wizard.lastMessage = null;
+          refresh();
+          return { consume: true };
+        }
+      } else {
+        if (matchesKey(data, Key.up) || matchesKey(data, Key.left)) {
+          moveStep(-1);
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.down) || matchesKey(data, Key.right)) {
+          moveStep(1);
+          return { consume: true };
+        }
+      }
+      if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) {
+        if (current.field !== "provider" && inputBuffer.length > 0) {
+          inputBuffer = inputBuffer.slice(0, -1);
+          refresh();
+        }
+        return { consume: true };
+      }
+      if (matchesKey(data, Key.ctrl("c")) || matchesKey(data, Key.ctrl("d"))) {
+        wizard.lastMessage = "Completa cartella, provider e chiave prima di uscire dal wizard.";
+        refresh();
+        return { consume: true };
+      }
+
+      const str = typeof data === "string" ? data : "";
+      if (current.field !== "provider" && str && str.length === 1 && str.charCodeAt(0) >= 32) {
+        inputBuffer += str;
+        wizard.lastMessage = null;
+        refresh();
+        return { consume: true };
+      }
+      return undefined;
+    });
+
+    syncProviderSelection();
+    tui.start();
+    refresh();
+  });
+
+  return completedApiKey;
 }
 
 export async function ensureWorkspaceConfigured(): Promise<string> {
   const savedWorkspace = loadWorkspacePath();
   const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
-  if (validation?.ok) {
-    ensureWorkspaceInitialized(validation.value);
-    return validation.value;
+  if (!validation?.ok || !loadWorkspaceProvider(validation.value) || !loadWorkspaceApiKey(validation.value)) {
+    await runSetupWizard();
   }
-
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const workspace = await promptWorkspacePath(
-    rl,
-    savedWorkspace || homedir(),
-    savedWorkspace ? "La cartella di lavoro salvata non e piu disponibile." : undefined,
-  );
-  rl.close();
-  await sleep(800);
-  return workspace;
+  return loadWorkspacePath();
 }
 
-async function testApiKey(key: string): Promise<boolean> {
+async function testApiKey(provider: WorkspaceProvider, key: string): Promise<boolean> {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1,
-        messages: [{ role: "user", content: "test" }],
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
+    const res = provider === "anthropic"
+      ? await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "test" }],
+          }),
+          signal: AbortSignal.timeout(10000),
+        })
+      : await fetch(
+          `${provider === "kimi" ? "https://api.moonshot.ai/v1" : "https://api.openai.com/v1"}/chat/completions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+              model: provider === "kimi" ? "kimi-k2-0711-preview" : "gpt-4o-mini",
+              max_tokens: 1,
+              messages: [{ role: "user", content: "test" }],
+            }),
+            signal: AbortSignal.timeout(10000),
+          },
+        );
     return res.ok || res.status === 400;
   } catch {
     return false;
