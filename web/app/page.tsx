@@ -21,7 +21,8 @@ function CompanyContent() {
         <>
           <JsonLd />
           <main style={{ position: 'relative', zIndex: 1 }}>
-            <LandingNav />
+            {/* LandingNav nascosto temporaneamente - pagine incomplete */}
+            {/* <LandingNav /> */}
             <LandingHero />
           </main>
         </>
