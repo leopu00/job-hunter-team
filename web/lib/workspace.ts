@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { hasSupabaseConfig } from '@/lib/supabase/config'
 
 const COOKIE_NAME = 'jht_workspace'
 const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
@@ -56,7 +57,4 @@ export function workspaceHasProfile(workspacePath: string): boolean {
   return fs.existsSync(getProfilePath(workspacePath))
 }
 
-export const isSupabaseConfigured = !!(
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+export const isSupabaseConfigured = hasSupabaseConfig()
