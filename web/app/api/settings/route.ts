@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 const CONFIG_DIR  = path.join(os.homedir(), '.jht')
 const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
-const PROVIDERS   = ['claude', 'openai', 'minimax'] as const
+const PROVIDERS   = ['anthropic', 'claude', 'openai', 'kimi', 'minimax'] as const
 
 function sanitize(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     try { existing = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) } catch { /* usa default */ }
   }
 
-  const activeProvider = sanitize(body.active_provider) ?? String(existing.active_provider ?? 'claude')
+  const activeProvider = sanitize(body.active_provider) ?? String(existing.active_provider ?? 'anthropic')
   if (!(PROVIDERS as readonly string[]).includes(activeProvider)) {
     return NextResponse.json({ error: 'active_provider non valido' }, { status: 400 })
   }
