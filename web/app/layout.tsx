@@ -101,7 +101,8 @@ export default function RootLayout({
             <ToastProvider>
               <KeyboardShortcutsProvider>
                 <GlobalSearch />
-                <FloatingChat />
+                {/* FloatingChat nascosto temporaneamente - feature non implementata */}
+                {/* <FloatingChat /> */}
                 <Sidebar />
                 <MainContent>
                   <Breadcrumb />
