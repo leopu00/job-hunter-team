@@ -134,6 +134,7 @@ export default function LandingNav() {
           </span>
         </Link>
 
+        {/* Nav links nascosti temporaneamente - pagine incomplete
         <div className="hidden md:flex items-center gap-6">
           <a href={homeAnchor('features')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
             {t('nav_features')}
@@ -165,6 +166,7 @@ export default function LandingNav() {
             {t('nav_about')}
           </Link>
         </div>
+        */}
 
         <div className="flex items-center gap-2 sm:gap-3">
           <LangDropdown />
@@ -179,7 +181,7 @@ export default function LandingNav() {
             {t('nav_login')}
           </Link>
 
-          {/* Mobile hamburger */}
+          {/* Mobile hamburger nascosto temporaneamente
           <button
             onClick={() => setMobileOpen(v => !v)}
             className="md:hidden flex flex-col gap-1 p-1.5"
@@ -192,10 +194,11 @@ export default function LandingNav() {
             <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
             <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
           </button>
+          */}
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile dropdown nascosto temporaneamente
       {mobileOpen && (
         <div
           id="mobile-nav-menu"
@@ -238,6 +241,7 @@ export default function LandingNav() {
           </Link>
         </div>
       )}
+      */}
     </nav>
   )
 }
