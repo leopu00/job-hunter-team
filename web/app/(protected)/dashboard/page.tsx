@@ -56,7 +56,7 @@ export default async function DashboardPage() {
     }
   }
 
-  // Verifica se il team è attivo (sessioni tmux JHT)
+  // Check if team is active (tmux JHT sessions)
   let teamActive = false
   try {
     const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
@@ -96,29 +96,29 @@ export default async function DashboardPage() {
             className="text-[10px] font-semibold tracking-[0.18em] uppercase"
             style={{ color: teamActive ? 'var(--color-green)' : 'var(--color-dim)' }}
           >
-            {teamActive ? 'live · team attivo' : 'dati aggiornati'}
+            {teamActive ? 'live · team active' : 'data updated'}
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
           Dashboard
         </h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {stats.total} posizioni totali · {stats.excluded} escluse · {activeTotal} attive
+          {stats.total} total positions · {stats.excluded} excluded · {activeTotal} active
         </p>
       </div>
 
       {/* ── Onboarding (empty state) ──────────────────────────── */}
       {isEmpty && (
         <div className="mb-10" style={{ animation: 'fade-in 0.35s ease both' }}>
-          <div className="section-label mb-5">Inizia da qui</div>
+          <div className="section-label mb-5">Start here</div>
           <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
             <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
-              Configura il tuo profilo per avviare la ricerca.
+              Configure your profile to start the search.
             </p>
 
             <div className="flex flex-col gap-4">
 
-              {/* Step 1 — Configura il Profilo (obbligatorio) */}
+              {/* Step 1 — Configure Profile (required) */}
               <Link
                 href="/profile"
                 className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
@@ -138,17 +138,17 @@ export default async function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-green)]' : 'text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors'}`}>
-                    Configura il tuo Profilo
+                    Configure your Profile
                     {hasProfile && (
                       <span className="ml-2 text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)] bg-[var(--color-green)]/10 px-2 py-0.5 rounded-full border border-[var(--color-green)]/20">
-                        completato
+                        completed
                       </span>
                     )}
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
                     {hasProfile
-                      ? 'Il profilo è stato configurato. Il team userà queste informazioni per personalizzare la ricerca.'
-                      : 'Ruolo target, skills, preferenze e salary range. Il team userà queste informazioni per la ricerca.'
+                      ? 'Profile configured. The team will use this information to personalize the search.'
+                      : 'Target role, skills, preferences and salary range. The team will use this information for the search.'
                     }
                   </p>
                 </div>
@@ -159,7 +159,7 @@ export default async function DashboardPage() {
                 )}
               </Link>
 
-              {/* Step 2 — Avvia il Team */}
+              {/* Step 2 — Start the Team */}
               <Link
                 href="/team"
                 className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
@@ -179,12 +179,12 @@ export default async function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[12px] font-bold mb-1 ${hasProfile ? 'text-[var(--color-bright)] group-hover:text-[var(--color-yellow)]' : 'text-[var(--color-dim)]'} transition-colors`}>
-                    Avvia il Team
+                    Start the Team
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
                     {hasProfile
-                      ? 'Il profilo è pronto. Avvia il team di agenti per iniziare la ricerca automatizzata di posizioni lavorative.'
-                      : 'Prima configura il profilo. Il team ha bisogno delle tue informazioni per cercare posizioni aderenti.'
+                      ? 'Profile ready. Start the agent team to begin automated job searching.'
+                      : 'Configure your profile first. The team needs your information to search for matching positions.'
                     }
                   </p>
                 </div>
@@ -197,17 +197,17 @@ export default async function DashboardPage() {
 
             </div>
 
-            {/* Assistente — helper opzionale, fuori dal flusso obbligatorio */}
+            {/* Assistant — optional helper, outside mandatory flow */}
             <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
               <Link
                 href="/assistente"
                 className="group flex items-center gap-3 no-underline"
               >
                 <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
-                  Hai bisogno di aiuto? L&apos;assistente può guidarti nella compilazione del profilo.
+                  Need help? The assistant can guide you in filling out your profile.
                 </span>
                 <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
-                  Apri assistente →
+                  Open assistant →
                 </span>
               </Link>
             </div>
@@ -220,12 +220,12 @@ export default async function DashboardPage() {
       <div className="section-label mb-4">Overview</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8" style={{ animation: 'fade-in 0.35s ease both' }}>
         {[
-          { label: 'Trovate',    val: stats.total,   color: 'var(--color-blue)' },
-          { label: 'Analizzate', val: stats.checked, color: 'var(--color-purple)' },
+          { label: 'Found',    val: stats.total,   color: 'var(--color-blue)' },
+          { label: 'Analyzed', val: stats.checked, color: 'var(--color-purple)' },
           { label: 'Scored',     val: stats.scored,  color: 'var(--color-yellow)' },
-          { label: 'CV scritti', val: stats.writing, color: 'var(--color-orange)' },
-          { label: 'Pronte',     val: stats.ready,   color: '#7fffb2' },
-          { label: 'Inviate',    val: stats.applied, color: 'var(--color-green)' },
+          { label: 'CVs written', val: stats.writing, color: 'var(--color-orange)' },
+          { label: 'Ready',     val: stats.ready,   color: '#7fffb2' },
+          { label: 'Sent',    val: stats.applied, color: 'var(--color-green)' },
         ].map(({ label, val, color }, i) => (
           <div
             key={label}
@@ -277,10 +277,10 @@ export default async function DashboardPage() {
         {/* Score distribution */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <div className="flex items-center justify-between mb-4">
-            <span className="section-label">Distribuzione Score</span>
+            <span className="section-label">Score Distribution</span>
             {scoreDist.avgScore != null && (
               <span className="text-[11px] font-semibold" style={{ color: scoreDist.avgScore >= 75 ? 'var(--color-green)' : scoreDist.avgScore >= 55 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
-                media {scoreDist.avgScore}
+                avg {scoreDist.avgScore}
               </span>
             )}
           </div>
@@ -299,16 +299,16 @@ export default async function DashboardPage() {
             ))}
           </div>
           <p className="text-[10px] text-[var(--color-dim)]">
-            {scoreDist.withScore} su {scoreDist.total} con score · {scoreDist.total - scoreDist.withScore} senza
+            {scoreDist.withScore} of {scoreDist.total} with score · {scoreDist.total - scoreDist.withScore} without
           </p>
         </div>
 
         {/* Source distribution */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="section-label mb-4">Fonti</div>
+          <div className="section-label mb-4">Sources</div>
           <div className="space-y-3">
             {sourceDist.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-dim)]">Nessun dato</p>
+              <p className="text-[11px] text-[var(--color-dim)]">No data</p>
             ) : (() => {
               const max = sourceDist[0]?.count ?? 1
               return sourceDist.map(s => (
@@ -327,19 +327,19 @@ export default async function DashboardPage() {
 
       {/* ── Positions table ─────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4">
-        <span className="section-label">Posizioni recenti</span>
+        <span className="section-label">Recent Positions</span>
         <Link
           href="/positions"
           className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
         >
-          Vedi tutte →
+          View all →
         </Link>
       </div>
       <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Posizioni recenti">
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Recent positions">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Score', 'Stato'].map(h => (
+              {['ID', 'Title', 'Company', 'Location', 'Remote', 'Score', 'Status'].map(h => (
                 <th
                   key={h}
                   scope="col"
@@ -355,7 +355,7 @@ export default async function DashboardPage() {
             {positions.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]">
-                  Nessuna posizione trovata.
+                  No positions found.
                 </td>
               </tr>
             ) : positions.map((p: PositionWithScore, i: number) => (
