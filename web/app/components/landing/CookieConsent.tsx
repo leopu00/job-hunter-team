@@ -29,7 +29,7 @@ const T = {
 
 export default function CookieConsent() {
   const { lang } = useLandingI18n()
-  const t = T[lang]
+  const t = T[lang as keyof typeof T] || T.it
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
