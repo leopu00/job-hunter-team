@@ -126,7 +126,7 @@ export default function Sidebar() {
       <div className="px-3 py-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
         {!collapsed && (
           <div className="flex items-center justify-between">
-            <span className="text-[8px] font-mono" style={{ color: 'var(--color-dim)' }}>v0.1.5</span>
+            <span className="text-[8px] font-mono" style={{ color: 'var(--color-dim)' }}>v0.1.6</span>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"
               className="text-[8px] hover:opacity-80 transition-opacity" style={{ color: 'var(--color-dim)' }}>docs →</a>
           </div>

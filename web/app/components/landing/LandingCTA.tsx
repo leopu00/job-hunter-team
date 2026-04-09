@@ -103,7 +103,7 @@ export function LandingFooter() {
           <span className="text-[9px] text-[var(--color-dim)]">
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash; {t('footer_copyright')}
           </span>
-          <span className="text-[9px] text-[var(--color-dim)]">v0.1.5</span>
+          <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
         </div>
       </div>
     </footer>
