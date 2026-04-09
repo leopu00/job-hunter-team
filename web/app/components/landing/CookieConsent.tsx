@@ -19,6 +19,12 @@ const T = {
     decline: 'Necessary only',
     privacy: 'Privacy Policy',
   },
+  hu: {
+    text: 'Ez az oldal technikai cookie-kat használ a működéshez és analitikai cookie-kat a felhasználói élmény javításához.',
+    accept: 'Elfogadás',
+    decline: 'Csak szükséges',
+    privacy: 'Adatvédelmi Irányelvek',
+  },
 }
 
 export default function CookieConsent() {
