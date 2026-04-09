@@ -508,61 +508,69 @@ const translations = {
   about_vision_3:    { it: 'Networking assistito e follow-up automatizzati',         en: 'Assisted networking and automated follow-ups', hu: 'Támogatott hálózatépítés és automatizált követések' },
 
   // Onboarding wizard
-  ob_title:          { it: 'Benvenuto in Job Hunter Team',   en: 'Welcome to Job Hunter Team' },
-  ob_skip:           { it: 'Salta',                          en: 'Skip' },
-  ob_next:           { it: 'Avanti',                         en: 'Next' },
-  ob_back:           { it: 'Indietro',                       en: 'Back' },
-  ob_finish:         { it: 'Inizia a cercare',               en: 'Start searching' },
-  ob_step:           { it: 'Passo',                          en: 'Step' },
+  ob_title:          { it: 'Benvenuto in Job Hunter Team',   en: 'Welcome to Job Hunter Team', hu: 'Üdvözöljük a Job Hunter Team-ben' },
+  ob_skip:           { it: 'Salta',                          en: 'Skip', hu: 'Kihagyás' },
+  ob_next:           { it: 'Avanti',                         en: 'Next', hu: 'Következő' },
+  ob_back:           { it: 'Indietro',                       en: 'Back', hu: 'Vissza' },
+  ob_finish:         { it: 'Inizia a cercare',               en: 'Start searching', hu: 'Keresés indítása' },
+  ob_step:           { it: 'Passo',                          en: 'Step', hu: 'Lépés' },
 
-  ob_s1_title:       { it: 'Benvenuto',                      en: 'Welcome' },
+  ob_s1_title:       { it: 'Benvenuto',                      en: 'Welcome', hu: 'Üdvözöljük' },
   ob_s1_desc:        {
     it: 'Job Hunter Team e il tuo team personale di agenti AI. Cercano offerte, le analizzano, scrivono CV e cover letter su misura — tutto in automatico, tutto sul tuo computer.',
     en: 'Job Hunter Team is your personal AI agent team. They find listings, analyze them, write tailored CVs and cover letters — all automatically, all on your computer.',
+    hu: 'A Job Hunter Team a te személyes AI ügynök csapatod. Ajánlatokat keresnek, elemeznek, személyre szabott önéletrajzokat és motivációs leveleket írnak — mindezt automatikusan, a te számítógépeden.',
   },
   ob_s1_hint:        {
     it: 'Configuriamo insieme il tuo spazio in 5 passi veloci.',
     en: 'Let\'s set up your workspace in 5 quick steps.',
+    hu: 'Állítsuk be együtt a munkateredet 5 gyors lépésben.',
   },
 
-  ob_s2_title:       { it: 'Configura il profilo',           en: 'Set up your profile' },
+  ob_s2_title:       { it: 'Configura il profilo',           en: 'Set up your profile', hu: 'Profil beállítása' },
   ob_s2_desc:        {
     it: 'Indica il tuo nome, il ruolo che cerchi e un breve riassunto della tua esperienza. Gli agenti useranno queste informazioni per personalizzare ogni candidatura.',
     en: 'Enter your name, the role you\'re looking for and a brief summary of your experience. Agents will use this information to personalize every application.',
+    hu: 'Add meg a neved, a keresett pozíciót és a tapasztalataid rövid összefoglalóját. Az ügynökök ezeket az információkat fogják használni minden jelentkezés személyre szabásához.',
   },
-  ob_s2_name:        { it: 'Nome',                           en: 'Name' },
-  ob_s2_role:        { it: 'Ruolo target',                   en: 'Target role' },
-  ob_s2_bio:         { it: 'Breve bio',                      en: 'Short bio' },
+  ob_s2_name:        { it: 'Nome',                           en: 'Name', hu: 'Név' },
+  ob_s2_role:        { it: 'Ruolo target',                   en: 'Target role', hu: 'Cél pozíció' },
+  ob_s2_bio:         { it: 'Breve bio',                      en: 'Short bio', hu: 'Rövid bemutatkozás' },
 
-  ob_s3_title:       { it: 'Scegli le competenze',           en: 'Choose your skills' },
+  ob_s3_title:       { it: 'Scegli le competenze',           en: 'Choose your skills', hu: 'Válaszd ki a készségeidet' },
   ob_s3_desc:        {
     it: 'Seleziona le tecnologie e competenze che conosci. Lo Scorer le usera\' per calcolare il match con ogni offerta.',
     en: 'Select the technologies and skills you know. The Scorer will use them to compute the match with each listing.',
+    hu: 'Válaszd ki az ismert technológiákat és készségeket. A Pontozó ezeket fogja használni az illeszkedés kiszámításához minden ajánlathoz.',
   },
   ob_s3_hint:        {
     it: 'Clicca per selezionare, clicca di nuovo per deselezionare.',
     en: 'Click to select, click again to deselect.',
+    hu: 'Kattints a kiválasztáshoz, kattints újra a kiválasztás megszüntetéséhez.',
   },
 
-  ob_s4_title:       { it: 'Configura la API Key',           en: 'Configure your API Key' },
+  ob_s4_title:       { it: 'Configura la API Key',           en: 'Configure your API Key', hu: 'API kulcs beállítása' },
   ob_s4_desc:        {
     it: 'Gli agenti usano Claude (Anthropic) per ragionare. Inserisci la tua chiave API per attivarli. La chiave resta sul tuo computer, non viene mai inviata a terzi.',
     en: 'Agents use Claude (Anthropic) to reason. Enter your API key to activate them. The key stays on your computer, never sent to third parties.',
+    hu: 'Az ügynökök a Claude-ot (Anthropic) használják a következtetéshez. Add meg az API kulcsodat az aktiválásukhoz. A kulcs a számítógépeden marad, soha nem kerül elküldésre harmadik feleknek.',
   },
-  ob_s4_placeholder: { it: 'sk-ant-...',                     en: 'sk-ant-...' },
+  ob_s4_placeholder: { it: 'sk-ant-...',                     en: 'sk-ant-...', hu: 'sk-ant-...' },
   ob_s4_hint:        {
     it: 'Ottienila su console.anthropic.com. Salvata in ~/.jht/jht.config.json.',
     en: 'Get it at console.anthropic.com. Saved in ~/.jht/jht.config.json.',
+    hu: 'Szerezd be a console.anthropic.com oldalon. Mentve: ~/.jht/jht.config.json.',
   },
 
-  ob_s5_title:       { it: 'Avvia il primo agente',          en: 'Launch your first agent' },
+  ob_s5_title:       { it: 'Avvia il primo agente',          en: 'Launch your first agent', hu: 'Első ügynök indítása' },
   ob_s5_desc:        {
     it: 'Tutto pronto! Premi il bottone per avviare lo Scout — il primo agente che cerchera\' offerte per te. Potrai avviare il team completo dalla pagina Team.',
     en: 'All set! Press the button to launch the Scout — the first agent that will search listings for you. You can launch the full team from the Team page.',
+    hu: 'Minden kész! Nyomd meg a gombot a Felfedező elindításához — az első ügynök, amely ajánlatokat fog keresni neked. A teljes csapatot a Csapat oldalon indíthatod el.',
   },
-  ob_s5_launch:      { it: 'Avvia Scout',                    en: 'Launch Scout' },
-  ob_s5_skip_agent:  { it: 'Lo faro\' dopo',                 en: 'I\'ll do it later' },
-  ob_s5_launched:    { it: 'Scout avviato!',                  en: 'Scout launched!' },
+  ob_s5_launch:      { it: 'Avvia Scout',                    en: 'Launch Scout', hu: 'Felfedező indítása' },
+  ob_s5_skip_agent:  { it: 'Lo faro\' dopo',                 en: 'I\'ll do it later', hu: 'Később megteszem' },
+  ob_s5_launched:    { it: 'Scout avviato!',                  en: 'Scout launched!', hu: 'Felfedező elindítva!' },
 } as const
 
 type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
