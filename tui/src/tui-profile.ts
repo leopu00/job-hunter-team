@@ -4,7 +4,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const CONFIG_DIR = join(homedir(), ".jht");
@@ -45,6 +45,15 @@ export type WorkspaceInitResult = {
   createdProfileDir: boolean;
   createdUploadsDir: boolean;
   createdDb: boolean;
+};
+
+export type WorkspaceProvider = "anthropic" | "openai" | "kimi";
+
+export type WorkspaceProviderConfig = {
+  provider: WorkspaceProvider;
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
 };
 
 const EMPTY_PROFILE: UserProfile = {
@@ -186,6 +195,178 @@ function saveConfig(cfg: Record<string, unknown>): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n", "utf-8");
 }
 
+function loadJsonFile(filePath: string): Record<string, unknown> {
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveJsonFile(filePath: string, data: Record<string, unknown>): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
+}
+
+function getWorkspaceProfileYamlPath(workspacePath?: string): string | null {
+  const resolvedWorkspace = workspacePath ? resolve(workspacePath) : loadWorkspacePath();
+  if (!resolvedWorkspace) return null;
+  return join(resolvedWorkspace, "profile", "candidate_profile.yml");
+}
+
+function yamlQuote(value: string): string {
+  return JSON.stringify(value);
+}
+
+function yamlScalar(value: string | number | boolean): string {
+  if (typeof value === "string") return yamlQuote(value);
+  return String(value);
+}
+
+function yamlList(lines: string[], key: string, values: string[], indent = ""): void {
+  if (values.length === 0) return;
+  lines.push(`${indent}${key}:`);
+  for (const value of values) {
+    lines.push(`${indent}  - ${yamlQuote(value)}`);
+  }
+}
+
+function parseSalaryTarget(value: string): { min: number; max: number } | null {
+  const matches = Array.from(value.matchAll(/\d+(?:[.,]\d+)?/g))
+    .map((match) => Number.parseFloat(match[0].replace(",", ".")))
+    .filter((num) => Number.isFinite(num));
+  if (matches.length === 0) return null;
+  const scale = /k\b/i.test(value) ? 1000 : 1;
+  const min = Math.round(matches[0]! * scale);
+  const max = Math.round((matches[1] ?? matches[0]!) * scale);
+  return { min, max };
+}
+
+function writeWorkspaceProfileYaml(profile: UserProfile, workspacePath?: string): void {
+  const profilePath = getWorkspaceProfileYamlPath(workspacePath);
+  if (!profilePath) return;
+
+  const fullName = [profile.nome, profile.cognome].filter(Boolean).join(" ").trim();
+  const salary = profile.salaryTarget ? parseSalaryTarget(profile.salaryTarget) : null;
+  const strengths = profile.strengths.filter(Boolean);
+  const lines: string[] = [
+    `name: ${yamlQuote(fullName)}`,
+    `target_role: ${yamlQuote(profile.targetRoles[0] ?? "")}`,
+    `location: ${yamlQuote(profile.locationPreferences[0] ?? profile.zona ?? "")}`,
+    "experience_years: 0",
+    "has_degree: false",
+    `seniority_target: ${yamlQuote(profile.seniorityTarget || "junior")}`,
+  ];
+
+  yamlList(lines, "skills", profile.competenze);
+
+  if (profile.languages.length > 0) {
+    lines.push("languages:");
+    for (const language of profile.languages) {
+      const [lingua, ...rest] = language.split(/\s+/).filter(Boolean);
+      lines.push("  -");
+      lines.push(`    lingua: ${yamlQuote(lingua ?? "")}`);
+      lines.push(`    livello: ${yamlQuote(rest.join(" "))}`);
+    }
+  }
+
+  yamlList(lines, "location_preferences", profile.locationPreferences);
+  yamlList(lines, "target_roles_priority", profile.targetRoles);
+
+  if (salary) {
+    lines.push("salary_target:");
+    lines.push(`  currency: ${yamlQuote("EUR")}`);
+    lines.push(`  min: ${yamlScalar(salary.min)}`);
+    lines.push(`  max: ${yamlScalar(salary.max)}`);
+  }
+
+  lines.push("candidate:");
+  lines.push(`  name: ${yamlQuote(fullName)}`);
+  lines.push(`  target_role: ${yamlQuote(profile.targetRoles[0] ?? "")}`);
+  lines.push("  contacts:");
+  lines.push(`    email: ${yamlQuote(profile.email)}`);
+  lines.push(`    phone: ${yamlQuote("")}`);
+  lines.push(`    linkedin: ${yamlQuote(profile.linkedin)}`);
+  lines.push(`    github: ${yamlQuote(profile.portfolio)}`);
+  lines.push(`    website: ${yamlQuote(profile.portfolio)}`);
+
+  if (profile.competenze.length > 0) {
+    lines.push("  skills:");
+    lines.push("    primary:");
+    for (const skill of profile.competenze) {
+      lines.push(`      - ${yamlQuote(skill)}`);
+    }
+  }
+
+  lines.push("  experience: []");
+  lines.push("  education: []");
+  lines.push("  certifications: []");
+  lines.push("  projects: []");
+
+  if (profile.languages.length > 0) {
+    lines.push("  languages:");
+    for (const language of profile.languages) {
+      const [lingua, ...rest] = language.split(/\s+/).filter(Boolean);
+      lines.push("    -");
+      lines.push(`      lingua: ${yamlQuote(lingua ?? "")}`);
+      lines.push(`      livello: ${yamlQuote(rest.join(" "))}`);
+    }
+  } else {
+    lines.push("  languages: []");
+  }
+
+  if (strengths.length > 0) {
+    lines.push("  strengths:");
+    for (const strength of strengths) {
+      lines.push(`    - ${yamlQuote(strength)}`);
+    }
+  } else {
+    lines.push("  strengths: []");
+  }
+
+  lines.push("  career_goals: {}");
+  lines.push("  aspirations: {}");
+  lines.push(`  free_notes: ${yamlQuote([
+    profile.headline && `headline: ${profile.headline}`,
+    profile.tipoLavoro && `tipo_lavoro: ${profile.tipoLavoro}`,
+    profile.availability && `availability: ${profile.availability}`,
+    profile.workAuthorization && `work_authorization: ${profile.workAuthorization}`,
+  ].filter(Boolean).join(" | "))}`);
+
+  mkdirSync(dirname(profilePath), { recursive: true });
+  writeFileSync(profilePath, lines.join("\n") + "\n", "utf-8");
+}
+
+function syncGlobalRuntimeConfig(workspacePath: string, provider?: WorkspaceProvider, apiKey?: string): void {
+  const cfg = loadConfig();
+  cfg.version = typeof cfg.version === "number" ? cfg.version : 1;
+  cfg.workspace = workspacePath;
+  cfg.workspacePath = workspacePath;
+  cfg.channels = cfg.channels && typeof cfg.channels === "object" ? cfg.channels : {};
+
+  if (provider) {
+    const providers = cfg.providers && typeof cfg.providers === "object"
+      ? cfg.providers as Record<string, unknown>
+      : {};
+    const existing = providers[provider] && typeof providers[provider] === "object"
+      ? providers[provider] as Record<string, unknown>
+      : {};
+    const defaults = getDefaultProviderSettings(provider);
+    providers[provider] = {
+      ...existing,
+      name: provider,
+      auth_method: "api_key",
+      ...(apiKey ? { api_key: apiKey } : {}),
+      model: existing.model ?? defaults.model,
+      ...(defaults.baseUrl ? { base_url: existing.base_url ?? defaults.baseUrl } : {}),
+    };
+    cfg.active_provider = provider;
+    cfg.providers = providers;
+  }
+
+  saveConfig(cfg);
+}
+
 function normalizeWorkspaceInput(value: string): string {
   return value.trim().replace(/^"(.*)"$/, "$1");
 }
@@ -214,9 +395,13 @@ export function validateWorkspacePath(value: string): WorkspaceValidationResult 
 
 export function loadWorkspacePath(): string {
   const cfg = loadConfig();
-  const nested = cfg.workspace as Record<string, unknown> | undefined;
+  const nested = typeof cfg.workspace === "object" && cfg.workspace !== null
+    ? cfg.workspace as Record<string, unknown>
+    : undefined;
   const raw = typeof cfg.workspacePath === "string"
     ? cfg.workspacePath
+    : typeof cfg.workspace === "string"
+      ? cfg.workspace
     : typeof nested?.path === "string"
       ? nested.path
       : "";
@@ -235,13 +420,132 @@ export function saveWorkspacePath(workspacePath: string): void {
   }
 
   const cfg = loadConfig();
-  const workspace = cfg.workspace && typeof cfg.workspace === "object"
-    ? cfg.workspace as Record<string, unknown>
-    : {};
-  workspace.path = validation.value;
-  cfg.workspace = workspace;
+  cfg.workspace = validation.value;
   cfg.workspacePath = validation.value;
   saveConfig(cfg);
+}
+
+function getWorkspaceConfigPath(workspacePath?: string): string | null {
+  const resolvedWorkspace = workspacePath ? resolve(workspacePath) : loadWorkspacePath();
+  if (!resolvedWorkspace) return null;
+  return join(resolvedWorkspace, "profile", "jht.config.json");
+}
+
+function getDefaultProviderSettings(provider: WorkspaceProvider): { model: string; baseUrl?: string } {
+  switch (provider) {
+    case "anthropic":
+      return { model: "claude-sonnet-4-20250514" };
+    case "openai":
+      return { model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" };
+    case "kimi":
+      return { model: "kimi-k2-0711-preview", baseUrl: "https://api.moonshot.ai/v1" };
+  }
+}
+
+export function validateWorkspaceProvider(value: string): WorkspaceProvider | null {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "anthropic" || normalized === "claude") return "anthropic";
+  if (normalized === "openai" || normalized === "gpt") return "openai";
+  if (normalized === "kimi" || normalized === "kimi-k2" || normalized === "k2") return "kimi";
+  return null;
+}
+
+export function loadWorkspaceProvider(workspacePath?: string): WorkspaceProvider | null {
+  const configPath = getWorkspaceConfigPath(workspacePath);
+  if (!configPath) return null;
+  const cfg = loadJsonFile(configPath);
+  const activeProvider = typeof cfg.active_provider === "string"
+    ? validateWorkspaceProvider(cfg.active_provider)
+    : null;
+  return activeProvider;
+}
+
+export function loadWorkspaceProviderConfig(workspacePath?: string): WorkspaceProviderConfig | null {
+  const configPath = getWorkspaceConfigPath(workspacePath);
+  if (!configPath) return null;
+  const cfg = loadJsonFile(configPath);
+  const provider = loadWorkspaceProvider(workspacePath);
+  if (!provider) return null;
+
+  const rawProviderConfig = (cfg.providers as Record<string, unknown> | undefined)?.[provider] as Record<string, unknown> | undefined;
+  const apiKey = typeof rawProviderConfig?.api_key === "string" ? rawProviderConfig.api_key.trim() : "";
+  if (!apiKey) return null;
+
+  const defaults = getDefaultProviderSettings(provider);
+  return {
+    provider,
+    apiKey,
+    model: typeof rawProviderConfig?.model === "string" && rawProviderConfig.model.trim()
+      ? rawProviderConfig.model.trim()
+      : defaults.model,
+    baseUrl: typeof rawProviderConfig?.base_url === "string" && rawProviderConfig.base_url.trim()
+      ? rawProviderConfig.base_url.trim()
+      : defaults.baseUrl,
+  };
+}
+
+export function loadWorkspaceApiKey(workspacePath?: string): string | null {
+  return loadWorkspaceProviderConfig(workspacePath)?.apiKey ?? null;
+}
+
+export function saveWorkspaceProvider(provider: WorkspaceProvider, workspacePath?: string): void {
+  const configPath = getWorkspaceConfigPath(workspacePath);
+  if (!configPath) {
+    throw new Error("cartella di lavoro non configurata");
+  }
+  const resolvedWorkspace = resolve(workspacePath ?? loadWorkspacePath());
+  const cfg = loadJsonFile(configPath);
+  cfg.active_provider = provider;
+  const providers = cfg.providers && typeof cfg.providers === "object"
+    ? cfg.providers as Record<string, unknown>
+    : {};
+  const existingProviderConfig = providers[provider] && typeof providers[provider] === "object"
+    ? providers[provider] as Record<string, unknown>
+    : {};
+  const defaults = getDefaultProviderSettings(provider);
+  providers[provider] = {
+    ...existingProviderConfig,
+    name: provider,
+    auth_method: "api_key",
+    model: existingProviderConfig.model ?? defaults.model,
+    ...(defaults.baseUrl ? { base_url: existingProviderConfig.base_url ?? defaults.baseUrl } : {}),
+  };
+  cfg.providers = providers;
+  saveJsonFile(configPath, cfg);
+  syncGlobalRuntimeConfig(resolvedWorkspace, provider);
+}
+
+export function saveWorkspaceApiKey(apiKey: string, workspacePath?: string, providerOverride?: WorkspaceProvider): void {
+  const configPath = getWorkspaceConfigPath(workspacePath);
+  if (!configPath) {
+    throw new Error("cartella di lavoro non configurata");
+  }
+  const resolvedWorkspace = resolve(workspacePath ?? loadWorkspacePath());
+  const cfg = loadJsonFile(configPath);
+  const provider = providerOverride ?? loadWorkspaceProvider(workspacePath);
+  if (!provider) {
+    throw new Error("provider non configurato");
+  }
+
+  const providers = cfg.providers && typeof cfg.providers === "object"
+    ? cfg.providers as Record<string, unknown>
+    : {};
+  const defaults = getDefaultProviderSettings(provider);
+  const existingProviderConfig = providers[provider] && typeof providers[provider] === "object"
+    ? providers[provider] as Record<string, unknown>
+    : {};
+  providers[provider] = {
+    ...existingProviderConfig,
+    name: provider,
+    auth_method: "api_key",
+    api_key: apiKey,
+    model: existingProviderConfig.model ?? defaults.model,
+    ...(defaults.baseUrl ? { base_url: existingProviderConfig.base_url ?? defaults.baseUrl } : {}),
+  };
+  cfg.active_provider = provider;
+  cfg.providers = providers;
+  saveJsonFile(configPath, cfg);
+  syncGlobalRuntimeConfig(resolvedWorkspace, provider, apiKey);
 }
 
 function initWorkspaceDb(dbPath: string): void {
@@ -364,6 +668,7 @@ export function saveProfile(profile: UserProfile): void {
     nomeCompleto: [profile.nome, profile.cognome].filter(Boolean).join(" ").trim(),
   };
   saveConfig(cfg);
+  writeWorkspaceProfileYaml(profile);
 }
 
 export function isProfileComplete(profile: UserProfile): boolean {

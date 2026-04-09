@@ -116,7 +116,7 @@ export default function LandingHero() {
     <section aria-label="Hero" className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
       <div className="relative z-10 w-full max-w-6xl mx-auto text-center" style={{ animation: 'fade-in 0.6s ease both' }}>
         <h1 className="w-full text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
-          Job Hunter Team
+          Job Hunter <span className="text-[var(--color-green)]">Team</span>
         </h1>
 
         <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
@@ -263,7 +263,7 @@ export default function LandingHero() {
         </div>
 
         <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
-          Hai una squadra di agenti AI virtuali disponibile 24 ore su 24: lavorano per te, cercano opportunità, analizzano offerte, preparano i materiali e si coordinano tra loro in autonomia, mentre tu mantieni sempre il controllo.
+          Un team di agenti AI segue con continuità ogni fase della ricerca di lavoro, trova opportunità, analizza offerte, prepara i materiali e coordina il processo, mantenendo sempre il controllo nelle tue mani.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
