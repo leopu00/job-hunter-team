@@ -13,15 +13,15 @@
 # Variabili d'ambiente:
 #   JHT_ENV          Ambiente target: production | staging (default: production)
 #   JHT_WEB_DIR      Path alla directory web/ (default: ./web)
-#   JHT_WORKSPACE    Path alla workspace JHT (default: ~/.jht)
+#   JHT_HOME         Cartella nascosta JHT (default: ~/.jht)
 #   JHT_DEPLOY_LOG   File di log deploy (default: ~/.jht/deploy.log)
 
 set -euo pipefail
 
 JHT_ENV="${JHT_ENV:-production}"
 JHT_WEB_DIR="${JHT_WEB_DIR:-./web}"
-JHT_WORKSPACE="${JHT_WORKSPACE:-$HOME/.jht}"
-JHT_DEPLOY_LOG="${JHT_DEPLOY_LOG:-$JHT_WORKSPACE/deploy.log}"
+JHT_HOME="${JHT_HOME:-$HOME/.jht}"
+JHT_DEPLOY_LOG="${JHT_DEPLOY_LOG:-$JHT_HOME/deploy.log}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MODE="deploy"
@@ -56,7 +56,7 @@ HELP
   shift
 done
 
-mkdir -p "$JHT_WORKSPACE"
+mkdir -p "$JHT_HOME"
 log "=== Deploy JHT — env=$JHT_ENV mode=$MODE ==="
 
 # ---------------------------------------------------------------------------
