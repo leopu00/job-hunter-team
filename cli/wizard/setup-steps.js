@@ -1,21 +1,18 @@
 /**
- * JHT Setup Wizard — Step Telegram, workspace, subscription, salvataggio, riepilogo
+ * JHT Setup Wizard — Step Telegram, subscription, salvataggio, riepilogo
+ * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team), non chiesti.
  */
-import os from 'node:os';
-import path from 'node:path';
 import {
   JHT_CONFIG_PATH,
+  JHT_CONFIG_DIR,
   writeConfigFile,
   validateTelegramToken,
   validateChatId,
-  validateWorkspacePath,
   validateEmail,
 } from './setup-helpers.js';
 import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
-
-const DEFAULT_WORKSPACE = path.join(os.homedir(), 'jht');
 
 /**
  * Step Telegram: chiede bot token e chat ID (opzionale).
@@ -57,30 +54,12 @@ export async function promptTelegram(prompter, baseChannels) {
 }
 
 /**
- * Step Workspace: chiede path workspace (quickstart usa default).
- */
-export async function promptWorkspace(prompter, flow, baseWorkspace) {
-  let workspace;
-  if (flow === 'quickstart') {
-    workspace = baseWorkspace || DEFAULT_WORKSPACE;
-  } else {
-    workspace = await prompter.text({
-      message: 'Path workspace JHT',
-      initialValue: baseWorkspace || DEFAULT_WORKSPACE,
-      validate: validateWorkspacePath,
-    });
-    workspace = workspace.trim();
-  }
-  return path.resolve(workspace);
-}
-
-/**
  * Assembla e salva la config finale conforme a shared/config/ schema.
  * apiKey puo' essere un SecretInput (oggetto) o una stringa plaintext legacy.
  */
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          telegramChannel, workspace, baseProviders } = params;
+          telegramChannel, baseProviders } = params;
 
   const progress = prompter.progress('Salvataggio configurazione...');
 
@@ -103,7 +82,6 @@ export async function assembleAndSaveConfig(prompter, params) {
     active_provider: providerChoice,
     providers: { ...baseProviders, [providerChoice]: providerConfig },
     channels: {},
-    workspace,
   };
 
   if (telegramChannel) config.channels.telegram = telegramChannel;
@@ -118,7 +96,7 @@ export async function assembleAndSaveConfig(prompter, params) {
  */
 export async function showSummary(prompter, params) {
   const { selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
-          model, telegramChannel, workspace } = params;
+          model, telegramChannel } = params;
 
   const authDisplay = authMethod === 'api_key'
     ? `API Key (${describeSecret(apiKeySecret)})`
@@ -129,13 +107,13 @@ export async function showSummary(prompter, params) {
     `Auth:       ${authDisplay}`,
     `Modello:    ${model}`,
     `Telegram:   ${telegramChannel ? 'configurato' : 'non configurato'}`,
-    `Workspace:  ${workspace}`,
     '',
-    `Config: ${JHT_CONFIG_PATH}`,
+    `Config:     ${JHT_CONFIG_PATH}`,
+    `JHT home:   ${JHT_CONFIG_DIR}`,
   ].join('\n');
 
   await prompter.note(summary, 'Riepilogo');
-  await prompter.outro('Setup completato! Esegui jht start per avviare il team.');
+  await prompter.outro('Setup completato! Esegui jht team start per avviare il team.');
 }
 
 /**

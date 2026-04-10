@@ -165,18 +165,6 @@ export function validateChatId(value) {
   return undefined;
 }
 
-export function validateWorkspacePath(value) {
-  if (!value || value.trim().length === 0) {
-    return 'Il path non puo\' essere vuoto';
-  }
-  const resolved = path.resolve(value.trim());
-  const parent = path.dirname(resolved);
-  if (!fs.existsSync(parent)) {
-    return `La directory padre non esiste: ${parent}`;
-  }
-  return undefined;
-}
-
 // --- Summarize existing config ---
 
 export function summarizeExistingConfig(config) {
@@ -194,9 +182,6 @@ export function summarizeExistingConfig(config) {
   }
   if (config.channels?.telegram) {
     lines.push('Telegram: configurato');
-  }
-  if (config.workspace) {
-    lines.push(`Workspace: ${config.workspace}`);
   }
   return lines.join('\n') || 'Config vuota';
 }
