@@ -346,7 +346,9 @@ export async function runSetupWizard(): Promise<string> {
       }
       // Salva credenziali
       await saveCredentials(state.workspace, state.provider as ProviderId, method.id, result.credentials);
-      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key : result.credentials.token;
+      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key
+        : result.credentials.type === "subscription" ? "__subscription__"
+        : result.credentials.token;
       completedApiKey = state.apiKey;
       state.message = "Autenticazione completata!";
       return true;
@@ -751,7 +753,8 @@ export async function ensureWorkspaceConfigured(): Promise<string> {
     return apiKey;
   }
 
-  return loadWorkspaceApiKey(validation.value) || "";
+  const key = loadWorkspaceApiKey(validation.value) || "";
+  return key === "__subscription__" ? "" : key;
 }
 
 export function saveApiKey(key: string): void {
