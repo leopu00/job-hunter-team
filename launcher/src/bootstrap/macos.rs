@@ -189,11 +189,15 @@ pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
         "openai" => "OPENAI_API_KEY",
         _ => "ANTHROPIC_API_KEY",
     };
-    let env_prefix = if !cfg.api_key.is_empty() {
-        format!("export {}='{}' && ", env_var, cfg.api_key)
-    } else {
+    let use_subscription = cfg.auth_method == "subscription";
+    let env_prefix = if use_subscription || cfg.api_key.is_empty() {
         String::new()
+    } else {
+        format!("export {}='{}' && ", env_var, cfg.api_key)
     };
+    if use_subscription {
+        log(&format!("Subscription mode: relying on {} CLI login", cli_cmd));
+    }
 
     for (session, role, effort) in &agents {
         let _ = sh(&format!("tmux kill-session -t '{}' 2>/dev/null", session));
