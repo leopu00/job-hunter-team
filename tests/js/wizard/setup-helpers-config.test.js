@@ -47,7 +47,6 @@ const validCfg = {
   active_provider: 'claude',
   providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-key' } },
   channels: {},
-  workspace: '/tmp/test-jht',
 };
 
 describe('validateConfigBeforeWrite', () => {
@@ -82,9 +81,9 @@ describe('validateConfigBeforeWrite', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rifiuta workspace mancante', () => {
-    const r = validateConfigBeforeWrite({ ...validCfg, workspace: '' });
-    expect(r.success).toBe(false);
+  it('accetta config senza workspace (path JHT fissi)', () => {
+    const { workspace, ...cfg } = { ...validCfg, workspace: '/obsolete' };
+    expect(validateConfigBeforeWrite(cfg).success).toBe(true);
   });
 });
 
@@ -106,16 +105,16 @@ describe('writeConfigFile', () => {
 // --- summarizeExistingConfig ---
 
 describe('summarizeExistingConfig', () => {
-  it('mostra provider, modello, auth, workspace', () => {
+  it('mostra provider, modello, auth', () => {
     const summary = summarizeExistingConfig({
       active_provider: 'claude',
       providers: { claude: { model: 'claude-sonnet-4-6', auth_method: 'api_key' } },
-      workspace: '/tmp/test-jht',
     });
     expect(summary).toMatch(/Claude/i);
     expect(summary).toMatch(/claude-sonnet-4-6/);
     expect(summary).toMatch(/api_key/);
-    expect(summary).toMatch(/\/tmp\/test-jht/);
+    // workspace non e' piu' parte del summary (path JHT fissi)
+    expect(summary).not.toMatch(/Workspace/);
   });
 
   it('mostra Telegram configurato se presente', () => {
@@ -123,7 +122,6 @@ describe('summarizeExistingConfig', () => {
       active_provider: 'claude',
       providers: { claude: { auth_method: 'api_key' } },
       channels: { telegram: { bot_token: '123:ABC' } },
-      workspace: '/home',
     });
     expect(summary).toMatch(/Telegram/);
   });

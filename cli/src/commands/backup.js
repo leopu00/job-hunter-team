@@ -1,8 +1,9 @@
 import { readFile, writeFile, mkdir, readdir, access, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR    = join(homedir(), '.jht');
+const JHT_DIR    = JHT_HOME;
 const BACKUP_DIR = join(JHT_DIR, 'backups');
 
 const BACKUP_FILES = [

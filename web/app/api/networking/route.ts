@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +14,9 @@ type CompanyNetwork = { company: string; contacts: Contact[]; hasApplication: bo
 type Suggestion = { action: string; target: string; reason: string; priority: 'high' | 'medium' | 'low' };
 type Interaction = { contactName: string; company: string; type: string; date: number };
 
-const CONTACTS_PATH = path.join(os.homedir(), '.jht', 'contacts.json');
-const COMPANIES_PATH = path.join(os.homedir(), '.jht', 'companies.json');
-const APPS_PATH = path.join(os.homedir(), '.jht', 'applications.json');
+const CONTACTS_PATH = path.join(JHT_HOME, 'contacts.json');
+const COMPANIES_PATH = path.join(JHT_HOME, 'companies.json');
+const APPS_PATH = path.join(JHT_HOME, 'applications.json');
 
 function loadJSON<T>(p: string, fallback: T): T {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')); } catch { return fallback; }

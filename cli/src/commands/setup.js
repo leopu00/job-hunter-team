@@ -49,7 +49,6 @@ export function registerSetupCommand(program) {
     .option('--secret-env <name>', 'Nome env var per la API key')
     .option('--secret-file <path>', 'Path file per la API key')
     .option('--model <model>', 'Modello AI default')
-    .option('--workspace <path>', 'Path workspace JHT')
     .option('--skip-health', 'Salta il health check della API key')
     .option('--reset', 'Ricomincia la configurazione da zero')
     .action(handleSetup);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkspacePath } from '@/lib/workspace'
+import { JHT_USER_UPLOADS_DIR } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
@@ -21,13 +21,8 @@ export async function GET(
   { params }: { params: Promise<{ name: string }> },
 ) {
   const { name } = await params
-  const workspace = await getWorkspacePath()
-  if (!workspace) {
-    return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-  }
-
   const safeName = path.basename(decodeURIComponent(name))
-  const filePath = path.join(workspace, 'profile', 'uploads', safeName)
+  const filePath = path.join(JHT_USER_UPLOADS_DIR, safeName)
 
   if (!fs.existsSync(filePath)) {
     return NextResponse.json({ error: 'file non trovato' }, { status: 404 })
