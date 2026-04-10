@@ -1,7 +1,6 @@
 use std::process::Command;
 use crate::config::{self, SetupConfig};
 use crate::log::log;
-use crate::ui;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -25,70 +24,33 @@ fn run_wsl(args: &[&str]) -> Result<String, String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Err(if stderr.is_empty() { stdout } else { stderr })
     }
 }
 
-pub fn run(cfg: &SetupConfig) -> Result<u16, String> {
-    // Step 1: Check WSL
-    ui::update_status(1, "Checking WSL + Ubuntu...");
-    check_wsl()?;
-
-    // Step 2: Check tmux
-    ui::update_status(2, "Checking tmux...");
-    ensure_tmux()?;
-
-    // Step 3: Check Node.js
-    ui::update_status(3, "Checking Node.js...");
-    ensure_node()?;
-
-    // Step 4: Check AI CLI
-    ui::update_status(4, &format!("Checking {} CLI...", cfg.provider));
-    check_ai_cli(cfg)?;
-
-    // Step 5: Clone/update repo
-    ui::update_status(5, "Updating repository...");
-    ensure_repo()?;
-
-    // Step 6: Install deps
-    ui::update_status(6, "Installing dependencies...");
-    ensure_deps()?;
-
-    // Step 7: Create work dir
-    ui::update_status(7, "Setting up workspace...");
-    setup_workspace(cfg)?;
-
-    // Step 8: Start web server
-    ui::update_status(8, "Starting web server...");
-    let port = start_web_server()?;
-
-    // Step 9: Start team
-    ui::update_status(9, "Starting agent team...");
-    start_team(cfg)?;
-
-    // Step 10: Open browser
-    ui::update_status(10, "Opening browser...");
-    let url = format!("http://localhost:{}", port);
-    let _ = open::that(&url);
-
-    Ok(port)
-}
-
-fn check_wsl() -> Result<(), String> {
+pub fn check_wsl() -> Result<(), String> {
     let output = Command::new("wsl")
         .args(["--list", "--quiet"])
         .output()
-        .map_err(|_| "WSL is not installed.\n\nInstall it: wsl --install".to_string())?;
+        .map_err(|_| "WSL is not installed.\n\nOpen PowerShell as admin and run:\nwsl --install".to_string())?;
 
     let list = String::from_utf8_lossy(&output.stdout);
+    // WSL --list --quiet on Windows outputs UTF-16, check for Ubuntu
     if !list.contains("Ubuntu") {
-        return Err("Ubuntu is not installed in WSL.\n\nRun: wsl --install -d Ubuntu".to_string());
+        // Also check raw bytes for UTF-16 "Ubuntu"
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let cleaned: String = raw.chars().filter(|c| !c.is_control() && *c != '\0').collect();
+        if !cleaned.contains("Ubuntu") {
+            return Err("Ubuntu is not installed in WSL.\n\nRun: wsl --install -d Ubuntu".to_string());
+        }
     }
     log("WSL + Ubuntu OK");
     Ok(())
 }
 
-fn ensure_tmux() -> Result<(), String> {
+pub fn ensure_tmux() -> Result<(), String> {
     match run_wsl(&["which", "tmux"]) {
         Ok(_) => {
             log("tmux OK");
@@ -96,23 +58,23 @@ fn ensure_tmux() -> Result<(), String> {
         }
         Err(_) => {
             log("Installing tmux...");
-            run_wsl(&["sudo", "apt-get", "update", "-qq"])?;
-            run_wsl(&["sudo", "apt-get", "install", "-y", "-qq", "tmux"])?;
+            let _ = run_wsl(&["sudo", "apt-get", "update", "-qq"]);
+            run_wsl(&["sudo", "apt-get", "install", "-y", "-qq", "tmux"])
+                .map_err(|e| format!("Failed to install tmux: {}", e))?;
             log("tmux installed");
             Ok(())
         }
     }
 }
 
-fn ensure_node() -> Result<(), String> {
+pub fn ensure_node() -> Result<(), String> {
     match run_wsl(&["node", "--version"]) {
         Ok(v) => {
             log(&format!("Node.js {}", v));
             Ok(())
         }
         Err(_) => {
-            // Try to install via nvm or apt
-            log("Installing Node.js...");
+            log("Node.js not found, installing...");
             let install = run_wsl(&["bash", "-c",
                 "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
             ]);
@@ -121,13 +83,13 @@ fn ensure_node() -> Result<(), String> {
                     log("Node.js installed");
                     Ok(())
                 }
-                Err(e) => Err(format!("Failed to install Node.js: {}\n\nInstall manually in WSL.", e)),
+                Err(e) => Err(format!("Failed to install Node.js:\n{}\n\nInstall manually in WSL.", e)),
             }
         }
     }
 }
 
-fn check_ai_cli(cfg: &SetupConfig) -> Result<(), String> {
+pub fn check_ai_cli(cfg: &SetupConfig) -> Result<(), String> {
     let cli = match cfg.provider.as_str() {
         "anthropic" => "claude",
         "kimi" => "kimik2",
@@ -141,18 +103,16 @@ fn check_ai_cli(cfg: &SetupConfig) -> Result<(), String> {
         }
         Err(_) => {
             Err(format!(
-                "{} CLI not found in WSL.\n\nInstall it first, then restart the launcher.",
+                "{} CLI not found in WSL.\n\nInstall it in WSL first, then retry.",
                 cli
             ))
         }
     }
 }
 
-fn ensure_repo() -> Result<(), String> {
+pub fn ensure_repo() -> Result<(), String> {
     let repo_dir = config::repo_dir();
-    let repo_dir_str = repo_dir.display().to_string().replace('\\', "/");
-    // Convert Windows path to WSL path
-    let wsl_path = windows_to_wsl_path(&repo_dir_str);
+    let wsl_path = windows_to_wsl_path(&repo_dir.display().to_string());
 
     if !repo_dir.exists() {
         std::fs::create_dir_all(config::app_dir())
@@ -169,9 +129,9 @@ fn ensure_repo() -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_deps() -> Result<(), String> {
+pub fn ensure_deps() -> Result<(), String> {
     let web_dir = config::web_dir();
-    let wsl_path = windows_to_wsl_path(&web_dir.display().to_string().replace('\\', "/"));
+    let wsl_path = windows_to_wsl_path(&web_dir.display().to_string());
 
     if !web_dir.join("node_modules").exists() {
         log("Running npm install...");
@@ -183,41 +143,44 @@ fn ensure_deps() -> Result<(), String> {
     Ok(())
 }
 
-fn setup_workspace(cfg: &SetupConfig) -> Result<(), String> {
+pub fn setup_workspace(cfg: &SetupConfig) -> Result<(), String> {
     std::fs::create_dir_all(&cfg.work_dir)
         .map_err(|e| format!("Cannot create workspace: {}", e))?;
-    log(&format!("Workspace: {:?}", cfg.work_dir));
+    // Create profile subdirectory
+    std::fs::create_dir_all(cfg.work_dir.join("profile")).ok();
+    log(&format!("Workspace ready: {:?}", cfg.work_dir));
     Ok(())
 }
 
-fn start_web_server() -> Result<u16, String> {
+pub fn start_web_server() -> Result<u16, String> {
     let web_dir = config::web_dir();
-    let wsl_path = windows_to_wsl_path(&web_dir.display().to_string().replace('\\', "/"));
+    let wsl_path = windows_to_wsl_path(&web_dir.display().to_string());
 
-    // Find free port
     let port = crate::server::find_free_port(config::DEFAULT_PORT);
 
-    // Start server in tmux session
+    // Kill existing jht-web session if any
+    let _ = run_wsl(&["tmux", "kill-session", "-t", "jht-web"]);
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
     let cmd = format!(
-        "tmux new-session -d -s jht-web -c '{}' 'npm run dev -- -p {}'",
+        "tmux new-session -d -s jht-web -c '{}' && tmux send-keys -t jht-web 'npm run dev -- -p {}' C-m",
         wsl_path, port
     );
     run_wsl(&["bash", "-c", &cmd])?;
 
     log(&format!("Web server starting on port {}...", port));
 
-    // Wait for port
     if !crate::server::wait_for_port(port) {
-        return Err(format!("Web server did not start within {} seconds", config::START_TIMEOUT_SECS));
+        return Err(format!("Web server did not start within {} seconds.\n\nCheck WSL and try again.", config::START_TIMEOUT_SECS));
     }
 
     log("Web server ready");
     Ok(port)
 }
 
-fn start_team(cfg: &SetupConfig) -> Result<(), String> {
+pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     let repo_dir = config::repo_dir();
-    let wsl_repo = windows_to_wsl_path(&repo_dir.display().to_string().replace('\\', "/"));
+    let wsl_repo = windows_to_wsl_path(&repo_dir.display().to_string());
     let cli_cmd = match cfg.provider.as_str() {
         "anthropic" => "claude",
         "kimi" => "kimik2",
@@ -235,7 +198,6 @@ fn start_team(cfg: &SetupConfig) -> Result<(), String> {
         ("SENTINELLA", "sentinella", "low"),
     ];
 
-    // Set API key env if provided
     let env_var = match cfg.provider.as_str() {
         "anthropic" => "ANTHROPIC_API_KEY",
         "kimi" => "MOONSHOT_API_KEY",
@@ -249,6 +211,9 @@ fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     };
 
     for (session, role, effort) in &agents {
+        // Kill existing session if any
+        let _ = run_wsl(&["tmux", "kill-session", "-t", session]);
+
         let agent_dir = format!("{}/agents/{}", wsl_repo, role);
         let cmd = format!(
             "tmux new-session -d -s '{}' -c '{}' && tmux send-keys -t '{}' '{}{} --dangerously-skip-permissions --effort {}' C-m && (sleep 4 && tmux send-keys -t '{}' Enter) &",
@@ -257,11 +222,10 @@ fn start_team(cfg: &SetupConfig) -> Result<(), String> {
 
         match run_wsl(&["bash", "-c", &cmd]) {
             Ok(_) => log(&format!("Started {}", session)),
-            Err(e) => log(&format!("Failed to start {}: {}", session, e)),
+            Err(e) => log(&format!("Warning: failed to start {}: {}", session, e)),
         }
 
-        // Small delay between agents
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(800));
     }
 
     log("Team started");
@@ -269,11 +233,11 @@ fn start_team(cfg: &SetupConfig) -> Result<(), String> {
 }
 
 fn windows_to_wsl_path(win_path: &str) -> String {
-    // C:/Users/foo -> /mnt/c/Users/foo
-    if win_path.len() >= 2 && win_path.as_bytes()[1] == b':' {
-        let drive = (win_path.as_bytes()[0] as char).to_lowercase().next().unwrap();
-        format!("/mnt/{}{}", drive, win_path[2..].replace('\\', "/"))
+    let normalized = win_path.replace('\\', "/");
+    if normalized.len() >= 2 && normalized.as_bytes()[1] == b':' {
+        let drive = (normalized.as_bytes()[0] as char).to_lowercase().next().unwrap();
+        format!("/mnt/{}{}", drive, &normalized[2..])
     } else {
-        win_path.replace('\\', "/")
+        normalized
     }
 }
