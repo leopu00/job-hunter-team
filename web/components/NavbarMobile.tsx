@@ -14,6 +14,7 @@ const NAV_ITEMS: { href: string; label: string; accent?: string }[] = [
   { href: '/reports', label: 'Report' },
   { href: '/team', label: 'Team' },
   { href: '/profile', label: 'Profilo' },
+  { href: '/credentials', label: 'Impostazioni', accent: '#8b949e' },
 ]
 
 export default function NavbarMobile() {
