@@ -8,8 +8,9 @@ description = "Lightweight launcher for Job Hunter Team"
 open = "5"
 shared_child = "1"
 sha2 = "0.10"
-native-windows-gui = "1.0.13"
 tray-item = "0.10"
+tao = "0.34"
+wry = "0.51"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

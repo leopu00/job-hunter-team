@@ -10,37 +10,27 @@ pub const PORT_FALLBACK_SPAN: u16 = 10;
 #[derive(Clone, Debug)]
 pub struct SetupConfig {
     pub work_dir: PathBuf,
-    pub provider: AiProvider,
+    pub provider: String,      // "anthropic" | "openai" | "kimi"
+    pub auth_method: String,   // "api-key" | "oauth"
     pub api_key: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum AiProvider {
-    ClaudeCode,
-    KimiK2,
+/// ~/.jht directory
+pub fn jht_config_dir() -> PathBuf {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
+    PathBuf::from(home).join(".jht")
 }
 
-impl AiProvider {
-    pub fn label(&self) -> &str {
-        match self {
-            AiProvider::ClaudeCode => "Claude Code",
-            AiProvider::KimiK2 => "Kimi K2",
-        }
-    }
+/// ~/.jht/jht.config.json
+pub fn global_config_path() -> PathBuf {
+    jht_config_dir().join("jht.config.json")
+}
 
-    pub fn cli_command(&self) -> &str {
-        match self {
-            AiProvider::ClaudeCode => "claude",
-            AiProvider::KimiK2 => "kimik2",
-        }
-    }
-
-    pub fn env_var_name(&self) -> &str {
-        match self {
-            AiProvider::ClaudeCode => "ANTHROPIC_API_KEY",
-            AiProvider::KimiK2 => "MOONSHOT_API_KEY",
-        }
-    }
+/// <workspace>/profile/jht.config.json
+pub fn workspace_config_path(workspace: &std::path::Path) -> PathBuf {
+    workspace.join("profile").join("jht.config.json")
 }
 
 pub fn app_dir() -> PathBuf {
@@ -66,44 +56,81 @@ pub fn hash_file() -> PathBuf {
     app_dir().join(".package-json-hash")
 }
 
-pub fn config_file() -> PathBuf {
-    app_dir().join("config.json")
-}
-
-/// Save config to disk (simple JSON)
+/// Save config in the same format as the TUI:
+/// 1. ~/.jht/jht.config.json  → { "workspace": "<path>", "workspacePath": "<path>" }
+/// 2. <workspace>/profile/jht.config.json → { "active_provider": "...", "providers": { ... } }
 pub fn save_config(cfg: &SetupConfig) -> Result<(), String> {
-    std::fs::create_dir_all(app_dir()).map_err(|e| e.to_string())?;
-    let provider = match cfg.provider {
-        AiProvider::ClaudeCode => "claude",
-        AiProvider::KimiK2 => "kimik2",
-    };
-    let json = format!(
-        "{{\n  \"work_dir\": \"{}\",\n  \"provider\": \"{}\",\n  \"api_key\": \"{}\"\n}}",
-        cfg.work_dir.display().to_string().replace('\\', "\\\\"),
-        provider,
-        cfg.api_key
+    let config_dir = jht_config_dir();
+    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+
+    // 1. Global config
+    let workspace_str = cfg.work_dir.display().to_string().replace('\\', "\\\\");
+    let global = format!(
+        "{{\n  \"workspace\": \"{}\",\n  \"workspacePath\": \"{}\"\n}}\n",
+        workspace_str, workspace_str
     );
-    std::fs::write(config_file(), json).map_err(|e| e.to_string())
+    std::fs::write(global_config_path(), global).map_err(|e| e.to_string())?;
+
+    // 2. Workspace config
+    let profile_dir = cfg.work_dir.join("profile");
+    std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
+
+    let (model, base_url) = default_provider_settings(&cfg.provider);
+    let base_url_line = base_url
+        .map(|u| format!(",\n        \"base_url\": \"{}\"", u))
+        .unwrap_or_default();
+
+    let ws_config = format!(
+        r#"{{
+  "active_provider": "{}",
+  "providers": {{
+    "{}": {{
+      "name": "{}",
+      "auth_method": "{}",
+      "model": "{}",
+      "api_key": "{}"{base_url_line}
+    }}
+  }}
+}}
+"#,
+        cfg.provider, cfg.provider, cfg.provider, cfg.auth_method, model, cfg.api_key,
+        base_url_line = base_url_line
+    );
+    std::fs::write(workspace_config_path(&cfg.work_dir), ws_config)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
-/// Load config from disk
+/// Load existing config from ~/.jht/jht.config.json + workspace config
 pub fn load_config() -> Option<SetupConfig> {
-    let content = std::fs::read_to_string(config_file()).ok()?;
-    // Simple manual parse (no serde)
-    let work_dir = extract_json_string(&content, "work_dir")?;
-    let provider_str = extract_json_string(&content, "provider")?;
-    let api_key = extract_json_string(&content, "api_key")?;
+    let global = std::fs::read_to_string(global_config_path()).ok()?;
+    let workspace = extract_json_string(&global, "workspacePath")
+        .or_else(|| extract_json_string(&global, "workspace"))?;
 
-    let provider = match provider_str.as_str() {
-        "kimik2" => AiProvider::KimiK2,
-        _ => AiProvider::ClaudeCode,
-    };
+    let work_dir = PathBuf::from(&workspace);
+    let ws_config = std::fs::read_to_string(workspace_config_path(&work_dir)).ok()?;
+
+    let provider = extract_json_string(&ws_config, "active_provider")?;
+    let api_key = extract_nested_provider_key(&ws_config, &provider).unwrap_or_default();
+    let auth_method = extract_nested_string(&ws_config, &provider, "auth_method")
+        .unwrap_or_else(|| "api-key".to_string());
 
     Some(SetupConfig {
-        work_dir: PathBuf::from(work_dir),
+        work_dir,
         provider,
+        auth_method,
         api_key,
     })
+}
+
+fn default_provider_settings(provider: &str) -> (&'static str, Option<&'static str>) {
+    match provider {
+        "anthropic" => ("claude-sonnet-4-20250514", None),
+        "openai" => ("gpt-4o-mini", Some("https://api.openai.com/v1")),
+        "kimi" => ("kimi-k2-0711-preview", Some("https://api.moonshot.ai/v1")),
+        _ => ("claude-sonnet-4-20250514", None),
+    }
 }
 
 fn extract_json_string(json: &str, key: &str) -> Option<String> {
@@ -116,4 +143,19 @@ fn extract_json_string(json: &str, key: &str) -> Option<String> {
     let rest = &rest[quote_start + 1..];
     let quote_end = rest.find('"')?;
     Some(rest[..quote_end].replace("\\\\", "\\"))
+}
+
+fn extract_nested_provider_key(json: &str, provider: &str) -> Option<String> {
+    // Find the provider block, then find api_key within it
+    let provider_pattern = format!("\"{}\"", provider);
+    let idx = json.find(&provider_pattern)?;
+    let rest = &json[idx..];
+    extract_json_string(rest, "api_key")
+}
+
+fn extract_nested_string(json: &str, provider: &str, key: &str) -> Option<String> {
+    let provider_pattern = format!("\"{}\"", provider);
+    let idx = json.find(&provider_pattern)?;
+    let rest = &json[idx..];
+    extract_json_string(rest, key)
 }
