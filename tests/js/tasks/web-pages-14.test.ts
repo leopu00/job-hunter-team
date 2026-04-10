@@ -44,11 +44,13 @@ describe("SecretRef", () => {
 /* ── jht setup CLI ── */
 describe("jht setup CLI", () => {
   const src = readCli("src/commands/setup.js");
-  it("registerSetupCommand + options: provider, auth-method, api-key, secret-mode, model, workspace", () => {
+  it("registerSetupCommand + options: provider, auth-method, api-key, secret-mode, model", () => {
     expect(src).toContain("export function registerSetupCommand");
     expect(src).toContain("'setup'");
-    for (const o of ["--non-interactive", "--provider", "--auth-method", "--api-key", "--secret-mode", "--model", "--workspace", "--skip-health", "--reset"])
+    // --workspace rimosso: path JHT ora fissi (~/.jht + ~/Documents/Job Hunter Team)
+    for (const o of ["--non-interactive", "--provider", "--auth-method", "--api-key", "--secret-mode", "--model", "--skip-health", "--reset"])
       expect(src).toContain(o);
+    expect(src).not.toContain("--workspace");
   });
   it("printBanner + runSetupWizard + runNonInteractiveSetup + WizardCancelledError", () => {
     expect(src).toContain("function printBanner"); expect(src).toContain("runSetupWizard");

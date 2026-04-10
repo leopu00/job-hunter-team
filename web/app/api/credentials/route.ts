@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CREDS_DIR = path.join(os.homedir(), '.jht', 'credentials')
+const CREDS_DIR = path.join(JHT_HOME, 'credentials')
 
 const API_KEY_PROVIDERS = ['claude', 'openai', 'minimax'] as const
 const OAUTH_PROVIDERS = ['chatgpt_pro', 'claude_max'] as const

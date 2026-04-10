@@ -1,8 +1,9 @@
 import { readdir, rm, stat, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR   = join(homedir(), '.jht');
+const JHT_DIR   = JHT_HOME;
 const CACHE_DIR = join(JHT_DIR, 'cache');
 
 const CACHE_DIRS = [

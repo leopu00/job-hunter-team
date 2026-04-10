@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const DATA_PATH = path.join(os.homedir(), '.jht', 'sentinel-data.jsonl')
+const DATA_PATH = path.join(JHT_HOME, 'sentinel-data.jsonl')
 
 type Point = { ts: string; usage: number; velocity: number; velocity_smooth: number; velocity_ideal: number; projection: number; status: string; throttle?: number }
 type DailyBar = { date: string; peak: number; consumed: number; sessions: number }

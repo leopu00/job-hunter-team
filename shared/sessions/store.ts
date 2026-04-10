@@ -6,10 +6,10 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
+import { JHT_HOME } from '../paths.js';
 import type { SessionStoreFile, SessionEntry } from './types.js';
 
-const JHT_SESSIONS_DIR = path.join(os.homedir(), '.jht', 'sessions');
+const JHT_SESSIONS_DIR = path.join(JHT_HOME, 'sessions');
 const JHT_SESSIONS_PATH = path.join(JHT_SESSIONS_DIR, 'sessions.json');
 
 export function resolveSessionStorePath(custom?: string): string {

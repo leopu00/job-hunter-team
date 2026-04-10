@@ -3,10 +3,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const TASKS_PATH = path.join(os.homedir(), '.jht', 'tasks', 'tasks.json')
+const TASKS_PATH = path.join(JHT_HOME, 'tasks', 'tasks.json')
 
 type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timed_out' | 'cancelled' | 'lost'
 type TaskRuntime = 'subagent' | 'cli' | 'cron'

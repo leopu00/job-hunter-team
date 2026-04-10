@@ -2,8 +2,9 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR      = join(homedir(), '.jht');
+const JHT_DIR      = JHT_HOME;
 const WEBHOOKS_PATH = join(JHT_DIR, 'webhooks', 'webhooks.json');
 
 const GREEN  = '\x1b[32m';

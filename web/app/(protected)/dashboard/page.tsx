@@ -2,7 +2,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { redirect } from 'next/navigation'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
-import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
@@ -83,10 +83,7 @@ export default async function DashboardPage() {
   if (isSupabaseConfigured) {
     hasProfile = false
   } else {
-    const workspace = await getWorkspacePath()
-    if (workspace) {
-      hasProfile = readWorkspaceProfile(workspace) !== null
-    }
+    hasProfile = readWorkspaceProfile() !== null
   }
 
   // Check if team is active (tmux JHT sessions)

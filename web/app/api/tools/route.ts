@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const JHT_DIR = path.join(os.homedir(), '.jht')
+const JHT_DIR = JHT_HOME
 const TOOLS_CONFIG_PATH = path.join(JHT_DIR, 'tools-config.json')
 const TOOLS_LOG_PATH = path.join(JHT_DIR, 'tools', 'executions.jsonl')
 

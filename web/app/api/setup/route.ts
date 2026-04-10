@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
-import path from 'path'
-import os from 'os'
+import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_DIR  = path.join(os.homedir(), '.jht')
-const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
+const CONFIG_DIR  = JHT_HOME
+const CONFIG_PATH = JHT_CONFIG_PATH
 
 const VALID_PROVIDERS = ['anthropic', 'claude', 'openai', 'kimi', 'minimax'] as const
 
@@ -68,17 +67,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'auth_method non valido' }, { status: 400 })
   }
 
-  const workspace = sanitizeString(body.workspace as string) ?? CONFIG_DIR
-  if (/[\n\r\0]/.test(workspace)) {
-    return NextResponse.json({ error: 'workspace contiene caratteri non validi' }, { status: 400 })
-  }
-
+  // Workspace path fisso — ignora qualsiasi override dal body
   const config = {
     version: 1,
     active_provider: activeProvider,
     providers,
     channels: body.channels ?? {},
-    workspace,
+    workspace: JHT_USER_DIR,
+    workspacePath: JHT_USER_DIR,
   }
 
   try {

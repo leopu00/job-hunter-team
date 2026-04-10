@@ -4,8 +4,9 @@ import { homedir } from 'node:os'
 import { execSync } from 'node:child_process'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR     = join(homedir(), '.jht')
+const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
 
 // ── Helpers ──────────────────────────────────────────────────────────────

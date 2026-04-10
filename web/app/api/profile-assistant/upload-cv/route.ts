@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
-import { getWorkspacePath } from '@/lib/workspace'
+import { JHT_USER_CV_DIR, getAgentDir } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
@@ -39,21 +39,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'il file non sembra un PDF valido' }, { status: 400 })
   }
 
-  const ws = await getWorkspacePath()
-  if (!ws) {
-    return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-  }
-
   try {
-    // Salva il PDF nel workspace
-    const uploadsDir = path.join(ws, 'assistente', 'uploads')
-    fs.mkdirSync(uploadsDir, { recursive: true })
+    // Salva il PDF nella cartella visibile dell'utente (CV)
+    fs.mkdirSync(JHT_USER_CV_DIR, { recursive: true })
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filePath = path.join(uploadsDir, safeName)
+    const filePath = path.join(JHT_USER_CV_DIR, safeName)
     fs.writeFileSync(filePath, buffer)
 
-    // Scrivi messaggio utente nella chat dell'assistente
-    const chatFile = path.join(ws, 'assistente', 'chat.jsonl')
+    // Scrivi messaggio utente nella chat dell'assistente (zona nascosta)
+    const assistenteDir = getAgentDir('assistente')
+    fs.mkdirSync(assistenteDir, { recursive: true })
+    const chatFile = path.join(assistenteDir, 'chat.jsonl')
     const userMsg = JSON.stringify({
       role: 'user',
       text: `Ho caricato il CV: ${file.name}. Estrai le informazioni del profilo.`,

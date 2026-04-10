@@ -5,14 +5,15 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type CLStatus = 'draft' | 'final';
 type CoverLetter = { id: string; title: string; jobTarget: string; company: string; template: string; status: CLStatus; content: string; createdAt: number; updatedAt: number; wordCount: number };
 
-const CL_PATH = path.join(os.homedir(), '.jht', 'cover-letters.json');
-const CL_DIR = path.join(os.homedir(), '.jht', 'cover-letters');
+const CL_PATH = path.join(JHT_HOME, 'cover-letters.json');
+const CL_DIR = path.join(JHT_HOME, 'cover-letters');
 
 function loadCoverLetters(): CoverLetter[] {
   try { return JSON.parse(fs.readFileSync(CL_PATH, 'utf-8')); }

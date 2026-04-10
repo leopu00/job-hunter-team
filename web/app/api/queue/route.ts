@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const QUEUE_PATH = path.join(os.homedir(), '.jht', 'queue', 'queue-state.json')
+const QUEUE_PATH = path.join(JHT_HOME, 'queue', 'queue-state.json')
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead'
 type JobPriority = 'low' | 'normal' | 'high' | 'critical'

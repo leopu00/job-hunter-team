@@ -45,17 +45,17 @@ const PLATFORM_ORDER: Record<PlatformId, number> = {
 const FALLBACK_VERSION = '0.1.0'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
 const FALLBACK_RELEASES_URL = `https://github.com/${FALLBACK_REPO}/releases`
+
+// One-liner installer: scarica, installa dipendenze e lancia il wizard.
+// Target: utenti tech su macOS / Linux / WSL.
+const CLI_SETUP_CMD = `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash`
+
+// Build da sorgente: per chi vuole sviluppare o contribuire.
 const SOURCE_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-npm install
-cd web && npm install && npm run dev`
-
-const CLI_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team
-npm install
-npm install --prefix shared/cron
-npm install --prefix cli
-node cli/bin/jht.js setup`
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
+node cli/bin/jht.js`
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
@@ -87,7 +87,7 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 function DownloadContent() {
   const { t } = useLandingI18n()
   const [installMode, setInstallMode] = useState<InstallMode>('desktop')
-  const [terminalMode, setTerminalMode] = useState<TerminalMode>('source')
+  const [terminalMode, setTerminalMode] = useState<TerminalMode>('cli')
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
     platforms: FALLBACK_PLATFORMS,

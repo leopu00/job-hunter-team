@@ -5,11 +5,9 @@
  * del provider attivo, pronta per l'uso dagli agenti.
  */
 import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { JHT_HOME, JHT_CONFIG_PATH } from '../paths.js';
 
-const JHT_CONFIG_DIR = path.join(os.homedir(), '.jht');
-const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');
+const JHT_CONFIG_DIR = JHT_HOME;
 
 /**
  * Legge la config JHT dal disco.

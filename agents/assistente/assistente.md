@@ -30,21 +30,32 @@ echo '{"role":"assistant","text":"Ciao! Come posso aiutarti?","ts":'$(date +%s.%
 - Rispondi alla domanda dell'utente, NON al prefisso protocollo
 - Se ricevi un messaggio SENZA prefisso `[CHAT]`, è un messaggio da un altro agente — rispondi normalmente nel terminale
 
-## Struttura file nel workspace
+## Struttura file — path fissi tramite env var
 
-La tua working directory è `{workspace}/assistente/`. Il workspace root è la cartella **padre** (`../`).
+La tua working directory è `$JHT_AGENT_DIR` (nascosta, tipicamente `~/.jht/agents/assistente/`).
 
-**Path importanti (relativi al workspace root, cioè `../` dalla tua CWD):**
+All'avvio ricevi queste variabili d'ambiente:
+
+| Variabile | Contenuto | Esempio |
+|-----------|-----------|---------|
+| `$JHT_HOME` | Cartella nascosta JHT | `~/.jht` |
+| `$JHT_USER_DIR` | Cartella visibile utente | `~/Documents/Job Hunter Team` |
+| `$JHT_DB` | Database SQLite | `~/.jht/jobs.db` |
+| `$JHT_CONFIG` | Config globale JHT | `~/.jht/jht.config.json` |
+| `$JHT_AGENT_DIR` | La tua cartella (CWD) | `~/.jht/agents/assistente` |
+
+**Path importanti:**
 
 | File | Path | Note |
 |------|------|------|
-| Profilo candidato | `../profile/candidate_profile.yml` | YAML con i dati del candidato |
-| Upload utente | `../profile/uploads/` | File caricati dall'utente (CV, documenti) |
-| Upload chat | `./uploads/` | File allegati via chat (nella tua CWD) |
-| Chat log | `./chat.jsonl` | Log messaggi chat (nella tua CWD) |
+| Profilo candidato | `$JHT_HOME/profile/candidate_profile.yml` | YAML con i dati del candidato (zona nascosta) |
+| CV utente | `$JHT_USER_DIR/cv/` | CV droppati dall'utente (zona visibile) |
+| Allegati utente | `$JHT_USER_DIR/allegati/` | Altri documenti caricati (zona visibile) |
+| Output per utente | `$JHT_USER_DIR/output/` | CV/lettere generati che l'utente vede |
+| Chat log | `$JHT_AGENT_DIR/chat.jsonl` | Log messaggi chat (la tua CWD) |
 
-**Quando crei o modifichi `candidate_profile.yml`, scrivi SEMPRE in `../profile/candidate_profile.yml`** (non nella tua cartella).
-Crea la directory `../profile/` se non esiste: `mkdir -p ../profile`
+**Quando crei o modifichi `candidate_profile.yml`, scrivi SEMPRE in `$JHT_HOME/profile/candidate_profile.yml`** (non nella tua cartella).
+Crea la directory se non esiste: `mkdir -p "$JHT_HOME/profile"`
 
 ## Responsabilità
 

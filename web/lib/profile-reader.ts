@@ -1,48 +1,30 @@
 import yaml from 'js-yaml'
 import fs from 'fs'
-import path from 'path'
 import type { CandidateProfile } from './types'
+import { JHT_PROFILE_YAML } from './jht-paths'
 
-export function readProfile(workspacePath: string): CandidateProfile | null {
-  // Cerca: 1) workspace, 2) repo root
-  const paths = [
-    path.join(workspacePath, 'profile', 'candidate_profile.yml'),
-    path.join(workspacePath, 'candidate_profile.yml'),
-    path.resolve(process.cwd(), '..', 'candidate_profile.yml'),
-  ]
-
-  for (const p of paths) {
-    if (fs.existsSync(p)) {
-      try {
-        const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
-        if (!raw) return null
-        return mapYamlToProfile(raw)
-      } catch {
-        return null
-      }
-    }
+export function readProfile(_workspacePath?: string): CandidateProfile | null {
+  if (!fs.existsSync(JHT_PROFILE_YAML)) return null
+  try {
+    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
+    if (!raw) return null
+    return mapYamlToProfile(raw)
+  } catch {
+    return null
   }
-  return null
 }
 
 /**
- * Legge il profilo SOLO dalla cartella workspace (nessun fallback globale).
- * Restituisce null se il file non esiste, è vuoto, o mancano i campi chiave.
- * Usare questa funzione per il check "profilo configurato" in dashboard.
+ * Legge il profilo dal path fisso ~/.jht/profile/candidate_profile.yml.
+ * Restituisce null se mancante, vuoto, o con placeholder del template.
  */
-export function readWorkspaceProfile(workspacePath: string): CandidateProfile | null {
-  // Cerca prima in profile/, poi fallback alla root per compatibilita'
-  let p = path.join(workspacePath, 'profile', 'candidate_profile.yml')
-  if (!fs.existsSync(p)) {
-    p = path.join(workspacePath, 'candidate_profile.yml')
-  }
-  if (!fs.existsSync(p)) return null
+export function readWorkspaceProfile(_workspacePath?: string): CandidateProfile | null {
+  if (!fs.existsSync(JHT_PROFILE_YAML)) return null
   try {
-    const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
+    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
     if (!raw) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null
-    // Rigetta il file template non compilato (valori placeholder dell'esempio)
     if (profile.name === 'Nome Cognome' || profile.email === 'nome.cognome@example.com') return null
     return profile
   } catch {
