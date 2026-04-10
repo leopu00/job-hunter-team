@@ -218,13 +218,62 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 
 ## 🐳 Docker — Roadmap future (non in Fase 1)
 
-> _Isolamento degli agenti dal filesystem host. Non urgente, ma il progetto e' gia' costruito per supportarlo senza refactor invasivi._
+> _Isolamento degli agenti dal filesystem host. Opzionale nel CLI, on-by-default nel DMG. Il progetto e' gia' costruito per supportarlo senza refactor invasivi._
 
 ### Motivazione
 
-Oggi gli agenti girano nativi sul sistema operativo dell'utente con `--dangerously-skip-permissions`. Funziona per Leone e per chiunque si fidi del tool, ma non e' accettabile per una distribuzione pubblica dove l'utente non puo' (e non vuole) verificare cosa fanno gli agenti sul suo filesystem.
+Oggi gli agenti girano nativi sul sistema operativo dell'utente con `--dangerously-skip-permissions`. Funziona per Leone e per chiunque si fidi del tool, ma non e' accettabile come default per una distribuzione pubblica dove l'utente non puo' (e non vuole) verificare cosa fanno gli agenti sul suo filesystem.
 
 Docker risolve isolando i processi agente in un container, che vede **solo** due cartelle bind-mounted: `~/.jht` (nascosta, DB/config/agenti) e `~/Documents/Job Hunter Team` (visibile, CV e output). Tutto il resto del filesystem host e' invisibile.
+
+### 📐 Policy di installazione
+
+Docker non e' una dipendenza obbligatoria ne' per il CLI ne' per il DMG, ma la **policy di default cambia in base al target utente**:
+
+```
+┌─ CLI one-liner (utenti tech) ────────────────────────────┐
+│                                                          │
+│  Default:     nativo (no Docker)                         │
+│  Flag:        --with-docker → installa e usa container   │
+│  Messaggio:   "Docker estremamente consigliato se JHT    │
+│                gira sul tuo PC quotidiano. Puoi saltarlo │
+│                se dedichi un PC/VM al team."             │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+
+┌─ DMG installer (utenti non-tech) ────────────────────────┐
+│                                                          │
+│  Default:     Docker ON — sempre installato e usato      │
+│  Flag:        (nessuno — non esposto all'utente)         │
+│  Motivazione: un utente che scarica un .dmg e installa   │
+│               "tutto" non puo' valutare i rischi di      │
+│               agenti AI con privilegi root-like. Il      │
+│               container e' l'unica garanzia che un       │
+│               eventuale danno resti contenuto.           │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 🎯 Due profili d'uso
+
+| Profilo | Ambiente | Docker consigliato? |
+|---------|----------|----------------------|
+| **PC personale quotidiano** | Il Mac/Linux che usi per tutto | ⭐ **Fortemente consigliato** |
+| **Workstation dedicata** | PC/VM usato SOLO per il team JHT | Opzionale (già isolato) |
+| **Server cloud (AWS/Hetzner)** | VM remota | Opzionale (già isolato) |
+| **Utente non-tech (DMG)** | Mac/Windows home, prima esperienza | 🔒 **Default attivo, non disattivabile** |
+
+### 🧰 Runtime container per piattaforma
+
+Non usiamo **Docker Desktop** perche' richiede EULA/GUI/interazione manuale. Usiamo alternative scriptabili:
+
+| OS | Runtime | Perche' |
+|----|---------|---------|
+| 🍎 macOS | **Colima** (`brew install colima docker`) | FOSS Apache 2.0, no GUI, no EULA, scriptable 100%, stesso `docker` CLI |
+| 🐧 Linux | **docker.io nativo** (`apt/dnf/pacman`) | Standard, zero frizione |
+| 🪟 Windows | **docker.io in WSL2** (non Docker Desktop) | JHT gira gia' in WSL2, saltiamo il layer Docker Desktop commerciale |
+
+Colima su Mac e' critico: Docker Desktop richiede all'utente di aprire l'app, accettare EULA e dare password admin. Colima gira in background come daemon, espone lo stesso `docker` CLI, e **puo' essere installato completamente via script**.
 
 ### 📋 Requisiti gia' soddisfatti
 
@@ -284,25 +333,60 @@ CI che su tag git:
   - docker push ghcr.io/leopu00/jht:v0.x.y
 L'utente: `docker pull ghcr.io/leopu00/jht:latest`
 
-Step 5: Integrazione nel DMG installer
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Il DMG (percorso non-tech) rileva se Docker Desktop e' installato e,
-se si', avvia JHT in container; altrimenti fallback modalita' nativa.
-L'utente non-tech ottiene isolamento automaticamente, senza sapere
-cosa sia Docker.
+Step 5: Flag --with-docker nel CLI installer
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+scripts/install.sh acquista un flag opt-in:
+
+  curl -fsSL .../install.sh | bash                      # nativo
+  curl -fsSL .../install.sh | bash -s -- --with-docker  # + Colima/Docker
+
+Con --with-docker lo script:
+  - Su macOS: brew install colima docker + colima start
+  - Su Linux: apt/dnf/pacman install docker.io + systemctl enable
+  - Su WSL:   apt install docker.io dentro WSL2
+Poi genera un wrapper `jht` che chiama docker run invece del
+processo nativo.
+
+Nel caso di install nativo (senza flag), il messaggio finale DEVE
+raccomandare Docker esplicitamente a chi usa il PC quotidiano:
+
+  "⚠️  JHT e' installato in modalita' nativa. Gli agenti avranno
+       accesso completo al tuo filesystem. Se stai usando il tuo
+       PC personale, considera fortemente di reinstallare con:
+           curl ... | bash -s -- --with-docker
+       Se invece hai dedicato un PC/VM solo a JHT, puoi ignorare."
+
+Step 6: DMG installer (Docker ON by default)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Il DMG (percorso non-tech) installa SEMPRE Colima+docker come parte
+del processo, senza chiedere all'utente, senza mostrare l'opzione.
+All'apertura del .dmg:
+  1. Estrae JHT.app in /Applications
+  2. Lancia post-install script che installa Colima via brew
+     (o bundled pkg se brew manca) e fa colima start
+  3. Prima esecuzione di JHT.app usa il container da subito
+
+L'utente non-tech non sa che esiste Docker: vede solo JHT che
+funziona. Il container e' la rete di sicurezza invisibile.
 ```
 
 ### 🎯 Quando farlo
 
-**Non prima** di:
-- Prima release stabile della piattaforma (Fase 2 completa: DMG installer funzionante)
-- Feedback da utenti early-adopter sulla modalita' nativa
-- Dimostrazione che almeno 10 utenti usano JHT senza problemi di isolamento
+**Milestone bloccanti:**
+- Il CLI installer (`scripts/install.sh`) deve arrivare a release stabile su `main` (fatto dopo merge `dev-4`).
+- Il DMG installer Fase 2 deve esistere in versione minimale (anche solo "installa JHT nativo + apre browser").
 
-**Trigger per prioritizzare:**
+**Ordine di implementazione consigliato:**
+1. Dockerfile minimale + smoke test (Step 1-3) — poche ore
+2. Image pre-buildata su GHCR via CI — mezza giornata
+3. Flag `--with-docker` nel CLI installer (Step 5) — mezza giornata
+4. DMG Docker-ON-by-default (Step 6) — **dipende da quando il team DMG e' pronto**, non bloccante per il CLI
+
+**Trigger per accelerare:**
 - Primo report di agente che fa qualcosa di indesiderato sul filesystem host
 - Richiesta esplicita da utenti "enterprise" o che lo vogliono provare senza installare Node/tmux
 - Domanda da parte di security reviewer per un audit pubblico
+- Crescita adozione DMG oltre 50 utenti (default safe diventa critico)
 
 ### ⚠️ Cose da NON fare finche' non si implementa Docker
 
