@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const JHT = path.join(os.homedir(), '.jht')
+const JHT = JHT_HOME
 const FORUM_PATH    = path.join(JHT, 'forum.log')
 const SENTINEL_PATH = path.join(JHT, 'sentinel-log.txt')
 
