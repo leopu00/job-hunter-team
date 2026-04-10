@@ -671,6 +671,23 @@ export function saveProfile(profile: UserProfile): void {
   writeWorkspaceProfileYaml(profile);
 }
 
+/** Resetta provider e auth dal workspace config (per forzare setup wizard al riavvio) */
+export function resetWorkspaceAuth(workspacePath?: string): void {
+  const configPath = getWorkspaceConfigPath(workspacePath);
+  if (!configPath) return;
+  try {
+    const cfg = loadJsonFile(configPath);
+    delete cfg.active_provider;
+    delete cfg.providers;
+    saveJsonFile(configPath, cfg);
+  } catch { /* ignora */ }
+  // Pulisci anche il global config
+  const globalCfg = loadConfig();
+  delete globalCfg.active_provider;
+  delete globalCfg.providers;
+  saveConfig(globalCfg);
+}
+
 export function isProfileComplete(profile: UserProfile): boolean {
   return !!(
     profile.nome &&
