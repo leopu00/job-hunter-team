@@ -26,9 +26,8 @@ const QUICK_COMMANDS_NAV = [
 
 const QUICK_COMMANDS_CONFIG = [
   ["1-7", "viste"],
-  ["Enter", "cartella"],
-  ["/setup", "api key"],
-  ["/profile", "profilo"],
+  ["↑↓", "naviga"],
+  ["Enter", "modifica"],
   ["Esc", "annulla"],
   ["Ctrl+C", "esci"],
 ];
