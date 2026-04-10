@@ -5,7 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export const JHT_CONFIG_DIR = path.join(os.homedir(), '.jht');
+// Path fissi JHT (specchio di shared/paths.ts, con override env var).
+// cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
+export const JHT_CONFIG_DIR = process.env.JHT_HOME || path.join(os.homedir(), '.jht');
 export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');
 
 export const AI_PROVIDERS = [
