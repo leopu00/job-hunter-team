@@ -1,33 +1,39 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
-import path from 'path'
 import { initDb } from '@/lib/db'
+import {
+  JHT_DB_PATH,
+  JHT_HOME,
+  JHT_PROFILE_DIR,
+  JHT_USER_DIR,
+  JHT_USER_CV_DIR,
+  JHT_USER_UPLOADS_DIR,
+  JHT_USER_OUTPUT_DIR,
+} from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}))
-  const wsPath = body.path as string | undefined
+export async function POST() {
+  const created = { home: false, userDir: false, db: false }
 
-  if (!wsPath) {
-    return NextResponse.json({ error: 'path richiesto' }, { status: 400 })
-  }
-
-  // Crea la directory se non esiste
   try {
-    fs.mkdirSync(wsPath, { recursive: true })
+    if (!fs.existsSync(JHT_HOME)) created.home = true
+    fs.mkdirSync(JHT_HOME, { recursive: true })
+    fs.mkdirSync(JHT_PROFILE_DIR, { recursive: true })
+
+    if (!fs.existsSync(JHT_USER_DIR)) created.userDir = true
+    fs.mkdirSync(JHT_USER_DIR, { recursive: true })
+    fs.mkdirSync(JHT_USER_CV_DIR, { recursive: true })
+    fs.mkdirSync(JHT_USER_UPLOADS_DIR, { recursive: true })
+    fs.mkdirSync(JHT_USER_OUTPUT_DIR, { recursive: true })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Impossibile creare la directory'
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const msg = err instanceof Error ? err.message : 'Impossibile creare le cartelle JHT'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  const created = { db: false, profile: false }
-
-  // Inizializza il database se non esiste
-  const dbPath = path.join(wsPath, 'jobs.db')
-  if (!fs.existsSync(dbPath)) {
+  if (!fs.existsSync(JHT_DB_PATH)) {
     try {
-      initDb(wsPath)
+      initDb()
       created.db = true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Errore creazione DB'
