@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { redirect } from 'next/navigation'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
@@ -39,6 +40,14 @@ function scoreBg(s?: number) {
 export default async function DashboardPage() {
   const locale = getServerLocale()
   const t = getDashboardT(locale)
+
+  // Gate: in modalità locale, senza profilo minimo, instrada all'onboarding
+  // invece di mostrare una dashboard vuota. Cloud mode resta view-only, niente gate.
+  if (!isSupabaseConfigured) {
+    const workspace = await getWorkspacePath()
+    const profile = workspace ? readWorkspaceProfile(workspace) : null
+    if (!profile) redirect('/onboarding')
+  }
 
   const [stats, positions, scoreDist, sourceDist] = await Promise.all([
     getDashboardStats(),
