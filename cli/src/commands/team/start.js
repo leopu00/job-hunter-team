@@ -5,8 +5,13 @@ import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, claudeAvailable, isSessionActive,
-  sessionName, parseAgentArg, resolveConfig, getWorkspace,
+  sessionName, parseAgentArg, resolveConfig, getAgentDir,
+  JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
+
+function shellEscape(value) {
+  return String(value).replace(/'/g, "'\\''");
+}
 
 export function startAction(agentArg, options) {
   if (!tmuxAvailable()) {
@@ -18,19 +23,14 @@ export function startAction(agentArg, options) {
     process.exit(1);
   }
 
-  const workspace = getWorkspace();
-  if (!workspace) {
-    console.error(c.red('Errore: JHT_WORKSPACE non configurato.'));
-    process.exit(1);
-  }
-
   const { repoRoot } = resolveConfig();
   const mode = options.mode || 'default';
   const targets = agentArg ? [agentArg] : DEFAULT_TEAM;
 
   console.log('');
   console.log(c.bold('Avvio agenti...'));
-  console.log(c.dim(`  Mode: ${mode} | Workspace: ${workspace}`));
+  console.log(c.dim(`  Mode: ${mode} | JHT_HOME: ${JHT_HOME}`));
+  console.log(c.dim(`  JHT_USER_DIR: ${JHT_USER_DIR}`));
   console.log('');
 
   let started = 0;
@@ -56,10 +56,7 @@ export function startAction(agentArg, options) {
     let effort = agent.effort;
     if (mode === 'fast') effort = 'low';
 
-    const agentDir = agent.multi
-      ? join(workspace, `${role}-${instance}`)
-      : join(workspace, role);
-
+    const agentDir = getAgentDir(role, agent.multi ? instance : null);
     if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true });
 
     if (repoRoot) {
@@ -68,8 +65,19 @@ export function startAction(agentArg, options) {
       if (!existsSync(dest) && existsSync(template)) copyFileSync(template, dest);
     }
 
+    const envVars = {
+      JHT_HOME,
+      JHT_USER_DIR,
+      JHT_DB: JHT_DB_PATH,
+      JHT_CONFIG: JHT_CONFIG_PATH,
+      JHT_AGENT_DIR: agentDir,
+    };
+
     try {
       execSync(`tmux new-session -d -s "${sName}" -c "${agentDir}"`, { stdio: 'ignore' });
+      for (const [k, v] of Object.entries(envVars)) {
+        execSync(`tmux send-keys -t "${sName}" "export ${k}='${shellEscape(v)}'" C-m`, { stdio: 'ignore' });
+      }
       execSync(`tmux send-keys -t "${sName}" "claude --dangerously-skip-permissions --effort ${effort}" C-m`, { stdio: 'ignore' });
       spawn('bash', ['-c', `sleep 4 && tmux send-keys -t "${sName}" Enter && sleep 3 && tmux send-keys -t "${sName}" Enter`], {
         detached: true, stdio: 'ignore',

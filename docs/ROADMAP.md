@@ -213,3 +213,103 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 | 💰 **Costo** | Pay-per-use: avvii → lavora → spegni |
 | 🤖 **Agenti** | Girano sulla VM cloud |
 | 📡 **Monitoring** | GUI web + launcher desktop |
+
+---
+
+## 🐳 Docker — Roadmap future (non in Fase 1)
+
+> _Isolamento degli agenti dal filesystem host. Non urgente, ma il progetto e' gia' costruito per supportarlo senza refactor invasivi._
+
+### Motivazione
+
+Oggi gli agenti girano nativi sul sistema operativo dell'utente con `--dangerously-skip-permissions`. Funziona per Leone e per chiunque si fidi del tool, ma non e' accettabile per una distribuzione pubblica dove l'utente non puo' (e non vuole) verificare cosa fanno gli agenti sul suo filesystem.
+
+Docker risolve isolando i processi agente in un container, che vede **solo** due cartelle bind-mounted: `~/.jht` (nascosta, DB/config/agenti) e `~/Documents/Job Hunter Team` (visibile, CV e output). Tutto il resto del filesystem host e' invisibile.
+
+### 📋 Requisiti gia' soddisfatti
+
+La centralizzazione path del refactor `dev-4` ha gia' preparato il terreno:
+
+```
+✅ Stato persistente in due cartelle sole (JHT_HOME + JHT_USER_DIR)
+✅ Path configurabili via env var (override per bind-mount)
+✅ Nessun side-effect sul sistema host (no scrittura in ~/.bashrc ecc.)
+⚠️ TUI usa `open`/`explorer`/`xdg-open` per aprire Finder — va gated
+   dietro un check "are we inside a container?" (env var IS_CONTAINER o
+   presenza di /.dockerenv)
+```
+
+### 🗺️ Fasi implementazione Docker
+
+```
+Step 1: Dockerfile minimale
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+FROM node:20-alpine
+RUN apk add tmux git bash
+RUN npm install -g @anthropic-ai/claude-cli
+COPY . /app
+WORKDIR /app
+ENV JHT_HOME=/jht_home
+ENV JHT_USER_DIR=/jht_user
+ENTRYPOINT ["node", "cli/bin/jht.js"]
+
+Step 2: docker-compose.yml
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+services:
+  jht:
+    build: .
+    volumes:
+      - ~/.jht:/jht_home
+      - ~/Documents/Job Hunter Team:/jht_user
+    environment:
+      - ANTHROPIC_API_KEY
+    ports:
+      - "3000:3000"  # web dashboard
+    stdin_open: true
+    tty: true        # per la TUI
+
+Step 3: Wrapper `jht-docker`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Script bash che fa:
+  docker run --rm -it \
+    -v ~/.jht:/jht_home \
+    -v "$HOME/Documents/Job Hunter Team:/jht_user" \
+    -e ANTHROPIC_API_KEY \
+    ghcr.io/leopu00/jht:latest
+
+Step 4: Image pre-buildata su GitHub Container Registry
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CI che su tag git:
+  - docker build
+  - docker push ghcr.io/leopu00/jht:v0.x.y
+L'utente: `docker pull ghcr.io/leopu00/jht:latest`
+
+Step 5: Integrazione nel DMG installer
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Il DMG (percorso non-tech) rileva se Docker Desktop e' installato e,
+se si', avvia JHT in container; altrimenti fallback modalita' nativa.
+L'utente non-tech ottiene isolamento automaticamente, senza sapere
+cosa sia Docker.
+```
+
+### 🎯 Quando farlo
+
+**Non prima** di:
+- Prima release stabile della piattaforma (Fase 2 completa: DMG installer funzionante)
+- Feedback da utenti early-adopter sulla modalita' nativa
+- Dimostrazione che almeno 10 utenti usano JHT senza problemi di isolamento
+
+**Trigger per prioritizzare:**
+- Primo report di agente che fa qualcosa di indesiderato sul filesystem host
+- Richiesta esplicita da utenti "enterprise" o che lo vogliono provare senza installare Node/tmux
+- Domanda da parte di security reviewer per un audit pubblico
+
+### ⚠️ Cose da NON fare finche' non si implementa Docker
+
+Per mantenere il progetto "Docker-ready" senza bloccare lo sviluppo:
+
+1. **Non aggiungere side-effects sul sistema host** (installazione globale di tool, scrittura in `~/.bashrc`, modifica di `~/Library`, ecc.)
+2. **Non hardcodare comandi OS-specific senza fallback** (es. `open ...` su macOS → gated behind platform check)
+3. **Non usare path assoluti fuori da `JHT_HOME`/`JHT_USER_DIR`** (es. `/usr/local/...`, `/etc/...`)
+4. **Non aprire porte di rete diverse da 3000** (web dashboard), altrimenti il port-forwarding Docker si complica
+5. **Non scrivere dentro `node_modules` a runtime** (sarebbe read-only nel container)

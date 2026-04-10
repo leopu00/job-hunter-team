@@ -3,10 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { randomUUID } from 'crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_DIR = path.join(os.homedir(), '.jht')
+const STORE_DIR = JHT_HOME
 const STORE_PATH = path.join(STORE_DIR, 'messages.json')
 
 interface Message { id: string; body: string; fromMe: boolean; timestamp: number }

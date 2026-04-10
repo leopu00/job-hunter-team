@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CRON_DIR   = path.join(os.homedir(), '.jht', 'cron')
+const CRON_DIR   = path.join(JHT_HOME, 'cron')
 const CRON_STORE = path.join(CRON_DIR, 'jobs.json')
 
 interface StoreFile { version: 1; jobs: Array<Record<string, unknown>> }
