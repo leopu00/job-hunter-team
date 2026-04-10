@@ -2,9 +2,16 @@ use std::process::Command;
 use crate::config::{self, SetupConfig};
 use crate::log::log;
 
+/// Paths where Homebrew and common user-installed CLIs live on macOS.
+/// Apps launched from Finder don't inherit the user's shell PATH, so we
+/// prepend them explicitly to every shell invocation.
+const EXTRA_PATHS: &str =
+    "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+
 fn sh(script: &str) -> Result<String, String> {
+    let wrapped = format!("export PATH={}:$PATH; {}", EXTRA_PATHS, script);
     let output = Command::new("/bin/bash")
-        .args(["-lc", script])
+        .args(["-c", &wrapped])
         .output()
         .map_err(|e| format!("Shell command failed: {}", e))?;
 
@@ -21,15 +28,114 @@ fn has(cmd: &str) -> bool {
     sh(&format!("command -v {}", cmd)).is_ok()
 }
 
-pub fn check_prerequisites() -> Result<(), String> {
-    if !has("git") {
-        return Err(
-            "git is not installed.\n\nInstall Xcode Command Line Tools:\n\nxcode-select --install"
-                .to_string(),
-        );
+/// Show a native AppleScript info dialog.
+fn notify(title: &str, message: &str) {
+    let script = format!(
+        r#"display dialog "{}" with icon note with title "{}" buttons {{"OK"}} default button 1"#,
+        escape_applescript(message),
+        escape_applescript(title)
+    );
+    let _ = Command::new("osascript").args(["-e", &script]).output();
+}
+
+fn escape_applescript(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Install Homebrew non-interactively. Asks the user for the macOS password
+/// via a native AppleScript dialog, caches sudo credentials, then runs the
+/// official install script with NONINTERACTIVE=1 so it never stops for
+/// keyboard input.
+fn install_homebrew() -> Result<(), String> {
+    log("Installing Homebrew...");
+
+    let install_script = r#"
+set -e
+pw=$(osascript <<'APPLESCRIPT' 2>/dev/null
+try
+  set dlg to display dialog "Per installare Homebrew (il gestore pacchetti usato per tmux e Node.js) serve la password del tuo Mac." default answer "" with hidden answer with icon note with title "JHT Desktop - Installazione dipendenze"
+  return text returned of dlg
+on error
+  return ""
+end try
+APPLESCRIPT
+)
+
+if [ -z "$pw" ]; then
+  echo "__JHT_CANCELLED__" >&2
+  exit 2
+fi
+
+if ! echo "$pw" | sudo -S -v 2>/dev/null; then
+  echo "__JHT_BAD_PASSWORD__" >&2
+  exit 3
+fi
+
+# Keep sudo credentials alive during install
+( while true; do sudo -n true; sleep 50; kill -0 "$$" || exit; done ) 2>/dev/null &
+SUDO_KEEPALIVE=$!
+trap 'kill $SUDO_KEEPALIVE 2>/dev/null' EXIT
+
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+"#;
+
+    let output = Command::new("/bin/bash")
+        .args(["-c", install_script])
+        .output()
+        .map_err(|e| format!("Cannot run Homebrew installer: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let code = output.status.code().unwrap_or(-1);
+        log(&format!(
+            "Homebrew install failed (exit {}): {}",
+            code, stderr
+        ));
+        let msg = if stderr.contains("__JHT_CANCELLED__") {
+            "Installazione annullata."
+        } else if stderr.contains("__JHT_BAD_PASSWORD__") {
+            "Password errata. Riprova."
+        } else {
+            "Installazione di Homebrew fallita. Controlla la connessione internet e riprova."
+        };
+        return Err(msg.to_string());
     }
-    log("git OK");
+
+    log("Homebrew installed");
     Ok(())
+}
+
+/// Auto-install the Xcode Command Line Tools (which brings git) if missing.
+/// `xcode-select --install` triggers the native macOS installer dialog; we
+/// then poll until the install finishes.
+fn install_xcode_clt() -> Result<(), String> {
+    log("Requesting Xcode Command Line Tools install...");
+    notify(
+        "JHT Desktop - Installazione dipendenze",
+        "Serve installare gli Xcode Command Line Tools (include git).\n\nSi aprira' la finestra ufficiale di Apple: clicca \"Installa\" e attendi il completamento, poi torna qui.",
+    );
+
+    let _ = Command::new("xcode-select")
+        .arg("--install")
+        .output();
+
+    // Poll up to 10 minutes for the install to finish
+    for _ in 0..120 {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        if has("git") {
+            log("Xcode Command Line Tools installed");
+            return Ok(());
+        }
+    }
+    Err("Installazione dei Command Line Tools non completata in tempo. Riapri JHT Desktop una volta installati.".to_string())
+}
+
+pub fn check_prerequisites() -> Result<(), String> {
+    if has("git") {
+        log("git OK");
+        return Ok(());
+    }
+    install_xcode_clt()
 }
 
 pub fn ensure_tmux() -> Result<(), String> {
@@ -38,13 +144,10 @@ pub fn ensure_tmux() -> Result<(), String> {
         return Ok(());
     }
     if !has("brew") {
-        return Err(
-            "tmux is not installed and Homebrew is not available.\n\nInstall Homebrew first:\n\n/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n\nThen retry."
-                .to_string(),
-        );
+        install_homebrew()?;
     }
     log("Installing tmux via Homebrew...");
-    sh("brew install tmux").map_err(|e| format!("brew install tmux failed:\n{}", e))?;
+    sh("brew install tmux").map_err(|e| format!("Installazione di tmux fallita:\n{}", e))?;
     log("tmux installed");
     Ok(())
 }
@@ -55,39 +158,36 @@ pub fn ensure_node() -> Result<(), String> {
         return Ok(());
     }
     if !has("brew") {
-        return Err(
-            "Node.js is not installed and Homebrew is not available.\n\nInstall Homebrew first, then retry."
-                .to_string(),
-        );
+        install_homebrew()?;
     }
     log("Installing Node.js via Homebrew...");
-    sh("brew install node").map_err(|e| format!("brew install node failed:\n{}", e))?;
+    sh("brew install node").map_err(|e| format!("Installazione di Node.js fallita:\n{}", e))?;
     log("Node.js installed");
     Ok(())
 }
 
 pub fn check_ai_cli(cfg: &SetupConfig) -> Result<(), String> {
-    let cli = match cfg.provider.as_str() {
-        "anthropic" => "claude",
-        "kimi" => "kimik2",
-        "openai" => "codex",
-        _ => "claude",
+    let (cli, npm_pkg) = match cfg.provider.as_str() {
+        "anthropic" => ("claude", "@anthropic-ai/claude-code"),
+        "kimi" => ("kimik2", "kimik2-cli"),
+        "openai" => ("codex", "@openai/codex"),
+        _ => ("claude", "@anthropic-ai/claude-code"),
     };
     if has(cli) {
         log(&format!("{} CLI found", cli));
-        Ok(())
-    } else {
-        let install_hint = match cli {
-            "claude" => "npm install -g @anthropic-ai/claude-code",
-            "codex" => "npm install -g @openai/codex",
-            "kimik2" => "npm install -g kimik2-cli",
-            _ => "npm install -g @anthropic-ai/claude-code",
-        };
-        Err(format!(
-            "{} CLI not found.\n\nInstall it globally with npm:\n\n{}",
-            cli, install_hint
-        ))
+        return Ok(());
     }
+    if !has("npm") {
+        return Err(format!(
+            "Il CLI {} non e' installato e npm non e' disponibile. Riprova dopo che Node.js sara' stato installato.",
+            cli
+        ));
+    }
+    log(&format!("Installing {} CLI via npm...", cli));
+    sh(&format!("npm install -g {}", npm_pkg))
+        .map_err(|e| format!("Installazione di {} non riuscita:\n{}", cli, e))?;
+    log(&format!("{} CLI installed", cli));
+    Ok(())
 }
 
 pub fn ensure_repo() -> Result<(), String> {
@@ -163,6 +263,7 @@ pub fn start_web_server() -> Result<u16, String> {
     Ok(port)
 }
 
+#[allow(dead_code)]
 pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     let repo_dir = config::repo_dir();
     let repo_str = repo_dir.display().to_string();
