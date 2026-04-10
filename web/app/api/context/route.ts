@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
-const HISTORY_PATH = path.join(os.homedir(), '.jht', 'history.json')
+const CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json')
+const HISTORY_PATH = path.join(JHT_HOME, 'history.json')
 
 function readJSON<T>(filePath: string, fallback: T): T {
   try {
