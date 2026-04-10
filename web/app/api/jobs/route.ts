@@ -15,7 +15,7 @@ const JOBS_PATH = path.join(os.homedir(), '.jht', 'jobs.json');
 
 function loadJobs(): Job[] {
   try { return JSON.parse(fs.readFileSync(JOBS_PATH, 'utf-8')); }
-  catch { return generateSampleJobs(); }
+  catch { return []; }
 }
 
 function generateSampleJobs(): Job[] {

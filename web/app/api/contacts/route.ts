@@ -15,7 +15,7 @@ const CONTACTS_PATH = path.join(os.homedir(), '.jht', 'contacts.json');
 
 function load(): Contact[] {
   try { return JSON.parse(fs.readFileSync(CONTACTS_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function save(data: Contact[]): void {
