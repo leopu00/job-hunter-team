@@ -1,6 +1,6 @@
 /**
  * HomePanel — pagina Config iniziale della TUI.
- * Mostra solo gli elementi necessari per completare il setup.
+ * Lista navigabile di opzioni di configurazione.
  */
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
@@ -9,113 +9,101 @@ import { getMissingProfileFields, getProfileCompletion, isProfileComplete, loadP
 import { loadApiKey, loadProviderConfig } from "../tui-client.js";
 
 const DEFAULT_TERMINAL_WIDTH = 100;
-const MAX_BOX_WIDTH = 54;
 
 function getTerminalWidth(): number {
   return Math.max(process.stdout.columns ?? DEFAULT_TERMINAL_WIDTH, 60);
 }
 
-function truncatePath(value: string, width: number): string {
-  if (width <= 0) return "";
-  if (value.length <= width) return value;
-  if (width === 1) return "…";
-  return `…${value.slice(-(width - 1))}`;
-}
-
-function wrapPlain(value: string, width: number): string[] {
-  if (width <= 0) return [""];
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= width) {
-      current = candidate;
-      continue;
-    }
-    if (current) lines.push(current);
-    current = word;
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function padPlain(value: string, width: number): string {
-  if (value.length >= width) return value;
-  return value + " ".repeat(width - value.length);
-}
-
-function createWorkspaceBox(workspace: string, isSelected: boolean, maxWidth: number): string[] {
-  const title = isSelected ? "❯ 📁 Cartella di lavoro" : "📁 Cartella di lavoro";
-  const workspaceText = workspace ? truncatePath(workspace, maxWidth) : "(non impostata)";
-  const innerWidth = Math.max(title.length, workspaceText.length);
-  const border = isSelected ? theme.borderSelected : theme.border;
-  const titleText = isSelected
-    ? theme.bold(theme.accent(padPlain(title, innerWidth)))
-    : theme.accent(padPlain(title, innerWidth));
-  return [
-    ` ${border("┌" + "─".repeat(innerWidth + 2) + "┐")}`,
-    ` ${border("│")} ${titleText} ${border("│")}`,
-    ` ${border("├" + "─".repeat(innerWidth + 2) + "┤")}`,
-    ` ${border("│")} ${theme.dim(padPlain(workspaceText, innerWidth))} ${border("│")}`,
-    ` ${border("└" + "─".repeat(innerWidth + 2) + "┘")}`,
-  ];
-}
-
-function checklistRow(done: boolean, label: string): string {
-  const icon = done ? theme.accent("✓") : theme.dim("○");
-  const text = done ? theme.text(label) : theme.dim(label);
-  return `     ${icon} ${text}`;
-}
+type ConfigItem = {
+  id: string;
+  label: string;
+  status: "done" | "todo" | "optional";
+  value?: string;
+};
 
 export class HomePanel extends Container {
+  private items: ConfigItem[] = [];
+  private selectedIndex = 0;
+
   refresh(_sessions: TmuxSession[]) {
     this.clear();
+    this.items = this.buildItems();
 
-    const workspace = loadWorkspacePath();
-    const profile = loadProfile();
-    const profileCompletion = getProfileCompletion(profile);
-    const profileComplete = isProfileComplete(profile);
-    const missingFields = getMissingProfileFields(profile);
-    const providerConfig = loadProviderConfig();
-    const apiConfigured = Boolean(loadApiKey());
     const terminalWidth = getTerminalWidth();
     const contentWidth = Math.max(terminalWidth - 8, 24);
-    const boxWidth = Math.min(MAX_BOX_WIDTH, Math.max(contentWidth - 4, 28));
 
     this.add("");
-    for (const line of createWorkspaceBox(workspace, true, boxWidth)) {
+    this.add(`  ${theme.accent("Configurazione")}`);
+    this.add("");
+
+    for (let i = 0; i < this.items.length; i++) {
+      const item = this.items[i];
+      const isSelected = i === this.selectedIndex;
+      const line = this.renderItem(item, isSelected, contentWidth);
       this.add(line);
     }
+
     this.add("");
-
-    this.add(`  ${theme.accent("Setup")}`);
-    this.add(checklistRow(Boolean(workspace), "Cartella di lavoro configurata"));
-    this.add(checklistRow(Boolean(providerConfig), providerConfig ? `Provider ${providerConfig.provider} configurato` : "Provider AI configurato"));
-    this.add(checklistRow(apiConfigured, "API key configurata per questa cartella"));
-    this.add(checklistRow(profileComplete, profileComplete ? "Profilo completo" : `Profilo ${profileCompletion.percent}%`));
-
-    if (!providerConfig || !apiConfigured) {
-      this.add(`       ${theme.dim("Usa il wizard setup per completare provider e chiave")}`);
-    }
-    if (!profileComplete) {
-      this.add(`       ${theme.dim("Usa /profile per completare il profilo")}`);
-      for (const line of wrapPlain(`Manca: ${missingFields.join(", ")}`, contentWidth - 7)) {
-        this.add(`       ${theme.dim(line)}`);
-      }
-    }
+    this.add(`  ${theme.dim("↑↓ seleziona  •  Enter modifica  •  1-7 cambia vista")}`);
   }
 
-  moveSelection(_delta: number): boolean {
+  private buildItems(): ConfigItem[] {
+    const workspace = loadWorkspacePath();
+    const providerConfig = loadProviderConfig();
+    const apiKey = loadApiKey();
+    const profile = loadProfile();
+    const profileComplete = isProfileComplete(profile);
+    const profileCompletion = getProfileCompletion(profile);
+
+    return [
+      {
+        id: "workspace",
+        label: "Cartella di lavoro",
+        status: workspace ? "done" : "todo",
+        value: workspace || undefined,
+      },
+      {
+        id: "provider",
+        label: "Provider AI",
+        status: providerConfig ? "done" : "todo",
+        value: providerConfig?.provider,
+      },
+      {
+        id: "apikey",
+        label: "API Key",
+        status: apiKey ? "done" : "todo",
+        value: apiKey ? "****************" : undefined,
+      },
+      {
+        id: "profile",
+        label: "Profilo",
+        status: profileComplete ? "done" : profileCompletion.percent > 0 ? "optional" : "todo",
+        value: profileComplete ? "Completato" : `${profileCompletion.percent}%`,
+      },
+    ];
+  }
+
+  private renderItem(item: ConfigItem, isSelected: boolean, _width: number): string {
+    const icon = item.status === "done" ? theme.accent("[✓]") : item.status === "optional" ? theme.dim("[~]") : theme.dim("[ ]");
+    const label = isSelected ? theme.bold(theme.accent("> " + item.label)) : "  " + item.label;
+    const value = item.value ? theme.dim(` (${item.value})`) : "";
+    
+    return `  ${icon} ${label}${value}`;
+  }
+
+  moveSelection(delta: number): boolean {
+    const newIndex = this.selectedIndex + delta;
+    if (newIndex >= 0 && newIndex < this.items.length) {
+      this.selectedIndex = newIndex;
+      return true;
+    }
     return false;
   }
 
-  getSelectedItem():
-    | { type: "workspace"; label: string }
-    | null {
-    return { type: "workspace", label: "cambia cartella" };
+  getSelectedItem(): { type: string; label: string } | null {
+    const item = this.items[this.selectedIndex];
+    if (!item) return null;
+    return { type: item.id, label: item.label };
   }
 
   private add(text: string) {
