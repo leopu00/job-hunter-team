@@ -1,5 +1,6 @@
-use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -64,21 +65,29 @@ pub fn run(existing: Option<SetupConfig>) {
         .with_ipc_handler(move |msg| {
             let body = msg.body();
             if body == "browse" {
-                // Open native folder picker via PowerShell
-                let output = std::process::Command::new("powershell.exe")
-                    .args([
-                        "-NoProfile", "-STA", "-Command",
-                        r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Select working directory'; $d.ShowNewFolderButton = $true; if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"#,
-                    ])
-                    .output();
-                if let Ok(out) = output {
-                    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    if !path.is_empty() {
-                        let escaped = path.replace('\\', "\\\\");
-                        let js = format!("document.getElementById('workDir').value='{}'", escaped);
-                        let _ = proxy_browse.send_event(UserEvent::EvalJs(js));
+                let proxy_b = proxy_browse.clone();
+                // Run in separate thread so webview doesn't freeze
+                std::thread::spawn(move || {
+                    // Use modern IFileOpenDialog via PowerShell
+                    let script = r#"
+                        Add-Type -AssemblyName Microsoft.VisualBasic
+                        $app = New-Object -ComObject Shell.Application
+                        $folder = $app.BrowseForFolder(0, 'Select working directory', 0x40 + 0x10, 0)
+                        if ($folder) { Write-Output $folder.Self.Path }
+                    "#;
+                    let output = std::process::Command::new("powershell.exe")
+                        .args(["-NoProfile", "-Command", script])
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .output();
+                    if let Ok(out) = output {
+                        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if !path.is_empty() {
+                            let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
+                            let js = format!("document.getElementById('workDir').value='{}'", escaped);
+                            let _ = proxy_b.send_event(UserEvent::EvalJs(js));
+                        }
                     }
-                }
+                });
             } else if body.starts_with("submit:") {
                 let json = &body[7..];
                 if let Some(cfg) = parse_submit(json) {
