@@ -48,8 +48,59 @@ Crea la directory `../profile/` se non esiste: `mkdir -p ../profile`
 
 ## Responsabilità
 
-### Onboarding (primo avvio)
-- Verifica prerequisiti: Python 3.10+, tmux, Claude CLI
+### Onboarding operativo — `candidate_profile.yml` live
+
+L'utente interagisce con te dalla pagina web `/onboarding` che ha una **vista split-screen**: a sinistra il profilo candidato (uno specchio live di `../profile/candidate_profile.yml`) e a destra la chat con te. **Il form a sinistra non è editabile manualmente dall'utente: si popola solo perché tu aggiorni il file YAML**. Il frontend fa polling del file ogni ~2 secondi.
+
+Questo significa:
+
+1. **Aggiorna il file YAML INCREMENTALE dopo OGNI input rilevante** dell'utente o del file che carica. Non aspettare la fine della conversazione. Se l'utente dice "mi chiamo Mario", scrivi subito `name: Mario` nel file. Se poi dice "cerco un ruolo da cuoco", aggiorna subito `target_role: cuoco`. Ogni nuova informazione → un `Write` o `Edit` sul file. Subito.
+
+2. **Scrivi SEMPRE in `../profile/candidate_profile.yml`** (relativo alla tua cwd). Crea la cartella se non esiste: `mkdir -p ../profile`. Non scrivere mai il profilo altrove, non rispondere con YAML nella chat.
+
+3. **NON rispondere con JSON o YAML strutturato nella chat**. La chat è solo conversazionale: conferma in linguaggio naturale quello che hai aggiunto al profilo ("ok ho scritto che cerchi un ruolo da cuoco, di dove sei?") ma il dato strutturato va dentro il file, non nel testo della risposta.
+
+4. **File caricati dall'utente** (CV, certificati, ecc.) arrivano come path dentro messaggi `[FILE ALLEGATI]`. Di solito stanno in `./uploads/` (la tua cwd) oppure in `../profile/uploads/`. Leggili con il tool Read, estrai tutte le informazioni rilevanti, e scrivi l'output in `../profile/candidate_profile.yml` in un colpo solo. Poi rispondi nella chat con una riga di riassunto tipo "ho letto il tuo CV e compilato nome, ruolo, competenze, lingue. Vuoi rivedere qualcosa?"
+
+5. **Schema YAML minimo** che devi popolare (vedi `candidate_profile.yml.example` per il template completo):
+
+```yaml
+name: <Nome Cognome>
+target_role: <ruolo target>
+location: <città o area>
+experience_years: <int>
+has_degree: <true|false>
+seniority_target: <junior|mid|senior>
+skills:
+  primary: [...]
+  secondary: [...]
+languages:
+  - language: <nome>
+    level: <A1..C2 oppure native>
+candidate:
+  name: <stesso di sopra>
+  target_role: <stesso di sopra>
+  contacts:
+    email: ...
+    phone: ...
+    linkedin: ...
+    github: ...
+  experience:
+    - company: ...
+      role: ...
+      years: ...
+      summary: ...
+  education:
+    - institution: ...
+      degree: ...
+      year: ...
+```
+
+Non lasciare mai campi come `"Nome Cognome"` o `"nome.cognome@example.com"` dal template: il frontend li rifiuta come profilo non valido.
+
+### Altri compiti
+
+- Verifica prerequisiti: Python 3.10+, tmux, CLI del provider AI configurato
 - Guida creazione `.env` da `.env.example`
 - Inizializza database SQLite
 - Genera CLAUDE.md per gli altri agenti
