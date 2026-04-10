@@ -1,4 +1,4 @@
-name: Deploy Web → Vercel
+name: Verify Vercel Production Link
 
 on:
   push:
@@ -7,24 +7,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Vercel
+  verify:
+    name: Verify Vercel production branch
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - name: Check required secrets
-        run: |
-          missing=""
-          [ -z "${{ secrets.VERCEL_TOKEN }}" ]      && missing="$missing VERCEL_TOKEN"
-          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]     && missing="$missing VERCEL_ORG_ID"
-          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ] && missing="$missing VERCEL_PROJECT_ID"
-          if [ -n "$missing" ]; then
-            echo "❌ Secret mancanti in GitHub → Settings → Secrets → Actions:"
-            echo "  $missing"
-            echo "Ottieni i valori da: https://vercel.com/account/tokens"
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -32,28 +21,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
-
-      - name: Install Vercel CLI
-        run: npm install --global vercel@50.41.0
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Verify linked Vercel project
+        run: node .github/scripts/verify-vercel-production.mjs
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build project
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --archive=tgz --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
