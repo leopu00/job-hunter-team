@@ -63,6 +63,12 @@ function getRustLauncherInfo(): { exists: boolean; size: string | null } {
   return { exists, size: exists ? getFileSize(launcherPath) : null };
 }
 
+function getRustDmgInfo(): { exists: boolean; size: string | null } {
+  const dmgPath = path.join(process.cwd(), 'public', 'downloads', 'jht-launcher.dmg');
+  const exists = fs.existsSync(dmgPath);
+  return { exists, size: exists ? getFileSize(dmgPath) : null };
+}
+
 function formatBytes(bytes: number | null | undefined): string | null {
   if (!Number.isFinite(bytes) || !bytes || bytes <= 0) return null;
   const mb = bytes / (1024 * 1024);
@@ -218,6 +224,22 @@ export async function GET() {
   const platforms: PlatformInfo[] = defaults.map((platform) => {
     // Windows uses the local Rust launcher — skip GitHub release lookup
     if (platform.id === 'windows') return platform;
+
+    // Mac: prefer local Rust launcher DMG if present
+    if (platform.id === 'mac') {
+      const localDmg = getRustDmgInfo();
+      if (localDmg.exists) {
+        return {
+          ...platform,
+          file: 'jht-launcher.dmg',
+          size: localDmg.size,
+          instructions: getPlatformInstructions('mac', 'dmg', true),
+          downloadUrl: '/downloads/jht-launcher.dmg',
+          available: true,
+          format: 'dmg',
+        };
+      }
+    }
 
     const extensions = platform.id === 'mac'
       ? ['.dmg']
