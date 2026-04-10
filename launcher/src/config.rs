@@ -34,10 +34,33 @@ pub fn workspace_config_path(workspace: &std::path::Path) -> PathBuf {
 }
 
 pub fn app_dir() -> PathBuf {
-    std::env::var("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(APP_DIR_NAME)
+    #[cfg(windows)]
+    {
+        std::env::var("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(APP_DIR_NAME)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join(APP_DIR_NAME)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        PathBuf::from(home).join(".local").join("share").join(APP_DIR_NAME)
+    }
+}
+
+pub fn default_workspace() -> PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default();
+    PathBuf::from(home).join("JHT")
 }
 
 pub fn repo_dir() -> PathBuf {
