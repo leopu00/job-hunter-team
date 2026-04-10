@@ -11,7 +11,7 @@ import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
 import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { ensureWorkspaceConfigured, saveApiKey } from "./tui-setup.js";
+import { ensureWorkspaceConfigured, saveApiKey, runSetupWizard } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
@@ -240,9 +240,10 @@ export async function runJhtTui() {
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
   let isEditingWorkspace = false;
+  let isEditingApiKey = false;
   const updateInputLine = () => {
-    // In home/team: nessun input visibile (navigazione pura), salvo editor cartella
-    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace) {
+    // In home/team: nessun input visibile (navigazione pura), salvo editor cartella/apikey
+    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace && !isEditingApiKey) {
       inputLine.setText("");
       return;
     }
@@ -253,6 +254,10 @@ export async function runJhtTui() {
     }
     if (state.currentView === "home" && isEditingWorkspace) {
       inputLine.setText(`\x1b[32m  workspace > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
+      return;
+    }
+    if (state.currentView === "home" && isEditingApiKey) {
+      inputLine.setText(`\x1b[32m  api key > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     const viewLabel = state.currentView === "chat" && state.chatTargetSession
@@ -473,6 +478,26 @@ export async function runJhtTui() {
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
       } else if (state.currentView === "home") {
+        if (isEditingApiKey) {
+          // Salva API key
+          const key = inputBuffer.trim();
+          inputBuffer = "";
+          isEditingApiKey = false;
+          updateInputLine();
+          tui.requestRender();
+          if (key) {
+            if (key.startsWith("sk-ant-")) {
+              const ok = commandContext.reconnect?.(key);
+              setActivityStatus(ok ? "api key salvata" : "errore connessione");
+            } else {
+              setActivityStatus("chiave deve iniziare con sk-ant-");
+            }
+          } else {
+            setActivityStatus("idle");
+          }
+          return { consume: true };
+        }
+        
         const selectedItem = homePanel.getSelectedItem();
         if (!selectedItem) return { consume: true };
         
@@ -484,10 +509,16 @@ export async function runJhtTui() {
             updateInputLine();
             tui.requestRender();
             break;
-          case "provider":
           case "apikey":
-            setActivityStatus("avvio setup...");
-            void handleCommand("/setup");
+            isEditingApiKey = true;
+            inputBuffer = loadApiKey() || "";
+            setActivityStatus("inserisci api key");
+            updateInputLine();
+            tui.requestRender();
+            break;
+          case "provider":
+            setActivityStatus("provider: usa /setup <key>");
+            tui.requestRender();
             break;
           case "profile":
             setActivityStatus("avvio wizard profilo...");
