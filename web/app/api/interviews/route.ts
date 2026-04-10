@@ -16,7 +16,7 @@ const INT_PATH = path.join(os.homedir(), '.jht', 'interviews.json');
 
 function loadInterviews(): Interview[] {
   try { return JSON.parse(fs.readFileSync(INT_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function generateSample(): Interview[] {
