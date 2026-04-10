@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import type { CandidateProfile } from '@/lib/types'
 import ProfilePageClient from '@/components/ProfilePageClient'
@@ -37,10 +37,7 @@ export default async function ProfilePage() {
       .single() as { data: CandidateProfile | null }
     profile = data
   } else {
-    const workspace = await getWorkspacePath()
-    if (workspace) {
-      profile = readWorkspaceProfile(workspace)
-    }
+    profile = readWorkspaceProfile()
   }
 
   const pos = profile?.positioning ?? {}
