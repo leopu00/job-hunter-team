@@ -3,6 +3,7 @@
  * Viste: Home, Team (agenti tmux), Chat (tmux), Tasks, AI.
  */
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { Container, Key, matchesKey, ProcessTerminal, Text, TUI } from "@mariozechner/pi-tui";
 import { createJhtLayout } from "./tui-layout.js";
 import { HomePanel } from "./components/home-panel.js";
@@ -12,12 +13,13 @@ import { TaskPanel } from "./components/task-panel.js";
 import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
 import { ensureWorkspaceConfigured, saveApiKey, runSetupWizard } from "./tui-setup.js";
+import { JHT_USER_DIR } from "./tui-paths.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
-import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
+import { listJhtSessions, listUserSessions, capturePane, stopAllSessions } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
-import { isProfileComplete, loadProfile, loadWorkspacePath, saveProfile, validateProfileField } from "./tui-profile.js";
+import { isProfileComplete, loadProfile, resetWorkspaceAuth, saveProfile, validateProfileField } from "./tui-profile.js";
 import type { JhtAgent, JhtTuiState, ProfileWizardState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
 const KNOWN_AGENTS: JhtAgent[] = [
@@ -239,11 +241,10 @@ export async function runJhtTui() {
   // Input line — visibile solo quando serve (non in home/team)
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
-  let isEditingWorkspace = false;
   let isEditingApiKey = false;
   const updateInputLine = () => {
     // In home/team: input visibile solo quando l'utente sta digitando un comando
-    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace && !isEditingApiKey) {
+    if ((state.currentView === "home" || state.currentView === "team") && !isEditingApiKey) {
       if (inputBuffer.length === 0) {
         inputLine.setText("");
         return;
@@ -256,10 +257,6 @@ export async function runJhtTui() {
     // In profile wizard: nessun prompt, input silenzioso
     if (state.currentView === "profile") {
       inputLine.setText("");
-      return;
-    }
-    if (state.currentView === "home" && isEditingWorkspace) {
-      inputLine.setText(`\x1b[32m  workspace > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     if (state.currentView === "home" && isEditingApiKey) {
@@ -307,9 +304,6 @@ export async function runJhtTui() {
   /** Switch view — aggiorna mainSlot */
   const switchView = (view: TuiView) => {
     const previousView = state.currentView;
-    if (view !== "home") {
-      isEditingWorkspace = false;
-    }
     state.currentView = view;
     layout.mainSlot.clear();
     switch (view) {
@@ -434,8 +428,14 @@ export async function runJhtTui() {
       state.connectionStatus = "no API";
     }
   } else {
-    state.isConnected = false;
-    state.connectionStatus = "no API";
+    // Controlla se siamo in modalità abbonamento (no API key, ma agenti funzionano via CLI)
+    const rawKey = loadApiKey();
+    const isSubscription = rawKey === "__subscription__" || rawKey === "";
+    state.isConnected = isSubscription;
+    state.connectionStatus = isSubscription ? "subscription" : "no API";
+    if (isSubscription) {
+      aiChatPanel.addSystem("Modalita abbonamento — gli agenti usano Claude CLI. Chat AI non disponibile senza API key.");
+    }
   }
 
   layout.updateHeader(state);
@@ -460,20 +460,6 @@ export async function runJhtTui() {
       if (state.currentView === "profile" && state.profileWizard) {
         submitProfileWizardAnswer();
         tui.requestRender();
-        return { consume: true };
-      }
-      if (state.currentView === "home" && isEditingWorkspace) {
-        const nextWorkspace = inputBuffer.trim();
-        inputBuffer = "";
-        isEditingWorkspace = false;
-        updateInputLine();
-        tui.requestRender();
-        if (nextWorkspace) {
-          setActivityStatus("aggiorna cartella");
-          void handleCommand(`/workspace ${nextWorkspace}`);
-        } else {
-          setActivityStatus("idle");
-        }
         return { consume: true };
       }
       const text = inputBuffer.trim();
@@ -518,24 +504,40 @@ export async function runJhtTui() {
         if (!selectedItem) return { consume: true };
         
         switch (selectedItem.type) {
-          case "workspace":
-            isEditingWorkspace = true;
-            inputBuffer = loadWorkspacePath();
-            setActivityStatus("modifica cartella");
-            updateInputLine();
-            tui.requestRender();
+          case "workspace": {
+            const opener = process.platform === "darwin" ? "open"
+              : process.platform === "win32" ? "explorer"
+              : "xdg-open";
+            try {
+              spawn(opener, [JHT_USER_DIR], { detached: true, stdio: "ignore" }).unref();
+              setActivityStatus("cartella aperta");
+            } catch {
+              setActivityStatus("impossibile aprire la cartella");
+            }
+            tui.requestRender(true);
             break;
+          }
           case "apikey":
-            isEditingApiKey = true;
-            inputBuffer = loadApiKey() || "";
-            setActivityStatus("inserisci api key");
-            updateInputLine();
+          case "provider": {
+            // Stop agenti prima di cambiare configurazione
+            const activeSessions = listUserSessions();
+            if (activeSessions.length > 0) {
+              const stopped = stopAllSessions();
+              state.activeTmuxCount = 0;
+              aiChatPanel.addSystem(`${stopped} agenti fermati per cambio configurazione`);
+            }
+            // Reset config auth e esci per forzare setup wizard al riavvio
+            resetWorkspaceAuth();
+            setActivityStatus("configurazione resettata");
             tui.requestRender();
+            setTimeout(() => {
+              try { tui.stop(); } catch {}
+              clearTerminalScreen();
+              process.stdout.write("\nConfigurazione resettata. Riavvia la TUI per riconfigurare.\n\n");
+              process.exit(0);
+            }, 300);
             break;
-          case "provider":
-            setActivityStatus("provider: usa /setup <key>");
-            tui.requestRender();
-            break;
+          }
           case "profile":
             setActivityStatus("avvio wizard profilo...");
             void handleCommand("/profile");

@@ -5,7 +5,8 @@
 import { Container, Text } from "@mariozechner/pi-tui";
 import { theme } from "../tui-theme.js";
 import type { TmuxSession } from "../tui-tmux.js";
-import { getMissingProfileFields, getProfileCompletion, isProfileComplete, loadProfile, loadWorkspacePath } from "../tui-profile.js";
+import { getMissingProfileFields, getProfileCompletion, isProfileComplete, loadProfile } from "../tui-profile.js";
+import { JHT_USER_DIR } from "../tui-paths.js";
 import { loadApiKey, loadProviderConfig } from "../tui-client.js";
 
 const DEFAULT_TERMINAL_WIDTH = 100;
@@ -48,7 +49,6 @@ export class HomePanel extends Container {
   }
 
   private buildItems(): ConfigItem[] {
-    const workspace = loadWorkspacePath();
     const providerConfig = loadProviderConfig();
     const apiKey = loadApiKey();
     const profile = loadProfile();
@@ -58,9 +58,9 @@ export class HomePanel extends Container {
     return [
       {
         id: "workspace",
-        label: "Cartella di lavoro",
-        status: workspace ? "done" : "todo",
-        value: workspace || undefined,
+        label: "Cartella utente",
+        status: "done",
+        value: JHT_USER_DIR,
       },
       {
         id: "provider",
@@ -70,9 +70,9 @@ export class HomePanel extends Container {
       },
       {
         id: "apikey",
-        label: "API Key",
+        label: "Autenticazione",
         status: apiKey ? "done" : "todo",
-        value: apiKey ? "****************" : undefined,
+        value: apiKey === "__subscription__" ? "Abbonamento" : apiKey ? "API Key" : undefined,
       },
       {
         id: "profile",

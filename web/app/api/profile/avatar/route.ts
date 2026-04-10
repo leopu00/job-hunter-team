@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkspacePath } from '@/lib/workspace'
+import { JHT_PROFILE_DIR } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
@@ -19,11 +19,7 @@ function findAvatar(dir: string): string | null {
 
 /** GET — serve avatar image or 204 if none */
 export async function GET() {
-  const workspace = await getWorkspacePath()
-  if (!workspace) return new NextResponse(null, { status: 204 })
-
-  const dir = path.join(workspace, 'profile')
-  const avatarPath = findAvatar(dir)
+  const avatarPath = findAvatar(JHT_PROFILE_DIR)
   if (!avatarPath) return new NextResponse(null, { status: 204 })
 
   const ext = path.extname(avatarPath).slice(1)
@@ -36,11 +32,6 @@ export async function GET() {
 
 /** POST — upload avatar (single image) */
 export async function POST(req: NextRequest) {
-  const workspace = await getWorkspacePath()
-  if (!workspace) {
-    return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-  }
-
   let formData: FormData
   try {
     formData = await req.formData()
@@ -59,17 +50,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'File troppo grande (max 2 MB).' }, { status: 400 })
   }
 
-  const dir = path.join(workspace, 'profile')
-  fs.mkdirSync(dir, { recursive: true })
+  fs.mkdirSync(JHT_PROFILE_DIR, { recursive: true })
 
   // Remove old avatars
   for (const ext of ['.png', '.jpg', '.jpeg', '.webp']) {
-    const old = path.join(dir, AVATAR_NAME + ext)
+    const old = path.join(JHT_PROFILE_DIR, AVATAR_NAME + ext)
     if (fs.existsSync(old)) fs.unlinkSync(old)
   }
 
   const ext = file.type === 'image/webp' ? '.webp' : file.type === 'image/png' ? '.png' : '.jpg'
-  const dest = path.join(dir, AVATAR_NAME + ext)
+  const dest = path.join(JHT_PROFILE_DIR, AVATAR_NAME + ext)
   const buffer = Buffer.from(await file.arrayBuffer())
   fs.writeFileSync(dest, buffer)
 
@@ -78,12 +68,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — remove avatar */
 export async function DELETE() {
-  const workspace = await getWorkspacePath()
-  if (!workspace) return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-
-  const dir = path.join(workspace, 'profile')
   for (const ext of ['.png', '.jpg', '.jpeg', '.webp']) {
-    const p = path.join(dir, AVATAR_NAME + ext)
+    const p = path.join(JHT_PROFILE_DIR, AVATAR_NAME + ext)
     if (fs.existsSync(p)) fs.unlinkSync(p)
   }
   return NextResponse.json({ ok: true })

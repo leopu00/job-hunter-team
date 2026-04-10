@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkspacePath } from '@/lib/workspace'
+import { JHT_USER_UPLOADS_DIR } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
@@ -9,11 +9,6 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.md', '.png', '.jp
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(req: NextRequest) {
-  const workspace = await getWorkspacePath()
-  if (!workspace) {
-    return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-  }
-
   let formData: FormData
   try {
     formData = await req.formData()
@@ -26,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'nessun file ricevuto' }, { status: 400 })
   }
 
-  const uploadsDir = path.join(workspace, 'assistente', 'uploads')
+  const uploadsDir = JHT_USER_UPLOADS_DIR
   fs.mkdirSync(uploadsDir, { recursive: true })
 
   const saved: { name: string; path: string }[] = []

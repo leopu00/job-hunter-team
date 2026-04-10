@@ -5,7 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export const JHT_CONFIG_DIR = path.join(os.homedir(), '.jht');
+// Path fissi JHT (specchio di shared/paths.ts, con override env var).
+// cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
+export const JHT_CONFIG_DIR = process.env.JHT_HOME || path.join(os.homedir(), '.jht');
 export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');
 
 export const AI_PROVIDERS = [
@@ -100,9 +102,8 @@ export function validateConfigBeforeWrite(config) {
       errors.push(`providers.${key}.subscription: email obbligatoria`);
     }
   }
-  if (!config.workspace || typeof config.workspace !== 'string') {
-    errors.push('workspace e\' obbligatorio');
-  }
+  // workspace non e' piu' parte del config: i path JHT sono fissi
+  // (~/.jht + ~/Documents/Job Hunter Team).
 
   return { success: errors.length === 0, errors };
 }
@@ -163,18 +164,6 @@ export function validateChatId(value) {
   return undefined;
 }
 
-export function validateWorkspacePath(value) {
-  if (!value || value.trim().length === 0) {
-    return 'Il path non puo\' essere vuoto';
-  }
-  const resolved = path.resolve(value.trim());
-  const parent = path.dirname(resolved);
-  if (!fs.existsSync(parent)) {
-    return `La directory padre non esiste: ${parent}`;
-  }
-  return undefined;
-}
-
 // --- Summarize existing config ---
 
 export function summarizeExistingConfig(config) {
@@ -192,9 +181,6 @@ export function summarizeExistingConfig(config) {
   }
   if (config.channels?.telegram) {
     lines.push('Telegram: configurato');
-  }
-  if (config.workspace) {
-    lines.push(`Workspace: ${config.workspace}`);
   }
   return lines.join('\n') || 'Config vuota';
 }
