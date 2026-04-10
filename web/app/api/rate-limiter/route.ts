@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,7 @@ const KNOWN_PROVIDERS: Array<{ id: string; label: string; window: WindowConfig }
 
 function loadConfig(): JhtConfig {
   const candidates = [
-    path.join(os.homedir(), '.jht', 'jht.config.json'),
+    path.join(JHT_HOME, 'jht.config.json'),
     path.join(process.cwd(), 'jht.config.json'),
     path.join(process.cwd(), '..', 'jht.config.json'),
   ]

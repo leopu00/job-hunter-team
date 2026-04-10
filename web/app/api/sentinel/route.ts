@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const LOG_PATH = path.join(os.homedir(), '.jht', 'sentinel-log.txt')
+const LOG_PATH = path.join(JHT_HOME, 'sentinel-log.txt')
 
 const USAGE_RE = /^\[(\S+)\] usage=(\d+)% \| delta=([+-]?\d+)% in 10m \| velocita=(\d+)%\/h \| vel_smussata=(\d+)%\/h \| vel_ideale=(\d+)%\/h \| rapporto=([\d.]+) \| throttle=(\d+) \| proiezione_reset=(\d+)% \| (.+)$/
 const ORDER_RE = /^\[(\S+)\] (Ordine .+)$/
