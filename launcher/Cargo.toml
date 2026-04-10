@@ -5,6 +5,7 @@ edition = "2021"
 description = "Lightweight launcher for Job Hunter Team"
 
 [dependencies]
+muda = "0.15"
 open = "5"
 shared_child = "1"
 sha2 = "0.10"
