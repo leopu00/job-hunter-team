@@ -6,8 +6,9 @@ use tao::window::WindowBuilder;
 use tao::dpi::LogicalSize;
 use wry::WebViewBuilder;
 
-use crate::config::{self, SetupConfig};
 use crate::bootstrap;
+use crate::config::{self, SetupConfig};
+use crate::log::log;
 
 #[derive(Clone)]
 enum AppState {
@@ -27,6 +28,9 @@ enum UserEvent {
 }
 
 pub fn run(existing: Option<SetupConfig>) {
+    log("=== JHT Desktop launcher starting ===");
+    log(&format!("log file: {}", config::log_file().display()));
+
     let default_dir = existing
         .as_ref()
         .map(|c| c.work_dir.display().to_string())
@@ -44,6 +48,8 @@ pub fn run(existing: Option<SetupConfig>) {
 
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
+
+    install_edit_menu();
 
     let window = WindowBuilder::new()
         .with_title("JHT Desktop")
@@ -84,6 +90,10 @@ pub fn run(existing: Option<SetupConfig>) {
             } else if body.starts_with("open:") {
                 let url = &body[5..];
                 let _ = open::that(url);
+            } else if body.starts_with("log:") {
+                crate::log::log(&format!("webview: {}", &body[4..]));
+            } else if body == "showLogs" {
+                let _ = open::that(config::log_file());
             } else if body == "quit" {
                 std::process::exit(0);
             }
@@ -215,6 +225,42 @@ fn run_bootstrap_with_events(cfg: &SetupConfig, proxy: tao::event_loop::EventLoo
     let _ = proxy.send_event(UserEvent::BootstrapDone(port));
 }
 
+fn install_edit_menu() {
+    use muda::{Menu, PredefinedMenuItem, Submenu};
+
+    let menu = Menu::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        let app_sub = Submenu::new("JHT Desktop", true);
+        let _ = app_sub.append_items(&[
+            &PredefinedMenuItem::about(None, None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::hide(None),
+            &PredefinedMenuItem::hide_others(None),
+            &PredefinedMenuItem::show_all(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::quit(None),
+        ]);
+        let _ = menu.append(&app_sub);
+    }
+
+    let edit_sub = Submenu::new("Edit", true);
+    let _ = edit_sub.append_items(&[
+        &PredefinedMenuItem::undo(None),
+        &PredefinedMenuItem::redo(None),
+        &PredefinedMenuItem::separator(),
+        &PredefinedMenuItem::cut(None),
+        &PredefinedMenuItem::copy(None),
+        &PredefinedMenuItem::paste(None),
+        &PredefinedMenuItem::select_all(None),
+    ]);
+    let _ = menu.append(&edit_sub);
+
+    #[cfg(target_os = "macos")]
+    menu.init_for_nsapp();
+}
+
 #[cfg(windows)]
 fn pick_folder() -> Option<String> {
     use std::os::windows::process::CommandExt;
@@ -309,6 +355,9 @@ body {{
 .step-dot.active {{ background: #44cc66; }}
 .step-dot.done {{ background: #2a5a3a; }}
 
+/* ── Wizard note ── */
+.wiz-note {{ padding: 10px 36px 0; font-size: 10px; color: #666; font-style: italic; line-height: 1.4; }}
+
 /* ── Content ── */
 .content {{ flex: 1; padding: 24px 36px; overflow-y: auto; }}
 .step {{ display: none; flex-direction: column; }}
@@ -388,6 +437,7 @@ select option {{ background: #1a2420; color: #e0e0e0; }}
 <div class="page active" id="page-wizard">
   <div class="header"><h1>JHT Desktop</h1><p class="sub">Job Hunter Team — Setup</p></div>
   <div class="steps" id="stepDots"></div>
+  <div class="wiz-note">Potrai cambiare provider e autenticazione in seguito dalle impostazioni della TUI.</div>
   <div class="content">
     <div class="step active" id="wiz-0">
       <div class="field">
@@ -412,7 +462,7 @@ select option {{ background: #1a2420; color: #e0e0e0; }}
     <div class="step" id="wiz-3">
       <div class="field">
         <label id="credL">API Key</label>
-        <input type="password" id="apiKey" value="{escaped_key}" placeholder="" />
+        <input type="text" id="apiKey" value="{escaped_key}" placeholder="" autocomplete="off" spellcheck="false" />
         <div class="hint" id="credH">Your key is stored locally and never shared</div>
         <div class="error" id="credE"></div>
       </div>
@@ -454,20 +504,39 @@ select option {{ background: #1a2420; color: #e0e0e0; }}
 </div>
 
 <script>
+window.onerror=function(msg,src,line,col,err){{
+  try{{window.ipc.postMessage('log:JS ERROR '+msg+' @ '+src+':'+line+':'+col);}}catch(e){{}}
+  return false;
+}};
+window.addEventListener('unhandledrejection',function(e){{
+  try{{window.ipc.postMessage('log:JS PROMISE '+(e.reason&&e.reason.message||e.reason));}}catch(_){{}}
+}});
 let cs=0, prov='{default_provider}'||'', authM='', runPort=3000;
 const PH={{anthropic:'sk-ant-api03-...',openai:'sk-proj-...',kimi:'sk-...'}};
 const AM={{
-  anthropic:[{{id:'api-key',label:'API Key',hint:'sk-ant-...',kind:'apiKey'}}],
-  openai:[{{id:'oauth',label:'OAuth (Codex)',hint:'Browser login',kind:'oauth'}},{{id:'api-key',label:'API Key',hint:'sk-...',kind:'apiKey'}}],
-  kimi:[{{id:'api-key',label:'API Key',hint:'sk-...',kind:'apiKey'}}],
+  anthropic:[
+    {{id:'subscription',label:'Abbonamento Claude',hint:'Pro/Max — login via claude login',kind:'subscription'}},
+    {{id:'api-key',label:'API Key',hint:'sk-ant-...',kind:'apiKey'}}
+  ],
+  openai:[
+    {{id:'subscription',label:'Abbonamento OpenAI',hint:'Plus — login via codex login',kind:'subscription'}},
+    {{id:'api-key',label:'API Key',hint:'sk-...',kind:'apiKey'}}
+  ],
+  kimi:[
+    {{id:'subscription',label:'Abbonamento Kimi',hint:'Moonshot — login via kimik2 login',kind:'subscription'}},
+    {{id:'api-key',label:'API Key',hint:'sk-...',kind:'apiKey'}}
+  ],
 }};
+const LOGIN_CMDS={{anthropic:'claude login',openai:'codex login',kimi:'kimik2 login'}};
 
-function init(){{ if(prov)spv(prov); dots(); show(0); }}
+function ilog(m){{try{{window.ipc.postMessage('log:'+m);}}catch(_){{}}}}
+function init(){{ ilog('init'); if(prov)spv(prov); dots(); show(0); }}
 function dots(){{
   const e=document.getElementById('stepDots'); e.innerHTML='';
   for(let i=0;i<4;i++){{ const d=document.createElement('div'); d.className='step-dot'+(i<cs?' done':'')+(i===cs?' active':''); e.appendChild(d); }}
 }}
 function show(n){{
+  ilog('show step '+n);
   cs=n; document.querySelectorAll('.step').forEach((e,i)=>e.classList.toggle('active',i===n));
   document.getElementById('btnB').style.display=n>0?'':'none';
   document.getElementById('btnN').textContent=n===3?'Start JHT':'Next';
@@ -488,8 +557,17 @@ function renderAM(){{
 }}
 function setupCred(){{
   const m=(AM[prov]||[]).find(x=>x.id===authM);
-  if(m&&m.kind==='oauth'){{ document.getElementById('credL').textContent='OAuth'; document.getElementById('apiKey').style.display='none'; document.getElementById('credH').textContent='Click Start to open browser'; }}
-  else{{ document.getElementById('credL').textContent='API Key'; document.getElementById('apiKey').style.display=''; document.getElementById('apiKey').placeholder=PH[prov]||'sk-...'; document.getElementById('credH').textContent='Your key is stored locally and never shared'; }}
+  if(m&&m.kind==='subscription'){{
+    document.getElementById('credL').textContent='Abbonamento';
+    document.getElementById('apiKey').style.display='none';
+    const cmd=LOGIN_CMDS[prov]||'claude login';
+    document.getElementById('credH').innerHTML='Esegui prima <code style="background:#1a2420;padding:1px 6px;border:1px solid #2a3a32">'+cmd+'</code> da terminale. Gli agenti useranno la sessione salvata dal login CLI.';
+  }} else {{
+    document.getElementById('credL').textContent='API Key';
+    document.getElementById('apiKey').style.display='';
+    document.getElementById('apiKey').placeholder=PH[prov]||'sk-...';
+    document.getElementById('credH').textContent='La chiave viene salvata solo sul tuo Mac e non condivisa.';
+  }}
   document.getElementById('credE').textContent='';
 }}
 function back(){{ if(cs<=0)return; let p=cs-1; if(p===2&&(AM[prov]||[]).length<=1)p=1; show(p); }}
@@ -501,9 +579,9 @@ function next(){{
   else if(cs===3){{
     const k=document.getElementById('apiKey').value.trim();
     const m=(AM[prov]||[]).find(x=>x.id===authM);
-    if(m&&m.kind!=='oauth'&&!k){{ document.getElementById('credE').textContent='Please enter your API key'; return; }}
-    if(prov==='anthropic'&&k&&!k.startsWith('sk-ant-')){{ document.getElementById('credE').textContent='Must start with sk-ant-'; return; }}
-    submit(k);
+    if(m&&m.kind==='apiKey'&&!k){{ document.getElementById('credE').textContent='Inserisci la tua API key'; return; }}
+    if(prov==='anthropic'&&m&&m.kind==='apiKey'&&k&&!k.startsWith('sk-ant-')){{ document.getElementById('credE').textContent='La chiave deve iniziare con sk-ant-'; return; }}
+    submit(m&&m.kind==='subscription'?'':k);
   }}
 }}
 function submit(key){{
