@@ -1,8 +1,9 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR  = join(homedir(), '.jht');
+const JHT_DIR  = JHT_HOME;
 const LOGS_DIR = join(JHT_DIR, 'logs');
 
 const LEVEL_PRIORITY = { error: 0, warn: 1, info: 2, debug: 3 };
