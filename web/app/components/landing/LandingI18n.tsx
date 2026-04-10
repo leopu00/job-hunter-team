@@ -601,7 +601,13 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>('it')
 
   useEffect(() => {
-    setLangState(getSavedLang())
+    const saved = getSavedLang()
+    setLangState(saved)
+    fetch('/api/i18n', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: saved }),
+    }).catch(() => { /* best effort */ })
   }, [])
 
   useEffect(() => {
@@ -611,6 +617,11 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
     localStorage.setItem(STORAGE_KEY, l)
+    fetch('/api/i18n', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: l }),
+    }).catch(() => { /* best effort */ })
   }, [])
 
   const t = useCallback((key: StringKeys) => {
