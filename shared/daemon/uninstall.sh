@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-JHT_WORKSPACE="${JHT_WORKSPACE:-$HOME/.jht}"
-JHT_LOG_DIR="${JHT_LOG_DIR:-$JHT_WORKSPACE/logs}"
+JHT_HOME="${JHT_HOME:-$HOME/.jht}"
+JHT_LOG_DIR="${JHT_LOG_DIR:-$JHT_HOME/logs}"
 
 SERVICE_NAME=""
 PURGE_LOGS=false
