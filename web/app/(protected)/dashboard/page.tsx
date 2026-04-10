@@ -7,6 +7,8 @@ import { runBash } from '@/lib/shell'
 import type { PositionWithScore } from '@/lib/types'
 import { getServerLocale } from '@/lib/server-locale'
 import { getDashboardT } from '@/lib/dashboard-i18n'
+import { createClient } from '@/lib/supabase/server'
+import CloudDownloadLanding from '@/app/components/CloudDownloadLanding'
 
 const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
@@ -39,6 +41,25 @@ function scoreBg(s?: number) {
 export default async function DashboardPage() {
   const locale = getServerLocale()
   const t = getDashboardT(locale)
+
+  // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
+  // non ha sincronizzato un profilo dal suo localhost, mostra la landing
+  // "scarica l'app" invece di una dashboard vuota con CTA che non portano
+  // da nessuna parte.
+  if (isSupabaseConfigured) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: cloudProfile } = await supabase
+        .from('candidate_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (!cloudProfile) {
+        return <CloudDownloadLanding userEmail={user.email ?? null} />
+      }
+    }
+  }
 
   const [stats, positions, scoreDist, sourceDist] = await Promise.all([
     getDashboardStats(),
