@@ -32,6 +32,15 @@ const KNOWN_AGENTS: JhtAgent[] = [
 ];
 
 const VIEWS: TuiView[] = ["home", "team", "chat", "tasks", "dashboard", "profile", "ai"];
+const VIEW_SHORTCUTS: Record<string, TuiView> = {
+  "1": "home",
+  "2": "team", 
+  "3": "chat",
+  "4": "tasks",
+  "5": "dashboard",
+  "6": "profile",
+  "7": "ai",
+};
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
   { field: "nome", section: "Profilo Base", title: "Nome", question: "Come ti chiami?", hint: "Es: Anna", required: true },
   { field: "cognome", section: "Profilo Base", title: "Cognome", question: "Qual e il tuo cognome?", hint: "Es: Verdi", required: true },
@@ -465,12 +474,25 @@ export async function runJhtTui() {
         else void sendMessage(text);
       } else if (state.currentView === "home") {
         const selectedItem = homePanel.getSelectedItem();
-        if (selectedItem?.type === "workspace") {
-          isEditingWorkspace = true;
-          inputBuffer = loadWorkspacePath();
-          setActivityStatus(selectedItem.label);
-          updateInputLine();
-          tui.requestRender();
+        if (!selectedItem) return { consume: true };
+        
+        switch (selectedItem.type) {
+          case "workspace":
+            isEditingWorkspace = true;
+            inputBuffer = loadWorkspacePath();
+            setActivityStatus("modifica cartella");
+            updateInputLine();
+            tui.requestRender();
+            break;
+          case "provider":
+          case "apikey":
+            setActivityStatus("avvio setup...");
+            void handleCommand("/setup");
+            break;
+          case "profile":
+            setActivityStatus("avvio wizard profilo...");
+            void handleCommand("/profile");
+            break;
         }
       }
       return { consume: true };
@@ -506,11 +528,27 @@ export async function runJhtTui() {
       tui.requestRender();
       return { consume: true };
     }
+    // Esc — cancella input e torna a navigazione
+    if (matchesKey(data, Key.escape)) {
+      if (inputBuffer.length > 0) {
+        inputBuffer = "";
+        updateInputLine();
+        tui.requestRender();
+        return { consume: true };
+      }
+      return { consume: true };
+    }
     // Tab — cicla viste
     if (matchesKey(data, Key.tab)) {
       const idx = VIEWS.indexOf(state.currentView);
       const next = VIEWS[(idx + 1) % VIEWS.length]!;
       switchView(next);
+      return { consume: true };
+    }
+    // Numeri 1-7 — shortcut diretti alle viste (solo se input vuoto)
+    const keyStr = typeof data === "string" ? data : "";
+    if (keyStr && VIEW_SHORTCUTS[keyStr] && inputBuffer.length === 0) {
+      switchView(VIEW_SHORTCUTS[keyStr]);
       return { consume: true };
     }
     if (state.currentView === "profile" && state.profileWizard) {
