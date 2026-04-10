@@ -37,7 +37,7 @@ export default function LandingGetStarted() {
                     style={{ background: 'var(--color-card)' }}>
                     <span className="text-[var(--color-green)] text-[13px] font-bold">{s.n}</span>
                   </div>
-                  <div className="text-[var(--color-muted)]">
+                  <div className="text-[var(--color-base)]">
                     <s.icon />
                   </div>
                 </div>
@@ -45,7 +45,7 @@ export default function LandingGetStarted() {
                 <h3 className="text-[14px] font-bold text-[var(--color-white)] mb-2">
                   {t(s.titleKey)}
                 </h3>
-                <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
+                <p className="text-[12px] text-[var(--color-base)] leading-relaxed">
                   {t(s.descKey)}
                 </p>
               </div>
