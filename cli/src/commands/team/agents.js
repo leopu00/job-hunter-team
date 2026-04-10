@@ -1,11 +1,19 @@
 // Definizione agenti e utility condivise per i comandi team
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Path fissi JHT (specchio di tui/src/tui-paths.ts)
+export const JHT_HOME = join(homedir(), '.jht');
+export const JHT_CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
+export const JHT_DB_PATH = join(JHT_HOME, 'jobs.db');
+export const JHT_AGENTS_DIR = join(JHT_HOME, 'agents');
+export const JHT_USER_DIR = join(homedir(), 'Documents', 'Job Hunter Team');
 
 export const AGENTS = [
   { role: 'alfa',       prefix: 'ALFA',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
@@ -77,15 +85,13 @@ export function resolveConfig() {
   return { repoRoot: null, launcherDir: null };
 }
 
+/** Cartella visibile all'utente (dove drop CV e output) */
 export function getWorkspace() {
-  const { repoRoot } = resolveConfig();
-  if (!repoRoot) return process.env.JHT_WORKSPACE || null;
-  if (process.env.JHT_WORKSPACE) return process.env.JHT_WORKSPACE.replace(/^~/, process.env.HOME);
-  const envFile = join(repoRoot, '.env');
-  if (existsSync(envFile)) {
-    const content = readFileSync(envFile, 'utf8');
-    const match = content.match(/^JHT_WORKSPACE=(.+)$/m);
-    if (match) return match[1].trim().replace(/^~/, process.env.HOME);
-  }
-  return null;
+  return JHT_USER_DIR;
+}
+
+/** Cartella nascosta dove girano gli agenti */
+export function getAgentDir(role, instance) {
+  const sub = instance ? `${role}-${instance}` : role;
+  return join(JHT_AGENTS_DIR, sub);
 }
