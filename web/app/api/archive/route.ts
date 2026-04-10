@@ -5,13 +5,14 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type ArchiveReason = 'rejected' | 'expired' | 'withdrawn';
 type ArchivedApp = { id: string; jobTitle: string; company: string; reason: ArchiveReason; appliedAt: number; closedAt: number; salary?: string; notes?: string };
 
-const FILE = path.join(os.homedir(), '.jht', 'archive.json');
+const FILE = path.join(JHT_HOME, 'archive.json');
 
 function load(): ArchivedApp[] {
   try { const d = JSON.parse(fs.readFileSync(FILE, 'utf-8')); return Array.isArray(d) ? d : []; }

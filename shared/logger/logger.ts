@@ -7,7 +7,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { JHT_LOGS_DIR } from "../paths.js";
 import { formatTimestampLong, formatConsoleLine } from "./formatter.js";
 
 // ── TYPES ───────────────────────────────────────────────────
@@ -37,7 +37,7 @@ export interface LoggerOptions {
 
 // ── CONSTANTS ───────────────────────────────────────────────
 
-const LOG_DIR = path.join(os.homedir(), ".jht", "logs");
+const LOG_DIR = JHT_LOGS_DIR;
 const LOG_PREFIX = "jht";
 const LOG_SUFFIX = ".log";
 const MAX_LOG_AGE_MS = 48 * 60 * 60 * 1000; // 48h

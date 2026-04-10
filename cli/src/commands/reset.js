@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR     = join(homedir(), '.jht')
+const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
 const CREDS_DIR   = join(JHT_DIR, 'credentials')
 const SESSIONS_DIR = join(JHT_DIR, 'sessions')

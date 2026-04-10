@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ type TimelineEntry = { status: AppStatus; date: number; note?: string };
 type Doc = { name: string; type: 'cv' | 'cover-letter' | 'portfolio' | 'other' };
 type Application = { id: string; jobTitle: string; company: string; status: AppStatus; sentAt: number; updatedAt: number; docs: Doc[]; timeline: TimelineEntry[]; profileId: string };
 
-const APPS_PATH = path.join(os.homedir(), '.jht', 'applications.json');
+const APPS_PATH = path.join(JHT_HOME, 'applications.json');
 
 function loadApplications(): Application[] {
   try { return JSON.parse(fs.readFileSync(APPS_PATH, 'utf-8')); }
