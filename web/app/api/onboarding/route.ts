@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STATE_PATH = path.join(os.homedir(), '.jht', 'onboarding.json')
+const STATE_PATH = path.join(JHT_HOME, 'onboarding.json')
 
 type OnboardingState = {
   completed: boolean
