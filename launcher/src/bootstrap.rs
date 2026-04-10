@@ -43,7 +43,7 @@ pub fn run(cfg: &SetupConfig) -> Result<u16, String> {
     ensure_node()?;
 
     // Step 4: Check AI CLI
-    ui::update_status(4, &format!("Checking {}...", cfg.provider.label()));
+    ui::update_status(4, &format!("Checking {} CLI...", cfg.provider));
     check_ai_cli(cfg)?;
 
     // Step 5: Clone/update repo
@@ -128,16 +128,21 @@ fn ensure_node() -> Result<(), String> {
 }
 
 fn check_ai_cli(cfg: &SetupConfig) -> Result<(), String> {
-    let cli = cfg.provider.cli_command();
+    let cli = match cfg.provider.as_str() {
+        "anthropic" => "claude",
+        "kimi" => "kimik2",
+        "openai" => "codex",
+        _ => "claude",
+    };
     match run_wsl(&["which", cli]) {
         Ok(_) => {
-            log(&format!("{} CLI found", cfg.provider.label()));
+            log(&format!("{} CLI found", cli));
             Ok(())
         }
         Err(_) => {
             Err(format!(
                 "{} CLI not found in WSL.\n\nInstall it first, then restart the launcher.",
-                cfg.provider.label()
+                cli
             ))
         }
     }
@@ -213,7 +218,12 @@ fn start_web_server() -> Result<u16, String> {
 fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     let repo_dir = config::repo_dir();
     let wsl_repo = windows_to_wsl_path(&repo_dir.display().to_string().replace('\\', "/"));
-    let cli_cmd = cfg.provider.cli_command();
+    let cli_cmd = match cfg.provider.as_str() {
+        "anthropic" => "claude",
+        "kimi" => "kimik2",
+        "openai" => "codex",
+        _ => "claude",
+    };
 
     let agents = [
         ("ALFA", "alfa", "high"),
@@ -226,8 +236,14 @@ fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     ];
 
     // Set API key env if provided
+    let env_var = match cfg.provider.as_str() {
+        "anthropic" => "ANTHROPIC_API_KEY",
+        "kimi" => "MOONSHOT_API_KEY",
+        "openai" => "OPENAI_API_KEY",
+        _ => "ANTHROPIC_API_KEY",
+    };
     let env_prefix = if !cfg.api_key.is_empty() {
-        format!("export {}='{}' && ", cfg.provider.env_var_name(), cfg.api_key)
+        format!("export {}='{}' && ", env_var, cfg.api_key)
     } else {
         String::new()
     };
