@@ -17,6 +17,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_crescita:     'Crescita',
     nav_reports:      'Report',
     nav_profile:      'Profilo',
+    nav_team:         'Team',
 
     // Breadcrumb labels
     bc_dashboard:      'Dashboard',
@@ -187,6 +188,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_crescita:     'Growth',
     nav_reports:      'Report',
     nav_profile:      'Profile',
+    nav_team:         'Team',
 
     // Breadcrumb labels
     bc_dashboard:      'Dashboard',
@@ -357,6 +359,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_crescita:     'Növekedés',
     nav_reports:      'Jelentések',
     nav_profile:      'Profil',
+    nav_team:         'Csapat',
 
     // Breadcrumb labels
     bc_dashboard:      'Irányítópult',
