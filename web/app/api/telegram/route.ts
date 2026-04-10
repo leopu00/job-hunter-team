@@ -9,10 +9,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STATUS_FILE = path.join(os.homedir(), '.jht', 'telegram', 'bridge-status.json')
+const STATUS_FILE = path.join(JHT_HOME, 'telegram', 'bridge-status.json')
 
 interface BridgeStatusFile {
   running: boolean
