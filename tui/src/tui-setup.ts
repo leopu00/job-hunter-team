@@ -526,11 +526,18 @@ export async function runSetupWizard(): Promise<string> {
 
       // Input testuale (solo per workspace e apiKey)
       const str = typeof data === "string" ? data : "";
-      if (str && str.length === 1 && str.charCodeAt(0) >= 32 && currentStep !== "provider") {
-        inputBuffer += str;
-        state.message = null;
-        render();
-        return { consume: true };
+      if (str && currentStep !== "provider") {
+        // Rimuovi sequenze bracketed paste [200~ e [201~ (con o senza ESC)
+        let cleaned = str.replace(/\x1b?\[200~/g, "").replace(/\x1b?\[201~/g, "");
+        // Gestisce sia input singolo che paste multi-carattere
+        // Filtra solo caratteri stampabili (>=32, escluso DEL 127)
+        const printable = cleaned.split("").filter(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127).join("");
+        if (printable) {
+          inputBuffer += printable;
+          state.message = null;
+          render();
+          return { consume: true };
+        }
       }
 
       return undefined;
@@ -603,9 +610,8 @@ function renderCredentials(panel: Container, state: SetupState, inputBuffer: str
     add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
   } else {
     const display = inputBuffer || "";
-    const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
     const cursor = "█";
-    const line = masked + cursor;
+    const line = display + cursor;
 
     add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
     add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
