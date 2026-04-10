@@ -483,6 +483,16 @@ export async function runJhtTui() {
         tui.requestRender();
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
+      } else if (state.currentView === "team") {
+        // Team: Enter su agente selezionato → avvia (offline) o chat (online)
+        const agent = teamPanel.getSelectedAgent();
+        if (agent) {
+          if (agent.isOnline) {
+            void handleCommand(`/chat ${agent.id}`);
+          } else {
+            void handleCommand(`/start ${agent.id}`);
+          }
+        }
       } else if (state.currentView === "home") {
         if (isEditingApiKey) {
           // Salva API key
@@ -610,11 +620,32 @@ export async function runJhtTui() {
       }
       return { consume: true };
     }
+    // Team view: navigazione frecce
+    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(-1)) {
+        switchView("team");
+      }
+      return { consume: true };
+    }
+    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(1)) {
+        switchView("team");
+      }
+      return { consume: true };
+    }
     // Ctrl+O — toggle tools expand (AI view)
     if (matchesKey(data, Key.ctrl("o"))) {
       state.toolsExpanded = !state.toolsExpanded;
       setActivityStatus(state.toolsExpanded ? "tool espansi" : "tool compressi");
       tui.requestRender();
+      return { consume: true };
+    }
+    // Team view: "x" ferma agente selezionato
+    if (typeof data === "string" && data === "x" && inputBuffer.length === 0 && state.currentView === "team") {
+      const agent = teamPanel.getSelectedAgent();
+      if (agent?.isOnline) {
+        void handleCommand(`/stop ${agent.id}`);
+      }
       return { consume: true };
     }
     // Caratteri stampabili
