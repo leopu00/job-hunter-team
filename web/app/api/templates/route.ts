@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
+const TEMPLATES_DIR = path.join(JHT_HOME, 'templates')
 
 type Frontmatter = Record<string, string | undefined>
 
@@ -27,11 +27,8 @@ interface TemplateDetail extends TemplateSummary {
   raw: string
 }
 
-function getWorkspace(): string | null {
-  try {
-    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-    return typeof cfg.workspace === 'string' ? cfg.workspace : null
-  } catch { return null }
+function getTemplatesDir(): string {
+  return TEMPLATES_DIR
 }
 
 function parseFrontmatter(raw: string): { frontmatter: Frontmatter; content: string } {
@@ -122,8 +119,7 @@ const SAMPLE_TEMPLATES: TemplateDetail[] = [
 
 /** GET — lista template: ?name=xxx&category=xxx */
 export async function GET(req: NextRequest) {
-  const workspace = getWorkspace()
-  let templates = workspace ? loadTemplates(workspace) : []
+  let templates = loadTemplates(getTemplatesDir())
   if (templates.length === 0) templates = SAMPLE_TEMPLATES
 
   const name = req.nextUrl.searchParams.get('name')
@@ -148,10 +144,7 @@ export async function POST(req: NextRequest) {
 
   if (!body.name) return NextResponse.json({ ok: false, error: 'name obbligatorio' }, { status: 400 })
 
-  const workspace = getWorkspace()
-  if (!workspace) return NextResponse.json({ ok: false, error: 'workspace non configurato' }, { status: 400 })
-
-  const filePath = path.join(workspace, body.name)
+  const filePath = path.join(getTemplatesDir(), body.name)
   if (!fs.existsSync(filePath)) return NextResponse.json({ ok: false, error: 'template non trovato' }, { status: 404 })
 
   const raw = fs.readFileSync(filePath, 'utf-8')
