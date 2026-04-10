@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { isSupabaseConfigured } from '@/lib/workspace'
+import { JHT_USER_DIR } from '@/lib/jht-paths'
 import Navbar from '@/components/Navbar'
 
 export const metadata: Metadata = {
@@ -29,13 +30,10 @@ export default async function ProtectedLayout({
     )
   }
 
-  // Modalita' locale: verifica workspace
-  const workspace = await getWorkspacePath()
-  if (!workspace) redirect('/')
-
+  // Modalita' locale: path fisso, sempre disponibile
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
-      <Navbar user={null} workspace={workspace} />
+      <Navbar user={null} workspace={JHT_USER_DIR} />
       <main className="max-w-6xl mx-auto px-5 py-8">
         {children}
       </main>
