@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type Contact = { id: string; name: string; company: string; role: string; email: string; linkedin: string; notes: string; lastContact: number | null; createdAt: number };
 
-const CONTACTS_PATH = path.join(os.homedir(), '.jht', 'contacts.json');
+const CONTACTS_PATH = path.join(JHT_HOME, 'contacts.json');
 
 function load(): Contact[] {
   try { return JSON.parse(fs.readFileSync(CONTACTS_PATH, 'utf-8')); }
