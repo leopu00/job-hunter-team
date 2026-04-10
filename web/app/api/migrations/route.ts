@@ -6,11 +6,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STATE_PATH = path.join(homedir(), '.jht', 'migrations.json');
-const CONFIG_PATH = path.join(homedir(), '.jht', 'config.json');
+const STATE_PATH = path.join(JHT_HOME, 'migrations.json');
+const CONFIG_PATH = path.join(JHT_HOME, 'config.json');
 
 type AppliedMigration = { version: string; description: string; appliedAt: number };
 type MigrationState = { currentVersion: string; applied: AppliedMigration[]; updatedAt: number };
