@@ -547,6 +547,11 @@ export async function runSetupWizard(): Promise<string> {
     render();
   });
 
+  // Salvataggio finale esplicito: assicura che workspace path sia nel config globale
+  if (state.workspace) {
+    try { saveWorkspacePath(state.workspace); } catch { /* ignora se path non valido */ }
+  }
+
   return completedApiKey || state.apiKey;
 }
 
@@ -726,7 +731,8 @@ async function testApiKey(provider: WorkspaceProvider | "", key: string): Promis
             signal: AbortSignal.timeout(10000),
           },
         );
-    return res.ok || res.status === 400;
+    // 200=ok, 400=formato sbagliato ma key valida, 429=rate limit, 529=overloaded
+    return res.ok || res.status === 400 || res.status === 429 || res.status === 529;
   } catch {
     return false;
   }
