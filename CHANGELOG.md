@@ -5,6 +5,13 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.8] — 2026-04-10
+
+### Fix
+- Aggiunto `overrides` per `@swc/helpers` nel `package.json` per risolvere conflitti di dipendenze durante `npm ci` nel workflow di release
+
+---
+
 ## [0.1.7] — 2026-04-10
 
 ### Web app
