@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { redirect } from 'next/navigation'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
@@ -59,6 +60,13 @@ export default async function DashboardPage() {
         return <CloudDownloadLanding userEmail={user.email ?? null} />
       }
     }
+  } else {
+    // Local mode: se non esiste un profilo valido, canalizza l'utente verso
+    // l'onboarding split-screen (form live + assistente) invece di mostrare
+    // una dashboard vuota.
+    const ws = await getWorkspacePath()
+    const localProfile = ws ? readWorkspaceProfile(ws) : null
+    if (!localProfile) redirect('/onboarding')
   }
 
   const [stats, positions, scoreDist, sourceDist] = await Promise.all([
