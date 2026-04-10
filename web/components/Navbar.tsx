@@ -53,6 +53,14 @@ export default function Navbar({ user, workspace }: NavbarProps) {
           <NavLink href="/reports">Report</NavLink>
           <TeamDropdown />
           <NavLink href="/profile">Profilo</NavLink>
+          <Link
+            href="/credentials"
+            className="px-2 py-1.5 text-[13px] hover:bg-[var(--color-card)] rounded transition-colors no-underline"
+            style={{ color: 'var(--color-muted)' }}
+            title="Impostazioni"
+          >
+            ⚙
+          </Link>
         </div>
 
         {/* Mobile hamburger */}
