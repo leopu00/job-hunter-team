@@ -8,14 +8,14 @@ import { StatusBar } from "./components/status-bar.js";
 import { theme } from "./tui-theme.js";
 import type { JhtTuiState, TuiView } from "./tui-types.js";
 
-const VIEW_LABELS: Record<TuiView, string> = {
-  home: "Config",
-  team: "Team",
-  chat: "Chat",
-  tasks: "Tasks",
-  dashboard: "Dashboard",
-  profile: "Profile",
-  ai: "AI",
+const VIEW_LABELS: Record<TuiView, { label: string; num: string }> = {
+  home: { label: "Config", num: "1" },
+  team: { label: "Team", num: "2" },
+  chat: { label: "Chat", num: "3" },
+  tasks: { label: "Tasks", num: "4" },
+  dashboard: { label: "Dashboard", num: "5" },
+  profile: { label: "Profile", num: "6" },
+  ai: { label: "AI", num: "7" },
 };
 
 export type JhtLayout = {
@@ -58,13 +58,14 @@ export function createJhtLayout(_tui: TUI): JhtLayout {
   root.addChild(statusBar.getNode());
 
   const updateHeader = (state: JhtTuiState) => {
-    // Tab bar: evidenzia la vista corrente
+    // Tab bar: evidenzia la vista corrente con numeri
     const tabs = (Object.keys(VIEW_LABELS) as TuiView[]).map((v) => {
-      const label = VIEW_LABELS[v];
-      if (v === state.currentView) return theme.accent(`[${label}]`);
-      return theme.dim(` ${label} `);
+      const { label, num } = VIEW_LABELS[v];
+      const display = `${num}:${label}`;
+      if (v === state.currentView) return theme.accent(`[${display}]`);
+      return theme.dim(` ${display} `);
     });
-    tabBar.setText(theme.border("  ") + tabs.join(theme.dim(" \u2502 ")));
+    tabBar.setText(theme.border("  ") + tabs.join(theme.dim(" | ")));
   };
 
   const updateStatusBar = (state: JhtTuiState) => {
