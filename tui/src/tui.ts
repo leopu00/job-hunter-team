@@ -15,9 +15,9 @@ import { ensureWorkspaceConfigured, saveApiKey, runSetupWizard } from "./tui-set
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
-import { listJhtSessions, listUserSessions, capturePane } from "./tui-tmux.js";
+import { listJhtSessions, listUserSessions, capturePane, stopAllSessions } from "./tui-tmux.js";
 import { loadTasks } from "./tui-tasks.js";
-import { isProfileComplete, loadProfile, loadWorkspacePath, saveProfile, validateProfileField } from "./tui-profile.js";
+import { isProfileComplete, loadProfile, loadWorkspacePath, resetWorkspaceAuth, saveProfile, validateProfileField } from "./tui-profile.js";
 import type { JhtAgent, JhtTuiState, ProfileWizardState, TuiStateAccess, TuiView, SessionInfo } from "./tui-types.js";
 
 const KNOWN_AGENTS: JhtAgent[] = [
@@ -532,16 +532,26 @@ export async function runJhtTui() {
             tui.requestRender();
             break;
           case "apikey":
-            isEditingApiKey = true;
-            inputBuffer = loadApiKey() || "";
-            setActivityStatus("inserisci api key");
-            updateInputLine();
+          case "provider": {
+            // Stop agenti prima di cambiare configurazione
+            const activeSessions = listUserSessions();
+            if (activeSessions.length > 0) {
+              const stopped = stopAllSessions();
+              state.activeTmuxCount = 0;
+              aiChatPanel.addSystem(`${stopped} agenti fermati per cambio configurazione`);
+            }
+            // Reset config auth e esci per forzare setup wizard al riavvio
+            resetWorkspaceAuth();
+            setActivityStatus("configurazione resettata");
             tui.requestRender();
+            setTimeout(() => {
+              try { tui.stop(); } catch {}
+              clearTerminalScreen();
+              process.stdout.write("\nConfigurazione resettata. Riavvia la TUI per riconfigurare.\n\n");
+              process.exit(0);
+            }, 300);
             break;
-          case "provider":
-            setActivityStatus("provider: usa /setup <key>");
-            tui.requestRender();
-            break;
+          }
           case "profile":
             setActivityStatus("avvio wizard profilo...");
             void handleCommand("/profile");
