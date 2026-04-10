@@ -4,7 +4,6 @@ import './globals.css'
 import Sidebar from './components/sidebar'
 import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
-import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
@@ -107,7 +106,6 @@ export default function RootLayout({
                 {/* <FloatingChat /> */}
                 <Sidebar />
                 <MainContent>
-                  <Breadcrumb />
                   {children}
                 </MainContent>
               </KeyboardShortcutsProvider>
