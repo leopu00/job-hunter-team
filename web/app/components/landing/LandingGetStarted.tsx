@@ -45,7 +45,7 @@ export default function LandingGetStarted() {
                 <h3 className="text-[14px] font-bold text-[var(--color-white)] mb-2">
                   {t(s.titleKey)}
                 </h3>
-                <p className="text-[12px] text-[var(--color-base)] leading-relaxed">
+                <p className="text-[12px] text-[var(--color-bright)] leading-relaxed">
                   {t(s.descKey)}
                 </p>
               </div>

@@ -25,7 +25,7 @@ export default function LandingCTA() {
           <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-white)] tracking-tight mb-4">
             {t('cta_title_1')}<br />{t('cta_title_2')}
           </h2>
-          <p className="text-[12px] text-[var(--color-base)] leading-relaxed max-w-md mx-auto mb-8">
+          <p className="text-[12px] text-[var(--color-bright)] leading-relaxed max-w-md mx-auto mb-8">
             {t('cta_desc')}
           </p>
           <Link

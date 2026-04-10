@@ -119,7 +119,7 @@ export default function LandingHero() {
           Job Hunter <span className="text-[var(--color-green)]">Team</span>
         </h1>
 
-        <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
+        <p className="text-[13px] md:text-[15px] text-[var(--color-bright)] leading-relaxed max-w-xl mx-auto mb-4">
           {t('hero_desc_short')}
         </p>
 
@@ -262,7 +262,7 @@ export default function LandingHero() {
           </div>
         </div>
 
-        <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-12">
+        <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed max-w-4xl mx-auto text-center mt-12">
           {t('hero_desc')}
         </p>
 
