@@ -270,13 +270,13 @@ export default function LandingHero() {
           <Link
             href="/download"
             className="px-6 py-3 text-[12px] font-bold tracking-wider no-underline transition-all"
-            style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
+            style={{ background: 'var(--color-green)', color: '#060608' }}
           >
             {t('hero_cta')}
           </Link>
           <Link
             href="/project"
-            className="px-6 py-3 text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)]"
+            className="px-6 py-3 text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)] hover:underline"
           >
             <span className="inline-flex items-center gap-2">
               <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
