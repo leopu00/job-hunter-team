@@ -11,6 +11,7 @@
 import pc from 'picocolors';
 import {
   AI_PROVIDERS,
+  JHT_CONFIG_DIR,
   writeConfigFile,
   validateApiKey,
 } from './setup-helpers.js';
@@ -53,7 +54,6 @@ export async function runNonInteractiveSetup(opts) {
   const authMethod = opts.authMethod || 'api_key';
   const secretMode = opts.secretMode || 'plaintext';
   const model = opts.model || selectedProvider.models[0].value;
-  const workspace = opts.workspace || `${process.env.HOME || '~'}/jht`;
 
   // --- Assembla API key (SecretRef) ---
   let apiKeySecret;
@@ -99,7 +99,6 @@ export async function runNonInteractiveSetup(opts) {
     active_provider: providerName,
     providers: { [providerName]: providerConfig },
     channels: {},
-    workspace,
   };
 
   try {
@@ -115,6 +114,6 @@ export async function runNonInteractiveSetup(opts) {
   console.log(`  Provider:   ${selectedProvider.label}`);
   console.log(`  Auth:       ${authMethod === 'api_key' ? describeSecret(apiKeySecret) : 'subscription'}`);
   console.log(`  Modello:    ${model}`);
-  console.log(`  Workspace:  ${workspace}`);
+  console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
 }
