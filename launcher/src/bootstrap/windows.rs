@@ -171,6 +171,7 @@ pub fn start_web_server() -> Result<u16, String> {
     Ok(port)
 }
 
+#[allow(dead_code)]
 pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     let repo_dir = config::repo_dir();
     let wsl_repo = windows_to_wsl_path(&repo_dir.display().to_string());

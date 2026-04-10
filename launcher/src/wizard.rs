@@ -212,13 +212,9 @@ fn run_bootstrap_with_events(cfg: &SetupConfig, proxy: tao::event_loop::EventLoo
         }
     };
 
-    // Step 9: Start team
-    step!(9, "Starting agent team...", {
-        bootstrap::start_team(cfg)
-    });
-
-    // Step 10: Open browser
-    send(10, "Opening browser...");
+    // Step 9: Open browser — the user configures the profile and starts
+    // the agent team manually from the web dashboard.
+    send(9, "Opening browser...");
     let url = format!("http://localhost:{}", port);
     let _ = open::that(&url);
 
@@ -480,7 +476,7 @@ select option {{ background: #1a2420; color: #e0e0e0; }}
     <div class="progress-title">Setting up JHT...</div>
     <div class="progress-status" id="progMsg">Initializing...</div>
     <div class="bar-bg"><div class="bar-fill" id="progBar"></div></div>
-    <div class="bar-label" id="progLabel">0/10</div>
+    <div class="bar-label" id="progLabel">0/9</div>
   </div>
 </div>
 
@@ -594,8 +590,8 @@ function showPage(id){{ document.querySelectorAll('.page').forEach(p=>p.classLis
 // Called from Rust
 function updateProgress(step, msg){{
   document.getElementById('progMsg').textContent=msg;
-  document.getElementById('progBar').style.width=(step*10)+'%';
-  document.getElementById('progLabel').textContent=step+'/10';
+  document.getElementById('progBar').style.width=Math.round(step*100/9)+'%';
+  document.getElementById('progLabel').textContent=step+'/9';
 }}
 function showRunning(port){{
   runPort=port;
