@@ -7,7 +7,7 @@ import path from "node:path";
 import * as readline from "node:readline";
 import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
 import { sendToSession, resolveSessionName, startSession, stopSession, listJhtSessions } from "./tui-tmux.js";
-import { loadProfile, loadWorkspacePath, saveProfile, isProfileComplete, formatProfile, saveWorkspacePath, validateWorkspacePath, ensureWorkspaceInitialized, type UserProfile } from "./tui-profile.js";
+import { loadProfile, loadWorkspacePath, loadWorkspaceApiKey, saveProfile, isProfileComplete, formatProfile, saveWorkspacePath, validateWorkspacePath, ensureWorkspaceInitialized, type UserProfile } from "./tui-profile.js";
 
 export type JhtChatClient = {
   sendChat: (params: {
@@ -207,7 +207,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
           break;
         }
-        const startResult = startSession(args, loadWorkspacePath() || undefined);
+        const startResult = startSession(args, loadWorkspacePath() || undefined, loadWorkspaceApiKey() || undefined);
         if (startResult.ok) {
           sysLog.addSystem(`sessione ${startResult.name} avviata`);
           setActivityStatus(`avviato ${startResult.name}`);
