@@ -2,14 +2,11 @@ use std::process::Command;
 use crate::config::{self, SetupConfig};
 use crate::log::log;
 
-#[cfg(windows)]
 use std::os::windows::process::CommandExt;
-#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn wsl_cmd() -> Command {
     let mut cmd = Command::new("wsl");
-    #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd
 }
@@ -30,16 +27,14 @@ fn run_wsl(args: &[&str]) -> Result<String, String> {
     }
 }
 
-pub fn check_wsl() -> Result<(), String> {
+pub fn check_prerequisites() -> Result<(), String> {
     let output = Command::new("wsl")
         .args(["--list", "--quiet"])
         .output()
         .map_err(|_| "WSL is not installed.\n\nOpen PowerShell as admin and run:\nwsl --install".to_string())?;
 
     let list = String::from_utf8_lossy(&output.stdout);
-    // WSL --list --quiet on Windows outputs UTF-16, check for Ubuntu
     if !list.contains("Ubuntu") {
-        // Also check raw bytes for UTF-16 "Ubuntu"
         let raw = String::from_utf8_lossy(&output.stdout);
         let cleaned: String = raw.chars().filter(|c| !c.is_control() && *c != '\0').collect();
         if !cleaned.contains("Ubuntu") {
@@ -146,7 +141,6 @@ pub fn ensure_deps() -> Result<(), String> {
 pub fn setup_workspace(cfg: &SetupConfig) -> Result<(), String> {
     std::fs::create_dir_all(&cfg.work_dir)
         .map_err(|e| format!("Cannot create workspace: {}", e))?;
-    // Create profile subdirectory
     std::fs::create_dir_all(cfg.work_dir.join("profile")).ok();
     log(&format!("Workspace ready: {:?}", cfg.work_dir));
     Ok(())
@@ -158,7 +152,6 @@ pub fn start_web_server() -> Result<u16, String> {
 
     let port = crate::server::find_free_port(config::DEFAULT_PORT);
 
-    // Kill existing jht-web session if any
     let _ = run_wsl(&["tmux", "kill-session", "-t", "jht-web"]);
     std::thread::sleep(std::time::Duration::from_millis(500));
 
@@ -211,7 +204,6 @@ pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     };
 
     for (session, role, effort) in &agents {
-        // Kill existing session if any
         let _ = run_wsl(&["tmux", "kill-session", "-t", session]);
 
         let agent_dir = format!("{}/agents/{}", wsl_repo, role);

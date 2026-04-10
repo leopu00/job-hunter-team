@@ -1,6 +1,4 @@
 use std::path::PathBuf;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -32,10 +30,7 @@ pub fn run(existing: Option<SetupConfig>) {
     let default_dir = existing
         .as_ref()
         .map(|c| c.work_dir.display().to_string())
-        .unwrap_or_else(|| {
-            let home = std::env::var("USERPROFILE").unwrap_or_default();
-            format!("{}\\JHT", home)
-        });
+        .unwrap_or_else(|| config::default_workspace().display().to_string());
     let default_provider = existing
         .as_ref()
         .map(|c| c.provider.clone())
@@ -66,26 +61,14 @@ pub fn run(existing: Option<SetupConfig>) {
             let body = msg.body();
             if body == "browse" {
                 let proxy_b = proxy_browse.clone();
-                // Run in separate thread so webview doesn't freeze
                 std::thread::spawn(move || {
-                    // Use modern IFileOpenDialog via PowerShell
-                    let script = r#"
-                        Add-Type -AssemblyName Microsoft.VisualBasic
-                        $app = New-Object -ComObject Shell.Application
-                        $folder = $app.BrowseForFolder(0, 'Select working directory', 0x40 + 0x10, 0)
-                        if ($folder) { Write-Output $folder.Self.Path }
-                    "#;
-                    let output = std::process::Command::new("powershell.exe")
-                        .args(["-NoProfile", "-Command", script])
-                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                        .output();
-                    if let Ok(out) = output {
-                        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                        if !path.is_empty() {
-                            let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
-                            let js = format!("document.getElementById('workDir').value='{}'", escaped);
-                            let _ = proxy_b.send_event(UserEvent::EvalJs(js));
-                        }
+                    if let Some(path) = pick_folder() {
+                        let escaped = path.replace('\\', "\\\\").replace('\'', "\\'");
+                        let js = format!(
+                            "document.getElementById('workDir').value='{}'",
+                            escaped
+                        );
+                        let _ = proxy_b.send_event(UserEvent::EvalJs(js));
                     }
                 });
             } else if body.starts_with("submit:") {
@@ -168,9 +151,9 @@ fn run_bootstrap_with_events(cfg: &SetupConfig, proxy: tao::event_loop::EventLoo
         }};
     }
 
-    // Step 1: Check WSL
-    step!(1, "Checking WSL + Ubuntu...", {
-        bootstrap::check_wsl()
+    // Step 1: Check prerequisites
+    step!(1, "Checking system requirements...", {
+        bootstrap::check_prerequisites()
     });
 
     // Step 2: Check tmux
@@ -230,6 +213,43 @@ fn run_bootstrap_with_events(cfg: &SetupConfig, proxy: tao::event_loop::EventLoo
     let _ = open::that(&url);
 
     let _ = proxy.send_event(UserEvent::BootstrapDone(port));
+}
+
+#[cfg(windows)]
+fn pick_folder() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let script = r#"
+        Add-Type -AssemblyName Microsoft.VisualBasic
+        $app = New-Object -ComObject Shell.Application
+        $folder = $app.BrowseForFolder(0, 'Select working directory', 0x40 + 0x10, 0)
+        if ($folder) { Write-Output $folder.Self.Path }
+    "#;
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+#[cfg(target_os = "macos")]
+fn pick_folder() -> Option<String> {
+    let script = "POSIX path of (choose folder with prompt \"Select working directory\")";
+    let output = std::process::Command::new("osascript")
+        .args(["-e", script])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    if path.is_empty() { None } else { Some(path) }
 }
 
 fn parse_submit(json: &str) -> Option<SetupConfig> {

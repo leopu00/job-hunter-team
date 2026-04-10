@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod bootstrap;
 mod config;

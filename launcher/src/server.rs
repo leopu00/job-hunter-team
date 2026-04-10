@@ -1,14 +1,21 @@
-use std::fs;
-use std::io::Write;
 use std::net::TcpStream;
-use std::path::Path;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use sha2::{Digest, Sha256};
-use shared_child::SharedChild;
-
 use crate::config;
+
+#[cfg(windows)]
+use std::fs;
+#[cfg(windows)]
+use std::io::Write;
+#[cfg(windows)]
+use std::path::Path;
+#[cfg(windows)]
+use std::process::{Command, Stdio};
+#[cfg(windows)]
+use sha2::{Digest, Sha256};
+#[cfg(windows)]
+use shared_child::SharedChild;
+#[cfg(windows)]
 use crate::log::log;
 
 #[cfg(windows)]
@@ -16,6 +23,8 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+#[cfg(windows)]
+#[allow(dead_code)]
 pub fn ensure_deps() -> Result<(), String> {
     let web_dir = config::web_dir();
     let node_modules = web_dir.join("node_modules");
@@ -61,6 +70,8 @@ pub fn ensure_deps() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(windows)]
+#[allow(dead_code)]
 fn hash_file(path: &Path) -> Result<String, String> {
     let contents = fs::read(path).map_err(|e| format!("Cannot read {:?}: {}", path, e))?;
     let mut hasher = Sha256::new();
@@ -68,6 +79,8 @@ fn hash_file(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+#[cfg(windows)]
+#[allow(dead_code)]
 pub fn detect_mode() -> &'static str {
     let web_dir = config::web_dir();
     let has_build =
@@ -83,6 +96,8 @@ pub fn detect_mode() -> &'static str {
     }
 }
 
+#[cfg(windows)]
+#[allow(dead_code)]
 pub fn start(port: u16) -> Result<std::sync::Arc<SharedChild>, String> {
     let web_dir = config::web_dir();
     let mode = detect_mode();
@@ -161,6 +176,8 @@ pub fn find_free_port(start_port: u16) -> u16 {
     start_port
 }
 
+#[cfg(windows)]
+#[allow(dead_code)]
 pub fn stop(child: &SharedChild) {
     log("Stopping server...");
     let _ = child.kill();
