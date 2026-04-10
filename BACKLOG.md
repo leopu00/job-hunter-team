@@ -1,6 +1,6 @@
 # BACKLOG — Job Hunter Team
 
-Ultimo aggiornamento: 2026-04-06
+Ultimo aggiornamento: 2026-04-11
 
 ---
 
@@ -49,6 +49,30 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 Obiettivo: la web app funziona end-to-end con dati reali.
 
 #### 🔴 ALTA PRIORITÀ
+
+##### [JHT-ONBOARDING-01] Auth gate + onboarding AI-assistito (drop CV)
+- **Problema:** oggi la dashboard è raggiungibile senza profilo configurato, e configurare il profilo a mano è così oneroso che gli utenti abbandonano. L'utente reale (vedi roadmap note) oggi fa analizzare il CV a un LLM esterno e incolla il risultato: dobbiamo portare quel flusso dentro al prodotto.
+- **Task:**
+  1. Gate in `web/app/(protected)/dashboard/page.tsx` (local mode): se `readWorkspaceProfile()` è `null` → `redirect('/onboarding')`. In cloud mode nessun gate (modalità view-only).
+  2. Nuova route `web/app/api/profile/extract-cv/route.ts`: legge provider + API key da `~/.jht/jht.config.json`, chiama direttamente l'API del provider dell'utente (no token pagati da noi), ritorna JSON coerente con lo schema di `/api/profile-assistant/save`. Solo in local mode.
+  3. Rifare `web/app/onboarding/page.tsx`: due path sempre disponibili — (a) drop PDF/CV con estrazione AI via provider utente, anteprima, conferma, save; (b) wizard manuale step-by-step con opzione "caricami il CV" sempre visibile in ogni step.
+  4. Dopo save redirect a `/dashboard`.
+- **Vincolo privacy:** l'estrazione gira solo in locale usando la chiave del provider dell'utente. Nessuna chiamata LLM dal deploy cloud.
+
+##### [JHT-ONBOARDING-02] Profile sync push-only (local → Supabase)
+- **Problema:** oggi il profilo vive solo come YAML locale, quindi accedere da un altro device (telefono, PC lavoro) non mostra nulla. Serve mirror read-only su cloud.
+- **Task:**
+  1. Estendere `/api/profile-assistant/save` branch locale: dopo `writeFileSync` del YAML, se l'utente è anche loggato su Supabase, fare `upsert` su `candidate_profiles` con `user_id = auth.uid()`. Push-only, mai pull inverso.
+  2. La modalità cloud legge sempre da Supabase in sola lettura. Nessuna UI di edit cloud (edit è solo nel localhost).
+  3. Cancellare/ignorare l'attuale flow `/api/profile-assistant/upload-cv` basato su tmux (non è il percorso MVP).
+
+##### [JHT-ONBOARDING-03] Agent results push su Supabase
+- **Problema:** gli agent scrivono solo su SQLite locale, quindi dal telefono non si vedono le posizioni trovate né le candidature generate.
+- **Task:**
+  1. Dopo ogni run agent (scout, analista, scorer, scrittore), batch push di `positions`, `scores`, `applications` verso le tabelle Supabase con `user_id`.
+  2. Nessuna scrittura inversa: cloud è sola vista.
+  3. Reuso di `shared/skills/db_supabase.py` (già pianificato in JHT-BACKEND-01).
+- **Dipendenza:** JHT-BACKEND-01 per il wrapper supabase-py.
 
 ##### [JHT-FRONTEND-01] Collegare Dashboard a Supabase (dati reali)
 - **File:** `web/app/(protected)/dashboard/page.tsx`
