@@ -91,19 +91,15 @@ if ! command -v tmux &>/dev/null; then
   exit 1
 fi
 
-# ── Workspace ────────────────────────────────────────────────────────────────
-if [ -z "${JHT_WORKSPACE:-}" ]; then
-  echo "Errore: JHT_WORKSPACE non configurato."
-  echo "Impostalo in .env o come variabile d'ambiente."
-  echo "Esempio: JHT_WORKSPACE=~/job-hunter-workspace"
-  exit 1
-fi
+# ── Cartelle JHT ─────────────────────────────────────────────────────────────
+mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
+mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
-# Directory di lavoro dell'agente nel workspace
+# Directory di lavoro dell'agente nella zona nascosta
 if [ "$ROLE" = "alfa" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  AGENT_DIR="$JHT_WORKSPACE/$ROLE"
+  AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
 else
-  AGENT_DIR="$JHT_WORKSPACE/${ROLE}-${INSTANCE}"
+  AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
 fi
 mkdir -p "$AGENT_DIR"
 
@@ -129,6 +125,14 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
+send_env_vars() {
+  tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
+}
+
 # Rileva se siamo in WSL — Claude CLI è un binario Windows, va lanciato via PowerShell
 if grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
@@ -136,12 +140,18 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
   sleep 2
   tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
+  tmux send-keys -t "$SESSION" "\$env:JHT_HOME='$JHT_HOME'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_USER_DIR='$JHT_USER_DIR'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
   tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" Enter
   # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
   sleep 8
   tmux send-keys -t "$SESSION" Enter
 else
   tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
+  send_env_vars
   tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" C-m
   # Auto-accept workspace trust dialog (Enter in background dopo qualche secondo)
   # L'Enter extra e' innocuo se Claude e' gia' partito (input vuoto = ignorato)
@@ -149,5 +159,6 @@ else
 fi
 
 echo "✓ $SESSION avviato (effort: $effort, mode: $MODE)"
-echo "  Workspace: $AGENT_DIR"
+echo "  Agent dir:    $AGENT_DIR"
+echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
