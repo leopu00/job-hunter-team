@@ -5,14 +5,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { JHT_HOME } from '../paths.js';
 import type {
   BackupEntry, BackupResult, RestoreResult,
   BackupConfig, BackupManifest, RetentionPolicy,
 } from './types.js';
 
-const DEFAULT_BACKUP_DIR = path.join(homedir(), '.jht', 'backups');
+const DEFAULT_BACKUP_DIR = path.join(JHT_HOME, 'backups');
 const MANIFEST_NAME = 'backup-manifest.json';
 
 function resolveDir(config?: Partial<BackupConfig>): string {
