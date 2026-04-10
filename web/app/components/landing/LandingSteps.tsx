@@ -38,7 +38,7 @@ export default function LandingSteps() {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <h3 className="text-[14px] font-bold text-[var(--color-white)] mb-2">{t(s.titleKey)}</h3>
-                <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">{t(s.descKey)}</p>
+                <p className="text-[12px] text-[var(--color-base)] leading-relaxed mb-3">{t(s.descKey)}</p>
 
                 {/* Code snippet */}
                 <div className="rounded px-3 py-2 border border-[var(--color-border)] overflow-x-auto transition-colors duration-200 group-hover:border-[var(--color-border-glow)]"
