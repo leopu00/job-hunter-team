@@ -272,6 +272,17 @@ export function startSession(agentId: string, workDir?: string, apiKey?: string)
   return { ok: true, name };
 }
 
+/** Ferma tutte le sessioni agente attive */
+export function stopAllSessions(): number {
+  const sessions = listUserSessions();
+  let stopped = 0;
+  for (const s of sessions) {
+    const r = stopSession(s.name);
+    if (r.ok) stopped++;
+  }
+  return stopped;
+}
+
 /** Ferma (kill) una sessione tmux */
 export function stopSession(sessionName: string): { ok: boolean; error?: string } {
   if (!sessionExists(sessionName)) {
