@@ -594,7 +594,8 @@ export async function runJhtTui() {
     }
     // Numeri 1-7 — shortcut diretti alle viste (solo se input vuoto)
     const keyStr = typeof data === "string" ? data : "";
-    if (keyStr && VIEW_SHORTCUTS[keyStr] && inputBuffer.length === 0) {
+    const inProfileWizard = state.currentView === "profile" && !!state.profileWizard;
+    if (keyStr && VIEW_SHORTCUTS[keyStr] && inputBuffer.length === 0 && !inProfileWizard) {
       switchView(VIEW_SHORTCUTS[keyStr]);
       return { consume: true };
     }
