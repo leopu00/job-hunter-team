@@ -5,6 +5,17 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.7] — 2026-04-10
+
+### Web app
+- Rimossa di nuovo dalla home la landing deprecated rientrata durante il recovery della `0.1.6`, mantenendo la versione semplificata prevista per il live
+- Riallineata la pagina iniziale al set di sezioni effettivamente supportato in produzione
+
+### Release e deploy
+- Corretto il flusso di verifica Vercel in CI, che ora controlla il progetto Git collegato anche senza metadata locali `.vercel`
+- Bloccata la pubblicazione di tag release che non puntano all'HEAD corrente di `production`
+- Aggiunto workflow dedicato per creare il tag release direttamente dall'HEAD di `production`
+
 ## [0.1.6] — 2026-04-09
 
 ### Web app
