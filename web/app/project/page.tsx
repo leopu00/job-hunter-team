@@ -109,9 +109,9 @@ function ProjectContent() {
         <section className="p-6 border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
           <h2 className="text-[15px] font-bold text-[var(--color-white)] mb-4">{t.story_title}</h2>
           <div className="flex flex-col gap-4">
-            <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed">{t.story_body_1}</p>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed">{t.story_body_2}</p>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed">{t.story_body_3}</p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_1}</p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_2}</p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_3}</p>
           </div>
         </section>
 
