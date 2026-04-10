@@ -1,6 +1,6 @@
 # BACKLOG — Job Hunter Team
 
-Ultimo aggiornamento: 2026-04-11
+Ultimo aggiornamento: 2026-04-11 (rework onboarding: assistente tmux + split-screen)
 
 ---
 
@@ -50,23 +50,42 @@ Obiettivo: la web app funziona end-to-end con dati reali.
 
 #### 🔴 ALTA PRIORITÀ
 
-##### [JHT-ONBOARDING-01] Auth gate + onboarding AI-assistito (drop CV)
-- **Problema:** oggi la dashboard è raggiungibile senza profilo configurato, e configurare il profilo a mano è così oneroso che gli utenti abbandonano. L'utente reale (vedi roadmap note) oggi fa analizzare il CV a un LLM esterno e incolla il risultato: dobbiamo portare quel flusso dentro al prodotto.
+##### [JHT-CLOUD-GATE-01] Cloud landing: "scarica l'app" invece di dashboard vuota
+- **Problema:** sul dominio pubblico (jobhunterteam.ai), un utente che fa login senza aver mai scaricato l'app desktop vede una dashboard vuota senza capire cosa fare, e ha pure un bottone "compila profilo" che non porta da nessuna parte perché il profilo richiede l'assistente AI locale. La visione corretta è: il cloud è **solo visualizzazione** dei risultati già sincronizzati dal team locale; tutto ciò che richiede azione (configurare profilo, avviare agenti) deve rimandare a localhost.
 - **Task:**
-  1. Gate in `web/app/(protected)/dashboard/page.tsx` (local mode): se `readWorkspaceProfile()` è `null` → `redirect('/onboarding')`. In cloud mode nessun gate (modalità view-only).
-  2. Nuova route `web/app/api/profile/extract-cv/route.ts`: legge provider + API key da `~/.jht/jht.config.json`, chiama direttamente l'API del provider dell'utente (no token pagati da noi), ritorna JSON coerente con lo schema di `/api/profile-assistant/save`. Solo in local mode.
-  3. Rifare `web/app/onboarding/page.tsx`: due path sempre disponibili — (a) drop PDF/CV con estrazione AI via provider utente, anteprima, conferma, save; (b) wizard manuale step-by-step con opzione "caricami il CV" sempre visibile in ogni step.
-  4. Dopo save redirect a `/dashboard`.
-- **Vincolo privacy:** l'estrazione gira solo in locale usando la chiave del provider dell'utente. Nessuna chiamata LLM dal deploy cloud.
+  1. In `web/app/(protected)/dashboard/page.tsx` (cloud mode): se `candidate_profiles` non ha nessuna riga per `auth.uid()`, **non** renderizzare la dashboard attuale. Renderizzare invece una landing "Scarica l'app per configurare il profilo e avviare il team" con CTA grossa a `/download`, una breve spiegazione del perché serve il desktop, e una nota "questa pagina mostra solo i risultati che il tuo team locale sincronizza".
+  2. Rimuovere da cloud mode qualsiasi link a /profile/edit, /onboarding, /assistente — in cloud non si configura nulla.
+  3. Quando `candidate_profiles` **ha** una riga (utente ha già sincronizzato da locale), mostrare la dashboard read-only come oggi.
 
-##### [JHT-ONBOARDING-02] Profile sync push-only (local → Supabase)
+##### [JHT-ONBOARDING-01] Onboarding locale split-screen (profilo ← assistente)
+- **Problema:** l'assistente AI locale esiste già (`tmux ASSISTENTE` con `claude --dangerously-skip-permissions`) e sa già scrivere direttamente in `candidate_profile.yml`, ma è sepolto dietro link incomprensibili, avvio manuale, e non c'è un flusso canalizzato. L'utente entra in dashboard, non capisce cosa fare, e non lo trova mai.
+- **Task:**
+  1. Gate in `web/app/(protected)/dashboard/page.tsx` (local mode): se `readWorkspaceProfile()` è `null` → `redirect('/onboarding')`.
+  2. Rifare `web/app/onboarding/page.tsx` come layout **split-screen**:
+     - **Sinistra**: form profilo live che pollappa `GET /api/profile` ogni 2s e mostra nome, ruolo, località, anni esperienza, skills, lingue. Zero input editabili: è uno specchio di `candidate_profile.yml`, aggiornato dall'assistente.
+     - **Destra**: chat con l'assistente (riuso del pattern già in `web/app/(protected)/assistente/page.tsx`: POST `/api/assistente/chat`, GET polling, drop-zone file che passa per `/api/profile-assistant/upload-cv`).
+  3. Al mount: se `GET /api/assistente/status` ritorna inattivo, chiamare automaticamente `POST /api/assistente/start` con un messaggio di benvenuto iniziale già scritto ("Ciao, aiutami a configurare il mio profilo"). Niente bottoni da trovare.
+  4. Quando il form sinistra raggiunge la soglia minima (name + target_role), un bottone "Vai alla dashboard" diventa attivo in basso. Nessun redirect forzato — l'utente decide quando è contento.
+- **Vincolo privacy:** tutto gira in locale, l'assistente usa il provider configurato dall'utente (api_key o subscription). Nessun token a nostro carico.
+
+##### [JHT-ONBOARDING-02] Assistente multi-provider (api_key + subscription)
+- **Problema:** `.launcher/start-agent.sh:145` oggi hardcoda `claude --dangerously-skip-permissions --effort $effort`, quindi l'assistente può partire solo se l'utente ha Claude CLI con subscription o API key. Multi-provider è una promessa, non una realtà.
+- **Task:**
+  1. Modificare `.launcher/start-agent.sh` per leggere `active_provider` + `auth_method` da `~/.jht/jht.config.json` (via `jq` o parser inline).
+  2. Selezione CLI: `claude` per anthropic/claude, `codex` per openai, `kimi` per moonshot/kimi.
+  3. `auth_method: subscription` → spawna la CLI senza env vars speciali (usa sessione esistente).
+  4. `auth_method: api_key` → spawna la CLI con env vars corrette (es. `ANTHROPIC_API_KEY=$key` per claude, `OPENAI_API_KEY=$key` per codex).
+  5. Fallback: se provider/CLI non supportato ancora, errore chiaro "installa e logga la CLI X o passa ad Anthropic".
+  6. Aggiornare `agents/assistente/assistente.md` con una sezione "Onboarding operativo" che istruisce l'assistente a: leggere file da `../assistente/uploads/` e `../profile/uploads/`, scrivere/aggiornare `../profile/candidate_profile.yml` incrementalmente dopo ogni input rilevante, NON rispondere con JSON nella chat (la chat è solo conversazionale).
+
+##### [JHT-ONBOARDING-03] Profile sync push-only (local → Supabase)
 - **Problema:** oggi il profilo vive solo come YAML locale, quindi accedere da un altro device (telefono, PC lavoro) non mostra nulla. Serve mirror read-only su cloud.
 - **Task:**
-  1. Estendere `/api/profile-assistant/save` branch locale: dopo `writeFileSync` del YAML, se l'utente è anche loggato su Supabase, fare `upsert` su `candidate_profiles` con `user_id = auth.uid()`. Push-only, mai pull inverso.
-  2. La modalità cloud legge sempre da Supabase in sola lettura. Nessuna UI di edit cloud (edit è solo nel localhost).
-  3. Cancellare/ignorare l'attuale flow `/api/profile-assistant/upload-cv` basato su tmux (non è il percorso MVP).
+  1. Estendere `/api/profile-assistant/save` (branch locale): dopo `writeFileSync` del YAML, se esistono credenziali Supabase e l'utente è loggato, fare `upsert` su `candidate_profiles` con `user_id = auth.uid()`. Push-only, mai pull inverso.
+  2. Modalità cloud legge sempre da Supabase in sola lettura. Niente edit dal cloud.
+  3. Trigger di sync automatico anche quando l'assistente aggiorna il YAML direttamente (watch file o polling con debounce lato server).
 
-##### [JHT-ONBOARDING-03] Agent results push su Supabase
+##### [JHT-ONBOARDING-04] Agent results push su Supabase
 - **Problema:** gli agent scrivono solo su SQLite locale, quindi dal telefono non si vedono le posizioni trovate né le candidature generate.
 - **Task:**
   1. Dopo ogni run agent (scout, analista, scorer, scrittore), batch push di `positions`, `scores`, `applications` verso le tabelle Supabase con `user_id`.
