@@ -3,12 +3,20 @@
  * Usato dal wizard onboarding, dalla TUI e dalla cartella di lavoro.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import {
+  JHT_HOME,
+  JHT_CONFIG_PATH,
+  JHT_DB_PATH,
+  JHT_PROFILE_YAML,
+  JHT_PROVIDER_CONFIG_PATH,
+  JHT_USER_DIR,
+  ensureJhtPaths,
+} from "./tui-paths.js";
 
-const CONFIG_DIR = join(homedir(), ".jht");
-const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
+const CONFIG_DIR = JHT_HOME;
+const CONFIG_PATH = JHT_CONFIG_PATH;
 
 export type UserProfile = {
   nome: string;
@@ -41,9 +49,8 @@ export type WorkspaceValidationResult =
   | { ok: false; error: string };
 
 export type WorkspaceInitResult = {
-  createdWorkspaceDir: boolean;
-  createdProfileDir: boolean;
-  createdUploadsDir: boolean;
+  createdHome: boolean;
+  createdUserDir: boolean;
   createdDb: boolean;
 };
 
@@ -208,10 +215,8 @@ function saveJsonFile(filePath: string, data: Record<string, unknown>): void {
   writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
-function getWorkspaceProfileYamlPath(workspacePath?: string): string | null {
-  const resolvedWorkspace = workspacePath ? resolve(workspacePath) : loadWorkspacePath();
-  if (!resolvedWorkspace) return null;
-  return join(resolvedWorkspace, "profile", "candidate_profile.yml");
+function getWorkspaceProfileYamlPath(_workspacePath?: string): string | null {
+  return JHT_PROFILE_YAML;
 }
 
 function yamlQuote(value: string): string {
@@ -337,11 +342,11 @@ function writeWorkspaceProfileYaml(profile: UserProfile, workspacePath?: string)
   writeFileSync(profilePath, lines.join("\n") + "\n", "utf-8");
 }
 
-function syncGlobalRuntimeConfig(workspacePath: string, provider?: WorkspaceProvider, apiKey?: string): void {
+function syncGlobalRuntimeConfig(_workspacePath: string, provider?: WorkspaceProvider, apiKey?: string): void {
   const cfg = loadConfig();
   cfg.version = typeof cfg.version === "number" ? cfg.version : 1;
-  cfg.workspace = workspacePath;
-  cfg.workspacePath = workspacePath;
+  cfg.workspace = JHT_USER_DIR;
+  cfg.workspacePath = JHT_USER_DIR;
   cfg.channels = cfg.channels && typeof cfg.channels === "object" ? cfg.channels : {};
 
   if (provider) {
@@ -367,68 +372,27 @@ function syncGlobalRuntimeConfig(workspacePath: string, provider?: WorkspaceProv
   saveConfig(cfg);
 }
 
-function normalizeWorkspaceInput(value: string): string {
-  return value.trim().replace(/^"(.*)"$/, "$1");
-}
-
-export function validateWorkspacePath(value: string): WorkspaceValidationResult {
-  const normalized = normalizeWorkspaceInput(value);
-  if (!normalized) {
-    return { ok: false, error: "inserisci una cartella di lavoro" };
-  }
-
-  const resolved = resolve(normalized);
-  if (!existsSync(resolved)) {
-    return { ok: false, error: "cartella non trovata" };
-  }
-
-  try {
-    if (!statSync(resolved).isDirectory()) {
-      return { ok: false, error: "il percorso indicato non e una cartella" };
-    }
-  } catch {
-    return { ok: false, error: "cartella non accessibile" };
-  }
-
-  return { ok: true, value: resolved };
+export function validateWorkspacePath(_value: string): WorkspaceValidationResult {
+  return { ok: true, value: JHT_USER_DIR };
 }
 
 export function loadWorkspacePath(): string {
-  const cfg = loadConfig();
-  const nested = typeof cfg.workspace === "object" && cfg.workspace !== null
-    ? cfg.workspace as Record<string, unknown>
-    : undefined;
-  const raw = typeof cfg.workspacePath === "string"
-    ? cfg.workspacePath
-    : typeof cfg.workspace === "string"
-      ? cfg.workspace
-    : typeof nested?.path === "string"
-      ? nested.path
-      : "";
-  return raw.trim();
+  return JHT_USER_DIR;
 }
 
 export function hasValidWorkspacePath(): boolean {
-  const workspace = loadWorkspacePath();
-  return validateWorkspacePath(workspace).ok;
+  return true;
 }
 
-export function saveWorkspacePath(workspacePath: string): void {
-  const validation = validateWorkspacePath(workspacePath);
-  if (!validation.ok) {
-    throw new Error(validation.error);
-  }
-
+export function saveWorkspacePath(_workspacePath: string): void {
   const cfg = loadConfig();
-  cfg.workspace = validation.value;
-  cfg.workspacePath = validation.value;
+  cfg.workspace = JHT_USER_DIR;
+  cfg.workspacePath = JHT_USER_DIR;
   saveConfig(cfg);
 }
 
-function getWorkspaceConfigPath(workspacePath?: string): string | null {
-  const resolvedWorkspace = workspacePath ? resolve(workspacePath) : loadWorkspacePath();
-  if (!resolvedWorkspace) return null;
-  return join(resolvedWorkspace, "profile", "jht.config.json");
+function getWorkspaceConfigPath(_workspacePath?: string): string | null {
+  return JHT_PROVIDER_CONFIG_PATH;
 }
 
 function getDefaultProviderSettings(provider: WorkspaceProvider): { model: string; baseUrl?: string } {
@@ -493,7 +457,7 @@ export function saveWorkspaceProvider(provider: WorkspaceProvider, workspacePath
   if (!configPath) {
     throw new Error("cartella di lavoro non configurata");
   }
-  const resolvedWorkspace = resolve(workspacePath ?? loadWorkspacePath());
+  const resolvedWorkspace = JHT_USER_DIR;
   const cfg = loadJsonFile(configPath);
   cfg.active_provider = provider;
   const providers = cfg.providers && typeof cfg.providers === "object"
@@ -520,7 +484,7 @@ export function saveWorkspaceApiKey(apiKey: string, workspacePath?: string, prov
   if (!configPath) {
     throw new Error("cartella di lavoro non configurata");
   }
-  const resolvedWorkspace = resolve(workspacePath ?? loadWorkspacePath());
+  const resolvedWorkspace = JHT_USER_DIR;
   const cfg = loadJsonFile(configPath);
   const provider = providerOverride ?? loadWorkspaceProvider(workspacePath);
   if (!provider) {
@@ -569,27 +533,17 @@ function initWorkspaceDb(dbPath: string): void {
   }
 }
 
-export function ensureWorkspaceInitialized(workspacePath: string): WorkspaceInitResult {
-  const resolved = resolve(workspacePath);
-  const profileDir = join(resolved, "profile");
-  const uploadsDir = join(profileDir, "uploads");
-  const dbPath = join(resolved, "jobs.db");
-
-  const createdWorkspaceDir = !existsSync(resolved);
-  mkdirSync(resolved, { recursive: true });
-
-  const createdProfileDir = !existsSync(profileDir);
-  mkdirSync(profileDir, { recursive: true });
-
-  const createdUploadsDir = !existsSync(uploadsDir);
-  mkdirSync(uploadsDir, { recursive: true });
-
-  const createdDb = !existsSync(dbPath);
+export function ensureWorkspaceInitialized(_workspacePath?: string): WorkspaceInitResult {
+  const pathsResult = ensureJhtPaths();
+  const createdDb = !existsSync(JHT_DB_PATH);
   if (createdDb) {
-    initWorkspaceDb(dbPath);
+    initWorkspaceDb(JHT_DB_PATH);
   }
-
-  return { createdWorkspaceDir, createdProfileDir, createdUploadsDir, createdDb };
+  return {
+    createdHome: pathsResult.createdHome,
+    createdUserDir: pathsResult.createdUserDir,
+    createdDb,
+  };
 }
 
 export function loadProfile(): UserProfile {

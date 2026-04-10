@@ -7,7 +7,7 @@ import path from "node:path";
 import * as readline from "node:readline";
 import type { ChatOptions, JhtAgent, TuiStateAccess, TuiView } from "./tui-types.js";
 import { sendToSession, resolveSessionName, startSession, stopSession, listJhtSessions } from "./tui-tmux.js";
-import { loadProfile, loadWorkspacePath, loadWorkspaceApiKey, saveProfile, isProfileComplete, formatProfile, saveWorkspacePath, validateWorkspacePath, ensureWorkspaceInitialized, type UserProfile } from "./tui-profile.js";
+import { loadProfile, loadWorkspacePath, loadWorkspaceApiKey, saveProfile, isProfileComplete, formatProfile, type UserProfile } from "./tui-profile.js";
 
 export type JhtChatClient = {
   sendChat: (params: {
@@ -126,7 +126,6 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     "  /send <msg>      — invia messaggio all'agente selezionato",
     "  /setup <key>     — configura API key Anthropic",
     "  /profile         — apre il wizard profilo",
-    "  /workspace       — cambia cartella di lavoro",
     "  /refresh         — aggiorna vista corrente",
     "  /status          — stato connessione",
     "  /abort           — interrompi run AI attivo",
@@ -293,39 +292,6 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           break;
         }
         context.startProfileWizard?.();
-        break;
-      }
-
-      case "workspace": {
-        const currentWorkspace = loadWorkspacePath();
-        if (!args) {
-          sysLog.addSystem(`cartella di lavoro attuale: ${currentWorkspace || "(non impostata)"}`);
-          sysLog.addSystem("uso: /workspace <percorso>  (es. /workspace C:\\Progetti\\jobs)");
-          break;
-        }
-        const validation = validateWorkspacePath(args);
-        if (!validation.ok) {
-          sysLog.addSystem(`errore: ${validation.error}`);
-          setActivityStatus("errore cartella");
-          break;
-        }
-        try {
-          const init = ensureWorkspaceInitialized(validation.value);
-          saveWorkspacePath(validation.value);
-          sysLog.addSystem(`cartella di lavoro aggiornata: ${validation.value}`);
-          setActivityStatus("cartella aggiornata");
-          if (init.createdDb || init.createdProfileDir) {
-            const parts: string[] = [];
-            if (init.createdDb) parts.push("database");
-            if (init.createdProfileDir) parts.push("cartella profilo");
-            if (init.createdUploadsDir) parts.push("uploads");
-            sysLog.addSystem(`inizializzato: ${parts.join(", ")}`);
-          }
-          context.refreshCurrentView();
-        } catch (err) {
-          sysLog.addSystem(`errore: ${err instanceof Error ? err.message : "impossibile inizializzare"}`);
-          setActivityStatus("errore cartella");
-        }
         break;
       }
 
