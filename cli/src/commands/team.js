@@ -6,6 +6,23 @@ const { Command } = require('commander');
 const { execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+// Path fissi JHT (specchio di tui/src/tui-paths.ts)
+const JHT_HOME = path.join(os.homedir(), '.jht');
+const JHT_CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json');
+const JHT_DB_PATH = path.join(JHT_HOME, 'jobs.db');
+const JHT_AGENTS_DIR = path.join(JHT_HOME, 'agents');
+const JHT_USER_DIR = path.join(os.homedir(), 'Documents', 'Job Hunter Team');
+
+function getAgentDir(role, instance) {
+  const sub = instance ? `${role}-${instance}` : role;
+  return path.join(JHT_AGENTS_DIR, sub);
+}
+
+function shellEscape(value) {
+  return String(value).replace(/'/g, "'\\''");
+}
 
 // ── Definizione agenti ──────────────────────────────────────────────────────
 const AGENTS = [
@@ -79,22 +96,6 @@ function resolveConfig() {
     }
   }
   return { repoRoot: null, launcherDir: null };
-}
-
-function getWorkspace() {
-  const { repoRoot } = resolveConfig();
-  if (!repoRoot) return process.env.JHT_WORKSPACE || null;
-
-  if (process.env.JHT_WORKSPACE) return process.env.JHT_WORKSPACE.replace(/^~/, process.env.HOME);
-
-  const envFile = path.join(repoRoot, '.env');
-  if (fs.existsSync(envFile)) {
-    const content = fs.readFileSync(envFile, 'utf8');
-    const match = content.match(/^JHT_WORKSPACE=(.+)$/m);
-    if (match) return match[1].trim().replace(/^~/, process.env.HOME);
-  }
-
-  return null;
 }
 
 function parseAgentArg(arg) {
@@ -212,20 +213,14 @@ function startAction(agentArg, options) {
     process.exit(1);
   }
 
-  const workspace = getWorkspace();
-  if (!workspace) {
-    console.error(c.red('Errore: JHT_WORKSPACE non configurato.'));
-    console.error('  Impostalo in .env o come variabile d\'ambiente.');
-    process.exit(1);
-  }
-
   const { repoRoot } = resolveConfig();
   const mode = options.mode || 'default';
   const targets = agentArg ? [agentArg] : DEFAULT_TEAM;
 
   console.log('');
   console.log(c.bold('Avvio agenti...'));
-  console.log(c.dim(`  Mode: ${mode} | Workspace: ${workspace}`));
+  console.log(c.dim(`  Mode: ${mode} | JHT_HOME: ${JHT_HOME}`));
+  console.log(c.dim(`  JHT_USER_DIR: ${JHT_USER_DIR}`));
   console.log('');
 
   let started = 0;
@@ -251,7 +246,7 @@ function startAction(agentArg, options) {
     let effort = agent.effort;
     if (mode === 'fast') effort = 'low';
 
-    const agentDir = agent.multi ? path.join(workspace, `${role}-${instance}`) : path.join(workspace, role);
+    const agentDir = getAgentDir(role, agent.multi ? instance : null);
     if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
 
     if (repoRoot) {
@@ -260,8 +255,19 @@ function startAction(agentArg, options) {
       if (!fs.existsSync(dest) && fs.existsSync(template)) fs.copyFileSync(template, dest);
     }
 
+    const envVars = {
+      JHT_HOME,
+      JHT_USER_DIR,
+      JHT_DB: JHT_DB_PATH,
+      JHT_CONFIG: JHT_CONFIG_PATH,
+      JHT_AGENT_DIR: agentDir,
+    };
+
     try {
       execSync(`tmux new-session -d -s "${sName}" -c "${agentDir}"`, { stdio: 'ignore' });
+      for (const [k, v] of Object.entries(envVars)) {
+        execSync(`tmux send-keys -t "${sName}" "export ${k}='${shellEscape(v)}'" C-m`, { stdio: 'ignore' });
+      }
       execSync(`tmux send-keys -t "${sName}" "claude --dangerously-skip-permissions --effort ${effort}" C-m`, { stdio: 'ignore' });
       spawn('bash', ['-c', `sleep 4 && tmux send-keys -t "${sName}" Enter && sleep 3 && tmux send-keys -t "${sName}" Enter`], {
         detached: true, stdio: 'ignore',
