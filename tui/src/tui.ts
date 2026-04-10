@@ -11,7 +11,7 @@ import { TeamPanel } from "./components/team-panel.js";
 import { TaskPanel } from "./components/task-panel.js";
 import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
-import { ensureWorkspaceConfigured, saveApiKey } from "./tui-setup.js";
+import { ensureWorkspaceConfigured, saveApiKey, runSetupWizard } from "./tui-setup.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
@@ -32,6 +32,15 @@ const KNOWN_AGENTS: JhtAgent[] = [
 ];
 
 const VIEWS: TuiView[] = ["home", "team", "chat", "tasks", "dashboard", "profile", "ai"];
+const VIEW_SHORTCUTS: Record<string, TuiView> = {
+  "1": "home",
+  "2": "team", 
+  "3": "chat",
+  "4": "tasks",
+  "5": "dashboard",
+  "6": "profile",
+  "7": "ai",
+};
 const PROFILE_WIZARD_STEPS: ProfileWizardState["steps"] = [
   { field: "nome", section: "Profilo Base", title: "Nome", question: "Come ti chiami?", hint: "Es: Anna", required: true },
   { field: "cognome", section: "Profilo Base", title: "Cognome", question: "Qual e il tuo cognome?", hint: "Es: Verdi", required: true },
@@ -231,10 +240,17 @@ export async function runJhtTui() {
   const inputLine = new Text("", 0, 0);
   let inputBuffer = "";
   let isEditingWorkspace = false;
+  let isEditingApiKey = false;
   const updateInputLine = () => {
-    // In home/team: nessun input visibile (navigazione pura), salvo editor cartella
-    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace) {
-      inputLine.setText("");
+    // In home/team: input visibile solo quando l'utente sta digitando un comando
+    if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace && !isEditingApiKey) {
+      if (inputBuffer.length === 0) {
+        inputLine.setText("");
+        return;
+      }
+      // Mostra riga di comando quando l'utente digita (es. /start scout)
+      const viewLabel = state.currentView;
+      inputLine.setText(`\x1b[32m  ${viewLabel} > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     // In profile wizard: nessun prompt, input silenzioso
@@ -244,6 +260,10 @@ export async function runJhtTui() {
     }
     if (state.currentView === "home" && isEditingWorkspace) {
       inputLine.setText(`\x1b[32m  workspace > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
+      return;
+    }
+    if (state.currentView === "home" && isEditingApiKey) {
+      inputLine.setText(`\x1b[32m  api key > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     const viewLabel = state.currentView === "chat" && state.chatTargetSession
@@ -463,14 +483,63 @@ export async function runJhtTui() {
         tui.requestRender();
         if (text.startsWith("/")) void handleCommand(text);
         else void sendMessage(text);
+      } else if (state.currentView === "team") {
+        // Team: Enter su agente selezionato → avvia (offline) o chat (online)
+        const agent = teamPanel.getSelectedAgent();
+        if (agent) {
+          if (agent.isOnline) {
+            void handleCommand(`/chat ${agent.id}`);
+          } else {
+            void handleCommand(`/start ${agent.id}`);
+          }
+        }
       } else if (state.currentView === "home") {
-        const selectedItem = homePanel.getSelectedItem();
-        if (selectedItem?.type === "workspace") {
-          isEditingWorkspace = true;
-          inputBuffer = loadWorkspacePath();
-          setActivityStatus(selectedItem.label);
+        if (isEditingApiKey) {
+          // Salva API key
+          const key = inputBuffer.trim();
+          inputBuffer = "";
+          isEditingApiKey = false;
           updateInputLine();
           tui.requestRender();
+          if (key) {
+            if (key.startsWith("sk-ant-")) {
+              const ok = commandContext.reconnect?.(key);
+              setActivityStatus(ok ? "api key salvata" : "errore connessione");
+            } else {
+              setActivityStatus("chiave deve iniziare con sk-ant-");
+            }
+          } else {
+            setActivityStatus("idle");
+          }
+          return { consume: true };
+        }
+        
+        const selectedItem = homePanel.getSelectedItem();
+        if (!selectedItem) return { consume: true };
+        
+        switch (selectedItem.type) {
+          case "workspace":
+            isEditingWorkspace = true;
+            inputBuffer = loadWorkspacePath();
+            setActivityStatus("modifica cartella");
+            updateInputLine();
+            tui.requestRender();
+            break;
+          case "apikey":
+            isEditingApiKey = true;
+            inputBuffer = loadApiKey() || "";
+            setActivityStatus("inserisci api key");
+            updateInputLine();
+            tui.requestRender();
+            break;
+          case "provider":
+            setActivityStatus("provider: usa /setup <key>");
+            tui.requestRender();
+            break;
+          case "profile":
+            setActivityStatus("avvio wizard profilo...");
+            void handleCommand("/profile");
+            break;
         }
       }
       return { consume: true };
@@ -506,11 +575,27 @@ export async function runJhtTui() {
       tui.requestRender();
       return { consume: true };
     }
+    // Esc — cancella input e torna a navigazione
+    if (matchesKey(data, Key.escape)) {
+      if (inputBuffer.length > 0) {
+        inputBuffer = "";
+        updateInputLine();
+        tui.requestRender();
+        return { consume: true };
+      }
+      return { consume: true };
+    }
     // Tab — cicla viste
     if (matchesKey(data, Key.tab)) {
       const idx = VIEWS.indexOf(state.currentView);
       const next = VIEWS[(idx + 1) % VIEWS.length]!;
       switchView(next);
+      return { consume: true };
+    }
+    // Numeri 1-7 — shortcut diretti alle viste (solo se input vuoto)
+    const keyStr = typeof data === "string" ? data : "";
+    if (keyStr && VIEW_SHORTCUTS[keyStr] && inputBuffer.length === 0) {
+      switchView(VIEW_SHORTCUTS[keyStr]);
       return { consume: true };
     }
     if (state.currentView === "profile" && state.profileWizard) {
@@ -535,11 +620,32 @@ export async function runJhtTui() {
       }
       return { consume: true };
     }
+    // Team view: navigazione frecce
+    if (matchesKey(data, Key.up) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(-1)) {
+        switchView("team");
+      }
+      return { consume: true };
+    }
+    if (matchesKey(data, Key.down) && inputBuffer.length === 0 && state.currentView === "team") {
+      if (teamPanel.moveSelection(1)) {
+        switchView("team");
+      }
+      return { consume: true };
+    }
     // Ctrl+O — toggle tools expand (AI view)
     if (matchesKey(data, Key.ctrl("o"))) {
       state.toolsExpanded = !state.toolsExpanded;
       setActivityStatus(state.toolsExpanded ? "tool espansi" : "tool compressi");
       tui.requestRender();
+      return { consume: true };
+    }
+    // Team view: "x" ferma agente selezionato
+    if (typeof data === "string" && data === "x" && inputBuffer.length === 0 && state.currentView === "team") {
+      const agent = teamPanel.getSelectedAgent();
+      if (agent?.isOnline) {
+        void handleCommand(`/stop ${agent.id}`);
+      }
       return { consume: true };
     }
     // Caratteri stampabili
