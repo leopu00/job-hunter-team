@@ -3,10 +3,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_PATH = path.join(os.homedir(), '.jht', 'skills', 'skills.json')
+const STORE_PATH = path.join(JHT_HOME, 'skills', 'skills.json')
 
 type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert'
 type SkillCategory = 'frontend' | 'backend' | 'devops' | 'soft-skills' | 'languages'

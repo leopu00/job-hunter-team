@@ -4,12 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import yaml from 'js-yaml'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
+import {
+  JHT_CONFIG_PATH,
+  JHT_PROFILE_DIR,
+  JHT_PROFILE_YAML,
+  JHT_USER_DIR,
+} from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const COOKIE_NAME = 'jht_workspace'
-const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
+const GLOBAL_CONFIG_PATH = JHT_CONFIG_PATH
 
 export async function POST(req: NextRequest) {
   let body: { profile?: Record<string, unknown>; confirmed?: boolean }
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (isSupabaseConfigured) {
     return await saveToSupabase(profile)
   }
-  return saveToYaml(req, profile)
+  return saveToYaml(profile)
 }
 
 async function saveToSupabase(profile: Record<string, unknown>) {
@@ -95,18 +99,9 @@ async function saveToSupabase(profile: Record<string, unknown>) {
   return NextResponse.json({ ok: true, profile: data })
 }
 
-function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
-  const wsPath = req.cookies.get(COOKIE_NAME)?.value
-  if (!wsPath) {
-    return NextResponse.json(
-      { error: 'workspace non configurato' },
-      { status: 500 }
-    )
-  }
-
-  const profileDir = path.join(wsPath, 'profile')
-  fs.mkdirSync(profileDir, { recursive: true })
-  const profilePath = path.join(profileDir, 'candidate_profile.yml')
+function saveToYaml(profile: Record<string, unknown>) {
+  fs.mkdirSync(JHT_PROFILE_DIR, { recursive: true })
+  const profilePath = JHT_PROFILE_YAML
   const positioning = (profile.positioning ?? {}) as Record<string, unknown>
   const contacts = (positioning.contacts ?? {}) as Record<string, string>
 
@@ -186,7 +181,7 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
   try {
     const yamlStr = yaml.dump(yamlData, { lineWidth: 120, noRefs: true })
     fs.writeFileSync(profilePath, yamlStr, 'utf-8')
-    syncTuiProfileCache(wsPath, profile)
+    syncTuiProfileCache(profile)
     return NextResponse.json({ ok: true, path: profilePath })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'scrittura YAML fallita'
@@ -194,7 +189,7 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
   }
 }
 
-function syncTuiProfileCache(workspacePath: string, profile: Record<string, unknown>) {
+function syncTuiProfileCache(profile: Record<string, unknown>) {
   const existing = fs.existsSync(GLOBAL_CONFIG_PATH)
     ? JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')) as Record<string, unknown>
     : {}
@@ -241,8 +236,8 @@ function syncTuiProfileCache(workspacePath: string, profile: Record<string, unkn
 
   const updated = {
     ...existing,
-    workspace: workspacePath,
-    workspacePath,
+    workspace: JHT_USER_DIR,
+    workspacePath: JHT_USER_DIR,
     profile: tuiProfile,
   }
 

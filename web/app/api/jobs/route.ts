@@ -5,13 +5,14 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type JobStatus = 'saved' | 'applied' | 'interview' | 'rejected' | 'offer';
 type Job = { id: string; title: string; company: string; location: string; salaryMin: number; salaryMax: number; currency: string; status: JobStatus; source: string; url: string; addedAt: number; updatedAt: number };
 
-const JOBS_PATH = path.join(os.homedir(), '.jht', 'jobs.json');
+const JOBS_PATH = path.join(JHT_HOME, 'jobs.json');
 
 function loadJobs(): Job[] {
   try { return JSON.parse(fs.readFileSync(JOBS_PATH, 'utf-8')); }

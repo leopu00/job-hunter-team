@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_PATH = path.join(os.homedir(), '.jht', 'jht.config.json')
-const STATS_PATH = path.join(os.homedir(), '.jht', 'channels', 'stats.json')
+const CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json')
+const STATS_PATH = path.join(JHT_HOME, 'channels', 'stats.json')
 
 type ChannelId = 'web' | 'cli' | 'telegram' | 'email' | 'slack' | 'webhook'
 
@@ -35,7 +36,7 @@ interface ChannelInfo {
   configuredAt: number | null
 }
 
-const ENABLED_PATH = path.join(os.homedir(), '.jht', 'channels', 'enabled.json')
+const ENABLED_PATH = path.join(JHT_HOME, 'channels', 'enabled.json')
 
 function loadEnabled(): Record<string, boolean> {
   try { return JSON.parse(fs.readFileSync(ENABLED_PATH, 'utf-8')) } catch { return {} }

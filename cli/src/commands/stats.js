@@ -1,8 +1,9 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR        = join(homedir(), '.jht');
+const JHT_DIR        = JHT_HOME;
 const TASKS_PATH     = join(JHT_DIR, 'tasks', 'tasks.json');
 const ANALYTICS_PATH = join(JHT_DIR, 'analytics', 'analytics.json');
 const SESSIONS_PATH  = join(JHT_DIR, 'sessions', 'sessions.json');

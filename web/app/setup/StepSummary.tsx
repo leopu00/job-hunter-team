@@ -19,7 +19,6 @@ export function StepSummary({ form, back }: Props) {
     ['Auth',      form.authMethod === 'api_key'
       ? `API Key (${form.apiKey.slice(0, 8)}••••)` : `Subscription (${form.email})`],
     ['Telegram',  form.useTelegram ? 'configurato' : 'non configurato'],
-    ['Workspace', '~/.jht'],
   ]
 
   const save = async () => {
@@ -30,6 +29,8 @@ export function StepSummary({ form, back }: Props) {
     if (form.authMethod === 'api_key') provConf.api_key = form.apiKey
     else provConf.subscription = { email: form.email }
 
+    // workspace path e' fisso (~/.jht + ~/Documents/Job Hunter Team),
+    // l'API /api/setup lo hardcoda da @/lib/jht-paths e ignora il body.
     const body = {
       active_provider: p.value,
       providers: { [p.value]: provConf },
@@ -39,7 +40,6 @@ export function StepSummary({ form, back }: Props) {
           ...(form.chatId.trim() ? { chat_id: form.chatId.trim() } : {}),
         },
       } : {},
-      workspace: `${typeof window !== 'undefined' ? '' : '~'}/.jht`,
     }
 
     try {
