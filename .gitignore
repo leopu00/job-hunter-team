@@ -63,6 +63,16 @@ shared/secrets/*
 
 # ── BUILD E DIPENDENZE ──────────────────────────────────────
 node_modules/
+
+# Rust build artifacts
+launcher/target/
+
+# Desktop build artifacts
+desktop/dist/
+desktop/app-payload/
+
+# Download binaries (served at runtime, not committed)
+web/public/downloads/
 .next/
 __pycache__/
 *.pyc
