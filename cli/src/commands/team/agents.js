@@ -2,18 +2,20 @@
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import {
+  JHT_HOME,
+  JHT_CONFIG_PATH,
+  JHT_DB_PATH,
+  JHT_AGENTS_DIR,
+  JHT_USER_DIR,
+} from '../../jht-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Path fissi JHT (specchio di tui/src/tui-paths.ts)
-export const JHT_HOME = join(homedir(), '.jht');
-export const JHT_CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
-export const JHT_DB_PATH = join(JHT_HOME, 'jobs.db');
-export const JHT_AGENTS_DIR = join(JHT_HOME, 'agents');
-export const JHT_USER_DIR = join(homedir(), 'Documents', 'Job Hunter Team');
+// Re-export costanti per gli altri moduli team
+export { JHT_HOME, JHT_CONFIG_PATH, JHT_DB_PATH, JHT_AGENTS_DIR, JHT_USER_DIR };
 
 export const AGENTS = [
   { role: 'alfa',       prefix: 'ALFA',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
