@@ -242,9 +242,15 @@ export async function runJhtTui() {
   let isEditingWorkspace = false;
   let isEditingApiKey = false;
   const updateInputLine = () => {
-    // In home/team: nessun input visibile (navigazione pura), salvo editor cartella/apikey
+    // In home/team: input visibile solo quando l'utente sta digitando un comando
     if ((state.currentView === "home" || state.currentView === "team") && !isEditingWorkspace && !isEditingApiKey) {
-      inputLine.setText("");
+      if (inputBuffer.length === 0) {
+        inputLine.setText("");
+        return;
+      }
+      // Mostra riga di comando quando l'utente digita (es. /start scout)
+      const viewLabel = state.currentView;
+      inputLine.setText(`\x1b[32m  ${viewLabel} > \x1b[0m${inputBuffer}\x1b[2m\u2588\x1b[0m`);
       return;
     }
     // In profile wizard: nessun prompt, input silenzioso
