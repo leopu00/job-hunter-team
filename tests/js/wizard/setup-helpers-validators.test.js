@@ -2,13 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('node:fs');
 
-import * as fs from 'node:fs';
 import {
   validateApiKey,
   validateEmail,
   validateTelegramToken,
   validateChatId,
-  validateWorkspacePath,
   AI_PROVIDERS,
 } from '../../../cli/wizard/setup-helpers.js';
 
@@ -97,20 +95,6 @@ describe('validateChatId', () => {
   });
 });
 
-// --- validateWorkspacePath ---
-
-describe('validateWorkspacePath', () => {
-  it('rifiuta path vuoto', () => {
-    expect(validateWorkspacePath('')).toMatch(/vuoto/);
-  });
-
-  it('rifiuta path con directory padre inesistente', () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    expect(validateWorkspacePath('/nonexistent/path')).toMatch(/non esiste/);
-  });
-
-  it('accetta path con directory padre esistente', () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    expect(validateWorkspacePath('/tmp/test-jht')).toBeUndefined();
-  });
-});
+// --- validateWorkspacePath (rimossa) ---
+// I path JHT sono ora fissi (~/.jht + ~/Documents/Job Hunter Team),
+// l'utente non sceglie piu' il workspace quindi non serve validazione.

@@ -102,9 +102,8 @@ export function validateConfigBeforeWrite(config) {
       errors.push(`providers.${key}.subscription: email obbligatoria`);
     }
   }
-  if (!config.workspace || typeof config.workspace !== 'string') {
-    errors.push('workspace e\' obbligatorio');
-  }
+  // workspace non e' piu' parte del config: i path JHT sono fissi
+  // (~/.jht + ~/Documents/Job Hunter Team).
 
   return { success: errors.length === 0, errors };
 }
