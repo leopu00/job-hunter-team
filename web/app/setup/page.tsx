@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Card, NavButtons } from './ui'
 
-const STEPS = ['prereq', 'model', 'apikey', 'workspace', 'health'] as const
+const STEPS = ['prereq', 'model', 'apikey', 'health'] as const
 type Step = (typeof STEPS)[number]
-const LABELS: Record<Step, string> = { prereq: 'Prerequisiti', model: 'Modello', apikey: 'API Key', workspace: 'Workspace', health: 'Health' }
+const LABELS: Record<Step, string> = { prereq: 'Prerequisiti', model: 'Modello', apikey: 'API Key', health: 'Health' }
 const PROVIDERS = [{ v: 'claude', l: 'Anthropic Claude' }, { v: 'openai', l: 'OpenAI' }, { v: 'minimax', l: 'MiniMax' }]
 const MODELS: Record<string, string[]> = {
   claude: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
@@ -13,11 +13,11 @@ const MODELS: Record<string, string[]> = {
 }
 
 interface Check { label: string; ok: boolean; hint?: string }
-interface FormState { provider: string; model: string; apiKey: string; workspace: string }
+interface FormState { provider: string; model: string; apiKey: string }
 
 export default function SetupPage() {
   const [step, setStep] = useState<Step>('prereq')
-  const [form, setForm] = useState<FormState>({ provider: 'claude', model: '', apiKey: '', workspace: '' })
+  const [form, setForm] = useState<FormState>({ provider: 'claude', model: '', apiKey: '' })
   const [checks, setChecks] = useState<Check[]>([])
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
@@ -51,7 +51,6 @@ export default function SetupPage() {
         body: JSON.stringify({
           active_provider: form.provider,
           providers: { [form.provider]: { auth_method: 'api_key', api_key: form.apiKey, model: form.model || MODELS[form.provider]?.[0] } },
-          workspace: form.workspace || undefined,
         }),
       })
       const d = await r.json()
@@ -137,19 +136,7 @@ export default function SetupPage() {
                 className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
               <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Salvata in ~/.jht/jht.config.json</p>
             </div>
-            <NavButtons onBack={back} onNext={next} disabled={!form.apiKey.trim()} />
-          </Card>
-        )}
-
-        {step === 'workspace' && (
-          <Card title="Workspace" sub="Directory di lavoro per i file">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="setup-workspace" className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-muted)' }}>Path</label>
-              <input id="setup-workspace" type="text" value={form.workspace} placeholder="~/.jht (default)" onChange={e => set({ workspace: e.target.value })}
-                className={inp} style={{ color: 'var(--color-bright)' }} autoComplete="off" />
-              <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Lascia vuoto per il default ~/.jht</p>
-            </div>
-            <NavButtons onBack={back} onNext={() => { next(); save() }} nextLabel="Salva e verifica" />
+            <NavButtons onBack={back} onNext={() => { next(); save() }} disabled={!form.apiKey.trim()} nextLabel="Salva e verifica" />
           </Card>
         )}
 
@@ -167,7 +154,7 @@ export default function SetupPage() {
                 <>
                   <span className="text-3xl" aria-hidden="true" style={{ color: 'var(--color-green)' }}>✓</span>
                   <p className="text-[12px] font-semibold" style={{ color: 'var(--color-green)' }}>{healthMsg}</p>
-                  <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Provider: {form.provider} · {form.workspace || '~/.jht'}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--color-dim)' }}>Provider: {form.provider} · ~/.jht</p>
                 </>
               )}
               {health === 'error' && (

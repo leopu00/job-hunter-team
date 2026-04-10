@@ -1,11 +1,11 @@
 import Database from 'better-sqlite3'
-import path from 'path'
 import fs from 'fs'
+import { JHT_DB_PATH } from '@/lib/jht-paths'
 
 declare const globalThis: { __jht_db_cache?: { path: string; db: Database.Database } }
 
-export function getDb(workspacePath: string): Database.Database {
-  const dbPath = path.join(workspacePath, 'jobs.db')
+export function getDb(_workspacePath?: string): Database.Database {
+  const dbPath = JHT_DB_PATH
   if (!fs.existsSync(dbPath)) {
     throw new Error(`Database non trovato: ${dbPath}`)
   }
@@ -126,9 +126,8 @@ CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 PRAGMA user_version = 2;
 `
 
-export function initDb(workspacePath: string): void {
-  const dbPath = path.join(workspacePath, 'jobs.db')
-  const db = new Database(dbPath)
+export function initDb(_workspacePath?: string): void {
+  const db = new Database(JHT_DB_PATH)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA_SQL)

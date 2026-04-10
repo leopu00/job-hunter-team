@@ -3,6 +3,7 @@ import { runBash } from '@/lib/shell'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ const DEFAULT_CONFIG = { port: 18789, channels: ['web', 'cli'] as ChannelId[], r
 
 function loadGatewayConfig(): typeof DEFAULT_CONFIG & { channels: ChannelId[] } {
   const candidates = [
-    path.join(os.homedir(), '.jht', 'jht.config.json'),
+    path.join(JHT_HOME, 'jht.config.json'),
     path.join(process.cwd(), 'jht.config.json'),
     path.join(process.cwd(), '..', 'jht.config.json'),
   ]

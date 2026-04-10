@@ -1,21 +1,22 @@
-const LS_KEY = 'jht_workspace'
+/**
+ * Path fisso lato client. Il workspace non e' piu' configurabile:
+ * gli agenti girano in ~/.jht/ (nascosto), l'utente usa
+ * ~/Documents/Job Hunter Team/ (visibile).
+ *
+ * Queste funzioni restano come stub per retro-compatibilita' — qualsiasi
+ * consumer rimasto ottiene il path fisso o un no-op.
+ */
 
-export function getWorkspace(): string | null {
-  try {
-    return localStorage.getItem(LS_KEY)
-  } catch {
-    return null
-  }
+const FIXED_USER_DIR_LABEL = '~/Documents/Job Hunter Team'
+
+export function getWorkspace(): string {
+  return FIXED_USER_DIR_LABEL
 }
 
-export function setWorkspace(path: string): void {
-  try {
-    localStorage.setItem(LS_KEY, path)
-  } catch { /* ignore */ }
+export function setWorkspace(_path: string): void {
+  /* no-op: il path e' fisso */
 }
 
 export function clearWorkspace(): void {
-  try {
-    localStorage.removeItem(LS_KEY)
-  } catch { /* ignore */ }
+  /* no-op: il path e' fisso */
 }

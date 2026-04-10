@@ -7,6 +7,13 @@ import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  JHT_HOME,
+  JHT_CONFIG_PATH,
+  JHT_DB_PATH,
+  JHT_USER_DIR,
+  getAgentDir,
+} from "./tui-paths.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -190,7 +197,7 @@ export function resolveSessionName(agentId: string): string | null {
 // ── Start/Stop ────────────────────────────────────────────────────────────
 
 /** Avvia una nuova sessione tmux per un agente con Claude CLI */
-export function startSession(agentId: string, workDir?: string, apiKey?: string): { ok: boolean; name: string; error?: string } {
+export function startSession(agentId: string, _workDir?: string, apiKey?: string): { ok: boolean; name: string; error?: string } {
   const normalized = agentId.toLowerCase().replace(/-/g, "_");
   const config = AGENT_CONFIGS[normalized];
   const name = SESSION_NAME_MAP[normalized] ?? `JHT-${agentId.toUpperCase()}`;
@@ -203,20 +210,27 @@ export function startSession(agentId: string, workDir?: string, apiKey?: string)
     return { ok: false, name, error: `agente '${agentId}' non riconosciuto` };
   }
 
-  // Prepara directory agente nel workspace
-  const agentSubDir = config.type === "single" ? normalized : `${normalized}-1`;
-  const agentDir = workDir ? join(workDir, agentSubDir) : undefined;
-  if (agentDir) {
-    mkdirSync(agentDir, { recursive: true });
-    // Copia CLAUDE.md template se non esiste
-    const templatePath = join(REPO_ROOT, "agents", normalized, `${normalized}.md`);
-    const claudeMdPath = join(agentDir, "CLAUDE.md");
-    if (existsSync(templatePath) && !existsSync(claudeMdPath)) {
-      try { copyFileSync(templatePath, claudeMdPath); } catch { /* ignora */ }
-    }
+  // Directory agente nella zona nascosta ~/.jht/agents/<id>/
+  const agentDir = getAgentDir(normalized, config.type === "multi" ? "1" : undefined);
+  mkdirSync(agentDir, { recursive: true });
+  // Copia CLAUDE.md template se non esiste
+  const templatePath = join(REPO_ROOT, "agents", normalized, `${normalized}.md`);
+  const claudeMdPath = join(agentDir, "CLAUDE.md");
+  if (existsSync(templatePath) && !existsSync(claudeMdPath)) {
+    try { copyFileSync(templatePath, claudeMdPath); } catch { /* ignora */ }
   }
 
   const claudeCmd = `claude --dangerously-skip-permissions --effort ${config.effort}`;
+
+  // Env var che gli agenti devono poter leggere
+  const jhtEnv: Record<string, string> = {
+    JHT_HOME,
+    JHT_USER_DIR,
+    JHT_DB: JHT_DB_PATH,
+    JHT_CONFIG: JHT_CONFIG_PATH,
+    JHT_AGENT_DIR: agentDir,
+  };
+  if (apiKey) jhtEnv.ANTHROPIC_API_KEY = apiKey;
 
   if (process.platform === "win32") {
     // Windows/WSL: crea sessione tmux con cmd.exe (evita Execution Policy di PowerShell)
@@ -225,19 +239,20 @@ export function startSession(agentId: string, workDir?: string, apiKey?: string)
       return { ok: false, name, error: r.stderr.trim() || "errore tmux" };
     }
 
-    // Setup in background: setta API key, naviga nella cartella e avvia Claude
-    const safePath = (agentDir || workDir || "").replace(/\\/g, "\\\\");
-    const setApiKeyCmd = apiKey
-      ? `tmux send-keys -t '${name}' 'set ANTHROPIC_API_KEY=${apiKey}' Enter && sleep 0.5`
-      : "";
+    // Setup in background: setta env vars, naviga nella cartella e avvia Claude
+    const safePath = agentDir.replace(/\\/g, "\\\\");
+    const setEnvCmds = Object.entries(jhtEnv).map(([k, v]) =>
+      `tmux send-keys -t '${name}' 'set ${k}=${v}' Enter && sleep 0.2`,
+    );
     // Se c'e' API key, Claude chiede conferma: Up (seleziona "Yes") + Enter
     const acceptApiKeyCmd = apiKey
       ? `sleep 5 && tmux send-keys -t '${name}' Up Enter && sleep 5`
       : "sleep 8";
     const setupCmds = [
       "sleep 2",
-      ...(setApiKeyCmd ? [setApiKeyCmd] : []),
-      ...(safePath ? [`tmux send-keys -t '${name}' 'cd ${safePath}' Enter`, "sleep 1"] : []),
+      ...setEnvCmds,
+      `tmux send-keys -t '${name}' 'cd ${safePath}' Enter`,
+      "sleep 1",
       `tmux send-keys -t '${name}' '${claudeCmd}' Enter`,
       acceptApiKeyCmd,
       `tmux send-keys -t '${name}' Enter`,
@@ -248,21 +263,20 @@ export function startSession(agentId: string, workDir?: string, apiKey?: string)
       stdio: "ignore",
     }).unref();
   } else {
-    // Linux/macOS: crea sessione direttamente
-    const args = ["new-session", "-d", "-s", name];
-    if (agentDir) args.push("-c", agentDir);
-    const r = spawnTmux(args);
+    // Linux/macOS: crea sessione direttamente con cwd = agentDir
+    const r = spawnTmux(["new-session", "-d", "-s", name, "-c", agentDir]);
     if (r.status !== 0) {
       return { ok: false, name, error: r.stderr.trim() || "errore tmux" };
     }
 
-    // Setta API key se presente
-    if (apiKey) {
-      spawnTmux(["send-keys", "-t", name, `export ANTHROPIC_API_KEY=${apiKey}`, "C-m"]);
+    // Export env vars (escape single quotes nei valori)
+    for (const [k, v] of Object.entries(jhtEnv)) {
+      const escaped = String(v).replace(/'/g, "'\\''");
+      spawnTmux(["send-keys", "-t", name, `export ${k}='${escaped}'`, "C-m"]);
     }
     // Avvia Claude e auto-accept trust/API key dialog
     spawnTmux(["send-keys", "-t", name, claudeCmd, "C-m"]);
-    const acceptDelay = apiKey ? "sleep 5 && tmux send-keys -t '${name}' Up Enter && sleep 5" : "sleep 4";
+    const acceptDelay = apiKey ? `sleep 5 && tmux send-keys -t '${name}' Up Enter && sleep 5` : "sleep 4";
     spawn("bash", ["-c", `${acceptDelay} && tmux send-keys -t '${name}' Enter && sleep 3 && tmux send-keys -t '${name}' Enter`], {
       detached: true,
       stdio: "ignore",
@@ -270,6 +284,17 @@ export function startSession(agentId: string, workDir?: string, apiKey?: string)
   }
 
   return { ok: true, name };
+}
+
+/** Ferma tutte le sessioni agente attive */
+export function stopAllSessions(): number {
+  const sessions = listUserSessions();
+  let stopped = 0;
+  for (const s of sessions) {
+    const r = stopSession(s.name);
+    if (r.ok) stopped++;
+  }
+  return stopped;
 }
 
 /** Ferma (kill) una sessione tmux */

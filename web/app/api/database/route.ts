@@ -5,18 +5,19 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type TableInfo = { name: string; rowCount: number; sizeKB: number; columns: string[]; source: string };
 
 const DATA_DIRS = [
-  path.join(os.homedir(), '.jht'),
-  path.join(os.homedir(), '.jht', 'databases'),
-  path.join(os.homedir(), '.jht', 'analytics'),
-  path.join(os.homedir(), '.jht', 'sessions'),
-  path.join(os.homedir(), '.jht', 'errors'),
-  path.join(os.homedir(), '.jht', 'status'),
+  JHT_HOME,
+  path.join(JHT_HOME, 'databases'),
+  path.join(JHT_HOME, 'analytics'),
+  path.join(JHT_HOME, 'sessions'),
+  path.join(JHT_HOME, 'errors'),
+  path.join(JHT_HOME, 'status'),
 ];
 
 function scanJsonFiles(): TableInfo[] {
@@ -46,7 +47,7 @@ function scanJsonFiles(): TableInfo[] {
 
 function scanSqliteFiles(): TableInfo[] {
   const tables: TableInfo[] = [];
-  const dbDir = path.join(os.homedir(), '.jht', 'databases');
+  const dbDir = path.join(JHT_HOME, 'databases');
   let files: string[];
   try { files = fs.readdirSync(dbDir).filter(f => f.endsWith('.db') || f.endsWith('.sqlite')); } catch { return tables; }
   for (const file of files) {

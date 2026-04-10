@@ -3,10 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { randomUUID } from 'crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_DIR = path.join(os.homedir(), '.jht')
+const STORE_DIR = JHT_HOME
 const STORE_PATH = path.join(STORE_DIR, 'activity-history.json')
 
 type ActionType = 'view' | 'apply' | 'save' | 'edit' | 'delete'

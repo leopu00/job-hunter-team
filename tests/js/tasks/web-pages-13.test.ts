@@ -36,11 +36,13 @@ describe("/setup", () => {
     const res = await POST(jreq("http://h/api/setup", { active_provider: "nope", providers: {} }) as any);
     expect(res.status).toBe(400);
   });
-  it("pagina: SetupPage + STEPS 5 + PROVIDERS 3 + MODELS + health check", () => {
+  it("pagina: SetupPage + STEPS 4 + PROVIDERS 3 + MODELS + health check", () => {
     const s = readSrc("app/setup/page.tsx");
     expect(s).toMatch(/export default function SetupPage/);
     expect(s).toContain("STEPS"); expect(s).toContain("PROVIDERS"); expect(s).toContain("MODELS");
-    for (const st of ["prereq", "model", "apikey", "workspace", "health"]) expect(s).toContain(`'${st}'`);
+    // workspace step rimosso: path fissi JHT non richiedono scelta utente
+    for (const st of ["prereq", "model", "apikey", "health"]) expect(s).toContain(`'${st}'`);
+    expect(s).not.toContain("'workspace'");
   });
 });
 
