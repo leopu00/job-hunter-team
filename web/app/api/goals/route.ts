@@ -6,13 +6,14 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type GoalStatus = 'on-track' | 'behind' | 'completed';
 type Goal = { id: string; title: string; target: number; current: number; unit: string; deadline: string; status: GoalStatus; createdAt: number };
 
-const FILE = path.join(os.homedir(), '.jht', 'goals.json');
+const FILE = path.join(JHT_HOME, 'goals.json');
 
 function load(): Goal[] {
   try { const d = JSON.parse(fs.readFileSync(FILE, 'utf-8')); return Array.isArray(d) ? d : []; }

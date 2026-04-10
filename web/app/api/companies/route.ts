@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ type CompanySize = 'startup' | 'small' | 'medium' | 'large' | 'enterprise';
 type HistoryEntry = { jobTitle: string; status: string; date: number };
 type Company = { id: string; name: string; sector: string; size: CompanySize; location: string; rating: number; openPositions: number; notes: string; website: string; history: HistoryEntry[]; addedAt: number };
 
-const COMPANIES_PATH = path.join(os.homedir(), '.jht', 'companies.json');
+const COMPANIES_PATH = path.join(JHT_HOME, 'companies.json');
 
 function loadCompanies(): Company[] {
   try { return JSON.parse(fs.readFileSync(COMPANIES_PATH, 'utf-8')); }

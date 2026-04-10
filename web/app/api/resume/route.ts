@@ -5,12 +5,13 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type ResumeData = { personal: Record<string, string>; experience: Array<Record<string, string>>; education: Array<Record<string, string>>; skills: string[]; languages: Array<Record<string, string>>; updatedAt: number };
 
-const RESUME_PATH = path.join(os.homedir(), '.jht', 'resume.json');
+const RESUME_PATH = path.join(JHT_HOME, 'resume.json');
 
 function loadResume(): ResumeData {
   try { return JSON.parse(fs.readFileSync(RESUME_PATH, 'utf-8')); }
