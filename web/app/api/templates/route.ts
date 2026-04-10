@@ -124,7 +124,7 @@ const SAMPLE_TEMPLATES: TemplateDetail[] = [
 export async function GET(req: NextRequest) {
   const workspace = getWorkspace()
   let templates = workspace ? loadTemplates(workspace) : []
-  if (templates.length === 0) templates = SAMPLE_TEMPLATES
+  // no sample fallback — empty until user creates templates
 
   const name = req.nextUrl.searchParams.get('name')
   const category = req.nextUrl.searchParams.get('category')

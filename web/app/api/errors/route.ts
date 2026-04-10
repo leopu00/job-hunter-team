@@ -26,7 +26,7 @@ interface TrackedError {
 
 function loadErrors(): TrackedError[] {
   try { return JSON.parse(fs.readFileSync(ERRORS_PATH, 'utf-8')); }
-  catch { return generateSampleErrors(); }
+  catch { return []; }
 }
 
 function saveErrors(errors: TrackedError[]): void {
