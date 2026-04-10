@@ -351,15 +351,17 @@ export async function saveCredentials(
   methodId: string,
   credentials: Credentials
 ): Promise<void> {
-  const { saveWorkspaceProvider } = await import("../tui-profile.js");
+  const { saveWorkspaceProvider, saveWorkspaceApiKey } = await import("../tui-profile.js");
   const { saveApiKeyCredentials, saveOAuthCredentials } = await import("../oauth/storage.js");
   
   // Salva provider selezionato nel workspace
   saveWorkspaceProvider(provider, workspace);
   
-  // Salva credenziali nel storage crittografato
+  // Salva credenziali nel storage crittografato (nuovo sistema)
   if (credentials.type === "apiKey") {
     saveApiKeyCredentials(provider, credentials.key);
+    // Salva anche nel formato vecchio per compatibilità con la home
+    saveWorkspaceApiKey(credentials.key, workspace, provider);
   } else if (credentials.type === "oauth") {
     saveOAuthCredentials(provider, {
       accessToken: credentials.token,

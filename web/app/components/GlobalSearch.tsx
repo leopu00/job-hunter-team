@@ -2,44 +2,39 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDashboardT } from './DashboardI18n'
+
+type ItemDef = { id: string; labelKey: string; detailKey: string; href: string; catKey: string }
+
+const ITEM_DEFS: ItemDef[] = [
+  { id: 'dashboard',    labelKey: 'gs_dashboard_label',    detailKey: 'gs_dashboard_detail',    catKey: 'cat_pages',  href: '/dashboard' },
+  { id: 'positions',    labelKey: 'gs_positions_label',    detailKey: 'gs_positions_detail',    catKey: 'cat_pages',  href: '/positions' },
+  { id: 'applications', labelKey: 'gs_applications_label', detailKey: 'gs_applications_detail', catKey: 'cat_pages',  href: '/applications' },
+  { id: 'ready',        labelKey: 'gs_ready_label',        detailKey: 'gs_ready_detail',        catKey: 'cat_pages',  href: '/ready' },
+  { id: 'risposte',     labelKey: 'gs_risposte_label',     detailKey: 'gs_risposte_detail',     catKey: 'cat_pages',  href: '/risposte' },
+  { id: 'crescita',     labelKey: 'gs_crescita_label',     detailKey: 'gs_crescita_detail',     catKey: 'cat_pages',  href: '/crescita' },
+  { id: 'profile',      labelKey: 'gs_profile_label',      detailKey: 'gs_profile_detail',      catKey: 'cat_pages',  href: '/profile' },
+  { id: 'team',         labelKey: 'gs_team_label',         detailKey: 'gs_team_detail',         catKey: 'cat_pages',  href: '/team' },
+  { id: 'assistente',   labelKey: 'gs_assistente_label',   detailKey: 'gs_assistente_detail',   catKey: 'cat_pages',  href: '/assistente' },
+  { id: 'agents',       labelKey: 'gs_agents_label',       detailKey: 'gs_agents_detail',       catKey: 'cat_pages',  href: '/agents' },
+  { id: 'tasks',        labelKey: 'gs_tasks_label',        detailKey: 'gs_tasks_detail',        catKey: 'cat_pages',  href: '/tasks' },
+  { id: 'sessions',     labelKey: 'gs_sessions_label',     detailKey: 'gs_sessions_detail',     catKey: 'cat_pages',  href: '/sessions' },
+  { id: 'queue',        labelKey: 'gs_queue_label',        detailKey: 'gs_queue_detail',        catKey: 'cat_pages',  href: '/queue' },
+  { id: 'events',       labelKey: 'gs_events_label',       detailKey: 'gs_events_detail',       catKey: 'cat_pages',  href: '/events' },
+  { id: 'logs',         labelKey: 'gs_logs_label',         detailKey: 'gs_logs_detail',         catKey: 'cat_pages',  href: '/logs' },
+  { id: 'analytics',    labelKey: 'gs_analytics_label',    detailKey: 'gs_analytics_detail',    catKey: 'cat_pages',  href: '/analytics' },
+  { id: 'budget',       labelKey: 'gs_budget_label',       detailKey: 'gs_budget_detail',       catKey: 'cat_pages',  href: '/budget' },
+  { id: 'reports',      labelKey: 'gs_reports_label',      detailKey: 'gs_reports_detail',      catKey: 'cat_pages',  href: '/reports' },
+  { id: 'integrations', labelKey: 'gs_integrations_label', detailKey: 'gs_integrations_detail', catKey: 'cat_pages',  href: '/integrations' },
+  { id: 'settings',     labelKey: 'gs_settings_label',     detailKey: 'gs_settings_detail',     catKey: 'cat_config', href: '/settings' },
+  { id: 'credentials',  labelKey: 'gs_credentials_label',  detailKey: 'gs_credentials_detail',  catKey: 'cat_config', href: '/credentials' },
+  { id: 'providers',    labelKey: 'gs_providers_label',    detailKey: 'gs_providers_detail',    catKey: 'cat_config', href: '/providers' },
+  { id: 'channels',     labelKey: 'gs_channels_label',     detailKey: 'gs_channels_detail',     catKey: 'cat_config', href: '/channels' },
+  { id: 'deploy',       labelKey: 'gs_deploy_label',       detailKey: 'gs_deploy_detail',       catKey: 'cat_system', href: '/deploy' },
+  { id: 'gateway',      labelKey: 'gs_gateway_label',      detailKey: 'gs_gateway_detail',      catKey: 'cat_system', href: '/gateway' },
+]
 
 type Item = { id: string; label: string; detail: string; href: string; category: string }
-
-const ITEMS: Item[] = [
-  { id: 'dashboard',    label: 'Dashboard',      detail: 'Panoramica sistema',                category: 'Pagine' },
-  { id: 'positions',    label: 'Posizioni',      detail: 'Offerte trovate e filtri',           category: 'Pagine' },
-  { id: 'applications', label: 'Candidature',    detail: 'CV e cover letter generate',         category: 'Pagine' },
-  { id: 'ready',        label: 'Pronte',         detail: 'Candidature pronte per invio',       category: 'Pagine' },
-  { id: 'risposte',     label: 'Risposte',       detail: 'Risposte ricevute',                  category: 'Pagine' },
-  { id: 'crescita',     label: 'Crescita',       detail: 'Statistiche e conversion rate',      category: 'Pagine' },
-  { id: 'profile',      label: 'Profilo',        detail: 'Il tuo profilo candidato',           category: 'Pagine' },
-  { id: 'team',         label: 'Team',           detail: 'Agenti e stato online',              category: 'Pagine' },
-  { id: 'assistente',   label: 'Assistente',     detail: 'Chat AI per assistenza',             category: 'Pagine' },
-  { id: 'agents',       label: 'Agenti',         detail: 'Lista e stato agenti',               category: 'Pagine' },
-  { id: 'tasks',        label: 'Task',           detail: 'Task in esecuzione e storico',       category: 'Pagine' },
-  { id: 'sessions',     label: 'Sessioni',       detail: 'Sessioni e chat',                    category: 'Pagine' },
-  { id: 'queue',        label: 'Queue',          detail: 'Job queue e dead-letter',            category: 'Pagine' },
-  { id: 'events',       label: 'Events',         detail: 'Stream SSE real-time',               category: 'Pagine' },
-  { id: 'logs',         label: 'Logs',           detail: 'Log strutturati con filtri',         category: 'Pagine' },
-  { id: 'analytics',   label: 'Analytics',      detail: 'Token, costi, latenza p95',          category: 'Pagine' },
-  { id: 'budget',       label: 'Budget API',     detail: 'Consumo API e proiezione',           category: 'Pagine' },
-  { id: 'sentinel',    label: 'Sentinel',       detail: 'Dashboard Vigil throttle',           category: 'Pagine' },
-  { id: 'forum',        label: 'Forum',          detail: 'Messaggi team con menzioni',         category: 'Pagine' },
-  { id: 'audit',        label: 'Audit Log',      detail: 'Azioni critiche con severity',       category: 'Pagine' },
-  { id: 'reports',      label: 'Reports',        detail: 'Generazione report e CSV',           category: 'Pagine' },
-  { id: 'integrations', label: 'Integrazioni',   detail: 'Telegram, GitHub, LinkedIn…',        category: 'Pagine' },
-  { id: 'project',      label: 'Progetto',       detail: 'Panoramica repository open source',   category: 'Pagine' },
-  { id: 'terms',        label: 'Termini',        detail: 'Termini di servizio e licenza',      category: 'Pagine' },
-  { id: 'settings',     label: 'Impostazioni',   detail: 'General, Notifiche, Sicurezza',      category: 'Config' },
-  { id: 'credentials',  label: 'Credenziali',    detail: 'API key e OAuth',                    category: 'Config' },
-  { id: 'providers',    label: 'Provider',       detail: 'Provider AI configurati',            category: 'Config' },
-  { id: 'channels',     label: 'Canali',         detail: 'Canali notifica',                    category: 'Config' },
-  { id: 'deploy',       label: 'Deploy',         detail: 'Stato servizi e daemon',             category: 'Sistema' },
-  { id: 'gateway',      label: 'Gateway',        detail: 'Canali e pipeline middleware',       category: 'Sistema' },
-  { id: 'health',       label: 'Health',         detail: 'Semafori 7 moduli',                  category: 'Sistema' },
-  { id: 'validators',   label: 'Validators',     detail: 'Schemi Zod registrati',              category: 'Sistema' },
-  { id: 'skills',       label: 'Skills',         detail: 'Script disponibili',                 category: 'Sistema' },
-].map(i => ({ ...i, href: `/${i.id}` }))
 
 const RECENT_KEY = 'jht:search:recent'
 const MAX_RECENT = 5
@@ -71,13 +66,25 @@ export function GlobalSearch() {
   const [open,     setOpen]     = useState(false)
   const [query,    setQuery]    = useState('')
   const [selected, setSelected] = useState(0)
-  const [recent,   setRecent]   = useState<Item[]>([])
+  const [recentIds, setRecentIds] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const router   = useRouter()
+  const { t } = useDashboardT()
+
+  // Translate ITEM_DEFS to runtime items
+  const ITEMS: Item[] = ITEM_DEFS.map(d => ({
+    id: d.id,
+    label: t(d.labelKey),
+    detail: t(d.detailKey),
+    href: d.href,
+    category: t(d.catKey),
+  }))
 
   useEffect(() => {
-    try { setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')) } catch { /* ignore */ }
+    try { setRecentIds(JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')) } catch { /* ignore */ }
   }, [])
+
+  const recent = recentIds.map(id => ITEMS.find(i => i.id === id)).filter(Boolean) as Item[]
 
   const openSearch = useCallback(() => { setOpen(true); setQuery(''); setSelected(0) }, [])
   const closeSearch = useCallback(() => { setOpen(false); setQuery('') }, [])
@@ -106,8 +113,8 @@ export function GlobalSearch() {
   const showRecent  = query.length === 0 && recent.length > 0
 
   const execute = useCallback((item: Item) => {
-    setRecent(prev => {
-      const next = [item, ...prev.filter(r => r.id !== item.id)].slice(0, MAX_RECENT)
+    setRecentIds(prev => {
+      const next = [item.id, ...prev.filter(id => id !== item.id)].slice(0, MAX_RECENT)
       try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
