@@ -190,7 +190,7 @@ export function resolveSessionName(agentId: string): string | null {
 // ── Start/Stop ────────────────────────────────────────────────────────────
 
 /** Avvia una nuova sessione tmux per un agente con Claude CLI */
-export function startSession(agentId: string, workDir?: string): { ok: boolean; name: string; error?: string } {
+export function startSession(agentId: string, workDir?: string, apiKey?: string): { ok: boolean; name: string; error?: string } {
   const normalized = agentId.toLowerCase().replace(/-/g, "_");
   const config = AGENT_CONFIGS[normalized];
   const name = SESSION_NAME_MAP[normalized] ?? `JHT-${agentId.toUpperCase()}`;
@@ -225,13 +225,21 @@ export function startSession(agentId: string, workDir?: string): { ok: boolean; 
       return { ok: false, name, error: r.stderr.trim() || "errore tmux" };
     }
 
-    // Setup in background: naviga nella cartella e avvia Claude
+    // Setup in background: setta API key, naviga nella cartella e avvia Claude
     const safePath = (agentDir || workDir || "").replace(/\\/g, "\\\\");
+    const setApiKeyCmd = apiKey
+      ? `tmux send-keys -t '${name}' 'set ANTHROPIC_API_KEY=${apiKey}' Enter && sleep 0.5`
+      : "";
+    // Se c'e' API key, Claude chiede conferma: Up (seleziona "Yes") + Enter
+    const acceptApiKeyCmd = apiKey
+      ? `sleep 5 && tmux send-keys -t '${name}' Up Enter && sleep 5`
+      : "sleep 8";
     const setupCmds = [
       "sleep 2",
+      ...(setApiKeyCmd ? [setApiKeyCmd] : []),
       ...(safePath ? [`tmux send-keys -t '${name}' 'cd ${safePath}' Enter`, "sleep 1"] : []),
       `tmux send-keys -t '${name}' '${claudeCmd}' Enter`,
-      "sleep 8",
+      acceptApiKeyCmd,
       `tmux send-keys -t '${name}' Enter`,
     ].join(" && ");
 
@@ -248,9 +256,14 @@ export function startSession(agentId: string, workDir?: string): { ok: boolean; 
       return { ok: false, name, error: r.stderr.trim() || "errore tmux" };
     }
 
-    // Avvia Claude e auto-accept trust dialog
+    // Setta API key se presente
+    if (apiKey) {
+      spawnTmux(["send-keys", "-t", name, `export ANTHROPIC_API_KEY=${apiKey}`, "C-m"]);
+    }
+    // Avvia Claude e auto-accept trust/API key dialog
     spawnTmux(["send-keys", "-t", name, claudeCmd, "C-m"]);
-    spawn("bash", ["-c", `sleep 4 && tmux send-keys -t '${name}' Enter && sleep 3 && tmux send-keys -t '${name}' Enter`], {
+    const acceptDelay = apiKey ? "sleep 5 && tmux send-keys -t '${name}' Up Enter && sleep 5" : "sleep 4";
+    spawn("bash", ["-c", `${acceptDelay} && tmux send-keys -t '${name}' Enter && sleep 3 && tmux send-keys -t '${name}' Enter`], {
       detached: true,
       stdio: "ignore",
     }).unref();
