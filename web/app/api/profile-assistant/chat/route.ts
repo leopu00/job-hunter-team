@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
-import { getWorkspacePath } from '@/lib/workspace'
+import { getAgentDir } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
@@ -29,15 +29,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messaggio vuoto' }, { status: 400 })
   }
 
-  const ws = await getWorkspacePath()
-  if (!ws) {
-    return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-  }
-
   try {
-    // Scrivi messaggio utente nella chat dell'assistente
-    const chatFile = path.join(ws, 'assistente', 'chat.jsonl')
-    fs.mkdirSync(path.dirname(chatFile), { recursive: true })
+    // Scrivi messaggio utente nella chat dell'assistente (zona nascosta)
+    const assistenteDir = getAgentDir('assistente')
+    fs.mkdirSync(assistenteDir, { recursive: true })
+    const chatFile = path.join(assistenteDir, 'chat.jsonl')
     const userMsg = JSON.stringify({ role: 'user', text, ts: Date.now() / 1000 })
     fs.appendFileSync(chatFile, userMsg + '\n', 'utf-8')
 
