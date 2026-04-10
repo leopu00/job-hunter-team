@@ -207,7 +207,9 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
           break;
         }
-        const startResult = startSession(args, loadWorkspacePath() || undefined, loadWorkspaceApiKey() || undefined);
+        const rawKey = loadWorkspaceApiKey() || undefined;
+        const apiKey = rawKey === "__subscription__" ? undefined : rawKey;
+        const startResult = startSession(args, loadWorkspacePath() || undefined, apiKey);
         if (startResult.ok) {
           sysLog.addSystem(`sessione ${startResult.name} avviata`);
           setActivityStatus(`avviato ${startResult.name}`);

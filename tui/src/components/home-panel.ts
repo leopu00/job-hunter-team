@@ -70,9 +70,9 @@ export class HomePanel extends Container {
       },
       {
         id: "apikey",
-        label: "API Key",
+        label: "Autenticazione",
         status: apiKey ? "done" : "todo",
-        value: apiKey ? "****************" : undefined,
+        value: apiKey === "__subscription__" ? "Abbonamento" : apiKey ? "API Key" : undefined,
       },
       {
         id: "profile",

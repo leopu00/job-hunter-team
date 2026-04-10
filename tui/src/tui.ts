@@ -434,8 +434,14 @@ export async function runJhtTui() {
       state.connectionStatus = "no API";
     }
   } else {
-    state.isConnected = false;
-    state.connectionStatus = "no API";
+    // Controlla se siamo in modalità abbonamento (no API key, ma agenti funzionano via CLI)
+    const rawKey = loadApiKey();
+    const isSubscription = rawKey === "__subscription__" || rawKey === "";
+    state.isConnected = isSubscription;
+    state.connectionStatus = isSubscription ? "subscription" : "no API";
+    if (isSubscription) {
+      aiChatPanel.addSystem("Modalita abbonamento — gli agenti usano Claude CLI. Chat AI non disponibile senza API key.");
+    }
   }
 
   layout.updateHeader(state);
