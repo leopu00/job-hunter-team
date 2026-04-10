@@ -3,6 +3,9 @@
  * Specchio di tui/src/tui-paths.ts e web/lib/jht-paths.ts.
  * Se cambi uno, cambia anche gli altri due.
  *
+ * Plain JS ESM per poter essere importato sia da .ts che da .js
+ * senza compilazione.
+ *
  * Override-abile via env var JHT_HOME e JHT_USER_DIR per test isolation.
  */
 import { homedir } from "node:os";
@@ -25,7 +28,12 @@ export const JHT_USER_CV_DIR = join(JHT_USER_DIR, "cv");
 export const JHT_USER_UPLOADS_DIR = join(JHT_USER_DIR, "allegati");
 export const JHT_USER_OUTPUT_DIR = join(JHT_USER_DIR, "output");
 
-export function getAgentDir(agentId: string, instance?: string): string {
+/**
+ * @param {string} agentId
+ * @param {string} [instance]
+ * @returns {string}
+ */
+export function getAgentDir(agentId, instance) {
   const sub = instance ? `${agentId}-${instance}` : agentId;
   return join(JHT_AGENTS_DIR, sub);
 }
