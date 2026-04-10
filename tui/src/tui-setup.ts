@@ -2,9 +2,7 @@
  * Setup wizard — onboarding completo al primo avvio.
  * Layout verticale con SelectList per navigazione pulita.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as readline from "node:readline";
 import {
   Container,
@@ -558,70 +556,6 @@ function renderCredentials(panel: Container, state: SetupState, inputBuffer: str
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-export function openWorkspaceFolderPicker(initialPath: string): string | null {
-  // macOS: AppleScript
-  if (process.platform === "darwin") {
-    const resolvedPath = resolve(initialPath);
-    const scriptLines = [
-      'tell application "Finder" to activate',
-      ...(existsSync(resolvedPath)
-        ? [
-            `set startFolder to POSIX file ${JSON.stringify(resolvedPath)}`,
-            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro" default location startFolder',
-          ]
-        : ['set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"']),
-      'POSIX path of selectedFolder',
-    ];
-
-    const result = spawnSync("osascript", scriptLines.flatMap((line) => ["-e", line]), {
-      encoding: "utf-8",
-      timeout: 120_000,
-    });
-
-    return result.status === 0 ? result.stdout.trim() || null : null;
-  }
-
-  // Windows / WSL
-  if (process.platform === "win32" || isWSL()) {
-    const escapedPath = initialPath.replace(/'/g, "''");
-    const script = [
-      "Add-Type -AssemblyName System.Windows.Forms",
-      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-      "$dialog.Title = 'Seleziona la cartella di lavoro'",
-      "$dialog.Filter = 'Cartelle|*.folder'",
-      "$dialog.CheckFileExists = $false",
-      "$dialog.CheckPathExists = $true",
-      "$dialog.ValidateNames = $false",
-      "$dialog.FileName = 'Seleziona questa cartella'",
-      `$initialPath = '${escapedPath}'`,
-      "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
-      "$result = $dialog.ShowDialog()",
-      "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
-      "  $selected = Split-Path -Path $dialog.FileName -Parent",
-      "  if (-not $selected) { $selected = $dialog.FileName }",
-      "  Write-Output $selected",
-      "}",
-    ].join("; ");
-
-    const result = spawnSync("powershell.exe", [
-      "-NoLogo",
-      "-NoProfile",
-      "-STA",
-      "-Command",
-      script,
-    ], { encoding: "utf-8", timeout: 120_000 });
-
-    return result.status === 0 ? result.stdout.trim() || null : null;
-  }
-
-  // Linux: nessun picker disponibile
-  return null;
-}
-
-function isWSL(): boolean {
-  return !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || process.env.WSLENV);
-}
 
 async function testApiKey(provider: WorkspaceProvider | "", key: string): Promise<boolean> {
   if (!provider) return false;
