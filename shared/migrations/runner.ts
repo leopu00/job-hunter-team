@@ -3,13 +3,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import { JHT_HOME } from '../paths.js';
 import type {
   Migration, MigrationResult, MigrationState,
   MigrationConfig, MigrationBatchResult, AppliedMigration,
 } from './types.js';
 
-const DEFAULT_STATE_PATH = path.join(homedir(), '.jht', 'migrations.json');
+const DEFAULT_STATE_PATH = path.join(JHT_HOME, 'migrations.json');
 
 // --- State persistence ---
 
