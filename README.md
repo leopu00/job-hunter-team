@@ -120,6 +120,21 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 
 ## Installazione
 
+### Installer one-liner (macOS / Linux / WSL)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
+```
+
+Lo script rileva il sistema, installa le dipendenze mancanti (Node 20+, tmux, git, Claude CLI), clona la repo in `~/.jht/src`, compila TUI e CLI, crea un simlink `jht` in `~/.local/bin` e lancia il setup wizard.
+
+**Dopo l'installazione** trovi due cartelle:
+
+- `~/.jht/` — zona nascosta: config, database, agenti, credenziali. **Non toccare.**
+- `~/Documents/Job Hunter Team/` — zona visibile: droppa qui i tuoi CV (`cv/`), allegati (`allegati/`) e leggi gli output generati (`output/`).
+
+Per aggiornare: ri-esegui il comando curl sopra.
+
 ### Desktop Launcher
 
 - **macOS**: pacchetto `.dmg`
@@ -129,31 +144,29 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 Scarica il pacchetto corretto dalla pagina [`/download`](https://jobhunterteam.ai/download) o da GitHub Releases.
 Il launcher include il payload web gia compilato, avvia il runtime locale e apre la dashboard nel browser.
 
-### Installazione da Sorgente
+### Installazione da Sorgente (per contribuire)
 
-Questa modalita e pensata per sviluppo locale, hacking del repo e uso power-user da terminale.
+Questa modalita e pensata per sviluppo locale, hacking del repo e PR.
 
-### Prerequisiti
+**Prerequisiti:**
 
-- **Node.js** 18+ e npm
-- **Python** 3.10+
+- **Node.js** 20+ e npm
 - **tmux** (Linux/macOS) — WSL2 + tmux su Windows
-- **Provider LLM a scelta** — OpenAI / Minimax / Anthropic API key; **Claude CLI** opzionale solo per flusso Claude Max
-- **pandoc + typst** (opzionale, per generazione PDF)
+- **git**
+- **Claude CLI** (`npm install -g @anthropic-ai/claude-cli`)
 
-### Quick Start da Sorgente
+**Quick start:**
 
 ```bash
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-npm install
-npm install --prefix shared/cron
 
-# Wizard di setup interattivo
-jht setup
+# Build TUI e CLI
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
 
-# Compila il tuo profilo candidato
-# → candidate_profile.yml (skills, esperienza, ruoli target)
+# Avvia il wizard
+node cli/bin/jht.js
 ```
 
 > **Claude Max:** nessuna API key necessaria — serve il `Claude CLI`.

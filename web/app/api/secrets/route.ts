@@ -3,10 +3,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const SECRETS_PATH = path.join(os.homedir(), '.jht', 'secrets.json')
+const SECRETS_PATH = path.join(JHT_HOME, 'secrets.json')
 
 export type SecretType = 'api_key' | 'token' | 'password' | 'webhook' | 'other'
 

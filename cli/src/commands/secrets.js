@@ -2,8 +2,9 @@ import { readFile, writeFile, readdir, mkdir, access, unlink } from 'node:fs/pro
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR   = join(homedir(), '.jht');
+const JHT_DIR   = JHT_HOME;
 const CREDS_DIR = join(JHT_DIR, 'credentials');
 const KEY_ENV   = 'JHT_SECRET_KEY';
 

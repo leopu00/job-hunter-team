@@ -4,10 +4,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const JHT_DIR    = path.join(os.homedir(), '.jht')
+const JHT_DIR    = JHT_HOME
 const AGENTS_DIR = path.join(JHT_DIR, 'agents')
 const CONFIG_PATH = path.join(JHT_DIR, 'jht.config.json')
 const TASKS_PATH  = path.join(JHT_DIR, 'tasks', 'tasks.json')

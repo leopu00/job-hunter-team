@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const WORKSPACE = path.join(os.homedir(), '.jht')
+const WORKSPACE = JHT_HOME
 const BOOTSTRAP_FILES = ['SOUL.md', 'IDENTITY.md', 'MEMORY.md', 'AGENTS.md', 'USER.md', 'TOOLS.md'] as const
 type BootstrapFileName = (typeof BOOTSTRAP_FILES)[number]
 

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ type AlertChannel = 'email' | 'telegram' | 'web';
 type AlertFrequency = 'realtime' | 'daily' | 'weekly';
 type Alert = { id: string; name: string; condition: string; conditionType: string; channel: AlertChannel; frequency: AlertFrequency; enabled: boolean; lastTriggered: number | null; triggerCount: number; createdAt: number };
 
-const ALERTS_PATH = path.join(os.homedir(), '.jht', 'alerts.json');
+const ALERTS_PATH = path.join(JHT_HOME, 'alerts.json');
 
 function loadAlerts(): Alert[] {
   try { return JSON.parse(fs.readFileSync(ALERTS_PATH, 'utf-8')); }

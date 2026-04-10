@@ -16,7 +16,10 @@ export type TokenResolution = {
   source: TokenSource;
 };
 
-const CREDENTIALS_DIR = resolve(homedir(), ".jht", "credentials");
+// Path mirror di shared/paths.ts (telegram-bridge e un modulo standalone
+// con rootDir: src, non puo importare ../../shared). Honor JHT_HOME.
+const JHT_HOME = process.env.JHT_HOME || resolve(homedir(), ".jht");
+const CREDENTIALS_DIR = resolve(JHT_HOME, "credentials");
 const TOKEN_FILE = resolve(CREDENTIALS_DIR, "telegram_bot.json");
 
 function trimToUndefined(value: unknown): string | undefined {

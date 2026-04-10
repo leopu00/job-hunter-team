@@ -7,6 +7,7 @@
 
 import path from "node:path";
 import os from "node:os";
+import { JHT_AGENTS_DIR } from "../paths.js";
 import type {
   AgentConfig,
   AgentsConfig,
@@ -20,8 +21,6 @@ const DEFAULT_MODEL = "claude-opus-4-6";
 const DEFAULT_CONTEXT_TOKENS = 200_000;
 const DEFAULT_THINKING: ThinkLevel = "medium";
 const DEFAULT_WORKSPACE = "~/.jht/workspace";
-
-const JHT_AGENTS_DIR = path.join(os.homedir(), ".jht", "agents");
 
 function expandHome(p: string): string {
   if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));

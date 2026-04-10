@@ -37,17 +37,15 @@ echo ""
 if ! command -v tmux &>/dev/null;  then fail "tmux non trovato. Installa con: brew install tmux"; fi
 if ! command -v claude &>/dev/null; then fail "Claude CLI non trovato. Scarica da https://claude.ai/download"; fi
 
-# ── Verifica .env ─────────────────────────────────────────────────────────────
-ENV_FILE="$REPO_ROOT/.env"
-if [ ! -f "$ENV_FILE" ]; then
-  warn ".env non trovato. Esegui prima: ./setup.sh"
-fi
+# ── Inizializza struttura JHT ─────────────────────────────────────────────────
+mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
+mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
+ok "JHT_HOME:     $JHT_HOME"
+ok "JHT_USER_DIR: $JHT_USER_DIR"
 
-# ── Verifica workspace ───────────────────────────────────────────────────────
-if [ -z "${JHT_WORKSPACE:-}" ]; then
-  fail "JHT_WORKSPACE non configurato nel .env. Esempio: JHT_WORKSPACE=~/job-hunter-workspace"
+if [ ! -f "$JHT_CONFIG" ]; then
+  warn "jht.config.json non trovato in $JHT_HOME. Avvia prima la TUI per configurare provider e API key."
 fi
-ok "Workspace: $JHT_WORKSPACE"
 
 # ── Avvia Job Hunter Team (configurazione dal legacy) ─────────────────────────
 # Ordine: prima ALFA (coordinatore), poi agenti operativi

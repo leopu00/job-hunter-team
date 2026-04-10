@@ -3,10 +3,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const WEBHOOKS_PATH = path.join(os.homedir(), '.jht', 'webhooks.json')
+const WEBHOOKS_PATH = path.join(JHT_HOME, 'webhooks.json')
 
 export type WebhookEvent =
   | 'task.completed' | 'task.failed' | 'session.started' | 'session.ended'

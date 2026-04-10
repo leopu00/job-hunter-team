@@ -3,11 +3,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
 const IS_SERVERLESS = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV)
-const JHT_DIR = path.join(os.homedir(), '.jht')
+const JHT_DIR = JHT_HOME
 const startedAt = Date.now()
 
 type Status = 'ok' | 'warn' | 'error'

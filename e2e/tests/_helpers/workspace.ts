@@ -1,9 +1,19 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
-export const SEEDED_WORKSPACE_PATH = process.env.JHT_E2E_WORKSPACE || '/tmp/jht-e2e-seeded'
+// Path fissi JHT per i test. Override via env var JHT_HOME / JHT_USER_DIR
+// per isolarsi dai dati reali dell'utente (deve essere impostato anche
+// sul Next.js server — vedi playwright webServer config).
+export const SEEDED_JHT_HOME = process.env.JHT_HOME || path.join(os.homedir(), '.jht')
+export const SEEDED_JHT_USER_DIR = process.env.JHT_USER_DIR || path.join(os.homedir(), 'Documents', 'Job Hunter Team')
+export const SEEDED_DB_PATH = path.join(SEEDED_JHT_HOME, 'jobs.db')
+export const SEEDED_PROFILE_YAML_PATH = path.join(SEEDED_JHT_HOME, 'profile', 'candidate_profile.yml')
+
+// Alias legacy (mantenuto per compat con test esistenti che lo importano)
+export const SEEDED_WORKSPACE_PATH = SEEDED_JHT_USER_DIR
 
 const SEED_SQL = `
 PRAGMA foreign_keys = OFF;
@@ -138,39 +148,26 @@ has_degree: true
 
 export async function ensureSeededWorkspace(
   request: APIRequestContext,
-  workspacePath = SEEDED_WORKSPACE_PATH,
 ): Promise<void> {
-  const res = await request.post('/api/workspace/init', {
-    data: { path: workspacePath },
-  })
-
+  // Il POST /api/workspace crea la struttura visibile e ritorna stato del path fisso
+  const res = await request.post('/api/workspace', { data: {} })
   if (!res.ok()) {
     throw new Error(`Workspace init failed with ${res.status()}`)
   }
 
-  const dbPath = path.join(workspacePath, 'jobs.db')
-  execFileSync('sqlite3', [dbPath], { input: SEED_SQL })
+  // Crea la zona nascosta se mancante e seed del DB e del profilo
+  fs.mkdirSync(SEEDED_JHT_HOME, { recursive: true })
+  fs.mkdirSync(path.dirname(SEEDED_PROFILE_YAML_PATH), { recursive: true })
 
-  const profileDir = path.join(workspacePath, 'profile')
-  fs.mkdirSync(profileDir, { recursive: true })
-  fs.writeFileSync(path.join(profileDir, 'candidate_profile.yml'), SEEDED_PROFILE_YAML, 'utf8')
+  execFileSync('sqlite3', [SEEDED_DB_PATH], { input: SEED_SQL })
+  fs.writeFileSync(SEEDED_PROFILE_YAML_PATH, SEEDED_PROFILE_YAML, 'utf8')
 }
 
 export async function loginToSeededWorkspace(
   page: Page,
-  workspacePath = SEEDED_WORKSPACE_PATH,
 ): Promise<void> {
+  // Il workspace ora e' fisso — la login page dovrebbe riconoscerlo automaticamente
   await page.goto('/?login=true')
-
-  const input = page.locator('input[placeholder="/percorso/alla/cartella"]')
-  await expect(input).toBeVisible({ timeout: 10_000 })
-  await input.fill(workspacePath)
-  await input.press('Enter')
-
-  const confirm = page.getByText('OK, usa questa cartella')
-  await expect(confirm).toBeVisible({ timeout: 10_000 })
-  await confirm.click()
-
   await page.waitForURL(/\/dashboard$/, { timeout: 15_000 })
 
   const onboardingSkip = page.getByRole('button', { name: /salta|skip/i })
