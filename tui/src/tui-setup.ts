@@ -337,8 +337,8 @@ export async function runSetupWizard(): Promise<string> {
       return false;
     }
 
-    // Se è OAuth, esegui direttamente (apre browser)
-    if (method.kind === "oauth") {
+    // Se è OAuth o Subscription, esegui direttamente (no input necessario)
+    if (method.kind === "oauth" || method.kind === "subscription") {
       const result = await executeAuthMethod(method);
       if (!result.success) {
         state.message = result.error;
