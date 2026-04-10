@@ -4,8 +4,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { resolve } from "node:path";
 import * as readline from "node:readline";
 import {
   Container,
@@ -30,24 +29,23 @@ import {
   loadWorkspacePath,
   saveWorkspaceApiKey,
   saveWorkspaceProvider,
-  saveWorkspacePath,
   loadWorkspaceApiKey,
-  validateWorkspacePath,
   type WorkspaceProvider,
   type UserProfile,
 } from "./tui-profile.js";
+import { JHT_HOME, JHT_CONFIG_PATH } from "./tui-paths.js";
 import { theme } from "./tui-theme.js";
-import { 
-  listProviders, 
-  getProvider, 
+import {
+  listProviders,
+  getProvider,
   getAuthMethods,
-  saveCredentials, 
+  saveCredentials,
   type ProviderId,
   type AuthMethod,
 } from "./auth/providers.js";
 
-const CONFIG_DIR = join(homedir(), ".jht");
-const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
+const CONFIG_DIR = JHT_HOME;
+const CONFIG_PATH = JHT_CONFIG_PATH;
 const SETUP_MODEL = "claude-sonnet-4-20250514";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +64,7 @@ const setupSelectTheme: SelectListTheme = {
 // TIPI
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SetupStep = "welcome" | "workspace" | "provider" | "authMethod" | "credentials";
+type SetupStep = "welcome" | "provider" | "authMethod" | "credentials";
 
 type SetupState = {
   step: SetupStep;
@@ -126,23 +124,25 @@ function renderFooter(): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function runSetupWizard(): Promise<string> {
+  // Crea zona nascosta ~/.jht/ e zona visibile ~/Documents/Job Hunter Team/
+  ensureWorkspaceInitialized();
+
   const state: SetupState = {
     step: "welcome",
     workspace: loadWorkspacePath(),
-    provider: (loadWorkspaceProvider(loadWorkspacePath()) as WorkspaceProvider) || "",
+    provider: (loadWorkspaceProvider() as WorkspaceProvider) || "",
     authMethodId: "",
-    apiKey: loadWorkspaceApiKey(loadWorkspacePath()) || "",
+    apiKey: loadWorkspaceApiKey() || "",
     message: null,
   };
 
   // Se già configurato, salta il wizard
-  if (state.workspace && state.provider && state.apiKey) {
+  if (state.provider && state.apiKey) {
     return state.apiKey;
   }
 
   // Determina step iniziale
-  if (!state.workspace) state.step = "workspace";
-  else if (!state.provider) state.step = "provider";
+  if (!state.provider) state.step = "provider";
   else if (!state.apiKey) state.step = "authMethod";
 
   const tui = new TUI(new ProcessTerminal());
@@ -206,9 +206,6 @@ export async function runSetupWizard(): Promise<string> {
       case "welcome":
         renderWelcome(contentArea, state);
         break;
-      case "workspace":
-        renderWorkspace(contentArea, state, inputBuffer);
-        break;
       case "provider":
         renderProvider(contentArea, state, providerSelect);
         break;
@@ -225,57 +222,6 @@ export async function runSetupWizard(): Promise<string> {
 
   // Handlers step
   const handleWelcome = (): boolean => {
-    state.step = "workspace";
-    return true;
-  };
-
-  const handleWorkspace = async (): Promise<boolean> => {
-    let path = inputBuffer.trim();
-
-    // Se vuoto, apri picker
-    if (!path) {
-      path = openWorkspaceFolderPicker(state.workspace || homedir()) ?? "";
-      if (!path) {
-        state.message = "Seleziona una cartella";
-        return false;
-      }
-    }
-
-    if (!path) {
-      state.message = "Seleziona una cartella di lavoro";
-      return false;
-    }
-
-    const normalized = resolve(path);
-    let validation = validateWorkspacePath(normalized);
-
-    // Se non esiste, prova a crearla
-    if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
-      try {
-        ensureWorkspaceInitialized(normalized);
-        validation = validateWorkspacePath(normalized);
-      } catch (err) {
-        state.message = err instanceof Error ? err.message : "Errore creazione cartella";
-        return false;
-      }
-    }
-
-    if (!validation.ok) {
-      state.message = validation.error;
-      return false;
-    }
-
-    ensureWorkspaceInitialized(validation.value);
-    saveWorkspacePath(validation.value);
-    state.workspace = validation.value;
-    // DEBUG: non caricare provider esistente, forza selezione
-    state.provider = "";
-    state.apiKey = "";
-    syncProviderSelection();
-    inputBuffer = "";
-    state.message = null;
-
-    // Procedi sempre allo step provider (DEBUG)
     state.step = "provider";
     return true;
   };
@@ -481,9 +427,6 @@ export async function runSetupWizard(): Promise<string> {
             case "welcome":
               ok = handleWelcome();
               break;
-            case "workspace":
-              ok = await handleWorkspace();
-              break;
             case "provider":
               ok = handleProvider();
               break;
@@ -549,11 +492,6 @@ export async function runSetupWizard(): Promise<string> {
     render();
   });
 
-  // Salvataggio finale esplicito: assicura che workspace path sia nel config globale
-  if (state.workspace) {
-    try { saveWorkspacePath(state.workspace); } catch { /* ignora se path non valido */ }
-  }
-
   return completedApiKey || state.apiKey;
 }
 
@@ -565,20 +503,6 @@ function renderWelcome(panel: Container, state: SetupState) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
   add("");
   add(`  ${theme.accent("▶ Premi Enter per iniziare")}`);
-  if (state.message) add(`  ${theme.warning(state.message)}`);
-}
-
-function renderWorkspace(panel: Container, state: SetupState, inputBuffer: string) {
-  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  const display = inputBuffer || state.workspace || "";
-  const cursor = "█";
-  const line = display + cursor;
-
-  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
-  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
-  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
-
   if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
@@ -635,7 +559,7 @@ function renderCredentials(panel: Container, state: SetupState, inputBuffer: str
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function openWorkspaceFolderPicker(initialPath: string): string | null {
+export function openWorkspaceFolderPicker(initialPath: string): string | null {
   // macOS: AppleScript
   if (process.platform === "darwin") {
     const resolvedPath = resolve(initialPath);
@@ -745,18 +669,18 @@ async function testApiKey(provider: WorkspaceProvider | "", key: string): Promis
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function ensureWorkspaceConfigured(): Promise<string> {
-  const savedWorkspace = loadWorkspacePath();
-  const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
+  // Crea zona nascosta e visibile se mancano
+  ensureWorkspaceInitialized();
 
-  if (!validation?.ok || !loadWorkspaceProvider(validation.value) || !loadWorkspaceApiKey(validation.value)) {
+  if (!loadWorkspaceProvider() || !loadWorkspaceApiKey()) {
     const apiKey = await runSetupWizard();
     return apiKey;
   }
 
-  const key = loadWorkspaceApiKey(validation.value) || "";
+  const key = loadWorkspaceApiKey() || "";
   return key === "__subscription__" ? "" : key;
 }
 
 export function saveApiKey(key: string): void {
-  saveWorkspaceApiKey(key, loadWorkspacePath());
+  saveWorkspaceApiKey(key);
 }
