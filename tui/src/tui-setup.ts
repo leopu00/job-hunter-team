@@ -547,6 +547,11 @@ export async function runSetupWizard(): Promise<string> {
     render();
   });
 
+  // Salvataggio finale esplicito: assicura che workspace path sia nel config globale
+  if (state.workspace) {
+    try { saveWorkspacePath(state.workspace); } catch { /* ignora se path non valido */ }
+  }
+
   return completedApiKey || state.apiKey;
 }
 
