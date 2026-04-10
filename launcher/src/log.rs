@@ -1,32 +1,33 @@
-use std::sync::Mutex;
 use std::io::Write;
+use std::sync::Mutex;
 
-static LOG_BUFFER: Mutex<Vec<String>> = Mutex::new(Vec::new());
+use crate::config;
+
+static LOG_FILE: Mutex<()> = Mutex::new(());
 
 pub fn log(message: &str) {
-    let timestamp = chrono_lite_now();
-    let line = format!("[{}] {}", timestamp, message);
+    let line = format!("[{}] {}", chrono_lite_now(), message);
     eprintln!("{}", line);
-
-    if let Ok(mut buf) = LOG_BUFFER.lock() {
-        buf.push(line);
-    }
+    append_to_file(&line);
 }
 
-pub fn flush_to_file(path: &std::path::Path) {
-    if let Ok(mut buf) = LOG_BUFFER.lock() {
-        if buf.is_empty() {
-            return;
-        }
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-        {
-            for line in buf.drain(..) {
-                let _ = writeln!(f, "{}", line);
-            }
-        }
+fn append_to_file(line: &str) {
+    let _guard = match LOG_FILE.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+
+    let path = config::log_file();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(f, "{}", line);
     }
 }
 

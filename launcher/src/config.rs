@@ -135,9 +135,16 @@ pub fn load_config() -> Option<SetupConfig> {
     let ws_config = std::fs::read_to_string(workspace_config_path(&work_dir)).ok()?;
 
     let provider = extract_json_string(&ws_config, "active_provider")?;
-    let api_key = extract_nested_provider_key(&ws_config, &provider).unwrap_or_default();
-    let auth_method = extract_nested_string(&ws_config, &provider, "auth_method")
+    let raw_key = extract_nested_provider_key(&ws_config, &provider).unwrap_or_default();
+    let stored_auth = extract_nested_string(&ws_config, &provider, "auth_method")
         .unwrap_or_else(|| "api-key".to_string());
+
+    // TUI interop: "__subscription__" marker in api_key signals subscription mode.
+    let (api_key, auth_method) = if raw_key == "__subscription__" {
+        (String::new(), "subscription".to_string())
+    } else {
+        (raw_key, stored_auth)
+    };
 
     Some(SetupConfig {
         work_dir,
