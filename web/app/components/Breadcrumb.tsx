@@ -5,59 +5,44 @@ import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { isMarketingRoute } from '../marketing-routes'
+import { useDashboardT } from './DashboardI18n'
 
 const NotificationCenter = dynamic(() => import('./NotificationCenter').then(m => m.NotificationCenter))
 
-// ── Label map ──────────────────────────────────────────────────────────────
-
-const LABELS: Record<string, string> = {
-  dashboard: 'Dashboard', agents: 'Agenti', tasks: 'Task', assistant: 'Assistente',
-  history: 'Storico', sessions: 'Sessioni', analytics: 'Analytics', queue: 'Coda',
-  events: 'Eventi', notifications: 'Notifiche', credentials: 'Credenziali',
-  plugins: 'Plugin', templates: 'Template', logs: 'Log', deploy: 'Deploy',
-  providers: 'Provider', gateway: 'Gateway', 'rate-limiter': 'Rate Limiter',
-  memory: 'Memoria', channels: 'Canali', settings: 'Impostazioni', cron: 'Cron',
-  config: 'Configurazione', daemon: 'Daemon', health: 'Salute', overview: 'Panoramica',
-  retry: 'Retry', tools: 'Strumenti', 'not-found': '404',
-  jobs: 'Offerte', applications: 'Candidature', interviews: 'Colloqui',
-  companies: 'Aziende', profiles: 'Profili', alerts: 'Avvisi',
-  'cover-letters': 'Cover Letter', workers: 'Workers', status: 'Stato',
-  positions: 'Posizioni', ready: 'Pronte', risposte: 'Risposte',
-  crescita: 'Crescita', profile: 'Profilo', team: 'Team',
-  capitano: 'Capitano', scout: 'Scout', analista: 'Analista',
-  scorer: 'Scorer', scrittore: 'Scrittore', critico: 'Critico',
-  sentinella: 'Sentinella', assistente: 'Assistente',
-  demo: 'Demo', download: 'Download', guide: 'Guida',
-  faq: 'FAQ', about: 'Chi siamo', pricing: 'Pricing',
-  privacy: 'Privacy', changelog: 'Changelog', docs: 'Documentazione',
-  stats: 'Statistiche', project: 'Progetto', reports: 'Report', setup: 'Setup', edit: 'Modifica',
-  terms: 'Termini di Servizio',
-  // Pagine aggiuntive
-  achievements: 'Obiettivi', activity: 'Attività', 'ai-assistant': 'Assistente AI',
-  'api-explorer': 'API Explorer', archive: 'Archivio', audit: 'Audit',
-  automations: 'Automazioni', backup: 'Backup', bookmarks: 'Preferiti',
-  budget: 'Budget', calendar: 'Calendario', compare: 'Confronto',
-  contacts: 'Contatti', context: 'Contesto', database: 'Database',
-  env: 'Ambiente', errors: 'Errori', export: 'Esportazione',
-  feedback: 'Feedback', forum: 'Forum', git: 'Git', goals: 'Obiettivi',
-  hooks: 'Hook', import: 'Importazione', insights: 'Insight',
-  integrations: 'Integrazioni', map: 'Mappa', messages: 'Messaggi',
-  migrations: 'Migrazioni', monitoring: 'Monitoraggio', networking: 'Networking',
-  onboarding: 'Onboarding', performance: 'Performance', pipelines: 'Pipeline',
-  recommendations: 'Raccomandazioni', reminders: 'Promemoria',
-  'resume-builder': 'Crea CV', 'saved-searches': 'Ricerche Salvate',
-  scheduler: 'Schedulatore', search: 'Ricerca', secrets: 'Segreti',
-  sentinel: 'Sentinella', skills: 'Competenze', timeline: 'Timeline',
-  validators: 'Validatori', webhooks: 'Webhook', metrics: 'Metriche',
+// Maps url segment → i18n key (bc_*)
+const SEG_KEY: Record<string, string> = {
+  dashboard: 'bc_dashboard', agents: 'bc_agents', tasks: 'bc_tasks', assistant: 'bc_assistant',
+  history: 'bc_history', sessions: 'bc_sessions', analytics: 'bc_analytics', queue: 'bc_queue',
+  events: 'bc_events', notifications: 'bc_notifications', credentials: 'bc_credentials',
+  plugins: 'bc_plugins', templates: 'bc_templates', logs: 'bc_logs', deploy: 'bc_deploy',
+  providers: 'bc_providers', gateway: 'bc_gateway', memory: 'bc_memory', channels: 'bc_channels',
+  settings: 'bc_settings', cron: 'bc_cron', config: 'bc_config', health: 'bc_health',
+  overview: 'bc_overview', retry: 'bc_retry', tools: 'bc_tools',
+  jobs: 'bc_jobs', applications: 'bc_applications', interviews: 'bc_interviews',
+  companies: 'bc_companies', profiles: 'bc_profiles', alerts: 'bc_alerts',
+  'cover-letters': 'bc_cover_letters', workers: 'bc_workers', status: 'bc_status',
+  positions: 'bc_positions', ready: 'bc_ready', risposte: 'bc_risposte',
+  crescita: 'bc_crescita', profile: 'bc_profile', team: 'bc_team',
+  capitano: 'bc_capitano', scout: 'bc_scout', analista: 'bc_analista',
+  scorer: 'bc_scorer', scrittore: 'bc_scrittore', critico: 'bc_critico',
+  sentinella: 'bc_sentinella', assistente: 'bc_assistente',
+  download: 'bc_download', guide: 'bc_guide', faq: 'bc_faq', about: 'bc_about',
+  privacy: 'bc_privacy', changelog: 'bc_changelog', docs: 'bc_docs',
+  stats: 'bc_stats', project: 'bc_project', reports: 'bc_reports', setup: 'bc_setup', edit: 'bc_edit',
+  terms: 'bc_terms', achievements: 'bc_achievements', activity: 'bc_activity',
+  archive: 'bc_archive', audit: 'bc_audit', automations: 'bc_automations', backup: 'bc_backup',
+  bookmarks: 'bc_bookmarks', budget: 'bc_budget', calendar: 'bc_calendar', compare: 'bc_compare',
+  contacts: 'bc_contacts', database: 'bc_database', errors: 'bc_errors', export: 'bc_export',
+  feedback: 'bc_feedback', forum: 'bc_forum', git: 'bc_git', goals: 'bc_goals',
+  import: 'bc_import', insights: 'bc_insights', integrations: 'bc_integrations',
+  messages: 'bc_messages', monitoring: 'bc_monitoring', onboarding: 'bc_onboarding',
+  performance: 'bc_performance', pipelines: 'bc_pipelines', recommendations: 'bc_recommendations',
+  reminders: 'bc_reminders', scheduler: 'bc_scheduler', search: 'bc_search', secrets: 'bc_secrets',
+  sentinel: 'bc_sentinel', skills: 'bc_skills', timeline: 'bc_timeline',
+  validators: 'bc_validators', webhooks: 'bc_webhooks', metrics: 'bc_metrics',
 }
 
 const ID_RE = /^[0-9a-f-]{8,}$|^[A-Z][\w-]+$/
-
-function segLabel(seg: string): string {
-  if (LABELS[seg]) return LABELS[seg]
-  if (ID_RE.test(seg)) return seg.length > 12 ? seg.slice(0, 8) + '…' : seg
-  return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
-}
 
 // ── Collapse dropdown ──────────────────────────────────────────────────────
 
@@ -126,10 +111,19 @@ const MAX_VISIBLE  = 3   // mostra max N segmenti, collassa il resto
 
 export default function Breadcrumb() {
   const pathname = usePathname()
+  const { t } = useDashboardT()
+
   if (!pathname || HIDDEN_PATHS.includes(pathname) || isMarketingRoute(pathname) || pathname.startsWith('/auth')) return null
 
   const segments = pathname.split('/').filter(Boolean)
   if (segments.length === 0) return null
+
+  function segLabel(seg: string): string {
+    const key = SEG_KEY[seg]
+    if (key) return t(key)
+    if (ID_RE.test(seg)) return seg.length > 12 ? seg.slice(0, 8) + '…' : seg
+    return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
+  }
 
   const crumbs: Crumb[] = segments.map((seg, i) => ({
     label: segLabel(seg),
