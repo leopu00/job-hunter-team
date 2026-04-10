@@ -114,9 +114,6 @@ function DownloadContent() {
 
           {/* Header */}
           <div className="mb-12 text-center">
-            <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-6">
-              download
-            </div>
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
               Configura il tuo team <span className="text-[var(--color-green)]">sul tuo PC</span>
             </h1>
@@ -272,31 +269,9 @@ function DownloadContent() {
             </div>
           )}
 
-          {/* Demo CTA */}
-          <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5 mb-8 text-center">
-            <p className="text-[12px] text-[var(--color-muted)] mb-3">
-              {t('dl_demo_question')}
-            </p>
-            <Link href="/demo"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-[12px] font-semibold tracking-wide transition-all no-underline"
-              style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}>
-              {t('dl_demo_cta')} &rarr;
-            </Link>
-          </div>
 
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-[10px] text-[var(--color-dim)]">
-              v{version} &middot; Job Hunter Team &middot;{' '}
-              <Link href="/" className="text-[var(--color-green)] hover:underline">{t('dl_home')}</Link>
-              {' '}&middot;{' '}
-              <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
-                className="text-[var(--color-green)] hover:underline">{t('dl_all_releases')}</a>
-            </p>
-          </div>
         </div>
       </main>
-      <LandingFooter />
       <ScrollToTop />
     </>
   )
