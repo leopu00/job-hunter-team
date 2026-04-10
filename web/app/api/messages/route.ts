@@ -51,8 +51,8 @@ function load(): MsgStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const data = JSON.parse(raw) as MsgStore
-    return Array.isArray(data?.threads) ? data : { version: 1, threads: SAMPLE }
-  } catch { return { version: 1, threads: SAMPLE } }
+    return Array.isArray(data?.threads) ? data : { version: 1, threads: [] }
+  } catch { return { version: 1, threads: [] } }
 }
 
 function save(store: MsgStore) {
