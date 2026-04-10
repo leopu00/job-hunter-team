@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
 const TASKS_DIR  = path.join(os.homedir(), '.jht-dev', 'tasks')
-const FORUM_LOG  = path.join(os.homedir(), '.jht', 'forum.log')
+const FORUM_LOG  = path.join(JHT_HOME, 'forum.log')
 
 export type ActivityType = 'merge' | 'pr' | 'task' | 'test' | 'forum' | 'deploy'
 
