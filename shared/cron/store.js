@@ -3,10 +3,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { JHT_HOME } from '../paths.js';
 
-const JHT_CRON_DIR = path.join(os.homedir(), '.jht', 'cron');
+const JHT_CRON_DIR = path.join(JHT_HOME, 'cron');
 const JHT_CRON_STORE_PATH = path.join(JHT_CRON_DIR, 'jobs.json');
 
 const serializedCache = new Map();
