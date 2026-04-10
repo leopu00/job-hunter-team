@@ -8,7 +8,7 @@ export default function NavLinks() {
   const { t } = useDashboardT()
 
   return (
-    <div className="hidden md:flex items-center gap-1 flex-1 justify-start ml-8">
+    <div className="flex items-center gap-1">
       <NavLink href="/dashboard">{t('nav_dashboard')}</NavLink>
       <NavLink href="/positions">{t('nav_positions')}</NavLink>
       <NavLink href="/applications">{t('nav_applications')}</NavLink>
