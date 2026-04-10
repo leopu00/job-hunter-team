@@ -8,12 +8,13 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Path fissi JHT (specchio di tui/src/tui-paths.ts)
-const JHT_HOME = path.join(os.homedir(), '.jht');
+// Path fissi JHT (specchio di tui/src/tui-paths.ts, con override env).
+// team.js e CommonJS — non puo importare cli/src/jht-paths.js (ESM).
+const JHT_HOME = process.env.JHT_HOME || path.join(os.homedir(), '.jht');
 const JHT_CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json');
 const JHT_DB_PATH = path.join(JHT_HOME, 'jobs.db');
 const JHT_AGENTS_DIR = path.join(JHT_HOME, 'agents');
-const JHT_USER_DIR = path.join(os.homedir(), 'Documents', 'Job Hunter Team');
+const JHT_USER_DIR = process.env.JHT_USER_DIR || path.join(os.homedir(), 'Documents', 'Job Hunter Team');
 
 function getAgentDir(role, instance) {
   const sub = instance ? `${role}-${instance}` : role;
