@@ -42,7 +42,7 @@ export default function LandingFeatures() {
               <h3 className="text-[13px] font-bold text-[var(--color-white)] mb-2 tracking-wide">
                 {t(f.titleKey)}
               </h3>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+              <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
                 {t(f.descKey)}
               </p>
               {/* Glow border on hover */}
