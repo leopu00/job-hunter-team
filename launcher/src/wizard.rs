@@ -24,6 +24,7 @@ enum UserEvent {
     BootstrapProgress(u8, String),
     BootstrapDone(u16),
     BootstrapError(String),
+    EvalJs(String),
 }
 
 pub fn run(existing: Option<SetupConfig>) {
@@ -56,12 +57,29 @@ pub fn run(existing: Option<SetupConfig>) {
         .unwrap();
 
     let proxy_ipc = proxy.clone();
+    let proxy_browse = proxy.clone();
 
     let webview = WebViewBuilder::new()
         .with_html(&html)
         .with_ipc_handler(move |msg| {
             let body = msg.body();
-            if body.starts_with("submit:") {
+            if body == "browse" {
+                // Open native folder picker via PowerShell
+                let output = std::process::Command::new("powershell.exe")
+                    .args([
+                        "-NoProfile", "-STA", "-Command",
+                        r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Select working directory'; $d.ShowNewFolderButton = $true; if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"#,
+                    ])
+                    .output();
+                if let Ok(out) = output {
+                    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    if !path.is_empty() {
+                        let escaped = path.replace('\\', "\\\\");
+                        let js = format!("document.getElementById('workDir').value='{}'", escaped);
+                        let _ = proxy_browse.send_event(UserEvent::EvalJs(js));
+                    }
+                }
+            } else if body.starts_with("submit:") {
                 let json = &body[7..];
                 if let Some(cfg) = parse_submit(json) {
                     let _ = config::save_config(&cfg);
@@ -104,6 +122,9 @@ pub fn run(existing: Option<SetupConfig>) {
                             "showError('{}')",
                             err.replace('\'', "\\'").replace('\n', "\\n")
                         );
+                        let _ = webview.evaluate_script(&js);
+                    }
+                    UserEvent::EvalJs(js) => {
                         let _ = webview.evaluate_script(&js);
                     }
                 }
@@ -342,7 +363,10 @@ select option {{ background: #1a2420; color: #e0e0e0; }}
     <div class="step active" id="wiz-0">
       <div class="field">
         <label>Working directory</label>
-        <input type="text" id="workDir" value="{escaped_dir}" placeholder="C:\Users\you\JHT" />
+        <div style="display:flex;gap:8px">
+          <input type="text" id="workDir" value="{escaped_dir}" placeholder="C:\Users\you\JHT" style="flex:1" />
+          <button onclick="window.ipc.postMessage('browse')" style="background:#1a2420;border:1px solid #2a3a32;color:#44cc66;padding:8px 14px;cursor:pointer;font-size:16px;transition:all 0.2s;flex-shrink:0" onmouseover="this.style.borderColor='#44cc66'" onmouseout="this.style.borderColor='#2a3a32'">&#128193;</button>
+        </div>
         <div class="hint">Where your job search data will be stored</div>
       </div>
     </div>
