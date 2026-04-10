@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ type ReminderType = 'follow-up' | 'interview-prep' | 'offer-deadline' | 'custom'
 type ReminderStatus = 'pending' | 'done' | 'snoozed';
 type Reminder = { id: string; type: ReminderType; title: string; jobTitle?: string; company?: string; dueDate: number; status: ReminderStatus; note?: string; createdAt: number };
 
-const FILE = path.join(os.homedir(), '.jht', 'reminders.json');
+const FILE = path.join(JHT_HOME, 'reminders.json');
 
 function load(): Reminder[] {
   try { const d = JSON.parse(fs.readFileSync(FILE, 'utf-8')); return Array.isArray(d) ? d : []; }
