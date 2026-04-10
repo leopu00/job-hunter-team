@@ -4,10 +4,11 @@ import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
 import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
-import TeamDropdown from './TeamDropdown'
+import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
 
 const NotificationCenter = dynamic(() => import('@/app/components/NotificationCenter').then(m => m.NotificationCenter))
+const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
 
 interface NavbarProps {
   user: User | null
@@ -43,17 +44,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
         </Link>
 
         {/* Nav links (desktop) */}
-        <div className="hidden md:flex items-center gap-1 flex-1 justify-start ml-8">
-          <NavLink href="/dashboard">Dashboard</NavLink>
-          <NavLink href="/positions">Posizioni</NavLink>
-          <NavLink href="/applications">Candidature</NavLink>
-          <NavLink href="/ready" accent="#7fffb2">Pronte</NavLink>
-          <NavLink href="/risposte" accent="#58a6ff">Risposte</NavLink>
-          <NavLink href="/crescita">Crescita</NavLink>
-          <NavLink href="/reports">Report</NavLink>
-          <TeamDropdown />
-          <NavLink href="/profile">Profilo</NavLink>
-        </div>
+        <NavLinks />
 
         {/* Mobile hamburger */}
         <NavbarMobile />
@@ -62,6 +53,7 @@ export default function Navbar({ user, workspace }: NavbarProps) {
         {user ? (
           <div className="flex items-center gap-3">
             <NotificationCenter />
+            <LanguageSwitcher direction="down" />
             <div className="hidden sm:flex flex-col items-end">
               <span className="text-[11px] text-[var(--color-bright)] leading-none font-medium">
                 {fullName ?? email.split('@')[0]}
@@ -99,18 +91,6 @@ export default function Navbar({ user, workspace }: NavbarProps) {
         )}
       </nav>
     </header>
-  )
-}
-
-function NavLink({ href, children, accent }: { href: string; children: React.ReactNode; accent?: string }) {
-  return (
-    <Link
-      href={href}
-      className="px-3 py-1.5 text-[11px] font-semibold tracking-widest uppercase hover:bg-[var(--color-card)] rounded transition-colors no-underline"
-      style={{ color: accent ?? 'var(--color-muted)' } as React.CSSProperties}
-    >
-      {children}
-    </Link>
   )
 }
 
