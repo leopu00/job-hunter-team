@@ -5,7 +5,7 @@
  * del provider attivo, pronta per l'uso dagli agenti.
  */
 import fs from 'node:fs';
-import { JHT_HOME, JHT_CONFIG_PATH } from '../paths.js';
+import { JHT_HOME, JHT_CONFIG_PATH, JHT_USER_DIR } from '../paths.js';
 
 const JHT_CONFIG_DIR = JHT_HOME;
 
@@ -108,11 +108,10 @@ export function getTelegramChannel() {
 }
 
 /**
- * Restituisce il path della workspace configurata.
- * @returns {string|null}
+ * Restituisce il path della cartella utente visibile JHT.
+ * Dal refactor path-fissi ritorna sempre JHT_USER_DIR (non piu' dal config).
+ * @returns {string}
  */
 export function getWorkspacePath() {
-  const result = loadConfig();
-  if (!result.success) return null;
-  return result.config.workspace || null;
+  return JHT_USER_DIR;
 }
