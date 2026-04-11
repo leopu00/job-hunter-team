@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node -e \"require('fs').copyFileSync('../scripts/install.sh','public/install.sh')\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

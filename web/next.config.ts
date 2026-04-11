@@ -78,6 +78,13 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+      {
+        source: '/install.sh',
+        headers: [
+          { key: 'content-type', value: 'application/x-sh; charset=utf-8' },
+          { key: 'cache-control', value: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400' },
+        ],
+      },
     ]
   },
 }
