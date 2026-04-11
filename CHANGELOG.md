@@ -5,6 +5,20 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Auth
+- Aggiunto login **GitHub OAuth** come secondo provider accanto a Google, target developer e contributor open source
+- Whitelist `avatars.githubusercontent.com` in `next/image` e nel CSP `img-src` per evitare il crash della dashboard al primo login GitHub
+
+### Cloud Sync (opt-in)
+- Nuova tabella `cloud_sync_tokens` (migration 006) con RLS per-user, hash SHA-256 del token e soft-delete via `revoked_at`
+- API CRUD `/api/cloud-sync/tokens` (GET lista, POST crea, DELETE revoca) — il token in chiaro viene restituito una sola volta al momento della creazione
+- Pagina `/settings/cloud-sync` per generare, copiare e revocare i token; ogni token ha un nome leggibile per identificare il dispositivo (es. "MacBook Leone", "Linux cron")
+- Infrastruttura pronta per l'integrazione CLI locale → Supabase senza dover usare il browser per ogni sync
+
+---
+
 ## [0.1.8] — 2026-04-10
 
 ### Fix

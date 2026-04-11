@@ -1,6 +1,6 @@
 # BACKLOG — Job Hunter Team
 
-Ultimo aggiornamento: 2026-04-11 (rework onboarding: assistente tmux + split-screen)
+Ultimo aggiornamento: 2026-04-11 (cloud sync tokens + GitHub OAuth)
 
 ---
 
@@ -29,8 +29,10 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 
 **Infrastruttura completata:**
 - ✅ Supabase cloud attivo (Frankfurt)
-- ✅ Schema PostgreSQL V2 applicato (migrations 001 + 002)
+- ✅ Schema PostgreSQL applicato (migrations 001-006, ultima: cloud_sync_tokens)
 - ✅ Google OAuth funzionante
+- ✅ GitHub OAuth funzionante (secondo provider, accesso developer)
+- ✅ Cloud Sync Tokens: schema + API CRUD + pagina `/settings/cloud-sync` per generare/revocare token (backend pronto per integrazione CLI)
 - ✅ Next.js app (web/) si builda, login funziona
 - ✅ CI/CD Vercel pipeline scritta (`.github/workflows/deploy.yml`)
 - ✅ Launcher desktop Electron in `desktop/`
@@ -38,7 +40,7 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 - ✅ Workflow release GitHub con runner nativi macOS / Windows / Linux
 - ✅ Pagina download allineata ai pacchetti desktop reali
 - ✅ Documentazione setup: `docs/supabase-setup.md`
-- ✅ Maturità stimata: ~65%
+- ✅ Maturità stimata: ~67%
 
 ---
 
@@ -49,6 +51,23 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 Obiettivo: la web app funziona end-to-end con dati reali.
 
 #### 🔴 ALTA PRIORITÀ
+
+##### [JHT-CLOUDSYNC-01] Cloud Sync — ponte locale ↔ cloud (opt-in)
+- **Obiettivo:** un utente che gira JHT in locale (CLI o launcher desktop) può opzionalmente sincronizzare i metadati delle candidature sul suo account cloud, senza mai esporre file sensibili. Modello local-first: il cloud è *specchio* del locale, non l'inverso. Zero auth obbligatoria per chi resta 100% in locale.
+- **Stato:**
+  - ✅ Schema `cloud_sync_tokens` applicato (migration 006, RLS per-user)
+  - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete via `revoked_at`)
+  - ✅ UI `/settings/cloud-sync` per generare/revocare token (token in chiaro mostrato una sola volta)
+  - ⬜ CLI command `jht cloud enable` — riceve token e lo salva in `~/.jht/cloud.json` (chmod 0600)
+  - ⬜ Endpoint `/api/cloud-sync/push` che accetta `Authorization: Bearer jht_sync_...`, verifica hash token, aggiorna `last_used_at` e scrive metadati in `positions/applications/scores`
+  - ⬜ Sync loop locale: diff SQLite → cloud ogni N minuti (configurabile, default 10)
+  - ⬜ Integrazione Google Drive scope `drive.file` per upload CV/cover letter (solo file creati da JHT, privacy-safe)
+  - ⬜ Toggle "Enable cloud sync" nel launcher desktop + wizard CLI
+  - ⬜ Documentazione: path upgrade verso self-hosted Supabase per utenti tecnici (BYO backend)
+- **Vincoli:**
+  - Token opachi (non JWT), hashed con SHA-256, revocabili sempre da `/settings/cloud-sync`
+  - Nessun dato sync se l'utente non clicca esplicitamente "Enable" — il default è zero-cloud
+  - File pesanti (PDF CV) non vanno mai in Supabase: solo metadati e riferimenti Drive
 
 ##### [JHT-CLOUD-GATE-01] Cloud landing: "scarica l'app" invece di dashboard vuota
 - **Problema:** sul dominio pubblico (jobhunterteam.ai), un utente che fa login senza aver mai scaricato l'app desktop vede una dashboard vuota senza capire cosa fare, e ha pure un bottone "compila profilo" che non porta da nessuna parte perché il profilo richiede l'assistente AI locale. La visione corretta è: il cloud è **solo visualizzazione** dei risultati già sincronizzati dal team locale; tutto ciò che richiede azione (configurare profilo, avviare agenti) deve rimandare a localhost.
