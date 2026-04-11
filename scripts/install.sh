@@ -592,7 +592,7 @@ maybe_onboard() {
   printf "\n${BOLD}Vuoi avviare il setup wizard adesso? [Y/n]${RESET} "
   read -r answer || answer=""
   case "$answer" in
-    n|N|no|NO) info "Wizard saltato. Esegui 'jht' quando sei pronto." ;;
+    n|N|no|NO) info "Wizard saltato. Esegui 'jht setup' quando sei pronto." ;;
     *)
       export PATH="$BIN_DIR:$PATH"
       jht setup || warn "Il wizard e' uscito con errore. Rilancialo con 'jht setup'."
