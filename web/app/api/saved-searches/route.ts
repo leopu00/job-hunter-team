@@ -6,16 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type SavedSearch = { id: string; name: string; query: string; filters: Record<string, string>; alertEnabled: boolean; frequency: string; newCount: number; lastRun: number; createdAt: number };
 
-const SS_PATH = path.join(os.homedir(), '.jht', 'saved-searches.json');
+const SS_PATH = path.join(JHT_HOME, 'saved-searches.json');
 
 function load(): SavedSearch[] {
   try { return JSON.parse(fs.readFileSync(SS_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function save(data: SavedSearch[]): void {

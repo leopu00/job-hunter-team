@@ -207,3 +207,77 @@ test('runtime manager falls back to next free port when preferred one is blocked
   openPorts = new Set()
   assert.equal(stopped.mode, 'stopped')
 })
+
+test('runtime manager in container mode skips web setup and uses docker spawn spec', async () => {
+  const repoRoot = makeTempRepo()
+  let portOpen = false
+  let containerEnsured = false
+  let lastSpec = null
+
+  const manager = createRuntimeManager({
+    repoRoot,
+    containerMode: true,
+    logFile: path.join(repoRoot, 'launcher.log'),
+    startTimeoutMs: 5000,
+    containerStartTimeoutMs: 5000,
+    isPortOpenFn: () => portOpen,
+    ensureContainerFn: () => {
+      containerEnsured = true
+    },
+    spawnFn: (command, args, options) => {
+      portOpen = true
+      return require('node:child_process').spawn(command, args, options)
+    },
+    containerSpawnSpecFactory: ({ port }) => {
+      lastSpec = {
+        command: 'docker',
+        args: ['run', '--rm', '-p', `${port}:3000`, 'fake-image'],
+        options: {
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      }
+      // Use a real long-running node process so spawnFn doesn't crash.
+      return {
+        command: process.execPath,
+        args: ['-e', 'setInterval(() => {}, 1000)'],
+        options: {
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      }
+    },
+  })
+
+  const started = await manager.startRuntime({ port: 3199 })
+  assert.equal(containerEnsured, true)
+  assert.equal(started.mode, 'running')
+  assert.equal(started.containerMode, true)
+  assert.equal(started.setup, null)
+  assert.equal(started.runtimeKind, 'container')
+  assert.ok(lastSpec)
+
+  const stopped = await manager.stopRuntime()
+  portOpen = false
+  assert.equal(stopped.mode, 'stopped')
+})
+
+test('runtime manager surfaces ensureContainer errors as runtime error', async () => {
+  const repoRoot = makeTempRepo()
+  const manager = createRuntimeManager({
+    repoRoot,
+    containerMode: true,
+    logFile: path.join(repoRoot, 'launcher.log'),
+    isPortOpenFn: () => false,
+    ensureContainerFn: () => {
+      throw new Error('docker not running')
+    },
+    containerSpawnSpecFactory: () => {
+      throw new Error('should not be called')
+    },
+  })
+
+  const status = await manager.startRuntime({ port: 3198 })
+  assert.equal(status.mode, 'error')
+  assert.match(status.lastError, /docker not running/)
+})

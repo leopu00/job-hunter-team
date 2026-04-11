@@ -2,10 +2,7 @@
  * Setup wizard — onboarding completo al primo avvio.
  * Layout verticale con SelectList per navigazione pulita.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as readline from "node:readline";
 import {
   Container,
@@ -30,24 +27,23 @@ import {
   loadWorkspacePath,
   saveWorkspaceApiKey,
   saveWorkspaceProvider,
-  saveWorkspacePath,
   loadWorkspaceApiKey,
-  validateWorkspacePath,
   type WorkspaceProvider,
   type UserProfile,
 } from "./tui-profile.js";
+import { JHT_HOME, JHT_CONFIG_PATH } from "./tui-paths.js";
 import { theme } from "./tui-theme.js";
-import { 
-  listProviders, 
-  getProvider, 
+import {
+  listProviders,
+  getProvider,
   getAuthMethods,
-  saveCredentials, 
+  saveCredentials,
   type ProviderId,
   type AuthMethod,
 } from "./auth/providers.js";
 
-const CONFIG_DIR = join(homedir(), ".jht");
-const CONFIG_PATH = join(CONFIG_DIR, "jht.config.json");
+const CONFIG_DIR = JHT_HOME;
+const CONFIG_PATH = JHT_CONFIG_PATH;
 const SETUP_MODEL = "claude-sonnet-4-20250514";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +62,7 @@ const setupSelectTheme: SelectListTheme = {
 // TIPI
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SetupStep = "welcome" | "workspace" | "provider" | "authMethod" | "credentials";
+type SetupStep = "welcome" | "provider" | "authMethod" | "credentials";
 
 type SetupState = {
   step: SetupStep;
@@ -126,23 +122,25 @@ function renderFooter(): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function runSetupWizard(): Promise<string> {
+  // Crea zona nascosta ~/.jht/ e zona visibile ~/Documents/Job Hunter Team/
+  ensureWorkspaceInitialized();
+
   const state: SetupState = {
     step: "welcome",
     workspace: loadWorkspacePath(),
-    provider: (loadWorkspaceProvider(loadWorkspacePath()) as WorkspaceProvider) || "",
+    provider: (loadWorkspaceProvider() as WorkspaceProvider) || "",
     authMethodId: "",
-    apiKey: loadWorkspaceApiKey(loadWorkspacePath()) || "",
+    apiKey: loadWorkspaceApiKey() || "",
     message: null,
   };
 
   // Se già configurato, salta il wizard
-  if (state.workspace && state.provider && state.apiKey) {
+  if (state.provider && state.apiKey) {
     return state.apiKey;
   }
 
   // Determina step iniziale
-  if (!state.workspace) state.step = "workspace";
-  else if (!state.provider) state.step = "provider";
+  if (!state.provider) state.step = "provider";
   else if (!state.apiKey) state.step = "authMethod";
 
   const tui = new TUI(new ProcessTerminal());
@@ -206,9 +204,6 @@ export async function runSetupWizard(): Promise<string> {
       case "welcome":
         renderWelcome(contentArea, state);
         break;
-      case "workspace":
-        renderWorkspace(contentArea, state, inputBuffer);
-        break;
       case "provider":
         renderProvider(contentArea, state, providerSelect);
         break;
@@ -225,57 +220,6 @@ export async function runSetupWizard(): Promise<string> {
 
   // Handlers step
   const handleWelcome = (): boolean => {
-    state.step = "workspace";
-    return true;
-  };
-
-  const handleWorkspace = async (): Promise<boolean> => {
-    let path = inputBuffer.trim();
-
-    // Se vuoto, apri picker
-    if (!path) {
-      path = openWorkspaceFolderPicker(state.workspace || homedir()) ?? "";
-      if (!path) {
-        state.message = "Seleziona una cartella";
-        return false;
-      }
-    }
-
-    if (!path) {
-      state.message = "Seleziona una cartella di lavoro";
-      return false;
-    }
-
-    const normalized = resolve(path);
-    let validation = validateWorkspacePath(normalized);
-
-    // Se non esiste, prova a crearla
-    if (!validation.ok && /cartella non trovata/i.test(validation.error)) {
-      try {
-        ensureWorkspaceInitialized(normalized);
-        validation = validateWorkspacePath(normalized);
-      } catch (err) {
-        state.message = err instanceof Error ? err.message : "Errore creazione cartella";
-        return false;
-      }
-    }
-
-    if (!validation.ok) {
-      state.message = validation.error;
-      return false;
-    }
-
-    ensureWorkspaceInitialized(validation.value);
-    saveWorkspacePath(validation.value);
-    state.workspace = validation.value;
-    // DEBUG: non caricare provider esistente, forza selezione
-    state.provider = "";
-    state.apiKey = "";
-    syncProviderSelection();
-    inputBuffer = "";
-    state.message = null;
-
-    // Procedi sempre allo step provider (DEBUG)
     state.step = "provider";
     return true;
   };
@@ -337,8 +281,8 @@ export async function runSetupWizard(): Promise<string> {
       return false;
     }
 
-    // Se è OAuth, esegui direttamente (apre browser)
-    if (method.kind === "oauth") {
+    // Se è OAuth o Subscription, esegui direttamente (no input necessario)
+    if (method.kind === "oauth" || method.kind === "subscription") {
       const result = await executeAuthMethod(method);
       if (!result.success) {
         state.message = result.error;
@@ -346,7 +290,9 @@ export async function runSetupWizard(): Promise<string> {
       }
       // Salva credenziali
       await saveCredentials(state.workspace, state.provider as ProviderId, method.id, result.credentials);
-      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key : result.credentials.token;
+      state.apiKey = result.credentials.type === "apiKey" ? result.credentials.key
+        : result.credentials.type === "subscription" ? "__subscription__"
+        : result.credentials.token;
       completedApiKey = state.apiKey;
       state.message = "Autenticazione completata!";
       return true;
@@ -394,7 +340,11 @@ export async function runSetupWizard(): Promise<string> {
       provider: state.provider as WorkspaceProvider,
       prompt: promptAPI,
       openUrl: async (url) => {
-        // Apri URL nel browser di default
+        const { isContainer } = await import("./tui-runtime.js");
+        if (isContainer()) {
+          state.message = `Apri questo URL nel browser host:\n  ${url}`;
+          return;
+        }
         const { spawn } = await import("node:child_process");
         const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
         spawn(command, [url], { detached: true, stdio: "ignore" });
@@ -479,9 +429,6 @@ export async function runSetupWizard(): Promise<string> {
             case "welcome":
               ok = handleWelcome();
               break;
-            case "workspace":
-              ok = await handleWorkspace();
-              break;
             case "provider":
               ok = handleProvider();
               break;
@@ -526,11 +473,18 @@ export async function runSetupWizard(): Promise<string> {
 
       // Input testuale (solo per workspace e apiKey)
       const str = typeof data === "string" ? data : "";
-      if (str && str.length === 1 && str.charCodeAt(0) >= 32 && currentStep !== "provider") {
-        inputBuffer += str;
-        state.message = null;
-        render();
-        return { consume: true };
+      if (str && currentStep !== "provider") {
+        // Rimuovi sequenze bracketed paste [200~ e [201~ (con o senza ESC)
+        let cleaned = str.replace(/\x1b?\[200~/g, "").replace(/\x1b?\[201~/g, "");
+        // Gestisce sia input singolo che paste multi-carattere
+        // Filtra solo caratteri stampabili (>=32, escluso DEL 127)
+        const printable = cleaned.split("").filter(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127).join("");
+        if (printable) {
+          inputBuffer += printable;
+          state.message = null;
+          render();
+          return { consume: true };
+        }
       }
 
       return undefined;
@@ -551,20 +505,6 @@ function renderWelcome(panel: Container, state: SetupState) {
   const add = (text: string) => panel.addChild(new Text(text, 0, 0));
   add("");
   add(`  ${theme.accent("▶ Premi Enter per iniziare")}`);
-  if (state.message) add(`  ${theme.warning(state.message)}`);
-}
-
-function renderWorkspace(panel: Container, state: SetupState, inputBuffer: string) {
-  const add = (text: string) => panel.addChild(new Text(text, 0, 0));
-
-  const display = inputBuffer || state.workspace || "";
-  const cursor = "█";
-  const line = display + cursor;
-
-  add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
-  add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
-  add(`  ${theme.border("└" + "─".repeat(50) + "┘")}`);
-
   if (state.message) add(`  ${theme.warning(state.message)}`);
 }
 
@@ -603,9 +543,8 @@ function renderCredentials(panel: Container, state: SetupState, inputBuffer: str
     add(`  ${theme.accent("▶ Premi Enter per aprire il browser")}`);
   } else {
     const display = inputBuffer || "";
-    const masked = display ? "*".repeat(Math.min(display.length, 30)) : "";
     const cursor = "█";
-    const line = masked + cursor;
+    const line = display + cursor;
 
     add(`  ${theme.border("┌" + "─".repeat(50) + "┐")}`);
     add(`  ${theme.border("│")} ${theme.text(line.padEnd(50, " "))} ${theme.border("│")}`);
@@ -621,70 +560,6 @@ function renderCredentials(panel: Container, state: SetupState, inputBuffer: str
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-function openWorkspaceFolderPicker(initialPath: string): string | null {
-  // macOS: AppleScript
-  if (process.platform === "darwin") {
-    const resolvedPath = resolve(initialPath);
-    const scriptLines = [
-      'tell application "Finder" to activate',
-      ...(existsSync(resolvedPath)
-        ? [
-            `set startFolder to POSIX file ${JSON.stringify(resolvedPath)}`,
-            'set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro" default location startFolder',
-          ]
-        : ['set selectedFolder to choose folder with prompt "Seleziona la cartella di lavoro"']),
-      'POSIX path of selectedFolder',
-    ];
-
-    const result = spawnSync("osascript", scriptLines.flatMap((line) => ["-e", line]), {
-      encoding: "utf-8",
-      timeout: 120_000,
-    });
-
-    return result.status === 0 ? result.stdout.trim() || null : null;
-  }
-
-  // Windows / WSL
-  if (process.platform === "win32" || isWSL()) {
-    const escapedPath = initialPath.replace(/'/g, "''");
-    const script = [
-      "Add-Type -AssemblyName System.Windows.Forms",
-      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-      "$dialog.Title = 'Seleziona la cartella di lavoro'",
-      "$dialog.Filter = 'Cartelle|*.folder'",
-      "$dialog.CheckFileExists = $false",
-      "$dialog.CheckPathExists = $true",
-      "$dialog.ValidateNames = $false",
-      "$dialog.FileName = 'Seleziona questa cartella'",
-      `$initialPath = '${escapedPath}'`,
-      "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.InitialDirectory = $initialPath }",
-      "$result = $dialog.ShowDialog()",
-      "if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
-      "  $selected = Split-Path -Path $dialog.FileName -Parent",
-      "  if (-not $selected) { $selected = $dialog.FileName }",
-      "  Write-Output $selected",
-      "}",
-    ].join("; ");
-
-    const result = spawnSync("powershell.exe", [
-      "-NoLogo",
-      "-NoProfile",
-      "-STA",
-      "-Command",
-      script,
-    ], { encoding: "utf-8", timeout: 120_000 });
-
-    return result.status === 0 ? result.stdout.trim() || null : null;
-  }
-
-  // Linux: nessun picker disponibile
-  return null;
-}
-
-function isWSL(): boolean {
-  return !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || process.env.WSLENV);
-}
 
 async function testApiKey(provider: WorkspaceProvider | "", key: string): Promise<boolean> {
   if (!provider) return false;
@@ -720,7 +595,8 @@ async function testApiKey(provider: WorkspaceProvider | "", key: string): Promis
             signal: AbortSignal.timeout(10000),
           },
         );
-    return res.ok || res.status === 400;
+    // 200=ok, 400=formato sbagliato ma key valida, 429=rate limit, 529=overloaded
+    return res.ok || res.status === 400 || res.status === 429 || res.status === 529;
   } catch {
     return false;
   }
@@ -731,17 +607,18 @@ async function testApiKey(provider: WorkspaceProvider | "", key: string): Promis
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function ensureWorkspaceConfigured(): Promise<string> {
-  const savedWorkspace = loadWorkspacePath();
-  const validation = savedWorkspace ? validateWorkspacePath(savedWorkspace) : null;
+  // Crea zona nascosta e visibile se mancano
+  ensureWorkspaceInitialized();
 
-  if (!validation?.ok || !loadWorkspaceProvider(validation.value) || !loadWorkspaceApiKey(validation.value)) {
+  if (!loadWorkspaceProvider() || !loadWorkspaceApiKey()) {
     const apiKey = await runSetupWizard();
     return apiKey;
   }
 
-  return loadWorkspaceApiKey(validation.value) || "";
+  const key = loadWorkspaceApiKey() || "";
+  return key === "__subscription__" ? "" : key;
 }
 
 export function saveApiKey(key: string): void {
-  saveWorkspaceApiKey(key, loadWorkspacePath());
+  saveWorkspaceApiKey(key);
 }

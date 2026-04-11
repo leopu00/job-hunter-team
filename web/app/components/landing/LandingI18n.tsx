@@ -240,29 +240,29 @@ const translations = {
     en: 'If you prefer the command line, you can clone the repository and start the local web dashboard or use CLI and TUI for more advanced control over the runtime.',
     hu: 'Ha a parancssort részesíti előnyben, klónozhatod a repository-t és elindíthatod a helyi webes irányítópultot, vagy használhatod a CLI-t és TUI-t a futtatókörnyezet fejlettebb vezérléséhez.',
   },
-  dl_terminal_source_tab: { it: 'Dashboard locale',     en: 'Local dashboard', hu: 'Helyi irányítópult' },
-  dl_terminal_cli_tab:    { it: 'CLI e setup',          en: 'CLI and setup', hu: 'CLI és beállítás' },
-  dl_terminal_source_title: { it: 'Setup da sorgente',  en: 'Source setup', hu: 'Telepítés forrásból' },
+  dl_terminal_source_tab: { it: 'Da sorgente',           en: 'From source', hu: 'Forrásból' },
+  dl_terminal_cli_tab:    { it: 'One-liner',             en: 'One-liner', hu: 'Egysoros' },
+  dl_terminal_source_title: { it: 'Build da sorgente',   en: 'Build from source', hu: 'Építés forrásból' },
   dl_terminal_source_desc:  {
-    it: 'Clona il progetto e avvia la dashboard web locale in sviluppo.',
-    en: 'Clone the project and start the local web dashboard in development mode.',
-    hu: 'Klónozd a projektet és indítsd el a helyi webes irányítópultot fejlesztői módban.',
+    it: 'Clona il repo, builda TUI e CLI. Consigliato per chi vuole contribuire.',
+    en: 'Clone the repo, build TUI and CLI. Recommended for contributors.',
+    hu: 'Klónozd a repo-t, építsd fel a TUI-t és a CLI-t. Közreműködőknek ajánlott.',
   },
   dl_terminal_source_note:  {
-    it: 'Dopo il comando, la dashboard web sara disponibile su localhost:3000. Questo percorso e pensato per sviluppo locale e uso manuale del repo.',
-    en: 'After running the command, the web dashboard will be available on localhost:3000. This path is meant for local development and manual repo usage.',
-    hu: 'A parancs futtatása után a webes irányítópult elérhető lesz a localhost:3000 címen. Ez az útvonal helyi fejlesztéshez és manuális repo használathoz készült.',
+    it: 'Dopo il build puoi lanciare il wizard con node cli/bin/jht.js. I dati vanno in ~/.jht e ~/Documents/Job Hunter Team.',
+    en: 'After the build you can launch the wizard with node cli/bin/jht.js. Data goes to ~/.jht and ~/Documents/Job Hunter Team.',
+    hu: 'A build után a varázslót a node cli/bin/jht.js paranccsal indíthatod. Az adatok a ~/.jht és ~/Documents/Job Hunter Team mappákba kerülnek.',
   },
-  dl_terminal_cli_title: { it: 'CLI senza installazione globale', en: 'CLI without global install', hu: 'CLI globális telepítés nélkül' },
+  dl_terminal_cli_title: { it: 'Installer one-liner',    en: 'One-liner installer', hu: 'Egysoros telepítő' },
   dl_terminal_cli_desc:  {
-    it: 'Prepara il progetto e avvia il wizard di setup dal binario CLI. Da qui puoi poi usare anche la TUI e gli altri comandi operativi.',
-    en: 'Prepare the project and launch the setup wizard from the CLI binary. From there you can also use the TUI and the other operational commands.',
-    hu: 'Készítsd elő a projektet és indítsd el a beállító varázslót a CLI binárisból. Innen használhatod a TUI-t és a többi operatív parancsot is.',
+    it: 'Installa tutto con un solo comando: dipendenze di sistema, Node, Claude CLI, repo e wizard.',
+    en: 'Install everything with a single command: system deps, Node, Claude CLI, repo and wizard.',
+    hu: 'Mindent egyetlen paranccsal telepíthetsz: rendszerfüggőségek, Node, Claude CLI, repo és varázsló.',
   },
   dl_terminal_cli_note:  {
-    it: 'Per la TUI puoi poi eseguire npm --prefix tui install && npm --prefix tui run dev dalla root del progetto. CLI e TUI lavorano sullo stesso runtime locale della dashboard web.',
-    en: 'For the TUI you can then run npm --prefix tui install && npm --prefix tui run dev from the project root. CLI and TUI work on the same local runtime as the web dashboard.',
-    hu: 'A TUI-hoz futtathatod az npm --prefix tui install && npm --prefix tui run dev parancsot a projekt gyökeréből. A CLI és TUI ugyanazon a helyi futtatókörnyezeten dolgozik, mint a webes irányítópult.',
+    it: 'Supportato su macOS, Linux (apt/dnf/pacman) e WSL. Crea ~/.jht (config, DB, agenti) e ~/Documents/Job Hunter Team (CV, output).',
+    en: 'Supported on macOS, Linux (apt/dnf/pacman) and WSL. Creates ~/.jht (config, DB, agents) and ~/Documents/Job Hunter Team (CV, output).',
+    hu: 'Támogatott: macOS, Linux (apt/dnf/pacman) és WSL. Létrehozza a ~/.jht (konfig, DB, ügynökök) és a ~/Documents/Job Hunter Team (CV, kimenet) mappákat.',
   },
   dl_setup_link:     { it: 'Node.js disponibile su',    en: 'Node.js available at', hu: 'Node.js elérhető itt' },
   dl_home:           { it: 'Home',                       en: 'Home', hu: 'Kezdőlap' },
@@ -601,7 +601,13 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>('it')
 
   useEffect(() => {
-    setLangState(getSavedLang())
+    const saved = getSavedLang()
+    setLangState(saved)
+    fetch('/api/i18n', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: saved }),
+    }).catch(() => { /* best effort */ })
   }, [])
 
   useEffect(() => {
@@ -611,6 +617,11 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
     localStorage.setItem(STORAGE_KEY, l)
+    fetch('/api/i18n', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: l }),
+    }).catch(() => { /* best effort */ })
   }, [])
 
   const t = useCallback((key: StringKeys) => {

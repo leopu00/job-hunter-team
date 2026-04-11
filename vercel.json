@@ -1,8 +1,17 @@
 {
   "framework": "nextjs",
-  "buildCommand": "cd web && npm run build",
+  "buildCommand": "cp scripts/install.sh web/public/install.sh && cd web && npm run build",
   "installCommand": "npm install && cd web && npm install",
   "outputDirectory": "web/.next",
   "regions": ["cdg1"],
-  "cleanUrls": true
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/install.sh",
+      "headers": [
+        { "key": "content-type", "value": "application/x-sh; charset=utf-8" },
+        { "key": "cache-control", "value": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" }
+      ]
+    }
+  ]
 }

@@ -1,16 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * FLUSSO 20 — VERIFICA FIX BUG WEB
- * Documenta il comportamento ATTESO post-fix per i 3 bug trovati
- * nel test E2E Marco Bianchi (task-e2e-003).
- *
- * BUG 1: Workspace selector non redirige alla dashboard dopo conferma
- * BUG 2: Form profilo utente mancante nella web UI
- * BUG 3: Pagina agenti senza istruzioni su come avviarli
- *
- * Selettori aggiornati per matchare la struttura reale dei componenti.
+ * FLUSSO 20 — OBSOLETO
+ * Questi test verificavano un workspace selector basato su cookie/input,
+ * rimpiazzato con path fisso (~/.jht, ~/Documents/Job Hunter Team).
+ * L'intera suite e' skippata: i BUG testati non sono piu' raggiungibili.
  */
+
+test.describe.skip('FLUSSO 20 — Workspace selector (obsoleto)', () => {
 
 const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
 const WORKSPACE_PATH = '/tmp/jht-test-workspace';
@@ -248,3 +245,5 @@ test.describe('BUG 3 — Pagina agenti: istruzioni avvio', () => {
   });
 
 });
+
+}); // chiusura test.describe.skip('FLUSSO 20 — Workspace selector (obsoleto)')

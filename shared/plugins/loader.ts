@@ -4,13 +4,13 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
+import { JHT_HOME } from "../paths.js";
 import type { PluginManifest, PluginModule, PluginContext, PluginLogger, PluginsConfig } from "./types.js";
 import { DEFAULT_PLUGINS_CONFIG } from "./types.js";
 import { RegistryBuilder, setActiveRegistry, type PluginRegistry } from "./registry.js";
 
 const MANIFEST_FILENAME = "jht.plugin.json";
-const STATE_DIR = join(homedir(), ".jht");
+const STATE_DIR = JHT_HOME;
 const DEFAULT_PLUGIN_DIRS = [join(STATE_DIR, "plugins")];
 
 export interface PluginCandidate {

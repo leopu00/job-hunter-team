@@ -101,14 +101,23 @@ Avvia JHT Desktop dal menu Start`}</Code>
 
       <H3>3. Primo avvio</H3>
       <P>Il launcher desktop prepara il runtime locale e apre il browser sulla dashboard locale, in genere su <code className="text-[var(--color-green)]">localhost:3000</code> o su una porta libera vicina.</P>
-      <P>Al primo avvio ti viene chiesto di selezionare una cartella di lavoro. Tutti i dati (database, CV, documenti) restano nella cartella scelta.</P>
+      <P>Al primo avvio JHT crea due cartelle con scopi ben separati:</P>
+      <ul className="ml-5 list-disc text-[12px] text-[var(--color-muted)] leading-relaxed">
+        <li><code className="text-[var(--color-green)]">~/.jht/</code> — zona nascosta: database, config, agenti. Non toccare.</li>
+        <li><code className="text-[var(--color-green)]">~/Documents/Job Hunter Team/</code> — zona visibile: droppa qui i tuoi CV, trovi qui gli output generati.</li>
+      </ul>
 
-      <H2>Installazione da sorgente</H2>
+      <H2>Installer one-liner (macOS / Linux / WSL)</H2>
+      <Code>{`curl -fsSL https://jobhunterteam.ai/install.sh | bash`}</Code>
+      <P>Lo script rileva il tuo OS, installa Colima su Mac (o docker.io su Linux/WSL2), scarica l&apos;immagine <code className="text-[var(--color-green)]">ghcr.io/leopu00/jht:latest</code> e crea un wrapper <code className="text-[var(--color-green)]">jht</code> in <code className="text-[var(--color-green)]">~/.local/bin</code> che lancia tutto in container.</P>
+
+      <H2>Installazione da sorgente (per contribuire)</H2>
       <Code>{`git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-npm install
-cd web && npm install && npm run dev`}</Code>
-      <P>La dashboard locale sara disponibile su <code className="text-[var(--color-green)]">localhost:3000</code> o sulla porta mostrata dal runtime.</P>
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
+node cli/bin/jht.js`}</Code>
+      <P>La dashboard web e' opzionale: <code className="text-[var(--color-green)]">cd web && npm install && npm run dev</code>. Sara disponibile su <code className="text-[var(--color-green)]">localhost:3000</code>.</P>
 
       <H2>Configurazione provider (opzionale)</H2>
       <P>Per usare gli agenti AI completa il setup iniziale dal launcher o configura le credenziali via ambiente se lavori da sorgente:</P>

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
+import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_DIR  = path.join(os.homedir(), '.jht')
-const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
+const CONFIG_DIR  = JHT_HOME
+const CONFIG_PATH = JHT_CONFIG_PATH
 const PROVIDERS   = ['anthropic', 'claude', 'openai', 'kimi', 'minimax'] as const
 
 function sanitize(v: unknown): string | undefined {
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   // Danger zone actions
   if (body._action === 'reset_config') {
     try {
-      const defaults = { version: 1, providers: {}, channels: {}, workspace: CONFIG_DIR, cron_enabled: false }
+      const defaults = { version: 1, providers: {}, channels: {}, workspace: JHT_USER_DIR, workspacePath: JHT_USER_DIR, cron_enabled: false }
       fs.mkdirSync(CONFIG_DIR, { recursive: true })
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaults, null, 2) + '\n', 'utf-8')
       return NextResponse.json({ ok: true })
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Leggi config esistente come base
-  let existing: Record<string, unknown> = { version: 1, providers: {}, channels: {}, workspace: CONFIG_DIR }
+  let existing: Record<string, unknown> = { version: 1, providers: {}, channels: {}, workspace: JHT_USER_DIR }
   if (fs.existsSync(CONFIG_PATH)) {
     try { existing = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) } catch { /* usa default */ }
   }
@@ -129,7 +129,9 @@ export async function POST(req: NextRequest) {
     active_provider: activeProvider,
     providers: mergedProviders,
     channels,
-    workspace: sanitize(body.workspace as string) ?? String(existing.workspace ?? CONFIG_DIR),
+    // workspace e' fisso — ignora eventuali override dal body
+    workspace: JHT_USER_DIR,
+    workspacePath: JHT_USER_DIR,
     cron_enabled: cronEnabled,
   }
 

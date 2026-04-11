@@ -5,10 +5,11 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const PREFS_PATH = path.join(homedir(), '.jht', 'i18n-prefs.json');
+const PREFS_PATH = path.join(JHT_HOME, 'i18n-prefs.json');
 
 const SUPPORTED_LOCALES = [
   { code: 'it', label: 'Italiano', flag: 'IT' },

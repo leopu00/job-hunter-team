@@ -3,7 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import { JHT_HOME } from '../paths.js';
 import type {
   HistoryMessage,
   TranscriptHeader,
@@ -13,7 +13,7 @@ import type {
 } from './types.js';
 import { createTranscriptHeader, DEFAULT_HISTORY_CONFIG } from './types.js';
 
-const DEFAULT_BASE_DIR = path.join(homedir(), '.jht', 'history');
+const DEFAULT_BASE_DIR = path.join(JHT_HOME, 'history');
 
 export function resolveBaseDir(config?: HistoryConfig): string {
   return config?.baseDir ?? DEFAULT_BASE_DIR;

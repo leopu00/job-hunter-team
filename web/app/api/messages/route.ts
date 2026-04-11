@@ -3,10 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { randomUUID } from 'crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_DIR = path.join(os.homedir(), '.jht')
+const STORE_DIR = JHT_HOME
 const STORE_PATH = path.join(STORE_DIR, 'messages.json')
 
 interface Message { id: string; body: string; fromMe: boolean; timestamp: number }
@@ -51,8 +52,8 @@ function load(): MsgStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const data = JSON.parse(raw) as MsgStore
-    return Array.isArray(data?.threads) ? data : { version: 1, threads: SAMPLE }
-  } catch { return { version: 1, threads: SAMPLE } }
+    return Array.isArray(data?.threads) ? data : { version: 1, threads: [] }
+  } catch { return { version: 1, threads: [] } }
 }
 
 function save(store: MsgStore) {

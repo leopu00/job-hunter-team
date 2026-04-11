@@ -1,10 +1,25 @@
 # setup.ps1 — Job Hunter Team
-# Onboarding automatizzato per Windows. Idempotente: sicuro da rieseguire.
+#
+# DEPRECATO: questo script e' l'onboarding legacy da dentro la repo clonata.
+#            Per l'installazione standard su WSL preferisci:
+#
+#   curl -fsSL https://jobhunterteam.ai/install.sh | bash
+#
+# setup.ps1 resta per chi lavora nativo Windows senza WSL e vuole un
+# onboarding idempotente delle dipendenze Python/Node dal source.
+#
 # Esegui con: powershell -ExecutionPolicy Bypass -File setup.ps1
 
 $ErrorActionPreference = "Stop"
 $RepoDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Steps = 10
+
+# Warning deprecation
+Write-Host ""
+Write-Host "[!!] setup.ps1 e' il flow legacy." -ForegroundColor Yellow
+Write-Host "     Per l'installazione standard (WSL) usa:"
+Write-Host "     curl -fsSL https://jobhunterteam.ai/install.sh | bash" -ForegroundColor White
+Write-Host ""
 
 # ── Colori ────────────────────────────────────────────────────────────────────
 function Ok   { param($msg) Write-Host "  " -NoNewline; Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " $msg" }

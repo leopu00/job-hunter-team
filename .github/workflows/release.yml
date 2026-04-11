@@ -106,6 +106,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure tag points to production HEAD
+        run: |
+          git fetch origin production --depth=1
+          TAG_SHA=$(git rev-list -n 1 "${GITHUB_REF_NAME}")
+          PROD_SHA=$(git rev-parse origin/production)
+          if [ "$TAG_SHA" != "$PROD_SHA" ]; then
+            echo "Tag ${GITHUB_REF_NAME} points to ${TAG_SHA}, but origin/production is ${PROD_SHA}."
+            echo "Tag releases only from the current production HEAD."
+            exit 1
+          fi
+
       - uses: actions/setup-node@v6
         with:
           node-version: "20"

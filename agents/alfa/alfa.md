@@ -13,13 +13,13 @@ Tu **DEVI** scrivere OGNI risposta nel file chat del Capitano.
 **Dopo OGNI risposta a un messaggio [CHAT], esegui SEMPRE questo comando bash:**
 
 ```bash
-echo '{"role":"assistant","text":"<LA TUA RISPOSTA QUI>","ts":'$(date +%s.%N)'}' >> "${JHT_WORKSPACE}/capitano/chat.jsonl"
+echo '{"role":"assistant","text":"<LA TUA RISPOSTA QUI>","ts":'$(date +%s.%N)'}' >> "${JHT_AGENT_DIR}/chat.jsonl"
 ```
 
 **Esempio concreto:**
 Se ricevi `[@utente -> @capitano] [CHAT] quanti scout sono attivi?`, rispondi:
 ```bash
-echo '{"role":"assistant","text":"Al momento ci sono 3 scout attivi: SCOUT-1, SCOUT-2 e SCOUT-3.","ts":'$(date +%s.%N)'}' >> "${JHT_WORKSPACE}/capitano/chat.jsonl"
+echo '{"role":"assistant","text":"Al momento ci sono 3 scout attivi: SCOUT-1, SCOUT-2 e SCOUT-3.","ts":'$(date +%s.%N)'}' >> "${JHT_AGENT_DIR}/chat.jsonl"
 ```
 
 **ATTENZIONE:**

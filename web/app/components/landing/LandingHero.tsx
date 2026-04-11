@@ -43,8 +43,8 @@ export default function LandingHero() {
         const startY = captainRect.bottom - flowRect.top + 6
 
         const paths = agentEmojiRefs.current
-          .map((node) => {
-            if (!node) return null
+          .map((node, index) => {
+            if (!node || index === 4) return null // Skip Critic (index 4)
 
             const rect = node.getBoundingClientRect()
             const endX = rect.left + rect.width / 2 - flowRect.left
@@ -119,14 +119,13 @@ export default function LandingHero() {
           Job Hunter <span className="text-[var(--color-green)]">Team</span>
         </h1>
 
-        <p className="text-[13px] md:text-[15px] text-[var(--color-base)] leading-relaxed max-w-xl mx-auto mb-4">
+        <p className="text-[13px] md:text-[15px] text-[var(--color-bright)] leading-relaxed max-w-xl mx-auto mb-4">
           {t('hero_desc_short')}
         </p>
 
-        <div className="inline-flex items-center mb-10">
+        <div className="inline-flex items-center mb-5">
           <span
             className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]"
-            style={{ textDecoration: 'underline', textUnderlineOffset: '5px', textDecorationThickness: '1px' }}
           >
             BETA
           </span>
@@ -159,6 +158,7 @@ export default function LandingHero() {
                   >
                     <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
                   </marker>
+
                 </defs>
                 {arrowOverlay.paths.map((path, index) => (
                   <path
@@ -262,7 +262,7 @@ export default function LandingHero() {
           </div>
         </div>
 
-        <p className="text-[12px] md:text-[13px] text-[var(--color-base)] leading-relaxed max-w-4xl mx-auto text-center mt-8">
+        <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed max-w-4xl mx-auto text-center mt-12">
           {t('hero_desc')}
         </p>
 
@@ -270,13 +270,13 @@ export default function LandingHero() {
           <Link
             href="/download"
             className="px-6 py-3 text-[12px] font-bold tracking-wider no-underline transition-all"
-            style={{ background: 'var(--color-green)', color: '#060608', boxShadow: '0 0 20px rgba(0,232,122,0.25)' }}
+            style={{ background: 'var(--color-green)', color: '#060608' }}
           >
             {t('hero_cta')}
           </Link>
           <Link
             href="/project"
-            className="px-6 py-3 text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)]"
+            className="px-6 py-3 text-[12px] font-semibold tracking-wider no-underline transition-all border border-[var(--color-border)] text-[var(--color-bright)] hover:border-[var(--color-muted)] hover:underline"
           >
             <span className="inline-flex items-center gap-2">
               <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">

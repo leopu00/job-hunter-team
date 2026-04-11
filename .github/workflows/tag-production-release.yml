@@ -1,0 +1,49 @@
+name: Tag Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version without leading v"
+        required: true
+        type: string
+
+jobs:
+  tag:
+    name: Tag current production HEAD
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate version and tag production
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be semantic (example: 0.1.7)."
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+
+          git fetch origin production --tags --force
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+            exit 1
+          fi
+
+          TARGET_SHA=$(git rev-parse origin/production)
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" "$TARGET_SHA" -m "Job Hunter Team $TAG"
+          git push origin "refs/tags/$TAG"
+
+          echo "Created $TAG on $TARGET_SHA"

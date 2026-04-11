@@ -45,17 +45,18 @@ const PLATFORM_ORDER: Record<PlatformId, number> = {
 const FALLBACK_VERSION = '0.1.0'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
 const FALLBACK_RELEASES_URL = `https://github.com/${FALLBACK_REPO}/releases`
+
+// One-liner installer: scarica, installa Docker (Colima su Mac), pulla
+// l'immagine GHCR e crea il wrapper jht.
+// Target: utenti tech su macOS / Linux / WSL.
+const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
+
+// Build da sorgente: per chi vuole sviluppare o contribuire.
 const SOURCE_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-npm install
-cd web && npm install && npm run dev`
-
-const CLI_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team
-npm install
-npm install --prefix shared/cron
-npm install --prefix cli
-node cli/bin/jht.js setup`
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
+node cli/bin/jht.js`
 
 const FALLBACK_PLATFORMS: PlatformData[] = [
   {
@@ -75,10 +76,10 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
     format: 'AppImage',
   },
   {
-    id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.exe`, size: null,
-    requirements: 'Windows 10/11 (x64)',
+    id: 'windows', label: 'Windows', file: 'jht-launcher.exe', size: '306 KB',
+    requirements: 'Windows 10/11 (x64) + Node.js + Git',
     instructions: [],
-    downloadUrl: `https://github.com/${FALLBACK_REPO}/releases/latest/download/job-hunter-team-${FALLBACK_VERSION}-windows.exe`,
+    downloadUrl: '/downloads/jht-launcher.exe',
     available: true,
     format: 'exe',
   },
@@ -87,7 +88,7 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
 function DownloadContent() {
   const { t } = useLandingI18n()
   const [installMode, setInstallMode] = useState<InstallMode>('desktop')
-  const [terminalMode, setTerminalMode] = useState<TerminalMode>('source')
+  const [terminalMode, setTerminalMode] = useState<TerminalMode>('cli')
   const [release, setRelease] = useState<ReleaseData>({
     version: FALLBACK_VERSION,
     platforms: FALLBACK_PLATFORMS,
@@ -114,9 +115,6 @@ function DownloadContent() {
 
           {/* Header */}
           <div className="mb-12 text-center">
-            <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-6">
-              download
-            </div>
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
               Configura il tuo team <span className="text-[var(--color-green)]">sul tuo PC</span>
             </h1>
@@ -187,7 +185,7 @@ function DownloadContent() {
                             </span>
                           </div>
                         </div>
-                        <div className="mt-4 pt-1">
+                        <div className="mt-auto pt-4">
                           <a href={ctaHref}
                             className="block w-full text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                             style={{
@@ -199,11 +197,6 @@ function DownloadContent() {
                             {platform.available ? t('dl_download') : t('dl_view_release')}
                           </a>
                         </div>
-                        {!platform.available && (
-                          <p className="mt-2 text-[10px] text-[var(--color-yellow)]">
-                            {t('dl_asset_pending')}
-                          </p>
-                        )}
                       </div>
                     </div>
                   )
@@ -272,31 +265,9 @@ function DownloadContent() {
             </div>
           )}
 
-          {/* Demo CTA */}
-          <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5 mb-8 text-center">
-            <p className="text-[12px] text-[var(--color-muted)] mb-3">
-              {t('dl_demo_question')}
-            </p>
-            <Link href="/demo"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-[12px] font-semibold tracking-wide transition-all no-underline"
-              style={{ border: '1px solid var(--color-green)', color: 'var(--color-green)' }}>
-              {t('dl_demo_cta')} &rarr;
-            </Link>
-          </div>
 
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-[10px] text-[var(--color-dim)]">
-              v{version} &middot; Job Hunter Team &middot;{' '}
-              <Link href="/" className="text-[var(--color-green)] hover:underline">{t('dl_home')}</Link>
-              {' '}&middot;{' '}
-              <a href={releasesUrl} target="_blank" rel="noopener noreferrer"
-                className="text-[var(--color-green)] hover:underline">{t('dl_all_releases')}</a>
-            </p>
-          </div>
         </div>
       </main>
-      <LandingFooter />
       <ScrollToTop />
     </>
   )
