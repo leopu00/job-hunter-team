@@ -9,7 +9,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    NODE_ENV=production \
     JHT_HOME=/jht_home \
     JHT_USER_DIR=/jht_user \
     IS_CONTAINER=1 \
@@ -30,10 +29,11 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY cli/package.json cli/package-lock.json* ./cli/
 COPY web/package.json web/package-lock.json* ./web/
-COPY desktop/package.json desktop/package-lock.json* ./desktop/
+COPY tui/package.json tui/package-lock.json* ./tui/
 
 RUN npm ci --prefix cli \
     && npm ci --prefix web \
+    && npm ci --prefix tui \
     && npm cache clean --force
 
 COPY requirements.txt ./
@@ -41,20 +41,20 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# shared/* moduli con package.json e dipendenze (es. shared/cron usa
-# croner) devono avere node_modules installato: il CLI li importa a
-# top level e crasha all'avvio se mancano. Questo loop installa solo
-# i moduli che dichiarano dependencies.
-RUN set -eux; \
-    for pkg in shared/*/package.json; do \
-      [ -f "$pkg" ] || continue; \
-      dir=$(dirname "$pkg"); \
-      has_deps=$(node -p "Object.keys(JSON.parse(require('fs').readFileSync('$pkg','utf8')).dependencies||{}).length>0"); \
-      if [ "$has_deps" = "true" ]; then \
-        (cd "$dir" && npm install --omit=dev --no-audit --no-fund); \
-      fi; \
-    done; \
-    npm cache clean --force
+RUN npm run build --prefix tui \
+    && for pkg in shared/*/package.json; do \
+         [ -f "$pkg" ] || continue; \
+         dir=$(dirname "$pkg"); \
+         has_deps=$(node -p "Object.keys(JSON.parse(require('fs').readFileSync('$pkg','utf8')).dependencies||{}).length > 0"); \
+         if [ "$has_deps" = "true" ]; then \
+           if [ -f "$dir/package-lock.json" ]; then \
+             npm ci --prefix "$dir" --no-audit --no-fund; \
+           else \
+             npm install --prefix "$dir" --no-audit --no-fund --omit=dev; \
+           fi; \
+         fi; \
+       done \
+    && npm cache clean --force
 
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
