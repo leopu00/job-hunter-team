@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const BACKUP_DIR = path.join(homedir(), '.jht', 'backups');
+const BACKUP_DIR = path.join(JHT_HOME, 'backups');
 const CATALOG_PATH = path.join(BACKUP_DIR, 'catalog.json');
-const JHT_DIR = path.join(homedir(), '.jht');
+const JHT_DIR = JHT_HOME;
 
 type BackupEntry = {
   id: string; createdAt: number; sizeBytes: number; sources: string[];
@@ -90,7 +91,7 @@ export async function PATCH(req: Request) {
 
   try {
     const { restoreBackup } = await loadBackupRunner();
-    const targetDir = path.join(homedir(), '.jht', 'restored', id);
+    const targetDir = path.join(JHT_HOME, 'restored', id);
     const result = restoreBackup(id, targetDir, { backupDir: BACKUP_DIR });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 404 });

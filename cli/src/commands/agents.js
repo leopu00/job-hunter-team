@@ -2,8 +2,9 @@ import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { JHT_HOME } from '../jht-paths.js';
 
-const JHT_DIR     = join(homedir(), '.jht');
+const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
 const TASKS_PATH  = join(JHT_DIR, 'tasks', 'tasks.json');
 

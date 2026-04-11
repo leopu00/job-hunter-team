@@ -50,9 +50,16 @@ Crea:
 Deploy produzione:
 
 ```bash
-cd fullstack-3
-vercel deploy --prod --yes
+git checkout production
+git pull --ff-only
+git merge --ff-only <branch-da-rilasciare>
+git push origin production
 ```
+
+Note:
+
+- il sito live deve passare da push su `production`, non da `vercel deploy --prod` lanciato da branch locali;
+- crea il tag release solo dopo che il deploy Git di Vercel su `production` e' `READY`.
 
 ## Verifica
 

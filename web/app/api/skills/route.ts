@@ -3,10 +3,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_PATH = path.join(os.homedir(), '.jht', 'skills', 'skills.json')
+const STORE_PATH = path.join(JHT_HOME, 'skills', 'skills.json')
 
 type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert'
 type SkillCategory = 'frontend' | 'backend' | 'devops' | 'soft-skills' | 'languages'
@@ -42,8 +43,8 @@ function load(): SkillStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as SkillStore
-    return Array.isArray(parsed?.skills) ? parsed : { version: 1, skills: SAMPLE_SKILLS }
-  } catch { return { version: 1, skills: SAMPLE_SKILLS } }
+    return Array.isArray(parsed?.skills) ? parsed : { version: 1, skills: [] }
+  } catch { return { version: 1, skills: [] } }
 }
 
 function save(store: SkillStore) {

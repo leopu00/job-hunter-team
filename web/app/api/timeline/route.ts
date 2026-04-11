@@ -5,13 +5,14 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type EventType = 'application' | 'interview' | 'offer' | 'follow-up' | 'contact' | 'update';
 type TimelineEvent = { id: string; type: EventType; title: string; description: string; company?: string; date: number };
 
-const DATA = path.join(os.homedir(), '.jht');
+const DATA = JHT_HOME;
 
 function loadJson(file: string): unknown[] {
   try { const d = JSON.parse(fs.readFileSync(path.join(DATA, file), 'utf-8')); return Array.isArray(d) ? d : []; }

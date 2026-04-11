@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ type ServiceStatus = 'operational' | 'degraded' | 'down' | 'maintenance';
 type Incident = { id: string; title: string; status: 'investigating' | 'identified' | 'resolved'; severity: 'minor' | 'major' | 'critical'; createdAt: number; resolvedAt?: number };
 type ServiceInfo = { id: string; name: string; status: ServiceStatus; latencyMs: number; uptimePercent: number; lastCheck: number };
 
-const STATUS_PATH = path.join(os.homedir(), '.jht', 'status');
+const STATUS_PATH = path.join(JHT_HOME, 'status');
 const INCIDENTS_FILE = path.join(STATUS_PATH, 'incidents.json');
 const MAINTENANCE_FILE = path.join(STATUS_PATH, 'maintenance.json');
 
@@ -41,7 +42,7 @@ function getServices(): ServiceInfo[] {
   services.push({ id: 'api', name: 'API Server', status: webUp ? 'operational' : 'down', latencyMs: webUp ? Math.floor(Math.random() * 20 + 3) : 0, uptimePercent: webUp ? 99.8 : 0, lastCheck: now });
 
   // Database (SQLite — controlla file)
-  const dbPath = path.join(os.homedir(), '.jht', 'databases', 'jobs.db');
+  const dbPath = path.join(JHT_HOME, 'databases', 'jobs.db');
   let dbOk = false;
   try { fs.accessSync(dbPath); dbOk = true; } catch {}
   services.push({ id: 'db', name: 'Database (SQLite)', status: dbOk ? 'operational' : 'degraded', latencyMs: dbOk ? Math.floor(Math.random() * 5 + 1) : 0, uptimePercent: dbOk ? 99.95 : 50, lastCheck: now });

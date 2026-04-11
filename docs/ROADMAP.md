@@ -213,3 +213,179 @@ La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tram
 | 💰 **Costo** | Pay-per-use: avvii → lavora → spegni |
 | 🤖 **Agenti** | Girano sulla VM cloud |
 | 📡 **Monitoring** | GUI web + launcher desktop |
+
+---
+
+## 🐳 Docker — Default ovunque
+
+> _Isolamento degli agenti dal filesystem host. **Default sia nel CLI sia nel DMG**. Chi sa quello che fa puo' uscire con `--no-docker` (CLI) o `JHT_NO_DOCKER=1` (desktop)._
+
+### Motivazione
+
+Oggi gli agenti girano nativi sul sistema operativo dell'utente con `--dangerously-skip-permissions`. Funziona per Leone e per chiunque si fidi del tool, ma non e' accettabile come default per una distribuzione pubblica dove l'utente non puo' (e non vuole) verificare cosa fanno gli agenti sul suo filesystem.
+
+Docker risolve isolando i processi agente in un container, che vede **solo** due cartelle bind-mounted: `~/.jht` (nascosta, DB/config/agenti) e `~/Documents/Job Hunter Team` (visibile, CV e output). Tutto il resto del filesystem host e' invisibile.
+
+### 📐 Policy di installazione
+
+Docker e' il **default in entrambi i percorsi di installazione**. La policy di opt-out cambia in base al target utente:
+
+```
+┌─ CLI one-liner (utenti tech) ────────────────────────────┐
+│                                                          │
+│  Default:     Docker ON (Colima su Mac, docker.io su     │
+│               Linux/WSL2)                                │
+│  Opt-out:     --no-docker → installa nativo (expert)     │
+│  Messaggio:   "Modalita' nativa: gli agenti hanno        │
+│                accesso al filesystem. Usa solo se hai    │
+│                dedicato un PC/VM al team."               │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+
+┌─ DMG installer (utenti non-tech) ────────────────────────┐
+│                                                          │
+│  Default:     Docker ON — sempre installato e usato      │
+│  Flag:        (nessuno — non esposto all'utente)         │
+│  Motivazione: un utente che scarica un .dmg e installa   │
+│               "tutto" non puo' valutare i rischi di      │
+│               agenti AI con privilegi root-like. Il      │
+│               container e' l'unica garanzia che un       │
+│               eventuale danno resti contenuto.           │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 🎯 Due profili d'uso
+
+| Profilo | Ambiente | Default Docker |
+|---------|----------|----------------|
+| **PC personale quotidiano** | Il Mac/Linux che usi per tutto | ⭐ **ON (consigliato)** |
+| **Workstation dedicata** | PC/VM usato SOLO per il team JHT | ON (puoi uscire con `--no-docker`) |
+| **Server cloud (AWS/Hetzner)** | VM remota | ON (puoi uscire con `--no-docker`) |
+| **Utente non-tech (DMG)** | Mac/Windows home, prima esperienza | 🔒 **ON, non disattivabile** |
+
+### 🧰 Runtime container per piattaforma
+
+Non usiamo **Docker Desktop** perche' richiede EULA/GUI/interazione manuale. Usiamo alternative scriptabili:
+
+| OS | Runtime | Perche' |
+|----|---------|---------|
+| 🍎 macOS | **Colima** (`brew install colima docker`) | FOSS Apache 2.0, no GUI, no EULA, scriptable 100%, stesso `docker` CLI |
+| 🐧 Linux | **docker.io nativo** (`apt/dnf/pacman`) | Standard, zero frizione |
+| 🪟 Windows | **docker.io in WSL2** (non Docker Desktop) | JHT gira gia' in WSL2, saltiamo il layer Docker Desktop commerciale |
+
+Colima su Mac e' critico: Docker Desktop richiede all'utente di aprire l'app, accettare EULA e dare password admin. Colima gira in background come daemon, espone lo stesso `docker` CLI, e **puo' essere installato completamente via script**.
+
+### 📋 Requisiti gia' soddisfatti
+
+La centralizzazione path del refactor `dev-4` + il rollout Docker hanno gia' chiuso il preparativo:
+
+```
+✅ Stato persistente in due cartelle sole (JHT_HOME + JHT_USER_DIR)
+✅ Path configurabili via env var (override per bind-mount)
+✅ Nessun side-effect sul sistema host (no scrittura in ~/.bashrc ecc.)
+✅ TUI / CLI auth / desktop launcher gated dietro isContainer()
+   (IS_CONTAINER=1 oppure /.dockerenv) — stampano path/URL invece
+   di lanciare open/xdg-open/explorer
+```
+
+### 🗺️ Fasi implementazione Docker
+
+```
+Step 1: Dockerfile minimale
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+FROM node:20-alpine
+RUN apk add tmux git bash
+RUN npm install -g @anthropic-ai/claude-cli
+COPY . /app
+WORKDIR /app
+ENV JHT_HOME=/jht_home
+ENV JHT_USER_DIR=/jht_user
+ENTRYPOINT ["node", "cli/bin/jht.js"]
+
+Step 2: docker-compose.yml
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+services:
+  jht:
+    build: .
+    volumes:
+      - ~/.jht:/jht_home
+      - ~/Documents/Job Hunter Team:/jht_user
+    environment:
+      - ANTHROPIC_API_KEY
+    ports:
+      - "3000:3000"  # web dashboard
+    stdin_open: true
+    tty: true        # per la TUI
+
+Step 3: Wrapper `jht-docker`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Script bash che fa:
+  docker run --rm -it \
+    -v ~/.jht:/jht_home \
+    -v "$HOME/Documents/Job Hunter Team:/jht_user" \
+    -e ANTHROPIC_API_KEY \
+    ghcr.io/leopu00/jht:latest
+
+Step 4: Image pre-buildata su GitHub Container Registry
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CI che su tag git:
+  - docker build
+  - docker push ghcr.io/leopu00/jht:v0.x.y
+L'utente: `docker pull ghcr.io/leopu00/jht:latest`
+
+Step 5: scripts/install.sh — Docker default + flag --no-docker
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+scripts/install.sh installa Docker by default:
+
+  curl -fsSL .../install.sh | bash                     # Docker (default)
+  curl -fsSL .../install.sh | bash -s -- --no-docker   # nativo (expert)
+
+Path Docker:
+  - Su macOS: brew install colima docker + colima start
+  - Su Linux: apt/dnf/pacman install docker.io + systemctl enable
+  - Su WSL:   apt install docker.io dentro WSL2
+  - docker pull ghcr.io/leopu00/jht:latest
+  - genera ~/.local/bin/jht come wrapper docker run con il
+    contratto MOUNTS/ENV/PORT condiviso
+
+Path --no-docker:
+  - clone repo, build TUI/CLI, simlink jht come prima
+  - il messaggio finale stampa un warning esplicito sul fatto
+    che gli agenti hanno accesso al filesystem host
+
+Step 6: DMG installer (Docker ON by default)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Il DMG (percorso non-tech) installa SEMPRE Colima+docker come parte
+del processo, senza chiedere all'utente, senza mostrare l'opzione.
+All'apertura del .dmg:
+  1. Estrae JHT.app in /Applications
+  2. Lancia post-install script che installa Colima via brew
+     (o bundled pkg se brew manca) e fa colima start
+  3. Prima esecuzione di JHT.app usa il container da subito
+
+L'utente non-tech non sa che esiste Docker: vede solo JHT che
+funziona. Il container e' la rete di sicurezza invisibile.
+```
+
+### 🎯 Stato
+
+```
+✅ scripts/install.sh — Docker default + --no-docker opt-out
+✅ Gating isContainer() in TUI / CLI auth / desktop runtime
+✅ desktop/runtime.js — spawn ghcr.io/leopu00/jht:latest via docker run
+✅ desktop/container.js — bootstrap Colima su Mac
+⬜ Dockerfile + docker-compose root (gestito da CORE container track)
+⬜ Workflow CI per pubblicare l'immagine su GHCR (CORE container track)
+⬜ DMG installer che pre-installa Colima senza chiedere all'utente
+```
+
+### ⚠️ Cose da NON fare finche' non si implementa Docker
+
+Per mantenere il progetto "Docker-ready" senza bloccare lo sviluppo:
+
+1. **Non aggiungere side-effects sul sistema host** (installazione globale di tool, scrittura in `~/.bashrc`, modifica di `~/Library`, ecc.)
+2. **Non hardcodare comandi OS-specific senza fallback** (es. `open ...` su macOS → gated behind platform check)
+3. **Non usare path assoluti fuori da `JHT_HOME`/`JHT_USER_DIR`** (es. `/usr/local/...`, `/etc/...`)
+4. **Non aprire porte di rete diverse da 3000** (web dashboard), altrimenti il port-forwarding Docker si complica
+5. **Non scrivere dentro `node_modules` a runtime** (sarebbe read-only nel container)

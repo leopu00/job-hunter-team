@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { platform } from 'node:os';
+import { isContainer } from '../../../shared/runtime/container.js';
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_URL  = `http://localhost:${DEFAULT_PORT}`;
@@ -32,6 +33,7 @@ function isPortOpen(port) {
 }
 
 function openBrowser(url) {
+  if (isContainer()) return false;
   const cmd = platform() === 'darwin' ? 'open' : platform() === 'win32' ? 'start' : 'xdg-open';
   try { execSync(`${cmd} "${url}" 2>/dev/null`, { stdio: 'pipe' }); return true; }
   catch { return false; }
@@ -39,15 +41,32 @@ function openBrowser(url) {
 
 async function findWebDir() {
   const root = getRepoRoot();
-  if (!root) return null;
-  const webDir = join(root, 'web');
-  if (await fileExists(join(webDir, 'package.json'))) return webDir;
-  // Fallback: cerca nella directory corrente
+  if (root) {
+    const webDir = join(root, 'web');
+    if (await fileExists(join(webDir, 'package.json'))) return webDir;
+  }
+  // Fallback: cwd (utile in container, dove .git non e' presente)
   if (await fileExists(join(process.cwd(), 'web', 'package.json'))) return join(process.cwd(), 'web');
+  // Fallback: /app/web (Dockerfile WORKDIR)
+  if (await fileExists('/app/web/package.json')) return '/app/web';
   return null;
 }
 
 function startNextDev(webDir, port) {
+  // In container bypass npm and exec next directly so docker stop
+  // delivers SIGTERM to the actual Next.js process (npm doesn't
+  // forward signals reliably and we'd hit SIGKILL after the 10s
+  // grace period). Bind to 0.0.0.0 so the host port-forward hits us.
+  if (isContainer()) {
+    const nextBin = join(webDir, 'node_modules', '.bin', 'next');
+    const child = spawn(nextBin, ['dev', '-p', String(port), '-H', '0.0.0.0'], {
+      cwd: webDir,
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PORT: String(port), HOSTNAME: '0.0.0.0' },
+    });
+    return child;
+  }
   const child = spawn('npm', ['run', 'dev', '--', '-p', String(port)], {
     cwd: webDir,
     detached: true,
@@ -78,9 +97,9 @@ async function handleDashboard(options) {
 
   if (alreadyRunning) {
     console.log(`  ${GREEN}●${RESET}  Dashboard già attiva su ${GREEN}${url}${RESET}`);
-    if (!options.noBrowser) {
-      openBrowser(url);
-      console.log(`  ${DIM}Browser aperto.${RESET}`);
+    if (options.browser !== false && !isContainer()) {
+      const opened = openBrowser(url);
+      if (opened) console.log(`  ${DIM}Browser aperto.${RESET}`);
     }
     console.log('');
     return;
@@ -124,15 +143,35 @@ async function handleDashboard(options) {
 
   if (ready) {
     console.log(`  ${GREEN}●${RESET}  Dashboard avviata su ${GREEN}${url}${RESET}`);
-    console.log(`  ${DIM}PID: ${child.pid} (in background)${RESET}`);
-    if (!options.noBrowser) {
-      openBrowser(url);
-      console.log(`  ${DIM}Browser aperto.${RESET}`);
+    console.log(`  ${DIM}PID: ${child.pid}${isContainer() ? ' (foreground)' : ' (in background)'}${RESET}`);
+    // commander --no-browser sets options.browser=false (no options.noBrowser).
+    if (options.browser !== false && !isContainer()) {
+      const opened = openBrowser(url);
+      if (opened) console.log(`  ${DIM}Browser aperto.${RESET}`);
     }
-    console.log(`\n  ${DIM}Per fermare: kill ${child.pid}${RESET}\n`);
+    if (!isContainer()) {
+      console.log(`\n  ${DIM}Per fermare: kill ${child.pid}${RESET}\n`);
+    }
   } else {
     console.log(`  ${YELLOW}Server avviato ma non ancora pronto (PID: ${child.pid}).${RESET}`);
     console.log(`  ${DIM}Apri manualmente: ${url}${RESET}\n`);
+  }
+
+  // In container PID 1 (this process) must stay alive: if we exit,
+  // docker tears the whole runtime down. Forward signals and wait
+  // for the next dev child indefinitely.
+  if (isContainer()) {
+    const forward = (sig) => {
+      try { child.kill(sig); } catch { /* ignore */ }
+    };
+    process.on('SIGINT', () => forward('SIGINT'));
+    process.on('SIGTERM', () => forward('SIGTERM'));
+    await new Promise((resolve) => {
+      child.once('exit', (code) => {
+        process.exitCode = code ?? 0;
+        resolve();
+      });
+    });
   }
 }
 

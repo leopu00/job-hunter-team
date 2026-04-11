@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ const CITIES: { city: string; area: string; x: number; y: number }[] = [
 const ROLES = ['Full Stack', 'Backend', 'Frontend', 'DevOps', 'Data Engineer', 'Mobile', 'QA'];
 
 function loadJobs(): { location?: string; title?: string; salary?: { min?: number; max?: number } }[] {
-  try { const d = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.jht', 'jobs.json'), 'utf-8')); return Array.isArray(d) ? d : []; }
+  try { const d = JSON.parse(fs.readFileSync(path.join(JHT_HOME, 'jobs.json'), 'utf-8')); return Array.isArray(d) ? d : []; }
   catch { return []; }
 }
 

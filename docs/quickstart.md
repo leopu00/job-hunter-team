@@ -2,48 +2,65 @@
 
 Guida per avviare il sistema in 5 minuti.
 
-## Percorso Consigliato
+## Percorso consigliato: installer one-liner
 
-Per utenti finali: scarica il launcher desktop dalla pagina `/download` o da GitHub Releases.
+```bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash
+```
+
+Lo script:
+
+1. Rileva il tuo OS (macOS, Linux apt/dnf/pacman, WSL)
+2. Installa Node 20+, tmux, git, Claude CLI se mancano
+3. Clona la repo in `~/.jht/src`
+4. Compila TUI + CLI
+5. Crea simlink `jht` in `~/.local/bin`
+6. Lancia il setup wizard interattivo
+
+Al termine avrai due cartelle:
+
+| Cartella | Scopo | Chi la tocca |
+|----------|-------|--------------|
+| `~/.jht/` | Config, database `jobs.db`, agenti, credenziali | Solo gli agenti e il CLI |
+| `~/Documents/Job Hunter Team/` | CV da analizzare, output generati (PDF/MD) | Tu + gli agenti |
+
+## Percorso alternativo: launcher desktop (non-tech)
+
+Scarica il launcher dalla pagina `/download` o da GitHub Releases:
 
 - macOS: `.dmg`
 - Windows: `.exe`
 - Linux: `.AppImage` oppure `.deb`
 
-Il launcher avvia il runtime locale e apre automaticamente la dashboard nel browser.
+Il launcher installa tutto con interfaccia grafica, senza aprire il terminale.
 
-## Setup da Sorgente
+## Setup da sorgente (per contribuire)
 
-Questa sezione e' per sviluppo locale e uso power-user.
+Questa sezione e' per sviluppo locale, hacking del repo e PR.
 
-## Prerequisiti
+### Prerequisiti
 
-- Python 3.10+
-- tmux
-- git
-- Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
-- Node.js 18+
+- **Node.js 20+** e npm
+- **tmux**
+- **git**
+- **Claude CLI** (`npm install -g @anthropic-ai/claude-cli`)
 
-## Setup
+### Setup
 
 ```bash
 # 1. Clona la repo
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Copia e compila il profilo candidato
-cp candidate_profile.yml.example candidate_profile.yml
-# Edita candidate_profile.yml con i tuoi dati
+# 2. Build TUI e CLI
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
 
-# 3. Copia e compila le variabili d'ambiente
-cp .env.example .env
-# Inserisci la tua ANTHROPIC_API_KEY in .env
-
-# 4. Installa dipendenze e inizializza il database
-npm install
-mkdir -p shared/data
-python3 shared/skills/db_init.py
+# 3. Avvia il wizard (crea ~/.jht e ~/Documents/Job Hunter Team)
+node cli/bin/jht.js
 ```
+
+Il wizard ti chiede provider AI e API key. Il profilo candidato si compila poi dalla TUI (vista Profilo) o dalla dashboard web.
 
 ## Struttura del Team
 

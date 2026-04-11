@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const LOG_DIR = path.join(os.homedir(), '.jht', 'logs')
+const LOG_DIR = path.join(JHT_HOME, 'logs')
 const LOG_PREFIX = 'jht-'
 const LOG_SUFFIX = '.log'
 const DEFAULT_LIMIT = 200
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
 
   const filePath = logFilePath(date)
   let entries = readLogFile(filePath)
-  if (entries.length === 0) entries = generateSampleLogs(date)
+  // no sample fallback — empty until real logs exist
 
   if (level) entries = entries.filter(e => e.level === level)
   if (subsystem) entries = entries.filter(e => e.subsystem === subsystem)

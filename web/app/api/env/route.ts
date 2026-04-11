@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as os from 'node:os'
+import { JHT_HOME, JHT_CONFIG_PATH } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const JHT_DIR     = path.join(os.homedir(), '.jht')
-const CONFIG_PATH = path.join(JHT_DIR, 'jht.config.json')
-const SECRETS_PATH = path.join(JHT_DIR, 'secrets.json')
+const CONFIG_PATH = JHT_CONFIG_PATH
+const SECRETS_PATH = path.join(JHT_HOME, 'secrets.json')
 
 type EnvSource   = 'env' | 'config' | 'secret'
 type EnvCategory = 'AI Provider' | 'Telegram' | 'Database' | 'Sistema' | 'Config' | 'Secrets'
@@ -42,7 +41,10 @@ const KNOWN_ENV: Array<{ name: string; category: EnvCategory }> = [
   { name: 'MINIMAX_GROUP_ID',     category: 'AI Provider' },
   { name: 'TELEGRAM_BOT_TOKEN',   category: 'Telegram'    },
   { name: 'TELEGRAM_CHAT_ID',     category: 'Telegram'    },
-  { name: 'JHT_WORKSPACE',        category: 'Sistema'     },
+  { name: 'JHT_HOME',             category: 'Sistema'     },
+  { name: 'JHT_USER_DIR',         category: 'Sistema'     },
+  { name: 'JHT_DB',               category: 'Sistema'     },
+  { name: 'JHT_CONFIG',           category: 'Sistema'     },
   { name: 'JHT_LOG_LEVEL',        category: 'Sistema'     },
   { name: 'NODE_ENV',             category: 'Sistema'     },
   { name: 'PORT',                 category: 'Sistema'     },

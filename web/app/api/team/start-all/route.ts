@@ -1,21 +1,31 @@
 import { NextResponse } from 'next/server'
-import { getWorkspacePath } from '@/lib/workspace'
+import {
+  JHT_HOME,
+  JHT_CONFIG_PATH,
+  JHT_DB_PATH,
+  JHT_USER_DIR,
+  getAgentDir,
+} from '@/lib/jht-paths'
 import { runBash } from '@/lib/shell'
-import { requireAuth, isValidPath } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import path from 'path'
 import fs from 'fs'
 
 export const dynamic = 'force-dynamic'
 
 const TEAM = [
-  { role: 'alfa',       session: 'ALFA',        effort: 'high',   dir: 'alfa' },
-  { role: 'scout',      session: 'SCOUT-1',     effort: 'high',   dir: 'scout-1' },
-  { role: 'analista',   session: 'ANALISTA-1',  effort: 'high',   dir: 'analista-1' },
-  { role: 'scorer',     session: 'SCORER-1',    effort: 'medium', dir: 'scorer-1' },
-  { role: 'scrittore',  session: 'SCRITTORE-1', effort: 'high',   dir: 'scrittore-1' },
-  { role: 'critico',    session: 'CRITICO',     effort: 'high',   dir: 'critico' },
-  { role: 'sentinella', session: 'SENTINELLA',  effort: 'low',    dir: 'sentinella' },
+  { role: 'alfa',       session: 'ALFA',        effort: 'high',   instance: null as string | null },
+  { role: 'scout',      session: 'SCOUT-1',     effort: 'high',   instance: '1' },
+  { role: 'analista',   session: 'ANALISTA-1',  effort: 'high',   instance: '1' },
+  { role: 'scorer',     session: 'SCORER-1',    effort: 'medium', instance: '1' },
+  { role: 'scrittore',  session: 'SCRITTORE-1', effort: 'high',   instance: '1' },
+  { role: 'critico',    session: 'CRITICO',     effort: 'high',   instance: null },
+  { role: 'sentinella', session: 'SENTINELLA',  effort: 'low',    instance: null },
 ]
+
+function shellEscape(value: string): string {
+  return String(value).replace(/'/g, "'\\''")
+}
 
 const DESCRIPTIONS: Record<string, string> = {
   alfa:       'Coordini la pipeline di ricerca lavoro del team.',
@@ -50,33 +60,16 @@ export async function POST() {
   if (authError) return authError
 
   try {
-    const workspace = await getWorkspacePath()
-    if (!workspace) {
-      return NextResponse.json(
-        { ok: false, error: 'Workspace non configurato. Seleziona una cartella dalla pagina principale.' },
-        { status: 400 }
-      )
-    }
-
-    if (!isValidPath(workspace)) {
-      return NextResponse.json(
-        { ok: false, error: 'Path workspace non valido' },
-        { status: 400 }
-      )
-    }
-
     const repoRoot = path.resolve(process.cwd(), '..')
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
     for (const agent of TEAM) {
-      const agentDir = path.join(workspace, agent.dir)
+      const agentDir = getAgentDir(agent.role, agent.instance ?? undefined)
       const claudeMd = path.join(agentDir, 'CLAUDE.md')
       const templatePath = path.join(repoRoot, 'agents', agent.role, `${agent.role}.md`)
 
-      // 1. Crea directory agente
       fs.mkdirSync(agentDir, { recursive: true })
 
-      // 2. Crea CLAUDE.md se non presente
       if (!fs.existsSync(claudeMd)) {
         if (fs.existsSync(templatePath) && fs.statSync(templatePath).size > 0) {
           fs.copyFileSync(templatePath, claudeMd)
@@ -85,7 +78,6 @@ export async function POST() {
         }
       }
 
-      // 3. Controlla se sessione tmux gia attiva
       try {
         const { stdout } = await runBash(
           `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`
@@ -98,14 +90,23 @@ export async function POST() {
         // Sessione non esiste, procedi
       }
 
-      // 4. Avvia sessione tmux con claude CLI
       try {
         await runBash(`tmux new-session -d -s "${agent.session}" -c "${agentDir}"`)
+
+        const envVars: Record<string, string> = {
+          JHT_HOME,
+          JHT_USER_DIR,
+          JHT_DB: JHT_DB_PATH,
+          JHT_CONFIG: JHT_CONFIG_PATH,
+          JHT_AGENT_DIR: agentDir,
+        }
+        for (const [k, v] of Object.entries(envVars)) {
+          await runBash(`tmux send-keys -t "${agent.session}" "export ${k}='${shellEscape(v)}'" C-m`)
+        }
+
         await runBash(
           `tmux send-keys -t "${agent.session}" "claude --dangerously-skip-permissions --effort ${agent.effort}" C-m`
         )
-        // Auto-accept: invia Enter in background per accettare "Do you trust this folder?"
-        // L'Enter extra e' innocuo se Claude e' gia' partito (input vuoto = ignorato)
         runBash(
           `(sleep 4 && tmux send-keys -t "${agent.session}" Enter && sleep 3 && tmux send-keys -t "${agent.session}" Enter) &>/dev/null &`
         ).catch(() => {})

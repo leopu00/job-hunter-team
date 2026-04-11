@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { getWorkspace } from '@/lib/workspace-client'
 
 type Status = { active: boolean; output: string }
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
@@ -36,7 +35,6 @@ function renderMarkdown(text: string) {
 
 export default function AssistentePage() {
   const [status, setStatus] = useState<Status | null>(null)
-  const [workspace, setWorkspace] = useState('')
   const [starting, setStarting] = useState(false)
   const [startMsg, setStartMsg] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMsg[]>([])
@@ -82,12 +80,6 @@ export default function AssistentePage() {
     } catch { /* ignore */ }
   }, [])
 
-  // Carica workspace dal cookie (già selezionato dal workspace-first flow)
-  useEffect(() => {
-    const ws = getWorkspace()
-    if (ws) setWorkspace(ws)
-  }, [])
-
   useEffect(() => {
     fetchStatus()
     fetchChat()
@@ -117,11 +109,7 @@ export default function AssistentePage() {
     setStarting(true)
     setStartMsg(null)
     try {
-      const res = await fetch('/api/assistente/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace }),
-      })
+      const res = await fetch('/api/assistente/start', { method: 'POST' })
       const data = await res.json()
       setStartMsg(data.message ?? (data.ok ? 'Avviato' : data.error))
       await fetchStatus()
@@ -206,15 +194,6 @@ export default function AssistentePage() {
           </div>
         </div>
       </div>
-
-      {/* Workspace info */}
-      {workspace && (
-        <div className="mb-6 flex items-center gap-2 px-3 py-2 rounded border font-mono text-[11px]"
-          style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-dim)' }}>
-          <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] font-sans">Workspace</span>
-          <span className="truncate" style={{ color: 'var(--color-bright)' }}>{workspace}</span>
-        </div>
-      )}
 
           {/* Assistente */}
           <div className="mb-6">

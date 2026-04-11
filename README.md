@@ -88,7 +88,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | **Backend** | Node.js · TypeScript · Zod |
 | **Frontend** | Next.js · Tailwind CSS |
 | **Database** | Supabase (PostgreSQL, Frankfurt) · SQLite (locale) |
-| **Auth** | Google OAuth · credenziali AES-256 |
+| **Auth** | Google OAuth · GitHub OAuth · Cloud Sync Tokens · credenziali AES-256 |
 | **LLM** | Claude · OpenAI · Minimax (factory pattern) |
 | **CI/CD** | GitHub Actions · 6 workflow · Vercel |
 | **Test** | Vitest · 800+ test case · 168 file |
@@ -120,40 +120,65 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 
 ## Installazione
 
+### Installer one-liner (macOS / Linux / WSL)
+
+```bash
+# Default: gli agenti girano in container, isolati dal filesystem host
+curl -fsSL https://jobhunterteam.ai/install.sh | bash
+```
+
+Lo script rileva il sistema, installa il runtime container (**Colima** su macOS, **docker.io** su Linux/WSL2), scarica l'immagine ufficiale `ghcr.io/leopu00/jht:latest` e crea un wrapper `jht` in `~/.local/bin` che fa `docker run` con due sole cartelle bind-mountate dall'host:
+
+- `~/.jht/` → `/jht_home` — zona nascosta: config, database, agenti, credenziali. **Non toccare.**
+- `~/Documents/Job Hunter Team/` → `/jht_user` — zona visibile: droppa qui i tuoi CV (`cv/`), allegati (`allegati/`) e leggi gli output generati (`output/`).
+
+Tutto il resto del filesystem **non e' visibile** agli agenti.
+
+Per aggiornare: ri-esegui il comando curl sopra.
+
+#### Modalita' nativa (expert mode)
+
+> ⚠️ **Senza container, gli agenti AI girano con `--dangerously-skip-permissions` e hanno accesso completo al tuo filesystem.** Usa questa modalita' solo se sai cosa stai facendo o se hai dedicato un PC/VM al solo JHT.
+
+```bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker
+```
+
+In questa modalita' lo script installa Node 20+, tmux, git, Claude CLI, clona la repo in `~/.jht/src`, compila TUI/CLI e crea un simlink `jht` in `~/.local/bin`.
+
 ### Desktop Launcher
 
-- **macOS**: pacchetto `.dmg`
+- **macOS**: pacchetto `.dmg` (Colima incluso, niente Docker Desktop)
 - **Windows**: installer `.exe` (NSIS)
 - **Linux**: `.AppImage` e `.deb`
 
 Scarica il pacchetto corretto dalla pagina [`/download`](https://jobhunterteam.ai/download) o da GitHub Releases.
-Il launcher include il payload web gia compilato, avvia il runtime locale e apre la dashboard nel browser.
 
-### Installazione da Sorgente
+Il launcher avvia automaticamente il runtime container `ghcr.io/leopu00/jht:latest` con i mount/env del contratto e apre la dashboard nel browser. Su macOS bootstrappa Colima al primo avvio se non e' gia' attivo. Per disattivare il container e cadere in modalita' nativa (debug / sviluppo): avvia con `JHT_NO_DOCKER=1`.
 
-Questa modalita e pensata per sviluppo locale, hacking del repo e uso power-user da terminale.
+### Installazione da Sorgente (per contribuire)
 
-### Prerequisiti
+Questa modalita e pensata per sviluppo locale, hacking del repo e PR.
 
-- **Node.js** 18+ e npm
-- **Python** 3.10+
+**Prerequisiti:**
+
+- **Node.js** 20+ e npm
 - **tmux** (Linux/macOS) — WSL2 + tmux su Windows
-- **Provider LLM a scelta** — OpenAI / Minimax / Anthropic API key; **Claude CLI** opzionale solo per flusso Claude Max
-- **pandoc + typst** (opzionale, per generazione PDF)
+- **git**
+- **Claude CLI** (`npm install -g @anthropic-ai/claude-cli`)
 
-### Quick Start da Sorgente
+**Quick start:**
 
 ```bash
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
-npm install
-npm install --prefix shared/cron
 
-# Wizard di setup interattivo
-jht setup
+# Build TUI e CLI
+npm --prefix tui install && npm --prefix tui run build
+npm --prefix cli install
 
-# Compila il tuo profilo candidato
-# → candidate_profile.yml (skills, esperienza, ruoli target)
+# Avvia il wizard
+node cli/bin/jht.js
 ```
 
 > **Claude Max:** nessuna API key necessaria — serve il `Claude CLI`.

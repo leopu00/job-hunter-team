@@ -2,7 +2,10 @@
  * JHT Setup Wizard — Main orchestration
  *
  * Flusso: prerequisiti → provider AI → auth (SecretRef) → modello →
- *         Telegram → workspace → health check → salva config.
+ *         Telegram → health check → salva config.
+ *
+ * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team) e non
+ * chiesti all'utente.
  *
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
@@ -14,7 +17,6 @@ import {
 } from './setup-helpers.js';
 import {
   promptTelegram,
-  promptWorkspace,
   promptSubscription,
   assembleAndSaveConfig,
   showSummary,
@@ -151,9 +153,8 @@ export async function runSetupWizard(prompter) {
     initialValue: baseConfig.providers?.[providerChoice]?.model || selectedProvider.models[0].value,
   });
 
-  // --- Telegram, workspace ---
+  // --- Telegram (workspace e' path fisso, non chiesto) ---
   const telegramChannel = await promptTelegram(prompter, baseConfig.channels);
-  const workspace = await promptWorkspace(prompter, flow, baseConfig.workspace);
 
   // --- Step 5: Health check ---
   if (authMethod === 'api_key') {
@@ -173,11 +174,11 @@ export async function runSetupWizard(prompter) {
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    telegramChannel, workspace, baseProviders: baseConfig.providers || {},
+    telegramChannel, baseProviders: baseConfig.providers || {},
   });
 
   await showSummary(prompter, {
     selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
-    model, telegramChannel, workspace,
+    model, telegramChannel,
   });
 }

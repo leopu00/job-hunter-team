@@ -3,11 +3,12 @@ import { runBash } from '@/lib/shell'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
 const KNOWN_SERVICES = ['jht-gateway', 'jht-cron', 'jht-web']
-const LOG_DIR = path.join(os.homedir(), '.jht', 'logs')
+const LOG_DIR = path.join(JHT_HOME, 'logs')
 const PLATFORM = process.platform
 
 async function getServiceStatus(name: string) {

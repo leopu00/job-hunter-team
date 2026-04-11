@@ -6,9 +6,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "n
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { JHT_HOME } from "../tui-paths.js";
 import type { OAuthCredentials } from "./openai.js";
 
-const CREDENTIALS_DIR = join(homedir(), ".jht");
+const CREDENTIALS_DIR = JHT_HOME;
 const CREDENTIALS_PATH = join(CREDENTIALS_DIR, "credentials.json");
 
 // Versione del formato storage

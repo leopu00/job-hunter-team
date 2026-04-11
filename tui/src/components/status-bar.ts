@@ -25,10 +25,10 @@ const QUICK_COMMANDS_NAV = [
 ];
 
 const QUICK_COMMANDS_CONFIG = [
-  ["Enter", "cartella"],
-  ["/setup", "api key"],
-  ["/profile", "profilo"],
-  ["Tab", "cambia vista"],
+  ["1-7", "viste"],
+  ["↑↓", "naviga"],
+  ["Enter", "modifica"],
+  ["Esc", "annulla"],
   ["Ctrl+C", "esci"],
 ];
 

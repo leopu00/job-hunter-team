@@ -16,8 +16,8 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 
-const FORUM_LOG = process.env.JHT_FORUM_LOG ?? `${homedir()}/.jht/forum.log`;
-const WORKSPACE = process.env.JHT_WORKSPACE ?? `${homedir()}/.jht`;
+const JHT_HOME = process.env.JHT_HOME ?? `${homedir()}/.jht`;
+const FORUM_LOG = process.env.JHT_FORUM_LOG ?? `${JHT_HOME}/forum.log`;
 
 export type LogLevel = "info" | "warn" | "error" | "all";
 

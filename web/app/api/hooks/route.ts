@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_PATH   = path.join(os.homedir(), '.jht', 'jht.config.json')
+const HOOKS_DIR     = path.join(JHT_HOME, 'hooks')
 const HOOK_MD       = 'HOOK.md'
 const HANDLER_FILES = ['handler.ts', 'handler.js', 'handler.mjs']
 
@@ -15,13 +15,6 @@ type HookSummary = {
   source: 'workspace'
   events: string[]
   enabled: boolean
-}
-
-function getWorkspace(): string | null {
-  try {
-    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-    return typeof cfg.workspace === 'string' ? cfg.workspace : null
-  } catch { return null }
 }
 
 function parseEvents(content: string): string[] {
@@ -75,12 +68,6 @@ function discoverHooks(hooksDir: string): HookSummary[] {
 }
 
 export async function GET() {
-  const workspace = getWorkspace()
-  if (!workspace) {
-    return NextResponse.json({ hooks: [], total: 0, error: 'workspace non configurato' })
-  }
-
-  const hooksDir = path.join(workspace, 'hooks')
-  const hooks    = discoverHooks(hooksDir)
-  return NextResponse.json({ hooks, total: hooks.length, hooksDir })
+  const hooks = discoverHooks(HOOKS_DIR)
+  return NextResponse.json({ hooks, total: hooks.length, hooksDir: HOOKS_DIR })
 }

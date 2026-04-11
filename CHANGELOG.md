@@ -5,6 +5,72 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.9] — 2026-04-11
+
+### Auth
+- Aggiunto login **GitHub OAuth** come secondo provider accanto a Google, target developer e contributor open source
+- Whitelist `avatars.githubusercontent.com` in `next/image` e nel CSP `img-src` per evitare il crash della dashboard al primo login GitHub
+
+### Cloud Sync (opt-in)
+- Nuova tabella `cloud_sync_tokens` (migration 006) con RLS per-user, hash SHA-256 del token e soft-delete via `revoked_at`
+- API CRUD `/api/cloud-sync/tokens` (GET lista, POST crea, DELETE revoca) — il token in chiaro viene restituito una sola volta al momento della creazione
+- Pagina `/settings/cloud-sync` per generare, copiare e revocare i token; ogni token ha un nome leggibile per identificare il dispositivo (es. "MacBook Leone", "Linux cron")
+- Endpoint `/api/cloud-sync/ping` per verifica Bearer token (usa service-role admin client per bypassare RLS), aggiorna `last_used_at` a ogni verifica
+- CLI commands `jht cloud enable/status/disable` — `enable` valida il token contro `/api/cloud-sync/ping` e lo persiste in `~/.jht/cloud.json` (chmod 0600); `--url` supporta self-hosted e sviluppo locale
+- Nuovo helper `web/lib/supabase/admin.ts` per client service-role usato solo lato server
+- Migration 007: constraint `UNIQUE (user_id, legacy_id)` su `positions` per permettere upsert atomico delle righe sincronizzate da SQLite locale
+- Endpoint `POST /api/cloud-sync/push` che accetta batch di `positions/scores/applications`: upsert idempotente di positions via `legacy_id`, build del mapping legacy_id → UUID, upsert di scores e applications con i nuovi UUID come FK. Normalizzazione di `status` e `critic_verdict` contro le enum Supabase
+- CLI command `jht cloud push` che legge SQLite tramite `node:sqlite` built-in (richiede Node 22.5+, zero native deps), supporta `--db <path>` e `--dry-run`, gestisce gracefully database/tabelle mancanti
+- Nuovo helper `web/lib/cloud-sync/auth.ts` con `verifyBearerToken` condiviso tra ping e push
+- Nota operativa: la env var `SUPABASE_SERVICE_ROLE_KEY` deve essere configurata su Vercel (Production + Preview) perché gli endpoint cloud-sync funzionino in prod
+
+### Docker Runtime (default-on)
+- Nuovo `Dockerfile` root + `docker-compose.yml` per il runtime container JHT, pubblicato come `ghcr.io/leopu00/jht:latest` (multi-arch amd64+arm64)
+- Nuovo workflow GitHub Actions per build e push automatici su GHCR
+- Runtime node bumpato a **Node 22 LTS** per compatibilità con `node:sqlite` built-in usato dal cloud-sync
+- Bootstrap automatico di `shared/` modules e build TUI dentro il container, `dashboard` wired come PID 1
+- `isContainer()` gate (env `IS_CONTAINER=1` o `/.dockerenv`) in tutti i call site di `open/xdg-open/explorer`: invece di lanciare il browser dal container, la CLI stampa path/URL
+- Contratto bind mount: `~/.jht → /jht_home`, `~/Documents/Job Hunter Team → /jht_user`
+
+### Installer
+- `install.sh` riscritto **Docker-by-default**: installa il runtime (Colima su macOS, docker.io su Linux/WSL2), pulla l'immagine GHCR, crea wrapper `jht` in `~/.local/bin` che fa `docker run` con il contratto standard
+- Opt-out con `curl ... | bash -s -- --no-docker` per modalità nativa (expert mode)
+- `install.sh` ora servito come **asset statico Vercel**: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
+- Wrapper compatibile con bash 3.2 (macOS system bash)
+- Fix `--help` line range e leak di `set -e`
+- Hint `cancel-wizard` aggiornato a `jht setup`
+
+### Desktop Launcher
+- Electron launcher ora spawna `docker run ghcr.io/leopu00/jht:latest dashboard --no-browser` invece del native next dev
+- Bootstrap automatico di Colima su macOS al primo avvio
+- `JHT_NO_DOCKER=1` per fallback in modalità nativa (debug/sviluppo)
+
+### Fix
+- **Build Vercel**: `next.config.ts` ora imposta esplicitamente `outputFileTracingRoot` e `turbopack.root` alla root del monorepo, con `outputFileTracingExcludes` per skippare `cli/`, `desktop/`, `tui/`, `agents/`, `e2e/`, `scripts/`, ecc. Questo risolve il limite di 250 MB unzipped per Serverless Function che altrimenti includeva tutto il monorepo
+- **Assistente page**: rimosso blocco JSX orfano `{workspace && (...)}` rimasto dopo il refactor che ha rimosso lo state `workspace` (build rotta con `Cannot find name 'workspace'`)
+- **Banner download**: rimosso il banner giallo "asset pending" dalla pagina `/download` (obsoleto dopo il rilascio dei pacchetti desktop)
+- **Fix post-merge path refactor**: consistency sui path centralizzati su `JHT_HOME`
+
+---
+
+## [0.1.8] — 2026-04-10
+
+### Fix
+- Aggiunto `overrides` per `@swc/helpers` nel `package.json` per risolvere conflitti di dipendenze durante `npm ci` nel workflow di release
+
+---
+
+## [0.1.7] — 2026-04-10
+
+### Web app
+- Rimossa di nuovo dalla home la landing deprecated rientrata durante il recovery della `0.1.6`, mantenendo la versione semplificata prevista per il live
+- Riallineata la pagina iniziale al set di sezioni effettivamente supportato in produzione
+
+### Release e deploy
+- Corretto il flusso di verifica Vercel in CI, che ora controlla il progetto Git collegato anche senza metadata locali `.vercel`
+- Bloccata la pubblicazione di tag release che non puntano all'HEAD corrente di `production`
+- Aggiunto workflow dedicato per creare il tag release direttamente dall'HEAD di `production`
+
 ## [0.1.6] — 2026-04-09
 
 ### Web app

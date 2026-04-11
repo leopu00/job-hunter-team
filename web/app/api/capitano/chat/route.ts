@@ -1,30 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
-import { getWorkspacePath } from '@/lib/workspace'
+import { getAgentDir } from '@/lib/jht-paths'
 import { parseJsonl } from '@/lib/agent-chat'
 import fs from 'fs'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-async function getChatFile(): Promise<string | null> {
-  const ws = await getWorkspacePath()
-  if (!ws) return null
-  return path.join(ws, 'alfa', 'chat.jsonl')
+function getChatFile(): string {
+  return path.join(getAgentDir('alfa'), 'chat.jsonl')
 }
 
 /** GET — leggi messaggi */
 export async function GET(req: NextRequest) {
-  const chatFile = await getChatFile()
-  if (!chatFile) return NextResponse.json({ messages: [] })
-
+  const chatFile = getChatFile()
   const after = parseFloat(req.nextUrl.searchParams.get('after') ?? '0')
 
   try {
     if (!fs.existsSync(chatFile)) return NextResponse.json({ messages: [] })
     const content = fs.readFileSync(chatFile, 'utf-8')
     const messages = parseJsonl(content).filter(m => m.ts > after)
-
     return NextResponse.json({ messages })
   } catch {
     return NextResponse.json({ messages: [] })
@@ -33,8 +28,8 @@ export async function GET(req: NextRequest) {
 
 /** DELETE — pulisci la chat */
 export async function DELETE() {
-  const chatFile = await getChatFile()
-  if (chatFile && fs.existsSync(chatFile)) {
+  const chatFile = getChatFile()
+  if (fs.existsSync(chatFile)) {
     fs.writeFileSync(chatFile, '', 'utf-8')
   }
   return NextResponse.json({ ok: true })
@@ -47,10 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'empty message' }, { status: 400 })
   }
 
-  const chatFile = await getChatFile()
-  if (!chatFile) {
-    return NextResponse.json({ error: 'workspace not configured' }, { status: 500 })
-  }
+  const chatFile = getChatFile()
 
   try {
     const msg = JSON.stringify({ role: 'user', text: text.trim(), ts: Date.now() / 1000 })

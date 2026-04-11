@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -31,5 +31,8 @@
     "eslint-config-next": "^16.2.2",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@swc/helpers": "^0.5.17"
   }
 }

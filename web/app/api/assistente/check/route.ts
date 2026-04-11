@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
+import fs from 'fs'
 import { runBash, toWslPath } from '@/lib/shell'
-import { getWorkspacePath } from '@/lib/workspace'
+import {
+  JHT_DB_PATH,
+  JHT_HOME,
+  JHT_PROFILE_YAML,
+  JHT_USER_DIR,
+} from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +24,6 @@ export async function GET() {
   const repoPath = toWslPath(repoRoot)
   const checks: Check[] = []
 
-  // Helper per eseguire un check
   async function check(id: string, label: string, cmd: string, hint: string): Promise<void> {
     try {
       const { stdout } = await runBash(cmd)
@@ -27,6 +32,11 @@ export async function GET() {
     } catch {
       checks.push({ id, label, ok: false, hint })
     }
+  }
+
+  function checkFile(id: string, label: string, absPath: string, hint: string): void {
+    const ok = fs.existsSync(absPath)
+    checks.push({ id, label, ok, detail: ok ? absPath : undefined, hint: ok ? undefined : hint })
   }
 
   // Prerequisiti ambiente
@@ -42,24 +52,13 @@ export async function GET() {
     'which claude && claude --version 2>/dev/null || which claude',
     'Installa Claude CLI: https://claude.ai/download')
 
-  // Configurazione
-  await check('env', '.env configurato',
-    `test -f "${repoPath}/.env" && grep -q "ANTHROPIC_API_KEY=." "${repoPath}/.env" && echo "ok"`,
-    'Copia .env.example in .env e inserisci la tua API key')
+  // Configurazione (ora da ~/.jht, non dal .env del repo)
+  checkFile('jht_home', 'Cartella ~/.jht', JHT_HOME, 'Avvia la TUI per inizializzare ~/.jht')
+  checkFile('user_dir', 'Cartella utente', JHT_USER_DIR, 'Avvia la TUI per creare ~/Documents/Job Hunter Team')
+  checkFile('profile', 'candidate_profile.yml', JHT_PROFILE_YAML, 'Completa il profilo nella TUI o nel wizard web')
+  checkFile('db', 'Database SQLite', JHT_DB_PATH, 'Avvia la TUI per inizializzare il database')
 
-  await check('workspace', 'JHT_WORKSPACE configurato',
-    `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' | grep -v "^$"`,
-    'Imposta JHT_WORKSPACE nel .env')
-
-  await check('profile', 'candidate_profile.yml',
-    `test -f "${repoPath}/candidate_profile.yml" && echo "ok"`,
-    'Copia candidate_profile.yml.example e compila con i tuoi dati')
-
-  await check('db', 'Database SQLite',
-    `test -f "${repoPath}/shared/data/jobs.db" && echo "ok"`,
-    'Esegui: python3 shared/skills/db_init.py')
-
-  // Template agenti
+  // Template agenti (sempre nella repo)
   await check('tpl_assistente', 'Template assistente.md',
     `test -f "${repoPath}/agents/assistente/assistente.md" && echo "ok"`,
     'File agents/assistente/assistente.md mancante')
@@ -68,19 +67,5 @@ export async function GET() {
     `test -f "${repoPath}/agents/alfa/alfa.md" && echo "ok"`,
     'Crea agents/alfa/alfa.md — identità del Capitano')
 
-  // Leggi workspace corrente: prima dal cookie (fonte di verità), poi dal .env
-  let workspace = ''
-  try {
-    workspace = (await getWorkspacePath()) ?? ''
-  } catch { /* ignore */ }
-  if (!workspace) {
-    try {
-      const { stdout } = await runBash(
-        `grep "^JHT_WORKSPACE=" "${repoPath}/.env" 2>/dev/null | head -1 | sed 's/^JHT_WORKSPACE=//' || echo ""`
-      )
-      workspace = stdout.trim()
-    } catch { /* ignore */ }
-  }
-
-  return NextResponse.json({ checks, workspace })
+  return NextResponse.json({ checks, workspace: JHT_USER_DIR })
 }

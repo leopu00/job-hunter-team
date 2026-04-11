@@ -6,12 +6,12 @@
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { JHT_CREDENTIALS_DIR } from "../paths.js";
 import { decrypt, deriveKey, encrypt, generateSalt, isValidPayload } from "./crypto.js";
 import type { Credential, EncryptedPayload } from "./types.js";
 
-const CREDENTIALS_DIR = join(homedir(), ".jht", "credentials");
+const CREDENTIALS_DIR = JHT_CREDENTIALS_DIR;
 const SALT_FILE = join(CREDENTIALS_DIR, ".salt");
 const FILE_MODE = 0o600;
 

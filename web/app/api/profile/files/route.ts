@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkspacePath } from '@/lib/workspace'
+import { JHT_USER_UPLOADS_DIR } from '@/lib/jht-paths'
 import fs from 'fs'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const workspace = await getWorkspacePath()
-  if (!workspace) return NextResponse.json({ files: [] })
-
-  const uploadsDir = path.join(workspace, 'profile', 'uploads')
+  const uploadsDir = JHT_USER_UPLOADS_DIR
   if (!fs.existsSync(uploadsDir)) return NextResponse.json({ files: [] })
 
   try {
@@ -28,9 +25,6 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
-  const workspace = await getWorkspacePath()
-  if (!workspace) return NextResponse.json({ error: 'workspace non configurato' }, { status: 500 })
-
   const { name } = await req.json()
   if (!name || typeof name !== 'string') {
     return NextResponse.json({ error: 'nome file richiesto' }, { status: 400 })
@@ -38,7 +32,7 @@ export async function DELETE(req: NextRequest) {
 
   // Previeni path traversal
   const safeName = path.basename(name)
-  const filePath = path.join(workspace, 'profile', 'uploads', safeName)
+  const filePath = path.join(JHT_USER_UPLOADS_DIR, safeName)
 
   if (!fs.existsSync(filePath)) {
     return NextResponse.json({ error: 'file non trovato' }, { status: 404 })

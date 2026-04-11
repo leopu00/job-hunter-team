@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STATE_PATH = path.join(os.homedir(), '.jht', 'retry', 'circuit-breakers.json')
+const STATE_PATH = path.join(JHT_HOME, 'retry', 'circuit-breakers.json')
 
 type CircuitState = 'closed' | 'open' | 'half-open'
 

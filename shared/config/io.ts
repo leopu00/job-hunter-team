@@ -7,15 +7,15 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
+import { JHT_HOME, JHT_CONFIG_PATH as SHARED_JHT_CONFIG_PATH } from "../paths.js";
 import { validateConfig } from "./schema";
 import type { JHTConfigParsed } from "./schema";
 
-/** Path della directory config */
-export const JHT_CONFIG_DIR = path.join(os.homedir(), ".jht");
+/** Alias: directory config (= JHT_HOME) */
+export const JHT_CONFIG_DIR = JHT_HOME;
 
 /** Path del file config */
-export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, "jht.config.json");
+export const JHT_CONFIG_PATH = SHARED_JHT_CONFIG_PATH;
 
 /** Campi sensibili da mascherare nei log */
 const SENSITIVE_FIELDS = ["api_key", "bot_token", "session_token", "value"];

@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const PLUGINS_DIR = path.join(os.homedir(), '.jht', 'plugins')
-const CONFIG_PATH = path.join(os.homedir(), '.jht', 'plugins-config.json')
+const PLUGINS_DIR = path.join(JHT_HOME, 'plugins')
+const CONFIG_PATH = path.join(JHT_HOME, 'plugins-config.json')
 const MANIFEST_FILE = 'jht.plugin.json'
 
 type PluginKind = 'skill' | 'channel' | 'storage' | 'provider' | 'tool' | 'integration'

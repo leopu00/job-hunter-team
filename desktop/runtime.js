@@ -4,6 +4,7 @@ const net = require('node:net')
 const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
+const containerRuntime = require('./container')
 
 const DEFAULT_PORT = 3000
 const START_TIMEOUT_MS = 20000
@@ -143,10 +144,16 @@ function createRuntimeManager(config = {}) {
   const startTimeoutMs = config.startTimeoutMs ?? START_TIMEOUT_MS
   const stopTimeoutMs = config.stopTimeoutMs ?? STOP_TIMEOUT_MS
   const spawnFn = config.spawnFn ?? spawn
-  const spawnSpecFactory = config.spawnSpecFactory ?? defaultSpawnSpecFactory
+  const containerMode = config.containerMode === true
+  const ensureContainerFn = config.ensureContainerFn ?? containerRuntime.ensureContainerRuntime
+  const containerSpawnSpecFactory =
+    config.containerSpawnSpecFactory ?? containerRuntime.buildDockerSpawnSpec
+  const spawnSpecFactory =
+    config.spawnSpecFactory ?? (containerMode ? containerSpawnSpecFactory : defaultSpawnSpecFactory)
   const isPortOpenFn = config.isPortOpenFn
   const probeHttpFn = config.probeHttpFn
   const portFallbackSpan = config.portFallbackSpan ?? 10
+  const containerStartTimeoutMs = config.containerStartTimeoutMs ?? 90000
   const state = {
     child: null,
     mode: 'stopped',
@@ -263,7 +270,8 @@ function createRuntimeManager(config = {}) {
       lastError: state.lastError,
       lastExitCode: state.lastExitCode,
       logFile,
-      setup: inspectWebSetup(repoRoot),
+      containerMode,
+      setup: containerMode ? null : inspectWebSetup(repoRoot),
       ...extra,
     }
   }
@@ -341,35 +349,48 @@ function createRuntimeManager(config = {}) {
       state.port = fallbackPort
     }
 
-    const setup = inspectWebSetup(repoRoot)
-    if (!setup.hasPackageJson && !setup.hasStandaloneServer) {
-      state.mode = 'error'
-      state.lastError = setup.issues[0] ?? `Directory web/ non trovata in ${setup.webDir}`
-      return buildStatus()
-    }
+    let setup = null
+    let mode = 'container'
 
-    if (!setup.hasNodeModules && !setup.hasProductionBuild) {
-      state.mode = 'error'
-      state.lastError = setup.issues[0] ?? 'Dipendenze web mancanti.'
-      return buildStatus()
-    }
+    if (containerMode) {
+      try {
+        ensureContainerFn({ logger: (msg) => writeLogHeader(msg) })
+      } catch (err) {
+        state.mode = 'error'
+        state.lastError = err instanceof Error ? err.message : String(err)
+        return buildStatus()
+      }
+    } else {
+      setup = inspectWebSetup(repoRoot)
+      if (!setup.hasPackageJson && !setup.hasStandaloneServer) {
+        state.mode = 'error'
+        state.lastError = setup.issues[0] ?? `Directory web/ non trovata in ${setup.webDir}`
+        return buildStatus()
+      }
 
-    const requestedMode = options.preferredMode === 'production' || options.preferredMode === 'development'
-      ? options.preferredMode
-      : 'auto'
-    const detectedMode = detectStartMode(setup.webDir)
-    const mode = requestedMode === 'auto' ? detectedMode : requestedMode
+      if (!setup.hasNodeModules && !setup.hasProductionBuild) {
+        state.mode = 'error'
+        state.lastError = setup.issues[0] ?? 'Dipendenze web mancanti.'
+        return buildStatus()
+      }
 
-    if (!mode) {
-      state.mode = 'error'
-      state.lastError = 'Impossibile determinare una modalità di avvio valida.'
-      return buildStatus()
-    }
+      const requestedMode = options.preferredMode === 'production' || options.preferredMode === 'development'
+        ? options.preferredMode
+        : 'auto'
+      const detectedMode = detectStartMode(setup.webDir)
+      mode = requestedMode === 'auto' ? detectedMode : requestedMode
 
-    if (mode === 'production' && !setup.hasProductionBuild) {
-      state.mode = 'error'
-      state.lastError = 'Build production mancante. Genera web/.next prima di avviare in modalità production.'
-      return buildStatus()
+      if (!mode) {
+        state.mode = 'error'
+        state.lastError = 'Impossibile determinare una modalità di avvio valida.'
+        return buildStatus()
+      }
+
+      if (mode === 'production' && !setup.hasProductionBuild) {
+        state.mode = 'error'
+        state.lastError = 'Build production mancante. Genera web/.next prima di avviare in modalità production.'
+        return buildStatus()
+      }
     }
 
     state.mode = 'starting'
@@ -380,7 +401,12 @@ function createRuntimeManager(config = {}) {
 
     writeLogHeader(`Launching JHT web runtime in ${mode} mode on port ${state.port}`)
 
-    const spec = spawnSpecFactory({ mode, port: state.port, webDir: setup.webDir, repoRoot })
+    const spec = spawnSpecFactory({
+      mode,
+      port: state.port,
+      webDir: setup ? setup.webDir : null,
+      repoRoot,
+    })
     const child = spawnFn(spec.command, spec.args, spec.options)
 
     state.child = child
@@ -399,7 +425,7 @@ function createRuntimeManager(config = {}) {
       resetState(state.mode)
     })
 
-    const ready = await waitForPort(state.port)
+    const ready = await waitForPort(state.port, containerMode ? containerStartTimeoutMs : startTimeoutMs)
     if (!ready) {
       await stopRuntime()
       state.mode = 'error'
@@ -462,7 +488,9 @@ function createRuntimeManager(config = {}) {
   }
 }
 
-const runtime = createRuntimeManager()
+const runtime = createRuntimeManager({
+  containerMode: containerRuntime.shouldUseContainer(),
+})
 
 module.exports = {
   DEFAULT_PORT,

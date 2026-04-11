@@ -3,10 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { randomUUID } from 'crypto'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_DIR = path.join(os.homedir(), '.jht')
+const STORE_DIR = JHT_HOME
 const STORE_PATH = path.join(STORE_DIR, 'bookmarks.json')
 
 interface Bookmark {
@@ -39,8 +40,8 @@ function load(): BookmarkStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const data = JSON.parse(raw) as BookmarkStore
-    return Array.isArray(data?.bookmarks) ? data : { version: 1, bookmarks: SAMPLE }
-  } catch { return { version: 1, bookmarks: SAMPLE } }
+    return Array.isArray(data?.bookmarks) ? data : { version: 1, bookmarks: [] }
+  } catch { return { version: 1, bookmarks: [] } }
 }
 
 function save(store: BookmarkStore) {

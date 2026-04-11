@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-const FORUM_PATH = path.join(os.homedir(), '.jht', 'forum.log')
+const FORUM_PATH = path.join(JHT_HOME, 'forum.log')
 const LINE_RE    = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[(\w+)\] (.+)$/
 
 type Message = { id: number; ts: string; author: string; content: string; mentions: string[] }

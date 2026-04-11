@@ -5,14 +5,15 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type CalEvent = { id: string; title: string; type: 'interview' | 'deadline' | 'follow-up'; date: number; company: string; details: string };
 
-const INT_PATH = path.join(os.homedir(), '.jht', 'interviews.json');
-const APPS_PATH = path.join(os.homedir(), '.jht', 'applications.json');
-const CONTACTS_PATH = path.join(os.homedir(), '.jht', 'contacts.json');
+const INT_PATH = path.join(JHT_HOME, 'interviews.json');
+const APPS_PATH = path.join(JHT_HOME, 'applications.json');
+const CONTACTS_PATH = path.join(JHT_HOME, 'contacts.json');
 
 function loadJSON<T>(p: string, fallback: T): T {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')); } catch { return fallback; }

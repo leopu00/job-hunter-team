@@ -4,10 +4,10 @@ import './globals.css'
 import Sidebar from './components/sidebar'
 import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
-import Breadcrumb from './components/Breadcrumb'
 import { ToastProvider } from './components/Toast'
 import { KeyboardShortcutsProvider } from './components/KeyboardShortcuts'
 import { AccessibilityProvider } from './components/AccessibilityProvider'
+import { DashboardI18nProvider } from './components/DashboardI18n'
 import dynamic from 'next/dynamic'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
@@ -97,6 +97,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <ThemeProvider>
+          <DashboardI18nProvider>
           <AccessibilityProvider>
             <ToastProvider>
               <KeyboardShortcutsProvider>
@@ -105,12 +106,12 @@ export default function RootLayout({
                 {/* <FloatingChat /> */}
                 <Sidebar />
                 <MainContent>
-                  <Breadcrumb />
                   {children}
                 </MainContent>
               </KeyboardShortcutsProvider>
             </ToastProvider>
           </AccessibilityProvider>
+          </DashboardI18nProvider>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />

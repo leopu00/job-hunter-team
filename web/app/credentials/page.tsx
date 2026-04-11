@@ -34,7 +34,7 @@ function ProviderCard({ p, onDelete, onSelect }: { p: ProviderInfo; onDelete: (p
         {!p.configured && (
           <button onClick={() => onSelect(p.provider)}
             className="text-[10px] px-2.5 py-1 rounded font-semibold cursor-pointer transition-colors"
-            style={{ background: 'var(--color-green)', color: 'var(--color-bg)' }}>Aggiungi</button>
+            style={{ background: 'var(--color-green)', color: '#000' }}>Aggiungi</button>
         )}
         {p.configured && !isEnv && (
           <button onClick={() => onDelete(p.provider)}
@@ -78,7 +78,7 @@ function AddForm({ provider, type, onDone }: { provider: string; type: string; o
       <div className="flex justify-end mt-3">
         <button onClick={handleSave} disabled={!value.trim() || saving}
           className="text-[10px] px-4 py-1.5 rounded font-semibold cursor-pointer transition-colors disabled:opacity-40"
-          style={{ background: 'var(--color-green)', color: 'var(--color-bg)' }}>
+          style={{ background: 'var(--color-green)', color: '#000' }}>
           {saving ? 'Salvataggio...' : 'Salva'}
         </button>
       </div>

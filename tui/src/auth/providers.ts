@@ -4,7 +4,7 @@
  */
 import type { WorkspaceProvider } from "../tui-profile.js";
 
-export type AuthMethodKind = "apiKey" | "oauth" | "token";
+export type AuthMethodKind = "apiKey" | "oauth" | "token" | "subscription";
 
 export type AuthMethod = {
   id: string;
@@ -29,7 +29,8 @@ export type AuthResult =
 export type Credentials =
   | { type: "apiKey"; key: string }
   | { type: "oauth"; token: string; refreshToken?: string; expiresAt?: number }
-  | { type: "token"; token: string };
+  | { type: "token"; token: string }
+  | { type: "subscription" };
 
 export type PromptAPI = {
   text: (params: { message: string; placeholder?: string; validate?: (v: string) => string | undefined }) => Promise<string>;
@@ -75,11 +76,21 @@ const anthropicApiKeyAuth: AuthMethod = {
   },
 };
 
+const anthropicSubscriptionAuth: AuthMethod = {
+  id: "subscription",
+  label: "Abbonamento Claude",
+  hint: "Pro/Max — usa Claude CLI",
+  kind: "subscription",
+  async run(_ctx) {
+    return { success: true, credentials: { type: "subscription" } };
+  },
+};
+
 export const anthropicProvider = {
   id: "anthropic" as const,
   label: "Anthropic",
   description: "Claude via Messages API",
-  auth: [anthropicApiKeyAuth],
+  auth: [anthropicSubscriptionAuth, anthropicApiKeyAuth],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -351,15 +362,17 @@ export async function saveCredentials(
   methodId: string,
   credentials: Credentials
 ): Promise<void> {
-  const { saveWorkspaceProvider } = await import("../tui-profile.js");
+  const { saveWorkspaceProvider, saveWorkspaceApiKey } = await import("../tui-profile.js");
   const { saveApiKeyCredentials, saveOAuthCredentials } = await import("../oauth/storage.js");
   
   // Salva provider selezionato nel workspace
   saveWorkspaceProvider(provider, workspace);
   
-  // Salva credenziali nel storage crittografato
+  // Salva credenziali nel storage crittografato (nuovo sistema)
   if (credentials.type === "apiKey") {
     saveApiKeyCredentials(provider, credentials.key);
+    // Salva anche nel formato vecchio per compatibilità con la home
+    saveWorkspaceApiKey(credentials.key, workspace, provider);
   } else if (credentials.type === "oauth") {
     saveOAuthCredentials(provider, {
       accessToken: credentials.token,
@@ -367,5 +380,8 @@ export async function saveCredentials(
       expiresAt: credentials.expiresAt || Date.now() + 3600 * 1000,
       tokenType: "Bearer",
     });
+  } else if (credentials.type === "subscription") {
+    // Abbonamento: salva marker nel workspace config (nessuna key necessaria)
+    saveWorkspaceApiKey("__subscription__", workspace, provider);
   }
 }

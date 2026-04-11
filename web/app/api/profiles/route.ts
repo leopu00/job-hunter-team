@@ -5,14 +5,15 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
 type Section = { name: string; filled: boolean; items: number };
 type Profile = { id: string; name: string; role: string; completeness: number; sections: Section[]; updatedAt: number; source: string };
 
-const CANDIDATO_DIR = path.join(os.homedir(), '.jht', 'candidato');
-const PROFILES_DIR = path.join(os.homedir(), '.jht', 'profiles');
+const CANDIDATO_DIR = path.join(JHT_HOME, 'candidato');
+const PROFILES_DIR = path.join(JHT_HOME, 'profiles');
 
 const SECTION_DEFS = ['esperienza', 'competenze', 'formazione', 'lingue', 'certificazioni', 'progetti', 'contatti'];
 
@@ -54,7 +55,7 @@ function scanProfiles(): Profile[] {
       if (p) profiles.push(p);
     }
   }
-  if (profiles.length === 0) return generateSampleProfiles();
+  if (profiles.length === 0) return [];
   return profiles;
 }
 
