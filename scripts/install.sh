@@ -44,7 +44,7 @@ for arg in "$@"; do
     --no-docker) USE_DOCKER=0 ;;
     --with-docker) USE_DOCKER=1 ;;  # alias retro-compat
     -h|--help)
-      sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
