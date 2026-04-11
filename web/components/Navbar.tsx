@@ -1,13 +1,11 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
-import LogoutButton from './LogoutButton'
 import LoginButton from './LoginButton'
 import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
+import UserMenu from './UserMenu'
 
-const NotificationCenter = dynamic(() => import('@/app/components/NotificationCenter').then(m => m.NotificationCenter))
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
 
 interface NavbarProps {
@@ -19,72 +17,45 @@ export default function Navbar({ user, workspace }: NavbarProps) {
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
   const fullName  = user?.user_metadata?.full_name as string | undefined
   const email     = user?.email ?? ''
-  const initials  = fullName
-    ? fullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
-    : email ? email.slice(0, 2).toUpperCase() : '?'
 
   return (
     <header
       style={{ position: 'relative', zIndex: 10 }}
       className="border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav aria-label="Navigazione app" className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
+      <nav aria-label="Navigazione app" className="relative px-5 sm:px-6 h-14 flex items-center gap-4">
 
         {/* Brand */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 no-underline group"
+          className="flex items-center gap-2.5 no-underline group"
         >
-          <span className="text-[var(--color-green)] font-bold text-sm tracking-tight group-hover:opacity-80 transition-opacity">
+          <div
+            className="w-2 h-2 group-hover:opacity-80 transition-opacity"
+            style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
+          />
+          <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
             JHT
-          </span>
-          <span className="text-[var(--color-dim)] text-[10px] tracking-widest uppercase hidden sm:block">
-            / dashboard
           </span>
         </Link>
 
-        {/* Nav links (desktop) */}
-        <NavLinks />
+        {/* Nav links (desktop) — absolute centered */}
+        <div className="absolute left-1/2 top-0 h-full -translate-x-1/2 hidden md:flex items-center">
+          <NavLinks />
+        </div>
 
         {/* Mobile hamburger */}
         <NavbarMobile />
 
-        {/* Notifications + User / Login */}
+        {/* User / Login */}
         {user ? (
-          <div className="flex items-center gap-3">
-            <NotificationCenter />
+          <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher direction="down" />
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[11px] text-[var(--color-bright)] leading-none font-medium">
-                {fullName ?? email.split('@')[0]}
-              </span>
-              <span className="text-[10px] text-[var(--color-dim)] leading-none mt-0.5">
-                {email}
-              </span>
-            </div>
-
-            {/* Avatar */}
-            <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--color-border)] flex-shrink-0 bg-[var(--color-card)] flex items-center justify-center">
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt={fullName ?? 'avatar'}
-                  width={32}
-                  height={32}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-[11px] font-bold text-[var(--color-green)]">
-                  {initials}
-                </span>
-              )}
-            </div>
-
-            <LogoutButton />
+            <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <NotificationCenter />
+          <div className="ml-auto flex items-center gap-3">
+            <LanguageSwitcher direction="down" />
             {workspace && <WorkspacePath path={workspace} />}
             <LoginButton />
           </div>

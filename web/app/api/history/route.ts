@@ -49,8 +49,8 @@ function load(): ActivityStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const data = JSON.parse(raw) as ActivityStore
-    return Array.isArray(data?.activities) ? data : { version: 1, activities: SAMPLE }
-  } catch { return { version: 1, activities: SAMPLE } }
+    return Array.isArray(data?.activities) ? data : { version: 1, activities: [] }
+  } catch { return { version: 1, activities: [] } }
 }
 
 function save(store: ActivityStore) {

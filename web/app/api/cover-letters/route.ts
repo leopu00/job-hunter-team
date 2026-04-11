@@ -17,7 +17,7 @@ const CL_DIR = path.join(JHT_HOME, 'cover-letters');
 
 function loadCoverLetters(): CoverLetter[] {
   try { return JSON.parse(fs.readFileSync(CL_PATH, 'utf-8')); }
-  catch { return scanDir() ?? generateSample(); }
+  catch { return scanDir() ?? []; }
 }
 
 function scanDir(): CoverLetter[] | null {
