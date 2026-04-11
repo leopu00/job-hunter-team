@@ -46,9 +46,10 @@ const FALLBACK_VERSION = '0.1.0'
 const FALLBACK_REPO = 'leopu00/job-hunter-team'
 const FALLBACK_RELEASES_URL = `https://github.com/${FALLBACK_REPO}/releases`
 
-// One-liner installer: scarica, installa dipendenze e lancia il wizard.
+// One-liner installer: scarica, installa Docker (Colima su Mac), pulla
+// l'immagine GHCR e crea il wrapper jht.
 // Target: utenti tech su macOS / Linux / WSL.
-const CLI_SETUP_CMD = `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash`
+const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
 
 // Build da sorgente: per chi vuole sviluppare o contribuire.
 const SOURCE_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
