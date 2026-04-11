@@ -34,7 +34,7 @@ BRANCH="${JHT_BRANCH:-main}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
 BIN_DIR="${JHT_BIN_DIR:-$HOME/.local/bin}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
-MIN_NODE_MAJOR=20
+MIN_NODE_MAJOR=22
 
 # ── Argomenti ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
