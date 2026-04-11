@@ -4,11 +4,10 @@
 # ╠══════════════════════════════════════════════════════════════════════════╣
 # ║                                                                          ║
 # ║  Uso:                                                                    ║
-# ║    curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/ ║
-# ║              main/scripts/install.sh | bash                              ║
+# ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash                 ║
 # ║                                                                          ║
 # ║    # Installazione "expert mode" senza container:                        ║
-# ║    curl -fsSL .../install.sh | bash -s -- --no-docker                    ║
+# ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker ║
 # ║                                                                          ║
 # ║  Default: gli agenti AI girano dentro un container Docker isolato.       ║
 # ║  Solo due cartelle host vengono esposte: ~/.jht e                        ║

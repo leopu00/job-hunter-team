@@ -108,8 +108,8 @@ Avvia JHT Desktop dal menu Start`}</Code>
       </ul>
 
       <H2>Installer one-liner (macOS / Linux / WSL)</H2>
-      <Code>{`curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash`}</Code>
-      <P>Lo script rileva il tuo OS, installa Node 20+, tmux e Claude CLI se mancano, clona la repo in <code className="text-[var(--color-green)]">~/.jht/src</code>, compila TUI e CLI, crea un simlink <code className="text-[var(--color-green)]">jht</code> in <code className="text-[var(--color-green)]">~/.local/bin</code> e lancia il wizard.</P>
+      <Code>{`curl -fsSL https://jobhunterteam.ai/install.sh | bash`}</Code>
+      <P>Lo script rileva il tuo OS, installa Colima su Mac (o docker.io su Linux/WSL2), scarica l&apos;immagine <code className="text-[var(--color-green)]">ghcr.io/leopu00/jht:latest</code> e crea un wrapper <code className="text-[var(--color-green)]">jht</code> in <code className="text-[var(--color-green)]">~/.local/bin</code> che lancia tutto in container.</P>
 
       <H2>Installazione da sorgente (per contribuire)</H2>
       <Code>{`git clone https://github.com/leopu00/job-hunter-team.git
