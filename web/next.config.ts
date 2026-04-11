@@ -1,5 +1,11 @@
 import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin';
+import path from 'node:path'
+
+// Locale: build parte da web/ (cwd termina con /web). Vercel: build parte dalla repo root.
+const CWD = process.cwd()
+const MONOREPO_ROOT =
+  CWD.endsWith(`${path.sep}web`) || CWD.endsWith('/web') ? path.dirname(CWD) : CWD
 
 const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -28,8 +34,29 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: MONOREPO_ROOT,
+  outputFileTracingExcludes: {
+    '*': [
+      '../cli/**',
+      '../desktop/**',
+      '../tui/**',
+      '../agents/**',
+      '../e2e/**',
+      '../telegram-bridge/**',
+      '../tests/**',
+      '../docs/**',
+      '../scripts/**',
+      '../launcher/**',
+      '../data/**',
+      '../sentinella/**',
+      '../assets/**',
+      '../.githooks/**',
+      '../node_modules/.cache/**',
+      '**/*.map',
+    ],
+  },
   turbopack: {
-    root: process.cwd(),
+    root: MONOREPO_ROOT,
   },
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
