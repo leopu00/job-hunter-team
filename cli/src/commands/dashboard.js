@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { platform } from 'node:os';
+import { isContainer } from '../../../shared/runtime/container.js';
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_URL  = `http://localhost:${DEFAULT_PORT}`;
@@ -32,6 +33,7 @@ function isPortOpen(port) {
 }
 
 function openBrowser(url) {
+  if (isContainer()) return false;
   const cmd = platform() === 'darwin' ? 'open' : platform() === 'win32' ? 'start' : 'xdg-open';
   try { execSync(`${cmd} "${url}" 2>/dev/null`, { stdio: 'pipe' }); return true; }
   catch { return false; }
@@ -48,13 +50,18 @@ async function findWebDir() {
 }
 
 function startNextDev(webDir, port) {
-  const child = spawn('npm', ['run', 'dev', '--', '-p', String(port)], {
+  // In container we must bind to 0.0.0.0 so the host port-forward
+  // hits the Next.js server; locally we keep the default 127.0.0.1.
+  const args = isContainer()
+    ? ['run', 'dev', '--', '-p', String(port), '-H', '0.0.0.0']
+    : ['run', 'dev', '--', '-p', String(port)];
+  const child = spawn('npm', args, {
     cwd: webDir,
-    detached: true,
+    detached: !isContainer(),
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), HOSTNAME: isContainer() ? '0.0.0.0' : process.env.HOSTNAME },
   });
-  child.unref();
+  if (!isContainer()) child.unref();
   return child;
 }
 
@@ -124,15 +131,34 @@ async function handleDashboard(options) {
 
   if (ready) {
     console.log(`  ${GREEN}●${RESET}  Dashboard avviata su ${GREEN}${url}${RESET}`);
-    console.log(`  ${DIM}PID: ${child.pid} (in background)${RESET}`);
+    console.log(`  ${DIM}PID: ${child.pid}${isContainer() ? ' (foreground)' : ' (in background)'}${RESET}`);
     if (!options.noBrowser) {
       openBrowser(url);
       console.log(`  ${DIM}Browser aperto.${RESET}`);
     }
-    console.log(`\n  ${DIM}Per fermare: kill ${child.pid}${RESET}\n`);
+    if (!isContainer()) {
+      console.log(`\n  ${DIM}Per fermare: kill ${child.pid}${RESET}\n`);
+    }
   } else {
     console.log(`  ${YELLOW}Server avviato ma non ancora pronto (PID: ${child.pid}).${RESET}`);
     console.log(`  ${DIM}Apri manualmente: ${url}${RESET}\n`);
+  }
+
+  // In container PID 1 (this process) must stay alive: if we exit,
+  // docker tears the whole runtime down. Forward signals and wait
+  // for the next dev child indefinitely.
+  if (isContainer()) {
+    const forward = (sig) => {
+      try { child.kill(sig); } catch { /* ignore */ }
+    };
+    process.on('SIGINT', () => forward('SIGINT'));
+    process.on('SIGTERM', () => forward('SIGTERM'));
+    await new Promise((resolve) => {
+      child.once('exit', (code) => {
+        process.exitCode = code ?? 0;
+        resolve();
+      });
+    });
   }
 }
 
