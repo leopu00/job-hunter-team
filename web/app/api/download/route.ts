@@ -57,6 +57,18 @@ function checkLauncherExists(name: string): boolean {
   return fs.existsSync(path.join(ROOT, 'scripts', 'launchers', name));
 }
 
+function getRustLauncherInfo(): { exists: boolean; size: string | null } {
+  const launcherPath = path.join(process.cwd(), 'public', 'downloads', 'jht-launcher.exe');
+  const exists = fs.existsSync(launcherPath);
+  return { exists, size: exists ? getFileSize(launcherPath) : null };
+}
+
+function getRustDmgInfo(): { exists: boolean; size: string | null } {
+  const dmgPath = path.join(process.cwd(), 'public', 'downloads', 'jht-launcher.dmg');
+  const exists = fs.existsSync(dmgPath);
+  return { exists, size: exists ? getFileSize(dmgPath) : null };
+}
+
 function formatBytes(bytes: number | null | undefined): string | null {
   if (!Number.isFinite(bytes) || !bytes || bytes <= 0) return null;
   const mb = bytes / (1024 * 1024);
@@ -126,9 +138,9 @@ function getPlatformInstructions(platformId: PlatformId, format: string, availab
   }
 
   return [
-    'Apri il file .exe scaricato',
-    'Segui il wizard NSIS e installa JHT Desktop',
-    'Avvia JHT Desktop dal menu Start: il launcher apre la dashboard nel browser',
+    'Scarica jht-launcher.exe (< 1 MB)',
+    'Avvia: clona la repo, installa le dipendenze e apre il browser',
+    'Richiede Node.js e Git installati',
   ];
 }
 
@@ -170,12 +182,12 @@ function getDefaultPlatformInfo(version: string): PlatformInfo[] {
     {
       id: 'windows',
       label: 'Windows',
-      file: windowsFile,
-      size: localArtifactSize(windowsFile),
-      requirements: 'Windows 10/11 (x64)',
+      file: 'jht-launcher.exe',
+      size: getRustLauncherInfo().size,
+      requirements: 'Windows 10/11 (x64) + Node.js + Git',
       instructions: getPlatformInstructions('windows', 'exe', true),
-      downloadUrl: `https://github.com/${REPO}/releases/latest/download/${windowsFile}`,
-      available: true,
+      downloadUrl: '/downloads/jht-launcher.exe',
+      available: getRustLauncherInfo().exists,
       format: 'exe',
     },
   ];
@@ -210,11 +222,28 @@ export async function GET() {
   const defaults = getDefaultPlatformInfo(version || fallbackVersion);
   const releaseAssets = release?.assets || [];
   const platforms: PlatformInfo[] = defaults.map((platform) => {
+    // Windows uses the local Rust launcher — skip GitHub release lookup
+    if (platform.id === 'windows') return platform;
+
+    // Mac: prefer local Rust launcher DMG if present
+    if (platform.id === 'mac') {
+      const localDmg = getRustDmgInfo();
+      if (localDmg.exists) {
+        return {
+          ...platform,
+          file: 'jht-launcher.dmg',
+          size: localDmg.size,
+          instructions: getPlatformInstructions('mac', 'dmg', true),
+          downloadUrl: '/downloads/jht-launcher.dmg',
+          available: true,
+          format: 'dmg',
+        };
+      }
+    }
+
     const extensions = platform.id === 'mac'
       ? ['.dmg']
-      : platform.id === 'linux'
-        ? ['.appimage', '.deb']
-        : ['.exe'];
+      : ['.appimage', '.deb'];
     const asset = findReleaseAsset(releaseAssets, platform.id, extensions);
     const format = asset?.name.split('.').pop() || platform.format;
     const available = !!asset;
