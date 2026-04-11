@@ -15,7 +15,9 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 - Nuova tabella `cloud_sync_tokens` (migration 006) con RLS per-user, hash SHA-256 del token e soft-delete via `revoked_at`
 - API CRUD `/api/cloud-sync/tokens` (GET lista, POST crea, DELETE revoca) — il token in chiaro viene restituito una sola volta al momento della creazione
 - Pagina `/settings/cloud-sync` per generare, copiare e revocare i token; ogni token ha un nome leggibile per identificare il dispositivo (es. "MacBook Leone", "Linux cron")
-- Infrastruttura pronta per l'integrazione CLI locale → Supabase senza dover usare il browser per ogni sync
+- Endpoint `/api/cloud-sync/ping` per verifica Bearer token (usa service-role admin client per bypassare RLS), aggiorna `last_used_at` a ogni verifica
+- CLI commands `jht cloud enable/status/disable` — `enable` valida il token contro `/api/cloud-sync/ping` e lo persiste in `~/.jht/cloud.json` (chmod 0600); `--url` supporta self-hosted e sviluppo locale
+- Nuovo helper `web/lib/supabase/admin.ts` per client service-role usato solo lato server
 
 ---
 
