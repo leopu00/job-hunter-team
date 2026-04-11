@@ -28,6 +28,7 @@ import { registerSecretsCommand } from './commands/secrets.js';
 import { registerHooksCommand } from './commands/hooks.js';
 import { registerReportCommand } from './commands/report.js';
 import { registerWebhooksCommand } from './commands/webhooks.js';
+import { registerCloudCommand } from './commands/cloud.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -65,6 +66,7 @@ export function buildProgram() {
   registerHooksCommand(program);
   registerReportCommand(program);
   registerWebhooksCommand(program);
+  registerCloudCommand(program);
 
   return program;
 }
