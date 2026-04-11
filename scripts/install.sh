@@ -263,7 +263,11 @@ write_wrapper() {
 #!/usr/bin/env bash
 # Job Hunter Team — wrapper container.
 # Generato da scripts/install.sh. Modifiche manuali verranno sovrascritte.
-set -euo pipefail
+#
+# Niente array bash, niente 'set -u': macOS imbarca bash 3.2 dove
+# l'espansione di array vuoti rompe set -u, e questo script e' troppo
+# semplice perche' valga la pena gestire le edge case.
+set -eo pipefail
 
 IMAGE="\${JHT_IMAGE:-$IMAGE}"
 JHT_HOME_HOST="\${JHT_HOME_HOST:-\$HOME/.jht}"
@@ -287,28 +291,33 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-# Passa attraverso le API key se presenti nell'ambiente del chiamante
-api_env=()
-for var in ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY CLAUDE_CODE_OAUTH_TOKEN GEMINI_API_KEY; do
-  if [ -n "\${!var:-}" ]; then
-    api_env+=( -e "\$var" )
+# Funzioni di supporto: emettono frammenti di flag come stringhe.
+tty_flag() {
+  if [ -t 0 ] && [ -t 1 ]; then
+    printf -- '-it'
   fi
-done
+}
 
-# TTY solo se siamo davvero su un terminale (curl | bash non lo e')
-tty_flags=()
-if [ -t 0 ] && [ -t 1 ]; then
-  tty_flags=( -it )
-fi
+env_flags() {
+  for var in ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY \\
+             CLAUDE_CODE_OAUTH_TOKEN GEMINI_API_KEY GOOGLE_API_KEY; do
+    eval "value=\\\${\$var:-}"
+    if [ -n "\$value" ]; then
+      printf -- '-e %s ' "\$var"
+    fi
+  done
+}
 
+# I \$(...) non quotati si espandono via word splitting in argomenti
+# separati: nessun array bash, nessun problema con bash 3.2.
 exec docker run --rm \\
-  "\${tty_flags[@]}" \\
+  \$(tty_flag) \\
   -v "\$JHT_HOME_HOST:/jht_home" \\
   -v "\$JHT_USER_DIR_HOST:/jht_user" \\
   -e JHT_HOME=/jht_home \\
   -e JHT_USER_DIR=/jht_user \\
   -e IS_CONTAINER=1 \\
-  "\${api_env[@]}" \\
+  \$(env_flags) \\
   -p 3000:3000 \\
   "\$IMAGE" "\$@"
 WRAPPER
