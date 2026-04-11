@@ -4,7 +4,7 @@
 # ⚠ DEPRECATO: questo script e' il vecchio onboarding da dentro la repo
 #              clonata. Per l'installazione standard preferisci:
 #
-#   curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
+#   curl -fsSL https://jobhunterteam.ai/install.sh | bash
 #
 # setup.sh resta per chi sta gia' lavorando nella repo clonata e vuole
 # un onboarding idempotente delle dipendenze Python/Node dal source.
@@ -16,7 +16,7 @@ set -euo pipefail
 if [ -t 1 ]; then
   printf "\n\033[1;33m⚠  setup.sh e' il flow legacy.\033[0m\n"
   printf "   Per l'installazione standard usa:\n"
-  printf "   \033[1mcurl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash\033[0m\n\n"
+  printf "   \033[1mcurl -fsSL https://jobhunterteam.ai/install.sh | bash\033[0m\n\n"
 fi
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
