@@ -195,15 +195,6 @@ export default function AssistentePage() {
         </div>
       </div>
 
-      {/* Workspace info */}
-      {workspace && (
-        <div className="mb-6 flex items-center gap-2 px-3 py-2 rounded border font-mono text-[11px]"
-          style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)', color: 'var(--color-dim)' }}>
-          <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] font-sans">Workspace</span>
-          <span className="truncate" style={{ color: 'var(--color-bright)' }}>{workspace}</span>
-        </div>
-      )}
-
           {/* Assistente */}
           <div className="mb-6">
             <div role="button" tabIndex={0} aria-label={`${collapsed.step3 ? 'Espandi' : 'Chiudi'} sezione Assistente`} className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => toggle('step3')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle('step3'); } }} aria-expanded={!collapsed.step3}>
