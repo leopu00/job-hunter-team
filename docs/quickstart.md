@@ -5,7 +5,7 @@ Guida per avviare il sistema in 5 minuti.
 ## Percorso consigliato: installer one-liner
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
 Lo script:

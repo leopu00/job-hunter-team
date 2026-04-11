@@ -124,7 +124,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 
 ```bash
 # Default: gli agenti girano in container, isolati dal filesystem host
-curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
 Lo script rileva il sistema, installa il runtime container (**Colima** su macOS, **docker.io** su Linux/WSL2), scarica l'immagine ufficiale `ghcr.io/leopu00/jht:latest` e crea un wrapper `jht` in `~/.local/bin` che fa `docker run` con due sole cartelle bind-mountate dall'host:
@@ -141,7 +141,7 @@ Per aggiornare: ri-esegui il comando curl sopra.
 > ⚠️ **Senza container, gli agenti AI girano con `--dangerously-skip-permissions` e hanno accesso completo al tuo filesystem.** Usa questa modalita' solo se sai cosa stai facendo o se hai dedicato un PC/VM al solo JHT.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash -s -- --no-docker
+curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker
 ```
 
 In questa modalita' lo script installa Node 20+, tmux, git, Claude CLI, clona la repo in `~/.jht/src`, compila TUI/CLI e crea un simlink `jht` in `~/.local/bin`.
