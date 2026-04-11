@@ -1,0 +1,36 @@
+# Job Hunter Team — Runtime container (root compose)
+#
+# Uso tipico:
+#   docker compose run --rm jht setup
+#   docker compose up -d jht
+#
+# Stato persistente: bind-mount di ~/.jht (config nascosta) e
+# ~/Documents/Job Hunter Team (CV e output visibili).
+#
+# Nota: questo compose è separato da web/docker-compose.yml, che è
+# usato solo per lo sviluppo locale del frontend Next.js.
+
+services:
+  jht:
+    image: ghcr.io/leopu00/jht:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jht
+    environment:
+      - JHT_HOME=/jht_home
+      - JHT_USER_DIR=/jht_user
+      - IS_CONTAINER=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    volumes:
+      - ${HOME}/.jht:/jht_home
+      - ${HOME}/Documents/Job Hunter Team:/jht_user
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
