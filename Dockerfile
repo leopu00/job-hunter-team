@@ -41,6 +41,21 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# shared/* moduli con package.json e dipendenze (es. shared/cron usa
+# croner) devono avere node_modules installato: il CLI li importa a
+# top level e crasha all'avvio se mancano. Questo loop installa solo
+# i moduli che dichiarano dependencies.
+RUN set -eux; \
+    for pkg in shared/*/package.json; do \
+      [ -f "$pkg" ] || continue; \
+      dir=$(dirname "$pkg"); \
+      has_deps=$(node -p "Object.keys(JSON.parse(require('fs').readFileSync('$pkg','utf8')).dependencies||{}).length>0"); \
+      if [ "$has_deps" = "true" ]; then \
+        (cd "$dir" && npm install --omit=dev --no-audit --no-fund); \
+      fi; \
+    done; \
+    npm cache clean --force
+
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
     && chown -R jht:jht /jht_home /jht_user /app

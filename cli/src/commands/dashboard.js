@@ -41,27 +41,39 @@ function openBrowser(url) {
 
 async function findWebDir() {
   const root = getRepoRoot();
-  if (!root) return null;
-  const webDir = join(root, 'web');
-  if (await fileExists(join(webDir, 'package.json'))) return webDir;
-  // Fallback: cerca nella directory corrente
+  if (root) {
+    const webDir = join(root, 'web');
+    if (await fileExists(join(webDir, 'package.json'))) return webDir;
+  }
+  // Fallback: cwd (utile in container, dove .git non e' presente)
   if (await fileExists(join(process.cwd(), 'web', 'package.json'))) return join(process.cwd(), 'web');
+  // Fallback: /app/web (Dockerfile WORKDIR)
+  if (await fileExists('/app/web/package.json')) return '/app/web';
   return null;
 }
 
 function startNextDev(webDir, port) {
-  // In container we must bind to 0.0.0.0 so the host port-forward
-  // hits the Next.js server; locally we keep the default 127.0.0.1.
-  const args = isContainer()
-    ? ['run', 'dev', '--', '-p', String(port), '-H', '0.0.0.0']
-    : ['run', 'dev', '--', '-p', String(port)];
-  const child = spawn('npm', args, {
+  // In container bypass npm and exec next directly so docker stop
+  // delivers SIGTERM to the actual Next.js process (npm doesn't
+  // forward signals reliably and we'd hit SIGKILL after the 10s
+  // grace period). Bind to 0.0.0.0 so the host port-forward hits us.
+  if (isContainer()) {
+    const nextBin = join(webDir, 'node_modules', '.bin', 'next');
+    const child = spawn(nextBin, ['dev', '-p', String(port), '-H', '0.0.0.0'], {
+      cwd: webDir,
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PORT: String(port), HOSTNAME: '0.0.0.0' },
+    });
+    return child;
+  }
+  const child = spawn('npm', ['run', 'dev', '--', '-p', String(port)], {
     cwd: webDir,
-    detached: !isContainer(),
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(port), HOSTNAME: isContainer() ? '0.0.0.0' : process.env.HOSTNAME },
+    env: { ...process.env, PORT: String(port) },
   });
-  if (!isContainer()) child.unref();
+  child.unref();
   return child;
 }
 
@@ -85,9 +97,9 @@ async function handleDashboard(options) {
 
   if (alreadyRunning) {
     console.log(`  ${GREEN}●${RESET}  Dashboard già attiva su ${GREEN}${url}${RESET}`);
-    if (!options.noBrowser) {
-      openBrowser(url);
-      console.log(`  ${DIM}Browser aperto.${RESET}`);
+    if (options.browser !== false && !isContainer()) {
+      const opened = openBrowser(url);
+      if (opened) console.log(`  ${DIM}Browser aperto.${RESET}`);
     }
     console.log('');
     return;
@@ -132,9 +144,10 @@ async function handleDashboard(options) {
   if (ready) {
     console.log(`  ${GREEN}●${RESET}  Dashboard avviata su ${GREEN}${url}${RESET}`);
     console.log(`  ${DIM}PID: ${child.pid}${isContainer() ? ' (foreground)' : ' (in background)'}${RESET}`);
-    if (!options.noBrowser) {
-      openBrowser(url);
-      console.log(`  ${DIM}Browser aperto.${RESET}`);
+    // commander --no-browser sets options.browser=false (no options.noBrowser).
+    if (options.browser !== false && !isContainer()) {
+      const opened = openBrowser(url);
+      if (opened) console.log(`  ${DIM}Browser aperto.${RESET}`);
     }
     if (!isContainer()) {
       console.log(`\n  ${DIM}Per fermare: kill ${child.pid}${RESET}\n`);
