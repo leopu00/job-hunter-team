@@ -15,7 +15,7 @@ const securityHeaders = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https://lh3.googleusercontent.com",
+      "img-src 'self' data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
       "font-src 'self'",
       "connect-src 'self' https://*.supabase.co",
       "frame-src 'none'",
@@ -38,6 +38,10 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com', // Avatar Google OAuth
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com', // Avatar GitHub OAuth
       },
     ],
   },
