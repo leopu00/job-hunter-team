@@ -88,7 +88,7 @@ function ensureHostPaths() {
   return { jhtHome, jhtUser }
 }
 
-function buildDockerArgs({ port, image = DEFAULT_IMAGE }) {
+function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--no-browser'] }) {
   const { jhtHome, jhtUser } = ensureHostPaths()
   const args = [
     'run',
@@ -110,6 +110,9 @@ function buildDockerArgs({ port, image = DEFAULT_IMAGE }) {
     'MOONSHOT_API_KEY',
     'CLAUDE_CODE_OAUTH_TOKEN',
     'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ]) {
     if (process.env[key]) {
       args.push('-e', key)
@@ -117,6 +120,9 @@ function buildDockerArgs({ port, image = DEFAULT_IMAGE }) {
   }
   args.push('-p', `${port}:3000`)
   args.push(image)
+  for (const a of cmd) {
+    args.push(a)
+  }
   return args
 }
 
