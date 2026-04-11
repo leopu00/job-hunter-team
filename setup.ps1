@@ -3,7 +3,7 @@
 # DEPRECATO: questo script e' l'onboarding legacy da dentro la repo clonata.
 #            Per l'installazione standard su WSL preferisci:
 #
-#   curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
+#   curl -fsSL https://jobhunterteam.ai/install.sh | bash
 #
 # setup.ps1 resta per chi lavora nativo Windows senza WSL e vuole un
 # onboarding idempotente delle dipendenze Python/Node dal source.
@@ -18,7 +18,7 @@ $Steps = 10
 Write-Host ""
 Write-Host "[!!] setup.ps1 e' il flow legacy." -ForegroundColor Yellow
 Write-Host "     Per l'installazione standard (WSL) usa:"
-Write-Host "     curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash" -ForegroundColor White
+Write-Host "     curl -fsSL https://jobhunterteam.ai/install.sh | bash" -ForegroundColor White
 Write-Host ""
 
 # ── Colori ────────────────────────────────────────────────────────────────────
