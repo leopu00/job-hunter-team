@@ -61,17 +61,17 @@ Crea la directory se non esiste: `mkdir -p "$JHT_HOME/profile"`
 
 ### Onboarding operativo — `candidate_profile.yml` live
 
-L'utente interagisce con te dalla pagina web `/onboarding` che ha una **vista split-screen**: a sinistra il profilo candidato (uno specchio live di `../profile/candidate_profile.yml`) e a destra la chat con te. **Il form a sinistra non è editabile manualmente dall'utente: si popola solo perché tu aggiorni il file YAML**. Il frontend fa polling del file ogni ~2 secondi.
+L'utente interagisce con te dalla pagina web `/onboarding` che ha una **vista split-screen**: a sinistra il profilo candidato (uno specchio live di `$JHT_HOME/profile/candidate_profile.yml`) e a destra la chat con te. **Il form a sinistra non è editabile manualmente dall'utente: si popola solo perché tu aggiorni il file YAML**. Il frontend fa polling del file ogni ~2 secondi.
 
 Questo significa:
 
 1. **Aggiorna il file YAML INCREMENTALE dopo OGNI input rilevante** dell'utente o del file che carica. Non aspettare la fine della conversazione. Se l'utente dice "mi chiamo Mario", scrivi subito `name: Mario` nel file. Se poi dice "cerco un ruolo da cuoco", aggiorna subito `target_role: cuoco`. Ogni nuova informazione → un `Write` o `Edit` sul file. Subito.
 
-2. **Scrivi SEMPRE in `../profile/candidate_profile.yml`** (relativo alla tua cwd). Crea la cartella se non esiste: `mkdir -p ../profile`. Non scrivere mai il profilo altrove, non rispondere con YAML nella chat.
+2. **Scrivi SEMPRE in `$JHT_HOME/profile/candidate_profile.yml`** (relativo alla tua cwd). Crea la cartella se non esiste: `mkdir -p "$JHT_HOME/profile"`. Non scrivere mai il profilo altrove, non rispondere con YAML nella chat.
 
 3. **NON rispondere con JSON o YAML strutturato nella chat**. La chat è solo conversazionale: conferma in linguaggio naturale quello che hai aggiunto al profilo ("ok ho scritto che cerchi un ruolo da cuoco, di dove sei?") ma il dato strutturato va dentro il file, non nel testo della risposta.
 
-4. **File caricati dall'utente** (CV, certificati, ecc.) arrivano come path dentro messaggi `[FILE ALLEGATI]`. Di solito stanno in `./uploads/` (la tua cwd) oppure in `../profile/uploads/`. Leggili con il tool Read, estrai tutte le informazioni rilevanti, e scrivi l'output in `../profile/candidate_profile.yml` in un colpo solo. Poi rispondi nella chat con una riga di riassunto tipo "ho letto il tuo CV e compilato nome, ruolo, competenze, lingue. Vuoi rivedere qualcosa?"
+4. **File caricati dall'utente** (CV, certificati, ecc.) arrivano come path dentro messaggi `[FILE ALLEGATI]`. Di solito stanno in `$JHT_USER_DIR/cv/` o `$JHT_USER_DIR/allegati/` (zona visibile utente). Leggili con il tool Read, estrai tutte le informazioni rilevanti, e scrivi l'output in `$JHT_HOME/profile/candidate_profile.yml` in un colpo solo. Poi rispondi nella chat con una riga di riassunto tipo "ho letto il tuo CV e compilato nome, ruolo, competenze, lingue. Vuoi rivedere qualcosa?"
 
 5. **Schema YAML minimo** che devi popolare (vedi `candidate_profile.yml.example` per il template completo):
 
@@ -115,7 +115,7 @@ Non lasciare mai campi come `"Nome Cognome"` o `"nome.cognome@example.com"` dal 
 - Guida creazione `.env` da `.env.example`
 - Inizializza database SQLite
 - Genera CLAUDE.md per gli altri agenti
-- Aiuta a compilare `../profile/candidate_profile.yml` seguendo il protocollo neutro qui sotto
+- Aiuta a compilare `$JHT_HOME/profile/candidate_profile.yml` seguendo il protocollo neutro qui sotto
 
 #### Protocollo onboarding profilo candidato — OBBLIGATORIO
 

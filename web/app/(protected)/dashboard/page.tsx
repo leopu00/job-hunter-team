@@ -63,9 +63,8 @@ export default async function DashboardPage() {
   } else {
     // Local mode: se non esiste un profilo valido, canalizza l'utente verso
     // l'onboarding split-screen (form live + assistente) invece di mostrare
-    // una dashboard vuota.
-    const ws = await getWorkspacePath()
-    const localProfile = ws ? readWorkspaceProfile(ws) : null
+    // una dashboard vuota. Path JHT fissi, readWorkspaceProfile() senza arg.
+    const localProfile = readWorkspaceProfile()
     if (!localProfile) redirect('/onboarding')
   }
 
