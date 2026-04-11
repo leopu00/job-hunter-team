@@ -88,7 +88,7 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 | **Backend** | Node.js · TypeScript · Zod |
 | **Frontend** | Next.js · Tailwind CSS |
 | **Database** | Supabase (PostgreSQL, Frankfurt) · SQLite (locale) |
-| **Auth** | Google OAuth · credenziali AES-256 |
+| **Auth** | Google OAuth · GitHub OAuth · Cloud Sync Tokens · credenziali AES-256 |
 | **LLM** | Claude · OpenAI · Minimax (factory pattern) |
 | **CI/CD** | GitHub Actions · 6 workflow · Vercel |
 | **Test** | Vitest · 800+ test case · 168 file |
