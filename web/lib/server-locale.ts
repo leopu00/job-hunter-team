@@ -3,11 +3,11 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { homedir } from 'node:os'
+import { JHT_HOME } from '@/lib/jht-paths'
 
 export type ServerLocale = 'it' | 'en' | 'hu'
 
-const PREFS_PATH = path.join(homedir(), '.jht', 'i18n-prefs.json')
+const PREFS_PATH = path.join(JHT_HOME, 'i18n-prefs.json')
 
 export function getServerLocale(): ServerLocale {
   try {
