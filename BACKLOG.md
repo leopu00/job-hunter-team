@@ -58,8 +58,9 @@ Obiettivo: la web app funziona end-to-end con dati reali.
   - ✅ Schema `cloud_sync_tokens` applicato (migration 006, RLS per-user)
   - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete via `revoked_at`)
   - ✅ UI `/settings/cloud-sync` per generare/revocare token (token in chiaro mostrato una sola volta)
-  - ⬜ CLI command `jht cloud enable` — riceve token e lo salva in `~/.jht/cloud.json` (chmod 0600)
-  - ⬜ Endpoint `/api/cloud-sync/push` che accetta `Authorization: Bearer jht_sync_...`, verifica hash token, aggiorna `last_used_at` e scrive metadati in `positions/applications/scores`
+  - ✅ Endpoint `/api/cloud-sync/ping` — verifica Bearer token via admin client, ritorna `user_id` + aggiorna `last_used_at` (usato dalla CLI per validare il token al momento dell'enable)
+  - ✅ CLI commands `jht cloud enable/status/disable` — salva token in `~/.jht/cloud.json` (chmod 0600), `--url` per self-hosted o dev locale
+  - ⬜ Endpoint `/api/cloud-sync/push` che accetta metadati da sincronizzare (`positions/applications/scores`) con la stessa Bearer auth
   - ⬜ Sync loop locale: diff SQLite → cloud ogni N minuti (configurabile, default 10)
   - ⬜ Integrazione Google Drive scope `drive.file` per upload CV/cover letter (solo file creati da JHT, privacy-safe)
   - ⬜ Toggle "Enable cloud sync" nel launcher desktop + wizard CLI
