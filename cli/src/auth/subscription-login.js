@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { randomBytes, createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import { openInBrowser, isRemoteEnvironment } from './browser-open.js';
+import { isContainer } from '../../../shared/runtime/container.js';
 
 const CALLBACK_PORT = 3737;
 const CALLBACK_PATH = '/callback';
@@ -120,7 +121,7 @@ export async function startSubscriptionLogin({ authorizeUrl, clientId, scopes, p
 
   const url = buildAuthorizeUrl({ authorizeUrl, clientId, challenge, state, scopes });
 
-  const remote = isRemoteEnvironment();
+  const remote = isRemoteEnvironment() || isContainer();
 
   if (remote && prompter) {
     // Fallback manuale: mostra URL, chiedi il codice

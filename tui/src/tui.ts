@@ -14,6 +14,7 @@ import { ProfileWizardPanel } from "./components/profile-wizard-panel.js";
 import { createTuiClient, loadApiKey } from "./tui-client.js";
 import { ensureWorkspaceConfigured, saveApiKey, runSetupWizard } from "./tui-setup.js";
 import { JHT_USER_DIR } from "./tui-paths.js";
+import { isContainer } from "./tui-runtime.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { DashboardPanel } from "./components/dashboard-panel.js";
@@ -505,6 +506,12 @@ export async function runJhtTui() {
         
         switch (selectedItem.type) {
           case "workspace": {
+            if (isContainer()) {
+              aiChatPanel.addSystem(`Cartella utente: ${JHT_USER_DIR} (apri da host, qui sei in container)`);
+              setActivityStatus("path stampato (container)");
+              tui.requestRender(true);
+              break;
+            }
             const opener = process.platform === "darwin" ? "open"
               : process.platform === "win32" ? "explorer"
               : "xdg-open";

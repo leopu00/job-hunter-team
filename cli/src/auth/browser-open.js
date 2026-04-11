@@ -7,6 +7,7 @@
 
 import { execSync } from 'node:child_process';
 import { platform } from 'node:os';
+import { isContainer } from '../../../shared/runtime/container.js';
 
 /**
  * Rileva se siamo in un ambiente remoto (SSH) dove non c'è browser.
@@ -34,6 +35,7 @@ function isWSL() {
  * @returns {string | null} comando, o null se non disponibile
  */
 function resolveBrowserCommand() {
+  if (isContainer()) return null;
   if (isRemoteEnvironment()) return null;
 
   const os = platform();
