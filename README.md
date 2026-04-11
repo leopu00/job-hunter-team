@@ -123,28 +123,38 @@ Ogni agente è una sessione Claude Code autonoma con un file `CLAUDE.md` dedicat
 ### Installer one-liner (macOS / Linux / WSL)
 
 ```bash
+# Default: gli agenti girano in container, isolati dal filesystem host
 curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash
 ```
 
-Lo script rileva il sistema, installa le dipendenze mancanti (Node 20+, tmux, git, Claude CLI), clona la repo in `~/.jht/src`, compila TUI e CLI, crea un simlink `jht` in `~/.local/bin` e lancia il setup wizard.
+Lo script rileva il sistema, installa il runtime container (**Colima** su macOS, **docker.io** su Linux/WSL2), scarica l'immagine ufficiale `ghcr.io/leopu00/jht:latest` e crea un wrapper `jht` in `~/.local/bin` che fa `docker run` con due sole cartelle bind-mountate dall'host:
 
-**Dopo l'installazione** trovi due cartelle:
+- `~/.jht/` → `/jht_home` — zona nascosta: config, database, agenti, credenziali. **Non toccare.**
+- `~/Documents/Job Hunter Team/` → `/jht_user` — zona visibile: droppa qui i tuoi CV (`cv/`), allegati (`allegati/`) e leggi gli output generati (`output/`).
 
-- `~/.jht/` — zona nascosta: config, database, agenti, credenziali. **Non toccare.**
-- `~/Documents/Job Hunter Team/` — zona visibile: droppa qui i tuoi CV (`cv/`), allegati (`allegati/`) e leggi gli output generati (`output/`).
+Tutto il resto del filesystem **non e' visibile** agli agenti.
 
 Per aggiornare: ri-esegui il comando curl sopra.
 
-> ⚠️ **Docker fortemente consigliato** se JHT gira sul tuo PC personale quotidiano. Gli agenti AI girano con `--dangerously-skip-permissions` e avrebbero accesso al tuo filesystem. Quando il flag sara' disponibile (vedi [roadmap Docker](docs/ROADMAP.md#-docker--roadmap-future-non-in-fase-1)) sara' opt-in con `--with-docker`. Se stai dedicando un PC/VM solo a JHT, puoi ignorare il warning.
+#### Modalita' nativa (expert mode)
+
+> ⚠️ **Senza container, gli agenti AI girano con `--dangerously-skip-permissions` e hanno accesso completo al tuo filesystem.** Usa questa modalita' solo se sai cosa stai facendo o se hai dedicato un PC/VM al solo JHT.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/main/scripts/install.sh | bash -s -- --no-docker
+```
+
+In questa modalita' lo script installa Node 20+, tmux, git, Claude CLI, clona la repo in `~/.jht/src`, compila TUI/CLI e crea un simlink `jht` in `~/.local/bin`.
 
 ### Desktop Launcher
 
-- **macOS**: pacchetto `.dmg`
+- **macOS**: pacchetto `.dmg` (Colima incluso, niente Docker Desktop)
 - **Windows**: installer `.exe` (NSIS)
 - **Linux**: `.AppImage` e `.deb`
 
 Scarica il pacchetto corretto dalla pagina [`/download`](https://jobhunterteam.ai/download) o da GitHub Releases.
-Il launcher include il payload web gia compilato, avvia il runtime locale e apre la dashboard nel browser.
+
+Il launcher avvia automaticamente il runtime container `ghcr.io/leopu00/jht:latest` con i mount/env del contratto e apre la dashboard nel browser. Su macOS bootstrappa Colima al primo avvio se non e' gia' attivo. Per disattivare il container e cadere in modalita' nativa (debug / sviluppo): avvia con `JHT_NO_DOCKER=1`.
 
 ### Installazione da Sorgente (per contribuire)
 
