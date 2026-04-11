@@ -80,10 +80,92 @@ if [ "$MODE" = "fast" ]; then
   effort="low"
 fi
 
-# Verifica prerequisiti
-if ! command -v claude &>/dev/null; then
-  echo "Errore: comando 'claude' non trovato."
-  echo "Installa Claude CLI: https://claude.ai/download"
+# ── Selezione provider CLI (multi-provider) ──────────────────────────────────
+# Legge ~/.jht/jht.config.json per scegliere tra claude / codex / kimi
+# e capire se usare api_key (env var) o subscription (sessione CLI esistente).
+# Default: claude subscription (comportamento pre-multi-provider).
+
+JHT_CONFIG_FILE="${HOME}/.jht/jht.config.json"
+
+extract_provider_info() {
+  local cfg="$1"
+  if ! [ -f "$cfg" ]; then
+    echo "||"
+    return
+  fi
+  if command -v python3 &>/dev/null; then
+    python3 - "$cfg" 2>/dev/null <<'PYEOF' || echo "||"
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        c = json.load(f)
+    active = c.get("active_provider", "") or ""
+    prov = (c.get("providers") or {}).get(active, {}) if active else {}
+    auth = prov.get("auth_method", "") or ""
+    key = prov.get("api_key", "") or ""
+    print(f"{active}|{auth}|{key}")
+except Exception:
+    print("||")
+PYEOF
+  elif command -v jq &>/dev/null; then
+    local active auth key
+    active=$(jq -r '.active_provider // ""' "$cfg" 2>/dev/null || echo "")
+    if [ -n "$active" ]; then
+      auth=$(jq -r ".providers[\"$active\"].auth_method // \"\"" "$cfg" 2>/dev/null || echo "")
+      key=$(jq -r ".providers[\"$active\"].api_key // \"\"" "$cfg" 2>/dev/null || echo "")
+    else
+      auth=""
+      key=""
+    fi
+    echo "${active}|${auth}|${key}"
+  else
+    echo "||"
+  fi
+}
+
+IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_CONFIG_FILE")"
+
+# Default: Claude subscription
+CLI_BIN="claude"
+CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+CLI_ENV_PREFIX=""
+
+case "$PROVIDER" in
+  ""|anthropic|claude)
+    CLI_BIN="claude"
+    CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+    if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
+      CLI_ENV_PREFIX="ANTHROPIC_API_KEY='${API_KEY}' "
+    fi
+    ;;
+  openai)
+    CLI_BIN="codex"
+    CLI_ARGS=""
+    if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
+      CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
+    fi
+    ;;
+  kimi|moonshot)
+    CLI_BIN="kimi"
+    CLI_ARGS=""
+    if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
+      CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
+    fi
+    ;;
+  *)
+    echo "Warning: provider '$PROVIDER' non riconosciuto in jht.config.json, fallback a claude."
+    ;;
+esac
+
+# Verifica prerequisiti della CLI scelta
+if ! command -v "$CLI_BIN" &>/dev/null; then
+  echo "Errore: comando '$CLI_BIN' non trovato (provider configurato: ${PROVIDER:-claude})."
+  case "$CLI_BIN" in
+    claude) echo "Installa Claude CLI: https://claude.ai/download" ;;
+    codex)  echo "Installa Codex CLI: https://github.com/openai/codex" ;;
+    kimi)   echo "Installa Kimi CLI del provider Moonshot." ;;
+  esac
+  echo "In alternativa, modifica ~/.jht/jht.config.json per usare un altro provider."
   exit 1
 fi
 if ! command -v tmux &>/dev/null; then
@@ -125,6 +207,8 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
+FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
+
 send_env_vars() {
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
@@ -145,20 +229,20 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
   tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
-  tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" Enter
+  tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
   sleep 8
   tmux send-keys -t "$SESSION" Enter
 else
   tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
   send_env_vars
-  tmux send-keys -t "$SESSION" "claude --dangerously-skip-permissions --effort $effort" C-m
+  tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-accept workspace trust dialog (Enter in background dopo qualche secondo)
-  # L'Enter extra e' innocuo se Claude e' gia' partito (input vuoto = ignorato)
+  # L'Enter extra e' innocuo se la CLI e' gia' partita (input vuoto = ignorato)
   (sleep 4 && tmux send-keys -t "$SESSION" Enter && sleep 3 && tmux send-keys -t "$SESSION" Enter) &>/dev/null &
 fi
 
-echo "✓ $SESSION avviato (effort: $effort, mode: $MODE)"
+echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
