@@ -4,5 +4,11 @@
   "installCommand": "npm install && cd web && npm install",
   "outputDirectory": "web/.next",
   "regions": ["cdg1"],
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/install.sh",
+      "destination": "https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/install.sh"
+    }
+  ]
 }
