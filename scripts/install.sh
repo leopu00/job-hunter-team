@@ -552,12 +552,14 @@ final_message() {
     printf "  ${DIM}  ~/Documents/Job Hunter Team/  → CV, allegati, output${RESET}\n"
     printf "\n"
   fi
-  printf "  ${BOLD}Prossimo passo:${RESET} avvia JHT\n"
+  printf "  ${BOLD}Prossimo passo:${RESET} avvia il wizard di setup\n"
   printf "\n"
   if [ "${PATH_READY:-0}" -eq 1 ]; then
-    printf "      ${BOLD}jht${RESET}\n"
+    printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
+    printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
   else
-    printf "      ${BOLD}%s/jht${RESET}\n" "$BIN_DIR"
+    printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
+    printf "      ${BOLD}%s/jht dashboard${RESET}\n" "$BIN_DIR"
   fi
   printf "\n"
   printf "  ${DIM}Per disinstallare:${RESET}\n"
@@ -584,7 +586,7 @@ maybe_onboard() {
     n|N|no|NO) info "Wizard saltato. Esegui 'jht' quando sei pronto." ;;
     *)
       export PATH="$BIN_DIR:$PATH"
-      jht || warn "Il wizard e' uscito con errore. Rilancialo con 'jht'."
+      jht setup || warn "Il wizard e' uscito con errore. Rilancialo con 'jht setup'."
       ;;
   esac
 }
