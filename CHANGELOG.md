@@ -18,6 +18,10 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 - Endpoint `/api/cloud-sync/ping` per verifica Bearer token (usa service-role admin client per bypassare RLS), aggiorna `last_used_at` a ogni verifica
 - CLI commands `jht cloud enable/status/disable` — `enable` valida il token contro `/api/cloud-sync/ping` e lo persiste in `~/.jht/cloud.json` (chmod 0600); `--url` supporta self-hosted e sviluppo locale
 - Nuovo helper `web/lib/supabase/admin.ts` per client service-role usato solo lato server
+- Migration 007: constraint `UNIQUE (user_id, legacy_id)` su `positions` per permettere upsert atomico delle righe sincronizzate da SQLite locale
+- Endpoint `POST /api/cloud-sync/push` che accetta batch di `positions/scores/applications`: upsert idempotente di positions via `legacy_id`, build del mapping legacy_id → UUID, upsert di scores e applications con i nuovi UUID come FK. Normalizzazione di `status` e `critic_verdict` contro le enum Supabase
+- CLI command `jht cloud push` che legge SQLite tramite `node:sqlite` built-in (richiede Node 22.5+, zero native deps), supporta `--db <path>` e `--dry-run`, gestisce gracefully database/tabelle mancanti
+- Nuovo helper `web/lib/cloud-sync/auth.ts` con `verifyBearerToken` condiviso tra ping e push
 
 ---
 
