@@ -196,11 +196,6 @@ function DownloadContent() {
                             {platform.available ? t('dl_download') : t('dl_view_release')}
                           </a>
                         </div>
-                        {!platform.available && (
-                          <p className="mt-2 text-[10px] text-[var(--color-yellow)]">
-                            {t('dl_asset_pending')}
-                          </p>
-                        )}
                       </div>
                     </div>
                   )
