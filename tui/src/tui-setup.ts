@@ -340,7 +340,11 @@ export async function runSetupWizard(): Promise<string> {
       provider: state.provider as WorkspaceProvider,
       prompt: promptAPI,
       openUrl: async (url) => {
-        // Apri URL nel browser di default
+        const { isContainer } = await import("./tui-runtime.js");
+        if (isContainer()) {
+          state.message = `Apri questo URL nel browser host:\n  ${url}`;
+          return;
+        }
         const { spawn } = await import("node:child_process");
         const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
         spawn(command, [url], { detached: true, stdio: "ignore" });
