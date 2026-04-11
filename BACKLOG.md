@@ -60,8 +60,9 @@ Obiettivo: la web app funziona end-to-end con dati reali.
   - ✅ UI `/settings/cloud-sync` per generare/revocare token (token in chiaro mostrato una sola volta)
   - ✅ Endpoint `/api/cloud-sync/ping` — verifica Bearer token via admin client, ritorna `user_id` + aggiorna `last_used_at` (usato dalla CLI per validare il token al momento dell'enable)
   - ✅ CLI commands `jht cloud enable/status/disable` — salva token in `~/.jht/cloud.json` (chmod 0600), `--url` per self-hosted o dev locale
-  - ⬜ Endpoint `/api/cloud-sync/push` che accetta metadati da sincronizzare (`positions/applications/scores`) con la stessa Bearer auth
-  - ⬜ Sync loop locale: diff SQLite → cloud ogni N minuti (configurabile, default 10)
+  - ✅ Endpoint `/api/cloud-sync/push` — accetta batch `positions/scores/applications`, upsert idempotente via constraint `(user_id, legacy_id)` (migration 007), mapping legacy_id → UUID per FK scores/applications
+  - ✅ CLI command `jht cloud push` — legge SQLite via `node:sqlite` built-in (nessuna native dep), `--db` + `--dry-run`, one-shot manual trigger
+  - ⬜ Sync loop periodico (daemon/cron): diff SQLite → cloud ogni N minuti (configurabile, default 10)
   - ⬜ Integrazione Google Drive scope `drive.file` per upload CV/cover letter (solo file creati da JHT, privacy-safe)
   - ⬜ Toggle "Enable cloud sync" nel launcher desktop + wizard CLI
   - ⬜ Documentazione: path upgrade verso self-hosted Supabase per utenti tecnici (BYO backend)
