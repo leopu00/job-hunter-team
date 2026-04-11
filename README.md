@@ -135,6 +135,8 @@ Lo script rileva il sistema, installa le dipendenze mancanti (Node 20+, tmux, gi
 
 Per aggiornare: ri-esegui il comando curl sopra.
 
+> ⚠️ **Docker fortemente consigliato** se JHT gira sul tuo PC personale quotidiano. Gli agenti AI girano con `--dangerously-skip-permissions` e avrebbero accesso al tuo filesystem. Quando il flag sara' disponibile (vedi [roadmap Docker](docs/ROADMAP.md#-docker--roadmap-future-non-in-fase-1)) sara' opt-in con `--with-docker`. Se stai dedicando un PC/VM solo a JHT, puoi ignorare il warning.
+
 ### Desktop Launcher
 
 - **macOS**: pacchetto `.dmg`
