@@ -55,7 +55,7 @@ function scanProfiles(): Profile[] {
       if (p) profiles.push(p);
     }
   }
-  if (profiles.length === 0) return generateSampleProfiles();
+  if (profiles.length === 0) return [];
   return profiles;
 }
 

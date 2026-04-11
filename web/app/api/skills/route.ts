@@ -43,8 +43,8 @@ function load(): SkillStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as SkillStore
-    return Array.isArray(parsed?.skills) ? parsed : { version: 1, skills: SAMPLE_SKILLS }
-  } catch { return { version: 1, skills: SAMPLE_SKILLS } }
+    return Array.isArray(parsed?.skills) ? parsed : { version: 1, skills: [] }
+  } catch { return { version: 1, skills: [] } }
 }
 
 function save(store: SkillStore) {

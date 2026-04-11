@@ -75,10 +75,10 @@ const FALLBACK_PLATFORMS: PlatformData[] = [
     format: 'AppImage',
   },
   {
-    id: 'windows', label: 'Windows', file: `job-hunter-team-${FALLBACK_VERSION}-windows.exe`, size: null,
-    requirements: 'Windows 10/11 (x64)',
+    id: 'windows', label: 'Windows', file: 'jht-launcher.exe', size: '306 KB',
+    requirements: 'Windows 10/11 (x64) + Node.js + Git',
     instructions: [],
-    downloadUrl: `https://github.com/${FALLBACK_REPO}/releases/latest/download/job-hunter-team-${FALLBACK_VERSION}-windows.exe`,
+    downloadUrl: '/downloads/jht-launcher.exe',
     available: true,
     format: 'exe',
   },
@@ -184,7 +184,7 @@ function DownloadContent() {
                             </span>
                           </div>
                         </div>
-                        <div className="mt-4 pt-1">
+                        <div className="mt-auto pt-4">
                           <a href={ctaHref}
                             className="block w-full text-center px-5 py-2 text-[12px] font-bold tracking-wide transition-all no-underline hover:no-underline"
                             style={{

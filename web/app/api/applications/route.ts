@@ -18,7 +18,7 @@ const APPS_PATH = path.join(JHT_HOME, 'applications.json');
 
 function loadApplications(): Application[] {
   try { return JSON.parse(fs.readFileSync(APPS_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function generateSample(): Application[] {

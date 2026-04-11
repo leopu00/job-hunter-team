@@ -40,8 +40,8 @@ function load(): BookmarkStore {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const data = JSON.parse(raw) as BookmarkStore
-    return Array.isArray(data?.bookmarks) ? data : { version: 1, bookmarks: SAMPLE }
-  } catch { return { version: 1, bookmarks: SAMPLE } }
+    return Array.isArray(data?.bookmarks) ? data : { version: 1, bookmarks: [] }
+  } catch { return { version: 1, bookmarks: [] } }
 }
 
 function save(store: BookmarkStore) {

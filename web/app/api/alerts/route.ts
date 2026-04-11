@@ -17,7 +17,7 @@ const ALERTS_PATH = path.join(JHT_HOME, 'alerts.json');
 
 function loadAlerts(): Alert[] {
   try { return JSON.parse(fs.readFileSync(ALERTS_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function saveAlerts(data: Alert[]): void {

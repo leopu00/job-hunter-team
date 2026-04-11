@@ -16,7 +16,7 @@ const SS_PATH = path.join(JHT_HOME, 'saved-searches.json');
 
 function load(): SavedSearch[] {
   try { return JSON.parse(fs.readFileSync(SS_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function save(data: SavedSearch[]): void {

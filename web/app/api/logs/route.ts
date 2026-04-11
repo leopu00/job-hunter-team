@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
 
   const filePath = logFilePath(date)
   let entries = readLogFile(filePath)
-  if (entries.length === 0) entries = generateSampleLogs(date)
+  // no sample fallback — empty until real logs exist
 
   if (level) entries = entries.filter(e => e.level === level)
   if (subsystem) entries = entries.filter(e => e.subsystem === subsystem)

@@ -17,7 +17,7 @@ const COMPANIES_PATH = path.join(JHT_HOME, 'companies.json');
 
 function loadCompanies(): Company[] {
   try { return JSON.parse(fs.readFileSync(COMPANIES_PATH, 'utf-8')); }
-  catch { return generateSample(); }
+  catch { return []; }
 }
 
 function generateSample(): Company[] {
