@@ -73,6 +73,11 @@ desktop/app-payload/
 
 # Download binaries (served at runtime, not committed)
 web/public/downloads/
+
+# Generato dal buildCommand di vercel.json: copia di scripts/install.sh
+# servito su jobhunterteam.ai/install.sh. Non committarlo: la fonte di
+# verita' resta scripts/install.sh, il copy avviene a build time.
+web/public/install.sh
 .next/
 __pycache__/
 *.pyc
