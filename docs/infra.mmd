@@ -1,6 +1,3 @@
-# Infrastruttura Job Hunter Team — Test Mermaid
-
-```mermaid
 graph TB
     subgraph Row1[" "]
         direction LR
@@ -25,24 +22,16 @@ graph TB
             end
             subgraph Storage["💾 Storage (bind-mount)"]
                 direction TB
-                SQLite["📊 SQLite
-                profilo, posizioni,
-                candidature, score"]
-                File["📁 File
-                CV, cover letter,
-                report PDF"]
+                SQLite["📊 SQLite<br/>profilo, posizioni,<br/>candidature, score"]
+                File["📁 File<br/>CV, cover letter,<br/>report PDF"]
             end
             Team <--> Storage
         end
 
         subgraph Cloud["☁️💾 Cloud Storage"]
             direction TB
-            Supabase["☁️📊 Supabase (Frankfurt)
-            profilo, posizioni,
-            candidature, score"]
-            GDrive["☁️📁 Google Drive
-            CV, cover letter,
-            report PDF"]
+            Supabase["☁️📊 Supabase (Frankfurt)<br/>profilo, posizioni,<br/>candidature, score"]
+            GDrive["☁️📁 Google Drive<br/>CV, cover letter,<br/>report PDF"]
         end
 
         Storage -. sync .-> Cloud
@@ -50,13 +39,11 @@ graph TB
 
     subgraph Row2[" "]
         direction LR
-        PC["🖥️ PC locale
-        🐳 Docker
-        🌐 Dashboard :3000"]
-        VPS["☁️🖥️ VPS remoto
-        AWS / GCP / Hetzner
-        🐳 Docker"]
+        PC["🖥️ PC locale<br/>🐳 Docker<br/>🌐 Dashboard :3000"]
+        VPS["☁️🖥️ VPS remoto<br/>AWS / GCP / Hetzner<br/>🐳 Docker"]
+        PC ~~~ VPS
     end
 
-    Docker -- "gira su uno dei due" --> Row2
-```
+    Row1 -- "gira su uno dei due" --> Row2
+
+    style Row2 fill:none,stroke:none,color:transparent
