@@ -1,9 +1,9 @@
 # Infrastruttura Job Hunter Team — Test Mermaid
 
 ```mermaid
-graph TD
+graph LR
     subgraph Docker["🐳 Docker Container"]
-        direction LR
+        direction TB
         subgraph Team["Agent Team"]
             direction TB
             Capitano["👨‍✈️ Capitano (Alfa)"]
@@ -31,4 +31,16 @@ graph TD
         end
         Team <--> Storage
     end
+
+    subgraph Cloud["☁️💾 Cloud Storage"]
+        direction TB
+        Supabase["☁️📊 Supabase (Frankfurt)
+        profilo, posizioni,
+        candidature, score"]
+        GDrive["☁️📁 Google Drive
+        CV, cover letter,
+        report PDF"]
+    end
+
+    Storage -- sync --> Cloud
 ```
