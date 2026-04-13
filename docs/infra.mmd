@@ -28,22 +28,34 @@ graph TB
             Team <--> Storage
         end
 
-        subgraph Cloud["☁️💾 Cloud Storage"]
+        subgraph CloudCol["☁️"]
             direction TB
-            Supabase["☁️📊 Supabase (Frankfurt)<br/>profilo, posizioni,<br/>candidature, score"]
-            GDrive["☁️📁 Google Drive<br/>CV, cover letter,<br/>report PDF"]
+            subgraph Cloud["☁️💾 Cloud Storage"]
+                direction LR
+                Supabase["☁️📊 Supabase (Frankfurt)<br/>profilo, posizioni,<br/>candidature, score"]
+                GDrive["☁️📁 Google Drive<br/>CV, cover letter,<br/>report PDF"]
+                Supabase ~~~ GDrive
+            end
+            Site["🌐☁️ jobhunterteam.ai<br/>Dashboard personale<br/>(Next.js + Vercel)<br/>Dati + File via cloud"]
+            Cloud --> Site
         end
 
-        Storage -. sync .-> Cloud
+        Storage -. sync .-> CloudCol
     end
 
     subgraph Row2[" "]
         direction LR
         PC["🖥️ PC locale<br/>🐳 Docker<br/>🌐 Dashboard :3000"]
         VPS["☁️🖥️ VPS remoto<br/>AWS / GCP / Hetzner<br/>🐳 Docker"]
-        PC ~~~ VPS
+        Cell["📱 Cellulare"]
+        PC ~~~ VPS ~~~ Cell
+        PC -. "📱 Telegram" .- Cell
     end
 
+    Utente["👤 Utente"]
+
     Row1 -- "gira su uno dei due" --> Row2
+    Row2 --> Utente
 
     style Row2 fill:none,stroke:none,color:transparent
+    style CloudCol fill:none,stroke:#999,stroke-dasharray: 5 5
