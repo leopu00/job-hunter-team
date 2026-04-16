@@ -19,6 +19,17 @@
 
       <section class="panel">
         <div class="panel__header">
+          <span>✅ Dipendenze</span>
+          <button id="recheckButton" class="button button--ghost">Ricontrolla</button>
+        </div>
+        <ul id="depsList" class="deps-list" aria-live="polite">
+          <li class="deps-list__placeholder">Controllo in corso…</li>
+        </ul>
+        <p id="depsSummary" class="hint"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
           <span>🟢 Stato runtime</span>
           <button id="refreshButton" class="button button--ghost">Refresh</button>
         </div>
@@ -64,13 +75,22 @@
         </div>
       </section>
 
+      <section class="panel">
+        <div class="panel__header">
+          <span>📦 Payload</span>
+          <button id="updatePayloadButton" class="button button--ghost" disabled>Aggiorna</button>
+        </div>
+        <p id="payloadStatus" class="hint">Payload: in verifica…</p>
+        <pre id="payloadLog" class="payload-log" hidden></pre>
+      </section>
+
       <section class="panel panel--subtle">
         <div class="panel__header">
           <span>🧠 Note</span>
         </div>
         <ul class="notes">
-          <li>Usa <code>next start</code> se trova una build in <code>web/.next</code>.</li>
-          <li>In assenza di build, va in fallback su <code>next dev</code> per sviluppo locale.</li>
+          <li>Al primo avvio il launcher scarica il payload (solo le cartelle necessarie) in <code>userData/app-payload</code>.</li>
+          <li>Usa <code>next start</code> se trova una build in <code>web/.next</code>, altrimenti <code>next dev</code>.</li>
           <li id="logFileValue">Log file: loading...</li>
         </ul>
       </section>
