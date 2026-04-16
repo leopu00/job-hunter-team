@@ -29,11 +29,6 @@ function resolveRepoRoot(baseDir = __dirname, payloadDir = null) {
     return payloadDir
   }
 
-  const bundledRoot = path.join(process.resourcesPath ?? '', 'app-payload')
-  if (process.defaultApp !== true && process.resourcesPath && hasWebEntry(bundledRoot)) {
-    return bundledRoot
-  }
-
   return path.resolve(baseDir, '..')
 }
 
