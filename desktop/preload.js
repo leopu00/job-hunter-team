@@ -4,7 +4,21 @@ contextBridge.exposeInMainWorld('launcherApi', {
   getStatus: () => ipcRenderer.invoke('launcher:get-status'),
   inspectSetup: () => ipcRenderer.invoke('launcher:inspect-setup'),
   getLogFile: () => ipcRenderer.invoke('launcher:get-log-file'),
+  getPayloadDir: () => ipcRenderer.invoke('launcher:get-payload-dir'),
+  ensurePayload: (options) => ipcRenderer.invoke('launcher:ensure-payload', options),
   start: (options) => ipcRenderer.invoke('launcher:start', options),
   stop: () => ipcRenderer.invoke('launcher:stop'),
   openBrowser: () => ipcRenderer.invoke('launcher:open-browser'),
+  openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
+  onPayloadLog: (callback) => {
+    const listener = (_event, message) => {
+      try {
+        callback(message)
+      } catch {
+        // ignore listener errors
+      }
+    }
+    ipcRenderer.on('launcher:payload-log', listener)
+    return () => ipcRenderer.removeListener('launcher:payload-log', listener)
+  },
 })
