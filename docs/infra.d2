@@ -1,0 +1,217 @@
+# Render: d2 --layout=dagre --dagre-nodesep=45 --dagre-edgesep=10 infra.d2 infra.png
+
+direction: right
+
+row1: "" {
+  style: {
+    stroke: transparent
+    fill: transparent
+  }
+  direction: down
+
+  decision_zone: "" {
+    style.stroke: transparent
+    style.fill: transparent
+
+    docker: "🐳 Docker Container" {
+    team: "🎯 Agent Team" {
+      style.font-size: 20
+      capitano: "👨‍✈️ Captain"
+      scout: "🕵️‍♂️ Scout"
+      analyst: "👨‍🔬 Analyst"
+      scorer: "👨‍💻 Scorer"
+      writer: "👨‍🏫 Writer"
+      critic: "👨‍⚖️ Critic"
+      sentinella: "💂 Sentinel"
+
+      capitano -- scout: {style.stroke: "#555"}
+      capitano -- analyst: {style.stroke: "#555"}
+      capitano -- scorer: {style.stroke: "#555"}
+      capitano -- writer: {style.stroke: "#555"}
+      capitano -- critic: {style.stroke: "#555"}
+      capitano -- sentinella: {style.stroke: "#555"}
+    }
+
+    storage: "💾 Storage" {
+      style.font-size: 20
+      sqlite: {
+        shape: rectangle
+        label: |md
+          **📊 SQLite**
+
+          profile, positions,<br/>applications, score
+        |
+      }
+      file: {
+        shape: rectangle
+        label: |md
+          **📁 File**
+
+          CV, cover letter,<br/>report PDF
+        |
+      }
+    }
+
+    team <-> storage: {style.stroke: "#555"}
+    }
+
+    junction: "Cloud\nor\nLocal?" {
+      shape: diamond
+      style: {
+        fill: "#f3f4f6"
+        stroke: "#555"
+        stroke-width: 2
+      }
+    }
+  }
+
+  cloud_col: "☁️ Cloud" {
+    style: {
+      stroke: "#3b82f6"
+      stroke-dash: 5
+      fill: "#f3f4f6"
+    }
+    cloud: "☁️💾 Cloud Storage" {
+      style.font-size: 20
+      grid-columns: 1
+      grid-gap: 8
+      supabase_box: " " {
+        grid-columns: 2
+        grid-gap: 6
+        style.stroke: transparent
+        style.fill: transparent
+        supabase: " " {
+          shape: image
+          icon: ./icons/supabase.svg
+          width: 22
+          height: 22
+          style.stroke: transparent
+        }
+        supabase_label: "Supabase" {
+          shape: text
+          style.bold: true
+        }
+      }
+      gdrive_box: " " {
+        grid-columns: 2
+        grid-gap: 6
+        style.stroke: transparent
+        style.fill: transparent
+        gdrive: " " {
+          shape: image
+          icon: ./icons/google-drive.svg
+          width: 22
+          height: 22
+          style.stroke: transparent
+        }
+        gdrive_label: "Google Drive" {
+          shape: text
+          style.bold: true
+        }
+      }
+    }
+    vps: "☁️🖥️ VPS" {
+      style.font-size: 20
+      docker: "🐳 Container" {
+        style.stroke-dash: 4
+        style.font-size: 17
+        team: "🎯 Agent Team" {style.bold: true}
+        storage: "💾 Storage" {style.bold: true}
+      }
+    }
+    site: {
+      shape: rectangle
+      label: |md
+        **🌍 Cloud Dashboard**
+
+        ⠀⠀⠀jobhunterteam.ai⠀⠀⠀
+      |
+    }
+  }
+
+}
+
+row2: "" {
+  style: {
+    stroke: transparent
+    fill: transparent
+  }
+  direction: down
+
+  pc: "🖥️ PC" {
+    style.font-size: 20
+    docker: "🐳 Container" {
+      style.stroke-dash: 4
+      style.font-size: 17
+      team: "🎯 Agent Team" {style.bold: true}
+      storage: "💾 Storage" {style.bold: true}
+    }
+    dashboard_locale: {
+      shape: rectangle
+      label: |md
+        **🌐 Local Dashboard**
+
+        ⠀⠀⠀localhost:3000⠀⠀⠀
+      |
+    }
+  }
+  user_zone: "" {
+    style.stroke: transparent
+    style.fill: transparent
+
+    utente: "👤 User"
+    telegram_box: "" {
+      grid-columns: 2
+      grid-gap: 6
+      telegram: "" {
+        shape: image
+        icon: ./icons/telegram.svg
+        width: 22
+        height: 22
+        style.stroke: transparent
+      }
+      telegram_label: "Telegram" {
+        shape: text
+            style.bold: true
+      }
+    }
+    browser_box: "" {
+      grid-columns: 2
+      grid-gap: 6
+      browser: "" {
+        shape: image
+        icon: ./icons/chrome.svg
+        width: 22
+        height: 22
+        style.stroke: transparent
+      }
+      browser_label: "Browser" {
+        shape: text
+            style.bold: true
+      }
+    }
+  }
+}
+
+row1.cloud_col.vps.docker.storage <-> row1.cloud_col.cloud: sync {
+  style.stroke: "#555"
+}
+row2.pc.docker.storage <-> row1.cloud_col.cloud: sync {
+  style.stroke: "#555"
+}
+row2.pc.docker.storage <-> row2.pc.dashboard_locale: {style.stroke: "#555"}
+row2.user_zone.browser_box <-> row1.cloud_col.site: {style.stroke: "#555"}
+row1.cloud_col.cloud <-> row1.cloud_col.site: {style.stroke: "#555"}
+row1.decision_zone.docker -> row1.decision_zone.junction: {
+  target-arrowhead.shape: none
+  style.stroke: "#555"
+}
+row1.decision_zone.junction -> row2.pc.docker: local {style.stroke: "#555"}
+row1.decision_zone.junction -> row1.cloud_col.vps.docker: cloud {style.stroke: "#555"}
+row2.pc.docker.team <-> row2.pc.docker.storage: {style.stroke: "#555"}
+row1.cloud_col.vps.docker.team <-> row1.cloud_col.vps.docker.storage: {style.stroke: "#555"}
+row2.user_zone.utente <-> row2.user_zone.browser_box: {style.stroke: "#555"}
+row2.user_zone.browser_box <-> row2.pc.dashboard_locale: {style.stroke: "#555"}
+row2.user_zone.utente <-> row2.user_zone.telegram_box: {style.stroke: "#555"}
+row2.user_zone.telegram_box <-> row2.pc.docker.team: {style.stroke: "#555"}
+row2.user_zone.telegram_box <-> row1.cloud_col.vps.docker.team: {style.stroke: "#555"}

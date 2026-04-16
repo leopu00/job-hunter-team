@@ -6,11 +6,24 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]*"
 
 jobs:
+  check-version:
+    name: Check tag ↔ package.json versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify tag matches package.json versions
+        run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
+
   build-desktop:
     name: Build Desktop — ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    needs: check-version
     permissions:
       contents: read
+    env:
+      HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,11 +86,44 @@ jobs:
         working-directory: desktop
         run: npm test
 
+      - name: Import macOS code signing certificate
+        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/jht-signing-cert.p12"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
+
+      - name: Warn about unsigned macOS build
+        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING != 'true'
+        run: |
+          echo "::warning::Apple signing secrets are not configured — producing an UNSIGNED DMG."
+          echo "::warning::End users will be blocked by Gatekeeper on first launch."
+          echo "::warning::See docs/release.md for the required secrets."
+
       - name: Build desktop package
         working-directory: desktop
         run: npm run ${{ matrix.build_script }}
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ (matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true') && 'true' || 'false' }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify macOS signature and Gatekeeper acceptance
+        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
+        run: |
+          DMG=$(ls desktop/dist/*.dmg | head -n 1)
+          if [ -z "$DMG" ]; then
+            echo "No DMG produced — cannot verify signature."
+            exit 1
+          fi
+          echo "Inspecting signature of $DMG"
+          codesign -dv --verbose=4 "$DMG" || true
+          echo "Asserting Gatekeeper acceptance"
+          spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 
       - name: Verify expected desktop artifact
         run: |
@@ -97,6 +143,7 @@ jobs:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs:
+      - check-version
       - build-desktop
     permissions:
       contents: write
