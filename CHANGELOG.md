@@ -5,6 +5,47 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.10] — 2026-04-16
+
+Release focalizzata sui friction point emersi dai test E2E manuali su Windows ARM64 e macOS (vedi `e2e-runs/2026-04-16-windows-arm64-parallels/` e `e2e-runs/2026-04-16-macos-dev-machine/`).
+
+### Desktop launcher
+- Nuova **checklist dipendenze** in-app che rileva Docker, Node (≥20), Git e Python con hint di installazione per OS; Start è bloccato finché le dipendenze obbligatorie non sono OK — fix al gap UX trovato durante i test (app non segnalava nulla se mancava Docker)
+- **Thin launcher**: rimosso `extraResources: app-payload` da electron-builder; il payload (webapp) viene scaricato in `userData/app-payload` al primo Start via git sparse-checkout e aggiornabile da UI. Dimensioni `JHT Desktop.app` da ~300 MB a footprint più leggero; niente re-download dell'installer per ogni update della webapp
+- Nuovo pulsante "Come installare" per ogni dipendenza mancante, apre la doc ufficiale in browser
+- `launcher:open-external` IPC handler con whitelist http/https
+
+### macOS code signing & notarization
+- Config electron-builder con `hardenedRuntime: true`, `notarize: true`, `desktop/build/entitlements.mac.plist` (set minimale: JIT, unsigned-executable-memory, network.client)
+- Workflow release importa cert da `MACOS_CERTIFICATE` + `MACOS_CERTIFICATE_PWD`, passa `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` a `@electron/notarize`
+- Verifica post-build con `codesign -dv --verbose=4` e `spctl --assess` — fallisce il job mac se Gatekeeper non accetta il DMG
+- Fallback a build **unsigned** quando i secrets mancano (warning, build non fallisce → altri OS pubblicano comunque)
+- Playbook maintainer in `docs/release.md` con tutti gli step: CSR → `.p12` → base64, App-Specific Password, Team ID, rotazione certificato
+
+### Release pipeline
+- Nuovo `scripts/check-release-version.sh` come **primo job CI**: verifica che tag git (`vX.Y.Z`), `package.json` root e `desktop/package.json` siano sulla stessa versione. Blocca la release con exit non-zero se c'è mismatch — fix al bug visto in v0.1.8 (tag `v0.1.8` con asset nominati `0.1.7` perché `desktop/package.json` non era stato bumpato)
+- Pre-release checklist per il maintainer in `docs/release.md`
+
+### Windows
+- **Build ARM64 nativa**: `desktop/package.json` ora produce sia `job-hunter-team-<ver>-windows-x64.exe` sia `job-hunter-team-<ver>-windows-arm64.exe`. Prima c'era solo x64 → su Windows ARM (Surface, Snapdragon, VM Apple Silicon) girava in emulazione
+
+### Download page
+- `/download` rileva OS e architettura dell'utente **server-side via User-Agent** (`Windows NT ... ARM64` / `aarch64`, `Mac OS X` → default arm64, `Linux`)
+- Mostra una sola CTA primaria con link diretto all'asset corretto della **ultima release** (fetched via `api.github.com/repos/.../releases/latest` con `revalidate: 300`)
+- "Altre opzioni" collassabile per gli altri OS/arch
+- **Niente più redirect a GitHub Releases** — l'utente resta su `jobhunterteam.ai`
+- API `/api/download` riorganizzata attorno al concetto di "variant" (id + arch), backward-compatible con il campo `platforms`
+
+### CLI install
+- `scripts/install.sh --dry-run` stampa ogni comando che verrebbe eseguito senza toccare il sistema (utile per debug e pairing)
+- `setup.ps1` allineato a `install.sh` sui dependency checks (parità minima, non è un rewrite completo)
+- Nuovo `docs/cli-install.md` con descrizione AS-IS dello script e sezione "tested environments"
+
+### Known issues (non risolti in questa release)
+- **F4**: installer Windows si chiude silenziosamente dopo la 2ª schermata al **primo** doppio click (al secondo tentativo parte regolare). Root cause non identificata — va riprodotta su VM fresca guardando Event Viewer e `%TEMP%\nsis*.log`. Documentato in `e2e-runs/2026-04-16-windows-arm64-parallels/README.md`
+
+---
+
 ## [0.1.9] — 2026-04-11
 
 ### Auth
