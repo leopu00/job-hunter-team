@@ -5,6 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const containerRuntime = require('./container')
+const { inspectDependencies } = require('./dependencies')
 
 const DEFAULT_PORT = 3000
 const START_TIMEOUT_MS = 20000
@@ -479,9 +480,19 @@ function createRuntimeManager(config = {}) {
     return buildStatus()
   }
 
+  function inspectFullSetup() {
+    const base = inspectWebSetup(repoRoot)
+    const deps = inspectDependencies()
+    return {
+      ...base,
+      dependencies: deps.dependencies,
+      allRequiredOk: deps.allRequiredOk,
+    }
+  }
+
   return {
     getLogFile: () => logFile,
-    inspectSetup: () => inspectWebSetup(repoRoot),
+    inspectSetup: inspectFullSetup,
     getStatus,
     startRuntime,
     stopRuntime,
