@@ -5,6 +5,37 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.11] — 2026-04-17
+
+Release focalizzata sulla riscrittura dell'esperienza del launcher desktop in base al 2° round di test E2E su Windows ARM64 (vedi `e2e-runs/2026-04-17-windows-arm64-round2/`).
+
+### Desktop launcher — riscrittura wizard
+
+- **UI step-based** al posto della pagina unica scrollabile: quattro step discreti — Welcome → Setup → Ready → Running — ognuno con un solo pulsante primario. Il log tecnico non è più visibile di default, sta dietro una disclosure "Dettagli tecnici" nello step Running
+- **Topbar "Alpha · in fase di test"** persistente in tutti gli step, così l'utente sa sempre lo stato del prodotto
+- **Checklist dipendenze essenziale**: la schermata Setup mostra solo Docker (unica dipendenza obbligatoria in container mode). Node/Git/Python sono rimossi dalla superficie principale
+- **Start bloccato** finché Docker non è pronto: il pulsante "Avvia Job Hunter Team" compare solo dallo step Ready, e Ready è raggiungibile solo dopo che la checklist è verde
+
+### Setup wizard — gestione dipendenze
+
+- **Stato Docker a tre valori**: `ok` (pronto), `needs-reboot` (binary presente ma `docker ps` non risponde — tipicamente utente ha installato Docker Desktop ma non ha riavviato), `missing` (non installato)
+- **Flusso install manuale guidato**: quando Docker manca, un pulsante "Scarica installer" apre la pagina ufficiale `docker.com/products/docker-desktop/` nel browser di default. L'utente installa, (se necessario) riavvia, torna al launcher e preme "Ho installato, ricontrolla" / "Ho riavviato, ricontrolla"
+- **Pre-install preview**: prima di installare, la card Docker mostra peso stimato dell'installazione e spazio libero sul disco dell'utente (via `powershell Get-PSDrive` su Windows, `fs.statfs`/`df` su Unix — zero dipendenze npm aggiuntive)
+- Nuovo modulo `desktop/docker-installer/` con `manifest` (strategia per OS), `check` (status a tre valori), `download-url` (URL ufficiale per OS). Policy rispettata: su macOS la strategia è Colima via Homebrew (NON Docker Desktop); su Linux è `get.docker.com`; solo su Windows è Docker Desktop
+
+### IPC
+
+- Nuovo canale `setup:get-docker-status` → `{platform, arch, strategy, check, disk}`
+- Nuovo canale `setup:open-docker-download-page` → apre URL ufficiale Docker in browser
+- Esposti al renderer come `window.setupApi`
+
+### Note
+
+- **F4** (installer Windows si chiude al 1° tentativo, round 1): non affrontato in questa release, ancora aperto
+- Il precedente `launcher:open-external` con whitelist HTTP resta per uso generico; il nuovo `setup:open-docker-download-page` è un endpoint dedicato che non espone URL arbitrari
+
+---
+
 ## [0.1.10] — 2026-04-16
 
 Release focalizzata sui friction point emersi dai test E2E manuali su Windows ARM64 e macOS (vedi `e2e-runs/2026-04-16-windows-arm64-parallels/` e `e2e-runs/2026-04-16-macos-dev-machine/`).
