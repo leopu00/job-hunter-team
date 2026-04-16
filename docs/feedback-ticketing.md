@@ -1,69 +1,69 @@
 # Feedback Ticketing
 
-Runbook operativo per la pagina [`/feedback`](/feedback) e l'API [`/api/feedback`](/api/feedback).
+Operational runbook for the [`/feedback`](/feedback) page and the [`/api/feedback`](/api/feedback) API.
 
-## Stato attuale
+## Current state
 
-- La UI feedback e' esposta nel menu laterale.
-- L'API non usa piu' `~/.jht` nel runtime serverless.
-- In cloud prova prima Supabase (`feedback_tickets`).
-- Se Supabase non e' configurato o la tabella non esiste ancora, fa fallback su `/tmp/jht/feedback.json`.
+- The feedback UI is exposed in the side menu.
+- The API no longer uses `~/.jht` in the serverless runtime.
+- In the cloud it tries Supabase first (`feedback_tickets`).
+- If Supabase isn't configured or the table doesn't exist yet, it falls back to `/tmp/jht/feedback.json`.
 
-## Modalita'
+## Modes
 
-### Modalita' persistente
+### Persistent mode
 
-Richiede:
+Requires:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- migration `supabase/migrations/005_feedback_tickets.sql` applicata
+- migration `supabase/migrations/005_feedback_tickets.sql` applied
 
-In questa modalita':
+In this mode:
 
-- `GET /api/feedback` legge da `feedback_tickets`
-- `POST /api/feedback` inserisce in `feedback_tickets`
-- i dati sopravvivono ai redeploy
+- `GET /api/feedback` reads from `feedback_tickets`
+- `POST /api/feedback` inserts into `feedback_tickets`
+- data survives redeploys
 
-### Modalita' fallback
+### Fallback mode
 
-Si attiva se Supabase non e' configurato o non risponde.
+Kicks in when Supabase isn't configured or doesn't respond.
 
-In questa modalita':
+In this mode:
 
-- l'API legge/scrive su `/tmp/jht/feedback.json`
-- il ticketing non va in `500`
-- i dati non sono garantiti nel lungo periodo
+- the API reads/writes `/tmp/jht/feedback.json`
+- the ticketing endpoint doesn't return `500`
+- data is not guaranteed long-term
 
-## Migration richiesta
+## Required migration
 
 File: [`supabase/migrations/005_feedback_tickets.sql`](/Users/leoneemanuelpuglisi/Repos/job-hunter-team/fullstack-3/supabase/migrations/005_feedback_tickets.sql)
 
-Crea:
+Creates:
 
-- tabella `feedback_tickets`
-- indici su `created_at` e `status`
-- policy RLS `SELECT` e `INSERT` per `anon` e `authenticated`
+- `feedback_tickets` table
+- indexes on `created_at` and `status`
+- RLS `SELECT` and `INSERT` policies for `anon` and `authenticated`
 
 ## Deploy
 
-Deploy produzione:
+Production deploy:
 
 ```bash
 git checkout production
 git pull --ff-only
-git merge --ff-only <branch-da-rilasciare>
+git merge --ff-only <branch-to-release>
 git push origin production
 ```
 
-Note:
+Notes:
 
-- il sito live deve passare da push su `production`, non da `vercel deploy --prod` lanciato da branch locali;
-- crea il tag release solo dopo che il deploy Git di Vercel su `production` e' `READY`.
+- the live site must go through a push to `production`, not `vercel deploy --prod` from local branches;
+- create the release tag only after Vercel's Git deploy on `production` reports `READY`.
 
-## Verifica
+## Verification
 
-Smoke test rapido:
+Quick smoke test:
 
 ```bash
 curl -i https://jobhunterteam.ai/api/feedback
@@ -73,13 +73,13 @@ curl -i -X POST https://jobhunterteam.ai/api/feedback \
 curl -I https://jobhunterteam.ai/feedback
 ```
 
-Atteso:
+Expected:
 
-- `/api/feedback` non deve restituire `500`
-- `POST /api/feedback` deve restituire `200`
-- `/feedback` deve rispondere `200`
+- `/api/feedback` must not return `500`
+- `POST /api/feedback` must return `200`
+- `/feedback` must respond `200`
 
-## Note operative
+## Operational notes
 
-- Se Vercel non ha env Supabase configurate, il sistema resta funzionante ma non persistente.
-- Se vuoi persistenza vera, applica la migration e configura le env Supabase nel progetto Vercel collegato.
+- If Vercel doesn't have the Supabase env vars configured, the system still works but is non-persistent.
+- For real persistence, apply the migration and configure the Supabase env vars in the connected Vercel project.

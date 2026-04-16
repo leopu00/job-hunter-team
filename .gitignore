@@ -85,6 +85,7 @@ __pycache__/
 .vercel/
 dist/
 build/
+!desktop/build/
 
 # ── OS ───────────────────────────────────────────────────────
 .DS_Store
@@ -109,3 +110,8 @@ supabase/.temp/
 # ── DEV SERVER LOGS ──────────────────────────────────────────────────────────
 .next-dev-*.log
 .next-dev-*.err.log
+
+# ── E2E MANUAL TEST RUNS ─────────────────────────────────────────────────────
+# Sessioni manuali di test end-to-end (note, screenshot, output di checkup, ecc.)
+# Gli e2e automatizzati stanno in e2e/ e sono versionati normalmente.
+e2e-runs/
