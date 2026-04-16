@@ -22,3 +22,8 @@ contextBridge.exposeInMainWorld('launcherApi', {
     return () => ipcRenderer.removeListener('launcher:payload-log', listener)
   },
 })
+
+contextBridge.exposeInMainWorld('setupApi', {
+  getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
+  openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
+})
