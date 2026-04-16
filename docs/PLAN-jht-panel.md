@@ -1,44 +1,44 @@
-# PIANO — JHT Panel (archiviato)
+# PLAN — JHT Panel (archived)
 
-**Data originale:** 2026-03-15
-**Stato:** ⚠️ Superato dalla nuova direzione prodotto
-
----
-
-## 📌 Nota
-
-Questo documento descriveva un piano per una **app desktop nativa Rust + egui** che parlasse direttamente con `tmux`.
-
-La direzione attuale del progetto e' diversa:
-
-- 🧭 l'app desktop diventa un **launcher/orchestratore**
-- 🌐 la GUI principale resta la **dashboard web** esistente
-- 🚀 il launcher installa e avvia JHT in background
-- 🔗 quando il runtime locale e' pronto, apre il browser su `http://localhost:3000`
+**Original date:** 2026-03-15
+**Status:** ⚠️ Superseded by the new product direction
 
 ---
 
-## ✅ Nuova direzione
+## 📌 Note
 
-Il piano attivo e' ora quello descritto in:
+This document described a plan for a **native Rust + egui desktop app** talking directly to `tmux`.
+
+The current project direction is different:
+
+- 🧭 the desktop app becomes a **launcher/orchestrator**
+- 🌐 the main GUI stays the existing **web dashboard**
+- 🚀 the launcher installs and starts JHT in the background
+- 🔗 when the local runtime is ready, it opens the browser at `http://localhost:3000`
+
+---
+
+## ✅ New direction
+
+The active plan now lives in:
 
 - [`README.md`](../README.md)
 - [`BACKLOG.md`](../BACKLOG.md)
 - [`docs/ROADMAP.md`](./ROADMAP.md)
 
-In sintesi:
+In short:
 
-- 📦 installer desktop (`.dmg`, `.exe`, `.AppImage`, `.deb`)
-- 🛠️ bootstrap silenzioso del runtime locale
-- 🧠 provider AI a scelta; `Claude CLI` solo se serve davvero
-- 🌍 nessun terminale per l'utente finale
-- 🖥️ esperienza principale nel browser locale, non in una UI desktop riscritta
+- 📦 desktop installer (`.dmg`, `.exe`, `.AppImage`, `.deb`)
+- 🛠️ silent bootstrap of the local runtime
+- 🧠 AI provider is user's choice; `Claude CLI` only when actually required
+- 🌍 no terminal for the end user
+- 🖥️ main experience in the local browser, not in a rewritten desktop UI
 
 ---
 
-## 🗃️ Perche' viene archiviato
+## 🗃️ Why it's archived
 
-- Evita di duplicare la UI gia' esistente in `web/`
-- Riduce drasticamente il codice da mantenere
-- Permette di arrivare prima a pacchetti desktop realmente utili (`.dmg`, `.exe`, `.AppImage`, `.deb`)
-- Mantiene la web dashboard come single source of truth della UX
+- Avoids duplicating the UI already present in `web/`
+- Drastically reduces the code to maintain
+- Gets us to actually useful desktop packages (`.dmg`, `.exe`, `.AppImage`, `.deb`) much sooner
+- Keeps the web dashboard as the single source of truth for UX
