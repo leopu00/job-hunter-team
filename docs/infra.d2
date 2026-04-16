@@ -1,0 +1,113 @@
+direction: down
+
+row1: "" {
+  style: {
+    stroke: transparent
+    fill: transparent
+  }
+  direction: right
+
+  docker: "🐳 Docker Container" {
+    team: "Agent Team" {
+      capitano: "👨‍✈️ Capitano (Alfa)"
+      scout: "🕵️‍♂️ Scout"
+      analyst: "👨‍🔬 Analyst"
+      scorer: "👨‍💻 Scorer"
+      writer: "👨‍🏫 Writer"
+      critic: "👨‍⚖️ Critic"
+      sentinella: "💂 Sentinella"
+
+      capitano -- scout
+      capitano -- analyst
+      capitano -- scorer
+      capitano -- writer
+      capitano -- critic
+      capitano -- sentinella
+    }
+
+    storage: "💾 Storage (bind-mount)" {
+      sqlite: "📊 SQLite\nprofilo, posizioni,\ncandidature, score"
+      file: "📁 File\nCV, cover letter,\nreport PDF"
+    }
+
+    team -> storage
+  }
+
+  cloud_col: "" {
+    style: {
+      stroke: "#999"
+      stroke-dash: 5
+      fill: transparent
+    }
+    cloud: "☁️💾 Cloud Storage" {
+      supabase: "☁️📊 Supabase (Frankfurt)\nprofilo, posizioni,\ncandidature, score"
+      gdrive: "☁️📁 Google Drive\nCV, cover letter,\nreport PDF"
+    }
+    site: "🌐☁️ jobhunterteam.ai\nDashboard personale\n(Next.js + Vercel)\nDati + File via cloud"
+    vps: "☁️🖥️ VPS remoto\nAWS / GCP / Hetzner" {
+      docker: "🐳 Docker" {
+        style.stroke-dash: 4
+        team: "🎯 Agent Team"
+        storage: "💾 Storage"
+      }
+    }
+    cloud <-> site: {
+      style.stroke-dash: 4
+    }
+  }
+
+}
+
+row2: "" {
+  style: {
+    stroke: transparent
+    fill: transparent
+  }
+  direction: right
+
+  pc: "🖥️ PC locale" {
+    docker: "🐳 Docker" {
+      style.stroke-dash: 4
+      team: "🎯 Agent Team"
+      storage: "💾 Storage"
+    }
+    dashboard_locale: "🌐 Dashboard locale\nlocalhost:3000\nNext.js\nDati da Storage"
+    telegram: "💬 Telegram"
+    browser: "🧭 Browser"
+  }
+  cell: "📱 Cellulare" {
+    telegram: "💬 Telegram"
+    browser: "🧭 Browser"
+  }
+}
+
+utente: "👤 Utente"
+junction: "Cloud\nO\nLocale?" {
+  shape: diamond
+  style: {
+    fill: "#fef3c7"
+    stroke: "#f59e0b"
+    stroke-width: 2
+  }
+}
+
+row1.cloud_col.site <-> row2.cell.browser
+row1.cloud_col.vps.docker.storage <-> row1.cloud_col.cloud: sync {
+  style.stroke-dash: 4
+}
+row2.pc.docker.storage <-> row2.pc.dashboard_locale
+row2.pc.browser <-> row1.cloud_col.site
+row1.docker -> junction: {
+  target-arrowhead.shape: none
+}
+junction -> row2.pc.docker
+junction -> row1.cloud_col.vps.docker
+row2.pc.docker.team <-> row2.pc.docker.storage
+row1.cloud_col.vps.docker.team <-> row1.cloud_col.vps.docker.storage
+utente <-> row2.pc.browser
+row2.pc.browser <-> row2.pc.dashboard_locale
+utente <-> row2.cell.browser
+utente <-> row2.pc.telegram
+utente <-> row2.cell.telegram
+row2.pc.telegram <-> row2.pc.docker.team
+row2.cell.telegram <-> row1.cloud_col.vps.docker.team
