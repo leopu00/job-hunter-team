@@ -16,7 +16,7 @@
     "prepare:payload": "node ./scripts/prepare-payload.js",
     "dist": "npm run prepare:payload && electron-builder",
     "dist:mac": "npm run dist -- --mac dmg",
-    "dist:win": "npm run dist -- --win nsis",
+    "dist:win": "npm run dist -- --win nsis --x64 --arm64",
     "dist:linux": "npm run dist -- --linux AppImage deb"
   },
   "devDependencies": {
@@ -51,9 +51,15 @@
       "category": "public.app-category.productivity"
     },
     "win": {
-      "artifactName": "job-hunter-team-${version}-windows.${ext}",
+      "artifactName": "job-hunter-team-${version}-windows-${arch}.${ext}",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "nsis": {
