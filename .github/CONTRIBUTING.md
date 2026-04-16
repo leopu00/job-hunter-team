@@ -76,6 +76,15 @@ Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Cri
 
 Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed by [ADR 0002](../docs/adr/0002-three-supported-agent-clis.md). Adding a fourth CLI requires a new ADR, not just a PR.
 
+## Cutting a release (maintainers)
+
+Releases are published by pushing a `vX.Y.Z` tag to `master`. Bump both
+the root `package.json` and `desktop/package.json` before tagging —
+electron-builder names artifacts after the desktop version, so forgetting
+it ships assets labeled with the previous release number. The full
+checklist (including the version-consistency gate and the Windows x64 /
+ARM64 split) lives in [`docs/release.md`](../docs/release.md).
+
 ## Reporting bugs
 
 Use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) template.

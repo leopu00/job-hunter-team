@@ -15,7 +15,7 @@
     "test": "node --test runtime.test.js dependencies.test.js payload.test.js",
     "dist": "electron-builder",
     "dist:mac": "npm run dist -- --mac dmg",
-    "dist:win": "npm run dist -- --win nsis",
+    "dist:win": "npm run dist -- --win nsis --x64 --arm64",
     "dist:linux": "npm run dist -- --linux AppImage deb"
   },
   "devDependencies": {
@@ -52,9 +52,15 @@
       "notarize": true
     },
     "win": {
-      "artifactName": "job-hunter-team-${version}-windows.${ext}",
+      "artifactName": "job-hunter-team-${version}-windows-${arch}.${ext}",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "nsis": {
