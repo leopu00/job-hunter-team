@@ -1,8 +1,69 @@
-# Release — macOS code signing & notarization
+# Release
+
+Cutting a new release means pushing a `vX.Y.Z` tag to the `master` branch.
+CI then runs `.github/workflows/release.yml`: it verifies the tag matches
+the `version` field in both `package.json` files, builds the desktop apps
+(signed + notarized `.dmg` on macOS, `.AppImage` + `.deb` on Linux, NSIS
+`.exe` for Windows x64 **and** ARM64), and publishes a GitHub Release
+with all the artifacts attached.
+
+The downstream `/download` page resolves the "latest release" from the
+GitHub API and points each OS/arch at the matching asset — so mismatched
+versions or missing architectures surface as broken downloads.
+
+## Pre-release checklist
+
+Run through this checklist on the branch that is about to be tagged:
+
+- [ ] **Bump `version` in the root `package.json`** to the new `X.Y.Z`
+- [ ] **Bump `version` in `desktop/package.json`** to the *same* `X.Y.Z`  
+      (electron-builder uses this field for `artifactName`, so forgetting
+      it produces assets still named after the previous release)
+- [ ] Update `CHANGELOG.md` with the new section — the release workflow
+      extracts this block as the GitHub Release notes
+- [ ] Commit the bump: `chore(release): prepare vX.Y.Z`
+- [ ] Push the commit to `master`
+- [ ] Tag the commit: `git tag vX.Y.Z`
+- [ ] Push the tag: `git push origin vX.Y.Z`
+
+The version-consistency check runs as the first CI job and fails the
+entire workflow if any of the three versions (tag / root / desktop) are
+out of sync. You can reproduce it locally:
+
+```bash
+scripts/check-release-version.sh vX.Y.Z
+```
+
+### If CI fails on the version check
+
+Don't force-push the tag. Delete it, fix the `package.json` files,
+commit, and create a fresh tag pointing at the new commit:
+
+```bash
+git push origin :refs/tags/vX.Y.Z     # remove the broken tag remote-side
+git tag -d vX.Y.Z                     # remove it locally
+# …fix versions, commit, then re-tag…
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+### Windows ARM64
+
+From `v0.1.10` onwards the Windows build produces two NSIS installers,
+one per architecture:
+
+- `job-hunter-team-<version>-windows-x64.exe`
+- `job-hunter-team-<version>-windows-arm64.exe`
+
+Both are uploaded to the same GitHub Release. The `/download` page
+detects ARM64 Windows via User-Agent (`Windows NT ... ARM64` or
+`aarch64`) and shows the matching installer as the primary CTA.
+
+## macOS code signing & notarization
 
 Maintainer playbook for producing a signed, notarized `.dmg` that launches cleanly on end-user Macs (no Gatekeeper warning).
 
-## Why this matters
+### Why this matters
 
 Without a Developer ID signature and Apple notarization, the first launch of `JHT Desktop.app` triggers the "Apple could not verify this app" block on modern macOS. Non-tech users typically close the app at that point. A signed + notarized DMG opens with the standard "downloaded from the Internet" confirmation only.
 
@@ -13,13 +74,13 @@ Two independent steps are required:
 
 The release workflow performs both automatically when the required secrets are configured.
 
-## One-time maintainer setup
+### One-time maintainer setup
 
-### 1. Apple Developer Program
+#### 1. Apple Developer Program
 
 You need an active paid membership at <https://developer.apple.com/programs/> (~99 USD/year). Free accounts cannot issue `Developer ID` certificates.
 
-### 2. Create the Developer ID Application certificate
+#### 2. Create the Developer ID Application certificate
 
 1. Open **Keychain Access** on a Mac.
 2. Menu → _Certificate Assistant_ → _Request a Certificate From a Certificate Authority…_
@@ -30,14 +91,14 @@ You need an active paid membership at <https://developer.apple.com/programs/> (~
 
 Reference: <https://developer.apple.com/help/account/create-certificates/create-developer-id-certificates>
 
-### 3. Export the certificate as `.p12`
+#### 3. Export the certificate as `.p12`
 
 1. In Keychain Access, locate the certificate (type: `Developer ID Application: <Your Name> (<TEAM_ID>)`).
 2. Expand it so both the certificate **and** its private key are selected together.
 3. Right-click → **Export 2 items…** → File Format: **Personal Information Exchange (.p12)**.
 4. Set a strong password. This is the value for the `MACOS_CERTIFICATE_PWD` secret.
 
-### 4. Base64-encode the `.p12` for the GitHub secret
+#### 4. Base64-encode the `.p12` for the GitHub secret
 
 ```bash
 base64 -i developer-id.p12 | pbcopy
@@ -45,7 +106,7 @@ base64 -i developer-id.p12 | pbcopy
 
 On Linux use `base64 -w0 developer-id.p12`. The output is the value for the `MACOS_CERTIFICATE` secret — one single base64 line, no wrapping.
 
-### 5. App-Specific Password for notarytool
+#### 5. App-Specific Password for notarytool
 
 Notarization uses your Apple ID with an app-specific password (not your login password):
 
@@ -53,11 +114,11 @@ Notarization uses your Apple ID with an app-specific password (not your login pa
 2. Generate one labeled e.g. `notarytool-jht`.
 3. Copy the 4×4 character string. This is the value for `APPLE_APP_SPECIFIC_PASSWORD`.
 
-### 6. Find your Team ID
+#### 6. Find your Team ID
 
 <https://developer.apple.com/account> → **Membership details** → the 10-character alphanumeric value. This is the value for `APPLE_TEAM_ID`.
 
-## Required GitHub secrets
+### Required GitHub secrets
 
 Set these at `Settings → Secrets and variables → Actions` on the repository:
 
@@ -71,7 +132,7 @@ Set these at `Settings → Secrets and variables → Actions` on the repository:
 
 All five secrets must be present for the macOS job to sign and notarize. If any is missing, the release workflow falls back to producing an **unsigned** DMG and emits a GitHub Actions warning (the build does not fail, so other platforms still publish).
 
-## What the workflow does
+### What the workflow does
 
 `.github/workflows/release.yml` (job `build-desktop`, matrix entry `macos-14`) on a tag push:
 
@@ -86,7 +147,7 @@ The signing configuration itself lives in `desktop/package.json` → `build.mac`
 - `entitlements` / `entitlementsInherit` point at `desktop/build/entitlements.mac.plist` (minimal set: JIT, unsigned executable memory, network client).
 - `notarize: true` — electron-builder invokes notarytool when the Apple env vars are present.
 
-## Local build fallback
+### Local build fallback
 
 Running `npm run dist:mac` in `desktop/` locally **without** the signing env vars produces an unsigned DMG:
 
@@ -95,7 +156,7 @@ Running `npm run dist:mac` in `desktop/` locally **without** the signing env var
 
 The resulting DMG is fine for local smoke tests but will trigger Gatekeeper on other people's machines. Never ship an unsigned build to real users.
 
-## Verifying a build locally
+### Verifying a build locally
 
 Mount the DMG (or point these commands at the built `.app`):
 
@@ -112,7 +173,7 @@ spctl --assess --type open --context context:primary-signature --verbose /path/t
 
 If `spctl` reports `source=Notarized Developer ID` on both the app and the DMG, the artifact is ready to publish.
 
-## Rotating the certificate
+### Rotating the certificate
 
 Developer ID certificates expire after 5 years. To rotate:
 
