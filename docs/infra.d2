@@ -15,6 +15,7 @@ row1: "" {
 
     docker: "🐳 Docker Container" {
     team: "🎯 Agent Team" {
+      style.font-size: 20
       capitano: "👨‍✈️ Captain"
       scout: "🕵️‍♂️ Scout"
       analyst: "👨‍🔬 Analyst"
@@ -32,6 +33,7 @@ row1: "" {
     }
 
     storage: "💾 Storage" {
+      style.font-size: 20
       sqlite: {
         shape: rectangle
         label: |md
@@ -70,6 +72,7 @@ row1: "" {
       fill: "#f3f4f6"
     }
     cloud: "☁️💾 Cloud Storage" {
+      style.font-size: 20
       inner: "" {
         style.stroke: transparent
         style.fill: transparent
@@ -107,14 +110,22 @@ row1: "" {
       }
     }
     vps: "☁️🖥️ VPS" {
+      style.font-size: 20
       docker: "🐳 Container" {
         style.stroke-dash: 4
-        style.font-size: 14
+        style.font-size: 17
         team: "🎯 Agent Team" {style.bold: true}
         storage: "💾 Storage" {style.bold: true}
       }
     }
-    site: "🌐☁️ jobhunterteam.ai"
+    site: {
+      shape: rectangle
+      label: |md
+        **🌍 Public Dashboard**
+
+        ⠀⠀⠀jobhunterteam.ai⠀⠀⠀
+      |
+    }
   }
 
 }
@@ -127,13 +138,21 @@ row2: "" {
   direction: down
 
   pc: "🖥️ PC" {
+    style.font-size: 20
     docker: "🐳 Container" {
       style.stroke-dash: 4
-      style.font-size: 14
+      style.font-size: 17
       team: "🎯 Agent Team" {style.bold: true}
       storage: "💾 Storage" {style.bold: true}
     }
-    dashboard_locale: "🌐 localhost:3000"
+    dashboard_locale: {
+      shape: rectangle
+      label: |md
+        **🌐 Local Dashboard**
+
+        ⠀⠀⠀localhost:3000⠀⠀⠀
+      |
+    }
   }
   user_zone: "" {
     style.stroke: transparent
