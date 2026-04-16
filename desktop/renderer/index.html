@@ -19,6 +19,17 @@
 
       <section class="panel">
         <div class="panel__header">
+          <span>✅ Dipendenze</span>
+          <button id="recheckButton" class="button button--ghost">Ricontrolla</button>
+        </div>
+        <ul id="depsList" class="deps-list" aria-live="polite">
+          <li class="deps-list__placeholder">Controllo in corso…</li>
+        </ul>
+        <p id="depsSummary" class="hint"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
           <span>🟢 Stato runtime</span>
           <button id="refreshButton" class="button button--ghost">Refresh</button>
         </div>
