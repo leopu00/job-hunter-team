@@ -85,6 +85,7 @@ __pycache__/
 .vercel/
 dist/
 build/
+!desktop/build/
 
 # ── OS ───────────────────────────────────────────────────────
 .DS_Store
