@@ -1,65 +1,93 @@
 # Contributing
 
+Thanks for considering a contribution. Bug reports, feature ideas, documentation improvements, and code PRs are all welcome.
+
+## Ways to help
+
+- **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
+- **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
+- **Fix a bug / ship a feature** — follow the PR flow below
+- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/feedback-ticketing.md`](../docs/feedback-ticketing.md))
+
 ## Setup
 
 ```bash
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# Dipendenze web
+# Web dependencies
 cd web && npm install && cd ..
 
-# Dipendenze test
+# Test dependencies
 cd tests/js && npm install && cd ../..
 
-# Dipendenze shared/cron
+# Shared/cron dependencies
 npm install --prefix shared/cron
 
-# Setup configurazione
+# Configuration
 jht setup
 ```
 
-## Branch
+Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/quickstart.md`](../docs/quickstart.md#source-setup-for-contributors).
 
-- Lavora su un branch dedicato: `git checkout -b fix/descrizione` o `feat/descrizione`
-- **Non pushare direttamente su `master`**
-- Apri una Pull Request e aspetta la review
+## Branches
 
-## Commit
+- Branch off `master` with a descriptive name: `fix/description` or `feat/description`
+- **Do not push directly to `master`**
+- Open a Pull Request and wait for review
 
-Formato: `tipo(scope): descrizione breve`
+## Commits
 
-| Tipo | Quando usarlo |
-|------|---------------|
-| `feat` | Nuova funzionalità |
+Format: `type(scope): short description`
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature |
 | `fix` | Bug fix |
-| `docs` | Solo documentazione |
-| `refactor` | Refactor senza nuove feature |
-| `test` | Aggiunta o modifica test |
-| `ci` | CI/CD |
-| `chore` | Task di manutenzione |
+| `docs` | Documentation only |
+| `refactor` | Refactor with no new feature |
+| `test` | Adding or changing tests |
+| `ci` | CI / CD |
+| `chore` | Maintenance tasks |
 
-Regole:
-- 1 commit = 1 unità logica di lavoro
-- Max 200 righe per commit
-- Nessun dato sensibile nel commit message
+Rules:
+- 1 commit = 1 logical unit of work
+- Max ~200 lines per commit
+- No sensitive data in commit messages
+- Body explains **why**, not **what** — the diff already shows the what
 
-## Checklist pre-PR
+## Pre-PR checklist
 
-- [ ] `tsc --noEmit` passa senza errori (nella cartella `web/`)
-- [ ] `npm run lint` passa (nella cartella `web/`)
-- [ ] `npm test` passa (nella cartella `tests/js/`)
-- [ ] Nessun file sensibile incluso (PDF, DB, credenziali, dati personali)
-- [ ] Branch aggiornata su `master` prima di aprire la PR
+- [ ] `tsc --noEmit` passes (in `web/`)
+- [ ] `npm run lint` passes (in `web/`)
+- [ ] `npm test` passes (in `tests/js/`)
+- [ ] No sensitive files included (PDF, DB, credentials, personal data)
+- [ ] Branch rebased on `master` before opening the PR
 
-## Nuovi agenti
+## Non-trivial decisions — write an ADR
 
-Prima di aggiungere un nuovo agente, leggi [`shared/docs/add-agent.md`](../shared/docs/add-agent.md).
+If your change introduces a design decision that isn't obvious from the diff (new dependency, architectural tradeoff, invariant), drop a short Architecture Decision Record in [`docs/adr/`](../docs/adr/) alongside the code change. See the [ADR README](../docs/adr/README.md) for the format and when to add one.
 
-## Segnalare bug
+Load-bearing invariants live in ADRs — breaking them breaks the rest of the system.
 
-Usa il template [Bug Report](ISSUE_TEMPLATE/bug_report.md).
+## Adding a new agent
 
-## Proporre feature
+Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). If you're adding a new one, read [`shared/docs/add-agent.md`](../shared/docs/add-agent.md) first — there are specific contracts (anti-collision, DB schema, memory files) that must be respected.
 
-Usa il template [Feature Request](ISSUE_TEMPLATE/feature_request.md).
+Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed by [ADR 0002](../docs/adr/0002-three-supported-agent-clis.md). Adding a fourth CLI requires a new ADR, not just a PR.
+
+## Reporting bugs
+
+Use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) template.
+
+## Proposing features
+
+Use the [Feature Request](ISSUE_TEMPLATE/feature_request.md) template.
+
+## Code of conduct
+
+Be decent. No harassment, no discrimination. Constructive disagreement is welcome — personal attacks are not.
+
+## License
+
+Contributions are licensed under MIT — see [`LICENSE`](../LICENSE).
