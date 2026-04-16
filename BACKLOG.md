@@ -20,7 +20,7 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 
 - Desktop app: **Launcher Electron leggero** (installer, lifecycle manager, tray, auto-update; la GUI operativa resta nel browser)
 - Web dashboard: **Next.js su Vercel** (pipeline CI/CD già scritta)
-- Backend dati: **Supabase** (Frankfurt, già attivo)
+- Backend dati: **Supabase** (già attivo)
 - Cloud provisioning: **Multi-provider** (AWS + GCP + Hetzner fin dall'inizio, layer di astrazione con adapter)
 
 ---
@@ -28,7 +28,7 @@ La UI principale resta quindi la dashboard web su `localhost`, mentre l'app desk
 ## STATO ATTUALE
 
 **Infrastruttura completata:**
-- ✅ Supabase cloud attivo (Frankfurt)
+- ✅ Supabase cloud attivo
 - ✅ Schema PostgreSQL applicato (migrations 001-006, ultima: cloud_sync_tokens)
 - ✅ Google OAuth funzionante
 - ✅ GitHub OAuth funzionante (secondo provider, accesso developer)
@@ -301,7 +301,7 @@ Obiettivo: landing page, download, onboarding per utenti non tecnici.
 - ✅ Dominio acquistato: **jobhunterteam.ai** (Cloudflare, $80/anno)
 - ✅ DNS configurato: record A → 216.198.79.1 (Vercel), DNS only (no proxy)
 - ✅ Dominio collegato a Vercel (progetto job-hunter-team), SSL auto-generato
-- ✅ Supabase ripristinato e attivo (Frankfurt, eu-central-1)
+- ✅ Supabase ripristinato e attivo
 - ✅ Supabase Auth: Site URL aggiornato a `https://jobhunterteam.ai`, redirect URL aggiunto
 - Sottodomini previsti: `app.jobhunterteam.ai` (dashboard), `docs.jobhunterteam.ai` (documentazione), `api.jobhunterteam.ai` (gateway)
 
@@ -324,7 +324,7 @@ Obiettivo: landing page, download, onboarding per utenti non tecnici.
 ```
 Project ref:  [in .env.local]
 URL:          [in .env.local]
-Region:       eu-central-1 (Frankfurt)
+Region:       [in web/.env.local]
 Credenziali:  in web/.env.local (NON in git)
 ```
 
