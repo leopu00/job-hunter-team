@@ -49,6 +49,17 @@ app.whenReady().then(() => {
     return status
   })
   ipcMain.handle('launcher:stop', () => runtime.stopRuntime())
+  ipcMain.handle('launcher:open-external', async (_event, url) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      return { ok: false, error: 'invalid-url' }
+    }
+    try {
+      await shell.openExternal(url)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
 
   createWindow()
 

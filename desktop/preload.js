@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('launcherApi', {
   start: (options) => ipcRenderer.invoke('launcher:start', options),
   stop: () => ipcRenderer.invoke('launcher:stop'),
   openBrowser: () => ipcRenderer.invoke('launcher:open-browser'),
+  openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
 })
