@@ -5,6 +5,16 @@ Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
 
 ---
 
+## [0.1.12] — 2026-04-17
+
+### Fix
+
+- **Bundle**: il DMG/EXE della v0.1.11 crashava al primo avvio con `Cannot find module './docker-installer'` perché il campo `build.files` in `desktop/package.json` è una whitelist esplicita e i nuovi moduli (`disk-space.js`, `docker-installer/**`) non erano stati inclusi. Aggiunti alla lista; i `*.test.js` dei nuovi moduli sono esplicitamente esclusi dal bundle di release.
+
+Nessun'altra modifica funzionale rispetto a v0.1.11: è un bugfix dell'installazione.
+
+---
+
 ## [0.1.11] — 2026-04-17
 
 Release focalizzata sulla riscrittura dell'esperienza del launcher desktop in base al 2° round di test E2E su Windows ARM64 (vedi `e2e-runs/2026-04-17-windows-arm64-round2/`).
