@@ -8,7 +8,7 @@ row1: "" {
   direction: down
 
   docker: "🐳 Docker Container" {
-    team: "Agent Team" {
+    team: "🎯 Agent Team" {
       capitano: "👨‍✈️ Capitano (Alfa)"
       scout: "🕵️‍♂️ Scout"
       analyst: "👨‍🔬 Analyst"
@@ -25,26 +25,27 @@ row1: "" {
       capitano -- sentinella
     }
 
-    storage: "💾 Storage (bind-mount)" {
+    storage: "💾 Storage" {
       sqlite: "📊 SQLite\nprofilo, posizioni,\ncandidature, score"
       file: "📁 File\nCV, cover letter,\nreport PDF"
     }
 
-    team -> storage
+    team <-> storage
   }
 
-  cloud_col: "" {
+  cloud_col: "☁️ Cloud" {
     style: {
       stroke: "#999"
       stroke-dash: 5
       fill: transparent
+      font-size: 20
     }
     cloud: "☁️💾 Cloud Storage" {
-      supabase: "☁️📊 Supabase (Frankfurt)\nprofilo, posizioni,\ncandidature, score"
-      gdrive: "☁️📁 Google Drive\nCV, cover letter,\nreport PDF"
+      supabase: "☁️📊 Supabase"
+      gdrive: "☁️📁 Google Drive"
     }
-    site: "🌐☁️ jobhunterteam.ai\nDashboard personale\n(Next.js + Vercel)\nDati + File via cloud"
-    vps: "☁️🖥️ VPS remoto\nAWS / GCP / Hetzner" {
+    site: "🌐☁️ jobhunterteam.ai"
+    vps: "☁️🖥️ VPS" {
       docker: "🐳 Docker" {
         style.stroke-dash: 4
         team: "🎯 Agent Team"
@@ -71,7 +72,7 @@ row2: "" {
       team: "🎯 Agent Team"
       storage: "💾 Storage"
     }
-    dashboard_locale: "🌐 Dashboard locale\nlocalhost:3000\nNext.js\nDati da Storage"
+    dashboard_locale: "🌐 localhost:3000"
   }
   telegram: "💬 Telegram"
   browser: "🧭 Browser"
@@ -95,8 +96,8 @@ row2.browser <-> row1.cloud_col.site
 row1.docker -> junction: {
   target-arrowhead.shape: none
 }
-junction -> row2.pc.docker
-junction -> row1.cloud_col.vps.docker
+junction -> row2.pc.docker: locale
+junction -> row1.cloud_col.vps.docker: cloud
 row2.pc.docker.team <-> row2.pc.docker.storage
 row1.cloud_col.vps.docker.team <-> row1.cloud_col.vps.docker.storage
 utente <-> row2.browser
