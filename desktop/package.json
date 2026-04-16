@@ -12,9 +12,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "test": "node --test runtime.test.js",
-    "prepare:payload": "node ./scripts/prepare-payload.js",
-    "dist": "npm run prepare:payload && electron-builder",
+    "test": "node --test runtime.test.js dependencies.test.js payload.test.js",
+    "dist": "electron-builder",
     "dist:mac": "npm run dist -- --mac dmg",
     "dist:win": "npm run dist -- --win nsis",
     "dist:linux": "npm run dist -- --linux AppImage deb"
@@ -30,13 +29,10 @@
       "main.js",
       "preload.js",
       "runtime.js",
+      "container.js",
+      "dependencies.js",
+      "payload.js",
       "renderer/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "app-payload",
-        "to": "app-payload"
-      }
     ],
     "directories": {
       "buildResources": "assets",

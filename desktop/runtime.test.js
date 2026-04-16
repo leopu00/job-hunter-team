@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { createRuntimeManager, detectStartMode, inspectWebSetup, resolvePort } = require('./runtime')
+const { createRuntimeManager, detectStartMode, inspectWebSetup, resolvePort, resolveRepoRoot } = require('./runtime')
 
 function makeTempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'jht-desktop-test-'))
@@ -13,6 +13,33 @@ function writeFile(targetPath, contents) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
   fs.writeFileSync(targetPath, contents)
 }
+
+test('resolveRepoRoot prefers payloadDir when it contains a web/ entry', () => {
+  const dir = makeTempRepo()
+  const payloadDir = path.join(dir, 'app-payload')
+  writeFile(path.join(payloadDir, 'web', 'package.json'), '{}')
+
+  assert.equal(resolveRepoRoot(__dirname, payloadDir), payloadDir)
+})
+
+test('resolveRepoRoot ignores payloadDir when empty and falls back to repo root', () => {
+  const dir = makeTempRepo()
+  const payloadDir = path.join(dir, 'app-payload')
+
+  const resolved = resolveRepoRoot(__dirname, payloadDir)
+  assert.notEqual(resolved, payloadDir)
+})
+
+test('createRuntimeManager picks payloadDir up once the payload becomes available', async () => {
+  const dir = makeTempRepo()
+  const payloadDir = path.join(dir, 'app-payload')
+
+  const manager = createRuntimeManager({ payloadDir })
+  assert.notEqual(manager.getRepoRoot(), payloadDir)
+
+  writeFile(path.join(payloadDir, 'web', 'server.js'), '// stub')
+  assert.equal(manager.getRepoRoot(), payloadDir)
+})
 
 test('resolvePort falls back to default for invalid values', () => {
   assert.equal(resolvePort('abc'), 3000)
