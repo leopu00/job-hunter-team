@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
@@ -7,92 +7,106 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <div class="hero__eyebrow">🚀 JHT Desktop Launcher</div>
-        <h1>Job Hunter Team</h1>
-        <p>
-          Avvia il runtime locale, apri la dashboard su <code>localhost</code> e tieni tutto sotto
-          controllo senza terminale.
+    <header class="topbar">
+      <div class="topbar__brand">JHT Desktop</div>
+      <div class="topbar__alpha">Alpha · in fase di test</div>
+    </header>
+
+    <main class="wizard" id="wizard">
+      <!-- Step 1: welcome -->
+      <section class="step" id="step-welcome" data-step="welcome">
+        <h1 class="step__title">Job Hunter Team</h1>
+        <p class="step__lead">
+          Un team di agenti AI che cercano lavoro al posto tuo, analizzano le
+          offerte e scrivono CV e lettere di presentazione.
         </p>
+        <p class="step__hint">
+          Prima di avviare il team controlliamo che tutto sia pronto sul tuo
+          computer. Dura un minuto.
+        </p>
+        <div class="step__actions">
+          <button class="btn btn--primary" id="btn-welcome-continue">
+            Continua
+          </button>
+        </div>
       </section>
 
-      <section class="panel">
-        <div class="panel__header">
-          <span>✅ Dipendenze</span>
-          <button id="recheckButton" class="button button--ghost">Ricontrolla</button>
-        </div>
-        <ul id="depsList" class="deps-list" aria-live="polite">
-          <li class="deps-list__placeholder">Controllo in corso…</li>
-        </ul>
-        <p id="depsSummary" class="hint"></p>
-      </section>
+      <!-- Step 2: setup / checklist -->
+      <section class="step" id="step-setup" data-step="setup" hidden>
+        <h1 class="step__title">Setup</h1>
+        <p class="step__lead">
+          Per far girare il team in modo isolato serve <strong>Docker</strong>,
+          gratuito. Controlliamo se è già sul tuo computer.
+        </p>
 
-      <section class="panel">
-        <div class="panel__header">
-          <span>🟢 Stato runtime</span>
-          <button id="refreshButton" class="button button--ghost">Refresh</button>
-        </div>
-        <div class="status-grid">
-          <div>
-            <label>Modalità</label>
-            <strong id="modeValue">stopped</strong>
+        <div class="dep-card" id="docker-card">
+          <div class="dep-card__header">
+            <span class="dep-card__icon" id="docker-icon">…</span>
+            <span class="dep-card__name">Docker</span>
+            <span class="dep-card__badge" id="docker-badge">verifica…</span>
           </div>
-          <div>
-            <label>Porta</label>
-            <strong id="portValue">3000</strong>
+          <p class="dep-card__hint" id="docker-hint">
+            Controllo in corso…
+          </p>
+          <div class="dep-card__stats" id="docker-stats" hidden>
+            <div class="stat">
+              <span class="stat__label">Peso installazione</span>
+              <span class="stat__value" id="docker-required">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Libero sul tuo PC</span>
+              <span class="stat__value" id="docker-free">—</span>
+            </div>
           </div>
-          <div>
-            <label>Runtime</label>
-            <strong id="runtimeValue">n/a</strong>
-          </div>
-          <div>
-            <label>URL</label>
-            <strong id="urlValue">http://localhost:3000</strong>
+          <div class="dep-card__actions" id="docker-actions">
+            <!-- populated by renderer -->
           </div>
         </div>
-        <p id="hintText" class="hint">⏳ Nessun runtime avviato.</p>
-        <div class="setup-badges">
-          <span id="depsBadge" class="badge">deps: unknown</span>
-          <span id="buildBadge" class="badge">build: unknown</span>
-          <span id="modeBadge" class="badge">mode: auto</span>
-          <span id="activePortBadge" class="badge badge--accent">target: 3000</span>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-setup-back">Indietro</button>
+          <button class="btn btn--primary" id="btn-setup-continue" disabled>
+            Avanti
+          </button>
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel__header">
-          <span>⚙️ Azioni</span>
-        </div>
-        <label class="field">
-          <span>Porta locale</span>
-          <input id="portInput" type="number" min="1024" max="65535" value="3000" />
-        </label>
-        <div class="actions">
-          <button id="startButton" class="button button--primary">▶️ Start JHT</button>
-          <button id="stopButton" class="button button--secondary">⏹ Stop</button>
-          <button id="browserButton" class="button button--ghost">🌐 Open Browser</button>
+      <!-- Step 3: ready -->
+      <section class="step" id="step-ready" data-step="ready" hidden>
+        <h1 class="step__title">Tutto pronto</h1>
+        <p class="step__lead">
+          Docker è installato e attivo. Puoi avviare il team.
+        </p>
+        <p class="step__hint" id="ready-hint">
+          Al primo avvio il launcher scarica il codice del team (~60 MB) nella
+          tua cartella utente.
+        </p>
+        <div class="step__actions">
+          <button class="btn btn--primary btn--large" id="btn-start-team">
+            Avvia Job Hunter Team
+          </button>
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel__header">
-          <span>📦 Payload</span>
-          <button id="updatePayloadButton" class="button button--ghost" disabled>Aggiorna</button>
+      <!-- Step 4: running -->
+      <section class="step" id="step-running" data-step="running" hidden>
+        <h1 class="step__title" id="running-title">Team in esecuzione</h1>
+        <p class="step__lead" id="running-lead">
+          Il runtime è partito. Apri la dashboard nel browser per iniziare.
+        </p>
+        <div class="running-info" id="running-info"></div>
+        <div class="step__actions">
+          <button class="btn btn--primary" id="btn-open-browser">
+            Apri dashboard
+          </button>
+          <button class="btn btn--ghost" id="btn-stop-team">
+            Ferma team
+          </button>
         </div>
-        <p id="payloadStatus" class="hint">Payload: in verifica…</p>
-        <pre id="payloadLog" class="payload-log" hidden></pre>
-      </section>
-
-      <section class="panel panel--subtle">
-        <div class="panel__header">
-          <span>🧠 Note</span>
-        </div>
-        <ul class="notes">
-          <li>Al primo avvio il launcher scarica il payload (solo le cartelle necessarie) in <code>userData/app-payload</code>.</li>
-          <li>Usa <code>next start</code> se trova una build in <code>web/.next</code>, altrimenti <code>next dev</code>.</li>
-          <li id="logFileValue">Log file: loading...</li>
-        </ul>
+        <details class="advanced">
+          <summary>Dettagli tecnici</summary>
+          <pre class="advanced__log" id="advanced-log"></pre>
+        </details>
       </section>
     </main>
 
