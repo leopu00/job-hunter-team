@@ -304,3 +304,18 @@ code {
   font-size: 11px;
   white-space: nowrap;
 }
+
+.payload-log {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: rgba(4, 8, 6, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
