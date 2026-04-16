@@ -11,14 +11,19 @@ const modeBadge = document.getElementById('modeBadge')
 const activePortBadge = document.getElementById('activePortBadge')
 const depsList = document.getElementById('depsList')
 const depsSummary = document.getElementById('depsSummary')
+const payloadStatus = document.getElementById('payloadStatus')
+const payloadLog = document.getElementById('payloadLog')
 
 const startButton = document.getElementById('startButton')
 const stopButton = document.getElementById('stopButton')
 const browserButton = document.getElementById('browserButton')
 const refreshButton = document.getElementById('refreshButton')
 const recheckButton = document.getElementById('recheckButton')
+const updatePayloadButton = document.getElementById('updatePayloadButton')
 
 let dependenciesOk = false
+let payloadReady = false
+let payloadBusy = false
 
 function describeMode(status) {
   switch (status.mode) {
@@ -79,10 +84,11 @@ function updateHint(status) {
 }
 
 function updateButtons(status) {
-  const busy = status.mode === 'starting' || status.mode === 'stopping'
+  const busy = status.mode === 'starting' || status.mode === 'stopping' || payloadBusy
   startButton.disabled = busy || status.mode === 'running' || !dependenciesOk
   stopButton.disabled = busy || (!status.running && status.mode !== 'external')
   browserButton.disabled = busy
+  updatePayloadButton.disabled = payloadBusy || !payloadReady || !dependenciesOk
 }
 
 function renderSetup(setup) {
@@ -233,17 +239,79 @@ async function refreshDependencies() {
   return setup
 }
 
+function appendPayloadLog(line) {
+  if (!line) return
+  payloadLog.hidden = false
+  payloadLog.textContent += `${line}\n`
+  payloadLog.scrollTop = payloadLog.scrollHeight
+}
+
+function renderPayloadInfo(info) {
+  payloadReady = info?.present === true
+  if (!info?.payloadDir) {
+    payloadStatus.textContent = 'Payload: percorso non disponibile.'
+    return
+  }
+  payloadStatus.textContent = payloadReady
+    ? `Payload: presente in ${info.payloadDir}`
+    : `Payload: da scaricare al primo Start (verrà copiato in ${info.payloadDir})`
+}
+
+async function refreshPayload() {
+  const info = await window.launcherApi.getPayloadDir()
+  renderPayloadInfo(info)
+  return info
+}
+
+async function runPayloadAction({ update = false, reason = '' } = {}) {
+  payloadBusy = true
+  payloadLog.hidden = false
+  payloadLog.textContent = ''
+  if (reason) appendPayloadLog(reason)
+  await refreshStatus()
+  try {
+    const result = await window.launcherApi.ensurePayload({ update })
+    if (!result.ok) {
+      appendPayloadLog(`⚠️ ${result.error}`)
+      hintText.textContent = `⚠️ ${result.error}`
+      return { ok: false }
+    }
+    appendPayloadLog(`✔ Operazione: ${result.action}`)
+    if (result.warning) appendPayloadLog(`⚠️ ${result.warning}`)
+    await refreshPayload()
+    return { ok: true, action: result.action }
+  } finally {
+    payloadBusy = false
+    await refreshStatus()
+  }
+}
+
 async function boot() {
   const logFile = await window.launcherApi.getLogFile()
   logFileValue.textContent = `Log file: ${logFile}`
+  window.launcherApi.onPayloadLog(appendPayloadLog)
   await refreshDependencies()
+  await refreshPayload()
   await refreshStatus()
 }
 
 startButton.addEventListener('click', async () => {
-  if (!dependenciesOk) return
+  if (!dependenciesOk || payloadBusy) return
+  const payloadInfo = await refreshPayload()
+  if (!payloadInfo?.present) {
+    const result = await runPayloadAction({
+      update: false,
+      reason: 'Payload non trovato: avvio il download…',
+    })
+    if (!result.ok) return
+  }
   const status = await window.launcherApi.start({ port: portInput.value })
   renderStatus(status)
+})
+
+updatePayloadButton.addEventListener('click', async () => {
+  if (payloadBusy) return
+  await runPayloadAction({ update: true, reason: 'Aggiorno il payload…' })
 })
 
 stopButton.addEventListener('click', async () => {
