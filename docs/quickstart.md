@@ -1,46 +1,46 @@
 # Quickstart — Job Hunter Team
 
-Guida per avviare il sistema in 5 minuti.
+Get the system running in 5 minutes.
 
-## Percorso consigliato: installer one-liner
+## Recommended path: one-liner installer
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-Lo script:
+The script:
 
-1. Rileva il tuo OS (macOS, Linux apt/dnf/pacman, WSL)
-2. Installa Node 20+, tmux, git, Claude CLI se mancano
-3. Clona la repo in `~/.jht/src`
-4. Compila TUI + CLI
-5. Crea simlink `jht` in `~/.local/bin`
-6. Lancia il setup wizard interattivo
+1. Detects your OS (macOS, Linux apt/dnf/pacman, WSL)
+2. Installs Node 20+, tmux, git, Claude CLI if missing
+3. Clones the repo into `~/.jht/src`
+4. Builds TUI + CLI
+5. Creates a `jht` symlink in `~/.local/bin`
+6. Launches the interactive setup wizard
 
-Al termine avrai due cartelle:
+At the end you'll have two folders:
 
-| Cartella | Scopo | Chi la tocca |
-|----------|-------|--------------|
-| `~/.jht/` | Config, database `jobs.db`, agenti, credenziali | Solo gli agenti e il CLI |
-| `~/Documents/Job Hunter Team/` | CV da analizzare, output generati (PDF/MD) | Tu + gli agenti |
+| Folder | Purpose | Who touches it |
+|--------|---------|----------------|
+| `~/.jht/` | Config, `jobs.db` database, agents, credentials | Agents and CLI only |
+| `~/Documents/Job Hunter Team/` | CVs to analyze, generated output (PDF/MD) | You + the agents |
 
-## Percorso alternativo: launcher desktop (non-tech)
+## Alternative path: desktop launcher (non-tech)
 
-Scarica il launcher dalla pagina `/download` o da GitHub Releases:
+Download the launcher from the `/download` page or GitHub Releases:
 
 - macOS: `.dmg`
 - Windows: `.exe`
-- Linux: `.AppImage` oppure `.deb`
+- Linux: `.AppImage` or `.deb`
 
-Il launcher installa tutto con interfaccia grafica, senza aprire il terminale.
+The launcher installs everything through a graphical interface, no terminal needed.
 
-## Setup da sorgente (per contribuire)
+## Source setup (for contributors)
 
-Questa sezione e' per sviluppo locale, hacking del repo e PR.
+This section is for local development, hacking on the repo, and PRs.
 
-### Prerequisiti
+### Prerequisites
 
-- **Node.js 20+** e npm
+- **Node.js 20+** and npm
 - **tmux**
 - **git**
 - **Claude CLI** (`npm install -g @anthropic-ai/claude-cli`)
@@ -48,81 +48,82 @@ Questa sezione e' per sviluppo locale, hacking del repo e PR.
 ### Setup
 
 ```bash
-# 1. Clona la repo
+# 1. Clone the repo
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Build TUI e CLI
+# 2. Build TUI and CLI
 npm --prefix tui install && npm --prefix tui run build
 npm --prefix cli install
 
-# 3. Avvia il wizard (crea ~/.jht e ~/Documents/Job Hunter Team)
+# 3. Launch the wizard (creates ~/.jht and ~/Documents/Job Hunter Team)
 node cli/bin/jht.js
 ```
 
-Il wizard ti chiede provider AI e API key. Il profilo candidato si compila poi dalla TUI (vista Profilo) o dalla dashboard web.
+The wizard asks for an AI provider and API key. The candidate profile is filled later via the TUI (Profile view) or the web dashboard.
 
-## Struttura del Team
+## Team structure
 
-Il sistema usa agenti AI paralleli, ognuno con un ruolo preciso:
+The system uses parallel AI agents, each with a specific role:
 
-| Agente | Ruolo | Sessione tmux |
-|--------|-------|--------------|
-| Scout | Cerca posizioni sui job board | `SCOUT-1`, `SCOUT-2` |
-| Analista | Verifica JD e aziende | `ANALISTA-1`, `ANALISTA-2` |
-| Scorer | Punteggio 0-100 | `SCORER-1` |
-| Scrittore | Scrive CV e Cover Letter | `SCRITTORE-1` |
-| Critico | Review CV | `CRITICO` |
-| Capitano | Coordinatore | `ALFA` |
+| Agent | Role | tmux session |
+|-------|------|--------------|
+| Captain | Pipeline coordinator, anti-collision | `ALFA` |
+| Scout | Searches job boards | `SCOUT-1`, `SCOUT-2` |
+| Analyst | Verifies JDs and companies | `ANALYST-1`, `ANALYST-2` |
+| Scorer | Scores 0–100 | `SCORER-1` |
+| Writer | Writes CVs and cover letters | `WRITER-1` |
+| Critic | Blind review of CVs | `CRITIC` |
+| Sentinel | Monitors tokens, rate limits, costs, team health | `SENTINEL` |
 
-## Flusso Operativo
+## Operational flow
 
 ```
-Scout → trova posizioni → DB (status: new)
-Analista → verifica JD → DB (status: checked / excluded)
-Scorer → punteggio 0-100 → DB (status: scored)
+Scout → finds positions → DB (status: new)
+Analyst → verifies JD → DB (status: checked / excluded)
+Scorer → scores 0-100 → DB (status: scored)
   └─ score < 40 → excluded
-  └─ score >= 50 → notifica Scrittore
-Scrittore → CV + CL → 3 round con Critico
-  └─ critic_score >= 5 → status: ready (pronto per l'invio)
+  └─ score >= 50 → notifies Writer
+Writer → CV + CL → 3 rounds with Critic
+  └─ critic_score >= 5 → status: ready (ready to send)
   └─ critic_score < 5  → status: excluded
-Utente → review finale → invia candidatura
+User → final review → submits application
 ```
 
-## Avvio Manuale degli Agenti
+## Starting agents manually
 
-Ogni agente gira in una sessione tmux separata:
+Each agent runs in a separate tmux session:
 
 ```bash
-# Avvia Scout-1
+# Start Scout-1
 tmux new-session -d -s SCOUT-1 -c scout/
 tmux send-keys -t SCOUT-1 "claude --dangerously-skip-permissions" Enter
 
-# Avvia Analista-1
-tmux new-session -d -s ANALISTA-1 -c analista/
-tmux send-keys -t ANALISTA-1 "claude --dangerously-skip-permissions" Enter
+# Start Analyst-1
+tmux new-session -d -s ANALYST-1 -c analista/
+tmux send-keys -t ANALYST-1 "claude --dangerously-skip-permissions" Enter
 ```
 
-## Comandi DB Utili
+## Useful DB commands
 
 ```bash
-# Dashboard generale
+# Overview dashboard
 python3 shared/skills/db_query.py dashboard
 
-# Posizioni per status
+# Positions by status
 python3 shared/skills/db_query.py positions --status new
 python3 shared/skills/db_query.py positions --min-score 50
 
-# Dettaglio posizione
+# Position detail
 python3 shared/skills/db_query.py position 42
 
-# Statistiche
+# Stats
 python3 shared/skills/db_query.py stats
 ```
 
-## Documentazione Completa
+## Full documentation
 
-- [Schema DB](../shared/docs/db-schema.md)
-- [Anti-collisione agenti](../shared/docs/anti-collisione.md)
-- [Regole comunicazione](../shared/docs/regole-comunicazione.md)
-- [Aggiungere un agente](../shared/docs/add-agent.md)
+- [DB schema](../shared/docs/db-schema.md)
+- [Agent anti-collision](../shared/docs/anti-collisione.md)
+- [Communication rules](../shared/docs/regole-comunicazione.md)
+- [Adding an agent](../shared/docs/add-agent.md)
