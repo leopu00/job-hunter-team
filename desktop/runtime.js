@@ -15,9 +15,22 @@ function getDefaultLogFile() {
   return path.join(os.tmpdir(), 'jht-desktop-launcher.log')
 }
 
-function resolveRepoRoot(baseDir = __dirname) {
+function hasWebEntry(candidateRoot) {
+  if (!candidateRoot) return false
+  const webDir = path.join(candidateRoot, 'web')
+  return (
+    fs.existsSync(path.join(webDir, 'package.json'))
+    || fs.existsSync(path.join(webDir, 'server.js'))
+  )
+}
+
+function resolveRepoRoot(baseDir = __dirname, payloadDir = null) {
+  if (payloadDir && hasWebEntry(payloadDir)) {
+    return payloadDir
+  }
+
   const bundledRoot = path.join(process.resourcesPath ?? '', 'app-payload')
-  if (process.defaultApp !== true && process.resourcesPath && fs.existsSync(path.join(bundledRoot, 'web', 'package.json'))) {
+  if (process.defaultApp !== true && process.resourcesPath && hasWebEntry(bundledRoot)) {
     return bundledRoot
   }
 
@@ -140,7 +153,12 @@ function defaultSpawnSpecFactory({ mode, port, webDir }) {
 }
 
 function createRuntimeManager(config = {}) {
-  const repoRoot = config.repoRoot ?? resolveRepoRoot(__dirname)
+  const staticRepoRoot = config.repoRoot ?? null
+  const payloadDir = config.payloadDir ?? null
+  function getRepoRoot() {
+    if (staticRepoRoot) return staticRepoRoot
+    return resolveRepoRoot(__dirname, payloadDir)
+  }
   const logFile = config.logFile ?? getDefaultLogFile()
   const startTimeoutMs = config.startTimeoutMs ?? START_TIMEOUT_MS
   const stopTimeoutMs = config.stopTimeoutMs ?? STOP_TIMEOUT_MS
@@ -166,7 +184,7 @@ function createRuntimeManager(config = {}) {
   }
 
   function getWebDir() {
-    return path.join(repoRoot, 'web')
+    return path.join(getRepoRoot(), 'web')
   }
 
   function getUrl(port = state.port) {
@@ -272,7 +290,7 @@ function createRuntimeManager(config = {}) {
       lastExitCode: state.lastExitCode,
       logFile,
       containerMode,
-      setup: containerMode ? null : inspectWebSetup(repoRoot),
+      setup: containerMode ? null : inspectWebSetup(getRepoRoot()),
       ...extra,
     }
   }
@@ -362,7 +380,7 @@ function createRuntimeManager(config = {}) {
         return buildStatus()
       }
     } else {
-      setup = inspectWebSetup(repoRoot)
+      setup = inspectWebSetup(getRepoRoot())
       if (!setup.hasPackageJson && !setup.hasStandaloneServer) {
         state.mode = 'error'
         state.lastError = setup.issues[0] ?? `Directory web/ non trovata in ${setup.webDir}`
@@ -406,7 +424,7 @@ function createRuntimeManager(config = {}) {
       mode,
       port: state.port,
       webDir: setup ? setup.webDir : null,
-      repoRoot,
+      repoRoot: getRepoRoot(),
     })
     const child = spawnFn(spec.command, spec.args, spec.options)
 
@@ -481,7 +499,7 @@ function createRuntimeManager(config = {}) {
   }
 
   function inspectFullSetup() {
-    const base = inspectWebSetup(repoRoot)
+    const base = inspectWebSetup(getRepoRoot())
     const deps = inspectDependencies()
     return {
       ...base,
@@ -492,16 +510,13 @@ function createRuntimeManager(config = {}) {
 
   return {
     getLogFile: () => logFile,
+    getRepoRoot,
     inspectSetup: inspectFullSetup,
     getStatus,
     startRuntime,
     stopRuntime,
   }
 }
-
-const runtime = createRuntimeManager({
-  containerMode: containerRuntime.shouldUseContainer(),
-})
 
 module.exports = {
   DEFAULT_PORT,
@@ -512,9 +527,4 @@ module.exports = {
   detectStartMode,
   inspectWebSetup,
   createRuntimeManager,
-  getLogFile: runtime.getLogFile,
-  inspectSetup: runtime.inspectSetup,
-  getStatus: runtime.getStatus,
-  startRuntime: runtime.startRuntime,
-  stopRuntime: runtime.stopRuntime,
 }
