@@ -3,6 +3,8 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
+const dockerInstaller = require('./docker-installer')
+const { freeBytes, formatBytes } = require('./disk-space')
 
 let mainWindow = null
 let runtime = null
@@ -90,6 +92,50 @@ app.whenReady().then(() => {
     try {
       await shell.openExternal(url)
       return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  // Setup wizard — Docker status + download page + disk space preview.
+  ipcMain.handle('setup:get-docker-status', async () => {
+    const strategy = dockerInstaller.getStrategy()
+    const check = await dockerInstaller.checkDocker()
+    let free = null
+    let freeHuman = null
+    try {
+      const bytes = await freeBytes(app.getPath('home'))
+      free = bytes
+      freeHuman = formatBytes(bytes)
+    } catch {
+      // Preview can show "unknown" if the disk probe fails.
+    }
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      strategy,
+      check,
+      disk: {
+        freeBytes: free,
+        freeHuman,
+        requiredBytes: strategy ? strategy.installedBytes : null,
+        requiredHuman: strategy ? formatBytes(strategy.installedBytes) : null,
+        recommendedFreeBytes: strategy ? strategy.recommendedFreeBytes : null,
+        recommendedFreeHuman: strategy ? formatBytes(strategy.recommendedFreeBytes) : null,
+        meetsRequirement:
+          strategy && free !== null ? free >= strategy.installedBytes : null,
+        meetsRecommendation:
+          strategy && free !== null ? free >= strategy.recommendedFreeBytes : null,
+      },
+    }
+  })
+
+  ipcMain.handle('setup:open-docker-download-page', async () => {
+    const url = dockerInstaller.downloadUrlFor()
+    if (!url) return { ok: false, error: 'unsupported-platform' }
+    try {
+      await shell.openExternal(url)
+      return { ok: true, url }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
