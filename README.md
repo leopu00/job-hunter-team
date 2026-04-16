@@ -106,7 +106,7 @@ Full roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Contributing
 
-PRs welcome. Before adding a new agent, read [`shared/docs/add-agent.md`](shared/docs/add-agent.md).
+PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
 ## License
 
