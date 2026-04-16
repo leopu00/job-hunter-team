@@ -15,6 +15,7 @@
 # ║                                                                          ║
 # ║  Opzioni (env var / flag):                                               ║
 # ║    --no-docker             Salta il container, installa nativo (expert)  ║
+# ║    --dry-run               Mostra solo le azioni che verrebbero eseguite ║
 # ║    JHT_BRANCH=dev-3        Branch da clonare (default: main)             ║
 # ║    JHT_INSTALL_DIR         Dove clonare la repo (default: $HOME/.jht/src)║
 # ║    JHT_BIN_DIR             Dove mettere il wrapper jht (default:         ║
@@ -38,10 +39,12 @@ MIN_NODE_MAJOR=22
 
 # ── Argomenti ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
+DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --no-docker) USE_DOCKER=0 ;;
     --with-docker) USE_DOCKER=1 ;;  # alias retro-compat
+    --dry-run) DRY_RUN=1 ;;
     -h|--help)
       sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -72,6 +75,15 @@ info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
 
+# Wrap comandi con side-effect sul sistema. In dry-run stampa invece di eseguire.
+run() {
+  if [ "${DRY_RUN:-0}" = "1" ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: %s\n" "$*"
+    return 0
+  fi
+  "$@"
+}
+
 header() {
   printf "\n"
   printf "${BOLD}╔══════════════════════════════════════════╗${RESET}\n"
@@ -86,6 +98,9 @@ header() {
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
     printf "  ${DIM}branch: %s${RESET}\n" "$BRANCH"
     printf "  ${DIM}target: %s${RESET}\n" "$INSTALL_DIR"
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}dry-run:${RESET} ${YELLOW}ON${RESET} (nessuna modifica al sistema)\n"
   fi
   printf "\n"
 }
@@ -143,6 +158,10 @@ detect_system() {
 install_brew_if_missing() {
   if command -v brew &>/dev/null; then return 0; fi
   info "Homebrew non trovato. Installazione in corso..."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash\n"
+    return 0
+  fi
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
     || fail "Installazione Homebrew fallita"
   if [ -x /opt/homebrew/bin/brew ]; then
@@ -156,17 +175,21 @@ install_colima_macos() {
   install_brew_if_missing
   if ! command -v colima &>/dev/null; then
     info "Installo Colima (runtime container Apache 2.0, no Docker Desktop)..."
-    brew install colima || fail "Installazione Colima fallita"
+    run brew install colima || fail "Installazione Colima fallita"
   else
     ok "colima gia' installato"
   fi
   if ! command -v docker &>/dev/null; then
     info "Installo docker CLI..."
-    brew install docker || fail "Installazione docker CLI fallita"
+    run brew install docker || fail "Installazione docker CLI fallita"
   else
     ok "docker CLI gia' installato"
   fi
   # Avvia Colima se non gia' attivo
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: colima start (se non gia' attivo)\n"
+    return 0
+  fi
   if colima status &>/dev/null; then
     ok "colima gia' in esecuzione"
   else
@@ -179,22 +202,22 @@ install_colima_macos() {
 install_docker_linux() {
   case "$PKG" in
     apt)
-      sudo_maybe apt-get update -qq
+      run sudo_maybe apt-get update -qq
       if ! command -v docker &>/dev/null; then
         info "Installo docker.io..."
-        sudo_maybe apt-get install -y docker.io || fail "Installazione docker.io fallita"
+        run sudo_maybe apt-get install -y docker.io || fail "Installazione docker.io fallita"
       fi
       ;;
     dnf)
       if ! command -v docker &>/dev/null; then
         info "Installo docker..."
-        sudo_maybe dnf install -y docker || fail "Installazione docker fallita"
+        run sudo_maybe dnf install -y docker || fail "Installazione docker fallita"
       fi
       ;;
     pacman)
       if ! command -v docker &>/dev/null; then
         info "Installo docker..."
-        sudo_maybe pacman -Sy --noconfirm docker || fail "Installazione docker fallita"
+        run sudo_maybe pacman -Sy --noconfirm docker || fail "Installazione docker fallita"
       fi
       ;;
     *)
@@ -203,15 +226,15 @@ install_docker_linux() {
   esac
   # Su Linux/WSL2 il daemon di solito non parte da solo
   if command -v systemctl &>/dev/null; then
-    sudo_maybe systemctl enable --now docker 2>/dev/null || true
+    run sudo_maybe systemctl enable --now docker 2>/dev/null || true
   fi
   # WSL2: il daemon e' avviato dal service docker
   if [ "$OS" = "wsl" ]; then
-    sudo_maybe service docker start 2>/dev/null || true
+    run sudo_maybe service docker start 2>/dev/null || true
   fi
   # Aggiungi utente al gruppo docker per evitare sudo (richiede logout)
   if ! groups 2>/dev/null | grep -q '\bdocker\b'; then
-    sudo_maybe usermod -aG docker "$USER" 2>/dev/null || true
+    run sudo_maybe usermod -aG docker "$USER" 2>/dev/null || true
     warn "Sei stato aggiunto al gruppo 'docker'. Esci e rientra (o 'newgrp docker') per usarlo senza sudo."
   fi
   ok "docker installato"
@@ -227,6 +250,10 @@ install_container_runtime() {
 
 verify_docker_works() {
   step 3 "$TOTAL_STEPS_DOCKER" "Verifica docker"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: docker info\n"
+    return 0
+  fi
   if ! docker info &>/dev/null; then
     if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
       warn "docker info fallisce: probabilmente serve sudo o un re-login per il gruppo docker."
@@ -242,6 +269,10 @@ verify_docker_works() {
 
 pull_image() {
   step 4 "$TOTAL_STEPS_DOCKER" "Download immagine $IMAGE"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: docker pull %s\n" "$IMAGE"
+    return 0
+  fi
   if docker pull "$IMAGE"; then
     ok "immagine pronta"
   else
@@ -252,8 +283,18 @@ pull_image() {
 
 write_wrapper() {
   step 5 "$TOTAL_STEPS_DOCKER" "Wrapper jht (docker run)"
-  mkdir -p "$BIN_DIR"
   local wrapper="$BIN_DIR/jht"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s\n" "$BIN_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would write wrapper: %s\n" "$wrapper"
+    printf "  ${DIM}[dry-run]${RESET} wrapper launches: docker run --rm -v \$HOME/.jht:/jht_home -v '\$HOME/Documents/Job Hunter Team':/jht_user -p 3000:3000 %s\n" "$IMAGE"
+    case ":$PATH:" in
+      *":$BIN_DIR:"*) PATH_READY=1 ;;
+      *)              PATH_READY=0 ;;
+    esac
+    return 0
+  fi
+  mkdir -p "$BIN_DIR"
   if [ -L "$wrapper" ] || [ -e "$wrapper" ]; then
     rm -f "$wrapper"
   fi
@@ -350,7 +391,7 @@ install_dep() {
     return 0
   fi
   info "Installo $name..."
-  "$@" || fail "Installazione $name fallita"
+  run "$@" || fail "Installazione $name fallita"
   ok "$name installato"
 }
 
@@ -366,7 +407,7 @@ install_system_deps() {
     linux|wsl)
       case "$PKG" in
         apt)
-          sudo_maybe apt-get update -qq
+          run sudo_maybe apt-get update -qq
           install_dep git sudo_maybe apt-get install -y git
           install_dep tmux sudo_maybe apt-get install -y tmux
           install_dep curl sudo_maybe apt-get install -y curl
@@ -377,7 +418,7 @@ install_system_deps() {
           install_dep curl sudo_maybe dnf install -y curl
           ;;
         pacman)
-          sudo_maybe pacman -Sy --noconfirm
+          run sudo_maybe pacman -Sy --noconfirm
           install_dep git sudo_maybe pacman -S --noconfirm git
           install_dep tmux sudo_maybe pacman -S --noconfirm tmux
           install_dep curl sudo_maybe pacman -S --noconfirm curl
@@ -411,21 +452,31 @@ install_node() {
   info "Installo Node.js ${MIN_NODE_MAJOR}..."
   case "$OS" in
     macos)
-      brew install "node@${MIN_NODE_MAJOR}"
-      brew link --overwrite --force "node@${MIN_NODE_MAJOR}" || true
+      run brew install "node@${MIN_NODE_MAJOR}"
+      run brew link --overwrite --force "node@${MIN_NODE_MAJOR}" || true
       ;;
     linux|wsl)
       case "$PKG" in
         apt)
-          curl -fsSL "https://deb.nodesource.com/setup_${MIN_NODE_MAJOR}.x" | sudo_maybe -E bash -
-          sudo_maybe apt-get install -y nodejs
+          if [ "$DRY_RUN" -eq 1 ]; then
+            printf "  ${DIM}[dry-run]${RESET} would execute: curl -fsSL https://deb.nodesource.com/setup_%s.x | sudo -E bash -\n" "$MIN_NODE_MAJOR"
+            printf "  ${DIM}[dry-run]${RESET} would execute: sudo apt-get install -y nodejs\n"
+          else
+            curl -fsSL "https://deb.nodesource.com/setup_${MIN_NODE_MAJOR}.x" | sudo_maybe -E bash -
+            sudo_maybe apt-get install -y nodejs
+          fi
           ;;
         dnf)
-          curl -fsSL "https://rpm.nodesource.com/setup_${MIN_NODE_MAJOR}.x" | sudo_maybe bash -
-          sudo_maybe dnf install -y nodejs
+          if [ "$DRY_RUN" -eq 1 ]; then
+            printf "  ${DIM}[dry-run]${RESET} would execute: curl -fsSL https://rpm.nodesource.com/setup_%s.x | sudo bash -\n" "$MIN_NODE_MAJOR"
+            printf "  ${DIM}[dry-run]${RESET} would execute: sudo dnf install -y nodejs\n"
+          else
+            curl -fsSL "https://rpm.nodesource.com/setup_${MIN_NODE_MAJOR}.x" | sudo_maybe bash -
+            sudo_maybe dnf install -y nodejs
+          fi
           ;;
         pacman)
-          sudo_maybe pacman -S --noconfirm nodejs npm
+          run sudo_maybe pacman -S --noconfirm nodejs npm
           ;;
         *)
           fail "Installazione Node.js automatica non supportata su questo sistema."
@@ -434,6 +485,9 @@ install_node() {
       ;;
   esac
 
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
   check_node_version || fail "Node.js ${MIN_NODE_MAJOR}+ non e' disponibile dopo l'installazione"
   ok "node $(node -v) installato"
 }
@@ -447,6 +501,10 @@ install_claude_cli() {
   fi
 
   info "Installo Claude CLI via npm (globale)..."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: npm install -g @anthropic-ai/claude-cli\n"
+    return 0
+  fi
   if ! npm install -g @anthropic-ai/claude-cli 2>/dev/null; then
     warn "Installazione automatica fallita. Installa manualmente da https://docs.anthropic.com/claude/docs/claude-code"
     return 0
@@ -456,6 +514,16 @@ install_claude_cli() {
 
 clone_repo() {
   step 5 "$TOTAL_STEPS_NATIVE" "Download JHT (git clone)"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    if [ -d "$INSTALL_DIR/.git" ]; then
+      printf "  ${DIM}[dry-run]${RESET} would execute: git -C %s fetch && git reset --hard origin/%s\n" "$INSTALL_DIR" "$BRANCH"
+    else
+      printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s\n" "$(dirname "$INSTALL_DIR")"
+      printf "  ${DIM}[dry-run]${RESET} would execute: git clone --depth 1 --branch %s %s %s\n" "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    fi
+    return 0
+  fi
 
   if [ -d "$INSTALL_DIR/.git" ]; then
     info "Repo gia' presente in $INSTALL_DIR, aggiorno..."
@@ -472,6 +540,13 @@ clone_repo() {
 
 build_jht() {
   step 6 "$TOTAL_STEPS_NATIVE" "Build TUI, CLI e moduli shared"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/tui && npm install && npx tsc)\n" "$INSTALL_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/cli && npm install)\n" "$INSTALL_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would execute: npm install in ogni %s/shared/*/package.json con deps\n" "$INSTALL_DIR"
+    return 0
+  fi
 
   info "Installo dipendenze TUI..."
   (cd "$INSTALL_DIR/tui" && npm install --silent --no-audit --no-fund) \
@@ -507,8 +582,21 @@ build_jht() {
 link_bin_native() {
   step 7 "$TOTAL_STEPS_NATIVE" "Installazione comando jht (nativo)"
 
-  mkdir -p "$BIN_DIR"
   local target="$INSTALL_DIR/cli/bin/jht.js"
+  local link="$BIN_DIR/jht"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s\n" "$BIN_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s\n" "$target"
+    printf "  ${DIM}[dry-run]${RESET} would execute: ln -s %s %s\n" "$target" "$link"
+    case ":$PATH:" in
+      *":$BIN_DIR:"*) PATH_READY=1 ;;
+      *)              PATH_READY=0 ;;
+    esac
+    return 0
+  fi
+
+  mkdir -p "$BIN_DIR"
 
   if [ ! -f "$target" ]; then
     fail "Entry point non trovato: $target"
@@ -516,7 +604,6 @@ link_bin_native() {
 
   chmod +x "$target"
 
-  local link="$BIN_DIR/jht"
   if [ -L "$link" ] || [ -e "$link" ]; then
     rm -f "$link"
   fi
@@ -580,6 +667,10 @@ final_message() {
 }
 
 maybe_onboard() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: salto il wizard di onboarding."
+    return 0
+  fi
   if [ "${JHT_SKIP_ONBOARD:-0}" = "1" ]; then
     return 0
   fi
