@@ -1,298 +1,323 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Ultimo aggiornamento: 2026-04-06
+> Last updated: 2026-04-16
 
 ---
 
-## 🎯 Visione
+## 🎯 Vision
 
-Job Hunter Team diventa un'**applicazione desktop** scaricabile da chiunque — anche utenti non tecnici.
-L'utente scarica un installer, lo installa, e un launcher desktop prepara l'ambiente, avvia JHT in background e apre la GUI web locale nel browser.
-La UI principale resta la dashboard web su `localhost`; l'app desktop e' il tramite zero-terminale.
+Job Hunter Team becomes a **desktop application** anyone can download — non-technical users included.
+The user downloads an installer, runs it, and a desktop launcher prepares the environment, starts JHT in the background, and opens the local web GUI in the browser.
+The main UI stays the web dashboard on `localhost`; the desktop app is just the zero-terminal entry point.
 
-**Tre modalita' di esecuzione (scelta utente):**
+**Two execution modes (user's choice):**
 
 ```
-  👤 Utente qualsiasi              👨‍💻 Power user                ☁️ Cloud user
-        │                              │                           │
-        ▼                              ▼                           ▼
-  ┌───────────┐                 ┌─────────────┐            ┌──────────────┐
-  │ 🖥️ App   │                 │  💻 PC      │            │  ☁️ Remote  │
-  │  Desktop  │                 │  Dedicato   │            │     VM       │
-  │ (locale)  │                 │ (rete LAN)  │            │ AWS/GCP/     │
-  │           │                 │             │            │ Hetzner      │
-  └───────────┘                 └─────────────┘            └──────────────┘
-        │                              │                           │
-        └──────────────────────────────┴───────────────────────────┘
-                                       │
-                                       ▼
-                              🌐 Web Dashboard
-                           (monitoring da remoto)
-                            Vercel + Supabase
+  👤 Any user                                 ☁️ Cloud user
+        │                                          │
+        ▼                                          ▼
+  ┌───────────┐                           ┌──────────────┐
+  │ 🖥️ Desktop │                          │  ☁️ Remote   │
+  │  App      │                           │     VM       │
+  │ (local)   │                           │ AWS/GCP/     │
+  │           │                           │ Hetzner      │
+  └───────────┘                           └──────────────┘
+        │                                          │
+        └──────────────────────┬───────────────────┘
+                               │
+                               ▼
+                      🌐 Web Dashboard
+                   (remote monitoring)
+                    Vercel + Supabase
 ```
 
-**Stack decisioni:**
+> "Local" covers anything the user owns — personal laptop, spare desktop, a LAN-side box. The launcher treats them uniformly. If the user outgrows local, they migrate to Cloud.
 
-| Componente | Tecnologia | Motivazione |
-|-----------|------------|-------------|
-| Desktop app | **Launcher Electron leggero** | Installer, tray, lifecycle manager; la GUI operativa resta nel browser |
-| Web dashboard | **Next.js su Vercel** | Pipeline CI/CD gia' scritta |
-| Backend dati | **Supabase** (Frankfurt) | Gia' attivo, PostgreSQL, auth Google |
-| Cloud provisioning | **Multi-provider** | AWS + GCP + Hetzner con layer di astrazione |
-| Lingua principale | **Inglese** | Target internazionale, italiano come seconda lingua |
+**Stack decisions:**
+
+| Component | Technology | Rationale |
+|-----------|------------|-----------|
+| Desktop app | **Lightweight Electron launcher** | Installer, tray, lifecycle manager; operational GUI stays in the browser |
+| Web dashboard | **Next.js on Vercel** | CI/CD pipeline already in place |
+| Structured data | **Supabase** | Already active, PostgreSQL, Google auth |
+| User files (cloud) | **Google Drive** | CV, cover letters, generated PDFs |
+| Cloud provisioning | **Multi-provider** | AWS + GCP + Hetzner with an abstraction layer |
+| Primary language | **English** | International target, Italian as secondary |
 
 ---
 
-## 📅 Fasi di sviluppo
+## 📅 Development phases
 
 ```
-  Fase 1              Fase 2              Fase 3              Fase 4              Fase 5
+  Phase 1             Phase 2             Phase 3             Phase 4             Phase 5
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  🔨 IN CORSO          ⏳ PROSSIMA         ⏳ PROSSIMA          ⏳ PROSSIMA         🔮 FUTURO
-  Web Platform        Desktop Launcher    Cloud Multi-         i18n                Sito Web
-  consolidamento      + localhost GUI     Provider             Completa            Pubblico
+  🔨 IN PROGRESS      ⏳ NEXT             ⏳ NEXT              ⏳ NEXT             🔮 FUTURE
+  Web Platform       Desktop Launcher     Cloud Multi-         Full               Public
+  consolidation     + localhost GUI       Provider             i18n               Website
 ```
 
 ---
 
-### 🔨 Fase 1 — Consolidamento Web Platform (sprint corrente)
+### 🔨 Phase 1 — Web Platform Consolidation (current sprint)
 
-> _"La web app funziona end-to-end con dati reali."_
+> _"The web app works end-to-end with real data."_
 
 ```
-🟢 Stato: IN CORSO
-━━━━━━━━━━━━━━━━░░░░░ ~65%
+🟢 Status: IN PROGRESS
+━━━━━━━━━━━━━━━━━━░░░ ~78%
 
-✅ App Next.js funzionante con 56 pagine
-✅ Auth Google configurata
-✅ Schema DB V2 (5 tabelle + RLS)
-✅ CI/CD Vercel pipeline scritta
-⬜ Dashboard con dati reali Supabase
-⬜ Profilo utente con salvataggio cloud
-⬜ Pagine posizioni e candidature
-⬜ Deploy Vercel (mancano secrets GitHub)
-⬜ API layer agenti → Supabase (multi-tenant)
-⬜ Test E2E piattaforma web
+✅ Next.js app with 120 pages (App Router)
+✅ Google auth configured
+✅ DB schema V2 (5 tables + RLS)
+✅ Vercel CI/CD pipeline
+✅ Dashboard wired to real Supabase data
+✅ Positions and applications pages live
+✅ User profile with cloud save
+⬜ Vercel deploy (missing GitHub secrets)
+⬜ API layer agents → Supabase (multi-tenant)
+⬜ Web platform E2E tests
 ```
 
 ---
 
-### 📦 Fase 2 — Desktop Launcher
+### 📦 Phase 2 — Desktop Launcher
 
-> _"Scarichi, installi, parte tutto in background, poi lavori dal browser."_
+> _"Download, install, everything starts in the background, then you work from the browser."_
 
 ```
-🟡 Stato: IN CORSO
-━━━━━━━━━━━░░░░░░░░░ ~45%
+🟡 Status: IN PROGRESS
+━━━━━━━━━━━━━░░░░░░░ ~55%
 
-✅ Scaffolding `desktop/` + electron-builder
-✅ Launcher/orchestratore locale con browser opener e runtime manager
-✅ Payload prebuildato: GUI web gia' compilata, niente rebuild lato utente
-✅ Installer: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
-✅ Release workflow con GitHub Releases e runner nativi per OS
-⬜ Setup wizard grafico (lingua, profilo, provider AI, credenziali)
-⬜ Bootstrap silenzioso dipendenze in base al provider scelto
-⬜ Tray icon + notifiche desktop native
-⬜ Code signing completo (macOS + Windows)
+✅ `desktop/` scaffolding + electron-builder
+✅ Local launcher/orchestrator with browser opener and runtime manager
+✅ Pre-built payload: web GUI already compiled, no user-side rebuild
+✅ Installers: .dmg (macOS), .exe NSIS (Windows), .AppImage + .deb (Linux)
+✅ Release workflow with GitHub Releases and native runners per OS
+✅ Graphical setup wizard (language, profile, AI provider, credentials)
+⬜ Wizard hardening (edge-cases, retry logic, better error messages)
+⬜ Silent dependency bootstrap based on chosen provider
+⬜ Tray icon + native desktop notifications
+⬜ Full code signing (macOS + Windows)
 ⬜ Auto-update via electron-updater
-⬜ Modalita' "computer dedicato" (SSH + mDNS discovery)
 ```
 
 ---
 
-### ☁️ Fase 3 — Cloud Provisioning Multi-Provider
+### ☁️ Phase 3 — Multi-Provider Cloud Provisioning
 
-> _"Clicca un bottone, il team gira su un server cloud."_
+> _"Click a button, the team runs on a cloud server."_
 
 ```
-⚪ Stato: ROADMAP
+⚪ Status: ROADMAP
 ░░░░░░░░░░░░░░░░░░░░ 0%
 
-⬜ Layer di astrazione shared/cloud/ (interfaccia CloudProvider)
-⬜ Adapter AWS EC2 (provisioning, security group, lifecycle)
-⬜ Adapter Google Cloud GCE (firewall, startup script)
-⬜ Adapter Hetzner Cloud (EU-only, costi bassi)
-⬜ UI Cloud nel wizard desktop (scelta provider, stima costi)
+⬜ Abstraction layer shared/cloud/ (CloudProvider interface)
+⬜ AWS EC2 adapter (provisioning, security group, lifecycle)
+⬜ Google Cloud GCE adapter (firewall, startup script)
+⬜ Hetzner Cloud adapter (EU-only, low cost)
+⬜ Cloud UI inside the desktop wizard (provider choice, cost estimate)
 ⬜ One-click deploy + monitoring + teardown
-⬜ Tunnel sicuro app ↔ cloud (WireGuard / SSH tunnel)
-⬜ Billing alert (notifica soglia costi)
+⬜ Secure tunnel app ↔ cloud (WireGuard / SSH tunnel)
+⬜ Billing alerts (cost threshold notifications)
 ```
 
 ---
 
-### 🌍 Fase 4 — Internazionalizzazione Completa
+### 🌍 Phase 4 — Full Internationalization
 
-> _"La piattaforma parla la lingua dell'utente."_
+> _"The platform speaks the user's language."_
 
 ```
-⚪ Stato: ROADMAP (base it/en gia' presente in shared/i18n/)
+⚪ Status: ROADMAP (it/en base already in shared/i18n/)
 ━━━░░░░░░░░░░░░░░░░░ ~15%
 
-✅ Modulo i18n con supporto it/en e fallback
-✅ Chiavi traduzione per nav, common, status, time, notifications
-⬜ Inglese come lingua principale (default) per UI e docs
-⬜ Refactor traduzioni in file separati per lingua (locales/*.json)
-⬜ Language switcher in app desktop e web dashboard
-⬜ Copertura i18n per tutte le nuove pagine (wizard, cloud, ecc.)
-⬜ Espansione: spagnolo, tedesco, francese, portoghese
-⬜ Guida per traduttori community
+✅ i18n module with it/en support and fallback
+✅ Translation keys for nav, common, status, time, notifications
+⬜ English as primary language (default) for UI and docs
+⬜ Refactor translations into per-language files (locales/*.json)
+⬜ Language switcher in desktop app and web dashboard
+⬜ i18n coverage for all new pages (wizard, cloud, etc.)
+⬜ Expansion: Spanish, German, French, Portuguese
+⬜ Guide for community translators
 ```
 
 ---
 
-### 🌐 Fase 5 — Sito Web Pubblico e Distribuzione
+### 🌐 Phase 5 — Public Website and Distribution
 
-> _"Landing page, download, onboarding per utenti non tecnici."_
+> _"Landing page, download, onboarding for non-technical users."_
 
 ```
-🟡 Stato: IN CORSO
+🟡 Status: IN PROGRESS
 ━━━━━━━━━━━━░░░░░░░░ ~55%
 
-✅ Dominio acquistato: **jobhunterteam.ai** (Cloudflare)
-✅ DNS configurato: Record A → Vercel (216.198.79.1), DNS only
-✅ Dominio collegato a Vercel, SSL auto-generato
-✅ Supabase Auth: Site URL e redirect aggiornati a jobhunterteam.ai
-✅ Landing page pubblica
-✅ Pagina download con rilevamento OS automatico
-⬜ Configurazione sottodomini (app, docs, api)
-⬜ Documentazione utente visuale (guide, screenshot, FAQ)
-⬜ Video tutorial (opzionale)
+✅ Domain purchased: **jobhunterteam.ai** (Cloudflare)
+✅ DNS configured: A record → Vercel (216.198.79.1), DNS only
+✅ Domain connected to Vercel, SSL auto-generated
+✅ Supabase Auth: Site URL and redirects updated to jobhunterteam.ai
+✅ Public landing page
+✅ Download page with OS auto-detection
+⬜ Subdomain setup (app, docs, api)
+⬜ Visual user documentation (guides, screenshots, FAQ)
+⬜ Video tutorials (optional)
 ```
 
 ---
 
-## 🔄 Migrazione locale <-> cloud
+## 🔄 Local ↔ Cloud migration
 
 ```
- 💻 Locale                          🌐 Cloud
+ 💻 Local                           🌐 Cloud
 ┌─────────────┐    ──export──►   ┌───────────┐
 │   SQLite    │                  │ Supabase  │
-│   + PDF     │    ◄──import──   │ PostgreSQL│
+│   + PDFs    │    ◄──import──   │ PostgreSQL│
 └─────────────┘                  └───────────┘
 ```
 
-| Direzione | Cosa migra |
-|-----------|-----------|
-| 💻 → 🌐 | Profilo, posizioni, score, candidature, PDF |
-| 🌐 → 💻 | Stessi dati, scaricati in SQLite + cartelle locali |
+| Direction | What migrates |
+|-----------|---------------|
+| 💻 → 🌐 | Profile, positions, scores, applications, PDFs |
+| 🌐 → 💻 | Same data, pulled into SQLite + local folders |
 
-> Questa feature e' trasversale e verra' implementata progressivamente tra Fase 1 e Fase 3.
-
----
-
-## 📦 Modalita' di utilizzo (dettaglio)
-
-### 🖥️ 1. App Desktop — Per tutti
-
-| | |
-|---|---|
-| 🎯 **Target** | Chiunque — utenti non tecnici inclusi |
-| 📥 **Installazione** | Scarica il launcher (.dmg/.exe/.AppImage/.deb), installa e avvia |
-| ⚙️ **Setup** | Wizard grafico: lingua → profilo → provider AI → credenziali |
-| 🤖 **Runtime** | JHT gira in background; il launcher controlla start/stop/status |
-| 💾 **Storage** | SQLite locale + sync opzionale con Supabase |
-| 🌐 **GUI** | Browser su `http://localhost:3000` aperto automaticamente |
-| 📡 **Monitoring** | Web dashboard da browser (anche da telefono) |
-
-### 💻 2. Computer Dedicato — Per chi ha un PC extra
-
-| | |
-|---|---|
-| 🎯 **Target** | Chi vuole un PC sempre acceso dedicato al team |
-| 🔧 **Setup** | Dal launcher desktop, configura il PC remoto via SSH |
-| 🤖 **Agenti** | Girano sul PC dedicato, non sul principale |
-| 📡 **Monitoring** | GUI web + notifiche desktop |
-
-### ☁️ 3. Cloud Remoto — Per chi vuole zero hardware
-
-| | |
-|---|---|
-| 🎯 **Target** | Power user, chi non vuole tenere un PC acceso |
-| ☁️ **Provider** | AWS, GCP, Hetzner (scelta utente) |
-| 💰 **Costo** | Pay-per-use: avvii → lavora → spegni |
-| 🤖 **Agenti** | Girano sulla VM cloud |
-| 📡 **Monitoring** | GUI web + launcher desktop |
+> Cross-cutting feature, rolled out progressively across Phase 1 → Phase 3.
 
 ---
 
-## 🐳 Docker — Default ovunque
+## 📡 Communication channels
 
-> _Isolamento degli agenti dal filesystem host. **Default sia nel CLI sia nel DMG**. Chi sa quello che fa puo' uscire con `--no-docker` (CLI) o `JHT_NO_DOCKER=1` (desktop)._
+Today the user reaches the team through two channels, with different coverage:
 
-### Motivazione
+| Channel | Today | Recommended default |
+|---------|-------|---------------------|
+| **Web dashboard / TUI** | Can address **any agent** directly | Talk to the Captain; it coordinates the pipeline |
+| **Telegram** | Wired to the **Captain only** | — |
 
-Oggi gli agenti girano nativi sul sistema operativo dell'utente con `--dangerously-skip-permissions`. Funziona per Leone e per chiunque si fidi del tool, ma non e' accettabile come default per una distribuzione pubblica dove l'utente non puo' (e non vuole) verificare cosa fanno gli agenti sul suo filesystem.
+### 🛣️ Planned evolution — Telegram group chat with directed messages
 
-Docker risolve isolando i processi agente in un container, che vede **solo** due cartelle bind-mounted: `~/.jht` (nascosta, DB/config/agenti) e `~/Documents/Job Hunter Team` (visibile, CV e output). Tutto il resto del filesystem host e' invisibile.
-
-### 📐 Policy di installazione
-
-Docker e' il **default in entrambi i percorsi di installazione**. La policy di opt-out cambia in base al target utente:
+> _"A single Telegram group where the user can DM a specific agent without spamming the others."_
 
 ```
-┌─ CLI one-liner (utenti tech) ────────────────────────────┐
+⚪ Status: ROADMAP
+░░░░░░░░░░░░░░░░░░░░ 0%
+
+⬜ Telegram group with all agents as members
+⬜ Directed messages: `@scout find python jobs in EU` delivered only to Scout
+⬜ Broadcast mode for Captain announcements
+⬜ Per-agent mute / subscription preferences on the user side
+⬜ Audit log of who received what (for debugging)
+⬜ Backwards compatibility: plain messages still route to the Captain
+```
+
+Rationale: today Telegram is the "on the go" channel but limited to the Captain. Extending it to the full team — with directed messages to avoid noise — gives the user the same reach they already have on the web dashboard, without forcing them to be at their PC.
+
+> Cross-cutting feature, not tied to a specific phase. Can ship independently once the Captain → per-agent routing layer is in place.
+
+---
+
+## 📦 Usage modes (detail)
+
+### 🖥️ 1. Desktop App — For everyone
+
+| | |
+|---|---|
+| 🎯 **Target** | Anyone — non-technical users included |
+| 📥 **Install** | Download the launcher (.dmg/.exe/.AppImage/.deb), install, run |
+| ⚙️ **Setup** | Graphical wizard: language → profile → AI provider → credentials |
+| 🤖 **Runtime** | JHT runs in the background; the launcher handles start/stop/status |
+| 💾 **Storage** | Local SQLite + optional sync with Supabase |
+| 🌐 **GUI** | Browser at `http://localhost:3000`, opened automatically |
+| 📡 **Monitoring** | Web dashboard from any browser (including mobile) |
+
+### ☁️ 2. Cloud Remote — For zero-hardware users
+
+| | |
+|---|---|
+| 🎯 **Target** | Power users, people who don't want to keep a PC running |
+| ☁️ **Provider** | AWS, GCP, Hetzner (user's choice) |
+| 💰 **Cost** | Pay-per-use: start → work → stop |
+| 🤖 **Agents** | Run on the cloud VM |
+| 📡 **Monitoring** | Web dashboard + desktop launcher |
+
+---
+
+## 🐳 Docker — Default everywhere
+
+> _Isolates agents from the host filesystem. **Default in both the CLI and the DMG paths**. Users who know what they're doing can opt out with `--no-docker` (CLI) or `JHT_NO_DOCKER=1` (desktop)._
+
+### Rationale
+
+Today agents run natively on the user's OS with `--dangerously-skip-permissions`. That works for Leone and for anyone who trusts the tool, but it isn't an acceptable default for a public distribution where the user can't (and doesn't want to) verify what agents are doing on their filesystem.
+
+Docker solves this by isolating agent processes in a container that sees **only** two bind-mounted folders: `~/.jht` (hidden — DB/config/agents) and `~/Documents/Job Hunter Team` (visible — CVs and output). The rest of the host filesystem is invisible.
+
+### 📐 Install policy
+
+Docker is the **default on both install paths**. The opt-out policy depends on the target user:
+
+```
+┌─ CLI one-liner (tech users) ─────────────────────────────┐
 │                                                          │
-│  Default:     Docker ON (Colima su Mac, docker.io su     │
-│               Linux/WSL2)                                │
-│  Opt-out:     --no-docker → installa nativo (expert)     │
-│  Messaggio:   "Modalita' nativa: gli agenti hanno        │
-│                accesso al filesystem. Usa solo se hai    │
-│                dedicato un PC/VM al team."               │
+│  Default:    Docker ON (Colima on Mac, docker.io on      │
+│              Linux/WSL2)                                 │
+│  Opt-out:    --no-docker → native install (expert)       │
+│  Message:    "Native mode: agents have full filesystem   │
+│               access. Use only on a PC/VM dedicated to   │
+│               the team."                                 │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 
-┌─ DMG installer (utenti non-tech) ────────────────────────┐
+┌─ DMG installer (non-tech users) ─────────────────────────┐
 │                                                          │
-│  Default:     Docker ON — sempre installato e usato      │
-│  Flag:        (nessuno — non esposto all'utente)         │
-│  Motivazione: un utente che scarica un .dmg e installa   │
-│               "tutto" non puo' valutare i rischi di      │
-│               agenti AI con privilegi root-like. Il      │
-│               container e' l'unica garanzia che un       │
-│               eventuale danno resti contenuto.           │
+│  Default:    Docker ON — always installed and used       │
+│  Flag:       (none — not exposed to the user)            │
+│  Rationale:  a user who downloads a .dmg and installs    │
+│              "everything" cannot evaluate the risks of   │
+│              AI agents with root-like privileges. The    │
+│              container is the only guarantee that any    │
+│              damage stays contained.                     │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 🎯 Due profili d'uso
+### 🎯 Usage profiles
 
-| Profilo | Ambiente | Default Docker |
-|---------|----------|----------------|
-| **PC personale quotidiano** | Il Mac/Linux che usi per tutto | ⭐ **ON (consigliato)** |
-| **Workstation dedicata** | PC/VM usato SOLO per il team JHT | ON (puoi uscire con `--no-docker`) |
-| **Server cloud (AWS/Hetzner)** | VM remota | ON (puoi uscire con `--no-docker`) |
-| **Utente non-tech (DMG)** | Mac/Windows home, prima esperienza | 🔒 **ON, non disattivabile** |
+| Profile | Environment | Docker default |
+|---------|-------------|----------------|
+| **Daily personal PC** | The Mac/Linux you use for everything | ⭐ **ON (recommended)** |
+| **Dedicated workstation** | PC/VM used ONLY for the JHT team | ON (opt-out with `--no-docker`) |
+| **Cloud server (AWS/Hetzner)** | Remote VM | ON (opt-out with `--no-docker`) |
+| **Non-tech user (DMG)** | Home Mac/Windows, first experience | 🔒 **ON, not toggleable** |
 
-### 🧰 Runtime container per piattaforma
+### 🧰 Container runtime per platform
 
-Non usiamo **Docker Desktop** perche' richiede EULA/GUI/interazione manuale. Usiamo alternative scriptabili:
+We don't use **Docker Desktop** because it requires EULA/GUI/manual interaction. We use scriptable alternatives:
 
-| OS | Runtime | Perche' |
-|----|---------|---------|
-| 🍎 macOS | **Colima** (`brew install colima docker`) | FOSS Apache 2.0, no GUI, no EULA, scriptable 100%, stesso `docker` CLI |
-| 🐧 Linux | **docker.io nativo** (`apt/dnf/pacman`) | Standard, zero frizione |
-| 🪟 Windows | **docker.io in WSL2** (non Docker Desktop) | JHT gira gia' in WSL2, saltiamo il layer Docker Desktop commerciale |
+| OS | Runtime | Why |
+|----|---------|-----|
+| 🍎 macOS | **Colima** (`brew install colima docker`) | FOSS Apache 2.0, no GUI, no EULA, 100% scriptable, same `docker` CLI |
+| 🐧 Linux | **docker.io native** (`apt/dnf/pacman`) | Standard, zero friction |
+| 🪟 Windows | **docker.io inside WSL2** (not Docker Desktop) | JHT already runs in WSL2, we skip the commercial Docker Desktop layer |
 
-Colima su Mac e' critico: Docker Desktop richiede all'utente di aprire l'app, accettare EULA e dare password admin. Colima gira in background come daemon, espone lo stesso `docker` CLI, e **puo' essere installato completamente via script**.
+Colima on Mac is critical: Docker Desktop requires the user to open the app, accept EULA, and give admin password. Colima runs as a background daemon, exposes the same `docker` CLI, and **can be installed entirely via script**.
 
-### 📋 Requisiti gia' soddisfatti
+### 📋 Prerequisites already met
 
-La centralizzazione path del refactor `dev-4` + il rollout Docker hanno gia' chiuso il preparativo:
-
-```
-✅ Stato persistente in due cartelle sole (JHT_HOME + JHT_USER_DIR)
-✅ Path configurabili via env var (override per bind-mount)
-✅ Nessun side-effect sul sistema host (no scrittura in ~/.bashrc ecc.)
-✅ TUI / CLI auth / desktop launcher gated dietro isContainer()
-   (IS_CONTAINER=1 oppure /.dockerenv) — stampano path/URL invece
-   di lanciare open/xdg-open/explorer
-```
-
-### 🗺️ Fasi implementazione Docker
+The `dev-4` path centralization refactor + the Docker rollout have already closed the groundwork:
 
 ```
-Step 1: Dockerfile minimale
+✅ Persistent state in two folders only (JHT_HOME + JHT_USER_DIR)
+✅ Paths configurable via env vars (override for bind-mounts)
+✅ No side-effects on the host system (no writes to ~/.bashrc etc.)
+✅ TUI / CLI auth / desktop launcher gated behind isContainer()
+   (IS_CONTAINER=1 or /.dockerenv) — print paths/URLs instead of
+   invoking open/xdg-open/explorer
+```
+
+### 🗺️ Docker implementation phases
+
+```
+Step 1: Minimal Dockerfile
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 FROM node:20-alpine
 RUN apk add tmux git bash
@@ -316,76 +341,76 @@ services:
     ports:
       - "3000:3000"  # web dashboard
     stdin_open: true
-    tty: true        # per la TUI
+    tty: true        # for the TUI
 
-Step 3: Wrapper `jht-docker`
+Step 3: `jht-docker` wrapper
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Script bash che fa:
+bash script that runs:
   docker run --rm -it \
     -v ~/.jht:/jht_home \
     -v "$HOME/Documents/Job Hunter Team:/jht_user" \
     -e ANTHROPIC_API_KEY \
     ghcr.io/leopu00/jht:latest
 
-Step 4: Image pre-buildata su GitHub Container Registry
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CI che su tag git:
+Step 4: Pre-built image on GitHub Container Registry
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CI that on git tag:
   - docker build
   - docker push ghcr.io/leopu00/jht:v0.x.y
-L'utente: `docker pull ghcr.io/leopu00/jht:latest`
+User: `docker pull ghcr.io/leopu00/jht:latest`
 
-Step 5: scripts/install.sh — Docker default + flag --no-docker
+Step 5: scripts/install.sh — Docker default + --no-docker flag
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-scripts/install.sh installa Docker by default:
+scripts/install.sh installs Docker by default:
 
   curl -fsSL .../install.sh | bash                     # Docker (default)
-  curl -fsSL .../install.sh | bash -s -- --no-docker   # nativo (expert)
+  curl -fsSL .../install.sh | bash -s -- --no-docker   # native (expert)
 
-Path Docker:
-  - Su macOS: brew install colima docker + colima start
-  - Su Linux: apt/dnf/pacman install docker.io + systemctl enable
-  - Su WSL:   apt install docker.io dentro WSL2
+Docker path:
+  - macOS: brew install colima docker + colima start
+  - Linux: apt/dnf/pacman install docker.io + systemctl enable
+  - WSL:   apt install docker.io inside WSL2
   - docker pull ghcr.io/leopu00/jht:latest
-  - genera ~/.local/bin/jht come wrapper docker run con il
-    contratto MOUNTS/ENV/PORT condiviso
+  - generates ~/.local/bin/jht as a docker run wrapper with the
+    shared MOUNTS/ENV/PORT contract
 
-Path --no-docker:
-  - clone repo, build TUI/CLI, simlink jht come prima
-  - il messaggio finale stampa un warning esplicito sul fatto
-    che gli agenti hanno accesso al filesystem host
+--no-docker path:
+  - clone repo, build TUI/CLI, symlink jht as before
+  - final message prints an explicit warning that agents have
+    full filesystem access on the host
 
 Step 6: DMG installer (Docker ON by default)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Il DMG (percorso non-tech) installa SEMPRE Colima+docker come parte
-del processo, senza chiedere all'utente, senza mostrare l'opzione.
-All'apertura del .dmg:
-  1. Estrae JHT.app in /Applications
-  2. Lancia post-install script che installa Colima via brew
-     (o bundled pkg se brew manca) e fa colima start
-  3. Prima esecuzione di JHT.app usa il container da subito
+The DMG (non-tech path) ALWAYS installs Colima+docker as part
+of the process, without asking the user, without exposing the option.
+When the .dmg opens:
+  1. Extracts JHT.app into /Applications
+  2. Runs a post-install script that installs Colima via brew
+     (or a bundled pkg if brew is missing) and runs colima start
+  3. First launch of JHT.app uses the container from the start
 
-L'utente non-tech non sa che esiste Docker: vede solo JHT che
-funziona. Il container e' la rete di sicurezza invisibile.
+The non-tech user doesn't know Docker exists: they just see JHT
+working. The container is the invisible safety net.
 ```
 
-### 🎯 Stato
+### 🎯 Status
 
 ```
 ✅ scripts/install.sh — Docker default + --no-docker opt-out
 ✅ Gating isContainer() in TUI / CLI auth / desktop runtime
 ✅ desktop/runtime.js — spawn ghcr.io/leopu00/jht:latest via docker run
-✅ desktop/container.js — bootstrap Colima su Mac
-⬜ Dockerfile + docker-compose root (gestito da CORE container track)
-⬜ Workflow CI per pubblicare l'immagine su GHCR (CORE container track)
-⬜ DMG installer che pre-installa Colima senza chiedere all'utente
+✅ desktop/container.js — Colima bootstrap on Mac
+⬜ Dockerfile + root docker-compose (handled by CORE container track)
+⬜ CI workflow to publish the image to GHCR (CORE container track)
+⬜ DMG installer that pre-installs Colima without asking the user
 ```
 
-### ⚠️ Cose da NON fare finche' non si implementa Docker
+### ⚠️ Things NOT to do until Docker is in place
 
-Per mantenere il progetto "Docker-ready" senza bloccare lo sviluppo:
+To keep the project "Docker-ready" without blocking development:
 
-1. **Non aggiungere side-effects sul sistema host** (installazione globale di tool, scrittura in `~/.bashrc`, modifica di `~/Library`, ecc.)
-2. **Non hardcodare comandi OS-specific senza fallback** (es. `open ...` su macOS → gated behind platform check)
-3. **Non usare path assoluti fuori da `JHT_HOME`/`JHT_USER_DIR`** (es. `/usr/local/...`, `/etc/...`)
-4. **Non aprire porte di rete diverse da 3000** (web dashboard), altrimenti il port-forwarding Docker si complica
-5. **Non scrivere dentro `node_modules` a runtime** (sarebbe read-only nel container)
+1. **No side-effects on the host** (global tool installs, writes to `~/.bashrc`, mods to `~/Library`, etc.)
+2. **No hardcoded OS-specific commands without fallback** (e.g. `open ...` on macOS → gated behind platform check)
+3. **No absolute paths outside `JHT_HOME`/`JHT_USER_DIR`** (e.g. `/usr/local/...`, `/etc/...`)
+4. **No network ports other than 3000** (web dashboard), otherwise Docker port-forwarding gets complicated
+5. **No writes inside `node_modules` at runtime** (read-only in the container)
