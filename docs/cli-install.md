@@ -76,6 +76,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 |------------|---------|---------|
 | `--no-docker` | off | Skip the container, install natively (expert mode) |
 | `--with-docker` | on | Alias kept for retro-compat (Docker is already the default) |
+| `--dry-run` | off | Print every install/download/mutating action without executing any of them |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
 | `JHT_BRANCH` | `main` | Branch checked out in native mode |
@@ -172,22 +173,92 @@ or `docs/quickstart.md` instead.
 
 ---
 
-## Tested environments
+## Dry-run
 
-> Filled in once we run the script end-to-end on clean machines.
+`--dry-run` walks every step of the installer and prints the actions
+that *would* be executed, without touching the system. Nothing is
+downloaded, no package is installed, no file is written. Use it to
+preview what the installer will do on a new machine, or to sanity-check
+a change to `install.sh` before running it for real.
+
+```bash
+bash scripts/install.sh --dry-run                 # docker path
+bash scripts/install.sh --no-docker --dry-run     # native path
+```
+
+Both finish in under a second and exit `0`.
+
+Sample output (docker path on a Mac that already has `docker`, no
+Colima, no image pulled):
+
+```text
+╔══════════════════════════════════════════╗
+║     Job Hunter Team — Installer          ║
+╚══════════════════════════════════════════╝
+
+  mode:   Docker (isolato)
+  image:  ghcr.io/leopu00/jht:latest
+  dry-run: ON (nessuna modifica al sistema)
+
+[1/5] Rilevamento sistema
+  ✓ macOS
+
+[2/5] Container runtime
+  ▸ Installo Colima (runtime container Apache 2.0, no Docker Desktop)...
+  [dry-run] would execute: brew install colima
+  ✓ docker CLI gia' installato
+  [dry-run] would execute: colima start (se non gia' attivo)
+
+[3/5] Verifica docker
+  [dry-run] would execute: docker info
+
+[4/5] Download immagine ghcr.io/leopu00/jht:latest
+  [dry-run] would execute: docker pull ghcr.io/leopu00/jht:latest
+
+[5/5] Wrapper jht (docker run)
+  [dry-run] would execute: mkdir -p $HOME/.local/bin
+  [dry-run] would write wrapper: $HOME/.local/bin/jht
+  [dry-run] wrapper launches: docker run --rm -v $HOME/.jht:/jht_home ...
+```
+
+What `--dry-run` covers:
+
+- `brew install`, `apt-get install`, `dnf install`, `pacman -S`
+- `curl ... | bash` style one-liners (Homebrew, NodeSource)
+- `colima start`, `systemctl enable --now docker`, `service docker start`
+- `docker info`, `docker pull`
+- `git clone`, `git fetch`, `git reset`
+- `mkdir -p` on persistent paths, `chmod +x`, `ln -s`
+- wrapper-script heredoc at `$JHT_BIN_DIR/jht`
+- the final `jht setup` wizard (skipped in dry-run)
+
+What `--dry-run` intentionally does **not** do:
+
+- It still runs read-only probes: `uname -s`, `command -v`, reading
+  `/etc/os-release`, etc. Those have no side effect.
+- It does **not** verify that `apt-get`, `brew`, or `docker` would
+  succeed; it only prints the intent. Use `--dry-run` as a preview,
+  not a test.
+
+---
+
+## Tested environments
 
 | OS | Mode | Date | Result | Notes |
 |----|------|------|--------|-------|
-| macOS 15 (this Mac) | Docker | _todo_ | _todo_ | _todo_ |
-| Ubuntu 24.04 (`docker run -it ubuntu:24.04`) | Docker | _todo_ | _todo_ | DinD limitations expected |
-| Ubuntu 24.04 | `--no-docker` | _todo_ | _todo_ | _todo_ |
-| WSL2 (Ubuntu) | Docker | _todo_ | _todo_ | _todo_ |
+| macOS 15 (this Mac) | Docker `--dry-run` | 2026-04-16 | OK, exit 0 | Walks all 5 steps, no side effects. Colima not installed locally — shown as "would execute: brew install colima" |
+| macOS 15 (this Mac) | `--no-docker --dry-run` | 2026-04-16 | OK, exit 0 | Walks all 7 steps. `git`/`tmux`/`node`/`claude` already present, so only clone/build/link are "would execute" |
+| macOS 15 (this Mac) | Docker (real install) | _not run_ | — | Would install Colima system-wide; skipped in this session |
+| Ubuntu 24.04 (`docker run -it ubuntu:24.04`) | Docker `--dry-run` | _not run in this session_ | — | Docker daemon not active locally at verification time; skipped per anti-crash rules |
+| Ubuntu 24.04 | `--no-docker` | _not run_ | — | Needs a clean VM |
+| WSL2 (Ubuntu) | Docker | _not run_ | — | No WSL host available |
 
 ---
 
 ## Known gaps and follow-ups
 
-- `--dry-run` flag — not yet implemented; tracked separately.
+- Run the installer end-to-end on at least one clean Linux VM and one
+  clean WSL2 host; `--dry-run` on Mac is not a substitute.
 - The endpoint always serves `master`. We may want to pin to the latest
   GitHub release tag instead, so a stable curl install is reproducible.
 - `setup.ps1` still detects neither CPU architecture (ARM vs AMD64) nor
