@@ -72,13 +72,9 @@ row2: "" {
       storage: "💾 Storage"
     }
     dashboard_locale: "🌐 Dashboard locale\nlocalhost:3000\nNext.js\nDati da Storage"
-    telegram: "💬 Telegram"
-    browser: "🧭 Browser"
   }
-  cell: "📱 Cellulare" {
-    telegram: "💬 Telegram"
-    browser: "🧭 Browser"
-  }
+  telegram: "💬 Telegram"
+  browser: "🧭 Browser"
 }
 
 utente: "👤 Utente"
@@ -91,12 +87,11 @@ junction: "Cloud\nO\nLocale?" {
   }
 }
 
-row1.cloud_col.site <-> row2.cell.browser
 row1.cloud_col.vps.docker.storage <-> row1.cloud_col.cloud: sync {
   style.stroke-dash: 4
 }
 row2.pc.docker.storage <-> row2.pc.dashboard_locale
-row2.pc.browser <-> row1.cloud_col.site
+row2.browser <-> row1.cloud_col.site
 row1.docker -> junction: {
   target-arrowhead.shape: none
 }
@@ -104,10 +99,8 @@ junction -> row2.pc.docker
 junction -> row1.cloud_col.vps.docker
 row2.pc.docker.team <-> row2.pc.docker.storage
 row1.cloud_col.vps.docker.team <-> row1.cloud_col.vps.docker.storage
-utente <-> row2.pc.browser
-row2.pc.browser <-> row2.pc.dashboard_locale
-utente <-> row2.cell.browser
-utente <-> row2.pc.telegram
-utente <-> row2.cell.telegram
-row2.pc.telegram <-> row2.pc.docker.team
-row2.cell.telegram <-> row1.cloud_col.vps.docker.team
+utente <-> row2.browser
+row2.browser <-> row2.pc.dashboard_locale
+utente <-> row2.telegram
+row2.telegram <-> row2.pc.docker.team
+row2.telegram <-> row1.cloud_col.vps.docker.team
