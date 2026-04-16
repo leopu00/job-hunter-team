@@ -79,7 +79,10 @@ if ($git) {
     Fail "Git non trovato. Installalo da https://git-scm.com"
 }
 
-# WSL + tmux (opzionale)
+# tmux (via WSL, opzionale su Windows nativo)
+# Allineato con setup.sh: tmux serve per gli agenti tmux. Su Windows
+# nativo non c'e' tmux; il warning indica a Leone-di-turno che serve WSL
+# (o una VM Linux) per lanciare ".launcher/start.sh".
 $wsl = Get-Command wsl -ErrorAction SilentlyContinue
 if ($wsl) {
     $tmuxCheck = & wsl -d Ubuntu-22.04 -- which tmux 2>$null
@@ -87,9 +90,11 @@ if ($wsl) {
         Ok "WSL + tmux disponibile (Ubuntu-22.04)"
     } else {
         Warn "WSL trovato ma tmux non installato in Ubuntu-22.04"
+        Warn "  Installa con: wsl -d Ubuntu-22.04 -- sudo apt install tmux"
     }
 } else {
     Warn "WSL non disponibile — gli agenti tmux non funzioneranno"
+    Warn "  Installa WSL2 da https://aka.ms/wsl oppure usa la web app in solitaria"
 }
 
 # ── 2. Virtualenv + dipendenze Python ────────────────────────────────────────
@@ -282,6 +287,27 @@ Write-Host ""
 Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Attiva il virtualenv:"
 Write-Host "      .venv\Scripts\Activate.ps1"
 Write-Host ""
-Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Avvia la web app:"
-Write-Host "      cd web; npm run dev"
+
+if ($wsl) {
+    Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Avvia il team (via WSL):"
+    Write-Host "      wsl -d Ubuntu-22.04 -- ./.launcher/start.sh"
+    Write-Host ""
+    Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Connettiti al Coordinatore:"
+    Write-Host "      wsl -d Ubuntu-22.04 -- tmux attach -t ALFA"
+    Write-Host ""
+} else {
+    Write-Host "  > " -NoNewline -ForegroundColor Yellow; Write-Host "Agenti tmux disabilitati (serve WSL)."
+    Write-Host ""
+}
+
+Write-Host "Web App (Next.js) — setup locale:" -ForegroundColor White
+Write-Host ""
+Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Configura le variabili d'ambiente:"
+Write-Host "      Copy-Item web\.env.example web\.env.local  # poi compila i valori Supabase"
+Write-Host ""
+Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Avvia con Docker (hot reload):"
+Write-Host "      cd web; docker compose up"
+Write-Host ""
+Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Oppure avvia senza Docker:"
+Write-Host "      cd web; npm install; npm run dev"
 Write-Host ""
