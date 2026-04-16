@@ -1,345 +1,260 @@
-const modeValue = document.getElementById('modeValue')
-const portValue = document.getElementById('portValue')
-const runtimeValue = document.getElementById('runtimeValue')
-const urlValue = document.getElementById('urlValue')
-const hintText = document.getElementById('hintText')
-const portInput = document.getElementById('portInput')
-const logFileValue = document.getElementById('logFileValue')
-const depsBadge = document.getElementById('depsBadge')
-const buildBadge = document.getElementById('buildBadge')
-const modeBadge = document.getElementById('modeBadge')
-const activePortBadge = document.getElementById('activePortBadge')
-const depsList = document.getElementById('depsList')
-const depsSummary = document.getElementById('depsSummary')
-const payloadStatus = document.getElementById('payloadStatus')
-const payloadLog = document.getElementById('payloadLog')
+// Wizard renderer: welcome → setup → ready → running.
+// The user never sees a scrollable dump of state; each step has one job.
 
-const startButton = document.getElementById('startButton')
-const stopButton = document.getElementById('stopButton')
-const browserButton = document.getElementById('browserButton')
-const refreshButton = document.getElementById('refreshButton')
-const recheckButton = document.getElementById('recheckButton')
-const updatePayloadButton = document.getElementById('updatePayloadButton')
+const STEP_WELCOME = 'welcome'
+const STEP_SETUP = 'setup'
+const STEP_READY = 'ready'
+const STEP_RUNNING = 'running'
 
-let dependenciesOk = false
-let payloadReady = false
-let payloadBusy = false
-
-function describeMode(status) {
-  switch (status.mode) {
-    case 'running':
-      return '🟢 running'
-    case 'starting':
-      return '🟡 starting'
-    case 'stopping':
-      return '🟠 stopping'
-    case 'external':
-      return '🔵 external'
-    case 'blocked':
-      return '🟣 blocked'
-    case 'error':
-      return '🔴 error'
-    default:
-      return '⚪ stopped'
-  }
+const state = {
+  step: STEP_WELCOME,
+  docker: null,
+  payloadBusy: false,
+  starting: false,
 }
 
-function updateHint(status) {
-  if (status.message) {
-    hintText.textContent = status.message
-    return
-  }
-
-  if (status.lastError) {
-    hintText.textContent = `⚠️ ${status.lastError}`
-    return
-  }
-
-  if (status.mode === 'running') {
-    hintText.textContent = '✅ JHT è attivo e il browser può usare la dashboard locale.'
-    return
-  }
-
-  if (status.mode === 'external') {
-    hintText.textContent = 'ℹ️ La porta è già occupata: sembra esserci già una dashboard attiva.'
-    return
-  }
-
-  if (status.mode === 'blocked') {
-    hintText.textContent = '⚠️ La porta è occupata, ma la dashboard non risponde. Il launcher userà una porta alternativa al prossimo start.'
-    return
-  }
-
-  if (status.mode === 'starting') {
-    hintText.textContent = '⏳ Avvio in corso. Attendo che localhost risponda.'
-    return
-  }
-
-  if (!dependenciesOk) {
-    hintText.textContent = '⏳ Completa la checklist delle dipendenze per abilitare l\u2019avvio.'
-    return
-  }
-
-  hintText.textContent = '⏳ Nessun runtime avviato.'
+const dom = {
+  steps: document.querySelectorAll('.step'),
+  btnWelcomeContinue: document.getElementById('btn-welcome-continue'),
+  btnSetupBack: document.getElementById('btn-setup-back'),
+  btnSetupContinue: document.getElementById('btn-setup-continue'),
+  btnStartTeam: document.getElementById('btn-start-team'),
+  btnOpenBrowser: document.getElementById('btn-open-browser'),
+  btnStopTeam: document.getElementById('btn-stop-team'),
+  dockerIcon: document.getElementById('docker-icon'),
+  dockerBadge: document.getElementById('docker-badge'),
+  dockerHint: document.getElementById('docker-hint'),
+  dockerStats: document.getElementById('docker-stats'),
+  dockerRequired: document.getElementById('docker-required'),
+  dockerFree: document.getElementById('docker-free'),
+  dockerActions: document.getElementById('docker-actions'),
+  dockerCard: document.getElementById('docker-card'),
+  runningTitle: document.getElementById('running-title'),
+  runningLead: document.getElementById('running-lead'),
+  runningInfo: document.getElementById('running-info'),
+  advancedLog: document.getElementById('advanced-log'),
+  readyHint: document.getElementById('ready-hint'),
 }
 
-function updateButtons(status) {
-  const busy = status.mode === 'starting' || status.mode === 'stopping' || payloadBusy
-  startButton.disabled = busy || status.mode === 'running' || !dependenciesOk
-  stopButton.disabled = busy || (!status.running && status.mode !== 'external')
-  browserButton.disabled = busy
-  updatePayloadButton.disabled = payloadBusy || !payloadReady || !dependenciesOk
-}
-
-function renderSetup(setup) {
-  if (!setup) return
-  depsBadge.textContent = setup.hasNodeModules ? 'deps: ok' : 'deps: missing'
-  buildBadge.textContent = setup.hasProductionBuild ? 'build: ready' : 'build: dev fallback'
-  modeBadge.textContent = `mode: ${setup.suggestedMode ?? 'unavailable'}`
-}
-
-function depIcon(dep) {
-  if (dep.ok && dep.installed) return '✅'
-  if (!dep.required && !dep.installed) return '➖'
-  if (dep.installed && !dep.ok) return '⚠️'
-  return '❌'
-}
-
-function renderDependencyItem(dep) {
-  const item = document.createElement('li')
-  item.className = 'dep-item'
-  if (dep.ok) item.classList.add('dep-item--ok')
-  else if (dep.installed) item.classList.add('dep-item--warn')
-  else item.classList.add('dep-item--missing')
-  if (!dep.required) item.classList.add('dep-item--optional')
-
-  const icon = document.createElement('div')
-  icon.className = 'dep-item__icon'
-  icon.textContent = depIcon(dep)
-
-  const body = document.createElement('div')
-  body.className = 'dep-item__body'
-
-  const title = document.createElement('div')
-  title.className = 'dep-item__title'
-  const name = document.createElement('span')
-  name.className = 'dep-item__name'
-  name.textContent = dep.name
-  title.appendChild(name)
-  const tag = document.createElement('span')
-  tag.className = 'dep-item__tag'
-  tag.textContent = dep.required ? 'obbligatorio' : 'opzionale'
-  title.appendChild(tag)
-  body.appendChild(title)
-
-  const meta = document.createElement('div')
-  meta.className = 'dep-item__meta'
-  if (dep.installed && dep.version) {
-    meta.textContent = `Rilevato: v${dep.version}${dep.minVersion ? ` (minima ${dep.minVersion})` : ''}`
-  } else if (dep.installed) {
-    meta.textContent = 'Rilevato: versione sconosciuta'
-  } else {
-    meta.textContent = dep.minVersion ? `Non trovato (minima ${dep.minVersion})` : 'Non trovato'
-  }
-  body.appendChild(meta)
-
-  if (dep.hint) {
-    const hint = document.createElement('div')
-    hint.className = 'dep-item__hint'
-    hint.textContent = dep.hint
-    body.appendChild(hint)
-  }
-
-  item.appendChild(icon)
-  item.appendChild(body)
-
-  if (!dep.ok && dep.installUrl) {
-    const installBtn = document.createElement('button')
-    installBtn.type = 'button'
-    installBtn.className = 'button button--ghost dep-item__install'
-    installBtn.textContent = 'Come installare'
-    installBtn.addEventListener('click', () => {
-      window.launcherApi.openExternal(dep.installUrl).catch(() => {})
-    })
-    item.appendChild(installBtn)
-  }
-
-  return item
-}
-
-function renderDependencies(setup) {
-  const deps = Array.isArray(setup?.dependencies) ? setup.dependencies : []
-  depsList.innerHTML = ''
-  if (deps.length === 0) {
-    const empty = document.createElement('li')
-    empty.className = 'deps-list__placeholder'
-    empty.textContent = 'Nessuna informazione sulle dipendenze.'
-    depsList.appendChild(empty)
-  } else {
-    for (const dep of deps) {
-      depsList.appendChild(renderDependencyItem(dep))
+function showStep(name) {
+  state.step = name
+  for (const section of dom.steps) {
+    if (section.dataset.step === name) {
+      section.hidden = false
+    } else {
+      section.hidden = true
     }
   }
-
-  dependenciesOk = setup?.allRequiredOk === true
-  if (dependenciesOk) {
-    depsSummary.textContent = '✅ Tutte le dipendenze obbligatorie sono OK. Puoi avviare JHT.'
-  } else {
-    const missing = deps
-      .filter((dep) => dep.required && !dep.ok)
-      .map((dep) => dep.name)
-    depsSummary.textContent = missing.length
-      ? `⚠️ Manca: ${missing.join(', ')}. Installa e poi premi "Ricontrolla".`
-      : '⚠️ Alcune dipendenze obbligatorie non sono OK. Premi "Ricontrolla" dopo averle sistemate.'
-  }
 }
 
-function renderActivePort(status) {
-  if (status.note === 'port-fallback') {
-    activePortBadge.textContent = `active: ${status.port} fallback`
-    return
-  }
-
-  if (status.mode === 'running' || status.mode === 'external') {
-    activePortBadge.textContent = `active: ${status.port}`
-    return
-  }
-
-  if (status.mode === 'blocked') {
-    activePortBadge.textContent = `blocked: ${status.port}`
-    return
-  }
-
-  activePortBadge.textContent = `target: ${status.port}`
-}
-
-function renderStatus(status) {
-  modeValue.textContent = describeMode(status)
-  portValue.textContent = String(status.port)
-  runtimeValue.textContent = status.runtimeKind ?? 'n/a'
-  urlValue.textContent = status.url
-  renderActivePort(status)
-  renderSetup(status.setup)
-  if (document.activeElement !== portInput || status.mode === 'running' || status.note === 'port-fallback') {
-    portInput.value = String(status.port)
-  }
-  updateHint(status)
-  updateButtons(status)
-}
-
-async function refreshStatus() {
-  const status = await window.launcherApi.getStatus()
-  renderStatus(status)
-}
-
-async function refreshDependencies() {
-  const setup = await window.launcherApi.inspectSetup()
-  renderSetup(setup)
-  renderDependencies(setup)
-  return setup
-}
-
-function appendPayloadLog(line) {
+function appendLog(line) {
   if (!line) return
-  payloadLog.hidden = false
-  payloadLog.textContent += `${line}\n`
-  payloadLog.scrollTop = payloadLog.scrollHeight
+  dom.advancedLog.textContent += `${line}\n`
 }
 
-function renderPayloadInfo(info) {
-  payloadReady = info?.present === true
-  if (!info?.payloadDir) {
-    payloadStatus.textContent = 'Payload: percorso non disponibile.'
+// -------- Step 2: Setup (Docker checklist) --------
+
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild)
+}
+
+function renderDockerCard(status) {
+  const check = status.check
+  const card = dom.dockerCard
+  card.classList.remove('dep-card--ok', 'dep-card--warn', 'dep-card--missing')
+
+  if (check.state === 'ok') {
+    dom.dockerIcon.textContent = '✓'
+    dom.dockerBadge.textContent = 'Pronto'
+    card.classList.add('dep-card--ok')
+  } else if (check.state === 'needs-reboot') {
+    dom.dockerIcon.textContent = '⚠'
+    dom.dockerBadge.textContent = 'Riavvio necessario'
+    card.classList.add('dep-card--warn')
+  } else {
+    dom.dockerIcon.textContent = '○'
+    dom.dockerBadge.textContent = 'Non installato'
+    card.classList.add('dep-card--missing')
+  }
+
+  dom.dockerHint.textContent = check.hint || ''
+
+  // Stats visible only when we know the disk space.
+  if (status.disk && status.disk.freeHuman) {
+    dom.dockerStats.hidden = false
+    dom.dockerRequired.textContent = status.disk.requiredHuman || '—'
+    dom.dockerFree.textContent = status.disk.freeHuman
+    if (status.disk.meetsRequirement === false) {
+      dom.dockerFree.classList.add('stat__value--warn')
+    } else {
+      dom.dockerFree.classList.remove('stat__value--warn')
+    }
+  } else {
+    dom.dockerStats.hidden = true
+  }
+
+  clearChildren(dom.dockerActions)
+
+  if (check.state === 'ok') {
+    // Nothing to install; enable "Avanti".
     return
   }
-  payloadStatus.textContent = payloadReady
-    ? `Payload: presente in ${info.payloadDir}`
-    : `Payload: da scaricare al primo Start (verrà copiato in ${info.payloadDir})`
+
+  if (check.state === 'missing') {
+    const download = document.createElement('button')
+    download.className = 'btn btn--primary'
+    download.textContent = 'Scarica installer'
+    download.addEventListener('click', onOpenDownloadPage)
+    dom.dockerActions.appendChild(download)
+
+    const recheck = document.createElement('button')
+    recheck.className = 'btn btn--ghost'
+    recheck.textContent = 'Ho installato, ricontrolla'
+    recheck.addEventListener('click', refreshDockerStatus)
+    dom.dockerActions.appendChild(recheck)
+    return
+  }
+
+  if (check.state === 'needs-reboot') {
+    const recheck = document.createElement('button')
+    recheck.className = 'btn btn--primary'
+    recheck.textContent = 'Ho riavviato, ricontrolla'
+    recheck.addEventListener('click', refreshDockerStatus)
+    dom.dockerActions.appendChild(recheck)
+  }
 }
 
-async function refreshPayload() {
-  const info = await window.launcherApi.getPayloadDir()
-  renderPayloadInfo(info)
-  return info
-}
-
-async function runPayloadAction({ update = false, reason = '' } = {}) {
-  payloadBusy = true
-  payloadLog.hidden = false
-  payloadLog.textContent = ''
-  if (reason) appendPayloadLog(reason)
-  await refreshStatus()
+async function refreshDockerStatus() {
+  setBusy(true)
   try {
-    const result = await window.launcherApi.ensurePayload({ update })
-    if (!result.ok) {
-      appendPayloadLog(`⚠️ ${result.error}`)
-      hintText.textContent = `⚠️ ${result.error}`
-      return { ok: false }
+    const status = await window.setupApi.getDockerStatus()
+    state.docker = status
+    renderDockerCard(status)
+    dom.btnSetupContinue.disabled = status.check.state !== 'ok'
+  } finally {
+    setBusy(false)
+  }
+}
+
+function setBusy(isBusy) {
+  dom.dockerCard.classList.toggle('dep-card--busy', isBusy)
+  for (const btn of dom.dockerActions.querySelectorAll('button')) {
+    btn.disabled = isBusy
+  }
+}
+
+async function onOpenDownloadPage() {
+  setBusy(true)
+  try {
+    await window.setupApi.openDockerDownloadPage()
+  } finally {
+    setBusy(false)
+  }
+}
+
+// -------- Step 4: Running --------
+
+function updateRunningUI(status) {
+  if (!status) return
+  dom.runningInfo.innerHTML = ''
+  const row = (label, value) => {
+    const el = document.createElement('div')
+    el.className = 'info-row'
+    const l = document.createElement('span')
+    l.className = 'info-row__label'
+    l.textContent = label
+    const v = document.createElement('span')
+    v.className = 'info-row__value'
+    v.textContent = value
+    el.appendChild(l)
+    el.appendChild(v)
+    return el
+  }
+  if (status.url) dom.runningInfo.appendChild(row('URL', status.url))
+  if (status.port) dom.runningInfo.appendChild(row('Porta', String(status.port)))
+  if (status.mode) dom.runningInfo.appendChild(row('Modalità', status.mode))
+  if (status.running) {
+    dom.runningLead.textContent = 'Il runtime è partito. Apri la dashboard nel browser per iniziare.'
+  } else if (status.mode === 'starting') {
+    dom.runningLead.textContent = 'Avvio in corso…'
+  } else if (status.mode === 'error') {
+    dom.runningLead.textContent = status.lastError
+      ? `Errore: ${status.lastError}`
+      : 'Errore sconosciuto.'
+  }
+}
+
+async function refreshRunningStatus() {
+  try {
+    const status = await window.launcherApi.getStatus()
+    updateRunningUI(status)
+  } catch (error) {
+    appendLog(`refreshRunningStatus: ${error.message || error}`)
+  }
+}
+
+async function startTeam() {
+  if (state.starting) return
+  state.starting = true
+  dom.btnStartTeam.disabled = true
+  dom.btnStartTeam.textContent = 'Avvio in corso…'
+  showStep(STEP_RUNNING)
+  dom.runningLead.textContent = 'Preparazione del runtime…'
+  try {
+    const payloadInfo = await window.launcherApi.getPayloadDir()
+    if (!payloadInfo?.present) {
+      dom.runningLead.textContent = 'Scarico il codice del team (una tantum, ~60 MB)…'
+      const result = await window.launcherApi.ensurePayload({ update: false })
+      if (!result.ok) throw new Error(result.error || 'download fallito')
     }
-    appendPayloadLog(`✔ Operazione: ${result.action}`)
-    if (result.warning) appendPayloadLog(`⚠️ ${result.warning}`)
-    await refreshPayload()
-    return { ok: true, action: result.action }
+    dom.runningLead.textContent = 'Avvio il runtime…'
+    const status = await window.launcherApi.start({})
+    updateRunningUI(status)
+    if (status.running && status.url) {
+      await window.launcherApi.openBrowser().catch(() => {})
+    }
+  } catch (error) {
+    appendLog(`startTeam errore: ${error.message || error}`)
+    dom.runningLead.textContent = `Errore durante l'avvio: ${error.message || error}`
   } finally {
-    payloadBusy = false
-    await refreshStatus()
+    state.starting = false
+    dom.btnStartTeam.disabled = false
+    dom.btnStartTeam.textContent = 'Avvia Job Hunter Team'
   }
 }
 
-async function boot() {
-  const logFile = await window.launcherApi.getLogFile()
-  logFileValue.textContent = `Log file: ${logFile}`
-  window.launcherApi.onPayloadLog(appendPayloadLog)
-  await refreshDependencies()
-  await refreshPayload()
-  await refreshStatus()
-}
-
-startButton.addEventListener('click', async () => {
-  if (!dependenciesOk || payloadBusy) return
-  const payloadInfo = await refreshPayload()
-  if (!payloadInfo?.present) {
-    const result = await runPayloadAction({
-      update: false,
-      reason: 'Payload non trovato: avvio il download…',
-    })
-    if (!result.ok) return
-  }
-  const status = await window.launcherApi.start({ port: portInput.value })
-  renderStatus(status)
-})
-
-updatePayloadButton.addEventListener('click', async () => {
-  if (payloadBusy) return
-  await runPayloadAction({ update: true, reason: 'Aggiorno il payload…' })
-})
-
-stopButton.addEventListener('click', async () => {
-  const status = await window.launcherApi.stop()
-  renderStatus(status)
-})
-
-browserButton.addEventListener('click', async () => {
-  const status = await window.launcherApi.openBrowser()
-  renderStatus(status)
-})
-
-refreshButton.addEventListener('click', refreshStatus)
-
-recheckButton.addEventListener('click', async () => {
-  recheckButton.disabled = true
-  const previousLabel = recheckButton.textContent
-  recheckButton.textContent = 'Controllo…'
+async function stopTeam() {
+  dom.btnStopTeam.disabled = true
   try {
-    await refreshDependencies()
-    await refreshStatus()
+    await window.launcherApi.stop()
+    showStep(STEP_READY)
   } finally {
-    recheckButton.textContent = previousLabel
-    recheckButton.disabled = false
+    dom.btnStopTeam.disabled = false
+  }
+}
+
+// -------- Wiring --------
+
+dom.btnWelcomeContinue.addEventListener('click', async () => {
+  showStep(STEP_SETUP)
+  await refreshDockerStatus()
+})
+
+dom.btnSetupBack.addEventListener('click', () => showStep(STEP_WELCOME))
+
+dom.btnSetupContinue.addEventListener('click', () => {
+  if (state.docker?.check.state === 'ok') {
+    showStep(STEP_READY)
   }
 })
 
-setInterval(refreshStatus, 3000)
-boot().catch((error) => {
-  hintText.textContent = `⚠️ ${error instanceof Error ? error.message : String(error)}`
-})
+dom.btnStartTeam.addEventListener('click', startTeam)
+dom.btnOpenBrowser.addEventListener('click', () => window.launcherApi.openBrowser())
+dom.btnStopTeam.addEventListener('click', stopTeam)
+
+window.launcherApi.onPayloadLog(appendLog)
+
+// Poll running state only while we are on the running step.
+setInterval(() => {
+  if (state.step === STEP_RUNNING) refreshRunningStatus()
+}, 3000)
