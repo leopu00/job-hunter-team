@@ -1,6 +1,6 @@
 {
   "name": "jht-desktop",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
@@ -32,6 +32,9 @@
       "container.js",
       "dependencies.js",
       "payload.js",
+      "disk-space.js",
+      "docker-installer/**/*.js",
+      "!docker-installer/**/*.test.js",
       "renderer/**/*"
     ],
     "directories": {
