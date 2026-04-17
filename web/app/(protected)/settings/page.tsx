@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
-import { Tabs, Tab } from '../components/Tabs'
-import { useToast } from '../components/Toast'
-import SettingsProfile from '../components/SettingsProfile'
+import { Tabs, Tab } from '../../components/Tabs'
+import { useToast } from '../../components/Toast'
+import SettingsProfile from '../../components/SettingsProfile'
 
 type NotifKey = 'telegram' | 'email' | 'desktop'
 type Settings = { app_name: string; language: string; notifications: Record<NotifKey, boolean> }

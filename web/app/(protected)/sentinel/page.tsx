@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { AreaChart, DataPoint } from '../components/Chart'
+import { AreaChart, DataPoint } from '../../components/Chart'
 
 type UsageCurrent = { usage: number; delta: number; velocity: number; throttle: number; projection: number; ts: string; status: string }
 type HistPoint    = { ts: string; usage: number; velocity: number; throttle: number; projection: number }
