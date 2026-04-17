@@ -16,6 +16,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0001](./0001-colima-not-docker-desktop.md) | Use Colima (not Docker Desktop) for agent isolation on macOS | Accepted |
 | [0002](./0002-three-supported-agent-clis.md) | Support exactly three agent CLIs: Claude Code, Codex, Kimi | Accepted |
 | [0003](./0003-single-writer-team.md) | Team runs in one location at a time (VPS xor PC) | Accepted |
+| [0004](./0004-subscription-only-no-api-keys.md) | Subscription-only: no pay-per-use API keys | Accepted |
 
 ## When to add an ADR
 

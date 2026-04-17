@@ -12,7 +12,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     JHT_HOME=/jht_home \
     JHT_USER_DIR=/jht_user \
     IS_CONTAINER=1 \
-    PATH=/home/jht/.local/bin:$PATH
+    # Agent CLIs (claude, codex, kimi) are NOT baked into the image.
+    # They are installed lazily on first run into /jht_home/.npm-global,
+    # which lives on a bind-mount so installs persist across container
+    # recreation. See ADR 0004 + the desktop provider-install step.
+    NPM_CONFIG_PREFIX=/jht_home/.npm-global \
+    PATH=/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -21,8 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libsqlite3-0 \
       tini \
     && rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g @anthropic-ai/claude-code@latest
 
 WORKDIR /app
 
