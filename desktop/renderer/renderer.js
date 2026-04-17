@@ -569,7 +569,9 @@ function renderDockerCard(status) {
 
   dom.dockerHint.textContent = check.hintKey ? t(check.hintKey) : ''
 
-  if (status.disk && status.disk.freeHuman) {
+  // Install/free size is helpful only while deciding whether to install
+  // Docker. Once the state is ok the stats are just noise.
+  if (check.state !== 'ok' && status.disk && status.disk.freeHuman) {
     dom.dockerStats.hidden = false
     dom.dockerRequired.textContent = status.disk.requiredHuman || '—'
     dom.dockerFree.textContent = status.disk.freeHuman

@@ -231,17 +231,22 @@ app.whenReady().then(() => {
     if (!payload.isPayloadPresent(payloadDir)) {
       return { ok: false, error: 'payload not present — run container prep first' }
     }
-    // `docker compose run --rm` spins up an ephemeral container so the
-    // login step works before the user has hit Start-team. The
-    // bind-mount to ~/.jht means the auth tokens the CLI writes
-    // persist and are visible to the "real" runtime later.
-    // --entrypoint overrides the Dockerfile's JHT CLI dispatcher.
+    // `docker compose run --rm` spins up an ephemeral container so
+    // the login step works before the user has hit Start-team.
+    // HOME=/jht_home points the CLI's credentials dir at the bind-
+    // mounted ~/.jht on the host, so the tokens persist. -it asks
+    // compose for a TTY, which our node-pty session actually
+    // provides on the host side. No `login` argument: the binary
+    // opens its interactive UI (e.g. Claude Code's TUI) where the
+    // user types the slash-command for authentication.
     const id = terminal.spawnSession({
       command: 'docker',
       args: [
         'compose', 'run', '--rm', '--no-deps',
+        '-it',
+        '-e', 'HOME=/jht_home',
         '--entrypoint', meta.binary,
-        'jht', 'login',
+        'jht',
       ],
       cwd: payloadDir,
       env: containerPrep.dockerEnv(),

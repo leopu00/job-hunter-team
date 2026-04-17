@@ -18,6 +18,10 @@ services:
       dockerfile: Dockerfile
     container_name: jht
     environment:
+      # HOME points at the bind-mounted /jht_home so CLI credential
+      # files (~/.claude, ~/.codex, ~/.kimi) land on the host disk
+      # and persist across container recreation.
+      - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
       - IS_CONTAINER=1
