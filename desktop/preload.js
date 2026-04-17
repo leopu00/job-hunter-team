@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('launcherApi', {
 })
 
 contextBridge.exposeInMainWorld('setupApi', {
+  getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
   getExtraDeps: () => ipcRenderer.invoke('setup:get-extra-deps'),
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
@@ -38,11 +39,31 @@ contextBridge.exposeInMainWorld('setupApi', {
   },
   installProviders: (ids) => ipcRenderer.invoke('setup:install-providers', ids),
   getProviders: () => ipcRenderer.invoke('setup:get-providers'),
+  getAuthStates: () => ipcRenderer.invoke('setup:get-auth-states'),
   onProviderLog: (callback) => {
     const listener = (_event, message) => {
       try { callback(message) } catch { /* ignore */ }
     }
     ipcRenderer.on('setup:provider-log', listener)
     return () => ipcRenderer.removeListener('setup:provider-log', listener)
+  },
+})
+
+contextBridge.exposeInMainWorld('terminalApi', {
+  start: (opts) => ipcRenderer.invoke('terminal:start', opts),
+  write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
+  resize: (sessionId, cols, rows) => ipcRenderer.send('terminal:resize', { sessionId, cols, rows }),
+  kill: (sessionId) => ipcRenderer.invoke('terminal:kill', sessionId),
+  onData: (sessionId, cb) => {
+    const channel = `terminal:data:${sessionId}`
+    const listener = (_event, data) => { try { cb(data) } catch { /* ignore */ } }
+    ipcRenderer.on(channel, listener)
+    return () => ipcRenderer.removeListener(channel, listener)
+  },
+  onExit: (sessionId, cb) => {
+    const channel = `terminal:exit:${sessionId}`
+    const listener = (_event, exit) => { try { cb(exit) } catch { /* ignore */ } }
+    ipcRenderer.on(channel, listener)
+    return () => ipcRenderer.removeListener(channel, listener)
   },
 })

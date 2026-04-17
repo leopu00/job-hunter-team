@@ -7,6 +7,7 @@ const STEP_SETUP = 'setup'
 const STEP_CONTAINER = 'container'
 const STEP_PROVIDER_CHOOSE = 'provider-choose'
 const STEP_PROVIDER_INSTALL = 'provider-install'
+const STEP_PROVIDER_LOGIN = 'provider-login'
 const STEP_READY = 'ready'
 const STEP_RUNNING = 'running'
 
@@ -115,6 +116,20 @@ const TRANSLATIONS = {
     'provider.installStatus.running': 'Installing {name}…',
     'provider.installStatus.allDone': 'All CLIs installed.',
     'provider.installStatus.error': 'Error while installing {name}: {error}',
+    'login.title': 'Sign in to your providers',
+    'login.lead': 'Each CLI needs your active subscription. Open Login to sign in inside the app.',
+    'login.back': 'Back',
+    'login.continue': 'Continue',
+    'login.status.signedIn': 'Signed in',
+    'login.status.notSignedIn': 'Not signed in',
+    'login.action.open': 'Login',
+    'login.action.recheck': 'Re-check',
+    'login.action.close': 'Close',
+    'login.terminalTitle': 'Login — {name}',
+    'summary.docker': 'Docker running',
+    'summary.wsl': 'WSL ready',
+    'summary.image': 'Container image pulled',
+    'summary.provider': '{name} installed & signed in',
     'ready.title': 'All set',
     'ready.lead': 'Docker is installed and running. You can start the team.',
     'ready.hint':
@@ -204,6 +219,20 @@ const TRANSLATIONS = {
     'provider.installStatus.running': 'Installazione di {name}…',
     'provider.installStatus.allDone': 'Tutte le CLI installate.',
     'provider.installStatus.error': "Errore durante l'installazione di {name}: {error}",
+    'login.title': 'Accedi ai provider',
+    'login.lead': "Ogni CLI richiede il tuo abbonamento attivo. Apri Login per autenticarti nell'app.",
+    'login.back': 'Indietro',
+    'login.continue': 'Continua',
+    'login.status.signedIn': 'Autenticato',
+    'login.status.notSignedIn': 'Non autenticato',
+    'login.action.open': 'Login',
+    'login.action.recheck': 'Ricontrolla',
+    'login.action.close': 'Chiudi',
+    'login.terminalTitle': 'Login — {name}',
+    'summary.docker': 'Docker in esecuzione',
+    'summary.wsl': 'WSL pronta',
+    'summary.image': 'Immagine container scaricata',
+    'summary.provider': '{name} installato e autenticato',
     'ready.title': 'Tutto pronto',
     'ready.lead': 'Docker è installato e attivo. Puoi avviare il team.',
     'ready.hint':
@@ -293,6 +322,20 @@ const TRANSLATIONS = {
     'provider.installStatus.running': '{name} telepítése…',
     'provider.installStatus.allDone': 'Minden CLI telepítve.',
     'provider.installStatus.error': 'Hiba a(z) {name} telepítésekor: {error}',
+    'login.title': 'Jelentkezz be a szolgáltatókhoz',
+    'login.lead': 'Minden CLI-hez aktív előfizetés kell. Nyisd meg a Belépést az alkalmazáson belül.',
+    'login.back': 'Vissza',
+    'login.continue': 'Tovább',
+    'login.status.signedIn': 'Bejelentkezve',
+    'login.status.notSignedIn': 'Nincs bejelentkezve',
+    'login.action.open': 'Belépés',
+    'login.action.recheck': 'Ellenőrzés',
+    'login.action.close': 'Bezár',
+    'login.terminalTitle': 'Belépés — {name}',
+    'summary.docker': 'Docker fut',
+    'summary.wsl': 'WSL kész',
+    'summary.image': 'Konténer image letöltve',
+    'summary.provider': '{name} telepítve és bejelentkezve',
     'ready.title': 'Minden készen áll',
     'ready.lead': 'A Docker telepítve van és fut. Elindíthatod a csapatot.',
     'ready.hint':
@@ -431,6 +474,8 @@ const state = {
   selectedProviders: new Set(),
   providerInstallBusy: false,
   providerInstallDone: false,
+  authStates: [],
+  lastStatus: null,
 }
 
 const dom = {
@@ -467,6 +512,14 @@ const dom = {
   btnProviderInstallBack: document.getElementById('btn-provider-install-back'),
   btnProviderInstallRetry: document.getElementById('btn-provider-install-retry'),
   btnProviderInstallContinue: document.getElementById('btn-provider-install-continue'),
+  authList: document.getElementById('auth-list'),
+  btnLoginBack: document.getElementById('btn-login-back'),
+  btnLoginContinue: document.getElementById('btn-login-continue'),
+  summaryList: document.getElementById('summary-list'),
+  terminalModal: document.getElementById('terminal-modal'),
+  terminalModalTitle: document.getElementById('terminal-modal-title'),
+  terminalModalBody: document.getElementById('terminal-modal-body'),
+  btnTerminalClose: document.getElementById('terminal-modal-close'),
   runningTitle: document.getElementById('running-title'),
   runningLead: document.getElementById('running-lead'),
   runningInfo: document.getElementById('running-info'),
@@ -768,9 +821,68 @@ document.getElementById('btn-language-continue').addEventListener('click', () =>
 dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
 
 dom.btnWelcomeContinue.addEventListener('click', async () => {
-  showStep(STEP_SETUP)
-  await refreshDockerStatus()
+  await smartAdvanceFromWelcome()
 })
+
+// Decide which step the user actually needs to see, based on what is
+// already set up on their machine. Jumps past steps whose prerequisite
+// is already satisfied so a re-launch doesn't force them through the
+// whole wizard again.
+async function smartAdvanceFromWelcome() {
+  let status
+  try {
+    status = await window.setupApi.getStatus()
+  } catch {
+    showStep(STEP_SETUP)
+    await refreshDockerStatus()
+    return
+  }
+  state.lastStatus = status
+
+  const dockerOk = status?.docker?.state === 'ok'
+  const depsOk = status?.extra ? status.extra.allRequiredOk !== false : true
+  const imagePresent = !!status?.image?.present
+  const saved = Array.isArray(status?.providers?.saved) ? status.providers.saved : []
+  const pending = Array.isArray(status?.providers?.pending) ? status.providers.pending : []
+  const auth = Array.isArray(status?.providers?.auth) ? status.providers.auth : []
+  state.authStates = auth
+
+  if (!dockerOk || !depsOk) {
+    showStep(STEP_SETUP)
+    await refreshDockerStatus()
+    return
+  }
+
+  if (!imagePresent) {
+    showStep(STEP_CONTAINER)
+    startContainerPrep()
+    return
+  }
+
+  if (saved.length === 0) {
+    enterProviderChoose()
+    return
+  }
+
+  if (pending.length > 0) {
+    state.selectedProviders = new Set(saved)
+    showStep(STEP_PROVIDER_INSTALL)
+    startProviderInstall()
+    return
+  }
+
+  const unauthed = auth.filter((a) => !a.authed)
+  if (unauthed.length > 0) {
+    state.selectedProviders = new Set(saved)
+    enterProviderLogin()
+    return
+  }
+
+  state.selectedProviders = new Set(saved)
+  state.containerReady = true
+  state.providerInstallDone = true
+  enterReady()
+}
 
 dom.btnSetupBack.addEventListener('click', () => showStep(STEP_WELCOME))
 
@@ -875,7 +987,7 @@ dom.btnProviderInstallRetry.addEventListener('click', () => {
 })
 
 dom.btnProviderInstallContinue.addEventListener('click', () => {
-  if (state.providerInstallDone) showStep(STEP_READY)
+  if (state.providerInstallDone) enterProviderLogin()
 })
 
 async function startProviderInstall() {
@@ -927,6 +1039,214 @@ window.setupApi.onProviderLog((line) => {
     dom.providerMessage.textContent = t('provider.installStatus.running', { name: match[1] })
   }
 })
+
+// -------- Step: provider login (tmux/subscription auth) --------
+
+dom.btnLoginBack.addEventListener('click', () => showStep(STEP_PROVIDER_CHOOSE))
+dom.btnLoginContinue.addEventListener('click', () => {
+  if (!dom.btnLoginContinue.disabled) enterReady()
+})
+
+function providerNeedsLoginContinue() {
+  const anyUnauthed = state.authStates.some((a) => !a.authed)
+  dom.btnLoginContinue.disabled = anyUnauthed
+}
+
+async function enterProviderLogin() {
+  showStep(STEP_PROVIDER_LOGIN)
+  await refreshAuthList()
+}
+
+async function refreshAuthList() {
+  try {
+    const res = await window.setupApi.getAuthStates()
+    state.authStates = Array.isArray(res?.auth) ? res.auth : []
+  } catch {
+    state.authStates = []
+  }
+  renderAuthList()
+  providerNeedsLoginContinue()
+}
+
+function renderAuthList() {
+  const list = dom.authList
+  list.innerHTML = ''
+  for (const entry of state.authStates) {
+    const opt = PROVIDER_OPTIONS.find((p) => p.id === entry.id)
+    if (!opt) continue
+
+    const card = document.createElement('div')
+    card.className = `dep-card dep-card--compact ${entry.authed ? 'dep-card--ok' : 'dep-card--warn'}`
+
+    const header = document.createElement('div')
+    header.className = 'dep-card__header'
+
+    const name = document.createElement('span')
+    name.className = 'dep-card__name'
+    name.textContent = opt.label
+
+    const badge = document.createElement('span')
+    badge.className = 'dep-card__badge'
+    badge.textContent = entry.authed ? t('login.status.signedIn') : t('login.status.notSignedIn')
+
+    header.appendChild(name)
+    header.appendChild(badge)
+    card.appendChild(header)
+
+    if (!entry.authed) {
+      const actions = document.createElement('div')
+      actions.className = 'dep-card__actions'
+
+      const btnOpen = document.createElement('button')
+      btnOpen.className = 'btn btn--primary'
+      btnOpen.textContent = t('login.action.open')
+      btnOpen.addEventListener('click', () => openLoginTerminal(entry.id, opt.label))
+      actions.appendChild(btnOpen)
+
+      const btnRecheck = document.createElement('button')
+      btnRecheck.className = 'btn btn--ghost'
+      btnRecheck.textContent = t('login.action.recheck')
+      btnRecheck.addEventListener('click', refreshAuthList)
+      actions.appendChild(btnRecheck)
+
+      card.appendChild(actions)
+    }
+    list.appendChild(card)
+  }
+}
+
+// -------- Terminal modal (xterm + node-pty via IPC) --------
+
+let activeTerminal = null
+let activeFit = null
+let activeSessionId = null
+let activeUnsubData = null
+let activeUnsubExit = null
+let activeResizeObserver = null
+
+async function openLoginTerminal(providerId, displayName) {
+  const Terminal = window.Terminal
+  const FitAddon = window.FitAddon && window.FitAddon.FitAddon
+  if (!Terminal || !FitAddon) {
+    console.error('xterm not loaded')
+    return
+  }
+
+  dom.terminalModalTitle.textContent = t('login.terminalTitle', { name: displayName })
+  dom.terminalModal.hidden = false
+
+  // Reset any previous instance.
+  dom.terminalModalBody.innerHTML = ''
+
+  const term = new Terminal({
+    cursorBlink: true,
+    fontSize: 12,
+    fontFamily: 'SF Mono, Menlo, Consolas, monospace',
+    theme: {
+      background: '#0e0e10',
+      foreground: '#f5f5f7',
+    },
+    convertEol: true,
+  })
+  const fit = new FitAddon()
+  term.loadAddon(fit)
+  term.open(dom.terminalModalBody)
+  fit.fit()
+
+  let result
+  try {
+    result = await window.terminalApi.start({ providerId })
+  } catch (error) {
+    term.writeln(`\r\n[error] ${error && error.message ? error.message : error}`)
+    return
+  }
+  if (!result?.ok) {
+    term.writeln(`\r\n[error] ${result?.error || 'failed to start'}`)
+    return
+  }
+
+  activeTerminal = term
+  activeFit = fit
+  activeSessionId = result.sessionId
+
+  activeUnsubData = window.terminalApi.onData(activeSessionId, (data) => term.write(data))
+  activeUnsubExit = window.terminalApi.onExit(activeSessionId, () => {
+    term.writeln('\r\n[session closed]')
+    closeTerminalModal({ skipKill: true })
+    refreshAuthList()
+  })
+
+  term.onData((data) => window.terminalApi.write(activeSessionId, data))
+  term.onResize(({ cols, rows }) => {
+    if (activeSessionId) window.terminalApi.resize(activeSessionId, cols, rows)
+  })
+
+  activeResizeObserver = new ResizeObserver(() => {
+    try { fit.fit() } catch { /* noop */ }
+  })
+  activeResizeObserver.observe(dom.terminalModalBody)
+}
+
+function closeTerminalModal({ skipKill = false } = {}) {
+  if (activeResizeObserver) {
+    activeResizeObserver.disconnect()
+    activeResizeObserver = null
+  }
+  if (activeUnsubData) { activeUnsubData(); activeUnsubData = null }
+  if (activeUnsubExit) { activeUnsubExit(); activeUnsubExit = null }
+  if (activeSessionId && !skipKill) {
+    window.terminalApi.kill(activeSessionId).catch(() => {})
+  }
+  activeSessionId = null
+  if (activeTerminal) {
+    try { activeTerminal.dispose() } catch { /* noop */ }
+    activeTerminal = null
+  }
+  activeFit = null
+  dom.terminalModalBody.innerHTML = ''
+  dom.terminalModal.hidden = true
+}
+
+dom.btnTerminalClose.addEventListener('click', () => closeTerminalModal())
+
+// -------- Step: ready (summary) --------
+
+async function enterReady() {
+  const status = state.lastStatus || (await safeGetStatus())
+  renderSummary(status)
+  showStep(STEP_READY)
+}
+
+async function safeGetStatus() {
+  try { return await window.setupApi.getStatus() } catch { return null }
+}
+
+function renderSummary(status) {
+  const list = dom.summaryList
+  list.innerHTML = ''
+  const rows = []
+  if (status?.docker?.state === 'ok') rows.push(t('summary.docker'))
+  const wsl = status?.extra?.deps?.find((d) => d.id === 'wsl')
+  if (wsl && wsl.ok) rows.push(t('summary.wsl'))
+  if (status?.image?.present) rows.push(t('summary.image'))
+  const authed = Array.isArray(status?.providers?.authed) ? status.providers.authed : []
+  for (const id of authed) {
+    const opt = PROVIDER_OPTIONS.find((p) => p.id === id)
+    rows.push(t('summary.provider', { name: opt ? opt.label : id }))
+  }
+  for (const text of rows) {
+    const li = document.createElement('li')
+    li.className = 'summary-list__item'
+    const icon = document.createElement('span')
+    icon.className = 'summary-list__check'
+    icon.textContent = '✓'
+    const label = document.createElement('span')
+    label.textContent = text
+    li.appendChild(icon)
+    li.appendChild(label)
+    list.appendChild(li)
+  }
+}
 
 function setProgressState(barEl, iconEl, stateName) {
   if (barEl) barEl.dataset.state = stateName

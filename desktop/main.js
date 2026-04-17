@@ -8,7 +8,13 @@ const deps = require('./deps')
 const containerPrep = require('./container-prep')
 const providerInstall = require('./provider-install')
 const providerStore = require('./provider-store')
+const providerAuth = require('./provider-auth')
+const terminal = require('./terminal')
 const { freeBytes, formatBytes } = require('./disk-space')
+
+function getBindHomeDir() {
+  return path.join(require('node:os').homedir(), '.jht')
+}
 
 let mainWindow = null
 let runtime = null
@@ -190,6 +196,73 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('setup:get-status', async () => {
+    const docker = await dockerInstaller.checkDocker()
+    const extra = await deps.inspectExtraDeps()
+    const image = containerPrep.inspectImage()
+    const saved = providerStore.readProviders(app.getPath('userData'))
+    const { installed } = providerInstall.inspectInstalledProviders()
+    const bindHomeDir = getBindHomeDir()
+    const auth = providerAuth.authStates({ providers: installed, bindHomeDir })
+    return {
+      docker,
+      extra,
+      image,
+      providers: {
+        saved,
+        installed,
+        pending: saved.filter((id) => !installed.includes(id)),
+        auth,
+        authed: auth.filter((a) => a.authed).map((a) => a.id),
+        unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
+      },
+    }
+  })
+
+  ipcMain.handle('setup:get-auth-states', () => {
+    const installed = providerInstall.inspectInstalledProviders().installed
+    const auth = providerAuth.authStates({ providers: installed, bindHomeDir: getBindHomeDir() })
+    return { auth, installed }
+  })
+
+  ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
+    if (!terminal.isAvailable()) {
+      return { ok: false, error: 'node-pty unavailable (run npm run postinstall)' }
+    }
+    const meta = providerInstall.PROVIDERS[providerId]
+    if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
+    const id = terminal.spawnPty({
+      command: 'docker',
+      args: ['exec', '-it', 'jht', meta.binary, 'login'],
+      cwd: process.cwd(),
+      env: process.env,
+      onData: (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:data:${id}`, data)
+        }
+      },
+      onExit: (exit) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:exit:${id}`, exit)
+        }
+      },
+    })
+    return { ok: true, sessionId: id }
+  })
+
+  ipcMain.on('terminal:write', (_event, { sessionId, data }) => {
+    terminal.write(sessionId, data)
+  })
+
+  ipcMain.on('terminal:resize', (_event, { sessionId, cols, rows }) => {
+    terminal.resize(sessionId, cols, rows)
+  })
+
+  ipcMain.handle('terminal:kill', (_event, sessionId) => {
+    terminal.kill(sessionId)
+    return { ok: true }
+  })
+
   ipcMain.handle('setup:install-providers', async (_event, providerIds) => {
     try {
       if (!payload.isPayloadPresent(payloadDir)) {
@@ -238,6 +311,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   if (runtime) runtime.stopRuntime().catch(() => {})
+  terminal.killAll()
 })
 
 app.on('window-all-closed', () => {
