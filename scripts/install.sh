@@ -340,7 +340,7 @@ tty_flag() {
 
 env_flags() {
   for var in ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY \\
-             CLAUDE_CODE_OAUTH_TOKEN GEMINI_API_KEY GOOGLE_API_KEY; do
+             CLAUDE_CODE_OAUTH_TOKEN; do
     eval "value=\\\${\$var:-}"
     if [ -n "\$value" ]; then
       printf -- '-e %s ' "\$var"
