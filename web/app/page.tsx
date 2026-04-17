@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import LandingNav from './components/landing/LandingNav'
 import LandingHero from './components/landing/LandingHero'
 import { LandingI18nProvider } from './components/landing/LandingI18n'
+import { LandingFooter } from './components/landing/LandingCTA'
 import JsonLd from './components/landing/JsonLd'
 
 function PageContent() {
@@ -24,6 +25,7 @@ function PageContent() {
             <LandingNav />
             <LandingHero />
           </main>
+          <LandingFooter />
         </>
       )}
     </LandingI18nProvider>
