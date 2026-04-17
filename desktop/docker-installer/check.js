@@ -1,10 +1,13 @@
-// Three-state check for Docker availability:
+// Multi-state check for Docker availability:
 //
-//   ok           → `docker ps` returns exit 0 → the user can start JHT.
-//   needs-reboot → `docker` binary exists but `docker ps` fails → the user
-//                  installed Docker but hasn't rebooted (Windows) or
-//                  started the daemon (Mac/Linux).
-//   missing      → `docker` binary not on PATH → not installed at all.
+//   ok            → `docker ps` returns exit 0 → the user can start JHT.
+//   starting      → Windows/Mac: Docker Desktop process is running but the
+//                   daemon pipe isn't ready yet. User should just wait and retry.
+//   not-running   → Windows/Mac: `docker` CLI is on PATH but Docker Desktop
+//                   is NOT running. User needs to open Docker Desktop.
+//   needs-reboot  → Linux: `docker` CLI is on PATH but the daemon is down.
+//                   User should start the daemon or reboot.
+//   missing       → `docker` binary not on PATH → not installed at all.
 //
 // The UI maps each state to a distinct message and action.
 
@@ -38,43 +41,82 @@ async function doesDockerRespond() {
   return result.ok
 }
 
-// Build a friendly hint telling the user exactly what to do next,
-// kept as a single short sentence because it is shown inline in the checklist.
-function hintForState(state, platform = process.platform) {
-  if (state === 'ok') return 'Pronto.'
+// Windows/Mac only: is the Docker Desktop GUI process running?
+// On Linux there is no "Desktop" app — the daemon runs as a service.
+async function isDockerDesktopRunning(platform = process.platform) {
+  if (platform === 'win32') {
+    const result = await runWithTimeout(
+      'tasklist.exe',
+      ['/FI', 'IMAGENAME eq Docker Desktop.exe', '/NH'],
+      3000,
+    )
+    if (!result.ok) return false
+    return /Docker Desktop\.exe/i.test(result.stdout)
+  }
+  if (platform === 'darwin') {
+    const result = await runWithTimeout('pgrep', ['-x', 'Docker'], 3000)
+    return result.ok && result.stdout.trim().length > 0
+  }
+  return null
+}
+
+// Return a translation key for the hint instead of localized text —
+// the renderer resolves it via its i18n dictionary so the language
+// matches the user's pick.
+function hintKeyForState(state, platform = process.platform) {
+  if (state === 'ok') return 'docker.hint.ok'
   if (state === 'missing') {
-    if (platform === 'win32') return 'Scarica e installa Docker Desktop dal sito ufficiale.'
-    if (platform === 'darwin') return 'Installa Docker Desktop dal sito ufficiale.'
-    return 'Installa Docker Engine seguendo la guida ufficiale.'
+    if (platform === 'win32') return 'docker.hint.missing.win32'
+    if (platform === 'darwin') return 'docker.hint.missing.darwin'
+    return 'docker.hint.missing.linux'
+  }
+  if (state === 'not-running') {
+    if (platform === 'win32') return 'docker.hint.notRunning.win32'
+    if (platform === 'darwin') return 'docker.hint.notRunning.darwin'
+    return 'docker.hint.notRunning.win32'
+  }
+  if (state === 'starting') {
+    return 'docker.hint.starting'
   }
   if (state === 'needs-reboot') {
-    if (platform === 'win32') return 'Docker è installato. Riavvia il computer per attivarlo.'
-    if (platform === 'darwin') return 'Docker è installato. Apri Docker una volta per avviare il runtime.'
-    return 'Docker è installato. Avvia il daemon (systemctl start docker) o riavvia.'
+    if (platform === 'win32') return 'docker.hint.needsReboot.win32'
+    if (platform === 'darwin') return 'docker.hint.needsReboot.darwin'
+    return 'docker.hint.needsReboot.linux'
   }
   return ''
 }
 
 async function checkDocker() {
+  const platform = process.platform
   const installed = await isDockerBinaryPresent()
   if (!installed) {
-    return { state: 'missing', installed: false, responsive: false, hint: hintForState('missing') }
+    return { state: 'missing', installed: false, responsive: false, hintKey: hintKeyForState('missing', platform) }
   }
   const responsive = await doesDockerRespond()
   if (responsive) {
-    return { state: 'ok', installed: true, responsive: true, hint: hintForState('ok') }
+    return { state: 'ok', installed: true, responsive: true, hintKey: hintKeyForState('ok', platform) }
   }
+
+  // CLI present but daemon unreachable. On Windows/Mac, distinguish
+  // "Docker Desktop not running" from "Docker Desktop is starting".
+  if (platform === 'win32' || platform === 'darwin') {
+    const desktopRunning = await isDockerDesktopRunning(platform)
+    const state = desktopRunning ? 'starting' : 'not-running'
+    return { state, installed: true, responsive: false, hintKey: hintKeyForState(state, platform) }
+  }
+
   return {
     state: 'needs-reboot',
     installed: true,
     responsive: false,
-    hint: hintForState('needs-reboot'),
+    hintKey: hintKeyForState('needs-reboot', platform),
   }
 }
 
 module.exports = {
   checkDocker,
-  hintForState,
+  hintKeyForState,
+  isDockerDesktopRunning,
   // exported for tests that want to stub them
-  _internal: { isDockerBinaryPresent, doesDockerRespond, runWithTimeout },
+  _internal: { isDockerBinaryPresent, doesDockerRespond, runWithTimeout, isDockerDesktopRunning },
 }
