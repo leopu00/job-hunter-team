@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { BarChart, LineChart, DataPoint } from '../components/Chart'
+import { BarChart, LineChart, DataPoint } from '../../components/Chart'
 
 type Current = { usage: number; velocity: number; velocity_smooth: number; velocity_ideal: number; projection: number; status: string; throttle: number; delta: number; hours_to_reset: number; ts: string }
 type DailyBar = { date: string; peak: number; consumed: number; sessions: number }
