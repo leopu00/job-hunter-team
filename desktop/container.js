@@ -88,11 +88,20 @@ function ensureHostPaths() {
   return { jhtHome, jhtUser }
 }
 
-function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--no-browser'] }) {
+const DEFAULT_CONTAINER_NAME = 'jht'
+
+function buildDockerArgs({
+  port,
+  image = DEFAULT_IMAGE,
+  cmd = ['dashboard', '--no-browser'],
+  name = DEFAULT_CONTAINER_NAME,
+}) {
   const { jhtHome, jhtUser } = ensureHostPaths()
   const args = [
     'run',
     '--rm',
+    '--name',
+    name,
     '-v',
     `${jhtHome}:/jht_home`,
     '-v',
@@ -109,8 +118,6 @@ function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--n
     'OPENAI_API_KEY',
     'MOONSHOT_API_KEY',
     'CLAUDE_CODE_OAUTH_TOKEN',
-    'GEMINI_API_KEY',
-    'GOOGLE_API_KEY',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ]) {
@@ -126,10 +133,26 @@ function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--n
   return args
 }
 
-function buildDockerSpawnSpec({ port }) {
+function removeContainerIfExists(name = DEFAULT_CONTAINER_NAME) {
+  try {
+    execFileSync('docker', ['rm', '-f', name], {
+      stdio: 'ignore',
+      timeout: 5000,
+      windowsHide: true,
+    })
+  } catch {
+    // Container did not exist — nothing to clean up.
+  }
+}
+
+function buildDockerSpawnSpec({ port, name = DEFAULT_CONTAINER_NAME }) {
+  // Docker refuses `run --name jht` if another container is already
+  // using that name (e.g., leftover from a crashed session). Clean up
+  // any stale container with the same name before spawning.
+  removeContainerIfExists(name)
   return {
     command: 'docker',
-    args: buildDockerArgs({ port }),
+    args: buildDockerArgs({ port, name }),
     options: {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -139,6 +162,7 @@ function buildDockerSpawnSpec({ port }) {
 
 module.exports = {
   DEFAULT_IMAGE,
+  DEFAULT_CONTAINER_NAME,
   shouldUseContainer,
   isDockerAvailable,
   colimaInstalled,
@@ -147,4 +171,5 @@ module.exports = {
   ensureHostPaths,
   buildDockerArgs,
   buildDockerSpawnSpec,
+  removeContainerIfExists,
 }
