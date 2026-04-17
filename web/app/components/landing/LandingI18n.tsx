@@ -9,11 +9,11 @@ export type Lang = 'it' | 'en' | 'hu'
 const STORAGE_KEY = 'jht-lang'
 
 function getSavedLang(): Lang {
-  if (typeof window === 'undefined') return 'it'
+  if (typeof window === 'undefined') return 'en'
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === 'en') return 'en'
+  if (saved === 'it') return 'it'
   if (saved === 'hu') return 'hu'
-  return 'it'
+  return 'en'
 }
 
 const translations = {
@@ -213,6 +213,21 @@ const translations = {
     en: 'JHT web dashboard can be started from the desktop launcher or from the terminal through advanced CLI and TUI setup. The runtime runs on your machine and your data stays under your control.',
     hu: 'A JHT webes irányítópult elindítható az asztali launcherről vagy a terminálból fejlett CLI és TUI beállítással. A futtatókörnyezet a gépeden fut, és az adataid a te ellenőrzésed alatt maradnak.',
   },
+  dl_back:           { it: '← Indietro', en: '← Back', hu: '← Vissza' },
+  dl_title_1:        { it: 'Configura il tuo team', en: 'Set up your team', hu: 'Állítsd be a csapatod' },
+  dl_title_2:        { it: 'sul tuo PC',            en: 'on your computer', hu: 'a számítógépeden' },
+  dl_toggle_hide:    { it: '− Nascondi altre opzioni', en: '− Hide other options', hu: '− További opciók elrejtése' },
+  dl_toggle_show:    { it: '+ Altre opzioni (altri OS / architetture)', en: '+ Other options (other OS / architectures)', hu: '+ További opciók (más OS / architektúra)' },
+  dl_copy_cmd:       { it: 'Copia comando', en: 'Copy command', hu: 'Parancs másolása' },
+  dl_norelease_title: { it: 'Nessuna release desktop pubblicata al momento', en: 'No desktop release published yet', hu: 'Még nincs közzétett asztali kiadás' },
+  dl_norelease_desc: {
+    it: 'Appena viene pubblicata la prossima release, questa pagina offre il download diretto. Nel frattempo puoi usare l\'installazione da terminale qui sotto o consultare l\'elenco su GitHub.',
+    en: 'As soon as the next release is published, this page will offer a direct download. Meanwhile you can use the terminal install below or check the list on GitHub.',
+    hu: 'Amint megjelenik a következő kiadás, ez az oldal közvetlen letöltést kínál. Addig használhatod az alábbi terminál telepítést, vagy megnézheted a listát a GitHubon.',
+  },
+  dl_open_releases:  { it: 'Apri GitHub Releases', en: 'Open GitHub Releases', hu: 'GitHub kiadások megnyitása' },
+  dl_detected_label: { it: 'Rilevato', en: 'Detected', hu: 'Észlelt' },
+  dl_download_for:   { it: 'Scarica per', en: 'Download for', hu: 'Letöltés ehhez:' },
   dl_detected:       { it: 'rilevato',                  en: 'detected', hu: 'észlelt' },
   dl_mode_desktop_title: { it: 'Desktop',               en: 'Desktop', hu: 'Asztali' },
   dl_mode_terminal_title: { it: 'CLI',                  en: 'CLI', hu: 'CLI' },
@@ -405,7 +420,7 @@ const translations = {
   faq_docs_btn:      { it: 'Documentazione',         en: 'Documentation', hu: 'Dokumentáció' },
 
   // About page
-  about_badge:       { it: 'chi siamo',           en: 'about us', hu: 'róllunk' },
+  about_badge:       { it: 'chi siamo',           en: 'about us', hu: 'rólunk' },
   about_title_1:     { it: 'Un team di agenti AI',  en: 'An AI agent team', hu: 'Egy AI ügynök csapat' },
   about_title_2:     { it: 'al tuo servizio',       en: 'at your service', hu: 'a szolgálatodban' },
   about_intro:       {
@@ -550,17 +565,17 @@ const translations = {
     hu: 'Kattints a kiválasztáshoz, kattints újra a kiválasztás megszüntetéséhez.',
   },
 
-  ob_s4_title:       { it: 'Configura la API Key',           en: 'Configure your API Key', hu: 'API kulcs beállítása' },
+  ob_s4_title:       { it: 'Collega un provider AI',           en: 'Connect an AI provider', hu: 'AI szolgáltató csatlakoztatása' },
   ob_s4_desc:        {
-    it: 'Gli agenti usano Claude (Anthropic) per ragionare. Inserisci la tua chiave API per attivarli. La chiave resta sul tuo computer, non viene mai inviata a terzi.',
-    en: 'Agents use Claude (Anthropic) to reason. Enter your API key to activate them. The key stays on your computer, never sent to third parties.',
-    hu: 'Az ügynökök a Claude-ot (Anthropic) használják a következtetéshez. Add meg az API kulcsodat az aktiválásukhoz. A kulcs a számítógépeden marad, soha nem kerül elküldésre harmadik feleknek.',
+    it: 'Gli agenti girano su una delle tre CLI supportate (Claude Code, Codex, Kimi). Servira il login con l\'abbonamento che hai gia attivo col provider; JHT non chiede ne memorizza chiavi API.',
+    en: 'Agents run on one of three supported CLIs (Claude Code, Codex, Kimi). You will sign in with the subscription you already have with the provider; JHT never asks for or stores API keys.',
+    hu: 'Az ügynökök három támogatott CLI valamelyikén futnak (Claude Code, Codex, Kimi). A szolgáltatónál már meglévő előfizetéssel kell bejelentkezned; a JHT soha nem kér és nem tárol API kulcsot.',
   },
-  ob_s4_placeholder: { it: 'sk-ant-...',                     en: 'sk-ant-...', hu: 'sk-ant-...' },
+  ob_s4_placeholder: { it: 'claude login / codex login / kimi login', en: 'claude login / codex login / kimi login', hu: 'claude login / codex login / kimi login' },
   ob_s4_hint:        {
-    it: 'Ottienila su console.anthropic.com. Salvata in ~/.jht/jht.config.json.',
-    en: 'Get it at console.anthropic.com. Saved in ~/.jht/jht.config.json.',
-    hu: 'Szerezd be a console.anthropic.com oldalon. Mentve: ~/.jht/jht.config.json.',
+    it: 'Il login avviene dentro il container dal terminale della CLI scelta. I token di sessione restano gestiti dalla CLI in locale.',
+    en: 'Login happens inside the container from the chosen CLI terminal. Session tokens stay managed by the CLI, locally.',
+    hu: 'A bejelentkezés a konténeren belül történik a választott CLI termináljából. A munkamenet tokenek helyben maradnak, a CLI kezelése alatt.',
   },
 
   ob_s5_title:       { it: 'Avvia il primo agente',          en: 'Launch your first agent', hu: 'Első ügynök indítása' },
@@ -585,10 +600,10 @@ interface I18nCtx {
 }
 
 const LandingI18nContext = createContext<I18nCtx>({
-  lang: 'it',
+  lang: 'en',
   setLang: () => {},
-  t: (key) => translations[key].it as string,
-  ta: (key) => Array.from(translations[key].it),
+  t: (key) => translations[key].en as string,
+  ta: (key) => Array.from(translations[key].en),
 })
 
 export function useLandingI18n() {
@@ -596,9 +611,9 @@ export function useLandingI18n() {
 }
 
 export function LandingI18nProvider({ children }: { children: ReactNode }) {
-  // Inizializza sempre con 'it' per evitare hydration mismatch
+  // Inizializza sempre con 'en' per evitare hydration mismatch
   // Dopo il mount, legge il localStorage
-  const [lang, setLangState] = useState<Lang>('it')
+  const [lang, setLangState] = useState<Lang>('en')
 
   useEffect(() => {
     const saved = getSavedLang()
