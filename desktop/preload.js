@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld('setupApi', {
   },
 })
 
+contextBridge.exposeInMainWorld('clipboardApi', {
+  read: () => ipcRenderer.invoke('clipboard:read'),
+  write: (text) => ipcRenderer.invoke('clipboard:write', text),
+})
+
 contextBridge.exposeInMainWorld('terminalApi', {
   start: (opts) => ipcRenderer.invoke('terminal:start', opts),
   write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
