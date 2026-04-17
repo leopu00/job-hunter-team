@@ -12,7 +12,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "test": "node --test runtime.test.js dependencies.test.js payload.test.js disk-space.test.js docker-installer/manifest.test.js docker-installer/check.test.js docker-installer/download-url.test.js",
+    "test": "node --test runtime.test.js dependencies.test.js deps.test.js payload.test.js disk-space.test.js container-prep.test.js provider-install.test.js provider-store.test.js docker-installer/manifest.test.js docker-installer/check.test.js docker-installer/download-url.test.js",
     "dist": "electron-builder",
     "dist:mac": "npm run dist -- --mac dmg",
     "dist:win": "npm run dist -- --win nsis --x64 --arm64",
@@ -30,11 +30,15 @@
       "preload.js",
       "runtime.js",
       "container.js",
+      "container-prep.js",
       "dependencies.js",
+      "deps.js",
       "payload.js",
       "disk-space.js",
+      "provider-install.js",
+      "provider-store.js",
       "docker-installer/**/*.js",
-      "!docker-installer/**/*.test.js",
+      "!**/*.test.js",
       "renderer/**/*"
     ],
     "directories": {

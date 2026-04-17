@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,102 +9,192 @@
   <body>
     <header class="topbar">
       <div class="topbar__brand">JHT Desktop</div>
-      <div class="topbar__alpha">Alpha · in fase di test</div>
+      <div class="topbar__right">
+        <div class="topbar__alpha" data-i18n="topbar.alpha">Beta · internal testing</div>
+      </div>
     </header>
 
     <main class="wizard" id="wizard">
-      <!-- Step 1: welcome -->
-      <section class="step" id="step-welcome" data-step="welcome">
-        <h1 class="step__title">Job Hunter Team</h1>
-        <p class="step__lead">
-          Un team di agenti AI che cercano lavoro al posto tuo, analizzano le
-          offerte e scrivono CV e lettere di presentazione.
-        </p>
-        <p class="step__hint">
-          Prima di avviare il team controlliamo che tutto sia pronto sul tuo
-          computer. Dura un minuto.
-        </p>
+      <!-- Step 0: language -->
+      <section class="step step--centered" id="step-language" data-step="language">
+        <h1 class="step__title" data-i18n="lang.title">Choose your language</h1>
+        <p class="step__lead" data-i18n="lang.lead">Interface language for the launcher.</p>
+        <div class="lang-select" id="lang-select">
+          <button
+            type="button"
+            class="lang-select__toggle"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="flag" data-lang-flag></span>
+            <span class="lang-select__label" data-lang-label></span>
+            <span class="lang-select__caret">▾</span>
+          </button>
+          <ul class="lang-select__menu" role="listbox" hidden></ul>
+        </div>
         <div class="step__actions">
-          <button class="btn btn--primary" id="btn-welcome-continue">
-            Continua
+          <button class="btn btn--primary" id="btn-language-continue" data-i18n="lang.continue">
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 1: welcome -->
+      <section class="step" id="step-welcome" data-step="welcome" hidden>
+        <h1 class="step__title" data-i18n="welcome.title">Job Hunter Team</h1>
+        <p class="step__lead" data-i18n="welcome.lead">
+          A team of AI agents that hunt for jobs on your behalf, analyse offers and write CVs and cover letters.
+        </p>
+        <p class="step__hint" data-i18n="welcome.hint">
+          Before we start the team we check everything is ready on your computer. It takes a minute.
+        </p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-welcome-back" data-i18n="welcome.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-welcome-continue" data-i18n="welcome.continue">
+            Continue
           </button>
         </div>
       </section>
 
       <!-- Step 2: setup / checklist -->
       <section class="step" id="step-setup" data-step="setup" hidden>
-        <h1 class="step__title">Setup</h1>
-        <p class="step__lead">
-          Per far girare il team in modo isolato serve <strong>Docker</strong>,
-          gratuito. Controlliamo se è già sul tuo computer.
+        <h1 class="step__title" data-i18n="setup.title">Setup</h1>
+        <p class="step__lead" data-i18n="setup.lead" data-i18n-html="true">
+          To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.
         </p>
 
         <div class="dep-card" id="docker-card">
           <div class="dep-card__header">
-            <span class="dep-card__icon" id="docker-icon">…</span>
+            <img class="dep-card__icon" src="./assets/docker.svg" alt="Docker" width="28" height="28" />
             <span class="dep-card__name">Docker</span>
-            <span class="dep-card__badge" id="docker-badge">verifica…</span>
+            <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
-          <p class="dep-card__hint" id="docker-hint">
-            Controllo in corso…
+          <p class="dep-card__hint" id="docker-hint" data-i18n="setup.checkingHint">
+            Checking…
           </p>
           <div class="dep-card__stats" id="docker-stats" hidden>
             <div class="stat">
-              <span class="stat__label">Peso installazione</span>
+              <span class="stat__label" data-i18n="setup.statRequired">Install size</span>
               <span class="stat__value" id="docker-required">—</span>
             </div>
             <div class="stat">
-              <span class="stat__label">Libero sul tuo PC</span>
+              <span class="stat__label" data-i18n="setup.statFree">Free on your PC</span>
               <span class="stat__value" id="docker-free">—</span>
             </div>
           </div>
-          <div class="dep-card__actions" id="docker-actions">
-            <!-- populated by renderer -->
+          <div class="dep-card__actions" id="docker-actions"></div>
+        </div>
+
+        <div class="dep-list" id="extra-deps"></div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-setup-back" data-i18n="setup.back">Back</button>
+          <button class="btn btn--primary" id="btn-setup-continue" disabled data-i18n="setup.continue">
+            Next
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 2b: container prep -->
+      <section class="step" id="step-container" data-step="container" hidden>
+        <h1 class="step__title" data-i18n="container.title">Preparing container</h1>
+        <p class="step__lead" data-i18n="container.lead">
+          Downloading the JHT container image (~1 GB). This runs once.
+        </p>
+
+        <div class="container-progress" id="container-progress">
+          <div class="progress-bar" id="container-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
           </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="container-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="container-message" data-i18n="container.status.pulling">
+              Pulling image from the registry…
+            </span>
+          </div>
+          <pre class="container-progress__log" id="container-log"></pre>
         </div>
 
         <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-setup-back">Indietro</button>
-          <button class="btn btn--primary" id="btn-setup-continue" disabled>
-            Avanti
-          </button>
+          <button class="btn btn--ghost" id="btn-container-back" data-i18n="container.back">Back</button>
+          <button class="btn btn--primary" id="btn-container-retry" hidden data-i18n="container.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-container-continue" disabled data-i18n="container.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c: provider choice -->
+      <section class="step" id="step-provider-choose" data-step="provider-choose" hidden>
+        <h1 class="step__title" data-i18n="provider.title">Choose AI providers</h1>
+        <p class="step__lead" data-i18n="provider.lead">
+          Pick one or more CLIs. The team runs on subscriptions, not API keys.
+        </p>
+        <div class="provider-options" id="provider-options"></div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-continue" disabled data-i18n="provider.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2d: provider install -->
+      <section class="step" id="step-provider-install" data-step="provider-install" hidden>
+        <h1 class="step__title" data-i18n="provider.installTitle">Installing CLIs</h1>
+        <p class="step__lead" data-i18n="provider.installLead">
+          Installing selected CLIs into the container. This runs once per CLI.
+        </p>
+
+        <div class="container-progress" id="provider-progress">
+          <div class="progress-bar" id="provider-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
+          </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="provider-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="provider-message"></span>
+          </div>
+          <pre class="container-progress__log" id="provider-log"></pre>
+        </div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-install-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-install-retry" hidden data-i18n="provider.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-provider-install-continue" disabled data-i18n="provider.continue">Continue</button>
         </div>
       </section>
 
       <!-- Step 3: ready -->
       <section class="step" id="step-ready" data-step="ready" hidden>
-        <h1 class="step__title">Tutto pronto</h1>
-        <p class="step__lead">
-          Docker è installato e attivo. Puoi avviare il team.
+        <h1 class="step__title" data-i18n="ready.title">All set</h1>
+        <p class="step__lead" data-i18n="ready.lead">
+          Docker is installed and running. You can start the team.
         </p>
-        <p class="step__hint" id="ready-hint">
-          Al primo avvio il launcher scarica il codice del team (~60 MB) nella
-          tua cartella utente.
+        <p class="step__hint" id="ready-hint" data-i18n="ready.hint">
+          On first launch the launcher downloads the team code (~60 MB) into your user folder.
         </p>
         <div class="step__actions">
-          <button class="btn btn--primary btn--large" id="btn-start-team">
-            Avvia Job Hunter Team
+          <button class="btn btn--primary btn--large" id="btn-start-team" data-i18n="ready.start">
+            Start Job Hunter Team
           </button>
         </div>
       </section>
 
       <!-- Step 4: running -->
       <section class="step" id="step-running" data-step="running" hidden>
-        <h1 class="step__title" id="running-title">Team in esecuzione</h1>
-        <p class="step__lead" id="running-lead">
-          Il runtime è partito. Apri la dashboard nel browser per iniziare.
+        <h1 class="step__title" id="running-title" data-i18n="running.title">Team running</h1>
+        <p class="step__lead" id="running-lead" data-i18n="running.leadRunning">
+          The runtime is up. Open the dashboard in your browser to get started.
         </p>
         <div class="running-info" id="running-info"></div>
         <div class="step__actions">
-          <button class="btn btn--primary" id="btn-open-browser">
-            Apri dashboard
+          <button class="btn btn--primary" id="btn-open-browser" data-i18n="running.openBrowser">
+            Open dashboard
           </button>
-          <button class="btn btn--ghost" id="btn-stop-team">
-            Ferma team
+          <button class="btn btn--ghost" id="btn-stop-team" data-i18n="running.stop">
+            Stop team
           </button>
         </div>
         <details class="advanced">
-          <summary>Dettagli tecnici</summary>
+          <summary data-i18n="running.advanced">Technical details</summary>
           <pre class="advanced__log" id="advanced-log"></pre>
         </details>
       </section>
