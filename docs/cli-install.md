@@ -106,9 +106,11 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    - ensures Colima is up on macOS,
    - mounts only `~/.jht` → `/jht_home` and `~/Documents/Job Hunter Team`
      → `/jht_user` (sandbox),
-   - forwards a fixed allow-list of API-key env vars
-     (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MOONSHOT_API_KEY`,
-     `CLAUDE_CODE_OAUTH_TOKEN`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`),
+   - forwards a fixed allow-list of env vars used by the three supported
+     CLIs (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MOONSHOT_API_KEY`,
+     `CLAUDE_CODE_OAUTH_TOKEN`). These are intended as power-user
+     escape hatches — the default flow is subscription-based CLI
+     login inside the tmux session (see ADR 0004),
    - publishes container port `3000`.
 
    The wrapper is intentionally bash-3.2-compatible (macOS) and avoids
