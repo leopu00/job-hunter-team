@@ -4,6 +4,10 @@ const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
 const dockerInstaller = require('./docker-installer')
+const deps = require('./deps')
+const containerPrep = require('./container-prep')
+const providerInstall = require('./provider-install')
+const providerStore = require('./provider-store')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 let mainWindow = null
@@ -32,6 +36,18 @@ function createWindow() {
 function broadcastPayloadLog(message) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('launcher:payload-log', String(message))
+  }
+}
+
+function broadcastContainerLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:container-log', String(message))
+  }
+}
+
+function broadcastProviderLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:provider-log', String(message))
   }
 }
 
@@ -136,6 +152,76 @@ app.whenReady().then(() => {
     try {
       await shell.openExternal(url)
       return { ok: true, url }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('setup:get-extra-deps', async () => {
+    try {
+      return await deps.inspectExtraDeps()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { deps: [], allRequiredOk: false, error: message }
+    }
+  })
+
+  ipcMain.handle('setup:ensure-container', async () => {
+    try {
+      if (!payload.isPayloadPresent(payloadDir)) {
+        broadcastContainerLog('Fetching payload (compose file + Dockerfile)…')
+        const result = await payload.ensurePayload({
+          payloadDir,
+          updateIfPresent: false,
+          logger: broadcastContainerLog,
+        })
+        if (!result) {
+          return { ok: false, stage: 'payload', error: 'payload missing after ensure' }
+        }
+      }
+      return await containerPrep.ensureContainerImage({
+        payloadDir,
+        onLog: broadcastContainerLog,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastContainerLog(`Error: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  ipcMain.handle('setup:install-providers', async (_event, providerIds) => {
+    try {
+      if (!payload.isPayloadPresent(payloadDir)) {
+        return { ok: false, stage: 'payload', error: 'payload not present — run container prep first' }
+      }
+      const result = await providerInstall.installProviders({
+        providerIds: Array.isArray(providerIds) ? providerIds : [],
+        payloadDir,
+        onLog: broadcastProviderLog,
+      })
+      if (result.ok) {
+        providerStore.writeProviders(app.getPath('userData'), providerIds)
+      }
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastProviderLog(`Error: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  ipcMain.handle('setup:get-providers', () => {
+    return { providers: providerStore.readProviders(app.getPath('userData')) }
+  })
+
+  ipcMain.handle('setup:open-docker-desktop', async () => {
+    const desktopPath = dockerInstaller.dockerDesktopPath()
+    if (!desktopPath) return { ok: false, error: 'docker-desktop-not-found' }
+    try {
+      const result = await shell.openPath(desktopPath)
+      if (result) return { ok: false, error: result }
+      return { ok: true, path: desktopPath }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
