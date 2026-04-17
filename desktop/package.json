@@ -1,6 +1,6 @@
 {
   "name": "jht-desktop",
-  "version": "0.1.12",
+  "version": "0.1.13-dev",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
