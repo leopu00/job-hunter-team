@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { EmptyState } from '../components/EmptyState'
+import { EmptyState } from '../../components/EmptyState'
 
 type Schema = { name: string; type: string; fields: string[]; description: string }
 type Module = { module: string; schemas: Schema[] }

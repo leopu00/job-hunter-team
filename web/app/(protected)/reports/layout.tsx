@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
+import BreadcrumbJsonLd from '../../components/BreadcrumbJsonLd'
 
 export const metadata: Metadata = {
   title: 'Report',
