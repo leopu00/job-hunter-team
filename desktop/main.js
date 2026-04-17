@@ -1,5 +1,5 @@
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
@@ -37,6 +37,24 @@ function createWindow() {
   })
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'))
+
+  // Force every link/URL open to go through the host's default browser
+  // via shell.openExternal. Without this, Electron would happily spawn
+  // a nested BrowserWindow for things like window.open(...) — which
+  // would not carry the user's existing session cookies (e.g. Google
+  // OAuth) and force them to log in again.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url).catch(() => {})
+    }
+    return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL() && /^https?:\/\//i.test(url)) {
+      event.preventDefault()
+      shell.openExternal(url).catch(() => {})
+    }
+  })
 }
 
 function broadcastPayloadLog(message) {
@@ -203,7 +221,11 @@ app.whenReady().then(() => {
     const saved = providerStore.readProviders(app.getPath('userData'))
     const { installed } = providerInstall.inspectInstalledProviders()
     const bindHomeDir = getBindHomeDir()
-    const auth = providerAuth.authStates({ providers: installed, bindHomeDir })
+    // Auth only matters for providers the user currently picks (saved).
+    // Binaries in the bind-mount from previous runs are ignored — the
+    // user deselected them, they shouldn't resurface at login.
+    const relevant = saved.filter((id) => installed.includes(id))
+    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
     return {
       docker,
       extra,
@@ -220,10 +242,14 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('setup:get-auth-states', () => {
+    const saved = providerStore.readProviders(app.getPath('userData'))
     const installed = providerInstall.inspectInstalledProviders().installed
-    const auth = providerAuth.authStates({ providers: installed, bindHomeDir: getBindHomeDir() })
-    return { auth, installed }
+    const relevant = saved.filter((id) => installed.includes(id))
+    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir: getBindHomeDir() })
+    return { auth, installed: relevant }
   })
+
+  const loginContainerNames = new Map()
 
   ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
     const meta = providerInstall.PROVIDERS[providerId]
@@ -231,19 +257,15 @@ app.whenReady().then(() => {
     if (!payload.isPayloadPresent(payloadDir)) {
       return { ok: false, error: 'payload not present — run container prep first' }
     }
-    // `docker compose run --rm` spins up an ephemeral container so
-    // the login step works before the user has hit Start-team.
-    // HOME=/jht_home points the CLI's credentials dir at the bind-
-    // mounted ~/.jht on the host, so the tokens persist. -it asks
-    // compose for a TTY, which our node-pty session actually
-    // provides on the host side. No `login` argument: the binary
-    // opens its interactive UI (e.g. Claude Code's TUI) where the
-    // user types the slash-command for authentication.
+    // Predictable container name so we can docker-kill the orphan
+    // if the user closes the modal before the CLI exits cleanly.
+    const containerName = `jht-login-${providerId}-${Date.now()}`
     const id = terminal.spawnSession({
       command: 'docker',
       args: [
         'compose', 'run', '--rm', '--no-deps',
         '-it',
+        '--name', containerName,
         '-e', 'HOME=/jht_home',
         '--entrypoint', meta.binary,
         'jht',
@@ -256,11 +278,13 @@ app.whenReady().then(() => {
         }
       },
       onExit: (exit) => {
+        loginContainerNames.delete(id)
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(`terminal:exit:${id}`, exit)
         }
       },
     })
+    loginContainerNames.set(id, containerName)
     return { ok: true, sessionId: id }
   })
 
@@ -273,7 +297,28 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('terminal:kill', (_event, sessionId) => {
+    const containerName = loginContainerNames.get(sessionId)
     terminal.kill(sessionId)
+    loginContainerNames.delete(sessionId)
+    if (containerName) {
+      const { spawn } = require('node:child_process')
+      // Best-effort: remove the ephemeral container. --rm would clean
+      // it up if the CLI exited normally, but closing the modal
+      // early leaves it running.
+      try {
+        spawn('docker', ['rm', '-f', containerName], {
+          stdio: 'ignore',
+          windowsHide: true,
+          detached: true,
+        }).unref()
+      } catch { /* ignore */ }
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('clipboard:read', () => clipboard.readText())
+  ipcMain.handle('clipboard:write', (_event, text) => {
+    if (typeof text === 'string') clipboard.writeText(text)
     return { ok: true }
   })
 

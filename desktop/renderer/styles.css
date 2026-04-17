@@ -623,6 +623,17 @@ body { display: flex; flex-direction: column; }
   color: var(--text);
 }
 
+.terminal-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn--compact {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
 .terminal-modal__close {
   background: transparent;
   border: none;
@@ -650,6 +661,14 @@ body { display: flex; flex-direction: column; }
 .terminal-modal__body .xterm-screen {
   width: 100% !important;
   height: 100% !important;
+}
+
+/* xterm applies inline styles for hovered/active link ranges; we add a
+   subtle default underline so the user sees URLs are clickable. */
+.terminal-modal__body .xterm-decoration-overview-ruler,
+.terminal-modal__body .xterm .xterm-link {
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ── Summary list (ready step) ────────────────────────────── */
