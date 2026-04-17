@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { FilterBar, FilterDef, FilterValues } from '../components/FilterBar'
-import { EmptyState } from '../components/EmptyState'
-import { Pagination } from '../components/Pagination'
+import { FilterBar, FilterDef, FilterValues } from '../../components/FilterBar'
+import { EmptyState } from '../../components/EmptyState'
+import { Pagination } from '../../components/Pagination'
 
 type Severity = 'info' | 'warning' | 'critical'
 type AuditEvent = { id: string; ts: string; severity: Severity; actor: string; action: string; detail: string }
