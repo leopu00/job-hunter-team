@@ -570,6 +570,125 @@ body { display: flex; flex-direction: column; }
   word-break: break-word;
 }
 
+/* ── Auth list (provider login step) ──────────────────────── */
+
+.auth-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── Terminal modal ───────────────────────────────────────── */
+
+.terminal-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.terminal-modal[hidden] { display: none; }
+
+.terminal-modal__panel {
+  background: #0e0e10;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 820px;
+  height: 70vh;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.terminal-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-subtle);
+}
+
+.terminal-modal__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.terminal-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.terminal-modal__close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.terminal-modal__body {
+  flex: 1;
+  padding: 8px;
+  min-height: 0;
+  background: #0e0e10;
+}
+
+.terminal-modal__body .xterm,
+.terminal-modal__body .xterm-viewport,
+.terminal-modal__body .xterm-screen {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Summary list (ready step) ────────────────────────────── */
+
+.summary-list {
+  list-style: none;
+  margin: 14px 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.summary-list__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--success);
+  color: #0e0e10;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 /* ── Running step ─────────────────────────────────────────── */
 
 .running-info {

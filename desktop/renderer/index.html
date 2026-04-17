@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JHT Desktop</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -162,15 +163,24 @@
         </div>
       </section>
 
-      <!-- Step 3: ready -->
+      <!-- Step 2e: provider login -->
+      <section class="step" id="step-provider-login" data-step="provider-login" hidden>
+        <h1 class="step__title" data-i18n="login.title">Sign in to your providers</h1>
+        <p class="step__lead" data-i18n="login.lead">
+          Each CLI needs your active subscription. Open Login to sign in inside the app.
+        </p>
+        <div class="auth-list" id="auth-list"></div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-login-back" data-i18n="login.back">Back</button>
+          <button class="btn btn--primary" id="btn-login-continue" disabled data-i18n="login.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 3: ready / summary -->
       <section class="step" id="step-ready" data-step="ready" hidden>
         <h1 class="step__title" data-i18n="ready.title">All set</h1>
-        <p class="step__lead" data-i18n="ready.lead">
-          Docker is installed and running. You can start the team.
-        </p>
-        <p class="step__hint" id="ready-hint" data-i18n="ready.hint">
-          On first launch the launcher downloads the team code (~60 MB) into your user folder.
-        </p>
+        <p class="step__lead" data-i18n="ready.lead">Everything is configured. You can start the team.</p>
+        <ul class="summary-list" id="summary-list"></ul>
         <div class="step__actions">
           <button class="btn btn--primary btn--large" id="btn-start-team" data-i18n="ready.start">
             Start Job Hunter Team
@@ -200,6 +210,19 @@
       </section>
     </main>
 
+    <!-- Terminal modal: reusable xterm host for CLI login sessions. -->
+    <div class="terminal-modal" id="terminal-modal" hidden>
+      <div class="terminal-modal__panel">
+        <div class="terminal-modal__header">
+          <span class="terminal-modal__title" id="terminal-modal-title">Login</span>
+          <button type="button" class="terminal-modal__close" id="terminal-modal-close" aria-label="Close">✕</button>
+        </div>
+        <div class="terminal-modal__body" id="terminal-modal-body"></div>
+      </div>
+    </div>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>
