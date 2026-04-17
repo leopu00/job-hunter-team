@@ -19,7 +19,8 @@
     "dist:linux": "npm run dist -- --linux AppImage deb"
   },
   "dependencies": {
-    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@lydell/node-pty": "^1.2.0-beta.12",
+    "@lydell/node-pty-win32-x64": "^1.2.0-beta.12",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0"
   },
@@ -30,6 +31,7 @@
   "build": {
     "appId": "ai.jobhunterteam.desktop",
     "productName": "JHT Desktop",
+    "npmRebuild": false,
     "files": [
       "main.js",
       "preload.js",
@@ -49,7 +51,13 @@
       "node_modules/@xterm/xterm/lib/**/*",
       "node_modules/@xterm/xterm/css/**/*",
       "node_modules/@xterm/addon-fit/lib/**/*",
-      "node_modules/@homebridge/node-pty-prebuilt-multiarch/**/*",
+      "node_modules/@lydell/node-pty/**/*",
+      "node_modules/@lydell/node-pty-win32-x64/**/*",
+      "node_modules/@lydell/node-pty-win32-arm64/**/*",
+      "node_modules/@lydell/node-pty-darwin-x64/**/*",
+      "node_modules/@lydell/node-pty-darwin-arm64/**/*",
+      "node_modules/@lydell/node-pty-linux-x64/**/*",
+      "node_modules/@lydell/node-pty-linux-arm64/**/*",
       "renderer/**/*"
     ],
     "directories": {
