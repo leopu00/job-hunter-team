@@ -59,14 +59,16 @@ test('clonePayload runs git clone then sparse-checkout with expected paths', asy
   })
 
   assert.equal(result.action, 'cloned')
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 3)
   assert.equal(calls[0].args[0], 'clone')
   assert.ok(calls[0].args.includes('--depth=1'))
   assert.ok(calls[0].args.includes('--sparse'))
   assert.ok(calls[0].args.includes('https://example.test/repo.git'))
   assert.ok(calls[0].args.includes(payloadDir))
-  assert.deepEqual(calls[1].args, ['sparse-checkout', 'set', 'web', 'cli'])
+  assert.deepEqual(calls[1].args, ['sparse-checkout', 'init', '--no-cone'])
   assert.equal(calls[1].options.cwd, payloadDir)
+  assert.deepEqual(calls[2].args, ['sparse-checkout', 'set', 'web', 'cli'])
+  assert.equal(calls[2].options.cwd, payloadDir)
 })
 
 test('clonePayload removes an existing payloadDir before cloning', async () => {
