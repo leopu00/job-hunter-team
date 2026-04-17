@@ -156,11 +156,34 @@ async function installProviders({
   return { ok: true, results }
 }
 
+// Probe the bind-mounted npm-global bin dir on the host to see which
+// provider CLIs are already installed. No Docker call — we just check
+// for the symlink that `npm install -g` creates.
+function inspectInstalledProviders({ bindHomeDir } = {}) {
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const home = bindHomeDir || path.join(resolveHome(), '.jht')
+  const binDir = path.join(home, '.npm-global', 'bin')
+  const installed = []
+  for (const [id, meta] of Object.entries(PROVIDERS)) {
+    const binary = meta.binary
+    if (!binary) continue
+    if (
+      fs.existsSync(path.join(binDir, binary)) ||
+      fs.existsSync(path.join(binDir, `${binary}.cmd`))
+    ) {
+      installed.push(id)
+    }
+  }
+  return { bindHomeDir: home, installed }
+}
+
 module.exports = {
   PROVIDERS,
   SUPPORTED_IDS,
   installProvider,
   installProviders,
+  inspectInstalledProviders,
   resolveHome,
   dockerEnv,
   _internal: { runStreamed },
