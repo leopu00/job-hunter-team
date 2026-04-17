@@ -226,16 +226,25 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
-    if (!terminal.isAvailable()) {
-      return { ok: false, error: 'node-pty unavailable (run npm run postinstall)' }
-    }
     const meta = providerInstall.PROVIDERS[providerId]
     if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
-    const id = terminal.spawnPty({
+    if (!payload.isPayloadPresent(payloadDir)) {
+      return { ok: false, error: 'payload not present — run container prep first' }
+    }
+    // `docker compose run --rm` spins up an ephemeral container so the
+    // login step works before the user has hit Start-team. The
+    // bind-mount to ~/.jht means the auth tokens the CLI writes
+    // persist and are visible to the "real" runtime later.
+    // --entrypoint overrides the Dockerfile's JHT CLI dispatcher.
+    const id = terminal.spawnSession({
       command: 'docker',
-      args: ['exec', '-it', 'jht', meta.binary, 'login'],
-      cwd: process.cwd(),
-      env: process.env,
+      args: [
+        'compose', 'run', '--rm', '--no-deps',
+        '--entrypoint', meta.binary,
+        'jht', 'login',
+      ],
+      cwd: payloadDir,
+      env: containerPrep.dockerEnv(),
       onData: (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(`terminal:data:${id}`, data)

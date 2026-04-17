@@ -829,59 +829,20 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
 // is already satisfied so a re-launch doesn't force them through the
 // whole wizard again.
 async function smartAdvanceFromWelcome() {
-  let status
+  // Walk the wizard in order — each step self-reports its status with
+  // a checkmark and lets the user click Continue. No steps are hidden
+  // from view just because they're already resolved; the user wants
+  // to see the state of everything, not jump past it.
   try {
-    status = await window.setupApi.getStatus()
+    const status = await window.setupApi.getStatus()
+    state.lastStatus = status
+    const saved = Array.isArray(status?.providers?.saved) ? status.providers.saved : []
+    state.selectedProviders = new Set(saved)
+    state.authStates = Array.isArray(status?.providers?.auth) ? status.providers.auth : []
   } catch {
-    showStep(STEP_SETUP)
-    await refreshDockerStatus()
-    return
+    // Probe failed; walk the wizard anyway.
   }
-  state.lastStatus = status
-
-  const dockerOk = status?.docker?.state === 'ok'
-  const depsOk = status?.extra ? status.extra.allRequiredOk !== false : true
-  const imagePresent = !!status?.image?.present
-  const saved = Array.isArray(status?.providers?.saved) ? status.providers.saved : []
-  const pending = Array.isArray(status?.providers?.pending) ? status.providers.pending : []
-  const auth = Array.isArray(status?.providers?.auth) ? status.providers.auth : []
-  state.authStates = auth
-
-  if (!dockerOk || !depsOk) {
-    showStep(STEP_SETUP)
-    await refreshDockerStatus()
-    return
-  }
-
-  if (!imagePresent) {
-    showStep(STEP_CONTAINER)
-    startContainerPrep()
-    return
-  }
-
-  if (saved.length === 0) {
-    enterProviderChoose()
-    return
-  }
-
-  if (pending.length > 0) {
-    state.selectedProviders = new Set(saved)
-    showStep(STEP_PROVIDER_INSTALL)
-    startProviderInstall()
-    return
-  }
-
-  const unauthed = auth.filter((a) => !a.authed)
-  if (unauthed.length > 0) {
-    state.selectedProviders = new Set(saved)
-    enterProviderLogin()
-    return
-  }
-
-  state.selectedProviders = new Set(saved)
-  state.containerReady = true
-  state.providerInstallDone = true
-  enterReady()
+  await enterSetup()
 }
 
 dom.btnSetupBack.addEventListener('click', () => showStep(STEP_WELCOME))
@@ -894,10 +855,15 @@ dom.btnSetupContinue.addEventListener('click', () => {
   startContainerPrep()
 })
 
-dom.btnContainerBack.addEventListener('click', () => {
+dom.btnContainerBack.addEventListener('click', async () => {
   if (state.containerBusy) return
-  showStep(STEP_SETUP)
+  await enterSetup()
 })
+
+async function enterSetup() {
+  showStep(STEP_SETUP)
+  await refreshDockerStatus()
+}
 
 dom.btnContainerRetry.addEventListener('click', () => {
   if (state.containerBusy) return
@@ -1170,9 +1136,12 @@ async function openLoginTerminal(providerId, displayName) {
   activeSessionId = result.sessionId
 
   activeUnsubData = window.terminalApi.onData(activeSessionId, (data) => term.write(data))
-  activeUnsubExit = window.terminalApi.onExit(activeSessionId, () => {
-    term.writeln('\r\n[session closed]')
-    closeTerminalModal({ skipKill: true })
+  activeUnsubExit = window.terminalApi.onExit(activeSessionId, (exit) => {
+    const code = exit && typeof exit.exitCode === 'number' ? exit.exitCode : '?'
+    term.writeln(`\r\n\x1b[90m[session closed — exit ${code}]\x1b[0m`)
+    // Don't auto-close on non-zero exit so the user can read any error;
+    // they must press the ✕ button. Re-check auth in the background.
+    activeSessionId = null
     refreshAuthList()
   })
 
