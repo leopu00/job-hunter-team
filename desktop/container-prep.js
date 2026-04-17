@@ -95,10 +95,28 @@ async function ensureContainerImage({
   }
 }
 
+function inspectImage(imageName = 'ghcr.io/leopu00/jht:latest') {
+  // Synchronous probe: is the image already on the local Docker?
+  // Used by the setup wizard to skip the pull step on re-launch.
+  const { execFileSync } = require('node:child_process')
+  try {
+    execFileSync('docker', ['image', 'inspect', imageName], {
+      stdio: 'ignore',
+      timeout: 5000,
+      windowsHide: true,
+      env: dockerEnv(),
+    })
+    return { present: true, image: imageName }
+  } catch {
+    return { present: false, image: imageName }
+  }
+}
+
 module.exports = {
   ensureContainerImage,
   pullImage,
   buildImage,
+  inspectImage,
   dockerEnv,
   _internal: { runStreamed },
 }
