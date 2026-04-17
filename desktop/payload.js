@@ -71,6 +71,13 @@ async function clonePayload({
     { timeout: CLONE_TIMEOUT_MS },
   )
   logger('Configuro sparse-checkout…')
+  // Non-cone mode is required because SPARSE_PATHS mixes directories
+  // ("web", "cli", …) with files ("docker-compose.yml", "Dockerfile",
+  // ".env.example"). Cone mode (git ≥ 2.37 default) rejects file paths.
+  await runGit(['sparse-checkout', 'init', '--no-cone'], {
+    cwd: payloadDir,
+    timeout: CONFIG_TIMEOUT_MS,
+  })
   await runGit(['sparse-checkout', 'set', ...sparsePaths], {
     cwd: payloadDir,
     timeout: CONFIG_TIMEOUT_MS,
