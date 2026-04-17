@@ -71,19 +71,13 @@ export function LandingFooter() {
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_product')}</h4>
             <Link href="/download" className={linkClass}>Download</Link>
-            <Link href="/pricing" className={linkClass}>Pricing</Link>
-            <Link href="/demo" className={linkClass}>Demo</Link>
-            <Link href="/changelog" className={linkClass}>Changelog</Link>
             <Link href="/project" className={linkClass}>{t('footer_stats')}</Link>
-            <Link href="/reports" className={linkClass}>{t('footer_report')}</Link>
+            <a href="https://github.com/leopu00/job-hunter-team/blob/master/CHANGELOG.md" target="_blank" rel="noreferrer" className={linkClass}>Changelog</a>
           </div>
 
           {/* Risorse */}
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_resources')}</h4>
-            <Link href="/faq" className={linkClass}>FAQ</Link>
-            <Link href="/docs" className={linkClass}>{t('footer_docs')}</Link>
-            <Link href="/about" className={linkClass}>{t('footer_about')}</Link>
             <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer" className={linkClass}>GitHub</a>
             <a href="/sitemap.xml" className={linkClass}>Sitemap</a>
           </div>
@@ -92,7 +86,6 @@ export function LandingFooter() {
           <div>
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">{t('footer_contacts')}</h4>
             <a href="https://github.com/leopu00/job-hunter-team/issues" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_bug')}</a>
-            <a href="https://github.com/leopu00/job-hunter-team/discussions" target="_blank" rel="noreferrer" className={linkClass}>{t('footer_discuss')}</a>
             <Link href="/privacy" className={linkClass}>{t('footer_privacy')}</Link>
             <Link href="/terms" className={linkClass}>{t('footer_terms')}</Link>
           </div>
