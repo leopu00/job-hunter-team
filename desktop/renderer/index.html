@@ -215,7 +215,13 @@
       <div class="terminal-modal__panel">
         <div class="terminal-modal__header">
           <span class="terminal-modal__title" id="terminal-modal-title">Login</span>
-          <button type="button" class="terminal-modal__close" id="terminal-modal-close" aria-label="Close">✕</button>
+          <div class="terminal-modal__actions">
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-open-url" hidden data-i18n="login.action.openUrl">Open URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-copy-url" hidden data-i18n="login.action.copyUrl">Copy URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-paste" data-i18n="login.action.paste">Paste</button>
+            <button type="button" class="btn btn--primary btn--compact" id="terminal-modal-done" data-i18n="login.action.done">I'm done</button>
+            <button type="button" class="terminal-modal__close" id="terminal-modal-close" aria-label="Close">✕</button>
+          </div>
         </div>
         <div class="terminal-modal__body" id="terminal-modal-body"></div>
       </div>

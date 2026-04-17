@@ -125,6 +125,11 @@ const TRANSLATIONS = {
     'login.action.open': 'Login',
     'login.action.recheck': 'Re-check',
     'login.action.close': 'Close',
+    'login.action.done': "I'm done",
+    'login.action.paste': 'Paste',
+    'login.action.openUrl': 'Open URL',
+    'login.action.copyUrl': 'Copy URL',
+    'login.hint.codex': 'Codex uses a localhost callback that the container cannot expose. Press Esc in the terminal and choose "Sign in with Device Code".',
     'login.terminalTitle': 'Login — {name}',
     'summary.docker': 'Docker running',
     'summary.wsl': 'WSL ready',
@@ -228,6 +233,11 @@ const TRANSLATIONS = {
     'login.action.open': 'Login',
     'login.action.recheck': 'Ricontrolla',
     'login.action.close': 'Chiudi',
+    'login.action.done': 'Ho finito',
+    'login.action.paste': 'Incolla',
+    'login.action.openUrl': 'Apri URL',
+    'login.action.copyUrl': 'Copia URL',
+    'login.hint.codex': 'Codex usa un redirect su localhost che il container non può esporre. Premi Esc nel terminale e scegli "Sign in with Device Code".',
     'login.terminalTitle': 'Login — {name}',
     'summary.docker': 'Docker in esecuzione',
     'summary.wsl': 'WSL pronta',
@@ -331,6 +341,11 @@ const TRANSLATIONS = {
     'login.action.open': 'Belépés',
     'login.action.recheck': 'Ellenőrzés',
     'login.action.close': 'Bezár',
+    'login.action.done': 'Kész',
+    'login.action.paste': 'Beillesztés',
+    'login.action.openUrl': 'URL megnyitása',
+    'login.action.copyUrl': 'URL másolása',
+    'login.hint.codex': 'A Codex localhost visszahívást használ, amit a konténer nem tud elérhetővé tenni. Nyomj Esc-et a terminálban, majd válaszd a "Sign in with Device Code" opciót.',
     'login.terminalTitle': 'Belépés — {name}',
     'summary.docker': 'Docker fut',
     'summary.wsl': 'WSL kész',
@@ -520,6 +535,10 @@ const dom = {
   terminalModalTitle: document.getElementById('terminal-modal-title'),
   terminalModalBody: document.getElementById('terminal-modal-body'),
   btnTerminalClose: document.getElementById('terminal-modal-close'),
+  btnTerminalDone: document.getElementById('terminal-modal-done'),
+  btnTerminalPaste: document.getElementById('terminal-modal-paste'),
+  btnTerminalOpenUrl: document.getElementById('terminal-modal-open-url'),
+  btnTerminalCopyUrl: document.getElementById('terminal-modal-copy-url'),
   runningTitle: document.getElementById('running-title'),
   runningLead: document.getElementById('running-lead'),
   runningInfo: document.getElementById('running-info'),
@@ -1062,6 +1081,17 @@ function renderAuthList() {
     card.appendChild(header)
 
     if (!entry.authed) {
+      // Provider-specific hint: Codex's loopback OAuth doesn't work
+      // through the container, steer the user to the device-code flow.
+      const hintKey = `login.hint.${camelId(entry.id)}`
+      const hintText = t(hintKey)
+      if (hintText && hintText !== hintKey) {
+        const hint = document.createElement('p')
+        hint.className = 'dep-card__hint'
+        hint.textContent = hintText
+        card.appendChild(hint)
+      }
+
       const actions = document.createElement('div')
       actions.className = 'dep-card__actions'
 
@@ -1091,6 +1121,47 @@ let activeSessionId = null
 let activeUnsubData = null
 let activeUnsubExit = null
 let activeResizeObserver = null
+let activeLastUrl = null
+let activeAutoOpenedUrl = null
+let activeUrlDebounceTimer = null
+const URL_STABILIZE_MS = 700
+
+const TERMINAL_URL_RE = /https?:\/\/[^\s"'<>`]+/g
+
+function updateUrlButtons() {
+  const visible = !!activeLastUrl
+  dom.btnTerminalOpenUrl.hidden = !visible
+  dom.btnTerminalCopyUrl.hidden = !visible
+}
+
+// Walk xterm's active buffer joining wrapped continuations seamlessly,
+// so a URL that spans multiple rendered rows is a single string.
+function collectBufferText(term) {
+  const buf = term.buffer.active
+  const parts = []
+  let current = ''
+  for (let y = 0; y < buf.length; y++) {
+    const line = buf.getLine(y)
+    if (!line) continue
+    const text = line.translateToString(true)
+    if (line.isWrapped) {
+      current += text
+    } else {
+      if (current) parts.push(current)
+      current = text
+    }
+  }
+  if (current) parts.push(current)
+  return parts.join('\n')
+}
+
+function extractLongestUrl(text) {
+  const matches = text.match(TERMINAL_URL_RE)
+  if (!matches || matches.length === 0) return null
+  let best = matches[0]
+  for (const m of matches) if (m.length > best.length) best = m
+  return best.replace(/[.,:;)\]}>]+$/, '')
+}
 
 async function openLoginTerminal(providerId, displayName) {
   const Terminal = window.Terminal
@@ -1099,6 +1170,8 @@ async function openLoginTerminal(providerId, displayName) {
     console.error('xterm not loaded')
     return
   }
+  activeLastUrl = null
+  updateUrlButtons()
 
   dom.terminalModalTitle.textContent = t('login.terminalTitle', { name: displayName })
   dom.terminalModal.hidden = false
@@ -1121,6 +1194,101 @@ async function openLoginTerminal(providerId, displayName) {
   term.open(dom.terminalModalBody)
   fit.fit()
 
+  // Custom link provider: xterm's stock web-links addon only matches
+  // URLs within a single rendered row, so long wrapped URLs become
+  // unusable fragments. This provider uses the raw-stream URL we've
+  // already tracked (activeLastUrl) and registers every line that
+  // contains any part of it — click anywhere in the visible URL and
+  // shell.openExternal is called with the full, intact URL.
+  term.registerLinkProvider({
+    provideLinks(bufferLineNumber, callback) {
+      const links = []
+      const line = term.buffer.active.getLine(bufferLineNumber - 1)
+      if (!line) return callback(links)
+      const text = line.translateToString(true)
+
+      const openFull = (url) => () => {
+        window.launcherApi.openExternal(url).catch(() => {})
+      }
+
+      // URL begins on this line — take the intra-line match, but if we
+      // have a tracked URL that starts with it, prefer the tracked one.
+      const startRe = /https?:\/\/\S+/g
+      let m
+      while ((m = startRe.exec(text)) !== null) {
+        const hit = m[0].replace(/[.,:;)\]}>]+$/, '')
+        const full = activeLastUrl && activeLastUrl.startsWith(hit) ? activeLastUrl : hit
+        links.push({
+          range: {
+            start: { x: m.index + 1, y: bufferLineNumber },
+            end: { x: m.index + m[0].length, y: bufferLineNumber },
+          },
+          text: full,
+          activate: openFull(full),
+        })
+      }
+
+      // Wrapped continuation: no scheme on this line, but it holds a
+      // substring of the tracked URL. Make the whole non-whitespace
+      // run on the line clickable, pointing at the full URL.
+      if (links.length === 0 && activeLastUrl) {
+        const stride = 20
+        for (let i = 0; i + stride <= activeLastUrl.length; i += 10) {
+          const seg = activeLastUrl.slice(i, i + stride)
+          const idx = text.indexOf(seg)
+          if (idx < 0) continue
+          let sx = idx
+          let ex = idx + seg.length
+          while (sx > 0 && /\S/.test(text[sx - 1])) sx--
+          while (ex < text.length && /\S/.test(text[ex])) ex++
+          links.push({
+            range: {
+              start: { x: sx + 1, y: bufferLineNumber },
+              end: { x: ex, y: bufferLineNumber },
+            },
+            text: activeLastUrl,
+            activate: openFull(activeLastUrl),
+          })
+          break
+        }
+      }
+      callback(links)
+    },
+  })
+
+  // Intercept bare 'c' before it reaches the pty: the CLI inside the
+  // container has no access to the Windows clipboard, so its "link
+  // copied" message is a lie. We do the real copy on the host side
+  // and still forward the key so the CLI's UI feedback stays.
+  term.attachCustomKeyEventHandler((event) => {
+    if (
+      event.type === 'keydown' &&
+      event.key === 'c' &&
+      !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+      activeLastUrl
+    ) {
+      window.clipboardApi.write(activeLastUrl).catch(() => {})
+    }
+    return true
+  })
+
+  // Right-click: copy the current xterm selection to the host clipboard
+  // (reliable manual fallback if auto-open / click-to-open misbehaves);
+  // if nothing is selected, paste from the clipboard into the pty.
+  dom.terminalModalBody.addEventListener('contextmenu', async (event) => {
+    event.preventDefault()
+    const selection = term.getSelection()
+    if (selection && selection.length > 0) {
+      try { await window.clipboardApi.write(selection) } catch { /* ignore */ }
+      term.clearSelection()
+      return
+    }
+    try {
+      const text = await window.clipboardApi.read()
+      if (text && activeSessionId) window.terminalApi.write(activeSessionId, text)
+    } catch { /* ignore */ }
+  })
+
   let result
   try {
     result = await window.terminalApi.start({ providerId })
@@ -1137,7 +1305,34 @@ async function openLoginTerminal(providerId, displayName) {
   activeFit = fit
   activeSessionId = result.sessionId
 
-  activeUnsubData = window.terminalApi.onData(activeSessionId, (data) => term.write(data))
+  activeUnsubData = window.terminalApi.onData(activeSessionId, (data) => {
+    term.write(data, () => {
+      // Scan xterm's rendered buffer on every render tick. getLine()+
+      // isWrapped joins soft-wrapped URL continuations into one string.
+      const text = collectBufferText(term)
+      const url = extractLongestUrl(text)
+      if (url && url.length >= 12 && url !== activeLastUrl) {
+        activeLastUrl = url
+        updateUrlButtons()
+      }
+      // Debounce auto-open: Ink-based TUIs (Claude Code) render URLs
+      // progressively across several frames, so an early detection
+      // often catches a partial URL. Reset the timer on every render
+      // and only open in the browser after the buffer has been quiet
+      // for a short window — by then Ink has finished its last frame
+      // and the URL is complete.
+      if (activeUrlDebounceTimer) clearTimeout(activeUrlDebounceTimer)
+      activeUrlDebounceTimer = setTimeout(() => {
+        const latest = extractLongestUrl(collectBufferText(term))
+        if (latest && latest.length >= 12 && latest !== activeAutoOpenedUrl) {
+          activeLastUrl = latest
+          activeAutoOpenedUrl = latest
+          updateUrlButtons()
+          window.launcherApi.openExternal(latest).catch(() => {})
+        }
+      }, URL_STABILIZE_MS)
+    })
+  })
   activeUnsubExit = window.terminalApi.onExit(activeSessionId, (exit) => {
     const code = exit && typeof exit.exitCode === 'number' ? exit.exitCode : '?'
     term.writeln(`\r\n\x1b[90m[session closed — exit ${code}]\x1b[0m`)
@@ -1174,11 +1369,52 @@ function closeTerminalModal({ skipKill = false } = {}) {
     activeTerminal = null
   }
   activeFit = null
+  activeLastUrl = null
+  activeAutoOpenedUrl = null
+  if (activeUrlDebounceTimer) {
+    clearTimeout(activeUrlDebounceTimer)
+    activeUrlDebounceTimer = null
+  }
+  updateUrlButtons()
   dom.terminalModalBody.innerHTML = ''
   dom.terminalModal.hidden = true
 }
 
-dom.btnTerminalClose.addEventListener('click', () => closeTerminalModal())
+dom.btnTerminalClose.addEventListener('click', () => {
+  closeTerminalModal()
+  refreshAuthList()
+})
+
+dom.btnTerminalDone.addEventListener('click', () => {
+  closeTerminalModal()
+  refreshAuthList()
+})
+
+dom.btnTerminalPaste.addEventListener('click', async () => {
+  if (!activeSessionId) return
+  try {
+    const text = await window.clipboardApi.read()
+    if (text) window.terminalApi.write(activeSessionId, text)
+  } catch { /* ignore */ }
+})
+
+function freshUrlFromBuffer() {
+  // Re-scan the current xterm buffer (not the cached activeLastUrl) so
+  // the button always acts on the latest fully-rendered URL, even if
+  // Ink emitted more frames after the debounce opened a partial one.
+  if (!activeTerminal) return activeLastUrl
+  return extractLongestUrl(collectBufferText(activeTerminal)) || activeLastUrl
+}
+
+dom.btnTerminalOpenUrl.addEventListener('click', () => {
+  const url = freshUrlFromBuffer()
+  if (url) window.launcherApi.openExternal(url).catch(() => {})
+})
+
+dom.btnTerminalCopyUrl.addEventListener('click', () => {
+  const url = freshUrlFromBuffer()
+  if (url) window.clipboardApi.write(url).catch(() => {})
+})
 
 // -------- Step: ready (summary) --------
 
