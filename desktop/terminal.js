@@ -10,9 +10,12 @@
 // depend on raw-mode input (Ink-based TUIs like Claude Code's /login)
 // then work as expected.
 
+// @lydell/node-pty ships prebuilt binaries per platform via optional
+// deps (@lydell/node-pty-win32-x64, -darwin-arm64, -linux-x64, ...).
+// No node-gyp, no VS Build Tools, no electron-rebuild needed.
 let pty
 try {
-  pty = require('@homebridge/node-pty-prebuilt-multiarch')
+  pty = require('@lydell/node-pty')
 } catch {
   pty = null
 }
