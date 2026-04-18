@@ -33,18 +33,48 @@ test('returns unsupported-platform on linux', async () => {
   assert.equal(result.error, 'unsupported-platform')
 })
 
-test('stage=brew-missing when brew --version fails', async () => {
+test('stage=brew-install-homebrew when brew is missing and installer fails', async () => {
   const run = fakeRunSequence([])
   const result = await installDocker({
     platform: 'darwin',
     run,
     brewCheck: async () => false,
     dockerCheck: async () => true,
+    brewInstaller: async () => ({ ok: false, code: 1, stderr: 'network error' }),
   })
   assert.equal(result.ok, false)
-  assert.equal(result.stage, 'brew-missing')
-  assert.equal(result.hintKey, 'docker.install.brewMissing')
-  assert.equal(run.calls.length, 0, 'no install attempted when brew is missing')
+  assert.equal(result.stage, 'brew-install-homebrew')
+  assert.equal(run.calls.length, 0, 'colima install not attempted when brew install fails')
+})
+
+test('brew install triggers brew installer when missing, then proceeds', async () => {
+  const stages = []
+  let brewWasMissing = true
+  const run = fakeRunSequence([
+    { ok: true, code: 0, stderr: '' }, // brew install colima docker
+    { ok: true, code: 0, stderr: '' }, // colima start
+  ])
+  const result = await installDocker({
+    platform: 'darwin',
+    run,
+    onStage: (name, status) => stages.push(`${name}:${status}`),
+    // brewCheck returns false the first time (missing → trigger installer),
+    // then true after the installer pretends it installed brew.
+    brewCheck: async () => {
+      if (brewWasMissing) {
+        brewWasMissing = false
+        return false
+      }
+      return true
+    },
+    dockerCheck: async () => true,
+    brewInstaller: async () => ({ ok: true, code: 0, stderr: '' }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.stage, 'ok')
+  // Homebrew should flip busy → ok once the installer runs and brew is found.
+  assert.ok(stages.includes('homebrew:busy'))
+  assert.ok(stages.includes('homebrew:ok'))
 })
 
 test('stage=brew-install when brew install fails', async () => {
