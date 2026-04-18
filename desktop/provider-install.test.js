@@ -57,7 +57,11 @@ test('installProviders requires at least one id', async () => {
 })
 
 test('installProviders installs each selected provider in order', async () => {
+  // claude is one npm step, kimi is three (uninstall old wrapper,
+  // install uv, uv-install kimi-cli). Four docker run calls total.
   const { run, calls } = recordingRun([
+    { result: { ok: true, code: 0 } },
+    { result: { ok: true, code: 0 } },
     { result: { ok: true, code: 0 } },
     { result: { ok: true, code: 0 } },
   ])
@@ -67,9 +71,11 @@ test('installProviders installs each selected provider in order', async () => {
     run,
   })
   assert.equal(result.ok, true)
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 4)
   assert.ok(calls[0].args.includes('@anthropic-ai/claude-code@latest'))
-  assert.ok(calls[1].args.some((a) => /kimi/i.test(a)))
+  // The kimi steps must collectively mention kimi-cli somewhere.
+  const kimiCalls = calls.slice(1)
+  assert.ok(kimiCalls.some((c) => c.args.some((a) => /kimi/i.test(a))))
   for (const call of calls) {
     assert.ok(call.args.includes('--entrypoint'))
   }

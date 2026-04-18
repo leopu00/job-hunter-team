@@ -27,9 +27,12 @@ const AUTH_PATHS = {
     '.codex/credentials.json',
     '.config/codex/credentials.json',
   ],
-  // @jacksontian/kimi-cli: config typically at ~/.kimi/config.json
-  // once the user has signed in.
+  // Official Moonshot kimi-cli (github.com/MoonshotAI/kimi-cli) writes
+  // auth + session state to ~/.kimi/kimi.json after the TUI /login
+  // flow completes. Older @jacksontian wrapper used config.json; we
+  // keep it in the list as a fallback for users mid-migration.
   kimi: [
+    '.kimi/kimi.json',
     '.kimi/config.json',
     '.kimi/credentials.json',
     '.config/kimi/config.json',

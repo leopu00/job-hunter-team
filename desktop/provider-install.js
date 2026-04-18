@@ -43,16 +43,40 @@ const PROVIDERS = {
   kimi: {
     displayName: 'Kimi',
     binary: 'kimi',
-    // Moonshot AI does not publish an official CLI on npm. The most
-    // maintained third-party wrapper is @jacksontian/kimi-cli (by Hugo
-    // Wang), which exposes a `kimi` binary compatible with Moonshot's
-    // chat endpoint. Revisit if Moonshot ships an official package.
-    install: [{
-      entrypoint: 'npm',
-      args: ['install', '-g', '@jacksontian/kimi-cli@latest'],
-      env: NPM_PREFIX_ENV,
-    }],
-    loginHint: 'kimi login',
+    // Moonshot's official CLI is kimi-cli (github.com/MoonshotAI/kimi-cli) —
+    // a Python uv tool, not an npm package. This is the real "Kimi Code"
+    // TUI that supports /login OAuth (the subscription flow users pay
+    // for on Moderato/Allegretto), not the @jacksontian API-key wrapper
+    // we shipped originally. Kimi-cli requires Python 3.13; uv fetches
+    // it automatically so the container (Debian bookworm 3.11) is fine.
+    install: [
+      // Remove the old @jacksontian/kimi-cli npm package if present
+      // from a previous install. The sh -c swallows failures so a
+      // fresh install that never had it doesn't error out.
+      {
+        entrypoint: 'sh',
+        args: ['-c', 'npm uninstall -g @jacksontian/kimi-cli 2>/dev/null || true'],
+        env: NPM_PREFIX_ENV,
+      },
+      // uv itself is a single static binary available on PyPI.
+      // --break-system-packages is needed on Debian bookworm where
+      // system pip refuses user-wide installs by default (PEP 668).
+      {
+        entrypoint: 'pip3',
+        args: ['install', '--user', '--break-system-packages', 'uv'],
+      },
+      // uv tool install defaults to ~/.local/bin, but the container's
+      // Dockerfile hardcodes /home/jht/.local/bin in PATH — different
+      // from $HOME/.local/bin since HOME is overridden to /jht_home
+      // at runtime. UV_TOOL_BIN_DIR pins the symlinks into
+      // /jht_home/.npm-global/bin, which *is* on PATH and is already
+      // the bind-mounted location where npm global binaries live.
+      {
+        entrypoint: 'sh',
+        args: ['-c', 'export PATH="$HOME/.local/bin:$PATH" && UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --python 3.13 kimi-cli'],
+      },
+    ],
+    loginHint: 'inside TUI: /login',
   },
 }
 
@@ -171,14 +195,25 @@ function inspectInstalledProviders({ bindHomeDir } = {}) {
   const path = require('node:path')
   const home = bindHomeDir || path.join(resolveHome(), '.jht')
   const binDir = path.join(home, '.npm-global', 'bin')
+  // lstatSync (not existsSync) so dead-from-the-host symlinks still
+  // count as "present". Kimi's uv install uses an absolute symlink
+  // pointing inside the container (/jht_home/.local/share/uv/…),
+  // which the host sees as a broken link — but from inside the
+  // container it resolves fine, and that's the only place the binary
+  // ever actually runs.
+  const exists = (p) => {
+    try {
+      fs.lstatSync(p)
+      return true
+    } catch {
+      return false
+    }
+  }
   const installed = []
   for (const [id, meta] of Object.entries(PROVIDERS)) {
     const binary = meta.binary
     if (!binary) continue
-    if (
-      fs.existsSync(path.join(binDir, binary)) ||
-      fs.existsSync(path.join(binDir, `${binary}.cmd`))
-    ) {
+    if (exists(path.join(binDir, binary)) || exists(path.join(binDir, `${binary}.cmd`))) {
       installed.push(id)
     }
   }
