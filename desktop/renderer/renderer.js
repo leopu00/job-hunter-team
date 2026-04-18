@@ -1283,11 +1283,18 @@ let activeUnsubData = null
 let activeUnsubExit = null
 let activeResizeObserver = null
 let activeLastUrl = null
-let activeAutoOpenedUrl = null
 let activeUrlDebounceTimer = null
+// Raw unfiltered pty stream (ANSI stripped) — ground truth for URL
+// detection. xterm's rendered buffer sometimes chops long URLs when the
+// TUI uses cursor-positioning escape sequences; the raw stream has
+// whatever the CLI actually wrote, wrap-free.
+let activeRawStream = ''
 const URL_STABILIZE_MS = 700
+const RAW_STREAM_MAX = 80 * 1024
 
 const TERMINAL_URL_RE = /https?:\/\/[^\s"'<>`]+/g
+// Strip ANSI CSI (color/cursor) sequences before URL extraction.
+const ANSI_CSI_RE = /\x1b\[[0-?]*[ -/]*[@-~]/g
 
 function updateUrlButtons() {
   const visible = !!activeLastUrl
@@ -1324,6 +1331,47 @@ function extractLongestUrl(text) {
   return best.replace(/[.,:;)\]}>]+$/, '')
 }
 
+// Pane-capture style URL extraction, mirroring what a user would do
+// reading the terminal screen: dump every visible row as flat text,
+// find the row that contains "https://", scan forward until the row
+// that starts the CLI's prompt ("Paste code here if prompted"), then
+// glue all those rows together dropping every whitespace character.
+// Works regardless of xterm soft-wrap flags, cursor repositioning,
+// or ANSI frames — whatever is on the screen is what we capture.
+const URL_END_MARKER_RE = /paste\s+(the\s+)?code\s+(here|below)|paste\s+code\b|^\s*>\s*$/i
+
+function extractUrlViaPaneCapture(term) {
+  if (!term || !term.buffer || !term.buffer.active) return null
+  const buf = term.buffer.active
+  const rows = []
+  for (let y = 0; y < buf.length; y++) {
+    const line = buf.getLine(y)
+    if (!line) continue
+    rows.push(line.translateToString(true))
+  }
+  let startIdx = -1
+  for (let i = 0; i < rows.length; i++) {
+    if (/https?:\/\//i.test(rows[i])) { startIdx = i; break }
+  }
+  if (startIdx < 0) return null
+
+  let endIdx = rows.length
+  for (let i = startIdx; i < rows.length; i++) {
+    // Skip the very first row — it carries the scheme itself and
+    // would false-match if the CLI wrote hints on the same line.
+    if (i === startIdx) continue
+    if (URL_END_MARKER_RE.test(rows[i])) { endIdx = i; break }
+  }
+
+  // Join without separators and strip every whitespace run. URLs never
+  // contain whitespace, so collapsing is safe; soft-wrap artefacts
+  // (padding spaces, leading indents) disappear.
+  const joined = rows.slice(startIdx, endIdx).join('').replace(/\s+/g, '')
+  const m = joined.match(/https?:\/\/[^\s"'<>`]+/i)
+  if (!m) return null
+  return m[0].replace(/[.,:;)\]}>]+$/, '')
+}
+
 async function openLoginTerminal(providerId, displayName) {
   const Terminal = window.Terminal
   const FitAddon = window.FitAddon && window.FitAddon.FitAddon
@@ -1332,6 +1380,7 @@ async function openLoginTerminal(providerId, displayName) {
     return
   }
   activeLastUrl = null
+  activeRawStream = ''
   updateUrlButtons()
 
   dom.terminalModalTitle.textContent = t('login.terminalTitle', { name: displayName })
@@ -1467,29 +1516,39 @@ async function openLoginTerminal(providerId, displayName) {
   activeSessionId = result.sessionId
 
   activeUnsubData = window.terminalApi.onData(activeSessionId, (data) => {
+    // Accumulate the raw pty stream too, independent of xterm rendering.
+    // URL detection on the raw stream is bulletproof against wrap/chop
+    // issues caused by cursor-positioning escape sequences.
+    activeRawStream += data
+    if (activeRawStream.length > RAW_STREAM_MAX) {
+      activeRawStream = activeRawStream.slice(-RAW_STREAM_MAX / 2)
+    }
     term.write(data, () => {
-      // Scan xterm's rendered buffer on every render tick. getLine()+
-      // isWrapped joins soft-wrapped URL continuations into one string.
-      const text = collectBufferText(term)
-      const url = extractLongestUrl(text)
+      // Prefer the raw stream (ANSI stripped) — falls back to xterm's
+      // reassembled buffer only if the raw scan misses.
+      const rawText = activeRawStream.replace(ANSI_CSI_RE, '')
+      const url =
+        extractLongestUrl(rawText) ||
+        extractLongestUrl(collectBufferText(term))
       if (url && url.length >= 12 && url !== activeLastUrl) {
         activeLastUrl = url
         updateUrlButtons()
       }
-      // Debounce auto-open: Ink-based TUIs (Claude Code) render URLs
-      // progressively across several frames, so an early detection
-      // often catches a partial URL. Reset the timer on every render
-      // and only open in the browser after the buffer has been quiet
-      // for a short window — by then Ink has finished its last frame
-      // and the URL is complete.
+      // Debounced refresh of the cached URL (keeps the Open URL button
+      // enabled with the latest detection). We deliberately do NOT
+      // auto-open the browser here: Ink-based TUIs render the URL
+      // progressively, and an early catch can open a truncated URL.
+      // The Open URL button re-extracts from the pane on click, which
+      // is the only reliable path — let the user drive it.
       if (activeUrlDebounceTimer) clearTimeout(activeUrlDebounceTimer)
       activeUrlDebounceTimer = setTimeout(() => {
-        const latest = extractLongestUrl(collectBufferText(term))
-        if (latest && latest.length >= 12 && latest !== activeAutoOpenedUrl) {
+        const latest =
+          (activeTerminal && extractUrlViaPaneCapture(activeTerminal)) ||
+          extractLongestUrl(activeRawStream.replace(ANSI_CSI_RE, '')) ||
+          extractLongestUrl(collectBufferText(term))
+        if (latest && latest.length >= 12 && latest !== activeLastUrl) {
           activeLastUrl = latest
-          activeAutoOpenedUrl = latest
           updateUrlButtons()
-          window.launcherApi.openExternal(latest).catch(() => {})
         }
       }, URL_STABILIZE_MS)
     })
@@ -1531,7 +1590,7 @@ function closeTerminalModal({ skipKill = false } = {}) {
   }
   activeFit = null
   activeLastUrl = null
-  activeAutoOpenedUrl = null
+  activeRawStream = ''
   if (activeUrlDebounceTimer) {
     clearTimeout(activeUrlDebounceTimer)
     activeUrlDebounceTimer = null
@@ -1560,9 +1619,21 @@ dom.btnTerminalPaste.addEventListener('click', async () => {
 })
 
 function freshUrlFromBuffer() {
-  // Re-scan the current xterm buffer (not the cached activeLastUrl) so
-  // the button always acts on the latest fully-rendered URL, even if
-  // Ink emitted more frames after the debounce opened a partial one.
+  // 1) Pane-capture of the visible terminal screen — the authoritative
+  //    source because it is exactly what the user sees. Glues rows
+  //    together dropping whitespace; uses the "Paste code here"-style
+  //    row as the end marker, so nothing past the URL leaks in.
+  if (activeTerminal) {
+    const fromPane = extractUrlViaPaneCapture(activeTerminal)
+    if (fromPane) return fromPane
+  }
+  // 2) Raw pty stream (ANSI stripped) — helps when the URL has scrolled
+  //    off-screen.
+  const rawUrl = activeRawStream
+    ? extractLongestUrl(activeRawStream.replace(ANSI_CSI_RE, ''))
+    : null
+  if (rawUrl) return rawUrl
+  // 3) Fall back to the cached value if nothing is live.
   if (!activeTerminal) return activeLastUrl
   return extractLongestUrl(collectBufferText(activeTerminal)) || activeLastUrl
 }
