@@ -21,6 +21,7 @@ const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
 const dockerInstaller = require('./docker-installer')
+const winInstaller = require('./win-installer/install')
 const deps = require('./deps')
 const containerPrep = require('./container-prep')
 const providerInstall = require('./provider-install')
@@ -227,6 +228,41 @@ app.whenReady().then(() => {
       const message = error instanceof Error ? error.message : String(error)
       broadcastInstallLog(`Errore: ${message}`)
       return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  // Windows-only: one-click install of WSL2 + Docker Desktop behind a
+  // single UAC prompt. Reuses the install-log broadcast channel so the
+  // renderer can show live progress in the same panel.
+  ipcMain.handle('setup:install-windows-stack', async () => {
+    try {
+      return await winInstaller.installWindowsStack({
+        platform: process.platform,
+        onLog: broadcastInstallLog,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastInstallLog(`Errore: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  // Triggers a full OS reboot. Used at the end of the Windows install
+  // flow so WSL2 kernel + Docker engine come up clean on next boot.
+  ipcMain.handle('setup:reboot', async () => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'unsupported-platform' }
+    }
+    const { spawn } = require('node:child_process')
+    try {
+      spawn('shutdown.exe', ['/r', '/t', '0'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      }).unref()
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   })
 
