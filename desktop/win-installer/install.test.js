@@ -93,46 +93,6 @@ test('ok=false + stage=wsl-install when result is WSL_INSTALL', async () => {
   assert.equal(result.stage, 'wsl-install')
 })
 
-test('ok=false + stage=docker-download when result is DOCKER_DOWNLOAD', async () => {
-  const fakeFs = makeFakeFs()
-  const child = makeFakeChild()
-  const spawnFn = () => {
-    setImmediate(() => {
-      fakeFs.writeFileSync(FAKE_PATHS.result, 'DOCKER_DOWNLOAD')
-      child.emit('close', 1)
-    })
-    return child
-  }
-
-  const result = await installWindowsStack({
-    platform: 'win32',
-    paths: FAKE_PATHS,
-    spawnFn,
-    fsApi: fakeFs,
-  })
-  assert.equal(result.stage, 'docker-download')
-})
-
-test('ok=false + stage=docker-install when result is DOCKER_INSTALL', async () => {
-  const fakeFs = makeFakeFs()
-  const child = makeFakeChild()
-  const spawnFn = () => {
-    setImmediate(() => {
-      fakeFs.writeFileSync(FAKE_PATHS.result, 'DOCKER_INSTALL')
-      child.emit('close', 1)
-    })
-    return child
-  }
-
-  const result = await installWindowsStack({
-    platform: 'win32',
-    paths: FAKE_PATHS,
-    spawnFn,
-    fsApi: fakeFs,
-  })
-  assert.equal(result.stage, 'docker-install')
-})
-
 test('ok=false + stage=aborted when no result file (UAC declined / blocked)', async () => {
   const fakeFs = makeFakeFs()
   const child = makeFakeChild()
@@ -153,16 +113,16 @@ test('ok=false + stage=aborted when no result file (UAC declined / blocked)', as
   assert.match(result.error, /UAC|before reporting/)
 })
 
-test('buildScript references the canonical Docker installer URL and the four step labels', () => {
+test('buildScript runs only the two automatic steps (WSL + Git); Docker stays manual', () => {
   const script = buildScript({ paths: FAKE_PATHS })
-  assert.match(script, /https:\/\/desktop\.docker\.com\/win\/main\/amd64\/Docker%20Desktop%20Installer\.exe/)
-  assert.match(script, /Step 1\/4 Installing WSL/)
-  assert.match(script, /Step 2\/4 Installing Git/)
-  assert.match(script, /Step 3\/4 Downloading Docker Desktop/)
-  assert.match(script, /Step 4\/4 Installing Docker Desktop/)
+  assert.match(script, /Step 1\/2 Installing WSL/)
+  assert.match(script, /Step 2\/2 Installing Git/)
   assert.match(script, /--no-launch/)
-  assert.match(script, /--no-restart/)
   assert.match(script, /winget install --id Git\.Git/)
+  // Docker install was removed — Docker Desktop is installed manually
+  // by the user clicking "Download" in the wizard's Docker row.
+  assert.doesNotMatch(script, /Installing Docker Desktop/)
+  assert.doesNotMatch(script, /Invoke-WebRequest/)
 })
 
 test('stage=git-install when result is GIT_INSTALL', async () => {
