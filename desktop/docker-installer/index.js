@@ -5,7 +5,7 @@ const { getStrategy, DOCKER_DISPLAY_NAME } = require('./manifest')
 const { checkDocker, hintKeyForState, isDockerDesktopRunning } = require('./check')
 const { downloadUrlFor } = require('./download-url')
 const { dockerDesktopPath } = require('./desktop-path')
-const { installDocker } = require('./install')
+const { installDocker, inspectInstallSteps } = require('./install')
 
 module.exports = {
   getStrategy,
@@ -16,4 +16,5 @@ module.exports = {
   downloadUrlFor,
   dockerDesktopPath,
   installDocker,
+  inspectInstallSteps,
 }

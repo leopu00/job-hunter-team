@@ -101,15 +101,44 @@ async function isDockerResponsive({ env } = {}) {
   }
 }
 
+async function isColimaInstalled({ env } = {}) {
+  try {
+    await execFileAsync('colima', ['version'], { env: env || brewEnv(), timeout: 5000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Snapshot of the three install steps shown in the UI. Used by the renderer
+// to paint the checklist on open without running any install yet.
+async function inspectInstallSteps({ platform = process.platform } = {}) {
+  if (platform !== 'darwin') return null
+  const env = brewEnv()
+  const [homebrew, colima, daemon] = await Promise.all([
+    isBrewPresent({ env }),
+    isColimaInstalled({ env }),
+    isDockerResponsive({ env }),
+  ])
+  return {
+    homebrew: homebrew ? 'ok' : 'missing',
+    colima: colima ? 'ok' : 'missing',
+    daemon: daemon ? 'ok' : 'missing',
+  }
+}
+
 async function installColimaOnDarwin({
   onLog = () => {},
+  onStage = () => {},
   run = runStreamed,
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
 } = {}) {
   const env = brewEnv()
 
+  onStage('homebrew', 'busy')
   if (!(await brewCheck({ env }))) {
+    onStage('homebrew', 'fail')
     return {
       ok: false,
       stage: 'brew-missing',
@@ -117,18 +146,24 @@ async function installColimaOnDarwin({
       hintKey: 'docker.install.brewMissing',
     }
   }
+  onStage('homebrew', 'ok')
 
+  onStage('colima', 'busy')
   const install = await run('brew', ['install', 'colima', 'docker'], { onLog, env })
   if (!install.ok) {
+    onStage('colima', 'fail')
     return {
       ok: false,
       stage: 'brew-install',
       error: install.stderr || `brew install exited with code ${install.code}`,
     }
   }
+  onStage('colima', 'ok')
 
+  onStage('daemon', 'busy')
   const start = await run('colima', ['start'], { onLog, env })
   if (!start.ok) {
+    onStage('daemon', 'fail')
     return {
       ok: false,
       stage: 'colima-start',
@@ -137,6 +172,7 @@ async function installColimaOnDarwin({
   }
 
   if (!(await dockerCheck({ env }))) {
+    onStage('daemon', 'fail')
     return {
       ok: false,
       stage: 'daemon-unreachable',
@@ -144,6 +180,7 @@ async function installColimaOnDarwin({
       hintKey: 'docker.install.daemonUnreachable',
     }
   }
+  onStage('daemon', 'ok')
 
   return { ok: true, stage: 'ok' }
 }
@@ -151,6 +188,7 @@ async function installColimaOnDarwin({
 async function installDocker({
   platform = process.platform,
   onLog = () => {},
+  onStage = () => {},
   run = runStreamed,
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
@@ -158,10 +196,18 @@ async function installDocker({
   if (platform !== 'darwin') {
     return { ok: false, error: 'unsupported-platform' }
   }
-  return installColimaOnDarwin({ onLog, run, brewCheck, dockerCheck })
+  return installColimaOnDarwin({ onLog, onStage, run, brewCheck, dockerCheck })
 }
 
 module.exports = {
   installDocker,
-  _internal: { runStreamed, isBrewPresent, isDockerResponsive, brewEnv, brewPath },
+  inspectInstallSteps,
+  _internal: {
+    runStreamed,
+    isBrewPresent,
+    isDockerResponsive,
+    isColimaInstalled,
+    brewEnv,
+    brewPath,
+  },
 }
