@@ -157,6 +157,25 @@ async function handleDashboard(options) {
     console.log(`  ${DIM}Apri manualmente: ${url}${RESET}\n`);
   }
 
+  // Boot the assistant in the background so the first thing the user
+  // sees on /dashboard → /onboarding is the welcome chat. Only inside
+  // the container — on the host, team/start is the user-initiated
+  // entry point. Non-fatal if the script or tmux isn't there yet.
+  if (isContainer() && ready) {
+    try {
+      const root = '/app';
+      const startScript = join(root, '.launcher', 'start-agent.sh');
+      if (await fileExists(startScript)) {
+        const boot = spawn('bash', [startScript, 'assistente'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        boot.unref();
+        console.log(`  ${DIM}Assistente: avvio in background…${RESET}`);
+      }
+    } catch { /* non-fatal */ }
+  }
+
   // In container PID 1 (this process) must stay alive: if we exit,
   // docker tears the whole runtime down. Forward signals and wait
   // for the next dev child indefinitely.
