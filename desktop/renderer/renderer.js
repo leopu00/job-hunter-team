@@ -78,16 +78,17 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Not installed',
     'docker.action.install': 'Install Docker',
     'docker.action.openDesktop': 'Open Docker Desktop',
+    'docker.action.startColima': 'Start Colima',
     'docker.action.check': 'Check',
     'docker.hint.ok': 'Ready.',
     'docker.hint.missing.win32': 'Install Docker Desktop and reboot your computer to activate it.',
-    'docker.hint.missing.darwin': 'Install Docker Desktop, then open it once to start the runtime.',
+    'docker.hint.missing.darwin': 'Install Colima: run `brew install colima docker` in Terminal.',
     'docker.hint.missing.linux': 'Install Docker Engine from the official guide, then reboot or start the daemon.',
     'docker.hint.notRunning.win32': 'Docker Desktop is installed but not running. Open it to start the daemon.',
-    'docker.hint.notRunning.darwin': 'Docker Desktop is installed but not running. Open it to start the daemon.',
+    'docker.hint.notRunning.darwin': 'Colima is installed but the daemon is stopped. Start it with `colima start` or click the button below.',
     'docker.hint.starting': 'Docker Desktop is starting. Wait a few seconds and click Check.',
     'docker.hint.needsReboot.win32': 'Docker is installed. Reboot your computer to activate it.',
-    'docker.hint.needsReboot.darwin': 'Docker is installed. Open Docker once to start the runtime.',
+    'docker.hint.needsReboot.darwin': 'Colima is installed. Run `colima start` to activate the runtime.',
     'docker.hint.needsReboot.linux': 'Docker is installed. Start the daemon (systemctl start docker) or reboot.',
     'deps.wsl.name': 'WSL',
     'deps.wsl.state.ok': 'Ready',
@@ -186,16 +187,17 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Non installato',
     'docker.action.install': 'Installa Docker',
     'docker.action.openDesktop': 'Apri Docker Desktop',
+    'docker.action.startColima': 'Avvia Colima',
     'docker.action.check': 'Verifica',
     'docker.hint.ok': 'Pronto.',
     'docker.hint.missing.win32': 'Installa Docker Desktop e riavvia il computer per attivarlo.',
-    'docker.hint.missing.darwin': 'Installa Docker Desktop, poi aprilo una volta per avviare il runtime.',
+    'docker.hint.missing.darwin': 'Installa Colima: apri il Terminale ed esegui `brew install colima docker`.',
     'docker.hint.missing.linux': 'Installa Docker Engine dalla guida ufficiale, poi riavvia o avvia il daemon.',
     'docker.hint.notRunning.win32': 'Docker Desktop è installato ma non in esecuzione. Aprilo per avviare il daemon.',
-    'docker.hint.notRunning.darwin': 'Docker Desktop è installato ma non in esecuzione. Aprilo per avviare il daemon.',
+    'docker.hint.notRunning.darwin': 'Colima è installato ma il daemon è fermo. Avvialo con `colima start` oppure premi il pulsante qui sotto.',
     'docker.hint.starting': 'Docker Desktop sta partendo. Attendi qualche secondo e premi Verifica.',
     'docker.hint.needsReboot.win32': 'Docker è installato. Riavvia il computer per attivarlo.',
-    'docker.hint.needsReboot.darwin': 'Docker è installato. Apri Docker una volta per avviare il runtime.',
+    'docker.hint.needsReboot.darwin': 'Colima è installato. Esegui `colima start` per attivare il runtime.',
     'docker.hint.needsReboot.linux': 'Docker è installato. Avvia il daemon (systemctl start docker) o riavvia.',
     'deps.wsl.name': 'WSL',
     'deps.wsl.state.ok': 'Pronto',
@@ -294,16 +296,17 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Nincs telepítve',
     'docker.action.install': 'Docker telepítése',
     'docker.action.openDesktop': 'Docker Desktop megnyitása',
+    'docker.action.startColima': 'Colima indítása',
     'docker.action.check': 'Ellenőrzés',
     'docker.hint.ok': 'Kész.',
     'docker.hint.missing.win32': 'Telepítsd a Docker Desktopot, majd indítsd újra a gépet az aktiváláshoz.',
-    'docker.hint.missing.darwin': 'Telepítsd a Docker Desktopot, majd nyisd meg egyszer a futtatókörnyezet indításához.',
+    'docker.hint.missing.darwin': 'Telepítsd a Colimát: nyisd meg a Terminált, és futtasd a `brew install colima docker` parancsot.',
     'docker.hint.missing.linux': 'Telepítsd a Docker Engine-t a hivatalos útmutatóból, majd indítsd újra vagy indítsd el a démont.',
     'docker.hint.notRunning.win32': 'A Docker Desktop telepítve van, de nem fut. Nyisd meg a démon indításához.',
-    'docker.hint.notRunning.darwin': 'A Docker Desktop telepítve van, de nem fut. Nyisd meg a démon indításához.',
+    'docker.hint.notRunning.darwin': 'A Colima telepítve van, de a démon leállt. Indítsd el a `colima start` paranccsal, vagy kattints az alábbi gombra.',
     'docker.hint.starting': 'A Docker Desktop indul. Várj pár másodpercet, majd kattints az Ellenőrzés gombra.',
     'docker.hint.needsReboot.win32': 'A Docker telepítve van. Indítsd újra a gépet az aktiváláshoz.',
-    'docker.hint.needsReboot.darwin': 'A Docker telepítve van. Nyisd meg egyszer a Dockert a futtatókörnyezet indításához.',
+    'docker.hint.needsReboot.darwin': 'A Colima telepítve van. Futtasd a `colima start` parancsot a futtatókörnyezet aktiválásához.',
     'docker.hint.needsReboot.linux': 'A Docker telepítve van. Indítsd el a démont (systemctl start docker) vagy indítsd újra a gépet.',
     'deps.wsl.name': 'WSL',
     'deps.wsl.state.ok': 'Kész',
@@ -388,6 +391,17 @@ function t(key, vars) {
     }
   }
   return str
+}
+
+// The docker status response carries a platform-tagged hint key
+// (e.g. `docker.hint.notRunning.darwin`). Use it to pick the right
+// action label without round-tripping to main just for os.platform().
+function platformFromHintKey(hintKey) {
+  if (typeof hintKey !== 'string') return null
+  if (hintKey.endsWith('.darwin')) return 'darwin'
+  if (hintKey.endsWith('.win32')) return 'win32'
+  if (hintKey.endsWith('.linux')) return 'linux'
+  return null
 }
 
 function applyTranslations() {
@@ -625,7 +639,11 @@ function renderDockerCard(status) {
   if (check.state === 'not-running') {
     const openDesktop = document.createElement('button')
     openDesktop.className = 'btn btn--primary'
-    openDesktop.textContent = t('docker.action.openDesktop')
+    const actionKey =
+      platformFromHintKey(check.hintKey) === 'darwin'
+        ? 'docker.action.startColima'
+        : 'docker.action.openDesktop'
+    openDesktop.textContent = t(actionKey)
     openDesktop.addEventListener('click', onOpenDockerDesktop)
     dom.dockerActions.appendChild(openDesktop)
 
