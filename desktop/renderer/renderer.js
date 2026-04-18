@@ -83,6 +83,7 @@ const TRANSLATIONS = {
     'docker.step.daemon': 'Runtime up',
     'docker.install.brewMissingCta': 'Install from brew.sh',
     'docker.install.homebrewFailHint': 'Homebrew install failed',
+    'docker.install.authCanceledHint': 'Password prompt canceled — click again',
     'docker.install.colimaFailHint': 'brew install failed',
     'docker.install.daemonFailHint': 'colima start failed',
     'setup.back': 'Back',
@@ -216,6 +217,7 @@ const TRANSLATIONS = {
     'docker.step.daemon': 'Runtime attivo',
     'docker.install.brewMissingCta': 'Installa da brew.sh',
     'docker.install.homebrewFailHint': 'Installazione Homebrew fallita',
+    'docker.install.authCanceledHint': 'Prompt password annullato — riprova',
     'docker.install.colimaFailHint': 'brew install fallito',
     'docker.install.daemonFailHint': 'colima start fallito',
     'setup.back': 'Indietro',
@@ -349,6 +351,7 @@ const TRANSLATIONS = {
     'docker.step.daemon': 'Futtatókörnyezet aktív',
     'docker.install.brewMissingCta': 'Telepítés innen: brew.sh',
     'docker.install.homebrewFailHint': 'A Homebrew telepítése nem sikerült',
+    'docker.install.authCanceledHint': 'Jelszó-kérés megszakítva — kattints újra',
     'docker.install.colimaFailHint': 'brew install hiba',
     'docker.install.daemonFailHint': 'colima start hiba',
     'setup.back': 'Vissza',
@@ -867,6 +870,10 @@ async function onInstallDocker() {
     if (result?.ok) {
       hideInstallLog()
       await refreshDockerStatus()
+      return
+    }
+    if (result?.stage === 'brew-auth-canceled') {
+      setStepState('homebrew', 'fail', t('docker.install.authCanceledHint'))
       return
     }
     if (result?.stage === 'brew-install-homebrew' || result?.stage === 'brew-missing') {
