@@ -409,6 +409,11 @@ app.whenReady().then(() => {
     // Predictable container name so we can docker-kill the orphan
     // if the user closes the modal before the CLI exits cleanly.
     const containerName = `jht-login-${providerId}-${Date.now()}`
+    // Append loginArgs (e.g. --yolo for kimi) so the first-run trust
+    // dialog is auto-accepted and the approval lands in the CLI's
+    // config on disk. Later launches — including the background
+    // assistant boot — will skip straight past it.
+    const loginArgs = Array.isArray(meta.loginArgs) ? meta.loginArgs : []
     const id = terminal.spawnSession({
       command: 'docker',
       args: [
@@ -418,6 +423,7 @@ app.whenReady().then(() => {
         '-e', 'HOME=/jht_home',
         '--entrypoint', meta.binary,
         'jht',
+        ...loginArgs,
       ],
       cwd: payloadDir,
       env: containerPrep.dockerEnv(),
