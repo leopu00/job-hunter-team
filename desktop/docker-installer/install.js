@@ -396,7 +396,15 @@ async function installColimaOnDarwin({
   onStage('homebrew', 'ok')
 
   onStage('colima', 'busy')
-  const install = await run('brew', ['install', 'colima', 'docker'], { onLog, env })
+  // `docker-compose` is a separate Homebrew formula — without it the
+  // `docker compose ...` subcommand reports "unknown command" because
+  // Colima's docker CLI ships without the Compose plugin bundled (unlike
+  // Docker Desktop, which includes it).
+  const install = await run(
+    'brew',
+    ['install', 'colima', 'docker', 'docker-compose'],
+    { onLog, env },
+  )
   if (!install.ok) {
     onStage('colima', 'fail')
     return {
@@ -405,6 +413,20 @@ async function installColimaOnDarwin({
       error: install.stderr || `brew install exited with code ${install.code}`,
     }
   }
+
+  // Homebrew's docker-compose formula doesn't wire the plugin into
+  // ~/.docker/cli-plugins on its own (brew just prints a caveat), so
+  // `docker compose` still fails after install. Do the symlink now.
+  // Best-effort: if the path layout is non-standard, we let it slide —
+  // the user can always invoke docker-compose as a standalone binary.
+  await run(
+    'bash',
+    [
+      '-c',
+      'mkdir -p "$HOME/.docker/cli-plugins" && ln -sfn "/opt/homebrew/opt/docker-compose/bin/docker-compose" "$HOME/.docker/cli-plugins/docker-compose"',
+    ],
+    { onLog, env },
+  )
   onStage('colima', 'ok')
 
   onStage('daemon', 'busy')
