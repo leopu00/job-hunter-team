@@ -115,10 +115,12 @@ test('ok=false + stage=aborted when no result file (UAC declined / blocked)', as
 
 test('buildScript runs only the two automatic steps (WSL + Git); Docker stays manual', () => {
   const script = buildScript({ paths: FAKE_PATHS })
-  assert.match(script, /Step 1\/2 Installing WSL/)
+  assert.match(script, /Step 1\/2 Checking\/installing WSL/)
   assert.match(script, /Step 2\/2 Installing Git/)
   assert.match(script, /--no-launch/)
   assert.match(script, /winget install --id Git\.Git/)
+  // WSL install is idempotent — already-installed case skips safely.
+  assert.match(script, /skipping wsl --install/)
   // Docker install was removed — Docker Desktop is installed manually
   // by the user clicking "Download" in the wizard's Docker row.
   assert.doesNotMatch(script, /Installing Docker Desktop/)
