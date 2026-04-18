@@ -8,13 +8,6 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="topbar__brand">JHT Desktop</div>
-      <div class="topbar__right">
-        <div class="topbar__alpha" data-i18n="topbar.alpha">Beta · internal testing</div>
-      </div>
-    </header>
-
     <main class="wizard" id="wizard">
       <!-- Step 0: language -->
       <section class="step step--centered" id="step-language" data-step="language">
@@ -29,7 +22,6 @@
           >
             <span class="flag" data-lang-flag></span>
             <span class="lang-select__label" data-lang-label></span>
-            <span class="lang-select__caret">▾</span>
           </button>
           <ul class="lang-select__menu" role="listbox" hidden></ul>
         </div>
@@ -41,15 +33,16 @@
       </section>
 
       <!-- Step 1: welcome -->
-      <section class="step" id="step-welcome" data-step="welcome" hidden>
+      <section class="step step--centered" id="step-welcome" data-step="welcome" hidden>
+        <div class="step__emoji" aria-hidden="true">🎯</div>
         <h1 class="step__title" data-i18n="welcome.title">Job Hunter Team</h1>
         <p class="step__lead" data-i18n="welcome.lead">
-          A team of AI agents that hunt for jobs on your behalf, analyse offers and write CVs and cover letters.
+          AI agents that help you land a job: match offers to your profile, tailor CVs and mentor your next move.
         </p>
-        <p class="step__hint" data-i18n="welcome.hint">
-          Before we start the team we check everything is ready on your computer. It takes a minute.
+        <p class="step__hint" data-i18n="welcome.hint" data-i18n-platform="true">
+          First we check your computer is ready.
         </p>
-        <div class="step__actions step__actions--between">
+        <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-welcome-back" data-i18n="welcome.back">
             Back
           </button>
@@ -60,7 +53,7 @@
       </section>
 
       <!-- Step 2: setup / checklist -->
-      <section class="step" id="step-setup" data-step="setup" hidden>
+      <section class="step step--centered" id="step-setup" data-step="setup" hidden>
         <h1 class="step__title" data-i18n="setup.title">Setup</h1>
         <p class="step__lead" id="setup-lead" data-i18n="setup.lead" data-i18n-html="true">
           To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.
@@ -143,7 +136,8 @@
       </section>
 
       <!-- Step 2b: container prep -->
-      <section class="step" id="step-container" data-step="container" hidden>
+      <section class="step step--centered" id="step-container" data-step="container" hidden>
+        <div class="step__emoji" aria-hidden="true">🏗️</div>
         <h1 class="step__title" data-i18n="container.title">Preparing container</h1>
         <p class="step__lead" data-i18n="container.lead">
           Downloading the JHT container image (~1 GB). This runs once.
@@ -169,8 +163,91 @@
         </div>
       </section>
 
+      <!-- Step 2c0: subscription notice (why subscriptions, not API keys) -->
+      <section class="step step--centered" id="step-subscription-notice" data-step="subscription-notice" hidden>
+        <div class="team-lineup" aria-hidden="true">
+          <div class="team-lineup__top">
+            <span class="team-lineup__slot" style="grid-column: 2">
+              <span class="team-lineup__emoji">💂</span>
+              <span class="team-lineup__name">Sentinel</span>
+            </span>
+            <span class="team-lineup__slot team-lineup__slot--raised" style="grid-column: 3">
+              <span class="team-lineup__emoji">👨‍✈️</span>
+              <span class="team-lineup__name">Captain</span>
+            </span>
+          </div>
+          <div class="team-lineup__pipeline">
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">🕵️</span>
+              <span class="team-lineup__name">Scout</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍🔬</span>
+              <span class="team-lineup__name">Analyst</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍💻</span>
+              <span class="team-lineup__name">Scorer</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍🏫</span>
+              <span class="team-lineup__name">Writer</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍⚖️</span>
+              <span class="team-lineup__name">Critic</span>
+            </span>
+          </div>
+        </div>
+        <h1 class="step__title" data-i18n="subscription.title">Subscriptions, not API keys</h1>
+        <p class="step__lead" data-i18n="subscription.lead">
+          The team keeps many AI agents running in parallel, around the clock. API keys bill per token and would cost hundreds per day. A flat subscription keeps your spend predictable.
+        </p>
+        <p class="step__hint" data-i18n="subscription.dedicatedHint" data-i18n-html="true">
+          <strong>Strongly recommended:</strong> use a subscription dedicated to the team — not the one you already use for work or personal tasks. A shared account drains the same weekly quota twice.
+        </p>
+
+        <div class="cost-compare">
+          <div class="cost-compare__col cost-compare__col--api">
+            <span class="cost-compare__label" data-i18n="subscription.compare.api">Pay-per-token (API)</span>
+            <span class="cost-compare__price">$1,000–$2,500<span class="cost-compare__per">/mo</span></span>
+            <span class="cost-compare__hint" data-i18n="subscription.compare.apiHint">~200–400M tokens/mo (Sonnet 4.6 mix)</span>
+          </div>
+          <div class="cost-compare__vs" aria-hidden="true">vs</div>
+          <div class="cost-compare__col cost-compare__col--sub">
+            <span class="cost-compare__label" data-i18n="subscription.compare.sub">Claude Max 20× subscription</span>
+            <span class="cost-compare__price">$200<span class="cost-compare__per">/mo</span></span>
+            <span class="cost-compare__hint" data-i18n="subscription.compare.subHint">same usage, fixed cost</span>
+          </div>
+        </div>
+        <p class="cost-compare__footnote" data-i18n="subscription.compare.footnote">
+          Estimate from Anthropic's public API pricing ($3/M input · $15/M output for Sonnet 4.6) and fully-saturated 5-hour windows against the Max 20× weekly cap. Actual savings depend on your input/output mix.
+        </p>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-subscription-back" data-i18n="subscription.back">Back</button>
+          <button class="btn btn--primary" id="btn-subscription-continue" data-i18n="subscription.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c1: model benchmark comparison (before provider pick) -->
+      <section class="step step--centered" id="step-model-compare" data-step="model-compare" hidden>
+        <h1 class="step__title" data-i18n="modelCompare.title">How the models compare</h1>
+        <p class="step__lead" data-i18n="modelCompare.lead">
+          Five variants that matter: Claude in two tiers (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex at two reasoning efforts (GPT-5.3 high vs xhigh), and Kimi Code — which has no thinking mode, so it's shown as a single bar.
+        </p>
+        <div class="model-charts" id="model-charts"></div>
+        <p class="step__hint model-compare__footnote" data-i18n="modelCompare.footnote" data-i18n-html="true">
+          Sources: SWE-bench Verified leaderboard, Artificial Analysis throughput data, vendor API pricing (April 2026). Kimi Code intelligence is estimated from K2.5 — K2.6 Preview numbers aren't published yet.
+        </p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-model-compare-back" data-i18n="modelCompare.back">Back</button>
+          <button class="btn btn--primary" id="btn-model-compare-continue" data-i18n="modelCompare.continue">Continue</button>
+        </div>
+      </section>
+
       <!-- Step 2c: provider choice -->
-      <section class="step" id="step-provider-choose" data-step="provider-choose" hidden>
+      <section class="step step--centered" id="step-provider-choose" data-step="provider-choose" hidden>
         <h1 class="step__title" data-i18n="provider.title">Choose AI providers</h1>
         <p class="step__lead" data-i18n="provider.lead">
           Pick one or more CLIs. The team runs on subscriptions, not API keys.
@@ -183,10 +260,11 @@
       </section>
 
       <!-- Step 2d: provider install -->
-      <section class="step" id="step-provider-install" data-step="provider-install" hidden>
-        <h1 class="step__title" data-i18n="provider.installTitle">Installing CLIs</h1>
+      <section class="step step--centered" id="step-provider-install" data-step="provider-install" hidden>
+        <div class="step__emoji" aria-hidden="true">📦</div>
+        <h1 class="step__title" data-i18n="provider.installTitle">Installing CLI</h1>
         <p class="step__lead" data-i18n="provider.installLead">
-          Installing selected CLIs into the container. This runs once per CLI.
+          Installing the selected CLI into the container. Runs once.
         </p>
 
         <div class="container-progress" id="provider-progress">
@@ -208,7 +286,8 @@
       </section>
 
       <!-- Step 2e: provider login -->
-      <section class="step" id="step-provider-login" data-step="provider-login" hidden>
+      <section class="step step--centered" id="step-provider-login" data-step="provider-login" hidden>
+        <div class="step__emoji" aria-hidden="true">🔑</div>
         <h1 class="step__title" data-i18n="login.title">Sign in to your providers</h1>
         <p class="step__lead" data-i18n="login.lead">
           Each CLI needs your active subscription. Open Login to sign in inside the app.
@@ -221,7 +300,8 @@
       </section>
 
       <!-- Step 3: ready / summary -->
-      <section class="step" id="step-ready" data-step="ready" hidden>
+      <section class="step step--centered" id="step-ready" data-step="ready" hidden>
+        <div class="step__emoji" aria-hidden="true">🚀</div>
         <h1 class="step__title" data-i18n="ready.title">All set</h1>
         <p class="step__lead" data-i18n="ready.lead">Everything is configured. You can start the team.</p>
         <ul class="summary-list" id="summary-list"></ul>
@@ -233,7 +313,8 @@
       </section>
 
       <!-- Step 4: running -->
-      <section class="step" id="step-running" data-step="running" hidden>
+      <section class="step step--centered" id="step-running" data-step="running" hidden>
+        <div class="step__emoji" aria-hidden="true">🏁</div>
         <h1 class="step__title" id="running-title" data-i18n="running.title">Team running</h1>
         <p class="step__lead" id="running-lead" data-i18n="running.leadRunning">
           The runtime is up. Open the dashboard in your browser to get started.

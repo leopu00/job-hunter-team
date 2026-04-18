@@ -5,6 +5,8 @@ const STEP_LANGUAGE = 'language'
 const STEP_WELCOME = 'welcome'
 const STEP_SETUP = 'setup'
 const STEP_CONTAINER = 'container'
+const STEP_SUBSCRIPTION_NOTICE = 'subscription-notice'
+const STEP_MODEL_COMPARE = 'model-compare'
 const STEP_PROVIDER_CHOOSE = 'provider-choose'
 const STEP_PROVIDER_INSTALL = 'provider-install'
 const STEP_PROVIDER_LOGIN = 'provider-login'
@@ -17,29 +19,108 @@ const PROVIDER_OPTIONS = [
   { id: 'kimi', label: 'Kimi', vendor: 'Moonshot · Kimi paid plan' },
 ]
 
-// Subscription tiers the user can connect through each CLI. The estimate
-// column is an educated guess based on public usage limits (April 2026)
-// — Anthropic/OpenAI describe limits in sessions/resets rather than
-// token budgets, so "~X msg/week" is always approximate. Shown to help
-// users pick the right plan for their workload, not as a contract.
+// Subscription tiers the user can connect through each CLI. Monthly
+// price, monthly tokens delivered at full saturation, $/M = price ÷
+// monthly. Shown to help users pick a plan, not as a contract.
+// Monthly tokens = weekly × 4 (conservative, approximates 4 full-
+// saturation weeks per month).
+//
+// Methodology (reworked April 2026, reconciled with real-world
+// measurements from ksred.com, productcompass.pm, Faros.ai, OpenAI
+// community threads and kimik2ai.com):
+//   - Claude Pro / Max 5×: community benchmarks converge on ~8M / 40M
+//     tok/wk (=32M / 160M /mo), matching the 5× multiplier. Max 20×
+//     weekly cap (intro 2025-08) compresses nominal 20× to measured
+//     ~70–110M/wk (~280–440M/mo) — we use 400M/mo.
+//   - Codex Plus: post-rebalance real usage is ~15–25M/wk (~60–100M/mo),
+//     not the nominal 30M/wk. We use 80M/mo. Pro 5× / Pro 20× scale by
+//     the stated multiplier on the new Plus baseline (400M / 1.6B /mo).
+//   - Kimi Moderato: 16M/wk = 64M/mo, verified via 2048 Kimi Code
+//     req/wk × ~8k tok/req. Allegretto / Allegro / Vivace: extrapolated
+//     from published credit multipliers (5× / 15× / 44× Moderato) and
+//     labelled "est." — no public measurements exist yet.
+//
+// Tokens uncached. Kimi's 75% cache discount bumps real throughput.
 const PROVIDER_PLANS = {
   claude: [
-    { id: 'pro',    name: 'Claude Pro',     price: '$17/mo (annual) · $20 monthly', estimate: 'Claude Code baseline' },
-    { id: 'max5',   name: 'Claude Max 5×',  price: '$100/mo', estimate: '~88k tok / 5h · 5× Pro usage' },
-    { id: 'max20',  name: 'Claude Max 20×', price: '$200/mo', estimate: '~220k tok / 5h · 20× Pro usage' },
+    { id: 'pro',    name: 'Claude Pro',     model: 'Sonnet 4.6 · Opus 4.7',            price: '$20/mo',  priceUsd: 20,  monthlyM: 32,   monthly: '~32M tok/mo',   estimate: '~44k tok / 5h baseline' },
+    { id: 'max5',   name: 'Claude Max 5×',  model: 'Sonnet 4.6 · Opus 4.7',            price: '$100/mo', priceUsd: 100, monthlyM: 160,  monthly: '~160M tok/mo',  estimate: '~88k tok / 5h · 5× Pro' },
+    { id: 'max20',  name: 'Claude Max 20×', model: 'Sonnet 4.6 · Opus 4.7',            price: '$200/mo', priceUsd: 200, monthlyM: 400,  monthly: '~400M tok/mo',  estimate: 'measured ~280–440M/mo (post weekly cap)',   recommended: true, recommendedTag: 'intelligence' },
   ],
   codex: [
-    { id: 'plus',   name: 'ChatGPT Plus',    price: '$20/mo',  estimate: '20–100 msg / 5h (GPT-5.4)' },
-    { id: 'pro5',   name: 'ChatGPT Pro 5×',  price: '$100/mo', estimate: '100–500 msg / 5h · 5× Plus' },
-    { id: 'pro20',  name: 'ChatGPT Pro 20×', price: '$200/mo', estimate: '400–2k msg / 5h · 20× Plus' },
+    { id: 'plus',   name: 'ChatGPT Plus',    model: 'GPT-5.3-Codex',                   price: '$20/mo',  priceUsd: 20,  monthlyM: 80,   monthly: '~80M tok/mo',    estimate: 'measured ~60–100M/mo (post rebalance)' },
+    { id: 'pro5',   name: 'ChatGPT Pro 5×',  model: 'GPT-5.4 · GPT-5.3-Codex',         price: '$100/mo', priceUsd: 100, monthlyM: 400,  monthly: '~400M tok/mo',   estimate: '~5× Plus',                                   recommended: true, recommendedTag: 'balanced' },
+    { id: 'pro20',  name: 'ChatGPT Pro 20×', model: 'GPT-5.4 · GPT-5.3-Codex-Spark',   price: '$200/mo', priceUsd: 200, monthlyM: 1600, monthly: '~1.6B tok/mo',   estimate: '~20× Plus' },
   ],
   kimi: [
-    { id: 'moderato',   name: 'Moderato',   price: '$19/mo',  estimate: '4× base quota' },
-    { id: 'allegretto', name: 'Allegretto', price: '$39/mo',  estimate: '20× base · Recommended' },
-    { id: 'allegro',    name: 'Allegro',    price: '$99/mo',  estimate: '60× base · heavy' },
-    { id: 'vivace',     name: 'Vivace',     price: '$199/mo', estimate: 'highest · team-scale' },
+    { id: 'moderato',   name: 'Moderato',   model: 'Kimi Code',                        price: '$19/mo',  priceUsd: 19,  monthlyM: 64,   monthly: '~64M tok/mo',           estimate: '2048 Kimi Code req/wk (verified)' },
+    { id: 'allegretto', name: 'Allegretto', model: 'Kimi Code',                        price: '$39/mo',  priceUsd: 39,  monthlyM: 320,  monthly: '~320M tok/mo (est.)',   estimate: '5× Moderato credits (extrapolated)',     recommended: true, recommendedTag: 'affordable' },
+    { id: 'allegro',    name: 'Allegro',    model: 'Kimi Code',                        price: '$99/mo',  priceUsd: 99,  monthlyM: 960,  monthly: '~960M tok/mo (est.)',   estimate: '15× Moderato credits (extrapolated)' },
+    { id: 'vivace',     name: 'Vivace',     model: 'Kimi Code',                        price: '$199/mo', priceUsd: 199, monthlyM: 2800, monthly: '~2.8B tok/mo (est.)',   estimate: '44× Moderato credits (extrapolated)' },
   ],
 }
+
+// Benchmark data for the "How the models stack up" step. Five variants
+// total — two Claude tiers (Opus 4.7 ceiling, Sonnet 4.6 workhorse),
+// two GPT-5.3-Codex reasoning levels (high and xhigh), and Kimi Code.
+// Choices:
+//   - GPT-5.3-Codex, not GPT-5.4: GPT-5.4 is the generalist reasoning
+//     model on ChatGPT. Codex CLI's native model is still GPT-5.3-Codex
+//     (coding-specialized, stronger on SWE-bench Verified). Users who
+//     pick "Codex" get GPT-5.3-Codex by default.
+//   - Hiku excluded — not deep enough for Captain / Writer / Critic
+//     roles in the JHT team.
+//
+// Sources (April 2026): Artificial Analysis (throughput), SWE-bench
+// Verified leaderboard / Vals.ai (intelligence), Anthropic/OpenAI/
+// Moonshot pricing pages (API cost). Kimi Code intelligence is K2.5
+// proxy — K2.6 Code Preview rolled out 2026-04-13 but official
+// numbers aren't published yet. GPT-5.3 xhigh numbers extrapolated
+// from its "high" default (~80% SWE-bench Verified from benchlm.ai)
+// applying OpenAI's documented "xhigh gains a few points for 3-5x
+// more output tokens thought".
+const MODEL_VARIANTS = [
+  {
+    providerId: 'claude',
+    modelName: 'Opus 4.7',
+    color: '#d97757',
+    intelligence: 87.6,
+    speed: 51,
+    cost: 25,
+  },
+  {
+    providerId: 'claude',
+    modelName: 'Sonnet 4.6',
+    color: '#e8a283',
+    intelligence: 79.6,
+    speed: 53,
+    cost: 15,
+  },
+  {
+    providerId: 'codex',
+    modelName: 'GPT-5.3 xhigh',
+    color: '#10a37f',
+    intelligence: 82,
+    speed: 73,
+    cost: 14,
+  },
+  {
+    providerId: 'codex',
+    modelName: 'GPT-5.3 high',
+    color: '#4fc49d',
+    intelligence: 80,
+    speed: 90,
+    cost: 14,
+  },
+  {
+    providerId: 'kimi',
+    modelName: 'Kimi Code',
+    color: '#7d62e8',
+    intelligence: 78,
+    speed: 60,
+    cost: 2.5,
+  },
+]
 
 // Where to send the user to buy a subscription if they don't have one
 // yet. Opened in the default system browser via shell.openExternal.
@@ -89,9 +170,11 @@ const TRANSLATIONS = {
     'lang.continue': 'Continue',
     'welcome.title': 'Job Hunter Team',
     'welcome.lead':
-      'A team of AI agents that hunt for jobs on your behalf, analyse offers and write CVs and cover letters.',
+      'AI agents that help you land a job: match offers to your profile, tailor CVs and mentor your next move.',
     'welcome.hint':
-      'Before we start the team we check everything is ready on your computer. It takes a minute.',
+      'First we check your computer is ready.',
+    'welcome.hint.win32':
+      'First we check your computer is ready. A restart may be needed to finish the WSL install.',
     'welcome.back': 'Back',
     'welcome.continue': 'Continue',
     'setup.title': 'Setup',
@@ -100,7 +183,7 @@ const TRANSLATIONS = {
     'setup.lead.win32':
       "To run the team in isolation we need <strong>Docker Desktop</strong>, free. Let's check if it's already on your computer.",
     'setup.lead.darwin':
-      "To run the team in isolation we need <strong>Colima</strong>, free. Let's check if it's already on your computer.",
+      'The team runs in an isolated container. <strong>Docker</strong> builds it, on macOS via <strong>Colima</strong>: free and active in the background.',
     'setup.lead.linux':
       "To run the team in isolation we need <strong>Docker Engine</strong>, free. Let's check if it's already on your computer.",
     'docker.name.win32': 'Docker',
@@ -191,17 +274,47 @@ const TRANSLATIONS = {
     'container.back': 'Back',
     'container.retry': 'Retry',
     'container.continue': 'Continue',
-    'provider.title': 'Choose AI providers',
-    'provider.lead': 'Pick one or more CLIs. The team runs on subscriptions, not API keys.',
+    'subscription.title': 'Subscriptions, not API keys',
+    'subscription.lead':
+      'The team keeps many AI agents running in parallel, around the clock. API keys bill per token and would cost hundreds per day. A flat subscription keeps your spend predictable.',
+    'subscription.dedicatedHint':
+      '<strong>Strongly recommended:</strong> use a subscription dedicated to the team, not the one you already use for work or personal tasks. A shared account drains the same weekly quota twice.',
+    'subscription.compare.api': 'Pay-per-token (API)',
+    'subscription.compare.apiHint': '~200–400M tokens/mo (Sonnet 4.6 mix)',
+    'subscription.compare.sub': 'Claude Max 20× subscription',
+    'subscription.compare.subHint': 'same usage, fixed cost',
+    'subscription.compare.footnote':
+      "Estimate from Anthropic's public API pricing ($3/M input · $15/M output for Sonnet 4.6) and fully-saturated 5-hour windows against the Max 20× weekly cap. Actual savings depend on your input/output mix.",
+    'subscription.back': 'Back',
+    'subscription.continue': 'Continue',
+    'modelCompare.title': 'How the models compare',
+    'modelCompare.lead':
+      "Five variants that matter: Claude in two tiers (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex at two reasoning efforts (GPT-5.3 high vs xhigh), and Kimi Code — which has no thinking mode, so it's shown as a single bar.",
+    'modelCompare.intelligence': 'Intelligence',
+    'modelCompare.intelligenceUnit': 'SWE-bench Verified',
+    'modelCompare.speed': 'Speed',
+    'modelCompare.speedUnit': 'tokens / second',
+    'modelCompare.cost': 'Affordability',
+    'modelCompare.costUnit': '$ / M output tok · lower is better',
+    'modelCompare.footnote':
+      "Sources: SWE-bench Verified leaderboard, Artificial Analysis throughput data, vendor API pricing (April 2026). Kimi Code intelligence is estimated from K2.5 — K2.6 Preview numbers aren't published yet.",
+    'modelCompare.back': 'Back',
+    'modelCompare.continue': 'Continue',
+    'provider.title': 'Choose your AI provider',
+    'provider.lead': 'Pick one provider and mark which subscription tier you own. The team uses your active subscription, not an API key.',
     'provider.hint': 'You can pick up to 3. Login happens in the next step.',
     'provider.back': 'Back',
     'provider.continue': 'Continue',
     'provider.retry': 'Retry',
-    'provider.installTitle': 'Installing CLIs',
-    'provider.installLead': 'Installing selected CLIs into the container. This runs once per CLI.',
+    'provider.installTitle': 'Installing CLI',
+    'provider.installLead': 'Installing the selected CLI into the container. Runs once.',
     'provider.installStatus.running': 'Installing {name}…',
-    'provider.installStatus.allDone': 'All CLIs installed.',
+    'provider.installStatus.allDone': 'CLI installed.',
     'provider.installStatus.error': 'Error while installing {name}: {error}',
+    'provider.recommended': 'Recommended',
+    'provider.recommendedTag.intelligence': 'Most intelligent',
+    'provider.recommendedTag.balanced': 'Best value',
+    'provider.recommendedTag.affordable': 'Most affordable',
     'provider.noSubscription': "Don't have a subscription yet?",
     'provider.subscribeCta': 'Subscribe →',
     'login.title': 'Sign in to your providers',
@@ -254,9 +367,11 @@ const TRANSLATIONS = {
     'lang.continue': 'Continua',
     'welcome.title': 'Job Hunter Team',
     'welcome.lead':
-      'Un team di agenti AI che cercano lavoro al posto tuo, analizzano le offerte e scrivono CV e lettere di presentazione.',
+      'Agenti AI che ti aiutano a trovare lavoro: confrontano le offerte col tuo profilo, preparano CV su misura e ti guidano nelle scelte.',
     'welcome.hint':
-      'Prima di avviare il team controlliamo che tutto sia pronto sul tuo computer. Dura un minuto.',
+      'Prima controlliamo che il tuo computer sia pronto.',
+    'welcome.hint.win32':
+      'Prima controlliamo che il tuo computer sia pronto. Potrebbe servire un riavvio per completare l\u2019installazione di WSL.',
     'welcome.back': 'Indietro',
     'welcome.continue': 'Continua',
     'setup.title': 'Setup',
@@ -265,7 +380,7 @@ const TRANSLATIONS = {
     'setup.lead.win32':
       'Per far girare il team in modo isolato serve <strong>Docker Desktop</strong>, gratuito. Controlliamo se è già sul tuo computer.',
     'setup.lead.darwin':
-      'Per far girare il team in modo isolato serve <strong>Colima</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+      'Il team gira in un contenitore isolato. <strong>Docker</strong> lo crea, su macOS tramite <strong>Colima</strong>: gratuito e attivo in background.',
     'setup.lead.linux':
       'Per far girare il team in modo isolato serve <strong>Docker Engine</strong>, gratuito. Controlliamo se è già sul tuo computer.',
     'docker.name.win32': 'Docker',
@@ -356,17 +471,47 @@ const TRANSLATIONS = {
     'container.back': 'Indietro',
     'container.retry': 'Riprova',
     'container.continue': 'Continua',
-    'provider.title': 'Scegli i provider AI',
-    'provider.lead': 'Seleziona una o più CLI. Il team gira con abbonamenti, non con API key.',
+    'subscription.title': 'Abbonamenti, non API key',
+    'subscription.lead':
+      'Il team fa girare molti agenti AI in parallelo, in modo continuo. Le API key si pagano a token e costerebbero centinaia di euro al giorno. Un abbonamento forfettario mantiene la spesa prevedibile.',
+    'subscription.dedicatedHint':
+      '<strong>Fortemente consigliato:</strong> usa un abbonamento dedicato al team, non quello che utilizzi per lavoro o uso personale. Un account condiviso consuma due volte la stessa quota settimanale.',
+    'subscription.compare.api': 'Pay-per-token (API)',
+    'subscription.compare.apiHint': '~200–400M token/mese (mix Sonnet 4.6)',
+    'subscription.compare.sub': 'Abbonamento Claude Max 20×',
+    'subscription.compare.subHint': 'stesso uso, costo fisso',
+    'subscription.compare.footnote':
+      'Stima dal listino API pubblico di Anthropic ($3/M input · $15/M output per Sonnet 4.6) e finestre 5 ore sature sul cap settimanale di Max 20×. Il risparmio reale dipende dal mix input/output.',
+    'subscription.back': 'Indietro',
+    'subscription.continue': 'Continua',
+    'modelCompare.title': 'Come si comportano i modelli',
+    'modelCompare.lead':
+      'Cinque varianti che contano: Claude in due livelli (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex a due livelli di reasoning (GPT-5.3 high vs xhigh), e Kimi Code — che non ha modalità thinking, quindi una singola barra.',
+    'modelCompare.intelligence': 'Intelligenza',
+    'modelCompare.intelligenceUnit': 'SWE-bench Verified',
+    'modelCompare.speed': 'Velocità',
+    'modelCompare.speedUnit': 'token / secondo',
+    'modelCompare.cost': 'Convenienza',
+    'modelCompare.costUnit': '$ / M token output · più basso è meglio',
+    'modelCompare.footnote':
+      'Fonti: SWE-bench Verified, dati throughput di Artificial Analysis, listini API ufficiali (aprile 2026). L\'intelligenza di Kimi Code è stimata da K2.5 — i numeri di K2.6 Preview non sono ancora pubblicati.',
+    'modelCompare.back': 'Indietro',
+    'modelCompare.continue': 'Continua',
+    'provider.title': 'Scegli il provider AI',
+    'provider.lead': 'Seleziona un provider e indica il tipo di abbonamento che possiedi. Il team usa il tuo abbonamento attivo, non una API key.',
     'provider.hint': 'Puoi sceglierne fino a 3. Il login avviene nel passaggio successivo.',
     'provider.back': 'Indietro',
     'provider.continue': 'Continua',
     'provider.retry': 'Riprova',
     'provider.installTitle': 'Installazione CLI',
-    'provider.installLead': 'Installo le CLI selezionate nel container. Una tantum per CLI.',
+    'provider.installLead': 'Installo il CLI selezionato nel container. Una tantum.',
     'provider.installStatus.running': 'Installazione di {name}…',
-    'provider.installStatus.allDone': 'Tutte le CLI installate.',
+    'provider.installStatus.allDone': 'CLI installato.',
     'provider.installStatus.error': "Errore durante l'installazione di {name}: {error}",
+    'provider.recommended': 'Consigliato',
+    'provider.recommendedTag.intelligence': 'Più intelligente',
+    'provider.recommendedTag.balanced': 'Miglior compromesso',
+    'provider.recommendedTag.affordable': 'Più economico',
     'provider.noSubscription': 'Non hai ancora un abbonamento?',
     'provider.subscribeCta': 'Abbonati →',
     'login.title': 'Accedi ai provider',
@@ -419,9 +564,11 @@ const TRANSLATIONS = {
     'lang.continue': 'Tovább',
     'welcome.title': 'Job Hunter Team',
     'welcome.lead':
-      'Egy AI-ügynökökből álló csapat, amely helyetted keres állást, elemzi az ajánlatokat és megírja az önéletrajzokat és motivációs leveleket.',
+      'AI-ügynökök segítenek állást találni: az ajánlatokat a profilodhoz illesztik, személyre szabják a CV-ket és támogatnak a döntéseidben.',
     'welcome.hint':
-      'Mielőtt elindítjuk a csapatot, ellenőrizzük, hogy minden készen áll-e a gépeden. Egy percet vesz igénybe.',
+      'Először ellenőrizzük, hogy a gép készen áll.',
+    'welcome.hint.win32':
+      'Először ellenőrizzük, hogy a gép készen áll. A WSL telepítés befejezéséhez lehet, hogy újraindításra lesz szükség.',
     'welcome.back': 'Vissza',
     'welcome.continue': 'Tovább',
     'setup.title': 'Beállítás',
@@ -430,7 +577,7 @@ const TRANSLATIONS = {
     'setup.lead.win32':
       'A csapat izolált futtatásához <strong>Docker Desktop</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
     'setup.lead.darwin':
-      'A csapat izolált futtatásához <strong>Colima</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+      'A csapat izolált konténerben fut. A <strong>Docker</strong> hozza létre, macOS-en <strong>Colima</strong> segítségével: ingyenes, a háttérben aktív.',
     'setup.lead.linux':
       'A csapat izolált futtatásához <strong>Docker Engine</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
     'docker.name.win32': 'Docker',
@@ -521,17 +668,47 @@ const TRANSLATIONS = {
     'container.back': 'Vissza',
     'container.retry': 'Újra',
     'container.continue': 'Tovább',
-    'provider.title': 'Válassz AI szolgáltatókat',
-    'provider.lead': 'Válassz egy vagy több CLI-t. A csapat előfizetéssel fut, nem API kulccsal.',
+    'subscription.title': 'Előfizetés, nem API kulcs',
+    'subscription.lead':
+      'A csapat sok AI-ügynököt futtat párhuzamosan, folyamatosan. Az API kulcsok tokenenként számláznak, ami naponta több száz eurót jelentene. Egy átalánydíjas előfizetés kiszámíthatóan tartja a költségeidet.',
+    'subscription.dedicatedHint':
+      '<strong>Erősen ajánlott:</strong> használj a csapatnak dedikált előfizetést, ne azt, amit munkára vagy saját célra használsz. A közös fiók kétszer fogyasztja ugyanazt a heti kvótát.',
+    'subscription.compare.api': 'Tokenenkénti számlázás (API)',
+    'subscription.compare.apiHint': '~200–400M token/hó (Sonnet 4.6 mix)',
+    'subscription.compare.sub': 'Claude Max 20× előfizetés',
+    'subscription.compare.subHint': 'ugyanaz a használat, fix költség',
+    'subscription.compare.footnote':
+      'Becslés az Anthropic nyilvános API-árlistája alapján ($3/M input · $15/M output Sonnet 4.6) és a Max 20× heti limitje szerint maximálisan kihasznált 5 órás ablakokkal. A tényleges megtakarítás az input/output aránytól függ.',
+    'subscription.back': 'Vissza',
+    'subscription.continue': 'Tovább',
+    'modelCompare.title': 'Hogyan teljesítenek a modellek',
+    'modelCompare.lead':
+      'Öt fontos variáns: Claude két szinten (Opus 4.7 plafon vs Sonnet 4.6 munkaerő), Codex két reasoning szinten (GPT-5.3 high vs xhigh), és Kimi Code — amelynek nincs thinking módja, ezért egyetlen oszlop.',
+    'modelCompare.intelligence': 'Intelligencia',
+    'modelCompare.intelligenceUnit': 'SWE-bench Verified',
+    'modelCompare.speed': 'Sebesség',
+    'modelCompare.speedUnit': 'token / másodperc',
+    'modelCompare.cost': 'Kedvező ár',
+    'modelCompare.costUnit': '$ / M output token · alacsonyabb a jobb',
+    'modelCompare.footnote':
+      'Források: SWE-bench Verified ranglista, Artificial Analysis throughput adatok, hivatalos API-árlisták (2026. április). A Kimi Code intelligenciája K2.5 alapján becsült — a K2.6 Preview értékeit még nem publikálták.',
+    'modelCompare.back': 'Vissza',
+    'modelCompare.continue': 'Tovább',
+    'provider.title': 'Válassz AI szolgáltatót',
+    'provider.lead': 'Válassz egy szolgáltatót, és jelöld meg az előfizetésed szintjét. A csapat az aktív előfizetésedet használja, nem API kulcsot.',
     'provider.hint': 'Legfeljebb 3-at választhatsz. A bejelentkezés a következő lépésben történik.',
     'provider.back': 'Vissza',
     'provider.continue': 'Tovább',
     'provider.retry': 'Újra',
-    'provider.installTitle': 'CLI-k telepítése',
-    'provider.installLead': 'A kiválasztott CLI-ket telepítem a konténerbe. CLI-nként egyszer fut.',
+    'provider.installTitle': 'CLI telepítése',
+    'provider.installLead': 'A kiválasztott CLI-t telepítem a konténerbe. Egyszeri futás.',
     'provider.installStatus.running': '{name} telepítése…',
-    'provider.installStatus.allDone': 'Minden CLI telepítve.',
+    'provider.installStatus.allDone': 'CLI telepítve.',
     'provider.installStatus.error': 'Hiba a(z) {name} telepítésekor: {error}',
+    'provider.recommended': 'Ajánlott',
+    'provider.recommendedTag.intelligence': 'Legintelligensebb',
+    'provider.recommendedTag.balanced': 'Legjobb ár-érték arány',
+    'provider.recommendedTag.affordable': 'Leggazdaságosabb',
     'provider.noSubscription': 'Még nincs előfizetésed?',
     'provider.subscribeCta': 'Előfizetés →',
     'login.title': 'Jelentkezz be a szolgáltatókhoz',
@@ -606,10 +783,20 @@ function platformFromHintKey(hintKey) {
 
 function applyTranslations() {
   document.documentElement.lang = currentLang
+  const platform = (window.platformInfo && window.platformInfo.platform) || null
   for (const node of document.querySelectorAll('[data-i18n]')) {
     const key = node.getAttribute('data-i18n')
     const html = node.getAttribute('data-i18n-html') === 'true'
-    const value = t(key)
+    const platformAware = node.getAttribute('data-i18n-platform') === 'true'
+    // If the node is marked platform-aware, prefer `<key>.<platform>`
+    // and fall back to the base key. Used e.g. for welcome.hint to
+    // mention the Windows-only reboot without showing it on macOS.
+    let value = null
+    if (platformAware && platform) {
+      const specific = t(`${key}.${platform}`)
+      if (specific && specific !== `${key}.${platform}`) value = specific
+    }
+    if (value === null) value = t(key)
     if (html) node.innerHTML = value
     else node.textContent = value
   }
@@ -752,6 +939,11 @@ const dom = {
   btnContainerBack: document.getElementById('btn-container-back'),
   btnContainerRetry: document.getElementById('btn-container-retry'),
   btnContainerContinue: document.getElementById('btn-container-continue'),
+  btnSubscriptionBack: document.getElementById('btn-subscription-back'),
+  btnSubscriptionContinue: document.getElementById('btn-subscription-continue'),
+  modelCharts: document.getElementById('model-charts'),
+  btnModelCompareBack: document.getElementById('btn-model-compare-back'),
+  btnModelCompareContinue: document.getElementById('btn-model-compare-continue'),
   providerOptions: document.getElementById('provider-options'),
   btnProviderBack: document.getElementById('btn-provider-back'),
   btnProviderContinue: document.getElementById('btn-provider-continue'),
@@ -1452,9 +1644,133 @@ dom.btnContainerRetry.addEventListener('click', () => {
 
 dom.btnContainerContinue.addEventListener('click', () => {
   if (state.containerReady) {
-    enterProviderChoose()
+    showStep(STEP_SUBSCRIPTION_NOTICE)
   }
 })
+
+dom.btnSubscriptionBack.addEventListener('click', () => {
+  showStep(STEP_CONTAINER)
+})
+
+dom.btnSubscriptionContinue.addEventListener('click', () => {
+  enterModelCompare()
+})
+
+function enterModelCompare() {
+  renderModelCharts()
+  showStep(STEP_MODEL_COMPARE)
+}
+
+dom.btnModelCompareBack.addEventListener('click', () => {
+  showStep(STEP_SUBSCRIPTION_NOTICE)
+})
+
+dom.btnModelCompareContinue.addEventListener('click', () => {
+  enterProviderChoose()
+})
+
+// Render 3 bar charts (intelligence / speed / cost), each with one
+// bar per model variant in MODEL_VARIANTS. Bar height is normalized
+// to the chart's max; for cost we invert so lower $ becomes the
+// taller "affordability" bar.
+function renderModelCharts() {
+  const root = dom.modelCharts
+  if (!root) return
+  clearChildren(root)
+
+  const metrics = [
+    { key: 'intelligence', titleKey: 'modelCompare.intelligence', unitKey: 'modelCompare.intelligenceUnit', higherIsBetter: true,  format: (v) => `${v.toFixed(1)}%` },
+    { key: 'speed',        titleKey: 'modelCompare.speed',        unitKey: 'modelCompare.speedUnit',        higherIsBetter: true,  format: (v) => `${v} t/s` },
+    { key: 'cost',         titleKey: 'modelCompare.cost',         unitKey: 'modelCompare.costUnit',         higherIsBetter: false, format: (v) => `$${v}` },
+  ]
+
+  for (const metric of metrics) {
+    const values = MODEL_VARIANTS.map((m) => m[metric.key])
+    const max = Math.max(...values)
+    const min = Math.min(...values)
+
+    const chart = document.createElement('div')
+    chart.className = 'model-chart'
+
+    const header = document.createElement('div')
+    header.className = 'model-chart__header'
+    const title = document.createElement('span')
+    title.className = 'model-chart__title'
+    title.setAttribute('data-i18n', metric.titleKey)
+    title.textContent = t(metric.titleKey)
+    const unit = document.createElement('span')
+    unit.className = 'model-chart__unit'
+    unit.setAttribute('data-i18n', metric.unitKey)
+    unit.textContent = t(metric.unitKey)
+    header.appendChild(title)
+    header.appendChild(unit)
+    chart.appendChild(header)
+
+    const barsRow = document.createElement('div')
+    barsRow.className = 'model-chart__bars'
+    barsRow.style.gridTemplateColumns = `repeat(${MODEL_VARIANTS.length}, 1fr)`
+
+    let previousProviderId = null
+    for (const model of MODEL_VARIANTS) {
+      const value = model[metric.key]
+      // Normalize to 8–100% so the smallest bar isn't invisible.
+      let pct
+      if (metric.higherIsBetter) {
+        pct = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 8
+      } else {
+        pct = max > 0 ? Math.max(8, Math.round((min / value) * 100)) : 8
+      }
+      const isWinner = metric.higherIsBetter ? value === max : value === min
+
+      const bar = document.createElement('div')
+      bar.className = 'model-bar'
+      if (isWinner) bar.classList.add('model-bar--winner')
+      // Visual separator between providers so the user reads Claude /
+      // Codex / Kimi as distinct groups inside a single chart.
+      if (previousProviderId && previousProviderId !== model.providerId) {
+        bar.classList.add('model-bar--group-start')
+      }
+      previousProviderId = model.providerId
+
+      const valueLabel = document.createElement('div')
+      valueLabel.className = 'model-bar__value'
+      valueLabel.textContent = metric.format(value)
+
+      const track = document.createElement('div')
+      track.className = 'model-bar__track'
+      const fill = document.createElement('div')
+      fill.className = 'model-bar__fill'
+      fill.style.height = `${pct}%`
+      fill.style.background = model.color
+      track.appendChild(fill)
+
+      // Split name into a primary line + sub line so "GPT-5.3 xhigh"
+      // renders as two tidy lines instead of breaking mid-token.
+      const nameLabel = document.createElement('div')
+      nameLabel.className = 'model-bar__name'
+      const firstSpace = model.modelName.indexOf(' ')
+      if (firstSpace > 0) {
+        const primary = document.createElement('span')
+        primary.textContent = model.modelName.slice(0, firstSpace)
+        const sub = document.createElement('span')
+        sub.className = 'model-bar__name-sub'
+        sub.textContent = model.modelName.slice(firstSpace + 1)
+        nameLabel.appendChild(primary)
+        nameLabel.appendChild(sub)
+      } else {
+        nameLabel.textContent = model.modelName
+      }
+
+      bar.appendChild(valueLabel)
+      bar.appendChild(track)
+      bar.appendChild(nameLabel)
+      barsRow.appendChild(bar)
+    }
+
+    chart.appendChild(barsRow)
+    root.appendChild(chart)
+  }
+}
 
 async function enterProviderChoose() {
   showStep(STEP_PROVIDER_CHOOSE)
@@ -1530,10 +1846,16 @@ function renderProviderOptions() {
       const table = document.createElement('table')
       table.className = 'plans-table'
 
+      // Helper: stamp the same `plans-table__col--recommended` class on
+      // every cell in the recommended tier's column so we can highlight
+      // it vertically.
+      const colClass = (p) => (p.recommended ? ' plans-table__col--recommended' : '')
+
       const thead = document.createElement('thead')
       const trHead = document.createElement('tr')
       for (const p of plans) {
         const th = document.createElement('th')
+        th.className = `plans-table__header${colClass(p)}`
         const planRadio = document.createElement('input')
         planRadio.type = 'radio'
         planRadio.name = `plan-select-${opt.id}`
@@ -1555,27 +1877,64 @@ function renderProviderOptions() {
         nameSpan.textContent = p.name
         label.appendChild(nameSpan)
         th.appendChild(label)
+        if (p.recommended) {
+          const badge = document.createElement('span')
+          badge.className = 'plans-table__badge'
+          badge.textContent = t('provider.recommended')
+          th.appendChild(badge)
+          if (p.recommendedTag) {
+            const tag = document.createElement('span')
+            tag.className = 'plans-table__badge-tag'
+            tag.textContent = t(`provider.recommendedTag.${p.recommendedTag}`)
+            th.appendChild(tag)
+          }
+        }
         trHead.appendChild(th)
       }
       thead.appendChild(trHead)
       table.appendChild(thead)
 
+      const cell = (plan, text, extraClass) => {
+        const td = document.createElement('td')
+        td.className = `${extraClass || ''}${colClass(plan)}`.trim()
+        td.textContent = text
+        return td
+      }
+
       const tbody = document.createElement('tbody')
+      const trModel = document.createElement('tr')
+      trModel.className = 'plans-table__model-row'
+      for (const p of plans) trModel.appendChild(cell(p, p.model || '—'))
+
       const trPrice = document.createElement('tr')
       trPrice.className = 'plans-table__price-row'
+      for (const p of plans) trPrice.appendChild(cell(p, p.price))
+
+      const trWeekly = document.createElement('tr')
+      trWeekly.className = 'plans-table__weekly-row'
+      for (const p of plans) trWeekly.appendChild(cell(p, p.monthly || '—'))
+
+      // "$/M" row: monthly price ÷ monthly token allowance. Simple
+      // rule of thumb — "$100/mo buys you 400M tokens ≈ $0.25/M".
+      const trUnit = document.createElement('tr')
+      trUnit.className = 'plans-table__unit-row'
       for (const p of plans) {
-        const td = document.createElement('td')
-        td.textContent = p.price
-        trPrice.appendChild(td)
+        let text = '—'
+        if (typeof p.priceUsd === 'number' && typeof p.monthlyM === 'number' && p.monthlyM > 0) {
+          const per = p.priceUsd / p.monthlyM
+          text = `~$${per.toFixed(2)}/M tok`
+        }
+        trUnit.appendChild(cell(p, text))
       }
+
       const trEst = document.createElement('tr')
       trEst.className = 'plans-table__estimate-row'
-      for (const p of plans) {
-        const td = document.createElement('td')
-        td.textContent = p.estimate
-        trEst.appendChild(td)
-      }
+      for (const p of plans) trEst.appendChild(cell(p, p.estimate))
+
+      tbody.appendChild(trModel)
       tbody.appendChild(trPrice)
+      tbody.appendChild(trWeekly)
+      tbody.appendChild(trUnit)
       tbody.appendChild(trEst)
       table.appendChild(tbody)
       body.appendChild(table)
@@ -1613,7 +1972,7 @@ function renderProviderOptions() {
 }
 
 dom.btnProviderBack.addEventListener('click', () => {
-  showStep(STEP_CONTAINER)
+  enterModelCompare()
 })
 
 dom.btnProviderContinue.addEventListener('click', async () => {
