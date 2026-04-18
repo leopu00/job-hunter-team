@@ -17,6 +17,30 @@ const PROVIDER_OPTIONS = [
   { id: 'kimi', label: 'Kimi', vendor: 'Moonshot · Kimi paid plan' },
 ]
 
+// Subscription tiers the user can connect through each CLI. The estimate
+// column is an educated guess based on public usage limits (April 2026)
+// — Anthropic/OpenAI describe limits in sessions/resets rather than
+// token budgets, so "~X msg/week" is always approximate. Shown to help
+// users pick the right plan for their workload, not as a contract.
+const PROVIDER_PLANS = {
+  claude: [
+    { id: 'pro',    name: 'Claude Pro',     price: '$17/mo (annual) · $20 monthly', estimate: 'Claude Code baseline' },
+    { id: 'max5',   name: 'Claude Max 5×',  price: '$100/mo', estimate: '~88k tok / 5h · 5× Pro usage' },
+    { id: 'max20',  name: 'Claude Max 20×', price: '$200/mo', estimate: '~220k tok / 5h · 20× Pro usage' },
+  ],
+  codex: [
+    { id: 'plus',   name: 'ChatGPT Plus',    price: '$20/mo',  estimate: '20–100 msg / 5h (GPT-5.4)' },
+    { id: 'pro5',   name: 'ChatGPT Pro 5×',  price: '$100/mo', estimate: '100–500 msg / 5h · 5× Plus' },
+    { id: 'pro20',  name: 'ChatGPT Pro 20×', price: '$200/mo', estimate: '400–2k msg / 5h · 20× Plus' },
+  ],
+  kimi: [
+    { id: 'moderato',   name: 'Moderato',   price: '$19/mo',  estimate: '4× base quota' },
+    { id: 'allegretto', name: 'Allegretto', price: '$39/mo',  estimate: '20× base · Recommended' },
+    { id: 'allegro',    name: 'Allegro',    price: '$99/mo',  estimate: '60× base · heavy' },
+    { id: 'vivace',     name: 'Vivace',     price: '$199/mo', estimate: 'highest · team-scale' },
+  ],
+}
+
 const SUPPORTED_LANGS = ['en', 'it', 'hu']
 const DEFAULT_LANG = 'en'
 const LANG_STORAGE_KEY = 'jht.lang'
@@ -1108,6 +1132,46 @@ function renderProviderOptions() {
 
     body.appendChild(name)
     body.appendChild(vendor)
+
+    // Subscription plan table inside the card: one COLUMN per tier.
+    // Header row = plan name, second row = price, third row = usage
+    // estimate. Purely informational — the CLI itself decides which
+    // plan the signed-in account uses; we just help the user match
+    // plan to workload.
+    const plans = PROVIDER_PLANS[opt.id] || []
+    if (plans.length > 0) {
+      const table = document.createElement('table')
+      table.className = 'plans-table'
+      const thead = document.createElement('thead')
+      const trHead = document.createElement('tr')
+      for (const p of plans) {
+        const th = document.createElement('th')
+        th.textContent = p.name
+        trHead.appendChild(th)
+      }
+      thead.appendChild(trHead)
+      table.appendChild(thead)
+
+      const tbody = document.createElement('tbody')
+      const trPrice = document.createElement('tr')
+      trPrice.className = 'plans-table__price-row'
+      for (const p of plans) {
+        const td = document.createElement('td')
+        td.textContent = p.price
+        trPrice.appendChild(td)
+      }
+      const trEst = document.createElement('tr')
+      trEst.className = 'plans-table__estimate-row'
+      for (const p of plans) {
+        const td = document.createElement('td')
+        td.textContent = p.estimate
+        trEst.appendChild(td)
+      }
+      tbody.appendChild(trPrice)
+      tbody.appendChild(trEst)
+      table.appendChild(tbody)
+      body.appendChild(table)
+    }
 
     row.appendChild(check)
     row.appendChild(body)
