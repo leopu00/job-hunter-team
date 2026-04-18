@@ -95,7 +95,7 @@ function buildScript({
     `  $distroCheck = (& wsl.exe -l -q 2>&1 | Out-String).Trim()`,
     `  $hasDistro = ($LASTEXITCODE -eq 0) -and ($distroCheck -ne '')`,
     `  if ($hasDistro) {`,
-    `    Log "WSL already has distro(s) registered — skipping wsl --install"`,
+    `    Log "WSL already has distro(s) registered - skipping wsl --install"`,
     `  } else {`,
     `    Log "WSL not set up; running wsl --install --no-launch"`,
     `    & wsl.exe --install --no-launch *>&1 | ForEach-Object { Log $_ }`,
@@ -149,7 +149,7 @@ function buildScript({
     `  }`,
     `} catch { Fail 'GIT_INSTALL' $_.Exception.Message }`,
     ``,
-    `Log "DONE — Docker Desktop is installed manually from https://docker.com; reboot required to finish WSL kernel setup"`,
+    `Log "DONE - Docker Desktop is installed manually from https://docker.com; reboot required to finish WSL kernel setup"`,
     `Set-Content -Path $resultPath -Value 'OK'`,
     `try { Stop-Transcript | Out-Null } catch { }`,
     `exit 0`,
@@ -286,8 +286,15 @@ async function installWindowsStack({
   wrappedLog('installWindowsStack: begin')
 
   const script = buildScript({ paths })
-  fsApi.writeFileSync(paths.script, script, 'utf8')
-  wrappedLog(`installWindowsStack: wrote ${paths.script}`)
+  // UTF-8 BOM prefix (0xEF 0xBB 0xBF). Without it, PowerShell 5.1
+  // reads .ps1 files as Windows-1252 ANSI, and any non-ASCII byte
+  // inside a string literal can mis-tokenize (e.g. an em-dash's third
+  // UTF-8 byte 0x94 maps to a `"` in CP-1252, closing the string
+  // early and throwing a parse error — elevated PS exits 1 silently).
+  // Writing with BOM makes parsing encoding-correct regardless of the
+  // current system locale.
+  fsApi.writeFileSync(paths.script, '\ufeff' + script, 'utf8')
+  wrappedLog(`installWindowsStack: wrote ${paths.script} (with UTF-8 BOM)`)
 
   const stopTail = tailLog(paths.log, wrappedLog)
 
