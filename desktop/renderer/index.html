@@ -62,14 +62,14 @@
       <!-- Step 2: setup / checklist -->
       <section class="step" id="step-setup" data-step="setup" hidden>
         <h1 class="step__title" data-i18n="setup.title">Setup</h1>
-        <p class="step__lead" data-i18n="setup.lead" data-i18n-html="true">
+        <p class="step__lead" id="setup-lead" data-i18n="setup.lead" data-i18n-html="true">
           To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.
         </p>
 
         <div class="dep-card" id="docker-card">
           <div class="dep-card__header">
             <img class="dep-card__icon" src="./assets/docker.svg" alt="Docker" width="28" height="28" />
-            <span class="dep-card__name">Docker</span>
+            <span class="dep-card__name" id="docker-name">Docker</span>
             <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
           <p class="dep-card__hint" id="docker-hint" data-i18n="setup.checkingHint">

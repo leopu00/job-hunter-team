@@ -64,7 +64,16 @@ const TRANSLATIONS = {
     'welcome.continue': 'Continue',
     'setup.title': 'Setup',
     'setup.lead':
-      "To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.",
+      "To run the team in isolation we need <strong>a container runtime</strong>, free. Let's check if it's already on your computer.",
+    'setup.lead.win32':
+      "To run the team in isolation we need <strong>Docker Desktop</strong>, free. Let's check if it's already on your computer.",
+    'setup.lead.darwin':
+      "To run the team in isolation we need <strong>Colima</strong>, free. Let's check if it's already on your computer.",
+    'setup.lead.linux':
+      "To run the team in isolation we need <strong>Docker Engine</strong>, free. Let's check if it's already on your computer.",
+    'docker.name.win32': 'Docker Desktop',
+    'docker.name.darwin': 'Colima',
+    'docker.name.linux': 'Docker Engine',
     'setup.back': 'Back',
     'setup.continue': 'Next',
     'setup.verifying': 'checking…',
@@ -177,7 +186,16 @@ const TRANSLATIONS = {
     'welcome.continue': 'Continua',
     'setup.title': 'Setup',
     'setup.lead':
-      'Per far girare il team in modo isolato serve <strong>Docker</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+      'Per far girare il team in modo isolato serve <strong>un container runtime</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+    'setup.lead.win32':
+      'Per far girare il team in modo isolato serve <strong>Docker Desktop</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+    'setup.lead.darwin':
+      'Per far girare il team in modo isolato serve <strong>Colima</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+    'setup.lead.linux':
+      'Per far girare il team in modo isolato serve <strong>Docker Engine</strong>, gratuito. Controlliamo se è già sul tuo computer.',
+    'docker.name.win32': 'Docker Desktop',
+    'docker.name.darwin': 'Colima',
+    'docker.name.linux': 'Docker Engine',
     'setup.back': 'Indietro',
     'setup.continue': 'Avanti',
     'setup.verifying': 'verifica…',
@@ -290,7 +308,16 @@ const TRANSLATIONS = {
     'welcome.continue': 'Tovább',
     'setup.title': 'Beállítás',
     'setup.lead':
-      'A csapat izolált futtatásához <strong>Docker</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+      'A csapat izolált futtatásához <strong>konténer-futtatókörnyezet</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+    'setup.lead.win32':
+      'A csapat izolált futtatásához <strong>Docker Desktop</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+    'setup.lead.darwin':
+      'A csapat izolált futtatásához <strong>Colima</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+    'setup.lead.linux':
+      'A csapat izolált futtatásához <strong>Docker Engine</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
+    'docker.name.win32': 'Docker Desktop',
+    'docker.name.darwin': 'Colima',
+    'docker.name.linux': 'Docker Engine',
     'setup.back': 'Vissza',
     'setup.continue': 'Tovább',
     'setup.verifying': 'ellenőrzés…',
@@ -535,6 +562,8 @@ const dom = {
   dockerFree: document.getElementById('docker-free'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  dockerName: document.getElementById('docker-name'),
+  setupLead: document.getElementById('setup-lead'),
   dockerInstallPanel: document.getElementById('docker-install-panel'),
   dockerInstallIcon: document.getElementById('docker-install-icon'),
   dockerInstallMessage: document.getElementById('docker-install-message'),
@@ -598,6 +627,17 @@ function renderDockerCard(status) {
   const check = status.check
   const card = dom.dockerCard
   card.classList.remove('dep-card--ok', 'dep-card--warn', 'dep-card--missing')
+
+  // Swap the card name and the setup lead to the platform-specific runtime
+  // (Colima on darwin, Docker Desktop on win32, Docker Engine on linux) so the
+  // whole screen tells one consistent story with the Install button.
+  const platform = status.platform || platformFromHintKey(check.hintKey)
+  if (platform && dom.dockerName) {
+    dom.dockerName.textContent = t(`docker.name.${platform}`)
+  }
+  if (platform && dom.setupLead) {
+    dom.setupLead.innerHTML = t(`setup.lead.${platform}`)
+  }
 
   if (check.state === 'ok') {
     dom.dockerBadge.textContent = t('docker.state.ok')
