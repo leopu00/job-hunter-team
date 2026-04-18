@@ -89,6 +89,18 @@ async function ensureContainerImage({
     return { ok: false, stage: 'init', error: 'payloadDir required' }
   }
 
+  // If a local image already exists, skip the pull. Pulling from
+  // ghcr.io every launch would clobber any locally-built image (the
+  // dev flow when you're iterating on the Dockerfile or the files it
+  // bakes in), forcing a painful rebuild every time the registry
+  // ships a different SHA. For the first run on a clean machine the
+  // image isn't there yet, so we still fall through to pull + build.
+  const local = inspectImage()
+  if (local.present) {
+    onLog(`Using existing local image ${local.image} — skipping pull`)
+    return { ok: true, stage: 'local-existing', source: 'local' }
+  }
+
   const pull = await pullImage({ cwd: payloadDir, service, onLog, run })
   if (pull.ok) {
     return { ok: true, stage: 'pulled', source: 'registry' }

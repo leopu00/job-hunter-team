@@ -106,13 +106,28 @@ function buildDockerArgs({
     `${jhtHome}:/jht_home`,
     '-v',
     `${jhtUser}:/jht_user`,
+  ]
+
+  // Dev overlay: if JHT_DEV_WEB_DIR points at an existing directory on
+  // the host, bind-mount it over /app/web so the Next.js dev server
+  // inside the container picks up live edits to the web/ source tree
+  // (HMR works in ~1s instead of rebuilding the image). The anonymous
+  // volume for node_modules keeps the container's linux-arm64 binaries
+  // from being shadowed by the host's darwin-arm64 ones. Opt-in only.
+  const devWebDir = process.env.JHT_DEV_WEB_DIR
+  if (devWebDir && fs.existsSync(devWebDir)) {
+    args.push('-v', `${devWebDir}:/app/web`)
+    args.push('-v', '/app/web/node_modules')
+  }
+
+  args.push(
     '-e',
     'JHT_HOME=/jht_home',
     '-e',
     'JHT_USER_DIR=/jht_user',
     '-e',
     'IS_CONTAINER=1',
-  ]
+  )
   for (const key of [
     'ANTHROPIC_API_KEY',
     'OPENAI_API_KEY',

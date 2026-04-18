@@ -183,11 +183,14 @@ function createRuntimeManager(config = {}) {
   }
 
   function getUrl(port = state.port) {
-    // Open directly on /dashboard — the root path (/) is the public
-    // landing page for the hosted site; desktop users need the
-    // authenticated dashboard view. The web app skips auth on
-    // localhost (see web middleware) so no login is required.
-    return `http://localhost:${port}/dashboard`
+    // Open /onboarding — the authenticated split-screen view where
+    // the assistant greets the user and the profile form fills in
+    // live. It's the real entry point for a fresh desktop user. We
+    // used to open /dashboard but with Supabase env baked into the
+    // web image the cloud auth layer intercepts unauthenticated
+    // local requests and bounces them to /?login=true, which is not
+    // where the desktop user should land.
+    return `http://localhost:${port}/onboarding`
   }
 
   function appendLog(chunk) {
