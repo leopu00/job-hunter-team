@@ -75,6 +75,12 @@ function broadcastProviderLog(message) {
   }
 }
 
+function broadcastInstallLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:install-log', String(message))
+  }
+}
+
 async function openRuntimeInBrowser() {
   const status = await runtime.getStatus()
   const launchableStatus = status.mode === 'running' || status.mode === 'external'
@@ -167,6 +173,20 @@ app.whenReady().then(() => {
         meetsRecommendation:
           strategy && free !== null ? free >= strategy.recommendedFreeBytes : null,
       },
+    }
+  })
+
+  ipcMain.handle('setup:install-docker', async () => {
+    try {
+      const result = await dockerInstaller.installDocker({
+        platform: process.platform,
+        onLog: broadcastInstallLog,
+      })
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastInstallLog(`Errore: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
     }
   })
 
