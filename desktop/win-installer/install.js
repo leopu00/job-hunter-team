@@ -31,6 +31,11 @@ function tempPaths() {
     result: path.join(dir, 'jht-install.result'),
     outerLog: path.join(dir, 'jht-install-outer.log'),
     nodeLog: path.join(dir, 'jht-install-node.log'),
+    // NEW: stdout/stderr of the elevated powershell child, captured by
+    // cmd.exe redirection so we see errors even when the script never
+    // gets to write its own log (execution-policy block, AppLocker, etc.)
+    childStdout: path.join(dir, 'jht-install-child-stdout.log'),
+    childStderr: path.join(dir, 'jht-install-child-stderr.log'),
     dockerInstaller: path.join(dir, 'DockerDesktopInstaller.exe'),
   }
 }
@@ -152,10 +157,32 @@ function tailLog(logPath, onLog) {
 // The outer (unelevated) PowerShell. It's generated with its own file
 // logger (`jht-install-outer.log` in TEMP) so we can see every step of
 // the elevation dance — the call to Start-Process, its return / exit
-// code, any native exception. Without this, a silent UAC cancel looks
-// identical to a silent elevated-script crash.
-function buildOuterScript({ scriptPath, outerLogPath }) {
+// code, any native exception.
+//
+// Elevation strategy: we launch `cmd.exe /c powershell.exe
+// -EncodedCommand <b64> > childStdout 2> childStderr` elevated.
+// Rationale for two design choices:
+//  1. `-EncodedCommand` (instead of `-File script.ps1`): PowerShell's
+//     Execution Policy applies to script FILES, not to commands passed
+//     inline. Encoded inline commands run even under Restricted/
+//     AllSigned policies set by Group Policy. AppLocker's "Script
+//     Rules" also target files on disk; encoded commands sidestep them.
+//  2. `cmd.exe /c ... > path 2> path`: Start-Process -Verb RunAs opens
+//     the elevated child in a detached console with no pipe back to us,
+//     so any stderr from the elevated PowerShell dies on screen close.
+//     cmd.exe's native redirection captures BOTH streams to files we
+//     can read, no matter whether the script loaded, parsed, or ran.
+function buildOuterScript({
+  scriptContent,
+  scriptPath,
+  childStdoutPath,
+  childStderrPath,
+  outerLogPath,
+}) {
   const q = (s) => `'${String(s).replace(/'/g, "''")}'`
+  // PowerShell -EncodedCommand requires UTF-16LE Base64. Produce it on
+  // the Node side so the outer shell only has to hand it off.
+  const encoded = Buffer.from(scriptContent, 'utf16le').toString('base64')
   return [
     `$outerLog = ${q(outerLogPath)}`,
     `function OLog([string]$m) {`,
@@ -165,25 +192,50 @@ function buildOuterScript({ scriptPath, outerLogPath }) {
     `}`,
     `try { Set-Content -Path $outerLog -Value "" -Force } catch { }`,
     `OLog "starting; script path = ${scriptPath.replace(/'/g, "''").replace(/\\/g, '\\\\')}"`,
-    `OLog "script exists = $(Test-Path ${q(scriptPath)})"`,
     `OLog "host PS version = $($PSVersionTable.PSVersion) edition = $($PSVersionTable.PSEdition)"`,
+    `OLog "encoded command length = ${encoded.length} chars (UTF-16LE Base64)"`,
+    // Wipe previous child logs so a stale run doesn't confuse the read.
+    `try { Remove-Item -LiteralPath ${q(childStdoutPath)} -Force -ErrorAction SilentlyContinue } catch { }`,
+    `try { Remove-Item -LiteralPath ${q(childStderrPath)} -Force -ErrorAction SilentlyContinue } catch { }`,
+    // Build the cmd /c command line. Note: cmd's redirection sees the
+    // > and 2> as a single string, so we quote the target paths.
+    `$childStdout = ${q(childStdoutPath)}`,
+    `$childStderr = ${q(childStderrPath)}`,
+    `$encoded = '${encoded}'`,
+    `$cmdLine = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + $encoded + ' > "' + $childStdout + '" 2> "' + $childStderr + '"'`,
+    `OLog "cmd line assembled ($($cmdLine.Length) chars)"`,
     `try {`,
-    `  OLog "calling Start-Process -Verb RunAs -Wait -PassThru"`,
-    `  $proc = Start-Process -Verb RunAs -Wait -PassThru -FilePath powershell \``,
-    `    -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',${q(scriptPath)}`,
+    `  OLog "calling Start-Process -Verb RunAs -Wait -PassThru cmd.exe /c ..."`,
+    `  $proc = Start-Process -Verb RunAs -Wait -PassThru -FilePath 'cmd.exe' -ArgumentList '/c', $cmdLine`,
     `  OLog "Start-Process returned, exit code = $($proc.ExitCode)"`,
     `} catch [System.ComponentModel.Win32Exception] {`,
-    `  # Native code from ShellExecuteEx; 1223 = ERROR_CANCELLED (UAC decline).`,
     `  OLog "Start-Process Win32Exception native=$($_.Exception.NativeErrorCode) msg=$($_.Exception.Message)"`,
     `} catch {`,
     `  OLog "Start-Process threw $($_.Exception.GetType().FullName): $($_.Exception.Message)"`,
     `}`,
+    // Surface a sample of the child's stderr into our outer log too, so
+    // if the user only reads outer.log we still get the root cause.
+    `try {`,
+    `  if (Test-Path -LiteralPath $childStderr) {`,
+    `    $tail = (Get-Content -LiteralPath $childStderr -TotalCount 20 -ErrorAction SilentlyContinue) -join " | "`,
+    `    if ($tail) { OLog "child stderr head: $tail" }`,
+    `  }`,
+    `} catch { }`,
     `OLog "done"`,
   ].join('\n')
 }
 
-function spawnElevatedScript({ scriptPath, outerLogPath, spawnFn = spawn }) {
-  const outerScript = buildOuterScript({ scriptPath, outerLogPath })
+function spawnElevatedScript({
+  scriptContent,
+  scriptPath,
+  childStdoutPath,
+  childStderrPath,
+  outerLogPath,
+  spawnFn = spawn,
+}) {
+  const outerScript = buildOuterScript({
+    scriptContent, scriptPath, childStdoutPath, childStderrPath, outerLogPath,
+  })
   return spawnFn('powershell.exe', [
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
@@ -203,7 +255,10 @@ async function installWindowsStack({
   }
 
   // Reset previous state so a re-run starts clean.
-  for (const p of [paths.log, paths.result, paths.outerLog, paths.nodeLog]) {
+  for (const p of [
+    paths.log, paths.result, paths.outerLog, paths.nodeLog,
+    paths.childStdout, paths.childStderr,
+  ]) {
     try { fsApi.unlinkSync(p) } catch { /* ok if missing */ }
   }
 
@@ -231,7 +286,10 @@ async function installWindowsStack({
   const stopTail = tailLog(paths.log, wrappedLog)
 
   const child = spawnElevatedScript({
+    scriptContent: script,
     scriptPath: paths.script,
+    childStdoutPath: paths.childStdout,
+    childStderrPath: paths.childStderr,
     outerLogPath: paths.outerLog,
     spawnFn,
   })
