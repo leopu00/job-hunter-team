@@ -16,9 +16,26 @@ const { promisify } = require('node:util')
 
 const execFileAsync = promisify(execFile)
 
+// macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
+// that does NOT include /opt/homebrew/bin or /usr/local/bin, so `which
+// docker` and `docker ps` fail even when Colima is running. Augment the
+// PATH explicitly with the standard Homebrew prefixes whenever we shell
+// out from a check.
+function checkEnv() {
+  if (process.platform !== 'darwin') return process.env
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin']
+  return {
+    ...process.env,
+    PATH: [...extra, process.env.PATH || ''].filter(Boolean).join(':'),
+  }
+}
+
 async function runWithTimeout(cmd, args, timeoutMs = 5000) {
   try {
-    const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: timeoutMs })
+    const { stdout, stderr } = await execFileAsync(cmd, args, {
+      timeout: timeoutMs,
+      env: checkEnv(),
+    })
     return { ok: true, stdout, stderr, code: 0 }
   } catch (error) {
     return {
