@@ -15,6 +15,11 @@
 
 const { spawn, execFile } = require('node:child_process')
 const { promisify } = require('node:util')
+const https = require('node:https')
+const fs = require('node:fs')
+const fsPromises = require('node:fs').promises
+const os = require('node:os')
+const path = require('node:path')
 
 const execFileAsync = promisify(execFile)
 
@@ -89,40 +94,140 @@ async function isBrewPresent({ env } = {}) {
   }
 }
 
-// Install Homebrew from inside the wizard — never asks the user to open
-// Terminal. macOS shows a native admin-password prompt because the
-// installer needs sudo to create /opt/homebrew with the right perms.
-// NONINTERACTIVE=1 skips brew's "press RETURN to continue" confirmations.
-function installHomebrew({ onLog = () => {} } = {}) {
+// Install Homebrew from inside the wizard without a Terminal window.
+//
+// The canonical `install.sh` script REFUSES to run as root ("Don't run
+// this as root!") because brew itself must live under an unprivileged
+// user — it only needs sudo for a few directory-permission steps. That
+// makes `osascript ... with administrator privileges` (which runs the
+// whole child as root) useless.
+//
+// Homebrew ships an official `.pkg` installer in every GitHub release,
+// designed exactly for this case: it runs as root via `installer(8)`,
+// sets up /opt/homebrew with the correct ownership (the invoking user),
+// and registers PATH helpers. We fetch the latest .pkg, install it with
+// a single admin-password prompt, and delete the temp file.
+async function installHomebrew({ onLog = () => {} } = {}) {
+  try {
+    onLog('Fetching latest Homebrew installer…')
+    const pkgUrl = await fetchLatestHomebrewPkgUrl()
+    const pkgPath = path.join(os.tmpdir(), `jht-homebrew-${Date.now()}.pkg`)
+    onLog(`Downloading ${pkgUrl.split('/').pop()}…`)
+    await downloadFile(pkgUrl, pkgPath, onLog)
+    onLog('Installing (macOS will ask for your password)…')
+    const result = await runPkgInstaller(pkgPath)
+    // Best-effort cleanup of the downloaded pkg.
+    try { await fsPromises.unlink(pkgPath) } catch { /* ignore */ }
+    return result
+  } catch (error) {
+    return {
+      ok: false,
+      code: -1,
+      stderr: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function fetchLatestHomebrewPkgUrl() {
+  const release = await fetchJson(
+    'https://api.github.com/repos/Homebrew/brew/releases/latest',
+  )
+  const pkg = (release.assets || []).find(
+    (a) => a && typeof a.name === 'string' && a.name.endsWith('.pkg'),
+  )
+  if (!pkg || !pkg.browser_download_url) {
+    throw new Error('No .pkg asset in latest Homebrew release')
+  }
+  return pkg.browser_download_url
+}
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': 'jht-desktop',
+          Accept: 'application/vnd.github+json',
+        },
+      },
+      (res) => {
+        // GitHub API redirects should already be resolved, but handle just in case.
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume()
+          fetchJson(res.headers.location).then(resolve, reject)
+          return
+        }
+        if (res.statusCode !== 200) {
+          res.resume()
+          reject(new Error(`GitHub API HTTP ${res.statusCode}`))
+          return
+        }
+        const chunks = []
+        res.on('data', (c) => chunks.push(c))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+          } catch (error) {
+            reject(error)
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    req.setTimeout(15000, () => {
+      req.destroy(new Error('GitHub API request timed out'))
+    })
+  })
+}
+
+function downloadFile(url, destPath, onLog) {
+  return new Promise((resolve, reject) => {
+    const doGet = (currentUrl) => {
+      https
+        .get(currentUrl, { headers: { 'User-Agent': 'jht-desktop' } }, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            res.resume()
+            doGet(res.headers.location)
+            return
+          }
+          if (res.statusCode !== 200) {
+            res.resume()
+            reject(new Error(`Download HTTP ${res.statusCode}`))
+            return
+          }
+          const file = fs.createWriteStream(destPath)
+          res.pipe(file)
+          file.on('finish', () => file.close(() => resolve()))
+          file.on('error', reject)
+        })
+        .on('error', reject)
+    }
+    doGet(url)
+  })
+}
+
+function runPkgInstaller(pkgPath) {
   return new Promise((resolve) => {
-    onLog('Installing Homebrew (macOS will ask for your password)...')
-    const shellCmd =
-      'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-    // AppleScript requires internal double quotes to be escaped with \\"
-    const applescript = `do shell script "${shellCmd.replace(/"/g, '\\"')}" with administrator privileges`
+    // `installer -pkg <pkg> -target /` needs root. `with administrator
+    // privileges` gives it root via a single native GUI password prompt.
+    const applescript =
+      `do shell script "/usr/sbin/installer -pkg ${JSON.stringify(pkgPath).slice(1, -1)} -target /" with administrator privileges`
     let child
     try {
       child = spawn('osascript', ['-e', applescript], { windowsHide: true })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      resolve({ ok: false, code: -1, stderr: message })
+      resolve({
+        ok: false,
+        code: -1,
+        stderr: error instanceof Error ? error.message : String(error),
+      })
       return
     }
-
     let stderrTail = ''
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    // osascript buffers brew's output, so live line-by-line streaming
-    // isn't possible via `do shell script`. The step spinner in the UI
-    // carries the burden of showing "we're still working".
-    child.stdout.on('data', (d) => {
-      for (const line of String(d).split(/\r?\n/)) if (line) onLog(line)
-    })
-    child.stderr.on('data', (d) => {
-      stderrTail += d
-      for (const line of String(d).split(/\r?\n/)) if (line) onLog(line)
-    })
-
+    child.stderr.on('data', (d) => (stderrTail += d))
     child.on('error', (error) => {
       resolve({
         ok: false,
