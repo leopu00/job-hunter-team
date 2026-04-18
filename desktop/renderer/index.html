@@ -69,32 +69,34 @@
         <div class="dep-card" id="docker-card">
           <div class="dep-card__header">
             <img class="dep-card__icon" src="./assets/docker.svg" alt="Docker" width="28" height="28" />
-            <span class="dep-card__name" id="docker-name">Docker</span>
+            <div class="dep-card__title">
+              <span class="dep-card__name" id="docker-name">Docker</span>
+              <span class="dep-card__subtitle" id="docker-subtitle"></span>
+            </div>
             <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
-          <p class="dep-card__hint" id="docker-hint" data-i18n="setup.checkingHint">
-            Checking…
-          </p>
-          <div class="dep-card__stats" id="docker-stats" hidden>
-            <div class="stat">
-              <span class="stat__label" data-i18n="setup.statRequired">Install size</span>
-              <span class="stat__value" id="docker-required">—</span>
-            </div>
-            <div class="stat">
-              <span class="stat__label" data-i18n="setup.statFree">Free on your PC</span>
-              <span class="stat__value" id="docker-free">—</span>
-            </div>
-          </div>
+
+          <ol class="install-steps" id="docker-steps">
+            <li class="install-step" id="step-homebrew" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.homebrew">Homebrew</span>
+              <span class="install-step__hint" id="step-homebrew-hint"></span>
+            </li>
+            <li class="install-step" id="step-colima" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.colima">Colima + Docker CLI</span>
+              <span class="install-step__hint" id="step-colima-hint"></span>
+            </li>
+            <li class="install-step" id="step-daemon" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.daemon">Runtime attivo</span>
+              <span class="install-step__hint" id="step-daemon-hint"></span>
+            </li>
+          </ol>
+
           <div class="dep-card__actions" id="docker-actions"></div>
-          <div class="container-progress" id="docker-install-panel" hidden>
-            <div class="container-progress__status">
-              <span class="status-icon" id="docker-install-icon" data-state="busy"></span>
-              <span class="container-progress__message" id="docker-install-message" data-i18n="docker.install.streamingTitle">
-                Installing Colima…
-              </span>
-            </div>
-            <pre class="container-progress__log" id="docker-install-log"></pre>
-          </div>
+
+          <pre class="install-log" id="docker-install-log" hidden></pre>
         </div>
 
         <div class="dep-list" id="extra-deps"></div>
