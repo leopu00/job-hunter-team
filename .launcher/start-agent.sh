@@ -85,7 +85,16 @@ fi
 # e capire se usare api_key (env var) o subscription (sessione CLI esistente).
 # Default: claude subscription (comportamento pre-multi-provider).
 
-JHT_CONFIG_FILE="${HOME}/.jht/jht.config.json"
+# In the JHT container HOME is overridden to /jht_home (the bind-mount
+# that matches the host's ~/.jht), so the provider config lives at
+# ${HOME}/jht.config.json — not ${HOME}/.jht/jht.config.json. On the
+# host the same file is at ~/.jht/jht.config.json. Honour JHT_HOME
+# when set (container path), fall back to ~/.jht for host runs.
+if [ -n "${JHT_HOME:-}" ] && [ -f "${JHT_HOME}/jht.config.json" ]; then
+  JHT_CONFIG_FILE="${JHT_HOME}/jht.config.json"
+else
+  JHT_CONFIG_FILE="${HOME}/.jht/jht.config.json"
+fi
 
 extract_provider_info() {
   local cfg="$1"
@@ -147,7 +156,10 @@ case "$PROVIDER" in
     ;;
   kimi|moonshot)
     CLI_BIN="kimi"
-    CLI_ARGS=""
+    # --yolo auto-approves every shell command so the agent can write
+    # chat.jsonl, create the profile dir, etc. without blocking on the
+    # approval prompt (equivalent of Claude's --dangerously-skip-permissions).
+    CLI_ARGS="--yolo"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
@@ -218,6 +230,20 @@ fi
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
 
 send_env_vars() {
+  # Inside the JHT container a fresh tmux bash resets HOME to the OS
+  # default (/home/jht, from /etc/passwd) — but the CLI credential
+  # files live under /jht_home (the bind-mounted ~/.jht from the
+  # host). Without this override, kimi/claude/codex would report
+  # "not logged in" even when the user authed successfully.
+  if [ -d "${JHT_HOME:-}" ] && [ "$JHT_HOME" != "$HOME" ]; then
+    tmux send-keys -t "$SESSION" "export HOME='$JHT_HOME'" C-m
+  fi
+  # Propagate our PATH into the tmux pane: a fresh interactive bash
+  # re-reads /etc/profile and ~/.bashrc which can clobber the PATH
+  # that docker's ENV set (e.g. /jht_home/.npm-global/bin where kimi
+  # lives after uv tool install). Re-exporting here guarantees the
+  # CLI binary resolves.
+  tmux send-keys -t "$SESSION" "export PATH='$PATH'" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
@@ -245,9 +271,18 @@ else
   tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
-  # Auto-accept workspace trust dialog (Enter in background dopo qualche secondo)
-  # L'Enter extra e' innocuo se la CLI e' gia' partita (input vuoto = ignorato)
-  (sleep 4 && tmux send-keys -t "$SESSION" Enter && sleep 3 && tmux send-keys -t "$SESSION" Enter) &>/dev/null &
+  # Auto-accept any first-launch trust / approval dialog the CLI
+  # might show. Each provider has its own "skip permissions" flag
+  # (claude --dangerously-skip-permissions, kimi --yolo) so in the
+  # steady state these Enters hit an empty prompt and are harmless,
+  # but when the CLI *does* pop up a "do you trust this dir?" modal
+  # on very first run we want to push through it without waiting
+  # for the user.
+  (
+    sleep 3  && tmux send-keys -t "$SESSION" Enter
+    sleep 3  && tmux send-keys -t "$SESSION" Enter
+    sleep 3  && tmux send-keys -t "$SESSION" Enter
+  ) &>/dev/null &
 fi
 
 echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
