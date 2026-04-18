@@ -153,14 +153,36 @@ test('ok=false + stage=aborted when no result file (UAC declined / blocked)', as
   assert.match(result.error, /UAC|before reporting/)
 })
 
-test('buildScript references the canonical Docker installer URL and the three step labels', () => {
+test('buildScript references the canonical Docker installer URL and the four step labels', () => {
   const script = buildScript({ paths: FAKE_PATHS })
   assert.match(script, /https:\/\/desktop\.docker\.com\/win\/main\/amd64\/Docker%20Desktop%20Installer\.exe/)
-  assert.match(script, /Step 1\/3 Installing WSL/)
-  assert.match(script, /Step 2\/3 Downloading Docker Desktop/)
-  assert.match(script, /Step 3\/3 Installing Docker Desktop/)
+  assert.match(script, /Step 1\/4 Installing WSL/)
+  assert.match(script, /Step 2\/4 Installing Git/)
+  assert.match(script, /Step 3\/4 Downloading Docker Desktop/)
+  assert.match(script, /Step 4\/4 Installing Docker Desktop/)
   assert.match(script, /--no-launch/)
   assert.match(script, /--no-restart/)
+  assert.match(script, /winget install --id Git\.Git/)
+})
+
+test('stage=git-install when result is GIT_INSTALL', async () => {
+  const fakeFs = makeFakeFs()
+  const child = makeFakeChild()
+  const spawnFn = () => {
+    setImmediate(() => {
+      fakeFs.writeFileSync(FAKE_PATHS.result, 'GIT_INSTALL')
+      child.emit('close', 1)
+    })
+    return child
+  }
+
+  const result = await installWindowsStack({
+    platform: 'win32',
+    paths: FAKE_PATHS,
+    spawnFn,
+    fsApi: fakeFs,
+  })
+  assert.equal(result.stage, 'git-install')
 })
 
 test('buildScript escapes single quotes in temp paths to avoid PowerShell injection', () => {
