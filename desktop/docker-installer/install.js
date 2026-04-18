@@ -115,7 +115,7 @@ async function installHomebrew({ onLog = () => {} } = {}) {
     onLog(`Downloading ${pkgUrl.split('/').pop()}…`)
     await downloadFile(pkgUrl, pkgPath, onLog)
     onLog('Installing (macOS will ask for your password)…')
-    const result = await runPkgInstaller(pkgPath)
+    const result = await runPkgInstaller(pkgPath, onLog)
     // Best-effort cleanup of the downloaded pkg.
     try { await fsPromises.unlink(pkgPath) } catch { /* ignore */ }
     return result
@@ -207,7 +207,7 @@ function downloadFile(url, destPath, onLog) {
   })
 }
 
-function runPkgInstaller(pkgPath) {
+function runPkgInstaller(pkgPath, onLog = () => {}) {
   return new Promise((resolve) => {
     // `installer -pkg <pkg> -target /` needs root. `with administrator
     // privileges` gives it root via a single native GUI password prompt.
@@ -227,7 +227,21 @@ function runPkgInstaller(pkgPath) {
     let stderrTail = ''
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (d) => (stderrTail += d))
+    const forward = (stream) => {
+      let buf = ''
+      stream.on('data', (d) => {
+        stderrTail += d
+        buf += d
+        const lines = buf.split(/\r?\n/)
+        buf = lines.pop() || ''
+        for (const line of lines) if (line.length > 0) onLog(line)
+      })
+      stream.on('end', () => {
+        if (buf.length > 0) onLog(buf)
+      })
+    }
+    forward(child.stdout)
+    forward(child.stderr)
     child.on('error', (error) => {
       resolve({
         ok: false,
@@ -236,10 +250,16 @@ function runPkgInstaller(pkgPath) {
       })
     })
     child.on('close', (code) => {
+      // osascript returns code 1 with stderr "User canceled. (-128)" when
+      // the user dismisses the native password prompt; surface that as a
+      // distinct reason so the UI can tell the user to retry and approve.
+      const tail = stderrTail.trim().slice(-1000)
+      const canceled = /-128/.test(tail) || /User canceled/i.test(tail)
       resolve({
         ok: code === 0,
         code: typeof code === 'number' ? code : -1,
-        stderr: stderrTail.trim().slice(-1000),
+        stderr: tail,
+        canceled,
       })
     })
   })
@@ -302,7 +322,7 @@ async function installColimaOnDarwin({
       onStage('homebrew', 'fail')
       return {
         ok: false,
-        stage: 'brew-install-homebrew',
+        stage: brewInstall.canceled ? 'brew-auth-canceled' : 'brew-install-homebrew',
         error:
           brewInstall.stderr ||
           `Homebrew install exited with code ${brewInstall.code}`,
