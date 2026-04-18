@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { inspectWsl, inspectExtraDeps } = require('./deps')
+const { inspectWsl, inspectGit, inspectExtraDeps } = require('./deps')
 
 function fakeRun(script) {
   return async (cmd, args) => {
@@ -45,17 +45,37 @@ test('inspectWsl reports ok when status + at least one distro', async () => {
   assert.equal(result.state, 'ok')
 })
 
-test('inspectExtraDeps skips WSL on non-Windows', async () => {
+test('inspectGit returns null on non-Windows', async () => {
+  const result = await inspectGit('darwin', { run: fakeRun(() => ({ ok: true })) })
+  assert.equal(result, null)
+})
+
+test('inspectGit flags missing when git --version fails on Windows', async () => {
+  const run = fakeRun(() => ({ ok: false }))
+  const result = await inspectGit('win32', { run })
+  assert.equal(result.id, 'git')
+  assert.equal(result.ok, false)
+  assert.equal(result.hintKey, 'deps.git.hint.missing')
+})
+
+test('inspectGit reports ok when git --version succeeds', async () => {
+  const run = fakeRun(() => ({ ok: true, stdout: 'git version 2.47.0' }))
+  const result = await inspectGit('win32', { run })
+  assert.equal(result.ok, true)
+  assert.equal(result.state, 'ok')
+})
+
+test('inspectExtraDeps skips WSL/git on non-Windows', async () => {
   const run = fakeRun(() => ({ ok: false }))
   const result = await inspectExtraDeps({ platform: 'linux', run })
   assert.deepEqual(result.deps, [])
   assert.equal(result.allRequiredOk, true)
 })
 
-test('inspectExtraDeps reports WSL missing on Windows', async () => {
+test('inspectExtraDeps reports both WSL and git on Windows', async () => {
   const run = fakeRun(() => ({ ok: false }))
   const result = await inspectExtraDeps({ platform: 'win32', run })
-  assert.equal(result.deps.length, 1)
-  assert.equal(result.deps[0].id, 'wsl')
+  const ids = result.deps.map((d) => d.id).sort()
+  assert.deepEqual(ids, ['git', 'wsl'])
   assert.equal(result.allRequiredOk, false)
 })
