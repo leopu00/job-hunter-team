@@ -86,6 +86,15 @@
             </div>
           </div>
           <div class="dep-card__actions" id="docker-actions"></div>
+          <div class="container-progress" id="docker-install-panel" hidden>
+            <div class="container-progress__status">
+              <span class="status-icon" id="docker-install-icon" data-state="busy"></span>
+              <span class="container-progress__message" id="docker-install-message" data-i18n="docker.install.streamingTitle">
+                Installing Colima…
+              </span>
+            </div>
+            <pre class="container-progress__log" id="docker-install-log"></pre>
+          </div>
         </div>
 
         <div class="dep-list" id="extra-deps"></div>
