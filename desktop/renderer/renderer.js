@@ -324,6 +324,7 @@ const TRANSLATIONS = {
     'login.status.signedIn': 'Signed in',
     'login.status.notSignedIn': 'Not signed in',
     'login.action.open': 'Login',
+    'login.action.openWhenAuthed': 'Open terminal',
     'login.action.recheck': 'Re-check',
     'login.action.logout': 'Log out',
     'login.action.close': 'Close',
@@ -342,6 +343,7 @@ const TRANSLATIONS = {
     'ready.hint':
       'On first launch the launcher downloads the team code (~60 MB) into your user folder.',
     'ready.start': 'Start Job Hunter Team',
+    'ready.manageLogin': 'Manage login',
     'running.title': 'Team running',
     'running.leadRunning':
       'The runtime is up. Open the dashboard in your browser to get started.',
@@ -521,6 +523,7 @@ const TRANSLATIONS = {
     'login.status.signedIn': 'Autenticato',
     'login.status.notSignedIn': 'Non autenticato',
     'login.action.open': 'Login',
+    'login.action.openWhenAuthed': 'Apri terminale',
     'login.action.recheck': 'Ricontrolla',
     'login.action.logout': 'Esci',
     'login.action.close': 'Chiudi',
@@ -539,6 +542,7 @@ const TRANSLATIONS = {
     'ready.hint':
       'Al primo avvio il launcher scarica il codice del team (~60 MB) nella tua cartella utente.',
     'ready.start': 'Avvia Job Hunter Team',
+    'ready.manageLogin': 'Gestisci login',
     'running.title': 'Team in esecuzione',
     'running.leadRunning':
       'Il runtime è partito. Apri la dashboard nel browser per iniziare.',
@@ -718,6 +722,7 @@ const TRANSLATIONS = {
     'login.status.signedIn': 'Bejelentkezve',
     'login.status.notSignedIn': 'Nincs bejelentkezve',
     'login.action.open': 'Belépés',
+    'login.action.openWhenAuthed': 'Terminál megnyitása',
     'login.action.recheck': 'Ellenőrzés',
     'login.action.logout': 'Kijelentkezés',
     'login.action.close': 'Bezár',
@@ -736,6 +741,7 @@ const TRANSLATIONS = {
     'ready.hint':
       'Az első indításkor a launcher letölti a csapat kódját (~60 MB) a felhasználói mappádba.',
     'ready.start': 'Job Hunter Team indítása',
+    'ready.manageLogin': 'Bejelentkezés kezelése',
     'running.title': 'Csapat fut',
     'running.leadRunning':
       'A futtatókörnyezet elindult. Nyisd meg a vezérlőpultot a böngészőben.',
@@ -893,6 +899,10 @@ const state = {
   providerInstallBusy: false,
   providerInstallDone: false,
   authStates: [],
+  // When the user opens provider-login from the ready screen's "Manage
+  // login" button, we set this to STEP_READY so back/continue bounce
+  // them back to ready instead of walking them through the wizard.
+  loginOrigin: null,
   lastStatus: null,
   // Windows-only: true while we're polling docker status after the user
   // clicked "Open Docker Desktop". Drives the Docker row to a spinner
@@ -957,6 +967,7 @@ const dom = {
   authList: document.getElementById('auth-list'),
   btnLoginBack: document.getElementById('btn-login-back'),
   btnLoginContinue: document.getElementById('btn-login-continue'),
+  btnReadyManageLogin: document.getElementById('btn-ready-manage-login'),
   summaryList: document.getElementById('summary-list'),
   terminalModal: document.getElementById('terminal-modal'),
   terminalModalTitle: document.getElementById('terminal-modal-title'),
@@ -2057,10 +2068,29 @@ window.setupApi.onProviderLog((line) => {
 
 // -------- Step: provider login (tmux/subscription auth) --------
 
-dom.btnLoginBack.addEventListener('click', () => showStep(STEP_PROVIDER_CHOOSE))
-dom.btnLoginContinue.addEventListener('click', () => {
-  if (!dom.btnLoginContinue.disabled) enterReady()
+dom.btnLoginBack.addEventListener('click', () => {
+  // If the user opened provider-login from the "Manage login" button
+  // on the ready screen, back should bounce them to ready, not send
+  // them back through the wizard.
+  if (state.loginOrigin === STEP_READY) {
+    state.loginOrigin = null
+    enterReady()
+  } else {
+    showStep(STEP_PROVIDER_CHOOSE)
+  }
 })
+dom.btnLoginContinue.addEventListener('click', () => {
+  if (dom.btnLoginContinue.disabled) return
+  state.loginOrigin = null
+  enterReady()
+})
+
+if (dom.btnReadyManageLogin) {
+  dom.btnReadyManageLogin.addEventListener('click', () => {
+    state.loginOrigin = STEP_READY
+    enterProviderLogin()
+  })
+}
 
 function providerNeedsLoginContinue() {
   const anyUnauthed = state.authStates.some((a) => !a.authed)
@@ -2142,6 +2172,16 @@ function renderAuthList() {
       // login flow re-populates them from scratch.
       const actions = document.createElement('div')
       actions.className = 'dep-card__actions'
+
+      // Even when we detect the user as authenticated, keep the
+      // terminal door open — Kimi needs /login inside the TUI even
+      // after the auth file exists (partial session), and users
+      // may want to re-run /login to switch account or troubleshoot.
+      const btnOpen = document.createElement('button')
+      btnOpen.className = 'btn btn--ghost'
+      btnOpen.textContent = t('login.action.openWhenAuthed')
+      btnOpen.addEventListener('click', () => openLoginTerminal(entry.id, opt.label))
+      actions.appendChild(btnOpen)
 
       const btnLogout = document.createElement('button')
       btnLogout.className = 'btn btn--ghost'
