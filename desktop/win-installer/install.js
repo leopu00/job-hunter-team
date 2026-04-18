@@ -87,10 +87,15 @@ function buildScript({
     ``,
     `Log "Step 2/2 Installing Git (winget, silent, --accept-package-agreements)"`,
     `try {`,
-    `  & git --version *>$null`,
-    `  if ($LASTEXITCODE -eq 0) {`,
-    `    Log "Git already on PATH, skipping"`,
+    // Get-Command returns $null without throwing when the command is
+    // missing. Using `& git --version` for detection raises a
+    // CommandNotFoundException before we can inspect $LASTEXITCODE,
+    // and the surrounding try/catch then mis-reports git as failed.
+    `  $gitCmd = Get-Command git -ErrorAction SilentlyContinue`,
+    `  if ($gitCmd) {`,
+    `    Log "Git already on PATH at $($gitCmd.Source), skipping"`,
     `  } else {`,
+    `    Log "Git not on PATH, installing via winget Git.Git"`,
     `    & winget install --id Git.Git --source winget --silent \``,
     `      --accept-package-agreements --accept-source-agreements \``,
     `      --disable-interactivity *>&1 | ForEach-Object { Log $_ }`,
