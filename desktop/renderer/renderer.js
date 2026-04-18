@@ -735,11 +735,21 @@ function setStepState(name, state, hintHtml) {
 function paintStepsFromStatus(status) {
   const platform = status.platform || platformFromHintKey(status.check && status.check.hintKey)
   // Only darwin uses the sequential-install checklist UX for now.
+  // We set BOTH the `hidden` attribute and an inline `display:none`
+  // because the .install-steps stylesheet rule has `display: flex`
+  // which overrides the user-agent default for `[hidden]` (no
+  // `.install-steps[hidden]` rule in the CSS to pull it back).
   if (platform !== 'darwin') {
-    if (dom.dockerSteps) dom.dockerSteps.hidden = true
+    if (dom.dockerSteps) {
+      dom.dockerSteps.hidden = true
+      dom.dockerSteps.style.display = 'none'
+    }
     return
   }
-  if (dom.dockerSteps) dom.dockerSteps.hidden = false
+  if (dom.dockerSteps) {
+    dom.dockerSteps.hidden = false
+    dom.dockerSteps.style.display = ''
+  }
 
   const steps = status.steps || { homebrew: 'missing', colima: 'missing', daemon: 'missing' }
   setStepState('homebrew', steps.homebrew === 'ok' ? 'ok' : 'pending', '')
@@ -785,23 +795,15 @@ function renderDockerCard(status) {
 
   clearChildren(dom.dockerActions)
 
-  if (check.state === 'ok') return
+  // On Windows the "Install everything" button must surface even when
+  // Docker is already ready, because we also need to install WSL/Git
+  // for any non-ok extra dep. We treat those as a unified install
+  // because the user experience must be one click → reboot → done.
+  const extraDeps = state.extraDeps && Array.isArray(state.extraDeps.deps)
+    ? state.extraDeps.deps : []
+  const anyExtraMissing = extraDeps.some((d) => d.required && !d.ok)
 
-  if (platform === 'darwin') {
-    const install = document.createElement('button')
-    install.className = 'btn btn--primary'
-    install.textContent = t('docker.action.installAll')
-    install.addEventListener('click', onInstallDocker)
-    dom.dockerActions.appendChild(install)
-    return
-  }
-
-  if (platform === 'win32') {
-    // One primary "Install everything" covers every not-ok state
-    // (missing Docker, missing WSL, Docker not running because WSL is
-    // outdated, …). Docker's own installer is idempotent, so re-running
-    // it when Docker is already present is harmless. Secondary actions
-    // stay available for users who want to open Docker Desktop manually.
+  if (platform === 'win32' && (check.state !== 'ok' || anyExtraMissing)) {
     const installAll = document.createElement('button')
     installAll.className = 'btn btn--primary'
     installAll.textContent = t('docker.action.installEverything')
@@ -815,6 +817,17 @@ function renderDockerCard(status) {
       openDesktop.addEventListener('click', onOpenDockerDesktop)
       dom.dockerActions.appendChild(openDesktop)
     }
+    return
+  }
+
+  if (check.state === 'ok') return
+
+  if (platform === 'darwin') {
+    const install = document.createElement('button')
+    install.className = 'btn btn--primary'
+    install.textContent = t('docker.action.installAll')
+    install.addEventListener('click', onInstallDocker)
+    dom.dockerActions.appendChild(install)
     return
   }
 
