@@ -121,10 +121,12 @@ test('buildScript runs only the two automatic steps (WSL + Git); Docker stays ma
   assert.match(script, /winget install --id Git\.Git/)
   // WSL install is idempotent — already-installed case skips safely.
   assert.match(script, /skipping wsl --install/)
+  // Git has a winget-missing fallback to the direct Git-for-Windows installer.
+  assert.match(script, /git-for-windows\/git\/releases\/download/)
+  assert.match(script, /VERYSILENT/)
   // Docker install was removed — Docker Desktop is installed manually
   // by the user clicking "Download" in the wizard's Docker row.
   assert.doesNotMatch(script, /Installing Docker Desktop/)
-  assert.doesNotMatch(script, /Invoke-WebRequest/)
 })
 
 test('stage=git-install when result is GIT_INSTALL', async () => {
