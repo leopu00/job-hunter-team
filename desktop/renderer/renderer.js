@@ -131,9 +131,32 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Not installed',
     'docker.action.install': 'Install Docker',
     'docker.action.installColima': 'Install Colima',
+    'docker.action.installEverything': 'Install everything',
+    'docker.install.gitInstallFail':
+      'Git install failed. Check the log below, then try again.',
+    'winReq.title': 'Required tools',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
+    'winSuccess.title': 'Installation complete',
+    'winSuccess.body':
+      'Restart your computer now to activate WSL and Git. The wizard will pick up where it left off.',
+    'docker.action.restartNow': 'Restart now',
     'docker.action.openDesktop': 'Open Docker Desktop',
     'docker.action.startColima': 'Start Colima',
     'docker.action.check': 'Check',
+    'docker.install.windowsRunning':
+      'Installing WSL2 + Docker Desktop. This can take 5-10 minutes. Windows will ask for admin permission. Do not close the app.',
+    'docker.install.rebootRequired':
+      'Installation complete. Restart your computer to finish setting up WSL and Docker. The wizard will resume after reboot.',
+    'docker.install.wslInstallFail':
+      'Failed to install WSL. Try running Windows Update first and retry.',
+    'docker.install.dockerDownloadFail':
+      'Could not download Docker Desktop. Check your internet connection and retry.',
+    'docker.install.dockerInstallFail':
+      'Docker Desktop installation failed. Check the log below for details.',
+    'docker.install.aborted':
+      'Install was cancelled (admin permission declined). Click "Install everything" again to retry.',
     'docker.install.streamingTitle': 'Installing Colima…',
     'docker.install.brewMissing': 'Homebrew is required first:',
     'docker.install.daemonUnreachable': 'Colima installed but `docker ps` is not responding. Retry or open Terminal.',
@@ -152,8 +175,13 @@ const TRANSLATIONS = {
     'deps.wsl.state.missing': 'Not installed',
     'deps.wsl.state.noDistro': 'No Linux distro',
     'deps.wsl.hint.ok': 'WSL is installed with at least one Linux distro.',
-    'deps.wsl.hint.missing': 'Install WSL: open PowerShell as admin and run "wsl --install".',
-    'deps.wsl.hint.noDistro': 'Install a distro: run "wsl --install -d Ubuntu" in PowerShell.',
+    'deps.wsl.hint.missing': 'Click "Install everything" above to set up WSL automatically.',
+    'deps.wsl.hint.noDistro': 'Click "Install everything" above to add the default Ubuntu distro.',
+    'deps.git.name': 'Git',
+    'deps.git.state.ok': 'Ready',
+    'deps.git.state.missing': 'Not installed',
+    'deps.git.hint.ok': 'Git is installed and on PATH.',
+    'deps.git.hint.missing': 'Click "Install everything" above to install Git automatically.',
     'container.title': 'Preparing container',
     'container.lead': 'Downloading the JHT container image (~1 GB). This runs once.',
     'container.status.pulling': 'Pulling image from the registry…',
@@ -268,9 +296,32 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Non installato',
     'docker.action.install': 'Installa Docker',
     'docker.action.installColima': 'Installa Colima',
+    'docker.action.installEverything': 'Installa tutto',
+    'docker.install.gitInstallFail':
+      'Installazione Git fallita. Controlla il log sotto e riprova.',
+    'winReq.title': 'Strumenti richiesti',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
+    'winSuccess.title': 'Installazione completata',
+    'winSuccess.body':
+      'Riavvia il computer ora per attivare WSL e Git. Il wizard riprenderà da dove hai interrotto.',
+    'docker.action.restartNow': 'Riavvia ora',
     'docker.action.openDesktop': 'Apri Docker Desktop',
     'docker.action.startColima': 'Avvia Colima',
     'docker.action.check': 'Verifica',
+    'docker.install.windowsRunning':
+      'Installazione di WSL2 + Docker Desktop in corso. Può durare 5-10 minuti. Windows chiederà i permessi di amministratore. Non chiudere l\'app.',
+    'docker.install.rebootRequired':
+      'Installazione completata. Riavvia il computer per attivare WSL e Docker. Il wizard riprenderà dopo il riavvio.',
+    'docker.install.wslInstallFail':
+      'Installazione di WSL fallita. Prova prima con Windows Update, poi riprova.',
+    'docker.install.dockerDownloadFail':
+      'Impossibile scaricare Docker Desktop. Controlla la connessione e riprova.',
+    'docker.install.dockerInstallFail':
+      'Installazione di Docker Desktop fallita. Controlla il log sotto per i dettagli.',
+    'docker.install.aborted':
+      'Installazione annullata (permessi admin rifiutati). Clicca di nuovo "Installa tutto" per riprovare.',
     'docker.install.streamingTitle': 'Installazione Colima…',
     'docker.install.brewMissing': 'Serve prima Homebrew:',
     'docker.install.daemonUnreachable': 'Colima installato ma `docker ps` non risponde. Riprova o apri il Terminale.',
@@ -289,8 +340,13 @@ const TRANSLATIONS = {
     'deps.wsl.state.missing': 'Non installato',
     'deps.wsl.state.noDistro': 'Nessuna distro Linux',
     'deps.wsl.hint.ok': 'WSL installato con almeno una distro Linux.',
-    'deps.wsl.hint.missing': 'Installa WSL: apri PowerShell come admin ed esegui "wsl --install".',
-    'deps.wsl.hint.noDistro': 'Installa una distro: esegui "wsl --install -d Ubuntu" in PowerShell.',
+    'deps.wsl.hint.missing': 'Clicca "Installa tutto" sopra per configurare WSL automaticamente.',
+    'deps.wsl.hint.noDistro': 'Clicca "Installa tutto" sopra per aggiungere la distro Ubuntu.',
+    'deps.git.name': 'Git',
+    'deps.git.state.ok': 'Pronto',
+    'deps.git.state.missing': 'Non installato',
+    'deps.git.hint.ok': 'Git installato e presente nel PATH.',
+    'deps.git.hint.missing': 'Clicca "Installa tutto" sopra per installare Git automaticamente.',
     'container.title': 'Preparazione container',
     'container.lead': "Scarico l'image del container JHT (~1 GB). Solo al primo avvio.",
     'container.status.pulling': 'Scarico image dal registry…',
@@ -405,9 +461,32 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Nincs telepítve',
     'docker.action.install': 'Docker telepítése',
     'docker.action.installColima': 'Colima telepítése',
+    'docker.action.installEverything': 'Minden telepítése',
+    'docker.install.gitInstallFail':
+      'A Git telepítése nem sikerült. Nézd meg a naplót, majd próbáld újra.',
+    'winReq.title': 'Szükséges eszközök',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
+    'winSuccess.title': 'A telepítés befejeződött',
+    'winSuccess.body':
+      'Indítsd újra a gépet a WSL és a Git aktiválásához. A varázsló ott folytatódik, ahol abbahagytad.',
+    'docker.action.restartNow': 'Újraindítás',
     'docker.action.openDesktop': 'Docker Desktop megnyitása',
     'docker.action.startColima': 'Colima indítása',
     'docker.action.check': 'Ellenőrzés',
+    'docker.install.windowsRunning':
+      'WSL2 + Docker Desktop telepítése folyamatban. 5-10 percig tarthat. A Windows rendszergazdai engedélyt fog kérni. Ne zárd be az alkalmazást.',
+    'docker.install.rebootRequired':
+      'Telepítés kész. Indítsd újra a gépet a WSL és a Docker aktiválásához. A varázsló újraindítás után folytatódik.',
+    'docker.install.wslInstallFail':
+      'A WSL telepítése nem sikerült. Először futtasd a Windows Update-et, majd próbáld újra.',
+    'docker.install.dockerDownloadFail':
+      'A Docker Desktop letöltése nem sikerült. Ellenőrizd az internetkapcsolatot, és próbáld újra.',
+    'docker.install.dockerInstallFail':
+      'A Docker Desktop telepítése nem sikerült. A részletekért nézd meg alább a naplót.',
+    'docker.install.aborted':
+      'A telepítés megszakadt (rendszergazdai jog megtagadva). Kattints újra a "Minden telepítése" gombra.',
     'docker.install.streamingTitle': 'Colima telepítése…',
     'docker.install.brewMissing': 'Először Homebrew szükséges:',
     'docker.install.daemonUnreachable': 'A Colima telepítve van, de a `docker ps` nem válaszol. Próbáld újra, vagy nyisd meg a Terminált.',
@@ -426,8 +505,13 @@ const TRANSLATIONS = {
     'deps.wsl.state.missing': 'Nincs telepítve',
     'deps.wsl.state.noDistro': 'Nincs Linux disztró',
     'deps.wsl.hint.ok': 'A WSL telepítve van, legalább egy Linux disztróval.',
-    'deps.wsl.hint.missing': 'Telepítsd a WSL-t: nyiss PowerShellt rendszergazdaként és futtasd: "wsl --install".',
-    'deps.wsl.hint.noDistro': 'Telepíts egy disztrót: futtasd a PowerShellben: "wsl --install -d Ubuntu".',
+    'deps.wsl.hint.missing': 'Kattints fent a "Minden telepítése" gombra a WSL automatikus beállításához.',
+    'deps.wsl.hint.noDistro': 'Kattints fent a "Minden telepítése" gombra az Ubuntu disztró hozzáadásához.',
+    'deps.git.name': 'Git',
+    'deps.git.state.ok': 'Kész',
+    'deps.git.state.missing': 'Nincs telepítve',
+    'deps.git.hint.ok': 'A Git telepítve van és elérhető a PATH-ban.',
+    'deps.git.hint.missing': 'Kattints fent a "Minden telepítése" gombra a Git automatikus telepítéséhez.',
     'container.title': 'Konténer előkészítése',
     'container.lead': 'A JHT konténer image letöltése (~1 GB). Csak az első indításkor fut.',
     'container.status.pulling': 'Image letöltése a registryből…',
@@ -623,6 +707,10 @@ const state = {
   providerInstallDone: false,
   authStates: [],
   lastStatus: null,
+  // Windows-only: true while we're polling docker status after the user
+  // clicked "Open Docker Desktop". Drives the Docker row to a spinner
+  // state and hides the "Install everything" button to avoid confusion.
+  winDockerStarting: false,
 }
 
 const dom = {
@@ -637,6 +725,14 @@ const dom = {
   dockerBadge: document.getElementById('docker-badge'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  winRequirements: document.getElementById('win-requirements'),
+  winStepDocker: document.getElementById('win-step-docker'),
+  winStepDockerAction: document.getElementById('win-step-docker-action'),
+  winStepWsl: document.getElementById('win-step-wsl'),
+  winStepGit: document.getElementById('win-step-git'),
+  winInstallActions: document.getElementById('win-install-actions'),
+  btnWinInstallEverything: document.getElementById('btn-win-install-everything'),
+  winInstallLog: document.getElementById('win-install-log'),
   dockerName: document.getElementById('docker-name'),
   dockerSubtitle: document.getElementById('docker-subtitle'),
   setupLead: document.getElementById('setup-lead'),
@@ -721,16 +817,70 @@ function setStepState(name, state, hintHtml) {
 function paintStepsFromStatus(status) {
   const platform = status.platform || platformFromHintKey(status.check && status.check.hintKey)
   // Only darwin uses the sequential-install checklist UX for now.
+  // We set BOTH the `hidden` attribute and an inline `display:none`
+  // because the .install-steps stylesheet rule has `display: flex`
+  // which overrides the user-agent default for `[hidden]` (no
+  // `.install-steps[hidden]` rule in the CSS to pull it back).
   if (platform !== 'darwin') {
-    if (dom.dockerSteps) dom.dockerSteps.hidden = true
+    if (dom.dockerSteps) {
+      dom.dockerSteps.hidden = true
+      dom.dockerSteps.style.display = 'none'
+    }
     return
   }
-  if (dom.dockerSteps) dom.dockerSteps.hidden = false
+  if (dom.dockerSteps) {
+    dom.dockerSteps.hidden = false
+    dom.dockerSteps.style.display = ''
+  }
 
   const steps = status.steps || { homebrew: 'missing', colima: 'missing', daemon: 'missing' }
   setStepState('homebrew', steps.homebrew === 'ok' ? 'ok' : 'pending', '')
   setStepState('colima', steps.colima === 'ok' ? 'ok' : 'pending')
   setStepState('daemon', steps.daemon === 'ok' ? 'ok' : 'pending')
+}
+
+// Paint platform-specific text and visibility on the docker card before
+// any IPC round-trip. Called at boot from the synchronous
+// window.platformInfo.platform so the wizard never flashes the
+// wrong-platform skeleton (e.g. macOS Homebrew/Colima checklist on
+// Windows) while waiting for setup:get-docker-status to reply.
+function showIf(el, visible) {
+  if (!el) return
+  el.hidden = !visible
+  el.style.display = visible ? '' : 'none'
+}
+
+function applyPlatformSkeleton(platform) {
+  if (!platform) return
+  if (dom.dockerName) {
+    dom.dockerName.textContent = t(`docker.name.${platform}`)
+  }
+  if (dom.dockerSubtitle) {
+    const subtitleKey = `docker.subtitle.${platform}`
+    const value = t(subtitleKey)
+    dom.dockerSubtitle.textContent = value === subtitleKey ? '' : value
+  }
+  if (dom.setupLead) {
+    const leadKey = `setup.lead.${platform}`
+    const value = t(leadKey)
+    if (value !== leadKey) dom.setupLead.innerHTML = value
+  }
+  // The macOS install-steps checklist only belongs on darwin. Force
+  // both the hidden attribute and the inline display so neither the
+  // CSS specificity nor a stripped rule can leak it back in.
+  if (dom.dockerSteps) {
+    showIf(dom.dockerSteps, platform === 'darwin')
+  }
+  // Windows gets a unified Docker/WSL/Git checklist that REPLACES the
+  // docker card + extra-deps cards above it. Swap them now so the first
+  // paint already has the right layout — avoids an FOUC of the darwin
+  // shape being visible while we wait for the setup:get-docker-status
+  // IPC reply.
+  const isWin = platform === 'win32'
+  showIf(dom.dockerCard, !isWin)
+  showIf(dom.extraDeps, !isWin)
+  showIf(dom.winRequirements, isWin)
+  showIf(dom.winInstallActions, isWin)
 }
 
 function renderDockerCard(status) {
@@ -771,6 +921,31 @@ function renderDockerCard(status) {
 
   clearChildren(dom.dockerActions)
 
+  // On Windows the "Install everything" button must surface even when
+  // Docker is already ready, because we also need to install WSL/Git
+  // for any non-ok extra dep. We treat those as a unified install
+  // because the user experience must be one click → reboot → done.
+  const extraDeps = state.extraDeps && Array.isArray(state.extraDeps.deps)
+    ? state.extraDeps.deps : []
+  const anyExtraMissing = extraDeps.some((d) => d.required && !d.ok)
+
+  if (platform === 'win32' && (check.state !== 'ok' || anyExtraMissing)) {
+    const installAll = document.createElement('button')
+    installAll.className = 'btn btn--primary'
+    installAll.textContent = t('docker.action.installEverything')
+    installAll.addEventListener('click', onInstallWindowsStack)
+    dom.dockerActions.appendChild(installAll)
+
+    if (check.state === 'not-running') {
+      const openDesktop = document.createElement('button')
+      openDesktop.className = 'btn btn--ghost'
+      openDesktop.textContent = t('docker.action.openDesktop')
+      openDesktop.addEventListener('click', onOpenDockerDesktop)
+      dom.dockerActions.appendChild(openDesktop)
+    }
+    return
+  }
+
   if (check.state === 'ok') return
 
   if (platform === 'darwin') {
@@ -782,7 +957,7 @@ function renderDockerCard(status) {
     return
   }
 
-  // win32 / linux keep the "open download page" flow.
+  // linux fallback: the "open download page" flow.
   if (check.state === 'missing') {
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
@@ -801,6 +976,65 @@ function renderDockerCard(status) {
   }
 }
 
+function winStepState(ok) { return ok ? 'ok' : 'pending' }
+
+// On Windows we render one unified checklist (Docker / WSL / Git)
+// instead of the darwin docker-card + extra-deps split. Each row's icon
+// flips to the ok state as soon as the matching dep reports ready; the
+// Docker row is the only one with an inline per-item action (Download),
+// because Docker Desktop install stays a manual step. WSL and Git ride
+// the shared "Install everything" button below.
+function renderWindowsRequirements(status, extra) {
+  const check = status && status.check
+  const dockerOk = check && check.state === 'ok'
+  const dockerMissing = !check || check.state === 'missing'
+  const deps = (extra && Array.isArray(extra.deps)) ? extra.deps : []
+  const wslDep = deps.find((d) => d.id === 'wsl')
+  const gitDep = deps.find((d) => d.id === 'git')
+  const wslOk = !!(wslDep && wslDep.ok)
+  const gitOk = !!(gitDep && gitDep.ok)
+
+  // Docker row visual state has 3 possibilities:
+  //   'ok'      — daemon responsive
+  //   'busy'    — user just clicked "Open Docker Desktop"; we're polling
+  //   'pending' — not ok and not currently starting
+  let dockerVisualState = 'pending'
+  if (dockerOk) dockerVisualState = 'ok'
+  else if (state.winDockerStarting) dockerVisualState = 'busy'
+  if (dom.winStepDocker) dom.winStepDocker.setAttribute('data-state', dockerVisualState)
+  if (dom.winStepWsl) dom.winStepWsl.setAttribute('data-state', winStepState(wslOk))
+  if (dom.winStepGit) dom.winStepGit.setAttribute('data-state', winStepState(gitOk))
+
+  // Docker row action depends on the precise state:
+  //   missing          → "Install Docker" (opens the download page)
+  //   not-running (idle) → "Start Docker Desktop"
+  //   starting (polling) → nothing — the spinner icon tells the story,
+  //                        a button here would make the user think they
+  //                        need to click something again
+  clearChildren(dom.winStepDockerAction)
+  if (dockerMissing) {
+    const download = document.createElement('button')
+    download.className = 'btn btn--ghost btn--compact'
+    download.textContent = t('docker.action.install')
+    download.addEventListener('click', onOpenDownloadPage)
+    dom.winStepDockerAction.appendChild(download)
+  } else if (!dockerOk && !state.winDockerStarting) {
+    const start = document.createElement('button')
+    start.className = 'btn btn--ghost btn--compact'
+    start.textContent = t('docker.action.openDesktop')
+    start.addEventListener('click', onOpenDockerDesktopAndPoll)
+    dom.winStepDockerAction.appendChild(start)
+  }
+
+  // "Install everything" only when at least one automatable item (WSL
+  // or Git) is actually missing AND we are not currently in the middle
+  // of the Docker-starting flow. Otherwise the button appearing while
+  // Docker boots is pure noise: the user is waiting on Docker, not on
+  // a new WSL/Git run.
+  const automatablePending = (!wslOk || !gitOk) && !state.winDockerStarting
+  showIf(dom.winInstallActions, automatablePending)
+}
+
 async function refreshDockerStatus() {
   setBusy(true)
   try {
@@ -810,8 +1044,14 @@ async function refreshDockerStatus() {
     ])
     state.docker = status
     state.extraDeps = extra
-    renderDockerCard(status)
-    renderExtraDeps(extra)
+    const platform = (status && status.platform)
+      || (window.platformInfo && window.platformInfo.platform)
+    if (platform === 'win32') {
+      renderWindowsRequirements(status, extra)
+    } else {
+      renderDockerCard(status)
+      renderExtraDeps(extra)
+    }
     const dockerOk = status.check.state === 'ok'
     const depsOk = extra && extra.allRequiredOk !== false
     dom.btnSetupContinue.disabled = !(dockerOk && depsOk)
@@ -938,6 +1178,84 @@ async function onInstallDocker() {
   }
 }
 
+function winShowLog(text) {
+  if (!dom.winInstallLog) return
+  dom.winInstallLog.textContent = text
+  showIf(dom.winInstallLog, true)
+}
+
+function markWinStepsAllOk() {
+  // Force the checklist rows to the 'ok' visual state. Necessary because
+  // the Electron process cached its PATH at startup — even though Git
+  // was just installed successfully, `git --version` from Node would
+  // still fail until the process is restarted (which happens at reboot).
+  // We trust the installer's exit code here; the post-reboot `getExtraDeps`
+  // re-check will either confirm or correct each row.
+  for (const id of ['win-step-docker', 'win-step-wsl', 'win-step-git']) {
+    const el = document.getElementById(id)
+    if (el) el.setAttribute('data-state', 'ok')
+  }
+  if (dom.winStepDockerAction) clearChildren(dom.winStepDockerAction)
+}
+
+function showWinSuccessBanner() {
+  if (!dom.winInstallActions) return
+  clearChildren(dom.winInstallActions)
+  // Big prominent green card instead of a small "Restart now" button
+  // tucked under a log. The user explicitly asked for this — "avvisarlo
+  // meglio che deve riavviare il computer".
+  const banner = document.createElement('div')
+  banner.className = 'win-success'
+  banner.innerHTML =
+    '<div class="win-success__title">' +
+    t('winSuccess.title') + '</div>' +
+    '<div class="win-success__body">' +
+    t('winSuccess.body') + '</div>'
+  const btn = document.createElement('button')
+  btn.className = 'btn btn--primary btn--large'
+  btn.textContent = t('docker.action.restartNow')
+  btn.addEventListener('click', onRebootNow)
+  banner.appendChild(btn)
+  dom.winInstallActions.appendChild(banner)
+  showIf(dom.winInstallActions, true)
+  showIf(dom.winInstallLog, false)
+}
+
+async function onInstallWindowsStack() {
+  setBusy(true)
+  winShowLog(t('docker.install.windowsRunning'))
+  try {
+    const result = await window.setupApi.installWindowsStack()
+    if (result?.ok && result.rebootRequired) {
+      markWinStepsAllOk()
+      showWinSuccessBanner()
+      return
+    }
+    const stage = result?.stage || 'unknown'
+    const errMsg = result?.error || 'installer failed'
+    const hintKey =
+      stage === 'wsl-install' ? 'docker.install.wslInstallFail' :
+      stage === 'git-install' ? 'docker.install.gitInstallFail' :
+      stage === 'aborted' ? 'docker.install.aborted' :
+      null
+    winShowLog(hintKey ? `${t(hintKey)}\n\n${errMsg}` : errMsg)
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    winShowLog(msg)
+  } finally {
+    setBusy(false)
+  }
+}
+
+async function onRebootNow() {
+  try {
+    await window.setupApi.reboot()
+  } catch (_) {
+    // If reboot couldn't be triggered programmatically, the label
+    // message already tells the user to restart manually.
+  }
+}
+
 async function onOpenDockerDesktop() {
   setBusy(true)
   try {
@@ -948,6 +1266,39 @@ async function onOpenDockerDesktop() {
   } finally {
     setBusy(false)
   }
+}
+
+// Dedicated handler for the Windows checklist: open Docker Desktop
+// (launches the installed app that wasn't running yet), then poll the
+// docker status every 3s for up to 90s. The engine typically needs
+// 20-60s to come up on a cold boot; auto-polling means the Docker row
+// flips to green without the user having to click anything else.
+let winDockerPollTimer = null
+async function onOpenDockerDesktopAndPoll() {
+  if (state.winDockerStarting) return // already starting
+  state.winDockerStarting = true
+  // Re-render immediately so the Docker row flips to the busy spinner
+  // and the "Install everything" button hides — before we wait on the
+  // openDockerDesktop IPC.
+  if (state.docker) renderWindowsRequirements(state.docker, state.extraDeps)
+  await onOpenDockerDesktop()
+  if (winDockerPollTimer) return
+  let tries = 0
+  const MAX_TRIES = 30 // 30 × 3s = 90s
+  const finish = () => {
+    clearInterval(winDockerPollTimer)
+    winDockerPollTimer = null
+    state.winDockerStarting = false
+    if (state.docker) renderWindowsRequirements(state.docker, state.extraDeps)
+  }
+  winDockerPollTimer = setInterval(async () => {
+    tries += 1
+    try {
+      await refreshDockerStatus()
+      const ok = state.docker && state.docker.check && state.docker.check.state === 'ok'
+      if (ok || tries >= MAX_TRIES) finish()
+    } catch (_) { /* keep polling */ }
+  }, 3000)
 }
 
 // -------- Running step --------
@@ -1079,6 +1430,10 @@ dom.btnSetupContinue.addEventListener('click', () => {
   showStep(STEP_CONTAINER)
   startContainerPrep()
 })
+
+if (dom.btnWinInstallEverything) {
+  dom.btnWinInstallEverything.addEventListener('click', onInstallWindowsStack)
+}
 
 dom.btnContainerBack.addEventListener('click', async () => {
   if (state.containerBusy) return
@@ -1926,14 +2281,18 @@ async function startContainerPrep() {
 }
 
 window.setupApi.onInstallLog((line) => {
-  if (!dom.dockerInstallLog) return
-  // Append so the user sees the whole stream, not just the last line.
-  // Cap at ~4000 chars to avoid runaway memory during long brew installs.
-  const prev = dom.dockerInstallLog.textContent || ''
+  // Route the stream to whichever log panel is actually mounted for the
+  // current platform (darwin → dockerInstallLog inside the docker card,
+  // win32 → winInstallLog below the unified checklist).
+  const target = (window.platformInfo && window.platformInfo.platform === 'win32')
+    ? dom.winInstallLog : dom.dockerInstallLog
+  if (!target) return
+  const prev = target.textContent || ''
   const combined = `${prev}${line}\n`
-  dom.dockerInstallLog.textContent =
+  // Cap at ~4000 chars to avoid runaway memory during long installs.
+  target.textContent =
     combined.length > 4000 ? combined.slice(combined.length - 4000) : combined
-  dom.dockerInstallLog.scrollTop = dom.dockerInstallLog.scrollHeight
+  target.scrollTop = target.scrollHeight
 })
 
 if (window.setupApi.onInstallStage) {
@@ -1972,4 +2331,11 @@ if (stored && SUPPORTED_LANGS.includes(stored)) {
 } else {
   setLang(DEFAULT_LANG, { persist: false })
   showStep(STEP_LANGUAGE)
+}
+
+// Paint platform-specific docker-card shape synchronously — before the
+// first `setup:get-docker-status` IPC reply — so the user never sees a
+// flash of the wrong-platform skeleton on boot.
+if (window.platformInfo && window.platformInfo.platform) {
+  applyPlatformSkeleton(window.platformInfo.platform)
 }

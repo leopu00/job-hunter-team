@@ -47,23 +47,43 @@ async function inspectWsl(platform = process.platform, { run = runWithTimeout } 
   return { id: 'wsl', required: true, ok: true, state: 'ok', hintKey: 'deps.wsl.hint.ok' }
 }
 
+// -------- Git (Windows only) --------
+//
+// On macOS git ships with Xcode CLT (already a hard requirement for
+// pretty much anything dev). On Linux every distro has it. Fresh
+// Windows installs don't — so it surfaces as a user-facing dep there,
+// alongside Docker/WSL, and the wizard's "Install everything" button
+// covers it via winget.
+
+async function inspectGit(platform = process.platform, { run = runWithTimeout } = {}) {
+  if (platform !== 'win32') return null
+  const result = await run('git', ['--version'], 3000)
+  if (!result.ok) {
+    return { id: 'git', required: true, ok: false, state: 'missing', hintKey: 'deps.git.hint.missing' }
+  }
+  return { id: 'git', required: true, ok: true, state: 'ok', hintKey: 'deps.git.hint.ok' }
+}
+
 // -------- Aggregate --------
 //
 // The AI CLI (Claude Code / Codex / Kimi) runs inside the JHT container,
 // so host PATH is not a meaningful check — the image bundles the CLI.
-// User-level concerns are Docker, WSL on Windows, and later the provider
-// credentials that the container consumes at runtime.
+// User-level concerns are Docker, WSL on Windows, git on Windows, and
+// later the provider credentials that the container consumes at runtime.
 
 async function inspectExtraDeps({ platform = process.platform, run = runWithTimeout } = {}) {
   const deps = []
   const wsl = await inspectWsl(platform, { run })
   if (wsl) deps.push(wsl)
+  const git = await inspectGit(platform, { run })
+  if (git) deps.push(git)
   const allRequiredOk = deps.every((d) => !d.required || d.ok)
   return { deps, allRequiredOk }
 }
 
 module.exports = {
   inspectWsl,
+  inspectGit,
   inspectExtraDeps,
   _internal: { runWithTimeout },
 }
