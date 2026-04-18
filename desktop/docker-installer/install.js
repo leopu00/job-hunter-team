@@ -415,7 +415,26 @@ async function installColimaOnDarwin({
   // on developer/test machines that live inside Parallels/UTM/etc.
   let start = await run('colima', ['start'], { onLog, env })
   if (!start.ok) {
-    onLog('Colima start with VZ backend failed — retrying with QEMU…')
+    onLog('Colima start with VZ backend failed — falling back to QEMU…')
+    // QEMU backend needs the qemu-img binary; install it lazily so real
+    // Mac hosts that never hit the fallback don't pay the ~200MB download.
+    let qemuOk = false
+    try {
+      await execFileAsync('qemu-img', ['--version'], { env, timeout: 3000 })
+      qemuOk = true
+    } catch { /* missing */ }
+    if (!qemuOk) {
+      onLog('Installing qemu (required by QEMU backend)…')
+      const qemu = await run('brew', ['install', 'qemu'], { onLog, env })
+      if (!qemu.ok) {
+        onStage('daemon', 'fail')
+        return {
+          ok: false,
+          stage: 'colima-start',
+          error: qemu.stderr || `qemu install exited with code ${qemu.code}`,
+        }
+      }
+    }
     start = await run('colima', ['start', '--vm-type', 'qemu'], { onLog, env })
   }
   if (!start.ok) {
