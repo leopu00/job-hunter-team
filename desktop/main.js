@@ -39,10 +39,10 @@ let payloadDir = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 460,
-    height: 700,
-    minWidth: 420,
-    minHeight: 600,
+    width: 1120,
+    height: 760,
+    minWidth: 880,
+    minHeight: 620,
     autoHideMenuBar: true,
     title: 'JHT Desktop',
     backgroundColor: '#0d1411',
