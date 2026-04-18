@@ -29,6 +29,14 @@ contextBridge.exposeInMainWorld('setupApi', {
   getExtraDeps: () => ipcRenderer.invoke('setup:get-extra-deps'),
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
   openDockerDesktop: () => ipcRenderer.invoke('setup:open-docker-desktop'),
+  installDocker: () => ipcRenderer.invoke('setup:install-docker'),
+  onInstallLog: (callback) => {
+    const listener = (_event, message) => {
+      try { callback(message) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('setup:install-log', listener)
+    return () => ipcRenderer.removeListener('setup:install-log', listener)
+  },
   ensureContainer: () => ipcRenderer.invoke('setup:ensure-container'),
   onContainerLog: (callback) => {
     const listener = (_event, message) => {
