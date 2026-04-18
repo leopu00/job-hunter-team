@@ -523,6 +523,10 @@ const dom = {
   dockerFree: document.getElementById('docker-free'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  dockerInstallPanel: document.getElementById('docker-install-panel'),
+  dockerInstallIcon: document.getElementById('docker-install-icon'),
+  dockerInstallMessage: document.getElementById('docker-install-message'),
+  dockerInstallLog: document.getElementById('docker-install-log'),
   extraDeps: document.getElementById('extra-deps'),
   containerMessage: document.getElementById('container-message'),
   containerBar: document.getElementById('container-bar'),
@@ -622,10 +626,11 @@ function renderDockerCard(status) {
   if (check.state === 'ok') return
 
   if (check.state === 'missing') {
+    const isDarwin = platformFromHintKey(check.hintKey) === 'darwin'
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
-    install.textContent = t('docker.action.install')
-    install.addEventListener('click', onOpenDownloadPage)
+    install.textContent = t(isDarwin ? 'docker.action.installColima' : 'docker.action.install')
+    install.addEventListener('click', isDarwin ? onInstallDocker : onOpenDownloadPage)
     dom.dockerActions.appendChild(install)
 
     const recheck = document.createElement('button')
@@ -747,6 +752,63 @@ async function onOpenDownloadPage() {
   setBusy(true)
   try {
     await window.setupApi.openDockerDownloadPage()
+  } finally {
+    setBusy(false)
+  }
+}
+
+function showInstallPanel() {
+  dom.dockerInstallLog.textContent = ''
+  dom.dockerInstallMessage.textContent = t('docker.install.streamingTitle')
+  dom.dockerInstallIcon.dataset.state = 'busy'
+  dom.dockerInstallPanel.hidden = false
+}
+
+function setInstallPanelEnd(stateName, messageKey, vars) {
+  dom.dockerInstallIcon.dataset.state = stateName
+  if (messageKey) dom.dockerInstallMessage.textContent = t(messageKey, vars)
+}
+
+function showBrewMissingHint() {
+  dom.dockerInstallLog.textContent = ''
+  const linkLine = document.createElement('a')
+  linkLine.href = 'https://brew.sh'
+  linkLine.textContent = 'https://brew.sh'
+  linkLine.addEventListener('click', (e) => {
+    e.preventDefault()
+    window.launcherApi.openExternal('https://brew.sh').catch(() => {})
+  })
+  dom.dockerInstallLog.appendChild(document.createTextNode(`${t('docker.install.brewMissing')} `))
+  dom.dockerInstallLog.appendChild(linkLine)
+}
+
+async function onInstallDocker() {
+  setBusy(true)
+  showInstallPanel()
+  try {
+    const result = await window.setupApi.installDocker()
+    if (result?.ok) {
+      setInstallPanelEnd('ok', 'docker.install.streamingTitle')
+      await refreshDockerStatus()
+      dom.dockerInstallPanel.hidden = true
+      return
+    }
+    if (result?.stage === 'brew-missing') {
+      setInstallPanelEnd('error', 'docker.install.brewMissing')
+      showBrewMissingHint()
+      return
+    }
+    if (result?.stage === 'daemon-unreachable') {
+      setInstallPanelEnd('error', 'docker.install.daemonUnreachable')
+      return
+    }
+    setInstallPanelEnd('error')
+    const errMsg = result?.error || 'unknown'
+    dom.dockerInstallMessage.textContent = t('container.status.error', { error: errMsg })
+  } catch (error) {
+    setInstallPanelEnd('error')
+    const msg = error instanceof Error ? error.message : String(error)
+    dom.dockerInstallMessage.textContent = t('container.status.error', { error: msg })
   } finally {
     setBusy(false)
   }
@@ -1510,6 +1572,10 @@ async function startContainerPrep() {
     state.containerBusy = false
   }
 }
+
+window.setupApi.onInstallLog((line) => {
+  dom.dockerInstallLog.textContent = line
+})
 
 window.setupApi.onContainerLog((line) => {
   dom.containerLog.textContent = line
