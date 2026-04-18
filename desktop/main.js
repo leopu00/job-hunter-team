@@ -81,6 +81,12 @@ function broadcastInstallLog(message) {
   }
 }
 
+function broadcastInstallStage(stage, status) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:install-stage', { stage, status })
+  }
+}
+
 async function openRuntimeInBrowser() {
   const status = await runtime.getStatus()
   const launchableStatus = status.mode === 'running' || status.mode === 'external'
@@ -156,11 +162,18 @@ app.whenReady().then(() => {
     } catch {
       // Preview can show "unknown" if the disk probe fails.
     }
+    let steps = null
+    try {
+      steps = await dockerInstaller.inspectInstallSteps({ platform: process.platform })
+    } catch {
+      // Leave steps null on failure; renderer falls back to the generic view.
+    }
     return {
       platform: process.platform,
       arch: process.arch,
       strategy,
       check,
+      steps,
       disk: {
         freeBytes: free,
         freeHuman,
@@ -176,11 +189,21 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('setup:open-brew-homepage', async () => {
+    try {
+      await shell.openExternal('https://brew.sh')
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle('setup:install-docker', async () => {
     try {
       const result = await dockerInstaller.installDocker({
         platform: process.platform,
         onLog: broadcastInstallLog,
+        onStage: broadcastInstallStage,
       })
       return result
     } catch (error) {
