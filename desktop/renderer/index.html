@@ -76,7 +76,7 @@
             <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
 
-          <ol class="install-steps" id="docker-steps">
+          <ol class="install-steps" id="docker-steps" hidden style="display: none">
             <li class="install-step" id="step-homebrew" data-state="pending">
               <span class="install-step__icon"></span>
               <span class="install-step__label" data-i18n="docker.step.homebrew">Homebrew</span>
@@ -100,6 +100,39 @@
         </div>
 
         <div class="dep-list" id="extra-deps"></div>
+
+        <!-- Windows-only unified requirements panel: replaces docker-card +
+             extra-deps cards above with a single 3-row checklist for
+             Docker / WSL / Git, and surfaces the "Install everything"
+             button below the list (not buried inside Docker's card). -->
+        <div class="dep-card" id="win-requirements" hidden style="display: none">
+          <div class="dep-card__header">
+            <span class="dep-card__name" data-i18n="winReq.title">Required tools</span>
+          </div>
+          <ol class="install-steps">
+            <li class="install-step" id="win-step-docker" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.docker">Docker Desktop</span>
+              <span class="install-step__action" id="win-step-docker-action"></span>
+            </li>
+            <li class="install-step" id="win-step-wsl" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.wsl">WSL2 + Ubuntu</span>
+              <span class="install-step__action"></span>
+            </li>
+            <li class="install-step" id="win-step-git" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.git">Git</span>
+              <span class="install-step__action"></span>
+            </li>
+          </ol>
+        </div>
+        <div id="win-install-actions" hidden style="display: none; margin-top: 14px; text-align: center">
+          <button class="btn btn--primary" id="btn-win-install-everything" data-i18n="docker.action.installEverything">
+            Install everything
+          </button>
+        </div>
+        <pre id="win-install-log" class="install-log" hidden style="display: none"></pre>
 
         <div class="step__actions step__actions--between">
           <button class="btn btn--ghost" id="btn-setup-back" data-i18n="setup.back">Back</button>

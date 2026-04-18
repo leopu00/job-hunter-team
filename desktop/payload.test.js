@@ -7,8 +7,10 @@ const {
   isPayloadPresent,
   isGitRepo,
   clonePayload,
+  clonePayloadTarball,
   updatePayload,
   ensurePayload,
+  deriveTarballUrl,
   SPARSE_PATHS,
 } = require('./payload')
 
@@ -170,6 +172,111 @@ test('ensurePayload swallows update errors and keeps existing payload', async ()
 
   assert.equal(result.action, 'kept')
   assert.match(result.warning, /offline/)
+})
+
+test('deriveTarballUrl maps github clone URLs to codeload tarball URL for the branch', () => {
+  assert.equal(
+    deriveTarballUrl('https://github.com/leopu00/job-hunter-team.git', 'master'),
+    'https://codeload.github.com/leopu00/job-hunter-team/tar.gz/refs/heads/master',
+  )
+  // .git suffix is optional
+  assert.equal(
+    deriveTarballUrl('https://github.com/leopu00/job-hunter-team', 'main'),
+    'https://codeload.github.com/leopu00/job-hunter-team/tar.gz/refs/heads/main',
+  )
+  // ssh-style URLs
+  assert.equal(
+    deriveTarballUrl('git@github.com:leopu00/job-hunter-team.git', 'dev-1'),
+    'https://codeload.github.com/leopu00/job-hunter-team/tar.gz/refs/heads/dev-1',
+  )
+})
+
+test('clonePayloadTarball downloads the tarball and extracts into the payload dir', async () => {
+  const dir = makeTempDir()
+  const payloadDir = path.join(dir, 'tar-target')
+  const calls = { download: [], extract: [] }
+  const fakeDownload = async (url, destPath) => {
+    calls.download.push({ url, destPath })
+    fs.writeFileSync(destPath, 'fake tarball bytes')
+  }
+  const fakeExtract = async (tarballPath, destDir) => {
+    calls.extract.push({ tarballPath, destDir })
+    // Simulate tar dropping a package.json into the payload so subsequent
+    // `isPayloadPresent` checks would pass end-to-end.
+    fs.mkdirSync(path.join(destDir, 'web'), { recursive: true })
+    fs.writeFileSync(path.join(destDir, 'web', 'package.json'), '{}')
+  }
+
+  const result = await clonePayloadTarball({
+    payloadDir,
+    httpsDownload: fakeDownload,
+    extractTarball: fakeExtract,
+  })
+
+  assert.equal(result.action, 'cloned')
+  assert.equal(result.source, 'tarball')
+  assert.equal(calls.download.length, 1)
+  assert.match(calls.download[0].url, /codeload\.github\.com\/leopu00\/job-hunter-team\/tar\.gz\/refs\/heads\/master$/)
+  assert.equal(calls.extract.length, 1)
+  assert.equal(calls.extract[0].destDir, payloadDir)
+  // The temp tarball should not linger after extraction.
+  assert.equal(fs.existsSync(calls.download[0].destPath), false)
+  // And the payload was left behind by the extractor stub.
+  assert.equal(isPayloadPresent(payloadDir), true)
+})
+
+test('clonePayloadTarball removes a stale payload dir before extracting', async () => {
+  const dir = makeTempDir()
+  const payloadDir = path.join(dir, 'tar-target')
+  writeFile(path.join(payloadDir, 'stale', 'file.txt'), 'old content')
+  const fakeDownload = async (_u, p) => fs.writeFileSync(p, 'fake')
+  const fakeExtract = async (_t, d) => {
+    // Confirm the stale file was wiped before extract ran.
+    assert.equal(fs.existsSync(path.join(d, 'stale', 'file.txt')), false)
+    writeFile(path.join(d, 'web', 'package.json'), '{}')
+  }
+
+  await clonePayloadTarball({
+    payloadDir,
+    httpsDownload: fakeDownload,
+    extractTarball: fakeExtract,
+  })
+})
+
+test('ensurePayload falls back to tarball when git is not on PATH', async () => {
+  const dir = makeTempDir()
+  const payloadDir = path.join(dir, 'app-payload')
+
+  const fakeDownload = async (_u, p) => fs.writeFileSync(p, 'fake')
+  const fakeExtract = async (_t, d) => {
+    writeFile(path.join(d, 'web', 'package.json'), '{}')
+  }
+
+  const result = await ensurePayload({
+    payloadDir,
+    checkGitAvailable: async () => false,
+    httpsDownload: fakeDownload,
+    extractTarball: fakeExtract,
+    logger: () => {},
+  })
+  assert.equal(result.action, 'cloned')
+  assert.equal(result.source, 'tarball')
+})
+
+test('ensurePayload uses git when available', async () => {
+  const dir = makeTempDir()
+  const payloadDir = path.join(dir, 'app-payload')
+  const fakeRunGit = async () => {
+    writeFile(path.join(payloadDir, 'web', 'package.json'), '{}')
+  }
+  const result = await ensurePayload({
+    payloadDir,
+    checkGitAvailable: async () => true,
+    runGit: fakeRunGit,
+    logger: () => {},
+  })
+  assert.equal(result.action, 'cloned')
+  assert.notEqual(result.source, 'tarball')
 })
 
 test('SPARSE_PATHS covers the folders the webapp needs at runtime', () => {
