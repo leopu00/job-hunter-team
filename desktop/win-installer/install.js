@@ -49,9 +49,18 @@ function buildScript({
     `$logPath = ${q(paths.log)}`,
     `$resultPath = ${q(paths.result)}`,
     `$dockerInstaller = ${q(paths.dockerInstaller)}`,
+    // Sentinel file on the Desktop: written as the very first action of
+    // the elevated script, before any other path/permission could fail.
+    // If this file exists after a run, we KNOW the elevated PowerShell
+    // actually started — so any missing $logPath means env/path mismatch,
+    // not elevation failure. If it DOESN'T exist, the elevation itself
+    // never ran the script (UAC declined, execution policy blocked, etc.).
+    `$diagPath = Join-Path $env:USERPROFILE 'Desktop\\jht-install-diag.log'`,
+    `try { Set-Content -Path $diagPath -Value "$([DateTime]::Now.ToString('o')) elevated PS started; TEMP=$env:TEMP USER=$env:USERNAME" -Force } catch { }`,
     `function Log([string]$m) {`,
     `  $line = "$([DateTime]::Now.ToString('HH:mm:ss')) $m"`,
-    `  Add-Content -Path $logPath -Value $line`,
+    `  try { Add-Content -Path $logPath -Value $line } catch { }`,
+    `  try { Add-Content -Path $diagPath -Value $line } catch { }`,
     `  Write-Host $line`,
     `}`,
     `function Fail([string]$tag, [string]$msg) {`,
@@ -170,6 +179,28 @@ async function installWindowsStack({
   const stopTail = tailLog(paths.log, onLog)
 
   const child = spawnElevatedScript({ scriptPath: paths.script, spawnFn })
+
+  // Forward outer-PowerShell stdout/stderr into the same log stream so
+  // that failures in Start-Process itself (UAC declined, execution
+  // policy blocked, elevation rejected by admin approval mode, etc.)
+  // surface as readable lines — without this, those errors die in the
+  // child's pipe and we're left guessing at exit codes.
+  const forwardStream = (stream, prefix) => {
+    if (!stream || typeof stream.on !== 'function') return
+    stream.setEncoding('utf8')
+    let buf = ''
+    stream.on('data', (chunk) => {
+      buf += chunk
+      const lines = buf.split(/\r?\n/)
+      buf = lines.pop() || ''
+      for (const line of lines) if (line.length > 0) onLog(`[${prefix}] ${line}`)
+    })
+    stream.on('end', () => {
+      if (buf.length > 0) onLog(`[${prefix}] ${buf}`)
+    })
+  }
+  forwardStream(child.stdout, 'outer-stdout')
+  forwardStream(child.stderr, 'outer-stderr')
 
   const exitCode = await new Promise((resolve) => {
     child.on('error', (err) => {
