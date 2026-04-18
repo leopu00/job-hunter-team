@@ -34,7 +34,7 @@
     "appId": "ai.jobhunterteam.desktop",
     "productName": "JHT Desktop",
     "npmRebuild": false,
-    "afterPack": "./build/after-pack.js",
+    "afterSign": "./build/after-sign.js",
     "files": [
       "main.js",
       "preload.js",
