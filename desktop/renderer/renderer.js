@@ -71,9 +71,19 @@ const TRANSLATIONS = {
       "To run the team in isolation we need <strong>Colima</strong>, free. Let's check if it's already on your computer.",
     'setup.lead.linux':
       "To run the team in isolation we need <strong>Docker Engine</strong>, free. Let's check if it's already on your computer.",
-    'docker.name.win32': 'Docker Desktop',
-    'docker.name.darwin': 'Colima',
-    'docker.name.linux': 'Docker Engine',
+    'docker.name.win32': 'Docker',
+    'docker.name.darwin': 'Docker',
+    'docker.name.linux': 'Docker',
+    'docker.subtitle.win32': 'via Docker Desktop',
+    'docker.subtitle.darwin': 'via Colima (CLI, free)',
+    'docker.subtitle.linux': 'via Docker Engine',
+    'docker.action.installAll': 'Install everything',
+    'docker.step.homebrew': 'Homebrew',
+    'docker.step.colima': 'Colima + Docker CLI',
+    'docker.step.daemon': 'Runtime up',
+    'docker.install.brewMissingCta': 'Install from brew.sh',
+    'docker.install.colimaFailHint': 'brew install failed',
+    'docker.install.daemonFailHint': 'colima start failed',
     'setup.back': 'Back',
     'setup.continue': 'Next',
     'setup.verifying': 'checking…',
@@ -193,9 +203,19 @@ const TRANSLATIONS = {
       'Per far girare il team in modo isolato serve <strong>Colima</strong>, gratuito. Controlliamo se è già sul tuo computer.',
     'setup.lead.linux':
       'Per far girare il team in modo isolato serve <strong>Docker Engine</strong>, gratuito. Controlliamo se è già sul tuo computer.',
-    'docker.name.win32': 'Docker Desktop',
-    'docker.name.darwin': 'Colima',
-    'docker.name.linux': 'Docker Engine',
+    'docker.name.win32': 'Docker',
+    'docker.name.darwin': 'Docker',
+    'docker.name.linux': 'Docker',
+    'docker.subtitle.win32': 'tramite Docker Desktop',
+    'docker.subtitle.darwin': 'tramite Colima (CLI, gratuito)',
+    'docker.subtitle.linux': 'tramite Docker Engine',
+    'docker.action.installAll': 'Installa tutto',
+    'docker.step.homebrew': 'Homebrew',
+    'docker.step.colima': 'Colima + Docker CLI',
+    'docker.step.daemon': 'Runtime attivo',
+    'docker.install.brewMissingCta': 'Installa da brew.sh',
+    'docker.install.colimaFailHint': 'brew install fallito',
+    'docker.install.daemonFailHint': 'colima start fallito',
     'setup.back': 'Indietro',
     'setup.continue': 'Avanti',
     'setup.verifying': 'verifica…',
@@ -315,9 +335,19 @@ const TRANSLATIONS = {
       'A csapat izolált futtatásához <strong>Colima</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
     'setup.lead.linux':
       'A csapat izolált futtatásához <strong>Docker Engine</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
-    'docker.name.win32': 'Docker Desktop',
-    'docker.name.darwin': 'Colima',
-    'docker.name.linux': 'Docker Engine',
+    'docker.name.win32': 'Docker',
+    'docker.name.darwin': 'Docker',
+    'docker.name.linux': 'Docker',
+    'docker.subtitle.win32': 'Docker Desktop használatával',
+    'docker.subtitle.darwin': 'Colimán keresztül (CLI, ingyenes)',
+    'docker.subtitle.linux': 'Docker Engine használatával',
+    'docker.action.installAll': 'Minden telepítése',
+    'docker.step.homebrew': 'Homebrew',
+    'docker.step.colima': 'Colima + Docker CLI',
+    'docker.step.daemon': 'Futtatókörnyezet aktív',
+    'docker.install.brewMissingCta': 'Telepítés innen: brew.sh',
+    'docker.install.colimaFailHint': 'brew install hiba',
+    'docker.install.daemonFailHint': 'colima start hiba',
     'setup.back': 'Vissza',
     'setup.continue': 'Tovább',
     'setup.verifying': 'ellenőrzés…',
@@ -556,17 +586,18 @@ const dom = {
   btnOpenBrowser: document.getElementById('btn-open-browser'),
   btnStopTeam: document.getElementById('btn-stop-team'),
   dockerBadge: document.getElementById('docker-badge'),
-  dockerHint: document.getElementById('docker-hint'),
-  dockerStats: document.getElementById('docker-stats'),
-  dockerRequired: document.getElementById('docker-required'),
-  dockerFree: document.getElementById('docker-free'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
   dockerName: document.getElementById('docker-name'),
+  dockerSubtitle: document.getElementById('docker-subtitle'),
   setupLead: document.getElementById('setup-lead'),
-  dockerInstallPanel: document.getElementById('docker-install-panel'),
-  dockerInstallIcon: document.getElementById('docker-install-icon'),
-  dockerInstallMessage: document.getElementById('docker-install-message'),
+  dockerSteps: document.getElementById('docker-steps'),
+  stepHomebrew: document.getElementById('step-homebrew'),
+  stepColima: document.getElementById('step-colima'),
+  stepDaemon: document.getElementById('step-daemon'),
+  stepHomebrewHint: document.getElementById('step-homebrew-hint'),
+  stepColimaHint: document.getElementById('step-colima-hint'),
+  stepDaemonHint: document.getElementById('step-daemon-hint'),
   dockerInstallLog: document.getElementById('docker-install-log'),
   extraDeps: document.getElementById('extra-deps'),
   containerMessage: document.getElementById('container-message'),
@@ -623,17 +654,49 @@ function clearChildren(node) {
   while (node.firstChild) node.removeChild(node.firstChild)
 }
 
+const STEP_DOM = {
+  homebrew: { li: 'stepHomebrew', hint: 'stepHomebrewHint' },
+  colima: { li: 'stepColima', hint: 'stepColimaHint' },
+  daemon: { li: 'stepDaemon', hint: 'stepDaemonHint' },
+}
+
+function setStepState(name, state, hintHtml) {
+  const entry = STEP_DOM[name]
+  if (!entry) return
+  const li = dom[entry.li]
+  const hint = dom[entry.hint]
+  if (li) li.setAttribute('data-state', state)
+  if (hint) hint.innerHTML = hintHtml || ''
+}
+
+function paintStepsFromStatus(status) {
+  const platform = status.platform || platformFromHintKey(status.check && status.check.hintKey)
+  // Only darwin uses the sequential-install checklist UX for now.
+  if (platform !== 'darwin') {
+    if (dom.dockerSteps) dom.dockerSteps.hidden = true
+    return
+  }
+  if (dom.dockerSteps) dom.dockerSteps.hidden = false
+
+  const steps = status.steps || { homebrew: 'missing', colima: 'missing', daemon: 'missing' }
+  setStepState('homebrew', steps.homebrew === 'ok' ? 'ok' : 'pending',
+    steps.homebrew === 'ok' ? '' : `<a href="#" data-brew-link>brew.sh</a>`)
+  setStepState('colima', steps.colima === 'ok' ? 'ok' : 'pending')
+  setStepState('daemon', steps.daemon === 'ok' ? 'ok' : 'pending')
+}
+
 function renderDockerCard(status) {
   const check = status.check
   const card = dom.dockerCard
   card.classList.remove('dep-card--ok', 'dep-card--warn', 'dep-card--missing')
 
-  // Swap the card name and the setup lead to the platform-specific runtime
-  // (Colima on darwin, Docker Desktop on win32, Docker Engine on linux) so the
-  // whole screen tells one consistent story with the Install button.
   const platform = status.platform || platformFromHintKey(check.hintKey)
   if (platform && dom.dockerName) {
     dom.dockerName.textContent = t(`docker.name.${platform}`)
+  }
+  if (platform && dom.dockerSubtitle) {
+    const subtitleKey = `docker.subtitle.${platform}`
+    dom.dockerSubtitle.textContent = t(subtitleKey) === subtitleKey ? '' : t(subtitleKey)
   }
   if (platform && dom.setupLead) {
     dom.setupLead.innerHTML = t(`setup.lead.${platform}`)
@@ -656,68 +719,46 @@ function renderDockerCard(status) {
     card.classList.add('dep-card--missing')
   }
 
-  dom.dockerHint.textContent = check.hintKey ? t(check.hintKey) : ''
-
-  // Install/free size is helpful only while deciding whether to install
-  // Docker. Once the state is ok the stats are just noise.
-  if (check.state !== 'ok' && status.disk && status.disk.freeHuman) {
-    dom.dockerStats.hidden = false
-    dom.dockerRequired.textContent = status.disk.requiredHuman || '—'
-    dom.dockerFree.textContent = status.disk.freeHuman
-    if (status.disk.meetsRequirement === false) {
-      dom.dockerFree.classList.add('stat__value--warn')
-    } else {
-      dom.dockerFree.classList.remove('stat__value--warn')
-    }
-  } else {
-    dom.dockerStats.hidden = true
-  }
+  paintStepsFromStatus(status)
 
   clearChildren(dom.dockerActions)
 
   if (check.state === 'ok') return
 
-  if (check.state === 'missing') {
-    const isDarwin = platformFromHintKey(check.hintKey) === 'darwin'
+  if (platform === 'darwin') {
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
-    install.textContent = t(isDarwin ? 'docker.action.installColima' : 'docker.action.install')
-    install.addEventListener('click', isDarwin ? onInstallDocker : onOpenDownloadPage)
+    install.textContent = t('docker.action.installAll')
+    install.addEventListener('click', onInstallDocker)
     dom.dockerActions.appendChild(install)
 
-    const recheck = document.createElement('button')
-    recheck.className = 'btn btn--ghost'
-    recheck.textContent = t('docker.action.check')
-    recheck.addEventListener('click', refreshDockerStatus)
-    dom.dockerActions.appendChild(recheck)
+    // Hook the brew.sh anchor (rendered inside the homebrew step hint).
+    const brewLink = dom.stepHomebrewHint && dom.stepHomebrewHint.querySelector('[data-brew-link]')
+    if (brewLink) {
+      brewLink.addEventListener('click', (e) => {
+        e.preventDefault()
+        window.setupApi.openBrewHomepage && window.setupApi.openBrewHomepage()
+      })
+    }
+    return
+  }
+
+  // win32 / linux keep the "open download page" flow.
+  if (check.state === 'missing') {
+    const install = document.createElement('button')
+    install.className = 'btn btn--primary'
+    install.textContent = t('docker.action.install')
+    install.addEventListener('click', onOpenDownloadPage)
+    dom.dockerActions.appendChild(install)
     return
   }
 
   if (check.state === 'not-running') {
     const openDesktop = document.createElement('button')
     openDesktop.className = 'btn btn--primary'
-    const actionKey =
-      platformFromHintKey(check.hintKey) === 'darwin'
-        ? 'docker.action.startColima'
-        : 'docker.action.openDesktop'
-    openDesktop.textContent = t(actionKey)
+    openDesktop.textContent = t('docker.action.openDesktop')
     openDesktop.addEventListener('click', onOpenDockerDesktop)
     dom.dockerActions.appendChild(openDesktop)
-
-    const recheck = document.createElement('button')
-    recheck.className = 'btn btn--ghost'
-    recheck.textContent = t('docker.action.check')
-    recheck.addEventListener('click', refreshDockerStatus)
-    dom.dockerActions.appendChild(recheck)
-    return
-  }
-
-  if (check.state === 'starting' || check.state === 'needs-reboot') {
-    const recheck = document.createElement('button')
-    recheck.className = 'btn btn--primary'
-    recheck.textContent = t('docker.action.check')
-    recheck.addEventListener('click', refreshDockerStatus)
-    dom.dockerActions.appendChild(recheck)
   }
 }
 
@@ -809,58 +850,57 @@ async function onOpenDownloadPage() {
   }
 }
 
-function showInstallPanel() {
-  dom.dockerInstallLog.textContent = ''
-  dom.dockerInstallMessage.textContent = t('docker.install.streamingTitle')
-  dom.dockerInstallIcon.dataset.state = 'busy'
-  dom.dockerInstallPanel.hidden = false
+function showInstallLog() {
+  if (dom.dockerInstallLog) {
+    dom.dockerInstallLog.textContent = ''
+    dom.dockerInstallLog.hidden = false
+  }
 }
 
-function setInstallPanelEnd(stateName, messageKey, vars) {
-  dom.dockerInstallIcon.dataset.state = stateName
-  if (messageKey) dom.dockerInstallMessage.textContent = t(messageKey, vars)
-}
-
-function showBrewMissingHint() {
-  dom.dockerInstallLog.textContent = ''
-  const linkLine = document.createElement('a')
-  linkLine.href = 'https://brew.sh'
-  linkLine.textContent = 'https://brew.sh'
-  linkLine.addEventListener('click', (e) => {
-    e.preventDefault()
-    window.launcherApi.openExternal('https://brew.sh').catch(() => {})
-  })
-  dom.dockerInstallLog.appendChild(document.createTextNode(`${t('docker.install.brewMissing')} `))
-  dom.dockerInstallLog.appendChild(linkLine)
+function hideInstallLog() {
+  if (dom.dockerInstallLog) dom.dockerInstallLog.hidden = true
 }
 
 async function onInstallDocker() {
   setBusy(true)
-  showInstallPanel()
+  showInstallLog()
+  // Mark all three steps as pending → the live stage listener will promote
+  // each to 'busy'/'ok'/'fail' as the backend progresses through them.
+  setStepState('homebrew', 'pending', '')
+  setStepState('colima', 'pending', '')
+  setStepState('daemon', 'pending', '')
   try {
     const result = await window.setupApi.installDocker()
     if (result?.ok) {
-      setInstallPanelEnd('ok', 'docker.install.streamingTitle')
+      hideInstallLog()
       await refreshDockerStatus()
-      dom.dockerInstallPanel.hidden = true
       return
     }
     if (result?.stage === 'brew-missing') {
-      setInstallPanelEnd('error', 'docker.install.brewMissing')
-      showBrewMissingHint()
+      setStepState(
+        'homebrew',
+        'fail',
+        `<a href="#" data-brew-link>${t('docker.install.brewMissingCta')}</a>`,
+      )
+      const brewLink = dom.stepHomebrewHint.querySelector('[data-brew-link]')
+      if (brewLink) {
+        brewLink.addEventListener('click', (e) => {
+          e.preventDefault()
+          window.setupApi.openBrewHomepage && window.setupApi.openBrewHomepage()
+        })
+      }
       return
     }
-    if (result?.stage === 'daemon-unreachable') {
-      setInstallPanelEnd('error', 'docker.install.daemonUnreachable')
+    if (result?.stage === 'brew-install') {
+      setStepState('colima', 'fail', t('docker.install.colimaFailHint'))
       return
     }
-    setInstallPanelEnd('error')
-    const errMsg = result?.error || 'unknown'
-    dom.dockerInstallMessage.textContent = t('container.status.error', { error: errMsg })
+    if (result?.stage === 'colima-start' || result?.stage === 'daemon-unreachable') {
+      setStepState('daemon', 'fail', t('docker.install.daemonFailHint'))
+      return
+    }
   } catch (error) {
-    setInstallPanelEnd('error')
-    const msg = error instanceof Error ? error.message : String(error)
-    dom.dockerInstallMessage.textContent = t('container.status.error', { error: msg })
+    setStepState('colima', 'fail', error instanceof Error ? error.message : String(error))
   } finally {
     setBusy(false)
   }
@@ -1626,8 +1666,21 @@ async function startContainerPrep() {
 }
 
 window.setupApi.onInstallLog((line) => {
-  dom.dockerInstallLog.textContent = line
+  if (!dom.dockerInstallLog) return
+  // Append so the user sees the whole stream, not just the last line.
+  // Cap at ~4000 chars to avoid runaway memory during long brew installs.
+  const prev = dom.dockerInstallLog.textContent || ''
+  const combined = `${prev}${line}\n`
+  dom.dockerInstallLog.textContent =
+    combined.length > 4000 ? combined.slice(combined.length - 4000) : combined
+  dom.dockerInstallLog.scrollTop = dom.dockerInstallLog.scrollHeight
 })
+
+if (window.setupApi.onInstallStage) {
+  window.setupApi.onInstallStage(({ stage, status }) => {
+    setStepState(stage, status, '')
+  })
+}
 
 window.setupApi.onContainerLog((line) => {
   dom.containerLog.textContent = line
