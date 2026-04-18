@@ -29,6 +29,8 @@ function tempPaths() {
     script: path.join(dir, 'jht-install-windows-stack.ps1'),
     log: path.join(dir, 'jht-install.log'),
     result: path.join(dir, 'jht-install.result'),
+    outerLog: path.join(dir, 'jht-install-outer.log'),
+    nodeLog: path.join(dir, 'jht-install-node.log'),
     dockerInstaller: path.join(dir, 'DockerDesktopInstaller.exe'),
   }
 }
@@ -147,14 +149,46 @@ function tailLog(logPath, onLog) {
   }
 }
 
-function spawnElevatedScript({ scriptPath, spawnFn = spawn }) {
-  // Outer (unelevated) PowerShell launches an elevated child via
-  // Start-Process -Verb RunAs and waits for it. This gives us a single
-  // process to await, while the elevated child does the real work.
-  const inner = `Start-Process -Verb RunAs -Wait -FilePath powershell -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${scriptPath.replace(/'/g, "''")}'`
-  return spawnFn('powershell.exe', ['-NoProfile', '-Command', inner], {
-    windowsHide: true,
-  })
+// The outer (unelevated) PowerShell. It's generated with its own file
+// logger (`jht-install-outer.log` in TEMP) so we can see every step of
+// the elevation dance — the call to Start-Process, its return / exit
+// code, any native exception. Without this, a silent UAC cancel looks
+// identical to a silent elevated-script crash.
+function buildOuterScript({ scriptPath, outerLogPath }) {
+  const q = (s) => `'${String(s).replace(/'/g, "''")}'`
+  return [
+    `$outerLog = ${q(outerLogPath)}`,
+    `function OLog([string]$m) {`,
+    `  $line = "$([DateTime]::Now.ToString('HH:mm:ss')) outer: $m"`,
+    `  try { Add-Content -Path $outerLog -Value $line -Encoding UTF8 } catch { }`,
+    `  Write-Host $line`,
+    `}`,
+    `try { Set-Content -Path $outerLog -Value "" -Force } catch { }`,
+    `OLog "starting; script path = ${scriptPath.replace(/'/g, "''").replace(/\\/g, '\\\\')}"`,
+    `OLog "script exists = $(Test-Path ${q(scriptPath)})"`,
+    `OLog "host PS version = $($PSVersionTable.PSVersion) edition = $($PSVersionTable.PSEdition)"`,
+    `try {`,
+    `  OLog "calling Start-Process -Verb RunAs -Wait -PassThru"`,
+    `  $proc = Start-Process -Verb RunAs -Wait -PassThru -FilePath powershell \``,
+    `    -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',${q(scriptPath)}`,
+    `  OLog "Start-Process returned, exit code = $($proc.ExitCode)"`,
+    `} catch [System.ComponentModel.Win32Exception] {`,
+    `  # Native code from ShellExecuteEx; 1223 = ERROR_CANCELLED (UAC decline).`,
+    `  OLog "Start-Process Win32Exception native=$($_.Exception.NativeErrorCode) msg=$($_.Exception.Message)"`,
+    `} catch {`,
+    `  OLog "Start-Process threw $($_.Exception.GetType().FullName): $($_.Exception.Message)"`,
+    `}`,
+    `OLog "done"`,
+  ].join('\n')
+}
+
+function spawnElevatedScript({ scriptPath, outerLogPath, spawnFn = spawn }) {
+  const outerScript = buildOuterScript({ scriptPath, outerLogPath })
+  return spawnFn('powershell.exe', [
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-Command', outerScript,
+  ], { windowsHide: true })
 }
 
 async function installWindowsStack({
@@ -169,16 +203,39 @@ async function installWindowsStack({
   }
 
   // Reset previous state so a re-run starts clean.
-  for (const p of [paths.log, paths.result]) {
+  for (const p of [paths.log, paths.result, paths.outerLog, paths.nodeLog]) {
     try { fsApi.unlinkSync(p) } catch { /* ok if missing */ }
   }
 
+  // Persist EVERY log line we see to disk too (jht-install-node.log in
+  // TEMP). The user's LAN sync watches jht-* so this is guaranteed to
+  // land on the Mac side even if the UI log panel scrolls past or the
+  // IPC channel drops. Fixes the class of "we got an error but no file
+  // to grep on the Mac" problems.
+  const tsNow = () => new Date().toISOString().slice(11, 19)
+  const logToFile = (line) => {
+    try { fsApi.appendFileSync(paths.nodeLog, `${tsNow()} ${line}\n`) } catch { /* ignore */ }
+  }
+  try { fsApi.writeFileSync(paths.nodeLog, '') } catch { /* ignore */ }
+  const wrappedLog = (line) => {
+    const s = String(line)
+    logToFile(s)
+    try { onLog(s) } catch { /* callback may throw — swallow */ }
+  }
+  wrappedLog('installWindowsStack: begin')
+
   const script = buildScript({ paths })
   fsApi.writeFileSync(paths.script, script, 'utf8')
+  wrappedLog(`installWindowsStack: wrote ${paths.script}`)
 
-  const stopTail = tailLog(paths.log, onLog)
+  const stopTail = tailLog(paths.log, wrappedLog)
 
-  const child = spawnElevatedScript({ scriptPath: paths.script, spawnFn })
+  const child = spawnElevatedScript({
+    scriptPath: paths.script,
+    outerLogPath: paths.outerLog,
+    spawnFn,
+  })
+  wrappedLog('installWindowsStack: spawned outer powershell')
 
   // Forward outer-PowerShell stdout/stderr into the same log stream so
   // that failures in Start-Process itself (UAC declined, execution
@@ -193,10 +250,10 @@ async function installWindowsStack({
       buf += chunk
       const lines = buf.split(/\r?\n/)
       buf = lines.pop() || ''
-      for (const line of lines) if (line.length > 0) onLog(`[${prefix}] ${line}`)
+      for (const line of lines) if (line.length > 0) wrappedLog(`[${prefix}] ${line}`)
     })
     stream.on('end', () => {
-      if (buf.length > 0) onLog(`[${prefix}] ${buf}`)
+      if (buf.length > 0) wrappedLog(`[${prefix}] ${buf}`)
     })
   }
   forwardStream(child.stdout, 'outer-stdout')
@@ -204,11 +261,12 @@ async function installWindowsStack({
 
   const exitCode = await new Promise((resolve) => {
     child.on('error', (err) => {
-      onLog(`spawn error: ${err.message}`)
+      wrappedLog(`spawn error: ${err.message}`)
       resolve(-1)
     })
     child.on('close', (code) => resolve(typeof code === 'number' ? code : -1))
   })
+  wrappedLog(`installWindowsStack: outer powershell exited with code ${exitCode}`)
 
   // Give the tail a moment to drain final lines after the child exits.
   await new Promise((r) => setTimeout(r, 600))
@@ -216,6 +274,7 @@ async function installWindowsStack({
 
   let result = 'UNKNOWN'
   try { result = fsApi.readFileSync(paths.result, 'utf8').trim() } catch { /* missing */ }
+  wrappedLog(`installWindowsStack: result file content = ${result}`)
 
   if (result === 'OK' && exitCode === 0) {
     return { ok: true, rebootRequired: true }
