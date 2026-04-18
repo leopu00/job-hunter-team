@@ -17,6 +17,10 @@ type Profile = {
   positioning?: {
     contacts?: { email?: string | null; phone?: string | null; linkedin?: string | null; github?: string | null; website?: string | null }
   } | null
+  candidate?: {
+    experience?: Array<{ company?: string | null; role?: string | null; years?: number | string | null; summary?: string | null }> | null
+    education?: Array<{ institution?: string | null; degree?: string | null; year?: number | string | null }> | null
+  } | null
 } | null
 
 const WELCOME_TEXT = 'Ciao! Aiutami a configurare il mio profilo. Puoi farmi qualche domanda oppure dirmi come caricare il mio CV.'
@@ -36,6 +40,117 @@ export default function OnboardingPage() {
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const autoStartedRef = useRef(false)
+
+  // Voice input via Web Speech API (Chrome/Safari on macOS). When the
+  // user taps the microphone we open a continuous recognition session
+  // in Italian and append each final transcript chunk to the input.
+  // Tap again to stop. The browser handles the permission prompt on
+  // first use.
+  const [isRecording, setIsRecording] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const [speechError, setSpeechError] = useState<string | null>(null)
+  const recognitionRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    setSpeechSupported(!!SR)
+  }, [])
+
+  const toggleRecording = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) {
+      setSpeechError('SpeechRecognition non supportato da questo browser')
+      return
+    }
+    if (isRecording && recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch { /* ignore */ }
+      return
+    }
+
+    // Pre-flight: forza il prompt di permesso microfono con
+    // getUserMedia. In Chromium 2026 SpeechRecognition spesso non
+    // chiede il permesso da sola e onerror viene chiamata con un
+    // event vuoto. Con getUserMedia otteniamo un errore chiaro
+    // (NotAllowedError / NotFoundError) da mostrare all'utente.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Subito chiuso — volevamo solo triggerare/verificare il permesso.
+      stream.getTracks().forEach((t) => t.stop())
+    } catch (err: any) {
+      const name = err?.name || 'Error'
+      const msg = err?.message || String(err)
+      setSpeechError(`Mic ${name}: ${msg}`)
+      console.error('[getUserMedia] failed', err)
+      return
+    }
+
+    let rec: any
+    try {
+      rec = new SR()
+    } catch (err: any) {
+      setSpeechError(`Errore init: ${err?.message ?? err}`)
+      return
+    }
+    rec.lang = 'it-IT'
+    rec.continuous = true
+    rec.interimResults = false
+    rec.onstart = () => {
+      setSpeechError(null)
+      setIsRecording(true)
+    }
+    rec.onresult = (event: any) => {
+      let finalText = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i]
+        if (r.isFinal) finalText += r[0].transcript
+      }
+      if (finalText) {
+        setInput((prev) => (prev ? prev + ' ' : '') + finalText.trim())
+      }
+    }
+    rec.onend = () => {
+      setIsRecording(false)
+      recognitionRef.current = null
+    }
+    rec.onerror = (event: any) => {
+      // SpeechRecognitionErrorEvent non è enumerable su tutti i
+      // browser — il campo utile è event.error (stringa: 'not-allowed',
+      // 'no-speech', 'audio-capture', 'network', 'aborted',
+      // 'language-not-supported', 'service-not-allowed'). Loggo tutti
+      // i campi possibili perché console.error(event) spesso stampa
+      // solo `{}`.
+      const code = event?.error || event?.name || event?.type || 'unknown'
+      const msg = event?.message || ''
+      setSpeechError(`Errore mic: ${code}${msg ? ' — ' + msg : ''}`)
+      console.error('[SpeechRecognition]', {
+        error: event?.error,
+        name: event?.name,
+        type: event?.type,
+        message: event?.message,
+        timeStamp: event?.timeStamp,
+      })
+      setIsRecording(false)
+      recognitionRef.current = null
+    }
+    recognitionRef.current = rec
+    try {
+      rec.start()
+    } catch (err: any) {
+      setSpeechError(`Start fallito: ${err?.message ?? err}`)
+      setIsRecording(false)
+      recognitionRef.current = null
+    }
+  }, [isRecording])
+
+  // Boot progress bar — the agent's first turn in chat.jsonl typically
+  // lands ~50–60s after page mount (container → tmux → kimi TUI → first
+  // LLM reply). A static "In attesa…" placeholder for that long feels
+  // broken, so we drive a simple bar against a 60s ETA. It caps at 95%
+  // until the real first message arrives, then the whole block unmounts.
+  const [bootProgress, setBootProgress] = useState(0)
+  const bootStartRef = useRef<number | null>(null)
 
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -139,22 +254,21 @@ export default function OnboardingPage() {
     setSending(false)
   }, [input, attached, sending, sendText])
 
-  // ── Auto-avvio assistente e welcome message ──────────────────────────────
+  // ── Auto-avvio assistente (nessun welcome client-side) ──────────────────
+  // Il welcome prompt viene iniettato dal boot script nel container
+  // (.launcher/start-agent.sh → tmux send-keys dopo ~12s). Non mandiamo
+  // più un sendText(WELCOME_TEXT) qui, altrimenti l'utente vede due
+  // benvenuti sovrapposti.
   useEffect(() => {
     if (autoStartedRef.current) return
     if (status == null) return
     if (status.active) { autoStartedRef.current = true; return }
-    // primo ingresso e assistente spento → avvio e invio welcome
     autoStartedRef.current = true
     ;(async () => {
-      const ok = await startAssistant()
-      if (!ok) return
-      // attesa breve perché tmux e Claude CLI siano pronti a ricevere
-      await new Promise(r => setTimeout(r, 3000))
+      await startAssistant()
       await fetchStatus()
-      await sendText(WELCOME_TEXT)
     })()
-  }, [status, startAssistant, sendText, fetchStatus])
+  }, [status, startAssistant, fetchStatus])
 
   // ── Polling loops ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -166,6 +280,20 @@ export default function OnboardingPage() {
     const chatId    = setInterval(fetchChat, 3000)
     return () => { clearInterval(profileId); clearInterval(statusId); clearInterval(chatId) }
   }, [fetchProfile, fetchStatus, fetchChat])
+
+  // ── Boot progress bar ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (messages.length > 0) return
+    if (bootStartRef.current == null) bootStartRef.current = Date.now()
+    const ESTIMATED_MS = 60_000
+    const tick = () => {
+      const elapsed = Date.now() - (bootStartRef.current ?? Date.now())
+      setBootProgress(Math.min(95, (elapsed / ESTIMATED_MS) * 100))
+    }
+    tick()
+    const id = setInterval(tick, 500)
+    return () => clearInterval(id)
+  }, [messages.length])
 
   // ── Auto-scroll chat ─────────────────────────────────────────────────────
   const prevCountRef = useRef(0)
@@ -185,7 +313,27 @@ export default function OnboardingPage() {
   const removeAttached = (i: number) => setAttached(prev => prev.filter((_, j) => j !== i))
 
   // ── Completeness gate ────────────────────────────────────────────────────
-  const canProceed = Boolean(profile?.name && profile?.target_role)
+  // "Profilo davvero configurato" — non bastano nome + ruolo, il team
+  // ha bisogno di abbastanza sostanza da poter scrivere un CV serio.
+  // Minimum viable:
+  //   - identità base (nome, ruolo, città, anni, email)
+  //   - almeno 2 skill primarie
+  //   - almeno 1 lingua
+  //   - almeno 1 esperienza lavorativa
+  //   - almeno 1 titolo di studio
+  const hasCore = Boolean(
+    profile?.name
+    && profile?.target_role
+    && profile?.location
+    && profile?.experience_years != null
+    && (profile?.positioning?.contacts?.email || profile?.email),
+  )
+  const skills = profile?.skills?.primary ?? []
+  const languages = profile?.languages ?? []
+  const experience = profile?.candidate?.experience ?? []
+  const education = profile?.candidate?.education ?? []
+  const hasDepth = skills.length >= 2 && languages.length >= 1 && experience.length >= 1 && education.length >= 1
+  const canProceed = hasCore && hasDepth
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto px-5 py-5" style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -223,7 +371,15 @@ export default function OnboardingPage() {
           >
             {canProceed
               ? <Link href="/dashboard" className="no-underline text-inherit block">Vai alla dashboard →</Link>
-              : 'Completa almeno nome e ruolo target'}
+              : (!hasCore
+                ? 'Profilo incompleto — nome, ruolo, città, anni, email'
+                : `Aggiungi ancora: ${[
+                  skills.length < 2 ? 'competenze (≥2)' : null,
+                  languages.length < 1 ? 'lingue' : null,
+                  experience.length < 1 ? 'esperienza' : null,
+                  education.length < 1 ? 'titolo di studio' : null,
+                ].filter(Boolean).join(', ')}`
+              )}
           </button>
         </aside>
 
@@ -245,19 +401,63 @@ export default function OnboardingPage() {
                 {status == null ? '· connessione…' : status.active ? '· attivo' : starting ? '· avvio…' : '· spento'}
               </span>
             </div>
-            {startError && (
-              <span className="text-[9px] text-[var(--color-red)] truncate max-w-[260px]">{startError}</span>
+            {startError && !speechError && (
+              <span className="text-[9px] text-[var(--color-red)] truncate max-w-[260px]">
+                {startError}
+              </span>
             )}
           </div>
+
+          {/* Modal: microfono bloccato */}
+          {speechError && speechError.includes('not-allowed') && (
+            <MicBlockedModal
+              onRetry={() => { setSpeechError(null); void toggleRecording() }}
+              onClose={() => setSpeechError(null)}
+            />
+          )}
+          {speechError && !speechError.includes('not-allowed') && (
+            <div
+              className="mx-4 mt-3 mb-0 px-3 py-2 rounded-md border flex items-center justify-between gap-3"
+              style={{
+                background: 'rgba(232, 138, 122, 0.08)',
+                borderColor: 'rgba(232, 138, 122, 0.35)',
+                color: 'var(--color-red)',
+              }}
+            >
+              <span className="text-[11px]">{speechError}</span>
+              <button
+                onClick={() => setSpeechError(null)}
+                className="text-[10px] underline opacity-70 hover:opacity-100"
+                type="button"
+              >
+                chiudi
+              </button>
+            </div>
+          )}
 
           {/* Messaggi */}
           <div ref={chatScrollRef} className="flex-1 overflow-auto px-4 py-4 min-h-0">
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="text-3xl mb-3 opacity-30">🤖</div>
-                <p className="text-[11px] text-[var(--color-dim)] max-w-xs leading-relaxed">
-                  {starting ? 'Sto avviando l\'assistente…' : 'L\'assistente partirà tra un istante. Poi potrai scrivergli liberamente.'}
+                <p className="text-[11px] text-[var(--color-dim)] max-w-xs leading-relaxed mb-4">
+                  Sto avviando l&apos;assistente… ci vogliono circa 60 secondi
                 </p>
+                <div
+                  className="w-full max-w-[240px] h-1 rounded-full overflow-hidden"
+                  style={{ background: 'var(--color-border)' }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${bootProgress}%`, background: 'var(--color-green)' }}
+                  />
+                </div>
+                <span
+                  className="text-[9.5px] text-[var(--color-dim)] mt-2"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {Math.round(bootProgress)}%
+                </span>
               </div>
             )}
             {messages.map((m, i) => (
@@ -311,6 +511,24 @@ export default function OnboardingPage() {
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
             </button>
+            {speechSupported && (
+              <button type="button"
+                onClick={toggleRecording}
+                disabled={sending || !status?.active}
+                title={isRecording ? 'Ferma registrazione' : 'Detta a voce (it-IT)'}
+                className="px-3 py-3 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                style={{
+                  color: isRecording ? 'var(--color-red)' : 'var(--color-dim)',
+                  animation: isRecording ? 'pulse-dot 1.4s ease-in-out infinite' : undefined,
+                }}
+                aria-label={isRecording ? 'Ferma registrazione' : 'Avvia registrazione vocale'}>
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="3" width="6" height="12" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                </svg>
+              </button>
+            )}
             <input
               type="text"
               value={input}
@@ -437,6 +655,83 @@ function Field({ label, value, highlight }: { label: string; value?: string | nu
         fontWeight: highlight && !empty ? 600 : 400,
       }}>
         {value ?? '—'}
+      </div>
+    </div>
+  )
+}
+
+function MicBlockedModal({ onRetry, onClose }: { onRetry: () => void; onClose: () => void }) {
+  // Chrome non espone `chrome://settings/content/microphone` via JS
+  // per security — l'utente deve cliccarlo manualmente. Forniamo il
+  // link come <a> così il click diretto funziona.
+  const chromeSettingsUrl = 'chrome://settings/content/microphone'
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="max-w-md w-full rounded-xl border p-6"
+        style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-glow)' }}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="text-2xl">🎤</div>
+          <div>
+            <h2 className="text-[14px] font-bold text-[var(--color-bright)] mb-1">
+              Microfono bloccato
+            </h2>
+            <p className="text-[11.5px] text-[var(--color-muted)] leading-relaxed">
+              Per dettare a voce devi autorizzare Chrome a usare il microfono su questa pagina. Due modi rapidi:
+            </p>
+          </div>
+        </div>
+
+        <ol className="text-[11.5px] text-[var(--color-bright)] space-y-3 pl-5 list-decimal mb-5">
+          <li>
+            Clicca il <strong>lucchetto 🔒</strong> accanto a <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> nella barra indirizzi
+            → <strong>Impostazioni sito</strong> → <strong>Microfono</strong> → <strong>Consenti</strong>.
+          </li>
+          <li>
+            In alternativa apri le impostazioni globali:
+            <a
+              href={chromeSettingsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-1 underline text-[var(--color-green)] hover:text-[var(--color-bright)]"
+            >
+              chrome://settings/content/microphone
+            </a>
+            {' '}e aggiungi <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">http://localhost:3000</code> a <em>Consenti</em>.
+          </li>
+          <li>
+            Se hai anche il check a livello macOS: <strong>Impostazioni → Privacy → Microfono</strong> → spunta Chrome.
+          </li>
+        </ol>
+
+        <p className="text-[10.5px] text-[var(--color-dim)] mb-4">
+          Fatto uno dei passaggi, ricarica la pagina o clicca <em>Riprova</em>: Chrome ti riproporrà il prompt del microfono.
+        </p>
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            type="button"
+            className="px-4 py-2 rounded-md text-[11px] font-semibold tracking-wide border transition-colors cursor-pointer"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Chiudi
+          </button>
+          <button
+            onClick={onRetry}
+            type="button"
+            className="px-4 py-2 rounded-md text-[11px] font-bold tracking-wide transition-opacity cursor-pointer"
+            style={{ background: 'var(--color-green)', color: '#000' }}
+          >
+            Riprova 🎤
+          </button>
+        </div>
       </div>
     </div>
   )
