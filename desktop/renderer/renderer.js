@@ -951,10 +951,14 @@ function renderWindowsRequirements(status, extra) {
   if (dom.winStepWsl) dom.winStepWsl.setAttribute('data-state', winStepState(wslOk))
   if (dom.winStepGit) dom.winStepGit.setAttribute('data-state', winStepState(gitOk))
 
-  // Docker row action: show "Download" only when Docker is missing.
-  // When Docker is installed but not running, the user sees the green
-  // check (ok=ready here means daemon responsive) so we only light up
-  // the download link for the truly-missing case.
+  // Docker row action depends on the precise state:
+  //   missing     → "Install Docker" (opens the download page; manual step)
+  //   not-running → "Start Docker Desktop" (launches the installed app;
+  //                 Docker doesn't auto-start on boot by default, so after
+  //                 a reboot the user lands here with no way forward
+  //                 unless we surface this button)
+  //   starting    → "Check" (UI convention: no-op but shows the user
+  //                 there's something to do)
   clearChildren(dom.winStepDockerAction)
   if (dockerMissing) {
     const download = document.createElement('button')
@@ -962,6 +966,12 @@ function renderWindowsRequirements(status, extra) {
     download.textContent = t('docker.action.install')
     download.addEventListener('click', onOpenDownloadPage)
     dom.winStepDockerAction.appendChild(download)
+  } else if (!dockerOk) {
+    const start = document.createElement('button')
+    start.className = 'btn btn--ghost btn--compact'
+    start.textContent = t('docker.action.openDesktop')
+    start.addEventListener('click', onOpenDockerDesktopAndPoll)
+    dom.winStepDockerAction.appendChild(start)
   }
 
   // "Install everything" only makes sense when at least one of the
@@ -1202,6 +1212,30 @@ async function onOpenDockerDesktop() {
   } finally {
     setBusy(false)
   }
+}
+
+// Dedicated handler for the Windows checklist: open Docker Desktop
+// (launches the installed app that wasn't running yet), then poll the
+// docker status every 3s for up to 90s. The engine typically needs
+// 20-60s to come up on a cold boot; auto-polling means the Docker row
+// flips to green without the user having to click anything else.
+let winDockerPollTimer = null
+async function onOpenDockerDesktopAndPoll() {
+  await onOpenDockerDesktop()
+  if (winDockerPollTimer) return // already polling
+  let tries = 0
+  const MAX_TRIES = 30 // 30 × 3s = 90s
+  winDockerPollTimer = setInterval(async () => {
+    tries += 1
+    try {
+      await refreshDockerStatus()
+      const ok = state.docker && state.docker.check && state.docker.check.state === 'ok'
+      if (ok || tries >= MAX_TRIES) {
+        clearInterval(winDockerPollTimer)
+        winDockerPollTimer = null
+      }
+    } catch (_) { /* keep polling */ }
+  }, 3000)
 }
 
 // -------- Running step --------
