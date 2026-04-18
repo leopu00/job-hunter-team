@@ -100,6 +100,12 @@ const TRANSLATIONS = {
     'docker.action.install': 'Install Docker',
     'docker.action.installColima': 'Install Colima',
     'docker.action.installEverything': 'Install everything',
+    'docker.install.gitInstallFail':
+      'Git install failed. Check the log below, then try again.',
+    'winReq.title': 'Required tools',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
     'docker.action.restartNow': 'Restart now',
     'docker.action.openDesktop': 'Open Docker Desktop',
     'docker.action.startColima': 'Start Colima',
@@ -253,6 +259,12 @@ const TRANSLATIONS = {
     'docker.action.install': 'Installa Docker',
     'docker.action.installColima': 'Installa Colima',
     'docker.action.installEverything': 'Installa tutto',
+    'docker.install.gitInstallFail':
+      'Installazione Git fallita. Controlla il log sotto e riprova.',
+    'winReq.title': 'Strumenti richiesti',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
     'docker.action.restartNow': 'Riavvia ora',
     'docker.action.openDesktop': 'Apri Docker Desktop',
     'docker.action.startColima': 'Avvia Colima',
@@ -406,6 +418,12 @@ const TRANSLATIONS = {
     'docker.action.install': 'Docker telepítése',
     'docker.action.installColima': 'Colima telepítése',
     'docker.action.installEverything': 'Minden telepítése',
+    'docker.install.gitInstallFail':
+      'A Git telepítése nem sikerült. Nézd meg a naplót, majd próbáld újra.',
+    'winReq.title': 'Szükséges eszközök',
+    'winReq.docker': 'Docker Desktop',
+    'winReq.wsl': 'WSL2 + Ubuntu',
+    'winReq.git': 'Git',
     'docker.action.restartNow': 'Újraindítás',
     'docker.action.openDesktop': 'Docker Desktop megnyitása',
     'docker.action.startColima': 'Colima indítása',
@@ -651,6 +669,14 @@ const dom = {
   dockerBadge: document.getElementById('docker-badge'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  winRequirements: document.getElementById('win-requirements'),
+  winStepDocker: document.getElementById('win-step-docker'),
+  winStepDockerAction: document.getElementById('win-step-docker-action'),
+  winStepWsl: document.getElementById('win-step-wsl'),
+  winStepGit: document.getElementById('win-step-git'),
+  winInstallActions: document.getElementById('win-install-actions'),
+  btnWinInstallEverything: document.getElementById('btn-win-install-everything'),
+  winInstallLog: document.getElementById('win-install-log'),
   dockerName: document.getElementById('docker-name'),
   dockerSubtitle: document.getElementById('docker-subtitle'),
   setupLead: document.getElementById('setup-lead'),
@@ -762,6 +788,12 @@ function paintStepsFromStatus(status) {
 // window.platformInfo.platform so the wizard never flashes the
 // wrong-platform skeleton (e.g. macOS Homebrew/Colima checklist on
 // Windows) while waiting for setup:get-docker-status to reply.
+function showIf(el, visible) {
+  if (!el) return
+  el.hidden = !visible
+  el.style.display = visible ? '' : 'none'
+}
+
 function applyPlatformSkeleton(platform) {
   if (!platform) return
   if (dom.dockerName) {
@@ -781,10 +813,18 @@ function applyPlatformSkeleton(platform) {
   // both the hidden attribute and the inline display so neither the
   // CSS specificity nor a stripped rule can leak it back in.
   if (dom.dockerSteps) {
-    const hide = platform !== 'darwin'
-    dom.dockerSteps.hidden = hide
-    dom.dockerSteps.style.display = hide ? 'none' : ''
+    showIf(dom.dockerSteps, platform === 'darwin')
   }
+  // Windows gets a unified Docker/WSL/Git checklist that REPLACES the
+  // docker card + extra-deps cards above it. Swap them now so the first
+  // paint already has the right layout — avoids an FOUC of the darwin
+  // shape being visible while we wait for the setup:get-docker-status
+  // IPC reply.
+  const isWin = platform === 'win32'
+  showIf(dom.dockerCard, !isWin)
+  showIf(dom.extraDeps, !isWin)
+  showIf(dom.winRequirements, isWin)
+  showIf(dom.winInstallActions, isWin)
 }
 
 function renderDockerCard(status) {
@@ -880,6 +920,48 @@ function renderDockerCard(status) {
   }
 }
 
+function winStepState(ok) { return ok ? 'ok' : 'pending' }
+
+// On Windows we render one unified checklist (Docker / WSL / Git)
+// instead of the darwin docker-card + extra-deps split. Each row's icon
+// flips to the ok state as soon as the matching dep reports ready; the
+// Docker row is the only one with an inline per-item action (Download),
+// because Docker Desktop install stays a manual step. WSL and Git ride
+// the shared "Install everything" button below.
+function renderWindowsRequirements(status, extra) {
+  const check = status && status.check
+  const dockerOk = check && check.state === 'ok'
+  const dockerMissing = !check || check.state === 'missing'
+  const deps = (extra && Array.isArray(extra.deps)) ? extra.deps : []
+  const wslDep = deps.find((d) => d.id === 'wsl')
+  const gitDep = deps.find((d) => d.id === 'git')
+  const wslOk = !!(wslDep && wslDep.ok)
+  const gitOk = !!(gitDep && gitDep.ok)
+
+  if (dom.winStepDocker) dom.winStepDocker.setAttribute('data-state', winStepState(dockerOk))
+  if (dom.winStepWsl) dom.winStepWsl.setAttribute('data-state', winStepState(wslOk))
+  if (dom.winStepGit) dom.winStepGit.setAttribute('data-state', winStepState(gitOk))
+
+  // Docker row action: show "Download" only when Docker is missing.
+  // When Docker is installed but not running, the user sees the green
+  // check (ok=ready here means daemon responsive) so we only light up
+  // the download link for the truly-missing case.
+  clearChildren(dom.winStepDockerAction)
+  if (dockerMissing) {
+    const download = document.createElement('button')
+    download.className = 'btn btn--ghost btn--compact'
+    download.textContent = t('docker.action.install')
+    download.addEventListener('click', onOpenDownloadPage)
+    dom.winStepDockerAction.appendChild(download)
+  }
+
+  // "Install everything" only makes sense when at least one of the
+  // automatable items (WSL or Git) is missing. If Docker alone is
+  // missing, the user must click Download manually → hide the button.
+  const automatablePending = !wslOk || !gitOk
+  showIf(dom.winInstallActions, automatablePending)
+}
+
 async function refreshDockerStatus() {
   setBusy(true)
   try {
@@ -889,8 +971,14 @@ async function refreshDockerStatus() {
     ])
     state.docker = status
     state.extraDeps = extra
-    renderDockerCard(status)
-    renderExtraDeps(extra)
+    const platform = (status && status.platform)
+      || (window.platformInfo && window.platformInfo.platform)
+    if (platform === 'win32') {
+      renderWindowsRequirements(status, extra)
+    } else {
+      renderDockerCard(status)
+      renderExtraDeps(extra)
+    }
     const dockerOk = status.check.state === 'ok'
     const depsOk = extra && extra.allRequiredOk !== false
     dom.btnSetupContinue.disabled = !(dockerOk && depsOk)
@@ -1017,41 +1105,40 @@ async function onInstallDocker() {
   }
 }
 
+function winShowLog(text) {
+  if (!dom.winInstallLog) return
+  dom.winInstallLog.textContent = text
+  showIf(dom.winInstallLog, true)
+}
+
 async function onInstallWindowsStack() {
   setBusy(true)
-  showInstallLog()
-  dom.dockerInstallLog.textContent = t('docker.install.windowsRunning')
+  winShowLog(t('docker.install.windowsRunning'))
   try {
     const result = await window.setupApi.installWindowsStack()
     if (result?.ok && result.rebootRequired) {
-      // Swap the action row with a prominent "Restart now" button. The
-      // rest of the wizard stays locked until the user reboots.
-      clearChildren(dom.dockerActions)
+      // Swap the "Install everything" button for a prominent "Restart
+      // now". The rest of the wizard stays locked until the reboot.
+      clearChildren(dom.winInstallActions)
       const reboot = document.createElement('button')
       reboot.className = 'btn btn--primary'
       reboot.textContent = t('docker.action.restartNow')
       reboot.addEventListener('click', onRebootNow)
-      dom.dockerActions.appendChild(reboot)
-      dom.dockerInstallLog.textContent = t('docker.install.rebootRequired')
-      dom.dockerInstallLog.hidden = false
+      dom.winInstallActions.appendChild(reboot)
+      winShowLog(t('docker.install.rebootRequired'))
       return
     }
     const stage = result?.stage || 'unknown'
     const errMsg = result?.error || 'installer failed'
     const hintKey =
       stage === 'wsl-install' ? 'docker.install.wslInstallFail' :
-      stage === 'docker-download' ? 'docker.install.dockerDownloadFail' :
-      stage === 'docker-install' ? 'docker.install.dockerInstallFail' :
+      stage === 'git-install' ? 'docker.install.gitInstallFail' :
       stage === 'aborted' ? 'docker.install.aborted' :
       null
-    dom.dockerInstallLog.textContent = hintKey
-      ? `${t(hintKey)}\n\n${errMsg}`
-      : errMsg
-    dom.dockerInstallLog.hidden = false
+    winShowLog(hintKey ? `${t(hintKey)}\n\n${errMsg}` : errMsg)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    dom.dockerInstallLog.textContent = msg
-    dom.dockerInstallLog.hidden = false
+    winShowLog(msg)
   } finally {
     setBusy(false)
   }
@@ -1207,6 +1294,10 @@ dom.btnSetupContinue.addEventListener('click', () => {
   showStep(STEP_CONTAINER)
   startContainerPrep()
 })
+
+if (dom.btnWinInstallEverything) {
+  dom.btnWinInstallEverything.addEventListener('click', onInstallWindowsStack)
+}
 
 dom.btnContainerBack.addEventListener('click', async () => {
   if (state.containerBusy) return
@@ -1826,14 +1917,18 @@ async function startContainerPrep() {
 }
 
 window.setupApi.onInstallLog((line) => {
-  if (!dom.dockerInstallLog) return
-  // Append so the user sees the whole stream, not just the last line.
-  // Cap at ~4000 chars to avoid runaway memory during long brew installs.
-  const prev = dom.dockerInstallLog.textContent || ''
+  // Route the stream to whichever log panel is actually mounted for the
+  // current platform (darwin → dockerInstallLog inside the docker card,
+  // win32 → winInstallLog below the unified checklist).
+  const target = (window.platformInfo && window.platformInfo.platform === 'win32')
+    ? dom.winInstallLog : dom.dockerInstallLog
+  if (!target) return
+  const prev = target.textContent || ''
   const combined = `${prev}${line}\n`
-  dom.dockerInstallLog.textContent =
+  // Cap at ~4000 chars to avoid runaway memory during long installs.
+  target.textContent =
     combined.length > 4000 ? combined.slice(combined.length - 4000) : combined
-  dom.dockerInstallLog.scrollTop = dom.dockerInstallLog.scrollHeight
+  target.scrollTop = target.scrollHeight
 })
 
 if (window.setupApi.onInstallStage) {
