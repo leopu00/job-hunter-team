@@ -106,6 +106,9 @@ const TRANSLATIONS = {
     'winReq.docker': 'Docker Desktop',
     'winReq.wsl': 'WSL2 + Ubuntu',
     'winReq.git': 'Git',
+    'winSuccess.title': 'Installation complete',
+    'winSuccess.body':
+      'Restart your computer now to activate WSL and Git. The wizard will pick up where it left off.',
     'docker.action.restartNow': 'Restart now',
     'docker.action.openDesktop': 'Open Docker Desktop',
     'docker.action.startColima': 'Start Colima',
@@ -265,6 +268,9 @@ const TRANSLATIONS = {
     'winReq.docker': 'Docker Desktop',
     'winReq.wsl': 'WSL2 + Ubuntu',
     'winReq.git': 'Git',
+    'winSuccess.title': 'Installazione completata',
+    'winSuccess.body':
+      'Riavvia il computer ora per attivare WSL e Git. Il wizard riprenderà da dove hai interrotto.',
     'docker.action.restartNow': 'Riavvia ora',
     'docker.action.openDesktop': 'Apri Docker Desktop',
     'docker.action.startColima': 'Avvia Colima',
@@ -424,6 +430,9 @@ const TRANSLATIONS = {
     'winReq.docker': 'Docker Desktop',
     'winReq.wsl': 'WSL2 + Ubuntu',
     'winReq.git': 'Git',
+    'winSuccess.title': 'A telepítés befejeződött',
+    'winSuccess.body':
+      'Indítsd újra a gépet a WSL és a Git aktiválásához. A varázsló ott folytatódik, ahol abbahagytad.',
     'docker.action.restartNow': 'Újraindítás',
     'docker.action.openDesktop': 'Docker Desktop megnyitása',
     'docker.action.startColima': 'Colima indítása',
@@ -1111,21 +1120,51 @@ function winShowLog(text) {
   showIf(dom.winInstallLog, true)
 }
 
+function markWinStepsAllOk() {
+  // Force the checklist rows to the 'ok' visual state. Necessary because
+  // the Electron process cached its PATH at startup — even though Git
+  // was just installed successfully, `git --version` from Node would
+  // still fail until the process is restarted (which happens at reboot).
+  // We trust the installer's exit code here; the post-reboot `getExtraDeps`
+  // re-check will either confirm or correct each row.
+  for (const id of ['win-step-docker', 'win-step-wsl', 'win-step-git']) {
+    const el = document.getElementById(id)
+    if (el) el.setAttribute('data-state', 'ok')
+  }
+  if (dom.winStepDockerAction) clearChildren(dom.winStepDockerAction)
+}
+
+function showWinSuccessBanner() {
+  if (!dom.winInstallActions) return
+  clearChildren(dom.winInstallActions)
+  // Big prominent green card instead of a small "Restart now" button
+  // tucked under a log. The user explicitly asked for this — "avvisarlo
+  // meglio che deve riavviare il computer".
+  const banner = document.createElement('div')
+  banner.className = 'win-success'
+  banner.innerHTML =
+    '<div class="win-success__title">' +
+    t('winSuccess.title') + '</div>' +
+    '<div class="win-success__body">' +
+    t('winSuccess.body') + '</div>'
+  const btn = document.createElement('button')
+  btn.className = 'btn btn--primary btn--large'
+  btn.textContent = t('docker.action.restartNow')
+  btn.addEventListener('click', onRebootNow)
+  banner.appendChild(btn)
+  dom.winInstallActions.appendChild(banner)
+  showIf(dom.winInstallActions, true)
+  showIf(dom.winInstallLog, false)
+}
+
 async function onInstallWindowsStack() {
   setBusy(true)
   winShowLog(t('docker.install.windowsRunning'))
   try {
     const result = await window.setupApi.installWindowsStack()
     if (result?.ok && result.rebootRequired) {
-      // Swap the "Install everything" button for a prominent "Restart
-      // now". The rest of the wizard stays locked until the reboot.
-      clearChildren(dom.winInstallActions)
-      const reboot = document.createElement('button')
-      reboot.className = 'btn btn--primary'
-      reboot.textContent = t('docker.action.restartNow')
-      reboot.addEventListener('click', onRebootNow)
-      dom.winInstallActions.appendChild(reboot)
-      winShowLog(t('docker.install.rebootRequired'))
+      markWinStepsAllOk()
+      showWinSuccessBanner()
       return
     }
     const stage = result?.stage || 'unknown'
