@@ -1,5 +1,22 @@
 const path = require('node:path')
 const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+
+// macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
+// that excludes /opt/homebrew/bin and /usr/local/bin. Every spawn/execFile
+// we make (docker, colima, brew, git, ...) would then fail with ENOENT
+// even though the binaries are installed. Patch the main process PATH
+// once at boot so every child inherits the right PATH. Done here (not in
+// each module) so third-party dependencies that shell out internally
+// also work.
+if (process.platform === 'darwin') {
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin']
+  const current = process.env.PATH || ''
+  const parts = current.split(':').filter(Boolean)
+  for (const dir of extra.reverse()) {
+    if (!parts.includes(dir)) parts.unshift(dir)
+  }
+  process.env.PATH = parts.join(':')
+}
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')

@@ -16,7 +16,19 @@ const DEFAULT_SERVICE = 'jht'
 function dockerEnv() {
   // `docker compose` substitutes ${HOME} in the compose file; on Windows
   // HOME isn't set by default, so the bind-mount paths would collapse.
-  return { ...process.env, HOME: process.env.HOME || process.env.USERPROFILE || os.homedir() }
+  const base = {
+    ...process.env,
+    HOME: process.env.HOME || process.env.USERPROFILE || os.homedir(),
+  }
+  // macOS GUI apps start with a sanitized PATH that excludes /opt/homebrew/bin
+  // and /usr/local/bin, so `spawn('docker', ...)` throws ENOENT even when
+  // Colima + Docker CLI are installed via Homebrew. Prepend the standard
+  // Homebrew prefixes on darwin only.
+  if (process.platform === 'darwin') {
+    const extra = ['/opt/homebrew/bin', '/usr/local/bin']
+    base.PATH = [...extra, base.PATH || ''].filter(Boolean).join(':')
+  }
+  return base
 }
 
 function runStreamed(cmd, args, { cwd, onLog = () => {}, env }) {

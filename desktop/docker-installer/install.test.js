@@ -93,10 +93,15 @@ test('stage=brew-install when brew install fails', async () => {
   assert.equal(run.calls[0].args[0], 'install')
 })
 
-test('stage=colima-start when colima start fails', async () => {
+test('stage=colima-start when colima start fails on both VZ and QEMU', async () => {
+  // New flow: if `colima start` fails, we install qemu (if missing) and
+  // retry with `--vm-type qemu`. Only when the QEMU retry also fails do
+  // we surface stage=colima-start.
   const run = fakeRunSequence([
-    { ok: true, code: 0, stderr: '' },
-    { ok: false, code: 2, stderr: 'cannot start vm' },
+    { ok: true, code: 0, stderr: '' },               // brew install colima docker
+    { ok: false, code: 2, stderr: 'cannot start vm vz' }, // colima start (vz)
+    { ok: true, code: 0, stderr: '' },               // brew install qemu
+    { ok: false, code: 3, stderr: 'cannot start vm qemu' }, // colima start --vm-type qemu
   ])
   const result = await installDocker({
     platform: 'darwin',
@@ -106,7 +111,7 @@ test('stage=colima-start when colima start fails', async () => {
   })
   assert.equal(result.ok, false)
   assert.equal(result.stage, 'colima-start')
-  assert.match(result.error, /cannot start vm/)
+  assert.match(result.error, /cannot start vm qemu/)
 })
 
 test('stage=daemon-unreachable when docker ps still fails after start', async () => {
