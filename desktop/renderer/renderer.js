@@ -757,6 +757,36 @@ function paintStepsFromStatus(status) {
   setStepState('daemon', steps.daemon === 'ok' ? 'ok' : 'pending')
 }
 
+// Paint platform-specific text and visibility on the docker card before
+// any IPC round-trip. Called at boot from the synchronous
+// window.platformInfo.platform so the wizard never flashes the
+// wrong-platform skeleton (e.g. macOS Homebrew/Colima checklist on
+// Windows) while waiting for setup:get-docker-status to reply.
+function applyPlatformSkeleton(platform) {
+  if (!platform) return
+  if (dom.dockerName) {
+    dom.dockerName.textContent = t(`docker.name.${platform}`)
+  }
+  if (dom.dockerSubtitle) {
+    const subtitleKey = `docker.subtitle.${platform}`
+    const value = t(subtitleKey)
+    dom.dockerSubtitle.textContent = value === subtitleKey ? '' : value
+  }
+  if (dom.setupLead) {
+    const leadKey = `setup.lead.${platform}`
+    const value = t(leadKey)
+    if (value !== leadKey) dom.setupLead.innerHTML = value
+  }
+  // The macOS install-steps checklist only belongs on darwin. Force
+  // both the hidden attribute and the inline display so neither the
+  // CSS specificity nor a stripped rule can leak it back in.
+  if (dom.dockerSteps) {
+    const hide = platform !== 'darwin'
+    dom.dockerSteps.hidden = hide
+    dom.dockerSteps.style.display = hide ? 'none' : ''
+  }
+}
+
 function renderDockerCard(status) {
   const check = status.check
   const card = dom.dockerCard
@@ -1842,4 +1872,11 @@ if (stored && SUPPORTED_LANGS.includes(stored)) {
 } else {
   setLang(DEFAULT_LANG, { persist: false })
   showStep(STEP_LANGUAGE)
+}
+
+// Paint platform-specific docker-card shape synchronously — before the
+// first `setup:get-docker-status` IPC reply — so the user never sees a
+// flash of the wrong-platform skeleton on boot.
+if (window.platformInfo && window.platformInfo.platform) {
+  applyPlatformSkeleton(window.platformInfo.platform)
 }

@@ -1,5 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+// Exposed synchronously at preload time so the renderer can paint the
+// platform-specific skeleton on first paint, without waiting for the
+// async setup:get-docker-status IPC round-trip. Removing this brings
+// back the "macOS checklist flashes then swaps to Windows UI" bug — the
+// skeleton paint at boot depends on knowing the platform without IPC.
+contextBridge.exposeInMainWorld('platformInfo', {
+  platform: process.platform,
+  arch: process.arch,
+})
+
 contextBridge.exposeInMainWorld('launcherApi', {
   getStatus: () => ipcRenderer.invoke('launcher:get-status'),
   inspectSetup: () => ipcRenderer.invoke('launcher:inspect-setup'),
