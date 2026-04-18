@@ -30,12 +30,20 @@ contextBridge.exposeInMainWorld('setupApi', {
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
   openDockerDesktop: () => ipcRenderer.invoke('setup:open-docker-desktop'),
   installDocker: () => ipcRenderer.invoke('setup:install-docker'),
+  openBrewHomepage: () => ipcRenderer.invoke('setup:open-brew-homepage'),
   onInstallLog: (callback) => {
     const listener = (_event, message) => {
       try { callback(message) } catch { /* ignore */ }
     }
     ipcRenderer.on('setup:install-log', listener)
     return () => ipcRenderer.removeListener('setup:install-log', listener)
+  },
+  onInstallStage: (callback) => {
+    const listener = (_event, payload) => {
+      try { callback(payload) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('setup:install-stage', listener)
+    return () => ipcRenderer.removeListener('setup:install-stage', listener)
   },
   ensureContainer: () => ipcRenderer.invoke('setup:ensure-container'),
   onContainerLog: (callback) => {
