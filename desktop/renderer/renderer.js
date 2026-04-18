@@ -99,9 +99,23 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Not installed',
     'docker.action.install': 'Install Docker',
     'docker.action.installColima': 'Install Colima',
+    'docker.action.installEverything': 'Install everything',
+    'docker.action.restartNow': 'Restart now',
     'docker.action.openDesktop': 'Open Docker Desktop',
     'docker.action.startColima': 'Start Colima',
     'docker.action.check': 'Check',
+    'docker.install.windowsRunning':
+      'Installing WSL2 + Docker Desktop. This can take 5-10 minutes. Windows will ask for admin permission. Do not close the app.',
+    'docker.install.rebootRequired':
+      'Installation complete. Restart your computer to finish setting up WSL and Docker. The wizard will resume after reboot.',
+    'docker.install.wslInstallFail':
+      'Failed to install WSL. Try running Windows Update first and retry.',
+    'docker.install.dockerDownloadFail':
+      'Could not download Docker Desktop. Check your internet connection and retry.',
+    'docker.install.dockerInstallFail':
+      'Docker Desktop installation failed. Check the log below for details.',
+    'docker.install.aborted':
+      'Install was cancelled (admin permission declined). Click "Install everything" again to retry.',
     'docker.install.streamingTitle': 'Installing Colima…',
     'docker.install.brewMissing': 'Homebrew is required first:',
     'docker.install.daemonUnreachable': 'Colima installed but `docker ps` is not responding. Retry or open Terminal.',
@@ -233,9 +247,23 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Non installato',
     'docker.action.install': 'Installa Docker',
     'docker.action.installColima': 'Installa Colima',
+    'docker.action.installEverything': 'Installa tutto',
+    'docker.action.restartNow': 'Riavvia ora',
     'docker.action.openDesktop': 'Apri Docker Desktop',
     'docker.action.startColima': 'Avvia Colima',
     'docker.action.check': 'Verifica',
+    'docker.install.windowsRunning':
+      'Installazione di WSL2 + Docker Desktop in corso. Può durare 5-10 minuti. Windows chiederà i permessi di amministratore. Non chiudere l\'app.',
+    'docker.install.rebootRequired':
+      'Installazione completata. Riavvia il computer per attivare WSL e Docker. Il wizard riprenderà dopo il riavvio.',
+    'docker.install.wslInstallFail':
+      'Installazione di WSL fallita. Prova prima con Windows Update, poi riprova.',
+    'docker.install.dockerDownloadFail':
+      'Impossibile scaricare Docker Desktop. Controlla la connessione e riprova.',
+    'docker.install.dockerInstallFail':
+      'Installazione di Docker Desktop fallita. Controlla il log sotto per i dettagli.',
+    'docker.install.aborted':
+      'Installazione annullata (permessi admin rifiutati). Clicca di nuovo "Installa tutto" per riprovare.',
     'docker.install.streamingTitle': 'Installazione Colima…',
     'docker.install.brewMissing': 'Serve prima Homebrew:',
     'docker.install.daemonUnreachable': 'Colima installato ma `docker ps` non risponde. Riprova o apri il Terminale.',
@@ -367,9 +395,23 @@ const TRANSLATIONS = {
     'docker.state.missing': 'Nincs telepítve',
     'docker.action.install': 'Docker telepítése',
     'docker.action.installColima': 'Colima telepítése',
+    'docker.action.installEverything': 'Minden telepítése',
+    'docker.action.restartNow': 'Újraindítás',
     'docker.action.openDesktop': 'Docker Desktop megnyitása',
     'docker.action.startColima': 'Colima indítása',
     'docker.action.check': 'Ellenőrzés',
+    'docker.install.windowsRunning':
+      'WSL2 + Docker Desktop telepítése folyamatban. 5-10 percig tarthat. A Windows rendszergazdai engedélyt fog kérni. Ne zárd be az alkalmazást.',
+    'docker.install.rebootRequired':
+      'Telepítés kész. Indítsd újra a gépet a WSL és a Docker aktiválásához. A varázsló újraindítás után folytatódik.',
+    'docker.install.wslInstallFail':
+      'A WSL telepítése nem sikerült. Először futtasd a Windows Update-et, majd próbáld újra.',
+    'docker.install.dockerDownloadFail':
+      'A Docker Desktop letöltése nem sikerült. Ellenőrizd az internetkapcsolatot, és próbáld újra.',
+    'docker.install.dockerInstallFail':
+      'A Docker Desktop telepítése nem sikerült. A részletekért nézd meg alább a naplót.',
+    'docker.install.aborted':
+      'A telepítés megszakadt (rendszergazdai jog megtagadva). Kattints újra a "Minden telepítése" gombra.',
     'docker.install.streamingTitle': 'Colima telepítése…',
     'docker.install.brewMissing': 'Először Homebrew szükséges:',
     'docker.install.daemonUnreachable': 'A Colima telepítve van, de a `docker ps` nem válaszol. Próbáld újra, vagy nyisd meg a Terminált.',
@@ -739,7 +781,29 @@ function renderDockerCard(status) {
     return
   }
 
-  // win32 / linux keep the "open download page" flow.
+  if (platform === 'win32') {
+    // One primary "Install everything" covers every not-ok state
+    // (missing Docker, missing WSL, Docker not running because WSL is
+    // outdated, …). Docker's own installer is idempotent, so re-running
+    // it when Docker is already present is harmless. Secondary actions
+    // stay available for users who want to open Docker Desktop manually.
+    const installAll = document.createElement('button')
+    installAll.className = 'btn btn--primary'
+    installAll.textContent = t('docker.action.installEverything')
+    installAll.addEventListener('click', onInstallWindowsStack)
+    dom.dockerActions.appendChild(installAll)
+
+    if (check.state === 'not-running') {
+      const openDesktop = document.createElement('button')
+      openDesktop.className = 'btn btn--ghost'
+      openDesktop.textContent = t('docker.action.openDesktop')
+      openDesktop.addEventListener('click', onOpenDockerDesktop)
+      dom.dockerActions.appendChild(openDesktop)
+    }
+    return
+  }
+
+  // linux fallback: the "open download page" flow.
   if (check.state === 'missing') {
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
@@ -892,6 +956,55 @@ async function onInstallDocker() {
     setStepState('colima', 'fail', error instanceof Error ? error.message : String(error))
   } finally {
     setBusy(false)
+  }
+}
+
+async function onInstallWindowsStack() {
+  setBusy(true)
+  showInstallLog()
+  dom.dockerInstallLog.textContent = t('docker.install.windowsRunning')
+  try {
+    const result = await window.setupApi.installWindowsStack()
+    if (result?.ok && result.rebootRequired) {
+      // Swap the action row with a prominent "Restart now" button. The
+      // rest of the wizard stays locked until the user reboots.
+      clearChildren(dom.dockerActions)
+      const reboot = document.createElement('button')
+      reboot.className = 'btn btn--primary'
+      reboot.textContent = t('docker.action.restartNow')
+      reboot.addEventListener('click', onRebootNow)
+      dom.dockerActions.appendChild(reboot)
+      dom.dockerInstallLog.textContent = t('docker.install.rebootRequired')
+      dom.dockerInstallLog.hidden = false
+      return
+    }
+    const stage = result?.stage || 'unknown'
+    const errMsg = result?.error || 'installer failed'
+    const hintKey =
+      stage === 'wsl-install' ? 'docker.install.wslInstallFail' :
+      stage === 'docker-download' ? 'docker.install.dockerDownloadFail' :
+      stage === 'docker-install' ? 'docker.install.dockerInstallFail' :
+      stage === 'aborted' ? 'docker.install.aborted' :
+      null
+    dom.dockerInstallLog.textContent = hintKey
+      ? `${t(hintKey)}\n\n${errMsg}`
+      : errMsg
+    dom.dockerInstallLog.hidden = false
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    dom.dockerInstallLog.textContent = msg
+    dom.dockerInstallLog.hidden = false
+  } finally {
+    setBusy(false)
+  }
+}
+
+async function onRebootNow() {
+  try {
+    await window.setupApi.reboot()
+  } catch (_) {
+    // If reboot couldn't be triggered programmatically, the label
+    // message already tells the user to restart manually.
   }
 }
 
