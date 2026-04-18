@@ -65,7 +65,14 @@ function resolveHome() {
 function dockerEnv(extra = {}) {
   // `docker compose` substitutes ${HOME} in the compose file; on Windows
   // the variable is not present unless we inject it ourselves.
-  return { ...process.env, HOME: resolveHome(), ...extra }
+  const base = { ...process.env, HOME: resolveHome() }
+  // macOS GUI apps start with a sanitized PATH that excludes Homebrew
+  // prefixes, so `spawn('docker', ...)` throws ENOENT.
+  if (process.platform === 'darwin') {
+    const extraPath = ['/opt/homebrew/bin', '/usr/local/bin']
+    base.PATH = [...extraPath, base.PATH || ''].filter(Boolean).join(':')
+  }
+  return { ...base, ...extra }
 }
 
 function runStreamed(cmd, args, { cwd, onLog = () => {}, env }) {
