@@ -79,10 +79,27 @@ function buildScript({
     `Set-Content -Path $logPath -Value ""`,
     `Set-Content -Path $resultPath -Value 'RUNNING'`,
     ``,
-    `Log "Step 1/2 Installing WSL (--no-launch, distro init deferred to reboot)"`,
+    `Log "Step 1/2 Checking/installing WSL"`,
     `try {`,
-    `  & wsl.exe --install --no-launch *>&1 | ForEach-Object { Log $_ }`,
-    `  if ($LASTEXITCODE -ne 0) { Fail 'WSL_INSTALL' "wsl exit $LASTEXITCODE" }`,
+    // Check if WSL has at least one distro registered. `wsl -l -q`
+    // returns 0 with distro names when configured; non-zero when WSL
+    // is missing, uninitialized, or has no distros. Output is UTF-16LE
+    // so we treat non-empty as "has something"; exact contents don't
+    // matter for the decision.
+    `  $distroCheck = (& wsl.exe -l -q 2>&1 | Out-String).Trim()`,
+    `  $hasDistro = ($LASTEXITCODE -eq 0) -and ($distroCheck -ne '')`,
+    `  if ($hasDistro) {`,
+    `    Log "WSL already has distro(s) registered — skipping wsl --install"`,
+    `  } else {`,
+    `    Log "WSL not set up; running wsl --install --no-launch"`,
+    `    & wsl.exe --install --no-launch *>&1 | ForEach-Object { Log $_ }`,
+    // Some wsl error codes (3010 = reboot required) aren't really
+    // failures for the install step; and ERROR_ALREADY_EXISTS can leak
+    // through race conditions too. Treat those as ok.
+    `    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {`,
+    `      Fail 'WSL_INSTALL' "wsl exit $LASTEXITCODE"`,
+    `    }`,
+    `  }`,
     `} catch { Fail 'WSL_INSTALL' $_.Exception.Message }`,
     ``,
     `Log "Step 2/2 Installing Git (winget, silent, --accept-package-agreements)"`,
