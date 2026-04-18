@@ -408,7 +408,16 @@ async function installColimaOnDarwin({
   onStage('colima', 'ok')
 
   onStage('daemon', 'busy')
-  const start = await run('colima', ['start'], { onLog, env })
+  // Try the fast default backend (VZ) first. If it fails — usually because
+  // we're running inside a VM whose host doesn't expose nested Apple
+  // Virtualization to the guest — fall back to QEMU emulation. QEMU is
+  // slower but runs without nested virt, so the wizard doesn't dead-end
+  // on developer/test machines that live inside Parallels/UTM/etc.
+  let start = await run('colima', ['start'], { onLog, env })
+  if (!start.ok) {
+    onLog('Colima start with VZ backend failed — retrying with QEMU…')
+    start = await run('colima', ['start', '--vm-type', 'qemu'], { onLog, env })
+  }
   if (!start.ok) {
     onStage('daemon', 'fail')
     return {
