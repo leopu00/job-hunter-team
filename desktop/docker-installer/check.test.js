@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { hintKeyForState, checkDocker } = require('./check')
+const { hintKeyForState, checkDocker, isDockerDesktopRunning } = require('./check')
 
 test('hintKeyForState maps states to platform-specific translation keys', () => {
   assert.equal(hintKeyForState('missing', 'win32'), 'docker.hint.missing.win32')
@@ -24,6 +24,16 @@ test('hintKeyForState maps states to platform-specific translation keys', () => 
 
 test('hintKeyForState for unknown state returns empty string', () => {
   assert.equal(hintKeyForState('unknown', 'win32'), '')
+})
+
+test('isDockerDesktopRunning returns a boolean on darwin (colima status)', async () => {
+  const result = await isDockerDesktopRunning('darwin')
+  assert.equal(typeof result, 'boolean')
+})
+
+test('isDockerDesktopRunning returns null on linux', async () => {
+  const result = await isDockerDesktopRunning('linux')
+  assert.equal(result, null)
 })
 
 test('checkDocker returns a well-shaped result', async () => {
