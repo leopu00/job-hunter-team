@@ -89,6 +89,57 @@ async function isBrewPresent({ env } = {}) {
   }
 }
 
+// Install Homebrew from inside the wizard — never asks the user to open
+// Terminal. macOS shows a native admin-password prompt because the
+// installer needs sudo to create /opt/homebrew with the right perms.
+// NONINTERACTIVE=1 skips brew's "press RETURN to continue" confirmations.
+function installHomebrew({ onLog = () => {} } = {}) {
+  return new Promise((resolve) => {
+    onLog('Installing Homebrew (macOS will ask for your password)...')
+    const shellCmd =
+      'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+    // AppleScript requires internal double quotes to be escaped with \\"
+    const applescript = `do shell script "${shellCmd.replace(/"/g, '\\"')}" with administrator privileges`
+    let child
+    try {
+      child = spawn('osascript', ['-e', applescript], { windowsHide: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      resolve({ ok: false, code: -1, stderr: message })
+      return
+    }
+
+    let stderrTail = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    // osascript buffers brew's output, so live line-by-line streaming
+    // isn't possible via `do shell script`. The step spinner in the UI
+    // carries the burden of showing "we're still working".
+    child.stdout.on('data', (d) => {
+      for (const line of String(d).split(/\r?\n/)) if (line) onLog(line)
+    })
+    child.stderr.on('data', (d) => {
+      stderrTail += d
+      for (const line of String(d).split(/\r?\n/)) if (line) onLog(line)
+    })
+
+    child.on('error', (error) => {
+      resolve({
+        ok: false,
+        code: -1,
+        stderr: error instanceof Error ? error.message : String(error),
+      })
+    })
+    child.on('close', (code) => {
+      resolve({
+        ok: code === 0,
+        code: typeof code === 'number' ? code : -1,
+        stderr: stderrTail.trim().slice(-1000),
+      })
+    })
+  })
+}
+
 async function isDockerResponsive({ env } = {}) {
   try {
     await execFileAsync('docker', ['ps', '--format', '{{.ID}}'], {
@@ -133,17 +184,35 @@ async function installColimaOnDarwin({
   run = runStreamed,
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
+  brewInstaller = installHomebrew,
 } = {}) {
   const env = brewEnv()
 
   onStage('homebrew', 'busy')
   if (!(await brewCheck({ env }))) {
-    onStage('homebrew', 'fail')
-    return {
-      ok: false,
-      stage: 'brew-missing',
-      error: 'Homebrew non trovato',
-      hintKey: 'docker.install.brewMissing',
+    // brew is missing: install it ourselves via osascript (GUI password
+    // prompt, no Terminal for the user). Requires network + admin.
+    const brewInstall = await brewInstaller({ onLog })
+    if (!brewInstall.ok) {
+      onStage('homebrew', 'fail')
+      return {
+        ok: false,
+        stage: 'brew-install-homebrew',
+        error:
+          brewInstall.stderr ||
+          `Homebrew install exited with code ${brewInstall.code}`,
+      }
+    }
+    // Some installers exit 0 but leave brew not on PATH of the current
+    // process (shell init hasn't been re-sourced). Re-verify from the
+    // augmented PATH; if still missing, report failure.
+    if (!(await brewCheck({ env }))) {
+      onStage('homebrew', 'fail')
+      return {
+        ok: false,
+        stage: 'brew-install-homebrew',
+        error: 'Homebrew installer finished but brew not found on PATH',
+      }
     }
   }
   onStage('homebrew', 'ok')
@@ -192,11 +261,19 @@ async function installDocker({
   run = runStreamed,
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
+  brewInstaller = installHomebrew,
 } = {}) {
   if (platform !== 'darwin') {
     return { ok: false, error: 'unsupported-platform' }
   }
-  return installColimaOnDarwin({ onLog, onStage, run, brewCheck, dockerCheck })
+  return installColimaOnDarwin({
+    onLog,
+    onStage,
+    run,
+    brewCheck,
+    dockerCheck,
+    brewInstaller,
+  })
 }
 
 module.exports = {
@@ -207,6 +284,7 @@ module.exports = {
     isBrewPresent,
     isDockerResponsive,
     isColimaInstalled,
+    installHomebrew,
     brewEnv,
     brewPath,
   },

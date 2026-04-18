@@ -82,6 +82,7 @@ const TRANSLATIONS = {
     'docker.step.colima': 'Colima + Docker CLI',
     'docker.step.daemon': 'Runtime up',
     'docker.install.brewMissingCta': 'Install from brew.sh',
+    'docker.install.homebrewFailHint': 'Homebrew install failed',
     'docker.install.colimaFailHint': 'brew install failed',
     'docker.install.daemonFailHint': 'colima start failed',
     'setup.back': 'Back',
@@ -214,6 +215,7 @@ const TRANSLATIONS = {
     'docker.step.colima': 'Colima + Docker CLI',
     'docker.step.daemon': 'Runtime attivo',
     'docker.install.brewMissingCta': 'Installa da brew.sh',
+    'docker.install.homebrewFailHint': 'Installazione Homebrew fallita',
     'docker.install.colimaFailHint': 'brew install fallito',
     'docker.install.daemonFailHint': 'colima start fallito',
     'setup.back': 'Indietro',
@@ -346,6 +348,7 @@ const TRANSLATIONS = {
     'docker.step.colima': 'Colima + Docker CLI',
     'docker.step.daemon': 'Futtatókörnyezet aktív',
     'docker.install.brewMissingCta': 'Telepítés innen: brew.sh',
+    'docker.install.homebrewFailHint': 'A Homebrew telepítése nem sikerült',
     'docker.install.colimaFailHint': 'brew install hiba',
     'docker.install.daemonFailHint': 'colima start hiba',
     'setup.back': 'Vissza',
@@ -679,8 +682,7 @@ function paintStepsFromStatus(status) {
   if (dom.dockerSteps) dom.dockerSteps.hidden = false
 
   const steps = status.steps || { homebrew: 'missing', colima: 'missing', daemon: 'missing' }
-  setStepState('homebrew', steps.homebrew === 'ok' ? 'ok' : 'pending',
-    steps.homebrew === 'ok' ? '' : `<a href="#" data-brew-link>brew.sh</a>`)
+  setStepState('homebrew', steps.homebrew === 'ok' ? 'ok' : 'pending', '')
   setStepState('colima', steps.colima === 'ok' ? 'ok' : 'pending')
   setStepState('daemon', steps.daemon === 'ok' ? 'ok' : 'pending')
 }
@@ -731,15 +733,6 @@ function renderDockerCard(status) {
     install.textContent = t('docker.action.installAll')
     install.addEventListener('click', onInstallDocker)
     dom.dockerActions.appendChild(install)
-
-    // Hook the brew.sh anchor (rendered inside the homebrew step hint).
-    const brewLink = dom.stepHomebrewHint && dom.stepHomebrewHint.querySelector('[data-brew-link]')
-    if (brewLink) {
-      brewLink.addEventListener('click', (e) => {
-        e.preventDefault()
-        window.setupApi.openBrewHomepage && window.setupApi.openBrewHomepage()
-      })
-    }
     return
   }
 
@@ -876,19 +869,8 @@ async function onInstallDocker() {
       await refreshDockerStatus()
       return
     }
-    if (result?.stage === 'brew-missing') {
-      setStepState(
-        'homebrew',
-        'fail',
-        `<a href="#" data-brew-link>${t('docker.install.brewMissingCta')}</a>`,
-      )
-      const brewLink = dom.stepHomebrewHint.querySelector('[data-brew-link]')
-      if (brewLink) {
-        brewLink.addEventListener('click', (e) => {
-          e.preventDefault()
-          window.setupApi.openBrewHomepage && window.setupApi.openBrewHomepage()
-        })
-      }
+    if (result?.stage === 'brew-install-homebrew' || result?.stage === 'brew-missing') {
+      setStepState('homebrew', 'fail', t('docker.install.homebrewFailHint'))
       return
     }
     if (result?.stage === 'brew-install') {
