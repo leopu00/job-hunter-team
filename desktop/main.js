@@ -309,6 +309,17 @@ app.whenReady().then(() => {
     return { auth, installed: relevant }
   })
 
+  ipcMain.handle('setup:logout-provider', (_event, providerId) => {
+    if (typeof providerId !== 'string' || !providerId) {
+      return { ok: false, error: 'providerId required' }
+    }
+    try {
+      return providerAuth.logoutProvider(providerId, { bindHomeDir: getBindHomeDir() })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   const loginContainerNames = new Map()
 
   ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
