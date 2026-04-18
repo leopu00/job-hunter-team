@@ -664,6 +664,10 @@ const state = {
   providerInstallDone: false,
   authStates: [],
   lastStatus: null,
+  // Windows-only: true while we're polling docker status after the user
+  // clicked "Open Docker Desktop". Drives the Docker row to a spinner
+  // state and hides the "Install everything" button to avoid confusion.
+  winDockerStarting: false,
 }
 
 const dom = {
@@ -947,18 +951,23 @@ function renderWindowsRequirements(status, extra) {
   const wslOk = !!(wslDep && wslDep.ok)
   const gitOk = !!(gitDep && gitDep.ok)
 
-  if (dom.winStepDocker) dom.winStepDocker.setAttribute('data-state', winStepState(dockerOk))
+  // Docker row visual state has 3 possibilities:
+  //   'ok'      — daemon responsive
+  //   'busy'    — user just clicked "Open Docker Desktop"; we're polling
+  //   'pending' — not ok and not currently starting
+  let dockerVisualState = 'pending'
+  if (dockerOk) dockerVisualState = 'ok'
+  else if (state.winDockerStarting) dockerVisualState = 'busy'
+  if (dom.winStepDocker) dom.winStepDocker.setAttribute('data-state', dockerVisualState)
   if (dom.winStepWsl) dom.winStepWsl.setAttribute('data-state', winStepState(wslOk))
   if (dom.winStepGit) dom.winStepGit.setAttribute('data-state', winStepState(gitOk))
 
   // Docker row action depends on the precise state:
-  //   missing     → "Install Docker" (opens the download page; manual step)
-  //   not-running → "Start Docker Desktop" (launches the installed app;
-  //                 Docker doesn't auto-start on boot by default, so after
-  //                 a reboot the user lands here with no way forward
-  //                 unless we surface this button)
-  //   starting    → "Check" (UI convention: no-op but shows the user
-  //                 there's something to do)
+  //   missing          → "Install Docker" (opens the download page)
+  //   not-running (idle) → "Start Docker Desktop"
+  //   starting (polling) → nothing — the spinner icon tells the story,
+  //                        a button here would make the user think they
+  //                        need to click something again
   clearChildren(dom.winStepDockerAction)
   if (dockerMissing) {
     const download = document.createElement('button')
@@ -966,7 +975,7 @@ function renderWindowsRequirements(status, extra) {
     download.textContent = t('docker.action.install')
     download.addEventListener('click', onOpenDownloadPage)
     dom.winStepDockerAction.appendChild(download)
-  } else if (!dockerOk) {
+  } else if (!dockerOk && !state.winDockerStarting) {
     const start = document.createElement('button')
     start.className = 'btn btn--ghost btn--compact'
     start.textContent = t('docker.action.openDesktop')
@@ -974,10 +983,12 @@ function renderWindowsRequirements(status, extra) {
     dom.winStepDockerAction.appendChild(start)
   }
 
-  // "Install everything" only makes sense when at least one of the
-  // automatable items (WSL or Git) is missing. If Docker alone is
-  // missing, the user must click Download manually → hide the button.
-  const automatablePending = !wslOk || !gitOk
+  // "Install everything" only when at least one automatable item (WSL
+  // or Git) is actually missing AND we are not currently in the middle
+  // of the Docker-starting flow. Otherwise the button appearing while
+  // Docker boots is pure noise: the user is waiting on Docker, not on
+  // a new WSL/Git run.
+  const automatablePending = (!wslOk || !gitOk) && !state.winDockerStarting
   showIf(dom.winInstallActions, automatablePending)
 }
 
@@ -1221,19 +1232,28 @@ async function onOpenDockerDesktop() {
 // flips to green without the user having to click anything else.
 let winDockerPollTimer = null
 async function onOpenDockerDesktopAndPoll() {
+  if (state.winDockerStarting) return // already starting
+  state.winDockerStarting = true
+  // Re-render immediately so the Docker row flips to the busy spinner
+  // and the "Install everything" button hides — before we wait on the
+  // openDockerDesktop IPC.
+  if (state.docker) renderWindowsRequirements(state.docker, state.extraDeps)
   await onOpenDockerDesktop()
-  if (winDockerPollTimer) return // already polling
+  if (winDockerPollTimer) return
   let tries = 0
   const MAX_TRIES = 30 // 30 × 3s = 90s
+  const finish = () => {
+    clearInterval(winDockerPollTimer)
+    winDockerPollTimer = null
+    state.winDockerStarting = false
+    if (state.docker) renderWindowsRequirements(state.docker, state.extraDeps)
+  }
   winDockerPollTimer = setInterval(async () => {
     tries += 1
     try {
       await refreshDockerStatus()
       const ok = state.docker && state.docker.check && state.docker.check.state === 'ok'
-      if (ok || tries >= MAX_TRIES) {
-        clearInterval(winDockerPollTimer)
-        winDockerPollTimer = null
-      }
+      if (ok || tries >= MAX_TRIES) finish()
     } catch (_) { /* keep polling */ }
   }, 3000)
 }
