@@ -834,6 +834,18 @@ body { display: flex; flex-direction: column; }
   flex-shrink: 0;
 }
 
+.summary-list__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-list__action {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
 /* ── Running step ─────────────────────────────────────────── */
 
 .running-info {

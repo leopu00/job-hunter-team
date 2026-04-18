@@ -150,6 +150,7 @@ const TRANSLATIONS = {
     'login.status.notSignedIn': 'Not signed in',
     'login.action.open': 'Login',
     'login.action.recheck': 'Re-check',
+    'login.action.logout': 'Log out',
     'login.action.close': 'Close',
     'login.action.done': "I'm done",
     'login.action.paste': 'Paste',
@@ -284,6 +285,7 @@ const TRANSLATIONS = {
     'login.status.notSignedIn': 'Non autenticato',
     'login.action.open': 'Login',
     'login.action.recheck': 'Ricontrolla',
+    'login.action.logout': 'Esci',
     'login.action.close': 'Chiudi',
     'login.action.done': 'Ho finito',
     'login.action.paste': 'Incolla',
@@ -418,6 +420,7 @@ const TRANSLATIONS = {
     'login.status.notSignedIn': 'Nincs bejelentkezve',
     'login.action.open': 'Belépés',
     'login.action.recheck': 'Ellenőrzés',
+    'login.action.logout': 'Kijelentkezés',
     'login.action.close': 'Bezár',
     'login.action.done': 'Kész',
     'login.action.paste': 'Beillesztés',
@@ -1269,6 +1272,28 @@ function renderAuthList() {
       actions.appendChild(btnRecheck)
 
       card.appendChild(actions)
+    } else {
+      // Signed-in state: let the user log out / switch account. Wipes
+      // the CLI's credential files on the host bind-mount; the next
+      // login flow re-populates them from scratch.
+      const actions = document.createElement('div')
+      actions.className = 'dep-card__actions'
+
+      const btnLogout = document.createElement('button')
+      btnLogout.className = 'btn btn--ghost'
+      btnLogout.textContent = t('login.action.logout')
+      btnLogout.addEventListener('click', async () => {
+        btnLogout.disabled = true
+        try {
+          await window.setupApi.logoutProvider(entry.id)
+        } finally {
+          btnLogout.disabled = false
+          await refreshAuthList()
+        }
+      })
+      actions.appendChild(btnLogout)
+
+      card.appendChild(actions)
     }
     list.appendChild(card)
   }
@@ -1660,30 +1685,55 @@ async function safeGetStatus() {
   try { return await window.setupApi.getStatus() } catch { return null }
 }
 
+function appendSummaryRow(list, text, { logoutProviderId } = {}) {
+  const li = document.createElement('li')
+  li.className = 'summary-list__item'
+  const icon = document.createElement('span')
+  icon.className = 'summary-list__check'
+  icon.textContent = '✓'
+  const label = document.createElement('span')
+  label.className = 'summary-list__label'
+  label.textContent = text
+  li.appendChild(icon)
+  li.appendChild(label)
+  if (logoutProviderId) {
+    // Provider rows on the "All set" screen need a logout escape hatch
+    // so the user can switch accounts without re-entering the wizard
+    // from scratch. The button wipes the CLI's credential files on the
+    // host bind-mount and re-renders the summary.
+    const btn = document.createElement('button')
+    btn.className = 'btn btn--ghost btn--small summary-list__action'
+    btn.textContent = t('login.action.logout')
+    btn.addEventListener('click', async () => {
+      btn.disabled = true
+      try {
+        await window.setupApi.logoutProvider(logoutProviderId)
+      } finally {
+        btn.disabled = false
+        const status = await safeGetStatus()
+        renderSummary(status)
+      }
+    })
+    li.appendChild(btn)
+  }
+  list.appendChild(li)
+}
+
 function renderSummary(status) {
   const list = dom.summaryList
   list.innerHTML = ''
-  const rows = []
-  if (status?.docker?.state === 'ok') rows.push(t('summary.docker'))
+  if (status?.docker?.state === 'ok') appendSummaryRow(list, t('summary.docker'))
   const wsl = status?.extra?.deps?.find((d) => d.id === 'wsl')
-  if (wsl && wsl.ok) rows.push(t('summary.wsl'))
-  if (status?.image?.present) rows.push(t('summary.image'))
+  if (wsl && wsl.ok) appendSummaryRow(list, t('summary.wsl'))
+  if (status?.image?.present) appendSummaryRow(list, t('summary.image'))
   const authed = Array.isArray(status?.providers?.authed) ? status.providers.authed : []
   for (const id of authed) {
     const opt = PROVIDER_OPTIONS.find((p) => p.id === id)
-    rows.push(t('summary.provider', { name: opt ? opt.label : id }))
-  }
-  for (const text of rows) {
-    const li = document.createElement('li')
-    li.className = 'summary-list__item'
-    const icon = document.createElement('span')
-    icon.className = 'summary-list__check'
-    icon.textContent = '✓'
-    const label = document.createElement('span')
-    label.textContent = text
-    li.appendChild(icon)
-    li.appendChild(label)
-    list.appendChild(li)
+    appendSummaryRow(
+      list,
+      t('summary.provider', { name: opt ? opt.label : id }),
+      { logoutProviderId: id },
+    )
   }
 }
 
