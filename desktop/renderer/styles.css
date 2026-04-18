@@ -418,6 +418,34 @@ body { display: flex; flex-direction: column; }
   to { transform: rotate(360deg); }
 }
 
+.win-success {
+  margin: 14px 0 0;
+  padding: 22px 20px;
+  border-radius: 12px;
+  background: rgba(126, 200, 154, 0.12);
+  border: 1px solid rgba(126, 200, 154, 0.45);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.win-success__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--success);
+  letter-spacing: -0.005em;
+}
+.win-success__body {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  max-width: 360px;
+}
+.win-success .btn--large {
+  margin-top: 4px;
+}
+
 .install-log {
   margin: 10px 0 0;
   max-height: 140px;
