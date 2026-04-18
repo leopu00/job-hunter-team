@@ -185,17 +185,25 @@ else
 fi
 mkdir -p "$AGENT_DIR"
 
-# ── CLAUDE.md per l'agente ────────────────────────────────────────────────────
-CLAUDE_DEST="$AGENT_DIR/CLAUDE.md"
+# ── File d'identità per l'agente ──────────────────────────────────────────────
+# Convenzione per provider:
+#   - Claude Code legge CLAUDE.md
+#   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
+# Il contenuto è identico, cambia solo il nome del file.
+case "$PROVIDER" in
+  ""|anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
+  *)                   IDENTITY_FILE="AGENTS.md" ;;
+esac
+IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
 
-if [ ! -f "$CLAUDE_DEST" ]; then
+if [ ! -f "$IDENTITY_DEST" ]; then
   if [ -f "$TEMPLATE" ]; then
-    cp "$TEMPLATE" "$CLAUDE_DEST"
-    echo "  → CLAUDE.md creato da template ($ROLE.md)"
+    cp "$TEMPLATE" "$IDENTITY_DEST"
+    echo "  → $IDENTITY_FILE creato da template ($ROLE.md)"
   else
-    echo "Errore: template $TEMPLATE non trovato e CLAUDE.md non esiste in $AGENT_DIR."
-    echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $CLAUDE_DEST manualmente."
+    echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
+    echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $IDENTITY_DEST manualmente."
     exit 1
   fi
 fi
@@ -246,3 +254,14 @@ echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: 
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
+
+# ── Prompt di avvio per l'assistente ─────────────────────────────────────────
+# Solo per role=assistente: dopo che il CLI è pronto, inietta un trigger che
+# fa scrivere al modello il primo messaggio di benvenuto nel chat.jsonl.
+# Gli altri ruoli (alfa / scout / ecc.) ricevono istruzioni dal Capitano.
+if [ "$ROLE" = "assistente" ]; then
+  (
+    sleep 12
+    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati, dammi il benvenuto e guidami nel setup del profilo candidato." Enter
+  ) &>/dev/null &
+fi
