@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { isSupabaseConfigured } from '@/lib/workspace'
@@ -10,6 +11,10 @@ import { getServerLocale } from '@/lib/server-locale'
 import { getDashboardT } from '@/lib/dashboard-i18n'
 import { createClient } from '@/lib/supabase/server'
 import CloudDownloadLanding from '@/app/components/CloudDownloadLanding'
+
+function isLocalhostHost(host: string): boolean {
+  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(host.toLowerCase())
+}
 
 const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
@@ -43,11 +48,22 @@ export default async function DashboardPage() {
   const locale = getServerLocale()
   const t = getDashboardT(locale)
 
+  // Localhost bypass: when the request comes from the user's own
+  // machine (desktop launcher opens /dashboard directly on
+  // http://localhost:3000), treat it as local mode regardless of
+  // whether Supabase env is baked in. Otherwise the Supabase auth
+  // path sends unauthenticated local users into the cloud login,
+  // which is nonsense for the desktop flow.
+  const hdrs = await headers()
+  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? ''
+  const localRequest = isLocalhostHost(host)
+  const useCloudAuth = isSupabaseConfigured && !localRequest
+
   // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
   // non ha sincronizzato un profilo dal suo localhost, mostra la landing
   // "scarica l'app" invece di una dashboard vuota con CTA che non portano
   // da nessuna parte.
-  if (isSupabaseConfigured) {
+  if (useCloudAuth) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
@@ -61,9 +77,9 @@ export default async function DashboardPage() {
       }
     }
   } else {
-    // Local mode: se non esiste un profilo valido in ~/.jht/profile/,
-    // canalizza l'utente verso l'onboarding split-screen (form live +
-    // assistente) invece di mostrare una dashboard vuota.
+    // Local mode (or localhost bypass): se non esiste un profilo
+    // valido in ~/.jht/profile/, canalizza l'utente verso l'onboarding
+    // split-screen invece di una dashboard vuota.
     if (readWorkspaceProfile() === null) redirect('/onboarding')
   }
 
