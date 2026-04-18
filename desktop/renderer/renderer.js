@@ -1152,9 +1152,17 @@ function renderDockerCard(status) {
   if (check.state === 'ok') return
 
   if (platform === 'darwin') {
+    // "Not-running" = Homebrew + Colima are already installed, the
+    // daemon is just stopped. Labelling this "Installa tutto" (Install
+    // everything) is misleading — nothing is actually being installed,
+    // we just need to fire `colima start`. Use "Avvia runtime" instead.
+    // The handler is the same install.js pipeline, which is idempotent
+    // and turns into a pure `colima start` when the binaries are there.
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
-    install.textContent = t('docker.action.installAll')
+    install.textContent = check.state === 'not-running'
+      ? t('docker.action.startColima')
+      : t('docker.action.installAll')
     install.addEventListener('click', onInstallDocker)
     dom.dockerActions.appendChild(install)
     return

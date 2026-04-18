@@ -23,6 +23,11 @@ const PROVIDERS = {
   claude: {
     displayName: 'Claude Code',
     binary: 'claude',
+    // Args appended to the binary when we open the "Login" terminal
+    // from the wizard. Skipping the trust-dir dialog on first launch
+    // saves the approval into the CLI's config, so the background
+    // agent-boot later never has to deal with it.
+    loginArgs: ['--dangerously-skip-permissions'],
     install: [{
       entrypoint: 'npm',
       args: ['install', '-g', '@anthropic-ai/claude-code@latest'],
@@ -33,6 +38,7 @@ const PROVIDERS = {
   codex: {
     displayName: 'Codex',
     binary: 'codex',
+    loginArgs: [],
     install: [{
       entrypoint: 'npm',
       args: ['install', '-g', '@openai/codex@latest'],
@@ -43,6 +49,10 @@ const PROVIDERS = {
   kimi: {
     displayName: 'Kimi',
     binary: 'kimi',
+    // --yolo at login time: the TUI writes its trust-approval for
+    // the working dir into ~/.kimi so later launches skip it, and
+    // the OAuth /login flow still runs normally.
+    loginArgs: ['--yolo'],
     // Moonshot's official CLI is kimi-cli (github.com/MoonshotAI/kimi-cli) —
     // a Python uv tool, not an npm package. This is the real "Kimi Code"
     // TUI that supports /login OAuth (the subscription flow users pay
