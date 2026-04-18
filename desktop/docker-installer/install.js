@@ -107,8 +107,61 @@ async function isBrewPresent({ env } = {}) {
 // sets up /opt/homebrew with the correct ownership (the invoking user),
 // and registers PATH helpers. We fetch the latest .pkg, install it with
 // a single admin-password prompt, and delete the temp file.
+// Xcode Command Line Tools (CLT) are a hard prerequisite for the
+// Homebrew .pkg installer — it refuses to run without them. We install
+// them via `xcode-select --install` which pops a native macOS dialog
+// ("Do you want to install the command line developer tools?") that the
+// user clicks through. No Terminal. Then we poll until the tools are
+// actually on disk, because the dialog returns to us before the
+// download finishes.
+async function ensureXcodeCLT({ onLog = () => {}, pollMs = 5000, timeoutMs = 900000 } = {}) {
+  const env = brewEnv()
+  const cltPresent = async () => {
+    try {
+      await execFileAsync('xcode-select', ['-p'], { env, timeout: 3000 })
+      await execFileAsync('xcrun', ['clang', '--version'], { env, timeout: 5000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  if (await cltPresent()) return { ok: true, alreadyPresent: true }
+
+  onLog('Command Line Tools missing — asking macOS to install them…')
+  try {
+    await execFileAsync('xcode-select', ['--install'], { env, timeout: 10000 })
+  } catch (error) {
+    const msg = String((error && error.stderr) || (error && error.message) || '')
+    // "already requested" / "already installed" from a previous canceled run
+    // is not a real error — we just fall through to the polling loop.
+    if (!/already/i.test(msg)) {
+      onLog(msg)
+    }
+  }
+
+  onLog('Waiting for Command Line Tools to finish installing…')
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollMs))
+    if (await cltPresent()) {
+      onLog('Command Line Tools installed.')
+      return { ok: true, alreadyPresent: false }
+    }
+  }
+  return { ok: false, error: 'Command Line Tools install timeout (15 min)' }
+}
+
 async function installHomebrew({ onLog = () => {} } = {}) {
   try {
+    const clt = await ensureXcodeCLT({ onLog })
+    if (!clt.ok) {
+      return {
+        ok: false,
+        code: -1,
+        stderr: clt.error || 'Command Line Tools not available',
+      }
+    }
     onLog('Fetching latest Homebrew installer…')
     const pkgUrl = await fetchLatestHomebrewPkgUrl()
     const pkgPath = path.join(os.tmpdir(), `jht-homebrew-${Date.now()}.pkg`)
