@@ -51,7 +51,8 @@ test('brew install triggers brew installer when missing, then proceeds', async (
   const stages = []
   let brewWasMissing = true
   const run = fakeRunSequence([
-    { ok: true, code: 0, stderr: '' }, // brew install colima docker
+    { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
     { ok: true, code: 0, stderr: '' }, // colima start
   ])
   const result = await installDocker({
@@ -98,7 +99,8 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
   // retry with `--vm-type qemu`. Only when the QEMU retry also fails do
   // we surface stage=colima-start.
   const run = fakeRunSequence([
-    { ok: true, code: 0, stderr: '' },               // brew install colima docker
+    { ok: true, code: 0, stderr: '' },               // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' },               // bash -c mkdir + ln (compose plugin symlink)
     { ok: false, code: 2, stderr: 'cannot start vm vz' }, // colima start (vz)
     { ok: true, code: 0, stderr: '' },               // brew install qemu
     { ok: false, code: 3, stderr: 'cannot start vm qemu' }, // colima start --vm-type qemu
@@ -116,8 +118,9 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
 
 test('stage=daemon-unreachable when docker ps still fails after start', async () => {
   const run = fakeRunSequence([
-    { ok: true, code: 0, stderr: '' },
-    { ok: true, code: 0, stderr: '' },
+    { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
+    { ok: true, code: 0, stderr: '' }, // colima start (vz)
   ])
   const result = await installDocker({
     platform: 'darwin',
@@ -133,8 +136,9 @@ test('stage=daemon-unreachable when docker ps still fails after start', async ()
 test('ok=true when brew install + colima start + docker ps all succeed', async () => {
   const logs = []
   const run = fakeRunSequence([
-    { ok: true, code: 0, stderr: '' },
-    { ok: true, code: 0, stderr: '' },
+    { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
+    { ok: true, code: 0, stderr: '' }, // colima start
   ])
   const result = await installDocker({
     platform: 'darwin',
@@ -145,9 +149,10 @@ test('ok=true when brew install + colima start + docker ps all succeed', async (
   })
   assert.equal(result.ok, true)
   assert.equal(result.stage, 'ok')
-  assert.equal(run.calls.length, 2)
-  assert.deepEqual(run.calls[0].args, ['install', 'colima', 'docker'])
-  assert.deepEqual(run.calls[1].args, ['start'])
+  assert.equal(run.calls.length, 3)
+  assert.deepEqual(run.calls[0].args, ['install', 'colima', 'docker', 'docker-compose'])
+  assert.equal(run.calls[1].args[0], '-c') // bash -c '...compose plugin symlink...'
+  assert.deepEqual(run.calls[2].args, ['start'])
   // Logs should have surfaced through the onLog callback.
   assert.ok(logs.some((l) => /brew install colima docker/.test(l)))
 })
