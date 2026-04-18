@@ -34,6 +34,40 @@ function getBindHomeDir() {
   return path.join(require('node:os').homedir(), '.jht')
 }
 
+// Map desktop-side provider id → the active_provider value that
+// .launcher/start-agent.sh (running inside the container) expects.
+// Codex is "openai" in that config because the start-agent script
+// dispatches on the vendor, not the product name.
+const DESKTOP_TO_LAUNCHER_PROVIDER = {
+  claude: 'claude',
+  codex: 'openai',
+  kimi: 'kimi',
+}
+
+// Export the user's chosen provider/plan to ~/.jht/jht.config.json so
+// the agent-boot script inside the container can pick the right CLI
+// and load the right identity file (CLAUDE.md for Claude, AGENTS.md
+// for Codex / Kimi). Written right before `docker run` on Start Team.
+function syncJhtConfig() {
+  const selection = providerStore.readSelection(require('electron').app.getPath('userData'))
+  if (!selection?.provider) return false
+  const activeProvider = DESKTOP_TO_LAUNCHER_PROVIDER[selection.provider] || selection.provider
+  const config = {
+    active_provider: activeProvider,
+    plan: selection.plan ?? null,
+    providers: {
+      [activeProvider]: { auth_method: 'subscription' },
+    },
+  }
+  const bindHomeDir = getBindHomeDir()
+  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
+  require('node:fs').writeFileSync(
+    path.join(bindHomeDir, 'jht.config.json'),
+    JSON.stringify(config, null, 2) + '\n',
+  )
+  return true
+}
+
 let mainWindow = null
 let runtime = null
 let payloadDir = null
@@ -148,6 +182,14 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
   ipcMain.handle('launcher:start', async (_event, options) => {
+    try {
+      syncJhtConfig()
+    } catch (error) {
+      // Non-fatal: the agent-boot script has a Claude-subscription
+      // fallback, so a missing or partial config just means the user
+      // drops into the default provider.
+      broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
+    }
     const status = await runtime.startRuntime(options)
     if (status.running) {
       shell.openExternal(status.url).catch(() => {})

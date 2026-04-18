@@ -183,7 +183,11 @@ function createRuntimeManager(config = {}) {
   }
 
   function getUrl(port = state.port) {
-    return `http://localhost:${port}`
+    // Open directly on /dashboard — the root path (/) is the public
+    // landing page for the hosted site; desktop users need the
+    // authenticated dashboard view. The web app skips auth on
+    // localhost (see web middleware) so no login is required.
+    return `http://localhost:${port}/dashboard`
   }
 
   function appendLog(chunk) {
