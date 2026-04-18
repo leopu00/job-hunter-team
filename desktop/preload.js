@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('setupApi', {
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
   openDockerDesktop: () => ipcRenderer.invoke('setup:open-docker-desktop'),
   installDocker: () => ipcRenderer.invoke('setup:install-docker'),
+  installWindowsStack: () => ipcRenderer.invoke('setup:install-windows-stack'),
+  reboot: () => ipcRenderer.invoke('setup:reboot'),
   openBrewHomepage: () => ipcRenderer.invoke('setup:open-brew-homepage'),
   onInstallLog: (callback) => {
     const listener = (_event, message) => {
