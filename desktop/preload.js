@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('setupApi', {
   installProviders: (ids) => ipcRenderer.invoke('setup:install-providers', ids),
   getProviders: () => ipcRenderer.invoke('setup:get-providers'),
   getAuthStates: () => ipcRenderer.invoke('setup:get-auth-states'),
+  logoutProvider: (providerId) => ipcRenderer.invoke('setup:logout-provider', providerId),
   onProviderLog: (callback) => {
     const listener = (_event, message) => {
       try { callback(message) } catch { /* ignore */ }

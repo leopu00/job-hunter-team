@@ -63,8 +63,32 @@ function authStates({ providers, bindHomeDir }) {
   return results
 }
 
+// Wipe every known credential file for a provider so the next login
+// starts from a clean slate ("switch account"). We delete individual
+// files rather than rm -rf'ing the whole provider directory because
+// some CLIs also keep non-credential state there (caches, settings)
+// that's fine to preserve.
+function logoutProvider(providerId, { bindHomeDir }) {
+  const candidates = AUTH_PATHS[providerId] || []
+  const removed = []
+  for (const rel of candidates) {
+    const abs = path.join(bindHomeDir, rel)
+    try {
+      if (fs.existsSync(abs)) {
+        fs.unlinkSync(abs)
+        removed.push(rel)
+      }
+    } catch (error) {
+      // Permission / race — skip and keep going; the login flow will
+      // overwrite anything stale when the user signs in again.
+    }
+  }
+  return { ok: true, removed }
+}
+
 module.exports = {
   AUTH_PATHS,
   authStateFor,
   authStates,
+  logoutProvider,
 }
