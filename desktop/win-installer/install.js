@@ -102,21 +102,44 @@ function buildScript({
     `  }`,
     `} catch { Fail 'WSL_INSTALL' $_.Exception.Message }`,
     ``,
-    `Log "Step 2/2 Installing Git (winget, silent, --accept-package-agreements)"`,
+    `Log "Step 2/2 Installing Git"`,
     `try {`,
     // Get-Command returns $null without throwing when the command is
     // missing. Using `& git --version` for detection raises a
-    // CommandNotFoundException before we can inspect $LASTEXITCODE,
-    // and the surrounding try/catch then mis-reports git as failed.
+    // CommandNotFoundException before we can inspect $LASTEXITCODE.
     `  $gitCmd = Get-Command git -ErrorAction SilentlyContinue`,
     `  if ($gitCmd) {`,
     `    Log "Git already on PATH at $($gitCmd.Source), skipping"`,
     `  } else {`,
-    `    Log "Git not on PATH, installing via winget Git.Git"`,
-    `    & winget install --id Git.Git --source winget --silent \``,
-    `      --accept-package-agreements --accept-source-agreements \``,
-    `      --disable-interactivity *>&1 | ForEach-Object { Log $_ }`,
-    `    if ($LASTEXITCODE -ne 0) { Fail 'GIT_INSTALL' "winget exit $LASTEXITCODE" }`,
+    // Prefer winget when present (simpler, keeps the package in Add/Remove
+    // Programs). Fresh Win10 installs often lack App Installer so winget
+    // is absent — fall back to downloading the official Git for Windows
+    // installer directly from GitHub, which requires no package manager.
+    `    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue`,
+    `    if ($wingetCmd) {`,
+    `      Log "winget present, installing Git.Git"`,
+    `      & winget install --id Git.Git --source winget --silent \``,
+    `        --accept-package-agreements --accept-source-agreements \``,
+    `        --disable-interactivity *>&1 | ForEach-Object { Log $_ }`,
+    `      if ($LASTEXITCODE -ne 0) { Fail 'GIT_INSTALL' "winget exit $LASTEXITCODE" }`,
+    `    } else {`,
+    `      Log "winget missing; falling back to direct Git-for-Windows installer"`,
+    `      $gitInstaller = Join-Path $env:TEMP 'jht-install-git-installer.exe'`,
+    // Pinned to a known-good 64-bit release. Kept up to date by us,
+    // not by the user — they reboot and the installed git works.
+    `      $gitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe'`,
+    `      Log "Downloading $gitUrl"`,
+    `      try {`,
+    `        $ProgressPreference = 'SilentlyContinue'`,
+    `        Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing`,
+    `        Log ("Downloaded {0:N1} MB" -f ((Get-Item $gitInstaller).Length / 1MB))`,
+    `      } catch { Fail 'GIT_INSTALL' ("download failed: " + $_.Exception.Message) }`,
+    `      Log "Running Git installer silent (/VERYSILENT /NORESTART)"`,
+    `      $gp = Start-Process -Wait -PassThru -FilePath $gitInstaller \``,
+    `        -ArgumentList '/VERYSILENT','/NORESTART','/SUPPRESSMSGBOXES','/NOCANCEL'`,
+    `      if ($gp.ExitCode -ne 0) { Fail 'GIT_INSTALL' "git installer exit $($gp.ExitCode)" }`,
+    `      Log "Git installed via direct installer"`,
+    `    }`,
     `  }`,
     `} catch { Fail 'GIT_INSTALL' $_.Exception.Message }`,
     ``,
