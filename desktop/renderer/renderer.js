@@ -41,6 +41,14 @@ const PROVIDER_PLANS = {
   ],
 }
 
+// Where to send the user to buy a subscription if they don't have one
+// yet. Opened in the default system browser via shell.openExternal.
+const PROVIDER_SUBSCRIBE_URL = {
+  claude: 'https://claude.com/pricing',
+  codex: 'https://chatgpt.com/pricing',
+  kimi: 'https://www.kimi.com/membership/pricing',
+}
+
 const SUPPORTED_LANGS = ['en', 'it', 'hu']
 const DEFAULT_LANG = 'en'
 const LANG_STORAGE_KEY = 'jht.lang'
@@ -166,6 +174,8 @@ const TRANSLATIONS = {
     'provider.installStatus.running': 'Installing {name}…',
     'provider.installStatus.allDone': 'All CLIs installed.',
     'provider.installStatus.error': 'Error while installing {name}: {error}',
+    'provider.noSubscription': "Don't have a subscription yet?",
+    'provider.subscribeCta': 'Subscribe →',
     'login.title': 'Sign in to your providers',
     'login.lead': 'Each CLI needs your active subscription. Open Login to sign in inside the app.',
     'login.back': 'Back',
@@ -301,6 +311,8 @@ const TRANSLATIONS = {
     'provider.installStatus.running': 'Installazione di {name}…',
     'provider.installStatus.allDone': 'Tutte le CLI installate.',
     'provider.installStatus.error': "Errore durante l'installazione di {name}: {error}",
+    'provider.noSubscription': 'Non hai ancora un abbonamento?',
+    'provider.subscribeCta': 'Abbonati →',
     'login.title': 'Accedi ai provider',
     'login.lead': "Ogni CLI richiede il tuo abbonamento attivo. Apri Login per autenticarti nell'app.",
     'login.back': 'Indietro',
@@ -436,6 +448,8 @@ const TRANSLATIONS = {
     'provider.installStatus.running': '{name} telepítése…',
     'provider.installStatus.allDone': 'Minden CLI telepítve.',
     'provider.installStatus.error': 'Hiba a(z) {name} telepítésekor: {error}',
+    'provider.noSubscription': 'Még nincs előfizetésed?',
+    'provider.subscribeCta': 'Előfizetés →',
     'login.title': 'Jelentkezz be a szolgáltatókhoz',
     'login.lead': 'Minden CLI-hez aktív előfizetés kell. Nyisd meg a Belépést az alkalmazáson belül.',
     'login.back': 'Vissza',
@@ -603,6 +617,8 @@ const state = {
   containerBusy: false,
   containerReady: false,
   selectedProviders: new Set(),
+  selectedProvider: null,
+  selectedPlan: null,
   providerInstallBusy: false,
   providerInstallDone: false,
   authStates: [],
@@ -1087,36 +1103,50 @@ dom.btnContainerContinue.addEventListener('click', () => {
 
 async function enterProviderChoose() {
   showStep(STEP_PROVIDER_CHOOSE)
-  renderProviderOptions()
+  // Restore any previously saved single-provider selection (with plan
+  // tier). Legacy multi-select state is still populated from getProviders
+  // for the rest of the wizard's logic that expects an array.
   try {
-    const res = await window.setupApi.getProviders()
-    const saved = Array.isArray(res?.providers) ? res.providers : []
-    state.selectedProviders = new Set(saved)
-    renderProviderOptions()
+    const sel = window.setupApi.getSelection
+      ? await window.setupApi.getSelection()
+      : { provider: null, plan: null }
+    state.selectedProvider = sel && sel.provider ? sel.provider : null
+    state.selectedPlan = sel && sel.plan ? sel.plan : null
+    state.selectedProviders = new Set(state.selectedProvider ? [state.selectedProvider] : [])
   } catch {
     // no-op: missing selection is fine
   }
+  renderProviderOptions()
+}
+
+function updateProviderContinueState() {
+  dom.btnProviderContinue.disabled = !(state.selectedProvider && state.selectedPlan)
 }
 
 function renderProviderOptions() {
   const container = dom.providerOptions
   container.innerHTML = ''
   for (const opt of PROVIDER_OPTIONS) {
-    const id = `prov-${opt.id}`
+    const providerRadioId = `prov-${opt.id}`
     const row = document.createElement('label')
     row.className = 'provider-option'
-    row.htmlFor = id
+    row.htmlFor = providerRadioId
 
-    const check = document.createElement('input')
-    check.type = 'checkbox'
-    check.id = id
-    check.value = opt.id
-    check.checked = state.selectedProviders.has(opt.id)
-    check.addEventListener('change', () => {
-      if (check.checked) state.selectedProviders.add(opt.id)
-      else state.selectedProviders.delete(opt.id)
-      row.classList.toggle('provider-option--active', check.checked)
-      dom.btnProviderContinue.disabled = state.selectedProviders.size === 0
+    // Single-select: only one provider active at a time.
+    const radio = document.createElement('input')
+    radio.type = 'radio'
+    radio.name = 'provider-select'
+    radio.id = providerRadioId
+    radio.value = opt.id
+    radio.checked = state.selectedProvider === opt.id
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return
+      state.selectedProvider = opt.id
+      // Clear the plan when the provider changes — the tier options
+      // are provider-specific and re-rendering will repaint them.
+      state.selectedPlan = null
+      state.selectedProviders = new Set([opt.id])
+      renderProviderOptions()
     })
 
     const body = document.createElement('div')
@@ -1133,20 +1163,43 @@ function renderProviderOptions() {
     body.appendChild(name)
     body.appendChild(vendor)
 
-    // Subscription plan table inside the card: one COLUMN per tier.
-    // Header row = plan name, second row = price, third row = usage
-    // estimate. Purely informational — the CLI itself decides which
-    // plan the signed-in account uses; we just help the user match
-    // plan to workload.
     const plans = PROVIDER_PLANS[opt.id] || []
+    const isProviderSelected = state.selectedProvider === opt.id
+
     if (plans.length > 0) {
+      // Subscription plan table: one COLUMN per tier. Header row holds
+      // the radio that lets the user mark which subscription they own
+      // — only enabled once this provider is selected. The selected
+      // tier is saved so the runtime sentinel can size context windows
+      // against the user's actual quota later on.
       const table = document.createElement('table')
       table.className = 'plans-table'
+
       const thead = document.createElement('thead')
       const trHead = document.createElement('tr')
       for (const p of plans) {
         const th = document.createElement('th')
-        th.textContent = p.name
+        const planRadio = document.createElement('input')
+        planRadio.type = 'radio'
+        planRadio.name = `plan-select-${opt.id}`
+        planRadio.className = 'plans-table__radio'
+        planRadio.value = p.id
+        planRadio.checked = isProviderSelected && state.selectedPlan === p.id
+        planRadio.disabled = !isProviderSelected
+        planRadio.addEventListener('change', () => {
+          if (!planRadio.checked) return
+          state.selectedProvider = opt.id
+          state.selectedPlan = p.id
+          state.selectedProviders = new Set([opt.id])
+          renderProviderOptions()
+        })
+        const label = document.createElement('label')
+        label.className = 'plans-table__header-label'
+        label.appendChild(planRadio)
+        const nameSpan = document.createElement('span')
+        nameSpan.textContent = p.name
+        label.appendChild(nameSpan)
+        th.appendChild(label)
         trHead.appendChild(th)
       }
       thead.appendChild(trHead)
@@ -1173,20 +1226,53 @@ function renderProviderOptions() {
       body.appendChild(table)
     }
 
-    row.appendChild(check)
+    // "Don't have a subscription yet?" link — opens the provider's
+    // pricing page in the default browser. Always visible, so users
+    // can subscribe on the spot before coming back to mark the tier.
+    const subscribeUrl = PROVIDER_SUBSCRIBE_URL[opt.id]
+    if (subscribeUrl) {
+      const hint = document.createElement('p')
+      hint.className = 'provider-option__subscribe-hint'
+      const text = document.createElement('span')
+      text.textContent = t('provider.noSubscription') + ' '
+      const link = document.createElement('a')
+      link.href = '#'
+      link.className = 'provider-option__subscribe-link'
+      link.textContent = t('provider.subscribeCta')
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        window.launcherApi.openExternal(subscribeUrl).catch(() => {})
+      })
+      hint.appendChild(text)
+      hint.appendChild(link)
+      body.appendChild(hint)
+    }
+
+    row.appendChild(radio)
     row.appendChild(body)
-    if (check.checked) row.classList.add('provider-option--active')
+    if (isProviderSelected) row.classList.add('provider-option--active')
     container.appendChild(row)
   }
-  dom.btnProviderContinue.disabled = state.selectedProviders.size === 0
+  updateProviderContinueState()
 }
 
 dom.btnProviderBack.addEventListener('click', () => {
   showStep(STEP_CONTAINER)
 })
 
-dom.btnProviderContinue.addEventListener('click', () => {
-  if (state.selectedProviders.size === 0) return
+dom.btnProviderContinue.addEventListener('click', async () => {
+  if (!state.selectedProvider || !state.selectedPlan) return
+  // Persist the single-provider + plan selection. The plan value is
+  // informational; the CLI picks up the actual account entitlements
+  // from its own login. We save regardless of install success so the
+  // sentinel can still read the intended plan later.
+  try {
+    await window.setupApi.saveSelection({
+      provider: state.selectedProvider,
+      plan: state.selectedPlan,
+    })
+  } catch { /* best-effort, not critical for the install flow */ }
   showStep(STEP_PROVIDER_INSTALL)
   startProviderInstall()
 })

@@ -418,6 +418,25 @@ app.whenReady().then(() => {
     return { providers: providerStore.readProviders(app.getPath('userData')) }
   })
 
+  // New single-select API used by the redesigned provider picker:
+  // one provider, one plan tier. The plan value is purely
+  // informational — the sentinel reads it later to size context
+  // windows against the account's actual quota.
+  ipcMain.handle('setup:get-selection', () => {
+    return providerStore.readSelection(app.getPath('userData'))
+  })
+
+  ipcMain.handle('setup:save-selection', (_event, { provider, plan } = {}) => {
+    try {
+      return {
+        ok: true,
+        selection: providerStore.writeSelection(app.getPath('userData'), { provider, plan }),
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle('setup:open-docker-desktop', async () => {
     const desktopPath = dockerInstaller.dockerDesktopPath()
     if (!desktopPath) return { ok: false, error: 'docker-desktop-not-found' }
