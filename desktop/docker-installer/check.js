@@ -41,7 +41,11 @@ async function doesDockerRespond() {
   return result.ok
 }
 
-// Windows/Mac only: is the Docker Desktop GUI process running?
+// Windows/Mac only: is the Docker/Colima runtime up?
+//   - Windows: is the Docker Desktop GUI process running?
+//   - Mac: does `colima status` exit 0? (Colima has no GUI; the daemon
+//     state is the only signal. A running Colima with an unresponsive
+//     docker CLI means the VM is still warming up → "starting".)
 // On Linux there is no "Desktop" app — the daemon runs as a service.
 async function isDockerDesktopRunning(platform = process.platform) {
   if (platform === 'win32') {
@@ -54,8 +58,8 @@ async function isDockerDesktopRunning(platform = process.platform) {
     return /Docker Desktop\.exe/i.test(result.stdout)
   }
   if (platform === 'darwin') {
-    const result = await runWithTimeout('pgrep', ['-x', 'Docker'], 3000)
-    return result.ok && result.stdout.trim().length > 0
+    const result = await runWithTimeout('colima', ['status'], 3000)
+    return result.ok
   }
   return null
 }
