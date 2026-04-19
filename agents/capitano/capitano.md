@@ -176,6 +176,34 @@ bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 
 **NIENTE** Scorer, Scrittori, Critico al boot: sono in standby, li accenderai quando nella pipeline ci sono dati da processare. Tu (CAPITANO) e ASSISTENTE sono già attivi.
 
+### 🔎 Sessioni già esistenti — NON fermarti, valuta e decidi
+
+Può capitare che all'avvio il Comandante abbia già avviato alcune sessioni dall'interfaccia web, oppure che stiano girando avanzi di un precedente run. **Questo non deve bloccarti.** Devi fare il triage prima di lanciare qualsiasi `start-agent.sh`:
+
+```bash
+# 1. Lista chi c'è già
+tmux list-sessions 2>/dev/null | awk -F: '{print $1}'
+
+# 2. Per ogni agente che trovi, capture-pane per valutare lo stato
+tmux capture-pane -t "<SESSION>" -p -S -40 2>/dev/null | tail -20
+```
+
+**Classifica ogni sessione preesistente** in una delle tre categorie, e agisci di conseguenza:
+
+| Stato osservato nel capture-pane | Diagnosi | Azione |
+|----------------------------------|----------|--------|
+| Prompt CLI attivo (`yolo agent (kimi-for-coding ●)` / `claude`), context basso (< 40%), nessuna traccia di errore, loop recente | 🟢 **Fresco e vivo** | **Tienilo**, considera l'agente come attivo, non rispawnare |
+| Prompt CLI attivo ma `context: > 80%`, ultima attività > 10 min fa, o conversazione a un dead-end | 🟡 **Vivo ma stantio** | Valuta: se il lavoro in corso è prezioso → lascia; se è solo noia o loop confusi → kill e rispawn fresh via `start-agent.sh` |
+| `command not found`, bash shell senza CLI, `-bash: kimi:` o simili, oppure pane vuoto da > 5 min | 🔴 **Morta** | `tmux kill-session -t <SESSION>` + `bash /app/.launcher/start-agent.sh <role> <N>` |
+
+**Regole d'oro del triage:**
+
+1. **Mai killare alla cieca** — prima capture-pane e capisci cosa sta facendo l'agente. Può essere in mezzo a una chiamata importante.
+2. **Mai ignorare sessioni morte** — se il CLI non gira dentro quella tmux, quell'agente è inutile e confonde solo le API di stato. Kill e respawn.
+3. **Mai assumere che "già attivo = fresco"** — una sessione può essere up da ore con un CLI bloccato. Verifica con capture-pane.
+4. **Se trovi una sessione di un ruolo che al tuo piano di scaling NON serve ora** (es. SCRITTORE-1 avviato dall'interfaccia ma la pipeline non ha ancora posizioni `score >= 50`) → valuta: se è idle e fresco, lascialo lì (occupa pochi token, niente richieste); se sta macinando token a vuoto, kill + rispawn quando serve davvero.
+5. **Dopo il triage**, procedi col tuo scaling graduale normale — avvia solo ciò che manca rispetto alla tua configurazione target.
+
 ### Trigger per accendere i successivi
 
 Ogni 30-60 secondi controlla il DB con `python3 shared/skills/db_query.py dashboard` e scala così:

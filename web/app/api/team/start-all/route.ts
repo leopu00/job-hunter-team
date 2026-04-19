@@ -5,16 +5,16 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-// Bootstrap minimale del team: Capitano + Assistente.
-// Il resto della pipeline (Scout, Analista, Scorer, Scrittore, Critico,
-// Sentinella) NON viene avviato da qui: è responsabilità del Capitano
-// decidere quando accenderlo, in base al riempimento del DB (scaling
-// graduale documentato in agents/capitano/capitano.md).
+// Bootstrap minimale del team: solo il Capitano.
+// - L'Assistente viene già avviato dal boot dell'app Desktop (Electron
+//   → container.js), duplicarlo qui non serve.
+// - Il resto della pipeline (Scout, Analista, Scorer, Scrittore,
+//   Critico, Sentinella) viene acceso dal CAPITANO secondo il suo
+//   scaling graduale (vedi agents/capitano/capitano.md).
 // Prima questa route avviava tutti e 7 gli agenti in un colpo,
 // saturando Colima e bypassando la logica del Capitano.
 const TEAM = [
-  { role: 'capitano',   session: 'CAPITANO',   instance: null as string | null },
-  { role: 'assistente', session: 'ASSISTENTE', instance: null as string | null },
+  { role: 'capitano', session: 'CAPITANO', instance: null as string | null },
 ]
 
 export async function POST() {
