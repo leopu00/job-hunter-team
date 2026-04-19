@@ -243,7 +243,11 @@ send_env_vars() {
   # that docker's ENV set (e.g. /jht_home/.npm-global/bin where kimi
   # lives after uv tool install). Re-exporting here guarantees the
   # CLI binary resolves.
-  tmux send-keys -t "$SESSION" "export PATH='$PATH'" C-m
+  # Prepend /app/agents/_tools: contiene wrapper come `jht-send` che
+  # gli agenti usano per interagire con l'UI web senza toccare JSON/shell
+  # quoting a mano. Da lì scriviamo chat.jsonl in modo sicuro.
+  AGENT_TOOLS_DIR="/app/agents/_tools"
+  tmux send-keys -t "$SESSION" "export PATH='${AGENT_TOOLS_DIR}:$PATH'" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
@@ -297,6 +301,6 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 if [ "$ROLE" = "assistente" ]; then
   (
     sleep 12
-    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (veloce con upload documenti, lenta con domande), NON fare domande finché l'utente non sceglie o allega qualcosa." Enter
+    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa." Enter
   ) &>/dev/null &
 fi
