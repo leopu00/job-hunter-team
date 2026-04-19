@@ -352,7 +352,7 @@ export default function OnboardingPage() {
       <div className="flex flex-1 gap-4 min-h-0">
 
         {/* ── Sinistra: Live profile ──────────────────────────────────── */}
-        <aside className="w-[38%] flex flex-col min-w-0">
+        <aside className="w-[46%] flex flex-col min-w-0">
           <div className="flex-1 rounded-lg overflow-auto" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
             <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
               <div className="section-label">Profilo candidato</div>
@@ -589,75 +589,143 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
 }
 
 function ProfileLive({ profile }: { profile: Profile }) {
-  if (!profile) {
-    return (
-      <div className="px-4 py-10 text-center">
-        <div className="text-2xl mb-2 opacity-30">◯</div>
-        <p className="text-[10px] text-[var(--color-dim)] max-w-[220px] mx-auto leading-relaxed">
-          Il profilo è vuoto. Inizia a chattare con l&apos;assistente: i campi compariranno qui man mano.
-        </p>
-      </div>
-    )
-  }
-
-  const skills = profile.skills
+  const skills = profile?.skills
     ? Object.values(profile.skills).flat().filter(Boolean)
     : []
-  const langs = (profile.languages ?? [])
+  const langs = (profile?.languages ?? [])
     .map(l => [l.language, l.level].filter(Boolean).join(' '))
     .filter(Boolean)
-  const contacts = profile.positioning?.contacts ?? {}
+  const experience = profile?.candidate?.experience ?? []
+  const education = profile?.candidate?.education ?? []
+  const contacts = profile?.positioning?.contacts ?? {}
 
   return (
     <div className="px-4 py-4 flex flex-col gap-3 text-[11px]">
-      <Field label="Nome" value={profile.name} highlight />
-      <Field label="Ruolo target" value={profile.target_role} highlight />
-      <Field label="Località" value={profile.location} />
-      <Field label="Anni esperienza" value={profile.experience_years != null ? String(profile.experience_years) : null} />
-      <Field label="Email" value={profile.email ?? contacts.email ?? null} />
-      {contacts.phone && <Field label="Telefono" value={contacts.phone} />}
-      {contacts.linkedin && <Field label="LinkedIn" value={contacts.linkedin} />}
-      {contacts.github && <Field label="GitHub" value={contacts.github} />}
-      {skills.length > 0 && (
-        <div>
-          <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-1.5">Skills</div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Nome" value={profile?.name} placeholder="Mario Rossi" highlight />
+        <Field label="Ruolo target" value={profile?.target_role} placeholder="Es. Full Stack Developer" highlight />
+        <Field label="Località" value={profile?.location} placeholder="Es. Milano, IT" />
+        <Field label="Anni esperienza" value={profile?.experience_years != null ? String(profile.experience_years) : null} placeholder="Es. 5" />
+        <Field label="Email" value={profile?.email ?? contacts.email ?? null} placeholder="nome@example.com" />
+        <Field label="Telefono" value={contacts.phone ?? null} placeholder="+39 …" />
+      </div>
+
+      {(contacts.linkedin || contacts.github) && (
+        <div className="grid grid-cols-2 gap-3">
+          {contacts.linkedin && <Field label="LinkedIn" value={contacts.linkedin} />}
+          {contacts.github && <Field label="GitHub" value={contacts.github} />}
+        </div>
+      )}
+
+      <Section label="Competenze">
+        {skills.length > 0 ? (
           <div className="flex flex-wrap gap-1">
-            {skills.slice(0, 24).map((s, i) => (
+            {skills.slice(0, 30).map((s, i) => (
               <span key={`${s}-${i}`} className="px-2 py-0.5 rounded text-[10px]"
                 style={{ background: 'var(--color-row)', color: 'var(--color-bright)', border: '1px solid var(--color-border)' }}>
                 {s}
               </span>
             ))}
-            {skills.length > 24 && (
-              <span className="px-2 py-0.5 text-[10px] text-[var(--color-dim)]">+{skills.length - 24}</span>
+            {skills.length > 30 && (
+              <span className="px-2 py-0.5 text-[10px] text-[var(--color-dim)]">+{skills.length - 30}</span>
             )}
           </div>
-        </div>
-      )}
-      {langs.length > 0 && (
-        <div>
-          <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-1.5">Lingue</div>
-          <div className="flex flex-wrap gap-1.5">
+        ) : (
+          <PlaceholderChips items={['React', 'Python', 'PostgreSQL', '…']} />
+        )}
+      </Section>
+
+      <Section label="Lingue">
+        {langs.length > 0 ? (
+          <div className="flex flex-wrap gap-3">
             {langs.map((l, i) => (
               <span key={`${l}-${i}`} className="text-[10px] text-[var(--color-bright)]">{l}</span>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <PlaceholderChips items={['Italiano C2', 'Inglese B2']} />
+        )}
+      </Section>
+
+      <Section label="Esperienza">
+        {experience.length > 0 ? (
+          <ul className="flex flex-col gap-1.5">
+            {experience.slice(0, 4).map((e, i) => (
+              <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
+                <span className="font-semibold">{e.role ?? '—'}</span>
+                {e.company ? <span className="text-[var(--color-muted)]"> · {e.company}</span> : null}
+                {e.years ? <span className="text-[var(--color-dim)]"> · {e.years} anni</span> : null}
+              </li>
+            ))}
+            {experience.length > 4 && (
+              <li className="text-[9.5px] text-[var(--color-dim)]">+{experience.length - 4} altre</li>
+            )}
+          </ul>
+        ) : (
+          <div className="text-[10px] text-[var(--color-border)] italic">Es. Senior Developer · Acme · 3 anni</div>
+        )}
+      </Section>
+
+      <Section label="Titoli di studio">
+        {education.length > 0 ? (
+          <ul className="flex flex-col gap-1">
+            {education.slice(0, 3).map((e, i) => (
+              <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
+                {e.degree ?? '—'}{e.institution ? <span className="text-[var(--color-muted)]"> · {e.institution}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-[10px] text-[var(--color-border)] italic">Es. Laurea in Informatica · Università di …</div>
+        )}
+      </Section>
     </div>
   )
 }
 
-function Field({ label, value, highlight }: { label: string; value?: string | null; highlight?: boolean }) {
-  const empty = !value
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
+      <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-1.5">{label}</div>
+      {children}
+    </div>
+  )
+}
+
+function PlaceholderChips({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((s, i) => (
+        <span
+          key={`${s}-${i}`}
+          className="px-2 py-0.5 rounded text-[10px] italic"
+          style={{
+            background: 'transparent',
+            color: 'var(--color-border)',
+            border: '1px dashed var(--color-border)',
+          }}
+        >
+          {s}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Field({ label, value, highlight, placeholder }: { label: string; value?: string | null; highlight?: boolean; placeholder?: string }) {
+  const empty = !value
+  return (
+    <div className="min-w-0">
       <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-0.5">{label}</div>
-      <div className="text-[11px]" style={{
-        color: empty ? 'var(--color-border)' : highlight ? 'var(--color-green)' : 'var(--color-bright)',
-        fontWeight: highlight && !empty ? 600 : 400,
-      }}>
-        {value ?? '—'}
+      <div
+        className="text-[11px] truncate"
+        style={{
+          color: empty ? 'var(--color-border)' : highlight ? 'var(--color-green)' : 'var(--color-bright)',
+          fontWeight: highlight && !empty ? 600 : 400,
+          fontStyle: empty ? 'italic' : 'normal',
+        }}
+      >
+        {value ?? placeholder ?? '—'}
       </div>
     </div>
   )
