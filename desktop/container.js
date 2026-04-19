@@ -120,6 +120,18 @@ function buildDockerArgs({
     args.push('-v', '/app/web/node_modules')
   }
 
+  // Dev overlay: if JHT_DEV_REPO_DIR points at the repo root on the host,
+  // bind-mount .launcher/ and agents/ so edits to tmux boot scripts and
+  // agent system prompts are picked up without rebuilding the image.
+  // Temporary — remove once the image pipeline is locked for end-users.
+  const devRepoDir = process.env.JHT_DEV_REPO_DIR
+  if (devRepoDir && fs.existsSync(devRepoDir)) {
+    const launcherDir = path.join(devRepoDir, '.launcher')
+    const agentsDir = path.join(devRepoDir, 'agents')
+    if (fs.existsSync(launcherDir)) args.push('-v', `${launcherDir}:/app/.launcher`)
+    if (fs.existsSync(agentsDir)) args.push('-v', `${agentsDir}:/app/agents`)
+  }
+
   args.push(
     '-e',
     'JHT_HOME=/jht_home',
