@@ -419,7 +419,7 @@ export default function OnboardingPage() {
 
           <button
             disabled={!canProceed}
-            onClick={() => { if (canProceed) router.push('/dashboard') }}
+            onClick={() => { if (canProceed) router.push('/onboarding/cloud') }}
             className="mt-3 px-4 py-2.5 rounded-lg text-[11px] font-bold tracking-wide transition-opacity"
             style={{
               background: canProceed ? 'var(--color-green)' : 'var(--color-card)',
