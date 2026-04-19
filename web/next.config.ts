@@ -14,7 +14,11 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // microphone=(self) permette al nostro origin di richiedere
+  // l'accesso via navigator.mediaDevices.getUserMedia (serve per il
+  // bottone "detta a voce" nell'onboarding). Camera e geolocation
+  // restano disabilitate: nessuna pagina le usa al momento.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
   {
     key: 'Content-Security-Policy',
     value: [
