@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 export default function NotFound() {
+  const pathname = usePathname()
   return (
     <div className="min-h-screen flex items-center justify-center px-5" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
       <div className="text-center max-w-md">
@@ -39,9 +41,12 @@ export default function NotFound() {
           </button>
         </div>
 
-        {/* Current path */}
+        {/* Current path: usePathname() è safe SSR+client, evita
+             hydration mismatch (window.location.pathname è undefined
+             sul server → stringa vuota → il client poi mostra il path
+             reale e React protesta). */}
         <p className="mt-8 text-[9px] font-mono" style={{ color: 'var(--color-dim)' }}>
-          {typeof window !== 'undefined' ? window.location.pathname : ''}
+          {pathname}
         </p>
       </div>
     </div>
