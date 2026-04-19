@@ -239,7 +239,16 @@ send_env_vars() {
   # files live under /jht_home (the bind-mounted ~/.jht from the
   # host). Without this override, kimi/claude/codex would report
   # "not logged in" even when the user authed successfully.
-  if [ -d "${JHT_HOME:-}" ] && [ "$JHT_HOME" != "$HOME" ]; then
+  #
+  # Nota: esportiamo SEMPRE HOME (senza il guard `$JHT_HOME != $HOME`
+  # che prima saltava il send-keys quando il caller aveva già HOME
+  # settato a $JHT_HOME). Motivo: quando il Capitano — che gira dentro
+  # una tmux dove HOME è già /jht_home — invoca start-agent.sh per
+  # spawnare un agente figlio, la nuova tmux parte con una bash fresca
+  # che legge /etc/passwd → HOME torna a /home/jht. Senza l'export,
+  # kimi/claude del nuovo agente cercano le credenziali nel posto
+  # sbagliato e chiedono di rifare il login device.
+  if [ -d "${JHT_HOME:-}" ]; then
     tmux send-keys -t "$SESSION" "export HOME='$JHT_HOME'" C-m
   fi
   # Propagate our PATH into the tmux pane: a fresh interactive bash
