@@ -10,6 +10,15 @@ const { inspectDependencies } = require('./dependencies')
 const DEFAULT_PORT = 3000
 const START_TIMEOUT_MS = 20000
 const STOP_TIMEOUT_MS = 1500
+// Dopo che TCP è open, aspettiamo che /api/health risponda 200 prima
+// di considerare Next "pronto". In container/dev Turbopack serve
+// risposte solo dopo il primo bundle → TCP open != dev server vivo.
+const HEALTH_TIMEOUT_MS = 30000
+// Warm-up: triggeriamo la compilazione on-demand di Turbopack sulle
+// pagine che l'utente apre per prime. Così quando il browser arriva,
+// non aspetta 5-15s di compile alla prima navigazione.
+const WARM_UP_TIMEOUT_MS = 45000
+const WARM_UP_PATHS = ['/onboarding', '/dashboard', '/team', '/capitano']
 
 function getDefaultLogFile() {
   return path.join(os.tmpdir(), 'jht-desktop-launcher.log')
@@ -166,8 +175,11 @@ function createRuntimeManager(config = {}) {
     config.spawnSpecFactory ?? (containerMode ? containerSpawnSpecFactory : defaultSpawnSpecFactory)
   const isPortOpenFn = config.isPortOpenFn
   const probeHttpFn = config.probeHttpFn
+  const httpGetFn = config.httpGetFn  // per test: (port, path) => { ok, status }
   const portFallbackSpan = config.portFallbackSpan ?? 10
   const containerStartTimeoutMs = config.containerStartTimeoutMs ?? 90000
+  const healthTimeoutMs = config.healthTimeoutMs ?? HEALTH_TIMEOUT_MS
+  const warmUpPaths = config.warmUpPaths ?? WARM_UP_PATHS
   const state = {
     child: null,
     mode: 'stopped',
@@ -176,6 +188,7 @@ function createRuntimeManager(config = {}) {
     startedAt: null,
     lastError: null,
     lastExitCode: null,
+    warmingProgress: null,  // { stage: 'health'|'warmup', done, total, currentPath? }
   }
 
   function getWebDir() {
@@ -254,6 +267,59 @@ function createRuntimeManager(config = {}) {
     return false
   }
 
+  // Fetch GET con timeout. Risolve { status, ok } o { error }.
+  // Test-friendly: se config.httpGetFn è iniettato lo usiamo senza
+  // passare da http.request (utile per i runtime.test.js che non hanno
+  // un server reale in ascolto).
+  function httpGet(port, targetPath, timeoutMs = 2000) {
+    if (httpGetFn) return Promise.resolve(httpGetFn(port, targetPath))
+    return new Promise((resolve) => {
+      const request = http.request({
+        host: '127.0.0.1',
+        port,
+        path: targetPath,
+        method: 'GET',
+        timeout: timeoutMs,
+      }, (response) => {
+        response.resume()
+        resolve({ status: response.statusCode, ok: response.statusCode >= 200 && response.statusCode < 400 })
+      })
+      request.on('timeout', () => { request.destroy(); resolve({ error: 'timeout' }) })
+      request.on('error', (err) => resolve({ error: err.message }))
+      request.end()
+    })
+  }
+
+  // Polling su /api/health fino a 200 (o timeoutMs). A differenza di
+  // waitForPort (TCP only), qui sappiamo davvero se l'app Next ha
+  // finito il boot ed è in grado di servire API.
+  async function waitForHealthy(port, timeoutMs = healthTimeoutMs) {
+    const started = Date.now()
+    while (Date.now() - started < timeoutMs) {
+      const { ok } = await httpGet(port, '/api/health', 2500)
+      if (ok) return true
+      await new Promise((resolve) => setTimeout(resolve, 600))
+    }
+    return false
+  }
+
+  // Pre-triggera la compile on-demand di Turbopack delle pagine chiave.
+  // Fatto in parallelo (Promise.allSettled) per ridurre il time-to-open.
+  // onProgress(done, total, pathCompleted) per UI feedback.
+  async function warmUp(port, paths, onProgress) {
+    let done = 0
+    const total = paths.length
+    const promises = paths.map(async (p) => {
+      await httpGet(port, p, 15000)  // timeout generoso per first compile
+      done += 1
+      onProgress?.(done, total, p)
+    })
+    await Promise.race([
+      Promise.allSettled(promises),
+      new Promise((resolve) => setTimeout(resolve, WARM_UP_TIMEOUT_MS)),
+    ])
+  }
+
   async function inspectPort(port) {
     const tcpOpen = await isPortOpen(port)
     if (!tcpOpen) {
@@ -282,7 +348,9 @@ function createRuntimeManager(config = {}) {
   function buildStatus(extra = {}) {
     return {
       mode: state.mode,
-      running: state.mode === 'running' || state.mode === 'starting',
+      // `running` resta true anche durante 'warming' così la UI non torna
+      // a "ferma" mentre Turbopack compila le prime pagine.
+      running: ['running', 'starting', 'warming'].includes(state.mode),
       managed: !!state.child,
       port: state.port,
       url: getUrl(),
@@ -290,6 +358,7 @@ function createRuntimeManager(config = {}) {
       startedAt: state.startedAt,
       lastError: state.lastError,
       lastExitCode: state.lastExitCode,
+      warmingProgress: state.warmingProgress,
       logFile,
       containerMode,
       setup: containerMode ? null : inspectWebSetup(getRepoRoot()),
@@ -454,7 +523,35 @@ function createRuntimeManager(config = {}) {
       return buildStatus()
     }
 
+    // TCP open != dev server pronto. Aspetta che /api/health risponda
+    // 200 (Next davvero vivo) e poi pre-triggera la compile on-demand
+    // di Turbopack sulle pagine chiave. Senza questo warm-up l'utente
+    // vedeva 404 transitori e le prime navigazioni bloccavano per 5-15s
+    // mentre Turbopack compilava.
+    state.mode = 'warming'
+    state.warmingProgress = { stage: 'health', done: 0, total: warmUpPaths.length + 1 }
+
+    const healthy = await waitForHealthy(state.port, healthTimeoutMs)
+    if (!healthy) {
+      await stopRuntime()
+      state.mode = 'error'
+      state.lastError = `Next non risponde su /api/health entro ${healthTimeoutMs / 1000}s (possibile cache Turbopack corrotta)`
+      state.warmingProgress = null
+      return buildStatus()
+    }
+    state.warmingProgress = { stage: 'warmup', done: 1, total: warmUpPaths.length + 1 }
+
+    await warmUp(state.port, warmUpPaths, (done, total, currentPath) => {
+      state.warmingProgress = {
+        stage: 'warmup',
+        done: 1 + done,
+        total: 1 + total,
+        currentPath,
+      }
+    })
+
     state.mode = 'running'
+    state.warmingProgress = null
     return buildStatus(state.port !== preferredPort
       ? {
           note: 'port-fallback',

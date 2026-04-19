@@ -112,6 +112,8 @@ test('runtime manager starts and stops a local server via custom spawn factory',
     logFile: path.join(repoRoot, 'launcher.log'),
     startTimeoutMs: 5000,
     isPortOpenFn: () => portOpen,
+    httpGetFn: () => ({ ok: true, status: 200 }),
+    warmUpPaths: [],
     spawnFn: (command, args, options) => {
       portOpen = true
       return require('node:child_process').spawn(command, args, options)
@@ -155,6 +157,8 @@ test('runtime manager accepts standalone production payload without node_modules
     logFile: path.join(repoRoot, 'launcher.log'),
     startTimeoutMs: 5000,
     isPortOpenFn: () => portOpen,
+    httpGetFn: () => ({ ok: true, status: 200 }),
+    warmUpPaths: [],
     spawnFn: (command, args, options) => {
       portOpen = true
       return require('node:child_process').spawn(command, args, options)
@@ -210,6 +214,8 @@ test('runtime manager falls back to next free port when preferred one is blocked
     startTimeoutMs: 5000,
     isPortOpenFn: (port) => openPorts.has(port),
     probeHttpFn: (port) => port === 3000 ? false : openPorts.has(port),
+    httpGetFn: () => ({ ok: true, status: 200 }),
+    warmUpPaths: [],
     spawnFn: (command, args, options) => {
       openPorts.add(3001)
       return require('node:child_process').spawn(command, args, options)
@@ -248,6 +254,8 @@ test('runtime manager in container mode skips web setup and uses docker spawn sp
     startTimeoutMs: 5000,
     containerStartTimeoutMs: 5000,
     isPortOpenFn: () => portOpen,
+    httpGetFn: () => ({ ok: true, status: 200 }),
+    warmUpPaths: [],
     ensureContainerFn: () => {
       containerEnsured = true
     },
