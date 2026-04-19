@@ -5,14 +5,16 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
+// Bootstrap minimale del team: Capitano + Assistente.
+// Il resto della pipeline (Scout, Analista, Scorer, Scrittore, Critico,
+// Sentinella) NON viene avviato da qui: è responsabilità del Capitano
+// decidere quando accenderlo, in base al riempimento del DB (scaling
+// graduale documentato in agents/capitano/capitano.md).
+// Prima questa route avviava tutti e 7 gli agenti in un colpo,
+// saturando Colima e bypassando la logica del Capitano.
 const TEAM = [
-  { role: 'capitano',   session: 'CAPITANO',    instance: null as string | null },
-  { role: 'scout',      session: 'SCOUT-1',     instance: '1' },
-  { role: 'analista',   session: 'ANALISTA-1',  instance: '1' },
-  { role: 'scorer',     session: 'SCORER-1',    instance: '1' },
-  { role: 'scrittore',  session: 'SCRITTORE-1', instance: '1' },
-  { role: 'critico',    session: 'CRITICO',     instance: null },
-  { role: 'sentinella', session: 'SENTINELLA',  instance: null },
+  { role: 'capitano',   session: 'CAPITANO',   instance: null as string | null },
+  { role: 'assistente', session: 'ASSISTENTE', instance: null as string | null },
 ]
 
 export async function POST() {
