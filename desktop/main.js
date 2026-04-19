@@ -17,6 +17,17 @@ if (process.platform === 'darwin') {
   }
   process.env.PATH = parts.join(':')
 }
+
+// Dev convenience: when running unpackaged (npm run dev) with a sibling
+// web/ checkout, auto-enable the live bind mount so edits to /web show
+// up in the container instantly via Next HMR. Temporary — remove once
+// we lock the image pipeline for end-users.
+if (!app.isPackaged && !('JHT_DEV_WEB_DIR' in process.env)) {
+  const siblingWeb = path.resolve(__dirname, '..', 'web')
+  if (require('node:fs').existsSync(path.join(siblingWeb, 'package.json'))) {
+    process.env.JHT_DEV_WEB_DIR = siblingWeb
+  }
+}
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
@@ -191,9 +202,6 @@ app.whenReady().then(() => {
       broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
     }
     const status = await runtime.startRuntime(options)
-    if (status.running) {
-      shell.openExternal(status.url).catch(() => {})
-    }
     return status
   })
   ipcMain.handle('launcher:stop', () => runtime.stopRuntime())
