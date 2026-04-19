@@ -96,6 +96,38 @@ Lo script fa automaticamente:
 
 Saltare anche UNO di questi passi = la sessione parte con `command not found`, la bash vede i messaggi come comandi errati, e il Comandante vede un agente "attivo" che in realtà è morto.
 
+### 🎬 KICK-OFF OBBLIGATORIO dopo lo spawn
+
+`start-agent.sh` **boota il CLI** (kimi/claude/codex) ma **NON invia alcun primo messaggio**. Se ti fermi lì l'agente è in tmux, vivo, col suo prompt caricato come `CLAUDE.md` (o `AGENTS.md`) — ma **resta fermo ad aspettare input**. Nel DB non succede nulla, il Comandante vede la sessione "attiva" ma non lavora.
+
+**Dopo OGNI `start-agent.sh`**, aspetta ~10 secondi per il boot del CLI, poi invia un messaggio di kick-off via tmux con la regola dei **due comandi separati** (REGOLA #1):
+
+```bash
+# 1. Spawn via script
+bash /app/.launcher/start-agent.sh scout 1
+
+# 2. Attendi boot del CLI (kimi/claude/codex impiega 8-15s)
+sleep 12
+
+# 3. Invia kick-off (testo SENZA Enter)
+tmux send-keys -t SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Leggi il tuo prompt (~/agents/scout-1/CLAUDE.md o AGENTS.md), il profilo candidato (\$JHT_HOME/profile/candidate_profile.yml), e parti dal CERCHIO 1 (Remote EU). Notifica gli Analisti dopo ogni batch di 3-5 posizioni."
+
+# 4. Enter separato (REGOLA #1)
+tmux send-keys -t SCOUT-1 Enter
+```
+
+**Esempi di kick-off per ruolo** (adatta al contesto concreto):
+
+| Ruolo | Messaggio di kick-off tipico |
+|-------|-------------------------------|
+| Scout | "Inizia il loop. Parti dal CERCHIO 1 (Remote EU). Batch di 3-5 posizioni, poi notifica gli Analisti." |
+| Analista | "Inizia. Coda: `db_query.py next-for-analista`. Compila i 5 campi strutturati e promuovi a checked/excluded." |
+| Scorer | "Inizia. Coda: `db_query.py next-for-scorer`. PRE-CHECK + scoring 0-100, gate 40/50." |
+| Scrittore | "Inizia. Coda: `db_query.py next-for-scrittore`. Massimo effort. Loop autonomo di 3 round col Critico." |
+| Critico | "Sei in attesa. Lo Scrittore ti chiamerà con JD + PDF per review cieca. Rispondi solo quando ricevi input." |
+
+**Verifica del kick-off**: dopo ~5 secondi dall'Enter, fai `tmux capture-pane -t <SESSION> -p | tail -10` per confermare che il CLI abbia ricevuto il messaggio (vedrai il testo nel campo input e l'agente iniziare a ragionare). Se il capture mostra ancora `context: 0.0%` e input vuoto → il kick-off non è passato, riprova.
+
 ---
 
 ## TEAM
