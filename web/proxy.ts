@@ -84,6 +84,13 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isApi = pathname.startsWith('/api/')
 
+  // Espone il pathname ai server component via header: il layout
+  // (protected) lo legge per redirigere a /onboarding quando il
+  // profilo non è completo. Va propagato a tutte le NextResponse.next()
+  // chiamate in questa funzione clonando le request headers.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+
   // --- API: CORS preflight ---
   if (isApi && request.method === 'OPTIONS') {
     const origin = request.headers.get('origin')
@@ -116,7 +123,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // --- Auth Supabase ---
-  let supabaseResponse = NextResponse.next({ request })
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
 
   const supabaseConfig = getSupabaseConfig()
 
@@ -133,7 +140,7 @@ export async function proxy(request: NextRequest) {
             cookiesToSet.forEach(({ name, value }) =>
               request.cookies.set(name, value)
             )
-            supabaseResponse = NextResponse.next({ request })
+            supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
             cookiesToSet.forEach(({ name, value, options }) =>
               supabaseResponse.cookies.set(name, value, options)
             )
