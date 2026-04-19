@@ -48,11 +48,11 @@ if [ ! -f "$JHT_CONFIG" ]; then
 fi
 
 # ── Avvia Job Hunter Team (configurazione dal legacy) ─────────────────────────
-# Ordine: prima ALFA (coordinatore), poi agenti operativi
-# Configurazione di default: ALFA + SCOUT-1 + ANALISTA-1 + SCORER-1
+# Ordine: prima CAPITANO (coordinatore), poi agenti operativi
+# Configurazione di default: CAPITANO + SCOUT-1 + ANALISTA-1 + SCORER-1
 #                            + SCRITTORE-1 + CRITICO + SENTINELLA
-echo "  Avvio ALFA..."
-"$AGENT_SCRIPT" alfa "" "$MODE" && true
+echo "  Avvio CAPITANO..."
+"$AGENT_SCRIPT" capitano "" "$MODE" && true
 
 echo "  Avvio SCOUT-1..."
 "$AGENT_SCRIPT" scout 1 "$MODE" && true
@@ -79,10 +79,10 @@ echo -e "${GREEN}${BOLD}  Job Hunter Team online!${RESET}"
 echo -e "${GREEN}${BOLD}══════════════════════════════════════${RESET}"
 echo ""
 echo "Sessioni attive:"
-tmux list-sessions 2>/dev/null | grep -E "ALFA|SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|SENTINELLA" || warn "Nessuna sessione trovata"
+tmux list-sessions 2>/dev/null | grep -E "CAPITANO|SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|SENTINELLA" || warn "Nessuna sessione trovata"
 echo ""
 echo -e "${BOLD}Connettiti al Coordinatore:${RESET}"
-echo "  tmux attach -t ALFA"
+echo "  tmux attach -t CAPITANO"
 echo ""
 echo -e "${BOLD}Web App (localhost:3000):${RESET}"
 

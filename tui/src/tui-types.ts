@@ -1,7 +1,7 @@
 export type TuiView = "home" | "team" | "chat" | "tasks" | "ai" | "dashboard" | "profile";
 
 export type AgentRole =
-  | "alfa"
+  | "capitano"
   | "analista"
   | "assistente"
   | "critico"

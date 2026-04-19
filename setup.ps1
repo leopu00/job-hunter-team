@@ -293,7 +293,7 @@ if ($wsl) {
     Write-Host "      wsl -d Ubuntu-22.04 -- ./.launcher/start.sh"
     Write-Host ""
     Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Connettiti al Coordinatore:"
-    Write-Host "      wsl -d Ubuntu-22.04 -- tmux attach -t ALFA"
+    Write-Host "      wsl -d Ubuntu-22.04 -- tmux attach -t CAPITANO"
     Write-Host ""
 } else {
     Write-Host "  > " -NoNewline -ForegroundColor Yellow; Write-Host "Agenti tmux disabilitati (serve WSL)."

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 // Job Hunter agent definitions (session prefix → display info)
 const JH_AGENTS: Record<string, { role: string; emoji: string; color: string; maxInstances: number }> = {
-  ALFA:       { role: 'Capitano',  emoji: '👨‍✈️', color: '#ff9100', maxInstances: 1 },
+  CAPITANO:       { role: 'Capitano',  emoji: '👨‍✈️', color: '#ff9100', maxInstances: 1 },
   SCOUT:      { role: 'Scout',     emoji: '🕵️',  color: '#2196f3', maxInstances: 3 },
   ANALISTA:   { role: 'Analista',  emoji: '🔬',  color: '#00e676', maxInstances: 2 },
   SCORER:     { role: 'Scorer',    emoji: '📊',  color: '#b388ff', maxInstances: 3 },

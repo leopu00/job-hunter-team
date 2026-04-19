@@ -4,7 +4,7 @@ import { runBash } from '@/lib/shell'
 export const dynamic = 'force-dynamic'
 
 const SESSIONS = [
-  'ALFA', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA',
+  'CAPITANO', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA',
 ]
 
 export async function POST() {

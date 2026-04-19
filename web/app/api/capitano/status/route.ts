@@ -8,14 +8,14 @@ export async function GET() {
     const { stdout: sessions } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""'
     )
-    const active = sessions.trim().split('\n').some(s => s.trim() === 'ALFA')
+    const active = sessions.trim().split('\n').some(s => s.trim() === 'CAPITANO')
 
     if (!active) {
       return NextResponse.json({ active: false, output: '' })
     }
 
     const { stdout: output } = await runBash(
-      'tmux capture-pane -t "ALFA" -p -S -200 2>/dev/null || echo ""'
+      'tmux capture-pane -t "CAPITANO" -p -S -200 2>/dev/null || echo ""'
     )
 
     return NextResponse.json({ active: true, output })

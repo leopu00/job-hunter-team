@@ -29,7 +29,7 @@ const TMUX_SESSIONS = [
   { name: 'telegram',     session: 'JHT-TELEGRAM' },
 ]
 
-const AGENT_SESSIONS = ['ALFA', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA']
+const AGENT_SESSIONS = ['CAPITANO', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA']
 
 async function checkHttp(name: string, url: string): Promise<ServiceHealth> {
   const start = Date.now()

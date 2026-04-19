@@ -63,7 +63,7 @@ async function checkMemory() {
 async function checkAgents() {
   try {
     const out = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    const jht = out.trim().split('\n').filter(s => s.startsWith('JHT-') || s.startsWith('ALFA') || s.startsWith('SCOUT') || s.startsWith('ANALISTA') || s.startsWith('SCORER') || s.startsWith('SCRITTORE') || s.startsWith('CRITICO') || s.startsWith('SENTINELLA') || s.startsWith('ASSISTENTE'));
+    const jht = out.trim().split('\n').filter(s => s.startsWith('JHT-') || s.startsWith('CAPITANO') || s.startsWith('SCOUT') || s.startsWith('ANALISTA') || s.startsWith('SCORER') || s.startsWith('SCRITTORE') || s.startsWith('CRITICO') || s.startsWith('SENTINELLA') || s.startsWith('ASSISTENTE'));
     return { name: 'Agenti', status: jht.length > 0 ? 'ok' : 'warn', detail: `${jht.length} sessioni tmux attive` };
   } catch { return { name: 'Agenti', status: 'warn', detail: 'tmux non disponibile' }; }
 }

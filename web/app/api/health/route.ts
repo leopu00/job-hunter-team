@@ -68,7 +68,7 @@ function checkMemory(): ModuleCheck {
 }
 
 function checkAgents(): ModuleCheck {
-  const sessions = ['ALFA', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA', 'ASSISTENTE']
+  const sessions = ['CAPITANO', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO', 'SENTINELLA', 'ASSISTENTE']
   let running = 0
   for (const s of sessions) { try { execSync(`tmux has-session -t "${s}" 2>/dev/null`, { stdio: 'pipe' }); running++ } catch { /* not running */ } }
   const status: Status = running === 0 ? 'warn' : running >= 3 ? 'ok' : 'warn'

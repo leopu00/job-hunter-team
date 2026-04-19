@@ -2,7 +2,7 @@
 # .launcher/start-agent.sh — Avvia un singolo agente del Job Hunter Team
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
-# Ruoli: alfa, scout, analista, scorer, scrittore, critico, sentinella, assistente
+# Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente
 # Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1)
 # Mode: default|fast (default se omesso)
 #
@@ -16,7 +16,7 @@ if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
   echo ""
   echo "Ruoli disponibili:"
-  echo "  alfa        → ALFA         (Coordinatore pipeline Job Hunter)"
+  echo "  capitano        → CAPITANO         (Coordinatore pipeline Job Hunter)"
   echo "  scout       → SCOUT-N      (Cerca posizioni lavorative)"
   echo "  analista    → ANALISTA-N   (Analizza job description e aziende)"
   echo "  scorer      → SCORER-N     (Calcola punteggio match)"
@@ -26,7 +26,7 @@ if [ -z "${1:-}" ]; then
   echo "  assistente  → ASSISTENTE   (Aiuta l'utente a navigare la piattaforma)"
   echo ""
   echo "Esempi:"
-  echo "  $0 alfa              → avvia ALFA"
+  echo "  $0 capitano              → avvia CAPITANO"
   echo "  $0 scout 1           → avvia SCOUT-1"
   echo "  $0 scrittore 2 fast  → avvia SCRITTORE-2 in modalità fast"
   echo "  $0 assistente        → avvia ASSISTENTE"
@@ -40,7 +40,7 @@ MODE="${3:-default}"
 # Mappa ruolo → prefisso sessione | effort
 get_agent_info() {
   case "$1" in
-    alfa)       echo "ALFA|high" ;;
+    capitano)       echo "CAPITANO|high" ;;
     scout)      echo "SCOUT|high" ;;
     analista)   echo "ANALISTA|high" ;;
     scorer)     echo "SCORER|medium" ;;
@@ -56,14 +56,14 @@ AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: alfa, scout, analista, scorer, scrittore, critico, sentinella, assistente"
+  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente"
   exit 1
 fi
 
 IFS='|' read -r session_prefix effort <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "alfa" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
   # Agenti singoli — nessun numero
   SESSION="$session_prefix"
 else
@@ -190,7 +190,7 @@ mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
 # Directory di lavoro dell'agente nella zona nascosta
-if [ "$ROLE" = "alfa" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
   AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
 else
   AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
@@ -297,7 +297,7 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 # ── Prompt di avvio per l'assistente ─────────────────────────────────────────
 # Solo per role=assistente: dopo che il CLI è pronto, inietta un trigger che
 # fa scrivere al modello il primo messaggio di benvenuto nel chat.jsonl.
-# Gli altri ruoli (alfa / scout / ecc.) ricevono istruzioni dal Capitano.
+# Gli altri ruoli (capitano / scout / ecc.) ricevono istruzioni dal Capitano.
 if [ "$ROLE" = "assistente" ]; then
   (
     sleep 12

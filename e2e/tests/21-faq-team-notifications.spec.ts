@@ -157,7 +157,7 @@ test.describe('/team — Pipeline e diagnostico agenti', () => {
   });
 
   test('griglia agenti è visibile con card cliccabili', async ({ page }) => {
-    await expect(page.getByRole('article', { name: /Alfa/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('article', { name: /Capitano/i })).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('article', { name: /Assistente/i })).toBeVisible({ timeout: 5000 });
   });
 

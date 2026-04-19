@@ -19,7 +19,7 @@ type LiveEvent = {
 const STREAM_CFG: Record<string, { label: string; color: string; border: string; icon: string }> = {
   lifecycle: { label: 'lifecycle', color: 'var(--color-green)',  border: 'rgba(0,232,122,0.3)',  icon: '⚡' },
   tool:      { label: 'tool',      color: 'var(--color-blue)',   border: 'rgba(77,159,255,0.3)',  icon: '🔧' },
-  assistant: { label: 'assistant', color: 'var(--color-yellow)', border: 'rgba(245,197,24,0.3)', icon: '🤖' },
+  assistant: { label: 'assistant', color: 'var(--color-yellow)', border: 'rgba(245,197,24,0.3)', icon: '👨‍💼' },
   error:     { label: 'error',     color: 'var(--color-red)',    border: 'rgba(255,69,96,0.3)',   icon: '✗' },
 }
 

@@ -14,7 +14,7 @@ import fs from 'fs'
 export const dynamic = 'force-dynamic'
 
 const TEAM = [
-  { role: 'alfa',       session: 'ALFA',        effort: 'high',   instance: null as string | null },
+  { role: 'capitano',       session: 'CAPITANO',        effort: 'high',   instance: null as string | null },
   { role: 'scout',      session: 'SCOUT-1',     effort: 'high',   instance: '1' },
   { role: 'analista',   session: 'ANALISTA-1',  effort: 'high',   instance: '1' },
   { role: 'scorer',     session: 'SCORER-1',    effort: 'medium', instance: '1' },
@@ -28,7 +28,7 @@ function shellEscape(value: string): string {
 }
 
 const DESCRIPTIONS: Record<string, string> = {
-  alfa:       'Coordini la pipeline di ricerca lavoro del team.',
+  capitano:       'Coordini la pipeline di ricerca lavoro del team.',
   scout:      'Cerchi posizioni lavorative online e le inserisci nel database.',
   analista:   'Analizzi le job description e le aziende per estrarre requisiti chiave.',
   scorer:     'Calcoli il punteggio di match tra il profilo del candidato e le posizioni.',
@@ -38,7 +38,7 @@ const DESCRIPTIONS: Record<string, string> = {
 }
 
 const DISPLAY_NAMES: Record<string, string> = {
-  alfa: 'Capitano (Alfa)', scout: 'Scout', analista: 'Analista',
+  capitano: 'Capitano', scout: 'Scout', analista: 'Analista',
   scorer: 'Scorer', scrittore: 'Scrittore', critico: 'Critico', sentinella: 'Sentinella',
 }
 

@@ -449,7 +449,7 @@ const translations = {
     hu: 'A rendszer 7 specializált operatív ügynököt és egy támogató asszisztenst tartalmaz. Helyben dolgoznak, egy közös futtatókörnyezet és egy strukturált folyamat koordinálásával.',
   },
 
-  about_agent_alfa_name:  { it: 'Alfa (Capitano)',     en: 'Alfa (Captain)', hu: 'Alfa (Kapitány)' },
+  about_agent_alfa_name:  { it: 'Capitano',     en: 'Captain', hu: 'Kapitány' },
   about_agent_alfa_desc:  {
     it: 'Il coordinatore del team. Riceve le direttive dall\'utente, assegna i task agli agenti, monitora il progresso e garantisce che la pipeline funzioni senza intoppi. E il punto di contatto tra te e il team.',
     en: 'The team coordinator. Receives directives from the user, assigns tasks to agents, monitors progress and ensures the pipeline runs smoothly. He\'s the point of contact between you and the team.',

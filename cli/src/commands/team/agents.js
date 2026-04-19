@@ -18,7 +18,7 @@ const __dirname = dirname(__filename);
 export { JHT_HOME, JHT_CONFIG_PATH, JHT_DB_PATH, JHT_AGENTS_DIR, JHT_USER_DIR };
 
 export const AGENTS = [
-  { role: 'alfa',       prefix: 'ALFA',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
+  { role: 'capitano',       prefix: 'CAPITANO',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
   { role: 'scout',      prefix: 'SCOUT',      multi: true,  effort: 'high',   desc: 'Cerca posizioni lavorative' },
   { role: 'analista',   prefix: 'ANALISTA',    multi: true,  effort: 'high',   desc: 'Analizza job description e aziende' },
   { role: 'scorer',     prefix: 'SCORER',      multi: true,  effort: 'medium', desc: 'Calcola punteggio match' },
@@ -28,7 +28,7 @@ export const AGENTS = [
   { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
 ];
 
-export const DEFAULT_TEAM = ['alfa', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
+export const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
 
 export const c = {
   green:  (s) => `\x1b[32m${s}\x1b[0m`,

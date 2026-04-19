@@ -80,7 +80,7 @@ describe("DEFAULT_ASSISTANT_CONFIG", () => {
   it("contiene valori default attesi", () => {
     expect(DEFAULT_ASSISTANT_CONFIG.name).toBe("Assistente JHT");
     expect(DEFAULT_ASSISTANT_CONFIG.avatar).toBe("🤖");
-    expect(DEFAULT_ASSISTANT_CONFIG.captainSession).toBe("ALFA");
+    expect(DEFAULT_ASSISTANT_CONFIG.captainSession).toBe("CAPITANO");
     expect(DEFAULT_ASSISTANT_CONFIG.teamResponseTimeoutMs).toBe(5 * 60 * 1000);
   });
 });

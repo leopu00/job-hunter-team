@@ -22,14 +22,14 @@ type AgentDef = {
 /* ── Definizioni agenti ───────────────────────────────────────────── */
 
 const AGENTS: AgentDef[] = [
-  { id: 'alfa',       name: 'Alfa',       role: 'Capitano',   emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100', session: 'ALFA',       link: '/capitano',  desc: 'Coordinates the team and priorities' },
+  { id: 'capitano',       name: 'Capitano',       role: 'Capitano',   emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100', session: 'CAPITANO',       link: '/capitano',  desc: 'Coordinates the team and priorities' },
   { id: 'scout',      name: 'Scout',      role: 'Scout',      emoji: '\uD83D\uDD75\uFE0F',         color: '#2196f3', session: 'SCOUT-1',    link: '/scout',     desc: 'Searches job listings' },
   { id: 'analista',   name: 'Analista',   role: 'Analista',   emoji: '\u{1F468}\u200D\uD83D\uDD2C', color: '#00e676', session: 'ANALISTA-1', link: '/analista',  desc: 'Analyzes requirements and fit' },
   { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff', session: 'SCORER-1',   link: '/scorer',    desc: 'Calculates match score' },
   { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600', session: 'SCRITTORE-1', link: '/scrittore', desc: 'Generates CV and cover letter' },
   { id: 'critico',    name: 'Critico',    role: 'Critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336', session: 'CRITICO',    link: '/critico',   desc: 'Reviews documents' },
   { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/sentinella', desc: 'Monitors budget and rate limits' },
-  { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\uD83E\uDD16',                color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'AI chat for user' },
+  { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\u{1F468}\u200D\u{1F4BC}',    color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'AI chat for user' },
 ]
 
 /* ── Componenti ───────────────────────────────────────────────────── */

@@ -105,7 +105,7 @@ export default async function DashboardPage() {
   try {
     const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
     const sessions = stdout.trim().split('\n').filter(Boolean)
-    const JH_PREFIXES = ['ALFA', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']
+    const JH_PREFIXES = ['CAPITANO', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']
     teamActive = sessions.some(s =>
       JH_PREFIXES.some(p => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`))
     )
