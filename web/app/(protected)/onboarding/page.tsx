@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
 type AssistantStatus = { active: boolean }
@@ -28,6 +28,8 @@ const WELCOME_TEXT = 'Ciao! Aiutami a configurare il mio profilo. Puoi farmi qua
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
+  const router = useRouter()
+
   // Profilo (sinistra, polling YAML)
   const [profile, setProfile] = useState<Profile>(null)
 
@@ -361,6 +363,7 @@ export default function OnboardingPage() {
 
           <button
             disabled={!canProceed}
+            onClick={() => { if (canProceed) router.push('/dashboard') }}
             className="mt-3 px-4 py-2.5 rounded-lg text-[11px] font-bold tracking-wide transition-opacity"
             style={{
               background: canProceed ? 'var(--color-green)' : 'var(--color-card)',
@@ -370,7 +373,7 @@ export default function OnboardingPage() {
             }}
           >
             {canProceed
-              ? <Link href="/dashboard" className="no-underline text-inherit block">Vai alla dashboard →</Link>
+              ? 'Vai alla dashboard →'
               : (!hasCore
                 ? 'Profilo incompleto — nome, ruolo, città, anni, email'
                 : `Aggiungi ancora: ${[
