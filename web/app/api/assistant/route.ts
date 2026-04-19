@@ -3,7 +3,7 @@ import { runBash } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
 
-const CAPTAIN_SESSION = 'ALFA'
+const CAPTAIN_SESSION = 'CAPITANO'
 const ASSISTANT_SESSION = 'ASSISTENTE'
 
 /** Classsifica l'intent del testo in modo leggero (senza importare shared/) */

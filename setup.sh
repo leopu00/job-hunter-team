@@ -251,7 +251,7 @@ if [ -f "$START_SCRIPT" ]; then
   echo -e "      ${BOLD}$START_SCRIPT${RESET}"
   echo ""
   echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
-  echo -e "      ${BOLD}tmux attach -t ALFA${RESET}"
+  echo -e "      ${BOLD}tmux attach -t CAPITANO${RESET}"
 else
   echo -e "  ${GREEN}▶${RESET} Attiva il virtualenv:"
   echo -e "      ${BOLD}source .venv/bin/activate${RESET}"
@@ -260,7 +260,7 @@ else
   echo -e "      ${BOLD}.launcher/start.sh${RESET}  (dalla root del repo)"
   echo ""
   echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
-  echo -e "      ${BOLD}tmux attach -t ALFA${RESET}"
+  echo -e "      ${BOLD}tmux attach -t CAPITANO${RESET}"
 fi
 
 echo ""

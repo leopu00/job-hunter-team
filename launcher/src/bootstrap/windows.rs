@@ -183,7 +183,7 @@ pub fn start_team(cfg: &SetupConfig) -> Result<(), String> {
     };
 
     let agents = [
-        ("ALFA", "alfa", "high"),
+        ("CAPITANO", "capitano", "high"),
         ("SCOUT-1", "scout", "high"),
         ("ANALISTA-1", "analista", "high"),
         ("SCORER-1", "scorer", "medium"),

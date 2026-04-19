@@ -106,14 +106,14 @@ def test_team_list_shows_agents(jht_home):
     assert code == 0
     # Verifica che siano elencati almeno i ruoli chiave
     assert "scout" in out.lower()
-    assert "alfa" in out.lower()
+    assert "capitano" in out.lower()
     assert "sentinella" in out.lower()
 
 
 def test_team_list_shows_all_expected_roles(jht_home):
     code, out, err = run_jht("team", "list", env={"HOME": str(jht_home)})
     assert code == 0
-    expected_roles = ["alfa", "scout", "analista", "scorer", "scrittore", "critico", "sentinella"]
+    expected_roles = ["capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella"]
     for role in expected_roles:
         assert role in out.lower(), f"Ruolo '{role}' mancante nel team list"
 

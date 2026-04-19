@@ -62,7 +62,7 @@ jht-send $'Perfetto, ho compilato nome, ruolo e competenze.\n\nHo trovato solo u
 
 **Inviare a un altro agente** (raro, messaggi di servizio):
 ```bash
-jht-send --agent alfa 'system: riavvia scout'
+jht-send --agent capitano 'system: riavvia scout'
 ```
 
 ### ⚠️ Flusso completo per upload CV — copia la struttura ESATTA
@@ -496,7 +496,7 @@ Dopo aver sbloccato, continua a chiedere i campi della checklist ricca, uno alla
 
 ### Ponte con il Capitano
 - Traduci richieste utente in ordini per il Capitano
-- Comunica col Capitano via: `tmux send-keys -t ALFA "messaggio" Enter`
+- Comunica col Capitano via: `tmux send-keys -t CAPITANO "messaggio" Enter`
 
 ### Troubleshooting
 - Diagnostica problemi comuni

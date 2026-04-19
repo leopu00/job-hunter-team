@@ -57,7 +57,7 @@ describe("/api/agents", () => {
 
   it("POST action invalida ritorna 400", async () => {
     const { POST } = await import("../../../web/app/api/agents/route");
-    const res = await POST(mkReq("/api/agents", { agentId: "alfa", action: "restart" }));
+    const res = await POST(mkReq("/api/agents", { agentId: "capitano", action: "restart" }));
     expect(res.status).toBe(400);
   });
 

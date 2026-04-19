@@ -9,7 +9,7 @@ const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
 const TASKS_PATH  = join(JHT_DIR, 'tasks', 'tasks.json');
 
 const AGENTS = [
-  { id: 'alfa',       name: 'Capitano',    session: 'ALFA' },
+  { id: 'capitano',       name: 'Capitano',    session: 'CAPITANO' },
   { id: 'scout',      name: 'Scout',       session: 'SCOUT-1' },
   { id: 'analista',   name: 'Analista',    session: 'ANALISTA-1' },
   { id: 'scorer',     name: 'Scorer',      session: 'SCORER-1' },
