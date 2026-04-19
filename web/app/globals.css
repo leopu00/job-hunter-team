@@ -57,14 +57,21 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
 ::selection { background: rgba(0, 232, 122, 0.25); color: var(--color-white); }
 
+/* Zoom globale UI: simula il Cmd++ del browser in un unico posto.
+   In Chromium `100vh` resta calcolato sul viewport NON zoomato, quindi
+   qualsiasi container con altezza fissa in vh va diviso per --zoom per
+   non traboccare. Vale anche per min-height del body sotto. */
+:root { --zoom: 1.15; }
+
 body {
   background-color: var(--color-void);
   color: var(--color-base);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
-  min-height: 100vh;
+  min-height: calc(100vh / var(--zoom));
   overflow-x: hidden;
+  zoom: var(--zoom);
   -webkit-font-smoothing: antialiased;
 }
 
