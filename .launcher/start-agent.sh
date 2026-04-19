@@ -297,6 +297,6 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 if [ "$ROLE" = "assistente" ]; then
   (
     sleep 12
-    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati, dammi il benvenuto e guidami nel setup del profilo candidato." Enter
+    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (veloce con upload documenti, lenta con domande), NON fare domande finché l'utente non sceglie o allega qualcosa." Enter
   ) &>/dev/null &
 fi
