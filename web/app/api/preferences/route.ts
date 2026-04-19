@@ -10,6 +10,10 @@ const PREFS_PATH = path.join(JHT_HOME, 'preferences.json')
 
 type ShortcutMap = Record<string, string>
 
+type UiState = {
+  tour_done: boolean
+}
+
 type UserPreferences = {
   theme: 'dark' | 'light'
   language: 'it' | 'en'
@@ -19,6 +23,7 @@ type UserPreferences = {
     desktop: boolean
   }
   shortcuts: ShortcutMap
+  ui_state: UiState
 }
 
 const DEFAULTS: UserPreferences = {
@@ -26,12 +31,18 @@ const DEFAULTS: UserPreferences = {
   language: 'it',
   notifications: { enabled: true, sound: false, desktop: false },
   shortcuts: {},
+  ui_state: { tour_done: false },
 }
 
 function load(): UserPreferences {
   try {
     const raw = JSON.parse(fs.readFileSync(PREFS_PATH, 'utf-8'))
-    return { ...DEFAULTS, ...raw, notifications: { ...DEFAULTS.notifications, ...(raw.notifications ?? {}) } }
+    return {
+      ...DEFAULTS,
+      ...raw,
+      notifications: { ...DEFAULTS.notifications, ...(raw.notifications ?? {}) },
+      ui_state: { ...DEFAULTS.ui_state, ...(raw.ui_state ?? {}) },
+    }
   } catch { return { ...DEFAULTS } }
 }
 
@@ -63,6 +74,10 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.shortcuts && typeof body.shortcuts === 'object') {
     prefs.shortcuts = { ...prefs.shortcuts, ...(body.shortcuts as ShortcutMap) }
+  }
+  if (body.ui_state && typeof body.ui_state === 'object') {
+    const u = body.ui_state as Record<string, unknown>
+    if (typeof u.tour_done === 'boolean') prefs.ui_state.tour_done = u.tour_done
   }
 
   try { save(prefs); return NextResponse.json(prefs) }
