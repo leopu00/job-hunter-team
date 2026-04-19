@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
 import { JHT_USER_DIR } from '@/lib/jht-paths'
-import Navbar from '@/components/Navbar'
+import { readWorkspaceProfile, isProfileComplete } from '@/lib/profile-reader'
+import Navbar from '@/components/NavbarChrome'
+import MainChrome from '@/components/MainChrome'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -27,6 +29,18 @@ export default async function ProtectedLayout({
   const hdrs = await headers()
   const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? ''
   const localRequest = isLocalhostHost(host)
+  const pathname = hdrs.get('x-pathname') ?? ''
+
+  // Onboarding gate: finché il profilo locale non è completo l'utente
+  // può stare solo su /onboarding. Qualsiasi altra route del gruppo
+  // protetto lo rispedisce indietro, così non può saltare il setup
+  // cambiando l'URL a mano. Il check gira solo in local mode, dove
+  // readWorkspaceProfile() ha senso (in cloud il profilo è su Supabase).
+  if (localRequest && pathname && !pathname.startsWith('/onboarding')) {
+    if (!isProfileComplete(readWorkspaceProfile())) {
+      redirect('/onboarding')
+    }
+  }
 
   // Cloud mode (Supabase env configured) AND request from a public
   // host → require auth. Local desktop users bypass even when the
@@ -40,9 +54,7 @@ export default async function ProtectedLayout({
     return (
       <div style={{ position: 'relative', zIndex: 1 }}>
         <Navbar user={user} />
-        <main className="max-w-6xl mx-auto px-5 py-8">
-          {children}
-        </main>
+        <MainChrome>{children}</MainChrome>
       </div>
     )
   }
@@ -51,9 +63,7 @@ export default async function ProtectedLayout({
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
       <Navbar user={null} workspace={JHT_USER_DIR} />
-      <main className="max-w-6xl mx-auto px-5 py-8">
-        {children}
-      </main>
+      <MainChrome>{children}</MainChrome>
     </div>
   )
 }
