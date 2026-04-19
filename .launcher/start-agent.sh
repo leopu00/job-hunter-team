@@ -209,15 +209,19 @@ esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
 
-if [ ! -f "$IDENTITY_DEST" ]; then
-  if [ -f "$TEMPLATE" ]; then
-    cp "$TEMPLATE" "$IDENTITY_DEST"
-    echo "  → $IDENTITY_FILE creato da template ($ROLE.md)"
-  else
-    echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
-    echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $IDENTITY_DEST manualmente."
-    exit 1
-  fi
+if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
+  echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
+  echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $IDENTITY_DEST manualmente."
+  exit 1
+fi
+# Copia il template se:
+#   (a) il file runtime non esiste ancora, oppure
+#   (b) il template nel repo è più recente (commit aggiornato) → sync
+#       così le modifiche al prompt fatte nel repo arrivano a ogni
+#       spawn, senza dover wipare $JHT_HOME/agents a mano.
+if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || [ "$TEMPLATE" -nt "$IDENTITY_DEST" ]; }; then
+  cp "$TEMPLATE" "$IDENTITY_DEST"
+  echo "  → $IDENTITY_FILE sincronizzato da template ($ROLE.md)"
 fi
 
 # ── Avvia agente ─────────────────────────────────────────────────────────────
