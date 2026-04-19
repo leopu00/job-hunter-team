@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""
+jht-send — scrive un messaggio da un agente alla chat web dell'utente.
+
+Usage:
+    jht-send "Testo del messaggio"
+    jht-send --agent alfa "Testo per un altro agente"
+    jht-send --role assistant "..."   # default: assistant
+
+Perché esiste:
+    In passato gli agenti scrivevano su chat.jsonl con costrutti bash fragili
+    ('echo ... $(date)' o heredoc 'EOF'), finendo per produrre JSON invalido
+    e messaggi che non arrivavano al frontend. Questo wrapper centralizza la
+    logica: una sola chiamata, niente quoting hell, timestamp numerico
+    garantito, validazione post-scrittura.
+
+Dove vive il file chat:
+    $JHT_AGENT_DIR/chat.jsonl — se la variabile è settata (caso normale
+    quando l'agente gira in tmux lanciato da start-agent.sh).
+    Altrimenti ricostruito da --agent + $JHT_HOME/agents/<id>/chat.jsonl.
+"""
+import argparse
+import json
+import os
+import pathlib
+import sys
+import time
+
+
+def resolve_chat_file(agent_id: str | None) -> pathlib.Path:
+    if agent_id:
+        jht_home = os.environ.get("JHT_HOME") or str(pathlib.Path.home() / ".jht")
+        return pathlib.Path(jht_home) / "agents" / agent_id / "chat.jsonl"
+    agent_dir = os.environ.get("JHT_AGENT_DIR")
+    if agent_dir:
+        return pathlib.Path(agent_dir) / "chat.jsonl"
+    # Fallback: cwd (l'agente di solito ha cwd = sua dir)
+    return pathlib.Path.cwd() / "chat.jsonl"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Invia un messaggio a chat.jsonl dell'agente (visibile nella chat web).",
+    )
+    parser.add_argument("message", help="Testo del messaggio (quotalo).")
+    parser.add_argument(
+        "--agent",
+        help="ID agente (default: deduce da $JHT_AGENT_DIR o cwd). Es: assistente, alfa.",
+    )
+    parser.add_argument(
+        "--role",
+        default="assistant",
+        choices=["assistant", "system"],
+        help="Ruolo del messaggio (default: assistant).",
+    )
+    parser.add_argument(
+        "--partial",
+        action="store_true",
+        help=(
+            "Marca il messaggio come checkpoint intermedio (done=False). "
+            "Il frontend continua a mostrare i 3 puntini di 'sto lavorando'. "
+            "Omettilo sull'ultimo messaggio del turno per chiudere lo stato busy."
+        ),
+    )
+    args = parser.parse_args()
+
+    chat_file = resolve_chat_file(args.agent)
+    chat_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # `done` = True  → messaggio finale di turno, spegni i puntini
+    # `done` = False → checkpoint intermedio, tieni i puntini accesi
+    entry = {
+        "role": args.role,
+        "text": args.message,
+        "ts": time.time(),
+        "done": not args.partial,
+    }
+    line = json.dumps(entry, ensure_ascii=False) + "\n"
+    with chat_file.open("a", encoding="utf-8") as f:
+        f.write(line)
+
+    # Verifica post-scrittura: l'ultima riga deve essere JSON parsabile.
+    try:
+        raw = chat_file.read_text(encoding="utf-8").rstrip("\n")
+        last = raw.split("\n")[-1] if raw else ""
+        json.loads(last)
+    except Exception as err:  # pragma: no cover
+        print(f"jht-send: last line not parsable ({err}) — file corrupted", file=sys.stderr)
+        return 1
+
+    print(
+        f"jht-send: sent {len(args.message)} chars as {args.role} to {chat_file}",
+        file=sys.stderr,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
