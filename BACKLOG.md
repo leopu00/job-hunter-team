@@ -158,6 +158,9 @@ Obiettivo: la web app funziona end-to-end con dati reali.
 
 #### 🟢 BASSA PRIORITÀ
 
+##### [JHT-DESKTOP-07] Container: `next build` + `next start` invece di `next dev`
+Oggi il container user-facing gira `next dev` (vedi `cli/src/commands/dashboard.js`). Conseguenze: watcher filesystem attivo inutilmente, compilazione on-demand al primo accesso di ogni pagina (3–5 s di attesa), ~500 MB RAM contro ~150 MB di `next start`, bug di buffer/ricompilazione in loop a cui siamo già inciampati in dev. Fix: nel Dockerfile `RUN npm --prefix web run build`, in `dashboard.js` se `isContainer()` spawn `next start -p 3000 -H 0.0.0.0` invece di `next dev`. Lasciare `next dev` solo dietro un flag esplicito `--dev` per poter iterare UI senza rebuild dell'immagine.
+
 ##### [JHT-FRONTEND-05] Pagina Settings (gestione account)
 - Email, piano, logout, delete account
 
