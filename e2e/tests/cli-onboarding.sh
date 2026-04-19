@@ -83,7 +83,7 @@ if [ "$DEPS_OK" = true ]; then
   fi
 
   # Test 6: jht team list risponde
-  if (cd "$CLI_DIR" && node bin/jht.js team list 2>&1 | grep -qi "agenti\|ruolo\|scout\|alfa"); then
+  if (cd "$CLI_DIR" && node bin/jht.js team list 2>&1 | grep -qi "agenti\|ruolo\|scout\|capitano"); then
     green "jht team list: output agenti visibile"
     ((PASS++))
   else

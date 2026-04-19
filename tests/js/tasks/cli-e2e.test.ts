@@ -74,7 +74,7 @@ describe("CLI — team list", () => {
     const r = tryCmd("team list");
     expect(r.code).toBe(0);
     expect(r.out).toContain("Agenti disponibili");
-    expect(r.out).toContain("alfa");
+    expect(r.out).toContain("capitano");
     expect(r.out).toContain("scout");
   });
 });

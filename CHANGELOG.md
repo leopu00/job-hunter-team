@@ -211,7 +211,7 @@ Release focalizzata sui friction point emersi dai test E2E manuali su Windows AR
 ## [0.1.0] — 2026-04-04
 
 ### Pipeline multi-agente
-- Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Alfa (Capitano)
+- Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Capitano
 - Agent runner con tool loop, abort e gestione errori
 - Database SQLite condiviso con anti-collision tra agenti
 
