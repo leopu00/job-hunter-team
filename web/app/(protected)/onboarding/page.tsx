@@ -387,8 +387,12 @@ export default function OnboardingPage() {
   // è davvero pronto, e può re-bloccare rimuovendo il file se serve.
   const canProceed = profileReady
 
+  // Altezza divisa per --zoom: la body ha zoom globale, ma `vh` in
+  // Chromium è calcolato sul viewport non zoomato → senza la divisione
+  // il container trabocca di --zoom volte. Niente -4rem: su /onboarding
+  // la navbar è nascosta (FULLSCREEN_FLOWS).
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto px-5 py-5" style={{ animation: 'fade-in 0.35s ease both' }}>
+    <div className="flex flex-col max-w-7xl mx-auto px-5 py-5" style={{ height: 'calc(100vh / var(--zoom))', animation: 'fade-in 0.35s ease both' }}>
 
       <header className="mb-4">
         <h1 className="text-xl font-bold tracking-tight text-[var(--color-white)]">
@@ -404,9 +408,11 @@ export default function OnboardingPage() {
         {/* ── Sinistra: Live profile ──────────────────────────────────── */}
         <aside className="w-[46%] flex flex-col min-w-0">
           <div className="flex-1 rounded-lg overflow-auto" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-              <div className="section-label">Profilo candidato</div>
-              <LiveDot />
+            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+              <Avatar role="user" size={32} />
+              <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
+                configurazione profilo
+              </span>
             </div>
             <ProfileLive profile={profile} summaries={summaries} sources={sources} />
           </div>
@@ -432,22 +438,13 @@ export default function OnboardingPage() {
         <section className="flex-1 flex flex-col min-w-0 rounded-lg overflow-hidden"
           style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
 
-          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full"
-                style={{
-                  background: status?.active ? 'var(--color-green)' : 'var(--color-dim)',
-                  animation: status?.active ? 'pulse-dot 2s ease-in-out infinite' : undefined,
-                }} />
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-                assistente ai
-              </span>
-              <span className="text-[9px] text-[var(--color-dim)]">
-                {status == null ? '· connessione…' : status.active ? '· attivo' : starting ? '· avvio…' : '· spento'}
-              </span>
-            </div>
+          <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+            <Avatar role="assistant" size={32} />
+            <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
+              assistente
+            </span>
             {startError && !speechError && (
-              <span className="text-[9px] text-[var(--color-red)] truncate max-w-[260px]">
+              <span className="text-[9px] text-[var(--color-red)] truncate max-w-[260px] ml-auto">
                 {startError}
               </span>
             )}
@@ -636,15 +633,6 @@ export default function OnboardingPage() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function LiveDot() {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)]" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-      <span className="text-[9px] tracking-widest uppercase text-[var(--color-dim)]">live</span>
-    </span>
-  )
-}
-
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === 'user'
   const { text, attachments } = extractAttachments(msg.text)
@@ -707,14 +695,15 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
 // Avatar condiviso tra ChatBubble e indicatore "sta scrivendo".
 // Emoji user: 👤 (sagoma busto) — placeholder finché non c'è un avatar
 // configurato per il profilo utente.
-function Avatar({ role }: { role: 'user' | 'assistant' }) {
+function Avatar({ role, size = 28 }: { role: 'user' | 'assistant'; size?: number }) {
   const isUser = role === 'user'
   return (
     <div
-      className="flex items-center justify-center shrink-0 rounded-full text-[16px] select-none"
+      className="flex items-center justify-center shrink-0 rounded-full select-none"
       style={{
-        width: 28,
-        height: 28,
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.57),
         background: 'var(--color-card)',
         border: '1px solid var(--color-border)',
       }}
@@ -935,29 +924,27 @@ function ProfileLive({ profile, summaries, sources }: {
     : []
 
   return (
-    <div className="px-4 py-4 flex flex-col gap-3 text-[11px]">
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Nome" value={profile?.name} placeholder="Mario Rossi" highlight />
-        <Field label="Ruolo target" value={profile?.target_role} placeholder={PLACEHOLDER_ROLES[phIdx]} highlight />
-        <Field label="Località" value={profile?.location} placeholder={PLACEHOLDER_LOCATIONS[phIdx]} />
-        <Field label="Anni esperienza" value={profile?.experience_years != null ? String(profile.experience_years) : null} placeholder="Es. 5" />
-        <Field label="Email" value={profile?.email ?? contacts.email ?? null} placeholder="nome@example.com" />
-        <Field label="Telefono" value={contacts.phone ?? null} placeholder="+39 …" />
-      </div>
-
-      {/* Link pubblici: visibili SOLO se l'utente li ha compilati, con la
-           stessa leggibilità degli altri campi. LinkedIn è rilevante anche
-           fuori dal tech (sanità, vendita, management), quindi niente
-           trattamento "secondario minuscolo". Se manca, non c'è la sezione. */}
-      {(contacts.linkedin || contacts.github || contacts.website) && (
+    <div className="px-4 py-4 flex flex-col gap-4 text-[11px]">
+      <Section label="Identità" icon="👤">
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Nome" value={profile?.name} placeholder="Mario Rossi" highlight />
+          <Field label="Ruolo target" value={profile?.target_role} placeholder={PLACEHOLDER_ROLES[phIdx]} highlight />
+          <Field label="Località" value={profile?.location} placeholder={PLACEHOLDER_LOCATIONS[phIdx]} />
+          <Field label="Anni esperienza" value={profile?.experience_years != null ? String(profile.experience_years) : null} placeholder="Es. 5" />
+        </div>
+      </Section>
+
+      <Section label="Contatti" icon="📱">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Email" value={profile?.email ?? contacts.email ?? null} placeholder="nome@example.com" />
+          <Field label="Telefono" value={contacts.phone ?? null} placeholder="+39 …" />
           {contacts.linkedin && <Field label="LinkedIn" value={contacts.linkedin} />}
           {contacts.github && <Field label="GitHub" value={contacts.github} />}
           {contacts.website && <Field label="Sito" value={contacts.website} />}
         </div>
-      )}
+      </Section>
 
-      <Section label="Competenze">
+      <Section label="Competenze" icon="🛠️">
         {skills.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {skills.slice(0, 30).map((s, i) => (
@@ -975,7 +962,7 @@ function ProfileLive({ profile, summaries, sources }: {
         )}
       </Section>
 
-      <Section label="Lingue">
+      <Section label="Lingue" icon="🌍">
         {langs.length > 0 ? (
           <div className="flex flex-wrap gap-3">
             {langs.map((l, i) => (
@@ -987,7 +974,7 @@ function ProfileLive({ profile, summaries, sources }: {
         )}
       </Section>
 
-      <Section label="Esperienza">
+      <Section label="Esperienza" icon="💼">
         {experience.length > 0 ? (
           <ul className="flex flex-col gap-1.5">
             {experience.slice(0, 4).map((e, i) => (
@@ -1007,7 +994,7 @@ function ProfileLive({ profile, summaries, sources }: {
       </Section>
 
       {sectorEntries.length > 0 && (
-        <Section label="Dettagli del settore">
+        <Section label="Dettagli del settore" icon="🏢">
           <ul className="flex flex-col gap-1">
             {sectorEntries.map(([k, v]) => (
               <li key={k} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
@@ -1020,7 +1007,7 @@ function ProfileLive({ profile, summaries, sources }: {
       )}
 
       {projects.length > 0 && (
-        <Section label="Progetti">
+        <Section label="Progetti" icon="🚀">
           <ul className="flex flex-col gap-1.5">
             {projects.slice(0, 4).map((p, i) => (
               <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
@@ -1040,7 +1027,7 @@ function ProfileLive({ profile, summaries, sources }: {
       )}
 
       {certifications.length > 0 && (
-        <Section label="Certificazioni">
+        <Section label="Certificazioni" icon="🏅">
           <ul className="flex flex-col gap-0.5">
             {certifications.slice(0, 5).map((c, i) => (
               <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
@@ -1052,7 +1039,7 @@ function ProfileLive({ profile, summaries, sources }: {
         </Section>
       )}
 
-      <Section label="Titoli di studio">
+      <Section label="Titoli di studio" icon="🎓">
         {education.length > 0 ? (
           <ul className="flex flex-col gap-1">
             {education.slice(0, 3).map((e, i) => (
@@ -1069,7 +1056,7 @@ function ProfileLive({ profile, summaries, sources }: {
       {summaries.length > 0 && (
         <div className="flex flex-col gap-3 pt-1 border-t border-[var(--color-border)] mt-1">
           {summaries.map(s => (
-            <Section key={s.id} label={s.title}>
+            <Section key={s.id} label={s.title} icon={iconForSummary(s.title)}>
               <div className="text-[11px] leading-relaxed text-[var(--color-bright)]">
                 <MiniMarkdown text={s.content} />
               </div>
@@ -1083,7 +1070,7 @@ function ProfileLive({ profile, summaries, sources }: {
            scrittori CV a valle li leggono via /api/profile/sources — al
            resto della UI l'utente non deve pensarci. */}
 
-      <Section label="Preferenze di lavoro">
+      <Section label="Preferenze di lavoro" icon="🎯">
         {prefs ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap gap-3">
@@ -1116,13 +1103,28 @@ function ProfileLive({ profile, summaries, sources }: {
   )
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, icon, children }: { label: string; icon?: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-1.5">{label}</div>
+      <div className="text-[8px] font-bold tracking-widest uppercase text-[var(--color-dim)] mb-1.5 flex items-center gap-1.5">
+        {icon && <span className="text-[13px] leading-none">{icon}</span>}
+        <span>{label}</span>
+      </div>
       {children}
     </div>
   )
+}
+
+// Icona euristica per i summary dinamici (about, preferences, goals, …).
+// I titoli arrivano dall'assistente, quindi il match è fuzzy sulla keyword.
+function iconForSummary(title: string): string {
+  const t = title.toLowerCase()
+  if (/preferenz|desider/.test(t)) return '⚙️'
+  if (/obiett|goal|aspirazion/.test(t)) return '🎯'
+  if (/forza|strength|punti\s+forti/.test(t)) return '⭐'
+  if (/chi\s+sono|about|di\s+me|profilo/.test(t)) return '👋'
+  if (/stor|percorso/.test(t)) return '🧭'
+  return '📝'
 }
 
 function PlaceholderChips({ items }: { items: string[] }) {
