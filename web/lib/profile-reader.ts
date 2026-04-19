@@ -32,6 +32,29 @@ export function readWorkspaceProfile(_workspacePath?: string): CandidateProfile 
   }
 }
 
+/**
+ * Gate di completezza: un profilo è considerato "pronto per la dashboard"
+ * solo quando contiene identità base + almeno 2 skill, 1 lingua, 1 esperienza
+ * lavorativa e 1 titolo di studio. Stessa logica usata dal client in
+ * onboarding/page.tsx (canProceed). Se cambi una, cambia anche l'altra.
+ */
+export function isProfileComplete(profile: CandidateProfile | null): boolean {
+  if (!profile) return false
+  const hasCore = Boolean(
+    profile.name
+    && profile.target_role
+    && profile.location
+    && profile.experience_years != null
+    && (profile.positioning?.contacts?.email || profile.email),
+  )
+  if (!hasCore) return false
+  const skills = Object.values(profile.skills ?? {}).flat().filter(Boolean)
+  const languages = profile.languages ?? []
+  const experience = profile.positioning?.experience ?? []
+  const education = profile.positioning?.education ?? []
+  return skills.length >= 2 && languages.length >= 1 && experience.length >= 1 && education.length >= 1
+}
+
 function mapYamlToProfile(raw: any): CandidateProfile {
   const candidate = raw.candidate ?? {}
   const personal = raw.personal ?? {}
