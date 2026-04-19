@@ -454,17 +454,26 @@ Dopo ogni campo della checklist di blocco risolto, passa al successivo. Quando l
 
 Il bottone "Vai alla dashboard" a sinistra nella pagina `/onboarding` è **disabilitato di default**. Il frontend NON fa nessuna euristica sul contenuto del profilo: il bottone si abilita **SOLO** se esiste il file `$JHT_HOME/profile/ready.flag`.
 
-**Quando creare il flag** — quando sei convinto che il profilo sia abbastanza ricco per lavorare davvero (checklist di blocco completa, inclusa ≥1 esperienza e ≥1 titolo di studio, e YAML valido). In quel momento esegui:
+**Nota importante sul fallback automatico**: il backend sblocca il bottone anche **senza** il flag quando il YAML soddisfa già la checklist minima (nome, ruolo, città, anni, email, ≥2 skill, ≥1 lingua, ≥1 esperienza, ≥1 titolo). Quindi spesso il bottone sarà già sbloccato da solo quando il profilo è completo: non c'è bisogno di dire "ho sbloccato" se non lo sei stato tu effettivamente. **Non annunciare lo sblocco a meno che tu stesso abbia eseguito il comando di seguito e verificato che il file esiste.**
+
+**Quando creare il flag** — quando vuoi sbloccare **prima** che la checklist euristica sia completa (es. l'utente ha dato info sufficienti ma qualche campo marginale manca e vuoi passare oltre) oppure quando vuoi ancorare lo sblocco in modo esplicito. Procedura RIGIDA in 3 passi — NON saltarli né cambiarli di ordine:
 
 ```bash
+# 1. Crea il flag
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
+
+# 2. VERIFICA che il file esista davvero (il comando sopra può fallire in
+#    modi silenziosi: permessi, directory inesistente, quota disco, ecc.)
+test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
+
+# 3. SOLO se il passo 2 ha stampato FLAG_OK → manda il messaggio in chat.
+#    Se ha stampato FLAG_MISSING → correggi l'errore (es. mkdir -p della
+#    directory) e ripeti dal passo 1. Non annunciare MAI lo sblocco se
+#    non hai visto FLAG_OK nel passo precedente.
+jht-send $'✅ Ho sbloccato il bottone **Vai alla dashboard** a sinistra — ora puoi proseguire quando vuoi.\n\nPrima di farlo ti consiglio però di arricchire il profilo: la qualità del CV che lo Scrittore genera dipende da quanti dettagli hai dato. Vuoi aggiungere altre esperienze, certificazioni o progetti?'
 ```
 
-(il contenuto non serve al frontend — basta la presenza del file — ma scrivere il timestamp aiuta il debug).
-
-Subito dopo, manda all'utente il messaggio di sblocco:
-
-> ✅ Ho sbloccato il bottone **Vai alla dashboard** a sinistra — ora puoi proseguire quando vuoi. Prima di farlo ti consiglio però di arricchire il profilo: la qualità del CV che lo Scrittore genera dipende da quanti dettagli hai dato. Vuoi aggiungere altre esperienze, certificazioni o progetti?
+⚠️ **Anti-hallucination**: è noto che un LLM tende a scrivere "ho fatto X" in chat come frase di chiusura anche quando il tool call per fare X non è stato emesso. Il passo 2 (`test -f`) esiste apposta per interromperti se hai saltato il touch: vedi `FLAG_MISSING` sullo schermo e ti ricordi di tornare indietro. NON fidarti del tuo ricordo — fidati solo dell'output del `test -f`.
 
 **Quando rimuovere il flag** — se durante la conversazione emerge che un campo della checklist di blocco è sbagliato o mancante (es. l'utente dice "ah no, l'esperienza che ti ho dato non era davvero mia"), rimuovi il flag per ri-bloccare il bottone:
 
