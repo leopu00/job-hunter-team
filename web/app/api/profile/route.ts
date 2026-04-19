@@ -2,7 +2,7 @@ import fs from 'fs'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
-import { readWorkspaceProfile } from '@/lib/profile-reader'
+import { isProfileComplete, readWorkspaceProfile } from '@/lib/profile-reader'
 import { isLocalRequest } from '@/lib/auth'
 import { JHT_PROFILE_READY_FLAG } from '@/lib/jht-paths'
 
@@ -30,10 +30,14 @@ export async function GET() {
   }
 
   const profile = readWorkspaceProfile()
-  // Il bottone "Vai alla dashboard" viene abilitato ESCLUSIVAMENTE quando
-  // l'assistente crea ~/.jht/profile/ready.flag (nessuna euristica lato
-  // frontend). Così la decisione di sbloccare resta agli occhi dell'agente
-  // che sa cosa ha raccolto e se è abbastanza per partire.
-  const ready = fs.existsSync(JHT_PROFILE_READY_FLAG)
+  // Il bottone "Vai alla dashboard" si abilita se uno dei due è vero:
+  //   (a) l'assistente ha creato ~/.jht/profile/ready.flag (canale esplicito).
+  //   (b) il YAML soddisfa già la checklist minima (nome, ruolo, città,
+  //       anni, email, ≥2 skill, ≥1 lingua, ≥1 esperienza, ≥1 titolo).
+  // Il fallback (b) evita il bug classico in cui l'assistente annuncia in
+  // chat "ho sbloccato" senza aver effettivamente eseguito il comando shell
+  // che crea il flag: con la checklist completa, da qui `ready` è già true
+  // e l'utente non resta bloccato per un'allucinazione del modello.
+  const ready = fs.existsSync(JHT_PROFILE_READY_FLAG) || isProfileComplete(profile)
   return NextResponse.json({ profile, ready })
 }
