@@ -27,7 +27,8 @@ export function readWorkspaceProfile(_workspacePath?: string): CandidateProfile 
     if (!profile.name && !profile.target_role) return null
     if (profile.name === 'Nome Cognome' || profile.email === 'nome.cognome@example.com') return null
     return profile
-  } catch {
+  } catch (err) {
+    console.error(`[profile-reader] failed to parse ${JHT_PROFILE_YAML}:`, err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -77,8 +78,21 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       }))
     : null
 
-  // Location preferences
+  // Preferenze di lavoro (nuovo campo standard `preferences`) con retrocompat
+  // verso vecchi campi usati dall'agente prima che lo schema venisse fissato:
+  // `work_location`, `flexible`, `location_preferences`, `relocation`.
+  const rawPrefs = raw.preferences ?? {}
   const rawLoc = raw.location_preferences ?? []
+  const legacyWorkMode = raw.work_location ?? rawPrefs.work_mode ?? null
+  const work_mode: string | null = legacyWorkMode
+    ?? (Array.isArray(rawLoc) && rawLoc.length > 0
+      ? (typeof rawLoc[0] === 'string' ? rawLoc[0] : rawLoc[0]?.type ?? null)
+      : null)
+  const work_mode_flexibility: string | null = rawPrefs.work_mode_flexibility
+    ?? (raw.flexible === true ? 'flessibile su altre modalità' : null)
+  const relocation: string | boolean | null = rawPrefs.relocation ?? raw.relocation ?? null
+  const salary_annual_eur: string | null = rawPrefs.salary_annual_eur ?? null
+
   const location_preferences = Array.isArray(rawLoc)
     ? rawLoc.map((l: any) => {
         if (typeof l === 'string') return { type: l }
@@ -133,6 +147,18 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       career_goals: candidate.career_goals,
       aspirations: candidate.aspirations,
       free_notes: candidate.free_notes ?? (typeof raw.notes === 'string' ? raw.notes : raw.notes ? Object.entries(raw.notes).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined),
+      preferences: (work_mode || work_mode_flexibility || relocation != null || salary_annual_eur) ? {
+        work_mode,
+        work_mode_flexibility,
+        relocation,
+        salary_annual_eur,
+      } : undefined,
+      // Dict aperto per dettagli specifici del settore (cucina, sanità,
+      // legale, edile, …). L'assistente popola le chiavi che ha senso per
+      // la persona; il frontend le rende come lista key/value generica.
+      sector_details: raw.sector_details && typeof raw.sector_details === 'object'
+        ? raw.sector_details as Record<string, string | number | boolean | string[] | null>
+        : undefined,
     },
     created_at: '',
     updated_at: '',
