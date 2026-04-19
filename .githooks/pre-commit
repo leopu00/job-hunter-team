@@ -38,7 +38,7 @@ BLOCKED_FILES=""
 while IFS= read -r file; do
     # Permetti file senza estensione noti + file in .githooks/
     basename=$(basename "$file")
-    if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" ]]; then
+    if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" ]]; then
         continue
     fi
     if [[ "$file" == .githooks/* ]]; then
