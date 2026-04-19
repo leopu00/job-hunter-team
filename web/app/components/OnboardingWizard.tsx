@@ -105,7 +105,14 @@ export default function OnboardingWizard() {
       const el = document.querySelector(s.selector!) as HTMLElement | null
       if (!el) { setRect(null); return }
       const r = el.getBoundingClientRect()
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height })
+      // Chromium 128+ scala il BCR con il CSS zoom del body: senza compensazione
+      // lo spotlight (anch'esso figlio body zoomato) viene ri-scalato → zoom².
+      // `currentCSSZoom` è la property standard che restituisce il fattore
+      // compound ereditato; dividendo otteniamo coordinate pre-zoom che il
+      // body ri-scala esattamente una volta, e l'allineamento è corretto a
+      // qualsiasi valore di --zoom. Fallback 1 per browser che non la supportano.
+      const z = (el as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom ?? 1
+      setRect({ top: r.top / z, left: r.left / z, width: r.width / z, height: r.height / z })
     }
     measure()
     window.addEventListener('resize', measure)
