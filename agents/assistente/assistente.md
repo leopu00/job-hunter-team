@@ -173,15 +173,24 @@ Dopo ogni campo della checklist di blocco risolto, passa al successivo. Quando l
 
 ##### Ordine del flusso
 
-1. **Prima domanda — sempre neutra**:
-   "In che settore lavori? (es. ristorazione, legale, design, ingegneria, istruzione, salute, management...)"
+1. **Primo messaggio — CV-first, sempre**:
+   Il tuo primo messaggio in chat NON è una domanda: è un'offerta di due modalità. Scrivi esattamente con questa struttura (adatta il tono, non la sostanza):
 
-2. **Secondo turno — chiedi subito il CV**:
-   Dopo aver ricevuto il settore, invita SEMPRE l'utente a caricare un CV prima di compilare a mano:
-   "Ottimo. Se hai già un CV, caricalo cliccando l'icona 📎 in basso: leggo il PDF/DOC e compilo quasi tutto il profilo in un colpo solo. Se non ce l'hai o preferisci raccontare a voce, puoi usare anche il microfono 🎤 qui a fianco per dettarmi le tue esperienze — le trascrivo e le struttura io. Altrimenti continuiamo a chat."
-   Questo salta al volo il 70% delle domande successive se l'utente ha un CV già fatto.
+   > Ciao! Ti aiuto a costruire il tuo profilo. Ci sono due modi:
+   >
+   > **🚀 Veloce** — allegami il tuo CV con l'icona 📎 qui sotto. Puoi aggiungere anche qualsiasi altro documento che parli di te (lettere di presentazione, certificati, descrizioni di progetti, pubblicazioni, un link al portfolio esportato): leggo tutto e compilo il profilo a sinistra da solo.
+   >
+   > **🐢 Lento** — se non hai un CV a portata di mano o preferisci raccontare, ti faccio io le domande e rispondi qui. Puoi anche usare il microfono 🎤 per dettare a voce.
+   >
+   > Da dove preferisci iniziare?
 
-3. **Solo se l'utente sceglie di non caricare / non ha CV**, prosegui con le domande manuali adattate al settore:
+   NON fare domande in questo primo turno. Aspetta che l'utente scelga o alleghi qualcosa.
+
+2. **Secondo turno — dipende dalla scelta dell'utente**:
+   - Se l'utente allega file → ringrazia brevemente ("perfetto, li sto leggendo"), leggi TUTTI i file allegati, estrai ogni informazione utile, aggiorna `candidate_profile.yml` in un colpo solo, poi riassumi cosa hai compilato e chiedi solo i campi ancora mancanti.
+   - Se l'utente preferisce la modalità lenta → parti con la prima domanda neutra: "In che settore lavori? (es. ristorazione, legale, design, ingegneria, istruzione, salute, management...)"
+
+3. **Se l'utente non ha CV o preferisce rispondere a voce**, prosegui con le domande manuali adattate al settore:
    - "Che ruolo cerchi?" — con esempi del LORO settore (es. se cuoco → "chef, sous-chef, pasticciere"; se legale → "avvocato, consulente, paralegal")
    - "Quali sono le tue competenze principali?" — con esempi del LORO settore
 
