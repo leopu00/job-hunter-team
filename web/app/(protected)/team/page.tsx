@@ -206,30 +206,32 @@ export default function TeamPage() {
       const data = await res.json()
       const agentList: { id: string; status: string }[] = data.agents ?? []
 
-      setStatuses(prev => {
-        const next = { ...prev }
-        AGENTS.forEach(a => {
-          const found = agentList.find(x => x.id === a.id)
-          next[a.id] = (found?.status as AgentStatus) ?? 'stopped'
-        })
-
-        // Toast per cambi di stato
-        const prevRef = prevStatusesRef.current
-        if (prevRef) {
-          AGENTS.forEach(a => {
-            const was = prevRef[a.id]
-            const now = next[a.id]
-            if (was === now) return
-            if (was !== 'running' && now === 'running') {
-              toast(`${a.name} is online`, 'success', 3000)
-            } else if (was === 'running' && now === 'stopped') {
-              toast(`${a.name} stopped`, 'warning', 3000)
-            }
-          })
-        }
-        prevStatusesRef.current = { ...next }
-        return next
+      // Compute next fuori dall'updater: chiamare `toast()` dentro
+      // un updater di setState triggera React warning "Cannot update
+      // ToastProvider while rendering TeamPage" perché React può
+      // rigiocare la callback durante il render. Stato + effetto
+      // esterno (toast) vanno tenuti separati.
+      const next: Record<string, AgentStatus> = {}
+      AGENTS.forEach(a => {
+        const found = agentList.find(x => x.id === a.id)
+        next[a.id] = (found?.status as AgentStatus) ?? 'stopped'
       })
+
+      const prevRef = prevStatusesRef.current
+      if (prevRef) {
+        AGENTS.forEach(a => {
+          const was = prevRef[a.id]
+          const now = next[a.id]
+          if (was === now) return
+          if (was !== 'running' && now === 'running') {
+            toast(`${a.name} is online`, 'success', 3000)
+          } else if (was === 'running' && now === 'stopped') {
+            toast(`${a.name} stopped`, 'warning', 3000)
+          }
+        })
+      }
+      prevStatusesRef.current = next
+      setStatuses(next)
     } catch { /* ignore */ }
   }, [toast])
 
