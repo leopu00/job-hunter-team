@@ -7,7 +7,7 @@ import { isMarketingRoute } from '../marketing-routes'
 const APP_CHROME_HIDDEN_PREFIXES = [
   '/dashboard', '/profile', '/capitano', '/scout', '/analista',
   '/scorer', '/scrittore', '/critico', '/sentinella', '/team',
-  '/applications', '/positions', '/ready', '/risposte', '/crescita', '/assistente', '/setup',
+  '/applications', '/positions', '/ready', '/risposte', '/crescita', '/assistente', '/setup', '/onboarding',
 ]
 
 export default function MainContent({ children }: { children: React.ReactNode }) {
