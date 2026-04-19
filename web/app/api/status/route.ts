@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { JHT_HOME } from '@/lib/jht-paths'
+import { JHT_HOME, JHT_DB_PATH } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic';
 
@@ -41,10 +41,12 @@ function getServices(): ServiceInfo[] {
   // API (stessa istanza Next.js)
   services.push({ id: 'api', name: 'API Server', status: webUp ? 'operational' : 'down', latencyMs: webUp ? Math.floor(Math.random() * 20 + 3) : 0, uptimePercent: webUp ? 99.8 : 0, lastCheck: now });
 
-  // Database (SQLite — controlla file)
-  const dbPath = path.join(JHT_HOME, 'databases', 'jobs.db');
+  // Database (SQLite — controlla file). Usa il path canonico
+  // JHT_DB_PATH (= $JHT_HOME/jobs.db) definito in jht-paths.ts —
+  // qui c'era un path errato /jht_home/databases/jobs.db che non
+  // veniva mai creato da nessuno.
   let dbOk = false;
-  try { fs.accessSync(dbPath); dbOk = true; } catch {}
+  try { fs.accessSync(JHT_DB_PATH); dbOk = true; } catch {}
   services.push({ id: 'db', name: 'Database (SQLite)', status: dbOk ? 'operational' : 'degraded', latencyMs: dbOk ? Math.floor(Math.random() * 5 + 1) : 0, uptimePercent: dbOk ? 99.95 : 50, lastCheck: now });
 
   // Telegram bot
