@@ -156,17 +156,42 @@ function broadcastInstallStage(stage, status) {
   }
 }
 
-async function openRuntimeInBrowser() {
-  const status = await runtime.getStatus()
-  const launchableStatus = status.mode === 'running' || status.mode === 'external'
-    ? status
-    : await runtime.startRuntime({ port: status.port })
+// Se il runtime è in fase 'warming' (Next boota + Turbopack pre-compila
+// le pagine chiave) aspettiamo il completamento prima di aprire il
+// browser. Così l'utente arriva su una pagina pronta, invece di trovarsi
+// 404 o pagine bianche che si materializzano dopo 5-15s.
+async function waitForWarmUpDone(maxWaitMs = 75000) {
+  const started = Date.now()
+  while (Date.now() - started < maxWaitMs) {
+    const s = await runtime.getStatus()
+    if (s.mode === 'running' || s.mode === 'external') return s
+    if (s.mode === 'error' || s.mode === 'stopped') return s
+    // Propaga il progress alla UI Electron così l'utente vede "Preparazione 2/5…"
+    if (mainWindow && !mainWindow.isDestroyed() && s.warmingProgress) {
+      mainWindow.webContents.send('launcher:warming-progress', s.warmingProgress)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return runtime.getStatus()
+}
 
-  if (launchableStatus.running) {
-    await shell.openExternal(launchableStatus.url)
+async function openRuntimeInBrowser() {
+  let status = await runtime.getStatus()
+  if (status.mode !== 'running' && status.mode !== 'external') {
+    status = await runtime.startRuntime({ port: status.port })
+  }
+  // `startRuntime` ora blocca fino a 'running' ma se il runtime era già
+  // in avvio (gestito altrove) il nostro status potrebbe essere
+  // 'warming'. In quel caso attendiamo il completamento.
+  if (status.mode === 'warming') {
+    status = await waitForWarmUpDone()
   }
 
-  return launchableStatus
+  if (status.running && status.mode === 'running') {
+    await shell.openExternal(status.url)
+  }
+
+  return status
 }
 
 app.whenReady().then(() => {
