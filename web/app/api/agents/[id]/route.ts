@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runBash } from '@/lib/shell'
+import { runBash, runScript } from '@/lib/shell'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -97,7 +97,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
   const body = await req.json().catch(() => ({})) as { action?: string; workspaceDir?: string }
   const resolved = resolve(id)
   if (!resolved) return NextResponse.json({ ok: false, error: 'Agente sconosciuto' }, { status: 400 })
-  const { session, effort } = resolved.info
+  const { session } = resolved.info
   const action = body.action
 
   if (action === 'stop') {
@@ -107,11 +107,20 @@ export async function POST(req: Request, ctx: RouteCtx) {
   }
   if (action === 'start') {
     if (isTmuxRunning(session)) return NextResponse.json({ ok: true, status: 'already_active' })
-    const dir = body.workspaceDir ?? process.cwd()
-    await runBash(`tmux new-session -d -s "${session}" -c "${dir}"`)
-    await runBash(`tmux send-keys -t "${session}" "claude --dangerously-skip-permissions --effort ${effort}" C-m`)
-    runBash(`(sleep 4 && tmux send-keys -t "${session}" Enter && sleep 3 && tmux send-keys -t "${session}" Enter) &>/dev/null &`).catch(() => {})
-    return NextResponse.json({ ok: true, status: 'started' })
+    // Deleghiamo a .launcher/start-agent.sh: template copy, env var,
+    // rilevamento provider (claude/kimi/codex) dal jht.config.json,
+    // creazione sessione tmux, lancio CLI. Instance ricavata dal
+    // suffisso `-N` della session (SCOUT-1 → instance '1').
+    const repoRoot = path.resolve(process.cwd(), '..')
+    const startAgentScript = path.join(repoRoot, '.launcher', 'start-agent.sh')
+    const instanceMatch = session.match(/-(\d+)$/)
+    const args = instanceMatch ? [resolved.id, instanceMatch[1]] : [resolved.id]
+    try {
+      await runScript(startAgentScript, ...args)
+      return NextResponse.json({ ok: true, status: 'started' })
+    } catch (err: any) {
+      return NextResponse.json({ ok: false, error: err?.message ?? 'Avvio fallito' }, { status: 500 })
+    }
   }
   return NextResponse.json({ ok: false, error: 'Azione non valida' }, { status: 400 })
 }
