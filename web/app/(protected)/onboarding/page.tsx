@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
-type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
+// `done` è opzionale per retrocompatibilità: messaggi vecchi senza il flag
+// vengono trattati come turno finito (done=true implicito). L'agente usa
+// `jht-send --partial` per i checkpoint intermedi (done=false) e mantiene
+// accesi i 3 puntini finché non invia un messaggio senza --partial.
+type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number; done?: boolean }
 type AssistantStatus = { active: boolean }
 
 type Profile = {
@@ -16,6 +20,17 @@ type Profile = {
   languages?: Array<{ language?: string | null; level?: string | null }> | null
   positioning?: {
     contacts?: { email?: string | null; phone?: string | null; linkedin?: string | null; github?: string | null; website?: string | null }
+    experience?: Array<{ company?: string | null; role?: string | null; years?: number | string | null; summary?: string | null }> | null
+    education?: Array<{ institution?: string | null; degree?: string | null; year?: number | string | null }> | null
+    certifications?: Array<{ name?: string | null; issuer?: string | null; year?: number | string | null }> | null
+    projects?: Array<{ name?: string | null; description?: string | null; tech?: string | string[] | null }> | null
+    preferences?: {
+      work_mode?: string | null
+      work_mode_flexibility?: string | null
+      relocation?: boolean | string | null
+      salary_annual_eur?: string | null
+    } | null
+    sector_details?: Record<string, string | number | boolean | string[] | null> | null
   } | null
   candidate?: {
     experience?: Array<{ company?: string | null; role?: string | null; years?: number | string | null; summary?: string | null }> | null
@@ -158,12 +173,42 @@ export default function OnboardingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Profilo polling ───────────────────────────────────────────────────────
+  // ready = il flag che l'assistente crea quando il profilo è completo
+  // abbastanza per la dashboard. Unico gate: non c'è fallback client-side.
+  const [profileReady, setProfileReady] = useState(false)
+  // Riassunti discorsivi (MD) scritti dall'assistente: about, preferences,
+  // goals, strengths. Complementari al YAML, mostrati sotto il profilo.
+  const [summaries, setSummaries] = useState<Array<{ id: string; title: string; content: string; updatedAt: number }>>([])
+  // Documenti originali del candidato archiviati dall'assistente (CV,
+  // lettere, certificati). Servono come fallback per gli scrittori CV +
+  // trasparenza lato utente ("ecco cosa ho preso in carico").
+  const [sources, setSources] = useState<Array<{ name: string; size: number; ext: string; updatedAt: number }>>([])
+
   const fetchProfile = useCallback(async () => {
     try {
       const res = await fetch('/api/profile')
       if (!res.ok) return
-      const data = await res.json() as { profile: Profile }
+      const data = await res.json() as { profile: Profile; ready?: boolean }
       setProfile(data.profile ?? null)
+      setProfileReady(Boolean(data.ready))
+    } catch { /* noop */ }
+  }, [])
+
+  const fetchSummaries = useCallback(async () => {
+    try {
+      const res = await fetch('/api/profile/summaries')
+      if (!res.ok) return
+      const data = await res.json() as { summaries?: Array<{ id: string; title: string; content: string; updatedAt: number }> }
+      setSummaries(data.summaries ?? [])
+    } catch { /* noop */ }
+  }, [])
+
+  const fetchSources = useCallback(async () => {
+    try {
+      const res = await fetch('/api/profile/sources')
+      if (!res.ok) return
+      const data = await res.json() as { sources?: Array<{ name: string; size: number; ext: string; updatedAt: number }> }
+      setSources(data.sources ?? [])
     } catch { /* noop */ }
   }, [])
 
@@ -246,10 +291,14 @@ export default function OnboardingPage() {
 
     let fullText = textToSend
     if (filePaths.length > 0) {
-      const list = filePaths.map(p => `📎 ${p}`).join('\n')
+      // Formato compatto: solo il marcatore + i path. Le istruzioni su cosa
+      // fare con gli allegati vivono nel system prompt dell'assistente
+      // (agents/assistente/assistente.md), non vanno ripetute a ogni turno.
+      // Il frontend riconosce [FILE ALLEGATI] e rende i path come chip.
+      const list = filePaths.join('\n')
       fullText = fullText
-        ? `${fullText}\n\n[FILE ALLEGATI]\n${list}\n\nLeggili ed estrai le informazioni rilevanti per il profilo, poi aggiorna ../profile/candidate_profile.yml con quello che trovi.`
-        : `Ho caricato questi documenti:\n${list}\n\nLeggili ed estrai le informazioni per il profilo, poi aggiorna ../profile/candidate_profile.yml con quello che trovi.`
+        ? `${fullText}\n\n[FILE ALLEGATI]\n${list}`
+        : `[FILE ALLEGATI]\n${list}`
     }
 
     if (fullText) await sendText(fullText)
@@ -277,11 +326,21 @@ export default function OnboardingPage() {
     fetchProfile()
     fetchStatus()
     fetchChat()
-    const profileId = setInterval(fetchProfile, 2500)
-    const statusId  = setInterval(fetchStatus, 5000)
-    const chatId    = setInterval(fetchChat, 3000)
-    return () => { clearInterval(profileId); clearInterval(statusId); clearInterval(chatId) }
-  }, [fetchProfile, fetchStatus, fetchChat])
+    fetchSummaries()
+    fetchSources()
+    const profileId   = setInterval(fetchProfile, 2500)
+    const statusId    = setInterval(fetchStatus, 5000)
+    const chatId      = setInterval(fetchChat, 3000)
+    const summariesId = setInterval(fetchSummaries, 5000)
+    const sourcesId   = setInterval(fetchSources, 5000)
+    return () => {
+      clearInterval(profileId)
+      clearInterval(statusId)
+      clearInterval(chatId)
+      clearInterval(summariesId)
+      clearInterval(sourcesId)
+    }
+  }, [fetchProfile, fetchStatus, fetchChat, fetchSummaries, fetchSources])
 
   // ── Boot progress bar ────────────────────────────────────────────────────
   useEffect(() => {
@@ -323,19 +382,10 @@ export default function OnboardingPage() {
   //   - almeno 1 lingua
   //   - almeno 1 esperienza lavorativa
   //   - almeno 1 titolo di studio
-  const hasCore = Boolean(
-    profile?.name
-    && profile?.target_role
-    && profile?.location
-    && profile?.experience_years != null
-    && (profile?.positioning?.contacts?.email || profile?.email),
-  )
-  const skills = profile?.skills?.primary ?? []
-  const languages = profile?.languages ?? []
-  const experience = profile?.candidate?.experience ?? []
-  const education = profile?.candidate?.education ?? []
-  const hasDepth = skills.length >= 2 && languages.length >= 1 && experience.length >= 1 && education.length >= 1
-  const canProceed = hasCore && hasDepth
+  // Il bottone è sbloccato SOLO dall'assistente (crea ~/.jht/profile/ready.flag).
+  // Nessuna euristica qui: l'agente sa meglio del frontend quando il profilo
+  // è davvero pronto, e può re-bloccare rimuovendo il file se serve.
+  const canProceed = profileReady
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto px-5 py-5" style={{ animation: 'fade-in 0.35s ease both' }}>
@@ -345,7 +395,7 @@ export default function OnboardingPage() {
           Configura il tuo <span className="text-[var(--color-green)]">profilo</span>
         </h1>
         <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-          Chatta con l&apos;assistente a destra o carica il tuo CV. Il profilo a sinistra si aggiorna da solo.
+          Costruisci il tuo profilo con l&apos;aiuto dell&apos;assistente a destra. Man mano che vi confrontate, il pannello a sinistra si aggiorna automaticamente.
         </p>
       </header>
 
@@ -358,7 +408,7 @@ export default function OnboardingPage() {
               <div className="section-label">Profilo candidato</div>
               <LiveDot />
             </div>
-            <ProfileLive profile={profile} />
+            <ProfileLive profile={profile} summaries={summaries} sources={sources} />
           </div>
 
           <button
@@ -374,15 +424,7 @@ export default function OnboardingPage() {
           >
             {canProceed
               ? 'Vai alla dashboard →'
-              : (!hasCore
-                ? 'Profilo incompleto — nome, ruolo, città, anni, email'
-                : `Aggiungi ancora: ${[
-                  skills.length < 2 ? 'competenze (≥2)' : null,
-                  languages.length < 1 ? 'lingue' : null,
-                  experience.length < 1 ? 'esperienza' : null,
-                  education.length < 1 ? 'titolo di studio' : null,
-                ].filter(Boolean).join(', ')}`
-              )}
+              : 'In attesa dell’assistente…'}
           </button>
         </aside>
 
@@ -442,9 +484,9 @@ export default function OnboardingPage() {
           <div ref={chatScrollRef} className="flex-1 overflow-auto px-4 py-4 min-h-0">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                <div className="text-3xl mb-3 opacity-30">🤖</div>
+                <div className="text-3xl mb-3 opacity-30">👨‍💼</div>
                 <p className="text-[11px] text-[var(--color-dim)] max-w-xs leading-relaxed mb-4">
-                  Sto avviando l&apos;assistente… ci vogliono circa 60 secondi
+                  Avvio dell&apos;assistente in corso…
                 </p>
                 <div
                   className="w-full max-w-[240px] h-1 rounded-full overflow-hidden"
@@ -466,17 +508,43 @@ export default function OnboardingPage() {
             {messages.map((m, i) => (
               <ChatBubble key={`${m.ts}-${i}`} msg={m} />
             ))}
-            {messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-              <div className="flex justify-start mb-3">
-                <div className="px-3 py-2 rounded-lg" style={{ background: '#1c2333' }}>
-                  <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.2s infinite' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.4s infinite' }} />
-                  </span>
+            {/* 3 puntini "sto lavorando". Mostrati quando:
+                 (a) l'ultima bubble è dell'utente (aspetto il primo reply), oppure
+                 (b) l'ultima bubble dell'assistente è un checkpoint intermedio (done=false).
+                 Safety stale: dopo 10 minuti di silenzio con done=false consideriamo
+                 l'agente bloccato/crashato e spegniamo i puntini.
+                 I puntini escono sempre "dalla testa dell'assistente": stesso layout
+                 avatar+bubble di ChatBubble, così visivamente l'animazione è ancorata
+                 al personaggio invece che fluttuare a vuoto. */}
+            {(() => {
+              if (messages.length === 0) return null
+              const last = messages[messages.length - 1]
+              const waitingFirstReply = last.role === 'user'
+              const inProgress = last.role === 'assistant' && last.done === false
+              const stale = Date.now() / 1000 - last.ts > 600
+              if (!waitingFirstReply && (!inProgress || stale)) return null
+              return (
+                // items-center + tail centrato verticalmente: la bubble dei 3
+                // puntini è più bassa del testo normale, quindi se lasciassimo
+                // items-start con tail a top-2.5 il tail finirebbe nella parte
+                // alta mentre l'avatar rimane al centro → disallineato.
+                <div className="flex mb-3 justify-start items-center gap-2">
+                  <Avatar role="assistant" />
+                  <div className="relative px-3 py-2 rounded-lg" style={{ background: '#1c2333' }}>
+                    <span
+                      aria-hidden
+                      className="absolute top-1/2 -left-1.5 w-3 h-3 rotate-45 -translate-y-1/2"
+                      style={{ background: '#1c2333' }}
+                    />
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.2s infinite' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]" style={{ animation: 'pulse-dot 1.4s ease-in-out 0.4s infinite' }} />
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
 
           {/* Allegati preview */}
@@ -494,11 +562,16 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Input */}
+          {/* Input — zero effetti al focus: niente ring, niente bordi
+               colorati. Solo un schiarimento quasi impercettibile del
+               background quando il cursore è dentro, giusto per segnalare
+               "stai scrivendo qui" senza invadenza.
+               NB: background via classe (bg-[var(--color-deep)]) e non
+               inline style, altrimenti focus-within:bg-... non si applica
+               (lo style inline ha sempre precedenza sulla classe). */}
           <form
             onSubmit={(e) => { e.preventDefault(); void handleSend() }}
-            className="flex items-center border-t border-[var(--color-border)]"
-            style={{ background: 'var(--color-deep)' }}
+            className="flex items-center border-t border-[var(--color-border)] outline-none bg-[var(--color-deep)] focus-within:bg-[var(--color-row)] transition-colors"
           >
             <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect}
               className="hidden"
@@ -571,49 +644,313 @@ function LiveDot() {
 
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === 'user'
-  return (
-    <div className={`flex mb-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className="max-w-[80%] px-3 py-2 rounded-lg text-[12px] leading-relaxed"
-        style={{
-          background: isUser ? 'var(--color-green)' : '#1c2333',
-          color: isUser ? '#000' : 'var(--color-bright)',
-          borderBottomRightRadius: isUser ? '4px' : undefined,
-          borderBottomLeftRadius: !isUser ? '4px' : undefined,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}>
-        {msg.text}
+  const { text, attachments } = extractAttachments(msg.text)
+  const bubbleBg = isUser ? 'var(--color-green)' : '#1c2333'
+
+  const bubble = (
+    <div
+      className="relative max-w-[80%] px-3 py-2 rounded-lg text-[12px] leading-relaxed flex flex-col gap-2"
+      style={{
+        background: bubbleBg,
+        color: isUser ? '#000' : 'var(--color-bright)',
+        wordBreak: 'break-word',
+      }}
+    >
+      {/* Tail del fumetto: triangolino che punta verso l'avatar.
+          Per l'assistente: a sinistra. Per l'utente: a destra. */}
+      <span
+        aria-hidden
+        className={`absolute top-2.5 w-3 h-3 rotate-45 ${isUser ? '-right-1.5' : '-left-1.5'}`}
+        style={{ background: bubbleBg }}
+      />
+      {text && <MiniMarkdown text={text} />}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {attachments.map((name, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px]"
+              style={{
+                background: isUser ? 'rgba(0,0,0,0.12)' : 'var(--color-card)',
+                border: `1px solid ${isUser ? 'rgba(0,0,0,0.15)' : 'var(--color-border)'}`,
+              }}
+            >
+              <span>📎</span>
+              <span className="font-mono">{name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  if (isUser) {
+    return (
+      <div className="flex mb-3 justify-end items-start gap-2">
+        {bubble}
+        <Avatar role="user" />
       </div>
+    )
+  }
+
+  return (
+    <div className="flex mb-3 justify-start items-start gap-2">
+      <Avatar role="assistant" />
+      {bubble}
     </div>
   )
 }
 
-function ProfileLive({ profile }: { profile: Profile }) {
+// Avatar condiviso tra ChatBubble e indicatore "sta scrivendo".
+// Emoji user: 👤 (sagoma busto) — placeholder finché non c'è un avatar
+// configurato per il profilo utente.
+function Avatar({ role }: { role: 'user' | 'assistant' }) {
+  const isUser = role === 'user'
+  return (
+    <div
+      className="flex items-center justify-center shrink-0 rounded-full text-[16px] select-none"
+      style={{
+        width: 28,
+        height: 28,
+        background: 'var(--color-card)',
+        border: '1px solid var(--color-border)',
+      }}
+      aria-label={isUser ? 'tu' : 'assistente'}
+    >
+      {isUser ? '👤' : '👨‍💼'}
+    </div>
+  )
+}
+
+function extractAttachments(raw: string): { text: string; attachments: string[] } {
+  const m = /\n*\[FILE ALLEGATI\]\n([\s\S]*?)$/i.exec(raw)
+  if (!m) return { text: raw, attachments: [] }
+  const text = raw.slice(0, m.index).trim()
+  const paths = m[1]
+    .split('\n')
+    .map(l => l.trim().replace(/^📎\s*/, ''))
+    .filter(Boolean)
+  // Mostra solo il basename: "cv-developer-IT.pdf" invece del path completo
+  const names = paths.map(p => p.split('/').filter(Boolean).pop() ?? p)
+  return { text, attachments: names }
+}
+
+// Renderer markdown minimale: bold (**x**), italic (*x*), inline code (`x`),
+// link [t](u), liste numerate (\d+\.) e puntate (- / *), paragrafi separati
+// da riga vuota. Niente dipendenze esterne — abbastanza per i messaggi
+// dell'assistente, che non produce HTML né blocchi di codice lunghi.
+function MiniMarkdown({ text }: { text: string }) {
+  const blocks = text.replace(/\r\n/g, '\n').split(/\n{2,}/)
+  return (
+    <div className="flex flex-col gap-2">
+      {blocks.map((block, bi) => {
+        const lines = block.split('\n')
+        const isOrdered = lines.every(l => /^\s*\d+\.\s+/.test(l))
+        const isBulleted = lines.every(l => /^\s*[-*]\s+/.test(l))
+        if (isOrdered && lines.length > 1) {
+          return (
+            <ol key={bi} className="list-decimal list-outside pl-5 space-y-1">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInline(l.replace(/^\s*\d+\.\s+/, ''))}</li>
+              ))}
+            </ol>
+          )
+        }
+        if (isBulleted && lines.length > 1) {
+          return (
+            <ul key={bi} className="list-disc list-outside pl-5 space-y-1">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInline(l.replace(/^\s*[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={bi} className="whitespace-pre-wrap">
+            {lines.map((l, li) => (
+              <span key={li}>
+                {renderInline(l)}
+                {li < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
+function renderInline(s: string): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  const regex = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`|\[[^\]]+\]\([^\)]+\))/g
+  let last = 0
+  let m: RegExpExecArray | null
+  let key = 0
+  while ((m = regex.exec(s)) !== null) {
+    if (m.index > last) out.push(s.slice(last, m.index))
+    const tok = m[0]
+    if (tok.startsWith('**')) {
+      out.push(<strong key={key++}>{tok.slice(2, -2)}</strong>)
+    } else if (tok.startsWith('`')) {
+      out.push(<code key={key++} className="px-1 rounded text-[11px]" style={{ background: 'var(--color-row)', color: 'var(--color-green)' }}>{tok.slice(1, -1)}</code>)
+    } else if (tok.startsWith('[')) {
+      const mm = /^\[([^\]]+)\]\(([^\)]+)\)$/.exec(tok)
+      if (mm) out.push(<a key={key++} href={mm[2]} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-green)' }}>{mm[1]}</a>)
+      else out.push(tok)
+    } else if (tok.startsWith('*')) {
+      out.push(<em key={key++}>{tok.slice(1, -1)}</em>)
+    }
+    last = m.index + tok.length
+  }
+  if (last < s.length) out.push(s.slice(last))
+  return out
+}
+
+// Esempi placeholder mix di settori — cuochi, infermieri, avvocati, designer,
+// insegnanti, muratori, ecc. Uno casuale è scelto al mount così ogni avvio
+// l'utente vede un esempio diverso: niente bias verso il tech. Tutti i pool
+// hanno la stessa lunghezza semantica (indice condiviso = stesso settore).
+const PLACEHOLDER_ROLES = [
+  'Es. Sous chef',
+  'Es. Infermiere di reparto',
+  'Es. Avvocato civilista',
+  'Es. Graphic designer',
+  'Es. Insegnante di scuola primaria',
+  'Es. Project manager',
+  'Es. Estetista',
+  'Es. Elettricista specializzato',
+  'Es. Addetto vendita',
+  'Es. Full Stack Developer',
+]
+const PLACEHOLDER_LOCATIONS = [
+  'Es. Bologna, IT',
+  'Es. Napoli, IT',
+  'Es. Palermo, IT',
+  'Es. Torino, IT',
+  'Es. Verona, IT',
+  'Es. Firenze, IT',
+  'Es. Bari, IT',
+  'Es. Genova, IT',
+  'Es. Cagliari, IT',
+  'Es. Milano, IT',
+]
+const PLACEHOLDER_EXPERIENCE = [
+  'Es. Capopartita · Ristorante Da Mario · 4 anni',
+  'Es. Infermiere · Ospedale San Raffaele · 6 anni',
+  'Es. Avvocato associato · Studio Rossi & C. · 3 anni',
+  'Es. Art director · Agenzia Pop · 5 anni',
+  'Es. Insegnante di sostegno · IC Verdi · 7 anni',
+  'Es. Project manager · Acme Srl · 4 anni',
+  'Es. Responsabile SPA · Hotel Terme · 3 anni',
+  'Es. Elettricista · Impianti Neri · 8 anni',
+  'Es. Commessa · Boutique Luna · 2 anni',
+  'Es. Senior Developer · Acme · 3 anni',
+]
+const PLACEHOLDER_EDUCATION = [
+  'Es. Diploma Istituto Alberghiero · IPSAR Milano',
+  'Es. Laurea in Scienze Infermieristiche · Università di Bologna',
+  'Es. Laurea magistrale in Giurisprudenza · La Sapienza',
+  'Es. Diploma Accademia Belle Arti · Brera',
+  'Es. Laurea in Scienze della Formazione · Università di Padova',
+  'Es. Laurea in Economia · Bocconi',
+  'Es. Diploma tecnico · ITIS Fermi',
+  'Es. Qualifica professionale · CFP Salesiani',
+  'Es. Diploma scientifico · Liceo Galilei',
+  'Es. Laurea in Informatica · Università di …',
+]
+// Chips di competenze: array di 4 chip per settore misto. Niente doppi dev.
+const PLACEHOLDER_SKILL_SETS: string[][] = [
+  ['Cucina italiana', 'Pasticceria', 'Gestione magazzino', '…'],
+  ['Triage', 'Assistenza post-op', 'Medicazioni', '…'],
+  ['Diritto civile', 'Stesura atti', 'Udienze', '…'],
+  ['Photoshop', 'Illustrazione', 'Branding', '…'],
+  ['Didattica inclusiva', 'Programmazione lezioni', 'Valutazione', '…'],
+  ['Team leadership', 'Budgeting', 'Public speaking', '…'],
+  ['Massaggi', 'Trattamenti viso', 'Consulenza prodotto', '…'],
+  ['Impianti civili', 'Quadri elettrici', 'Sicurezza CEI', '…'],
+  ['Vendita assistita', 'Visual merchandising', 'Gestione cassa', '…'],
+  ['React', 'Python', 'PostgreSQL', '…'],
+]
+// NB: non usare Math.random() all'init dello state perché SSR e client
+// calcolerebbero valori diversi → hydration mismatch. La randomizzazione
+// avviene dentro useEffect (vedi ProfileLive), lato client-only.
+function pickIndex(): number {
+  return Math.floor(Math.random() * PLACEHOLDER_ROLES.length)
+}
+
+// Formatta il campo `years` di un'esperienza. Se è un numero o stringa
+// puramente numerica → "N anni". Se è già una frase ("2025 - in corso",
+// "gennaio 2022 - oggi", ecc.) la mostra tale e quale senza appendere
+// "anni" che porterebbe a cose tipo "2025 - in corso anni".
+function formatYears(raw: number | string | null | undefined): string {
+  if (raw == null) return ''
+  const s = String(raw).trim()
+  if (!s) return ''
+  return /^\d+(?:[.,]\d+)?$/.test(s) ? `${s} ${Number(s) === 1 ? 'anno' : 'anni'}` : s
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function ProfileLive({ profile, summaries, sources }: {
+  profile: Profile
+  summaries: Array<{ id: string; title: string; content: string; updatedAt: number }>
+  sources: Array<{ name: string; size: number; ext: string; updatedAt: number }>
+}) {
+  // Randomizzazione post-mount per evitare hydration mismatch su Math.random.
+  // Server e primo render client partono da idx=0 (cucina: sous chef /
+  // ristorante / alberghiero — non tech, default neutro), poi dopo il mount
+  // useEffect sceglie un settore casuale. Il flip è istantaneo all'occhio.
+  const [phIdx, setPhIdx] = useState(0)
+  useEffect(() => { setPhIdx(pickIndex()) }, [])
   const skills = profile?.skills
     ? Object.values(profile.skills).flat().filter(Boolean)
     : []
   const langs = (profile?.languages ?? [])
     .map(l => [l.language, l.level].filter(Boolean).join(' '))
     .filter(Boolean)
-  const experience = profile?.candidate?.experience ?? []
-  const education = profile?.candidate?.education ?? []
+  // Il reader sposta candidate.experience/education sotto positioning.*
+  // (vedi profile-reader.ts). Leggi da lì, con fallback sul vecchio path
+  // per retrocompatibilità con eventuali profili salvati prima del fix.
+  const experience = profile?.positioning?.experience ?? profile?.candidate?.experience ?? []
+  const education = profile?.positioning?.education ?? profile?.candidate?.education ?? []
   const contacts = profile?.positioning?.contacts ?? {}
+  const prefs = profile?.positioning?.preferences ?? null
+  const projects = profile?.positioning?.projects ?? []
+  const certifications = profile?.positioning?.certifications ?? []
+  // Dict aperto: ogni settore ha i suoi campi (cucina: specializzazione,
+  // sanità: iscrizione_albo, edile: patentini, ecc.). Il frontend non sa
+  // quali chiavi arriveranno, le mostra come lista generica key: value.
+  const sectorDetails = profile?.positioning?.sector_details ?? null
+  const sectorEntries: Array<[string, string]> = sectorDetails
+    ? Object.entries(sectorDetails)
+        .filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+        .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
+    : []
 
   return (
     <div className="px-4 py-4 flex flex-col gap-3 text-[11px]">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Nome" value={profile?.name} placeholder="Mario Rossi" highlight />
-        <Field label="Ruolo target" value={profile?.target_role} placeholder="Es. Full Stack Developer" highlight />
-        <Field label="Località" value={profile?.location} placeholder="Es. Milano, IT" />
+        <Field label="Ruolo target" value={profile?.target_role} placeholder={PLACEHOLDER_ROLES[phIdx]} highlight />
+        <Field label="Località" value={profile?.location} placeholder={PLACEHOLDER_LOCATIONS[phIdx]} />
         <Field label="Anni esperienza" value={profile?.experience_years != null ? String(profile.experience_years) : null} placeholder="Es. 5" />
         <Field label="Email" value={profile?.email ?? contacts.email ?? null} placeholder="nome@example.com" />
         <Field label="Telefono" value={contacts.phone ?? null} placeholder="+39 …" />
       </div>
 
-      {(contacts.linkedin || contacts.github) && (
+      {/* Link pubblici: visibili SOLO se l'utente li ha compilati, con la
+           stessa leggibilità degli altri campi. LinkedIn è rilevante anche
+           fuori dal tech (sanità, vendita, management), quindi niente
+           trattamento "secondario minuscolo". Se manca, non c'è la sezione. */}
+      {(contacts.linkedin || contacts.github || contacts.website) && (
         <div className="grid grid-cols-2 gap-3">
           {contacts.linkedin && <Field label="LinkedIn" value={contacts.linkedin} />}
           {contacts.github && <Field label="GitHub" value={contacts.github} />}
+          {contacts.website && <Field label="Sito" value={contacts.website} />}
         </div>
       )}
 
@@ -631,7 +968,7 @@ function ProfileLive({ profile }: { profile: Profile }) {
             )}
           </div>
         ) : (
-          <PlaceholderChips items={['React', 'Python', 'PostgreSQL', '…']} />
+          <PlaceholderChips items={PLACEHOLDER_SKILL_SETS[phIdx]} />
         )}
       </Section>
 
@@ -654,7 +991,7 @@ function ProfileLive({ profile }: { profile: Profile }) {
               <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
                 <span className="font-semibold">{e.role ?? '—'}</span>
                 {e.company ? <span className="text-[var(--color-muted)]"> · {e.company}</span> : null}
-                {e.years ? <span className="text-[var(--color-dim)]"> · {e.years} anni</span> : null}
+                {e.years ? <span className="text-[var(--color-dim)]"> · {formatYears(e.years)}</span> : null}
               </li>
             ))}
             {experience.length > 4 && (
@@ -662,9 +999,55 @@ function ProfileLive({ profile }: { profile: Profile }) {
             )}
           </ul>
         ) : (
-          <div className="text-[10px] text-[var(--color-border)] italic">Es. Senior Developer · Acme · 3 anni</div>
+          <div className="text-[10px] text-[var(--color-border)] italic">{PLACEHOLDER_EXPERIENCE[phIdx]}</div>
         )}
       </Section>
+
+      {sectorEntries.length > 0 && (
+        <Section label="Dettagli del settore">
+          <ul className="flex flex-col gap-1">
+            {sectorEntries.map(([k, v]) => (
+              <li key={k} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
+                <span className="text-[var(--color-dim)] uppercase tracking-wide text-[9px] mr-1.5">{k.replace(/_/g, ' ')}</span>
+                {v}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {projects.length > 0 && (
+        <Section label="Progetti">
+          <ul className="flex flex-col gap-1.5">
+            {projects.slice(0, 4).map((p, i) => (
+              <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
+                <span className="font-semibold">{p.name ?? '—'}</span>
+                {p.description ? (
+                  <div className="text-[10px] text-[var(--color-muted)] leading-snug mt-0.5">
+                    {String(p.description).split('\n')[0].slice(0, 180)}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+            {projects.length > 4 && (
+              <li className="text-[9.5px] text-[var(--color-dim)]">+{projects.length - 4} altri</li>
+            )}
+          </ul>
+        </Section>
+      )}
+
+      {certifications.length > 0 && (
+        <Section label="Certificazioni">
+          <ul className="flex flex-col gap-0.5">
+            {certifications.slice(0, 5).map((c, i) => (
+              <li key={i} className="text-[10.5px] text-[var(--color-bright)] leading-snug">
+                {c.name ?? '—'}
+                {c.issuer ? <span className="text-[var(--color-muted)]"> · {c.issuer}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section label="Titoli di studio">
         {education.length > 0 ? (
@@ -676,7 +1059,54 @@ function ProfileLive({ profile }: { profile: Profile }) {
             ))}
           </ul>
         ) : (
-          <div className="text-[10px] text-[var(--color-border)] italic">Es. Laurea in Informatica · Università di …</div>
+          <div className="text-[10px] text-[var(--color-border)] italic">{PLACEHOLDER_EDUCATION[phIdx]}</div>
+        )}
+      </Section>
+
+      {summaries.length > 0 && (
+        <div className="flex flex-col gap-3 pt-1 border-t border-[var(--color-border)] mt-1">
+          {summaries.map(s => (
+            <Section key={s.id} label={s.title}>
+              <div className="text-[11px] leading-relaxed text-[var(--color-bright)]">
+                <MiniMarkdown text={s.content} />
+              </div>
+            </Section>
+          ))}
+        </div>
+      )}
+
+      {/* I file in profile/sources/ NON sono mostrati qui: sono un dettaglio
+           interno di archiviazione, non informazione del profilo. Gli
+           scrittori CV a valle li leggono via /api/profile/sources — al
+           resto della UI l'utente non deve pensarci. */}
+
+      <Section label="Preferenze di lavoro">
+        {prefs ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap gap-3">
+              {prefs.work_mode && (
+                <Field label="Modalità" value={prefs.work_mode} />
+              )}
+              {prefs.relocation != null && (
+                <Field
+                  label="Trasferimento"
+                  value={typeof prefs.relocation === 'boolean'
+                    ? (prefs.relocation ? 'disponibile' : 'non disponibile')
+                    : String(prefs.relocation)}
+                />
+              )}
+              {prefs.salary_annual_eur && (
+                <Field label="Retribuzione" value={prefs.salary_annual_eur} />
+              )}
+            </div>
+            {prefs.work_mode_flexibility && (
+              <div className="text-[10px] text-[var(--color-muted)] italic leading-snug">
+                {prefs.work_mode_flexibility}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-[10px] text-[var(--color-border)] italic">Es. Remoto · Disponibile al trasferimento · 30–35k</div>
         )}
       </Section>
     </div>
