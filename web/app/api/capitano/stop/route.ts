@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
-    await runBash('tmux kill-session -t ALFA 2>/dev/null')
+    await runBash('tmux kill-session -t CAPITANO 2>/dev/null')
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : ''

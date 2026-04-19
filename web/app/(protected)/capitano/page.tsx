@@ -237,7 +237,7 @@ export default function CapitanoPage() {
         <div className="mt-4" style={{ animation: 'fade-in 0.25s ease both' }}>
           <div className="flex items-center justify-between mb-2">
             <div className="section-label">Terminale</div>
-            <span className="text-[9px] text-[var(--color-dim)] font-mono">sessione ALFA</span>
+            <span className="text-[9px] text-[var(--color-dim)] font-mono">sessione CAPITANO</span>
           </div>
           <div ref={termRef}
             className="border border-[var(--color-border)] rounded-xl p-4 font-mono text-[11px] leading-relaxed overflow-auto"

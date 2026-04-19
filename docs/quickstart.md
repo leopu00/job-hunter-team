@@ -68,7 +68,7 @@ The system uses parallel AI agents, each with a specific role:
 
 | Agent | Role | tmux session |
 |-------|------|--------------|
-| Captain | Pipeline coordinator, anti-collision | `ALFA` |
+| Captain | Pipeline coordinator, anti-collision | `CAPITANO` |
 | Scout | Searches job boards | `SCOUT-1`, `SCOUT-2` |
 | Analyst | Verifies JDs and companies | `ANALYST-1`, `ANALYST-2` |
 | Scorer | Scores 0–100 | `SCORER-1` |

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
+import { isLocalRequest } from '@/lib/auth'
 import type { CandidateProfile } from '@/lib/types'
 import ProfilePageClient from '@/components/ProfilePageClient'
 import ProfileStats from '@/components/ProfileStats'
@@ -20,7 +21,10 @@ const SKILL_CATEGORY_COLORS = [
 export default async function ProfilePage() {
   let profile: CandidateProfile | null = null
 
-  if (isSupabaseConfigured) {
+  // In locale (desktop container su localhost) il profilo vive nel
+  // workspace YAML, Supabase non viene interpellato — coerente con il
+  // bypass auth in (protected)/layout.tsx e proxy.ts.
+  if (isSupabaseConfigured && !(await isLocalRequest())) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {

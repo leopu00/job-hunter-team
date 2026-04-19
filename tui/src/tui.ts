@@ -31,7 +31,7 @@ const KNOWN_AGENTS: JhtAgent[] = [
   { id: "scorer", name: "scorer", role: "scorer", status: "idle" },
   { id: "scrittore", name: "scrittore", role: "scrittore", status: "idle" },
   { id: "sentinella", name: "sentinella", role: "sentinella", status: "idle" },
-  { id: "alfa", name: "alfa", role: "alfa", status: "idle" },
+  { id: "capitano", name: "capitano", role: "capitano", status: "idle" },
 ];
 
 const VIEWS: TuiView[] = ["home", "team", "chat", "tasks", "dashboard", "profile", "ai"];

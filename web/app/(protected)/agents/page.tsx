@@ -14,7 +14,7 @@ type Agent = {
 }
 
 const KNOWN_AGENTS: Omit<Agent, 'status'>[] = [
-  { session: 'ALFA',         role: 'Capitano',   emoji: '👨‍✈️', color: '#ff9100' },
+  { session: 'CAPITANO',         role: 'Capitano',   emoji: '👨‍✈️', color: '#ff9100' },
   { session: 'SCOUT-1',      role: 'Scout',       emoji: '🕵️',  color: '#2196f3' },
   { session: 'ANALISTA-1',   role: 'Analista',    emoji: '🔬',  color: '#00e676' },
   { session: 'SCORER-1',     role: 'Scorer',      emoji: '📊',  color: '#b388ff' },

@@ -10,7 +10,7 @@ const JHT_DIR        = JHT_HOME
 const TASKS_PATH     = path.join(JHT_DIR, 'tasks', 'tasks.json')
 const ANALYTICS_PATH = path.join(JHT_DIR, 'analytics', 'analytics.json')
 
-const AGENT_IDS = ['alfa', 'scout', 'analista', 'scorer', 'scrittore', 'critico', 'sentinella', 'assistente']
+const AGENT_IDS = ['capitano', 'scout', 'analista', 'scorer', 'scrittore', 'critico', 'sentinella', 'assistente']
 
 type TaskRecord = {
   taskId: string; agentId?: string; status: string

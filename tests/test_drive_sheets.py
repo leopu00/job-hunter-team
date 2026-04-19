@@ -77,7 +77,7 @@ class TestDriveConstants:
         assert 'critico' in mod.WORKTREES, f"'critico' non in WORKTREES: {mod.WORKTREES}"
 
     def test_worktrees_contains_alfa(self, mod):
-        assert 'alfa' in mod.WORKTREES, f"'alfa' non in WORKTREES: {mod.WORKTREES}"
+        assert 'capitano' in mod.WORKTREES, f"'capitano' non in WORKTREES: {mod.WORKTREES}"
 
     def test_worktrees_contains_scout(self, mod):
         scout = [w for w in mod.WORKTREES if 'scout' in w]
