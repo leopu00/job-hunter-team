@@ -28,6 +28,12 @@ if (!app.isPackaged && !('JHT_DEV_WEB_DIR' in process.env)) {
     process.env.JHT_DEV_WEB_DIR = siblingWeb
   }
 }
+if (!app.isPackaged && !('JHT_DEV_REPO_DIR' in process.env)) {
+  const repoRoot = path.resolve(__dirname, '..')
+  if (require('node:fs').existsSync(path.join(repoRoot, '.launcher', 'start-agent.sh'))) {
+    process.env.JHT_DEV_REPO_DIR = repoRoot
+  }
+}
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
