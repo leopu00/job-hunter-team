@@ -3,11 +3,32 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+# Path DB unico, coerente con tutto il resto dell'app JHT:
+#   1. $JHT_DB esplicito (prima scelta) — dashboard web, API routes e
+#      start-agent.sh impostano questa env var su $JHT_HOME/jobs.db
+#   2. $JHT_HOME/jobs.db quando JHT_HOME è noto
+#   3. path relativo allo script (fallback storico per esecuzioni
+#      ad-hoc fuori dal container JHT)
+# Prima c'era solo (3): script invocati da /jht_home/agents/shared/skills/
+# scrivevano in /jht_home/agents/shared/data/jobs.db, mentre la dashboard
+# web leggeva $JHT_HOME/jobs.db → due DB non in sync, posizioni inserite
+# dagli agenti invisibili alla UI.
+def _resolve_db_path() -> str:
+    env_db = os.environ.get('JHT_DB')
+    if env_db:
+        return env_db
+    jht_home = os.environ.get('JHT_HOME')
+    if jht_home:
+        return os.path.join(jht_home, 'jobs.db')
+    return os.path.join(os.path.dirname(__file__), '..', 'data', 'jobs.db')
+
+
+DB_PATH = _resolve_db_path()
 
 
 def get_db() -> sqlite3.Connection:
     """Restituisce connessione al database con WAL mode e foreign keys."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
