@@ -128,8 +128,13 @@ function buildDockerArgs({
   if (devRepoDir && fs.existsSync(devRepoDir)) {
     const launcherDir = path.join(devRepoDir, '.launcher')
     const agentsDir = path.join(devRepoDir, 'agents')
+    const cliDir = path.join(devRepoDir, 'cli')
     if (fs.existsSync(launcherDir)) args.push('-v', `${launcherDir}:/app/.launcher`)
     if (fs.existsSync(agentsDir)) args.push('-v', `${agentsDir}:/app/agents`)
+    if (fs.existsSync(path.join(cliDir, 'bin', 'jht.js'))) {
+      args.push('-v', `${cliDir}:/app/cli`)
+      args.push('-v', '/app/cli/node_modules')
+    }
   }
 
   args.push(
