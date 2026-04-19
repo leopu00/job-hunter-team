@@ -613,8 +613,11 @@ export default function OnboardingPage() {
               placeholder={status?.active
                 ? (attached.length > 0 ? `${attached.length} file allegat${attached.length === 1 ? 'o' : 'i'} — aggiungi un messaggio…` : 'Scrivi all\'assistente…')
                 : 'In attesa dell\'assistente…'}
+              // outline:none inline per battere la regola globale
+              // `:focus-visible { outline: 2px solid green }` in globals.css
+              // senza toglierla al resto dell'app (serve a11y tastiera).
               className="flex-1 px-2 py-3 text-[12px] bg-transparent outline-none"
-              style={{ color: 'var(--color-bright)' }}
+              style={{ color: 'var(--color-bright)', outline: 'none' }}
             />
             <button type="submit"
               disabled={(!input.trim() && attached.length === 0) || sending || !status?.active}
