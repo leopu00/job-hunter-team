@@ -29,6 +29,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config \
       libsqlite3-0 \
       tini \
+      # Toolbox "agent-friendly": gli agenti Codex/Kimi/Claude vedono
+      # spesso PDF (CV, lettere), pagine web, JSON complessi. Senza questi
+      # tool scrivevano parser PDF in Python puro impiegando minuti invece
+      # di secondi. File/jq/unzip coprono il 90% dei casi. Sudo + passwordless
+      # (più sotto) permette di installare il resto on-demand.
+      poppler-utils ripgrep file jq unzip sudo \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -73,7 +79,26 @@ RUN useradd --create-home --shell /bin/bash jht \
     # bash -l -c "..." figli.
     && for f in /app/agents/_tools/*; do \
          [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
-       done
+       done \
+    # Skill discovery farm: l'Agent Skills standard (SKILL.md) è letto da
+    # Claude Code in .claude/skills/, da Codex e Kimi in .agents/skills/.
+    # Sorgente unica in .skills-source/; creiamo symlink in entrambe le
+    # directory di discovery così i 3 CLI vedono le stesse skill senza
+    # duplicare file. I symlink esistono solo nel container — il repo ha
+    # solo .skills-source/ (evitiamo i guai di symlink+git su Windows).
+    && mkdir -p /app/.claude/skills /app/.agents/skills \
+    && for skill in /app/.skills-source/*/; do \
+         [ -d "$skill" ] || continue; \
+         name=$(basename "$skill"); \
+         ln -sfn "/app/.skills-source/$name" "/app/.claude/skills/$name"; \
+         ln -sfn "/app/.skills-source/$name" "/app/.agents/skills/$name"; \
+       done \
+    # Passwordless sudo per l'user jht: gli agenti girano con --yolo in un
+    # container disposable — se servono tool extra (pdftohtml, tesseract,
+    # pacchetti pip ecc.) possono `sudo apt install` / `sudo pip install`
+    # al volo senza bloccare il flusso. Il container è isolato dal host.
+    && echo 'jht ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/jht \
+    && chmod 0440 /etc/sudoers.d/jht
 
 USER jht
 
