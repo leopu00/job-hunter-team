@@ -6,3 +6,8 @@ google-api-python-client
 gspread
 anthropic
 openai
+# PDF reading per gli agenti che leggono CV/lettere degli utenti.
+pypdf
+# BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
+beautifulsoup4
+lxml

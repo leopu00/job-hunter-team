@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# jht-tmux-send — consegna atomica di un messaggio a una sessione tmux.
+#
+# Le TUI "Ink" (Codex, Kimi Code) non registrano l'Enter se arriva nello
+# stesso send-keys del testo: il testo viene inviato carattere-per-carattere
+# e Ink deve finire il render prima di accettare un nuovo keystroke.
+#
+# Il Capitano (e in generale gli agenti coordinatori) deve quindi inviare
+# testo e Enter in due chiamate separate, con pausa in mezzo. Wrappiamo il
+# pattern qui così l'agente fa una sola tool call atomica, zero modo di
+# "ottimizzare" saltando step.
+#
+# Uso:
+#   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
+#
+# Se $SESSION non esiste, esce con codice 2 (il caller può catturarlo).
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "Usage: jht-tmux-send <session> <message>" >&2
+  echo "Esempio: jht-tmux-send SCOUT-1 '[@capitano -> @scout-1] [MSG] Inizia il loop.'" >&2
+  exit 1
+fi
+
+session="$1"
+shift
+# Qualunque cosa dopo il primo arg è il messaggio. Supportiamo sia la
+# forma "quotata" (un solo arg) sia lo splat accidentale (più arg con
+# spazi) — in quest'ultimo caso ricomponiamo con spazi.
+message="$*"
+
+if ! tmux has-session -t "$session" 2>/dev/null; then
+  echo "jht-tmux-send: sessione '$session' non esiste" >&2
+  exit 2
+fi
+
+# -l = literal: zero interpretazione di key-names nel testo.
+tmux send-keys -t "$session" -l "$message"
+# Lascia respirare il render Ink prima del submit.
+sleep 0.3
+tmux send-keys -t "$session" Enter
+# Secondo Enter idempotente: se il primo è stato perso dal TUI durante
+# un re-render, il secondo recupera. Se il prompt è già vuoto (submit
+# riuscito), questo Enter cade su input vuoto ed è innocuo.
+sleep 0.5
+tmux send-keys -t "$session" Enter
+
+echo "jht-tmux-send: ${#message} chars to $session"
