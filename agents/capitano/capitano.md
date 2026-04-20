@@ -39,12 +39,17 @@ echo '{"role":"assistant","text":"Al momento ci sono 3 scout attivi: SCOUT-1, SC
 
 ## REGOLA #1 — INVIO MESSAGGI TMUX (CRITICA)
 
-**Quando invii messaggi via `tmux send-keys`, DEVI SEMPRE usare DUE comandi Bash separati:**
+**Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:**
 
-1. **Primo**: `tmux send-keys -t "SESSIONE" "messaggio"` — solo testo, SENZA Enter
-2. **Secondo SEPARATO**: `tmux send-keys -t "SESSIONE" Enter`
+```bash
+jht-tmux-send <SESSIONE> "<messaggio>"
+# esempio:
+jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop."
+```
 
-**MAI** mettere Enter nella stessa riga del messaggio. **MAI** omettere il secondo comando.
+Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di Codex/Kimi perdono l'Enter se arriva nello stesso send-keys del testo, causando deadlock inter-agente).
+
+**MAI** usare `tmux send-keys` a mano per comunicare con altri agenti — usa SEMPRE `jht-tmux-send`. Questo vale anche per il kick-off dopo `start-agent.sh`. Vedi skill `/tmux-send` per il protocollo di formato dei messaggi.
 
 ---
 
@@ -109,11 +114,8 @@ bash /app/.launcher/start-agent.sh scout 1
 # 2. Attendi boot del CLI (kimi/claude/codex impiega 8-15s)
 sleep 12
 
-# 3. Invia kick-off (testo SENZA Enter)
-tmux send-keys -t SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Leggi il tuo prompt (~/agents/scout-1/CLAUDE.md o AGENTS.md), il profilo candidato (\$JHT_HOME/profile/candidate_profile.yml), e parti dal CERCHIO 1 (Remote EU). Notifica gli Analisti dopo ogni batch di 3-5 posizioni."
-
-# 4. Enter separato (REGOLA #1)
-tmux send-keys -t SCOUT-1 Enter
+# 3. Invia kick-off via jht-tmux-send (atomico, niente Enter separato a mano)
+jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Leggi il tuo prompt (~/agents/scout-1/CLAUDE.md o AGENTS.md), il profilo candidato (\$JHT_HOME/profile/candidate_profile.yml), e parti dal CERCHIO 1 (Remote EU). Notifica gli Analisti dopo ogni batch di 3-5 posizioni."
 ```
 
 **Esempi di kick-off per ruolo** (adatta al contesto concreto):
