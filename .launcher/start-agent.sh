@@ -301,11 +301,15 @@ else
   # but when the CLI *does* pop up a "do you trust this dir?" modal
   # on very first run we want to push through it without waiting
   # for the user.
-  (
-    sleep 3  && tmux send-keys -t "$SESSION" Enter
-    sleep 3  && tmux send-keys -t "$SESSION" Enter
-    sleep 3  && tmux send-keys -t "$SESSION" Enter
-  ) &>/dev/null &
+  # setsid scollega dalla sessione/process-group di chi ha chiamato
+  # start-agent.sh: senza, quando start-agent.sh esce il suo caller
+  # (Node.js del backend web) manda SIGTERM al process group e ammazza
+  # la subshell prima che lo sleep finisca.
+  setsid sh -c '
+    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
+    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
+    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
+  ' >/dev/null 2>&1 < /dev/null &
 fi
 
 echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
@@ -318,20 +322,19 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 # fa scrivere al modello il primo messaggio di benvenuto nel chat.jsonl.
 # Gli altri ruoli (capitano / scout / ecc.) ricevono istruzioni dal Capitano.
 if [ "$ROLE" = "assistente" ]; then
-  (
+  # setsid: idem come sopra (survive al parent exit). Senza, la sleep 15
+  # viene killata dal backend quando start-agent.sh esce, e il messaggio
+  # di welcome non parte mai.
+  setsid sh -c '
     sleep 15
-    # Le TUI Ink (Codex / Kimi) non "vedono" l'Enter se arriva troppo
-    # vicino al testo: ~400 char vengono inviati carattere-per-carattere
-    # e Ink deve finire il render prima di accettare un nuovo keystroke.
-    # -l invia il testo letterale (nessuna interpretazione di key-names),
-    # 3s di pausa lasciano stabilizzare il render, e l'Enter viene inviato
-    # due volte (il secondo è idempotente se il prompt è già vuoto dopo
-    # submit) per coprire sia il caso in cui il primo viene perso sia
-    # quello in cui serve confermare un'eventuale modale di workspace-trust.
-    tmux send-keys -t "$SESSION" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa."
+    # Le TUI Ink (Codex / Kimi) non "vedono" l'\''Enter se arriva troppo
+    # vicino al testo: il testo va inviato letterale con -l, poi una
+    # pausa, poi l'\''Enter in una chiamata separata. Double-Enter idempotente
+    # nel caso il primo venga perso o serva chiudere un trust-modal.
+    tmux send-keys -t "'"$SESSION"'" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'\''utente non sceglie o allega qualcosa."
     sleep 3
-    tmux send-keys -t "$SESSION" Enter
+    tmux send-keys -t "'"$SESSION"'" Enter
     sleep 2
-    tmux send-keys -t "$SESSION" Enter
-  ) &>/dev/null &
+    tmux send-keys -t "'"$SESSION"'" Enter
+  ' >/dev/null 2>&1 < /dev/null &
 fi
