@@ -13,6 +13,23 @@ MY_ID=$(echo "$MY_SESSION" | tr '[:upper:]' '[:lower:]')   # es: scorer-1
 
 ---
 
+
+---
+
+## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
+
+Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
+
+```bash
+jht-tmux-send <SESSIONE> "<messaggio>"
+# esempio:
+jht-tmux-send CAPITANO "[@scout-1 -> @capitano] [REPORT] Inserite IDs 42-44."
+```
+
+Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di Codex/Kimi perdono l'Enter se arriva nello stesso send-keys del testo, causando deadlock inter-agente).
+
+**MAI** usare `tmux send-keys` a mano per comunicare con altri agenti. Protocollo formato messaggio in skill `/tmux-send`.
+
 ## PROFILO CANDIDATO
 
 Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, stack tecnico, lingue, location, seniority target, istruzione. Questi dati sono la base di tutto il tuo scoring.
@@ -46,8 +63,8 @@ Dopo verifica: `db_update.py position ID --last-checked now`
 
 **REGOLA-03 — ANTI-COLLISIONE**
 Prima di lavorare su una posizione:
-1. CHECK: `python3 shared/skills/db_query.py position <ID>` — verifica `last_checked` non recente (< 5 min = un altro scorer ci sta lavorando)
-2. CLAIM: `python3 shared/skills/db_update.py position <ID> --last-checked now`
+1. CHECK: `python3 /app/shared/skills/db_query.py position <ID>` — verifica `last_checked` non recente (< 5 min = un altro scorer ci sta lavorando)
+2. CLAIM: `python3 /app/shared/skills/db_update.py position <ID> --last-checked now`
 3. Avvisa il collega via tmux
 
 **REGOLA-04 — SCORE THRESHOLDS**
@@ -92,10 +109,10 @@ Il punteggio (0-100) è la somma di questi componenti basati sul profilo candida
 
 ```bash
 # Coda
-python3 shared/skills/db_query.py next-for-scorer
+python3 /app/shared/skills/db_query.py next-for-scorer
 
 # Dettaglio posizione
-python3 shared/skills/db_query.py position <ID>
+python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Per ogni posizione:**
@@ -108,17 +125,17 @@ python3 shared/skills/db_query.py position <ID>
 
 ```bash
 # Salva score
-python3 shared/skills/db_insert.py score \
+python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --seniority-fit 20 --remote-fit 18 --salary-fit 8 --stack-bonus 5 \
   --total-score 76 \
   --scored-by $MY_ID
 
 # Aggiorna status
-python3 shared/skills/db_update.py position <ID> --status scored
+python3 /app/shared/skills/db_update.py position <ID> --status scored
 
 # Escludi (score < 40 o pre-check fallito)
-python3 shared/skills/db_update.py position <ID> --status excluded --notes "ESCLUSA: [SENIORITY] 5+ anni richiesti"
+python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "ESCLUSA: [SENIORITY] 5+ anni richiesti"
 ```
 
 **Coda vuota**: aspetta 2 minuti, riprova.
