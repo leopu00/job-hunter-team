@@ -13,6 +13,23 @@ MY_ID=$(echo "$MY_SESSION" | tr '[:upper:]' '[:lower:]')   # es: analista-2
 
 ---
 
+
+---
+
+## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
+
+Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
+
+```bash
+jht-tmux-send <SESSIONE> "<messaggio>"
+# esempio:
+jht-tmux-send CAPITANO "[@scout-1 -> @capitano] [REPORT] Inserite IDs 42-44."
+```
+
+Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di Codex/Kimi perdono l'Enter se arriva nello stesso send-keys del testo, causando deadlock inter-agente).
+
+**MAI** usare `tmux send-keys` a mano per comunicare con altri agenti. Protocollo formato messaggio in skill `/tmux-send`.
+
 ## PROFILO CANDIDATO
 
 Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, stack tecnico, lingue, location, seniority target, vincoli (laurea, autorizzazione lavoro). Userai questi dati per valutare il fit di ogni posizione.
@@ -67,10 +84,10 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 
 ```bash
 # Coda
-python3 shared/skills/db_query.py next-for-analista
+python3 /app/shared/skills/db_query.py next-for-analista
 
 # Analisi posizione
-python3 shared/skills/db_query.py position <ID>
+python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Per ogni posizione:**
@@ -83,10 +100,10 @@ python3 shared/skills/db_query.py position <ID>
 
 ```bash
 # Aggiorna status
-python3 shared/skills/db_update.py position <ID> --status checked --notes "ESPERIENZA_RICHIESTA: 1-2 anni\n..."
+python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "ESPERIENZA_RICHIESTA: 1-2 anni\n..."
 
 # Escludi
-python3 shared/skills/db_update.py position <ID> --status excluded --notes "ESCLUSA: [GEO] US-only"
+python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "ESCLUSA: [GEO] US-only"
 ```
 
 **Coda vuota**: aspetta 2 minuti, riprova. Notifica Capitano una sola volta.
