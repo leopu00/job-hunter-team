@@ -388,7 +388,7 @@ if [ "$ROLE" = "sentinella" ]; then
     setsid sh -c "
       sleep 30
       JHT_SENTINEL_SESSION='$SESSION' JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-5}' \
-        python3 $TICKER_SCRIPT >> /tmp/sentinel-ticker.log 2>&1
+        python3 -u $TICKER_SCRIPT >> /tmp/sentinel-ticker.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
     echo "  → ticker partito (intervallo: ${JHT_TICK_INTERVAL:-5} min, log /tmp/sentinel-ticker.log)"
   else
