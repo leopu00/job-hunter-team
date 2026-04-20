@@ -13,7 +13,9 @@ const STOP_TIMEOUT_MS = 1500
 // Dopo che TCP è open, aspettiamo che /api/health risponda 200 prima
 // di considerare Next "pronto". In container/dev Turbopack serve
 // risposte solo dopo il primo bundle → TCP open != dev server vivo.
-const HEALTH_TIMEOUT_MS = 30000
+// Windows + Docker Desktop WSL2 bind-mount NTFS→ext4 è molto lento al
+// cold-compile, serve una finestra larga prima di dichiarare fallito.
+const HEALTH_TIMEOUT_MS = process.platform === 'win32' ? 180000 : 30000
 // Warm-up: triggeriamo la compilazione on-demand di Turbopack sulle
 // pagine che l'utente apre per prime. Così quando il browser arriva,
 // non aspetta 5-15s di compile alla prima navigazione.
