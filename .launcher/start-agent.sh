@@ -338,3 +338,44 @@ if [ "$ROLE" = "assistente" ]; then
     tmux send-keys -t "'"$SESSION"'" Enter
   ' >/dev/null 2>&1 < /dev/null &
 fi
+
+# ── Sentinella: worker CLI + ticker in background ────────────────────────────
+# La Sentinella lavora in pattern "Vigil":
+#   1. resta in attesa silenziosa del [TICK HH:MM] dal ticker esterno
+#   2. al tick, polla SENTINELLA-WORKER (stesso CLI del provider attivo) con
+#      /status (codex) o /usage (claude/kimi), parsa, logga, alerta
+# Spawniamo il worker (stesso provider, stesso FULL_CMD) e il ticker Python
+# in background via setsid così sopravvivono al parent exit del launcher.
+if [ "$ROLE" = "sentinella" ]; then
+  WORKER_SESSION="SENTINELLA-WORKER"
+  # Worker: stessa CLI, nessun kick-off (resta lì a ricevere /status su keypress)
+  if ! tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
+    tmux new-session -d -s "$WORKER_SESSION" -c "$JHT_HOME"
+    if [ -d "${JHT_HOME:-}" ]; then
+      tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
+    fi
+    tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:$PATH'" C-m
+    tmux send-keys -t "$WORKER_SESSION" "$FULL_CMD" C-m
+    # Auto-accept trust dialog dopo boot CLI
+    setsid sh -c '
+      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
+      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
+      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
+    ' >/dev/null 2>&1 < /dev/null &
+    echo "✓ $WORKER_SESSION avviato (worker per polling /status o /usage)"
+  fi
+
+  # Ticker: heartbeat esterno. Intervallo letto da JHT_TICK_INTERVAL
+  # (env var, in minuti). Default nel Python script = 5.
+  TICKER_SCRIPT="/app/.launcher/sentinel-ticker.py"
+  if [ -x "$TICKER_SCRIPT" ]; then
+    setsid sh -c "
+      sleep 30
+      JHT_SENTINEL_SESSION='$SESSION' JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-5}' \
+        python3 $TICKER_SCRIPT >> /tmp/sentinel-ticker.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "  → ticker partito (intervallo: ${JHT_TICK_INTERVAL:-5} min, log /tmp/sentinel-ticker.log)"
+  else
+    echo "  ⚠ $TICKER_SCRIPT non eseguibile — ticker NON partito"
+  fi
+fi
