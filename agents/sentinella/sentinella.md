@@ -47,10 +47,22 @@ Se manca, segnala al Capitano e FERMATI. Non riavviarla da sola.
 
 ## PROVIDER ATTIVO — DA DOVE LO LEGGI
 
-Il provider corrente è in `$JHT_CONFIG` (default `/jht_home/jht.config.json`):
+Il provider corrente è in `$JHT_CONFIG` (default `/jht_home/jht.config.json`). La chiave nel JSON è **`active_provider`** (non `provider` — era un errore di questo prompt fino al 2026-04-20):
 
 ```bash
-PROVIDER=$(python3 -c "import json; print(json.load(open('$JHT_CONFIG'))['provider'])" 2>/dev/null)
+PROVIDER=$(python3 -c "import json; print(json.load(open('$JHT_CONFIG'))['active_provider'])" 2>/dev/null)
+```
+
+Il file ha questa forma:
+
+```json
+{
+  "active_provider": "openai",       // ← questo valore
+  "plan": "plus",
+  "providers": {
+    "openai": { "auth_method": "subscription" }
+  }
+}
 ```
 
 Valori possibili e comandi di check:
