@@ -5,17 +5,29 @@ import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-// Bootstrap minimale del team: solo il Capitano.
-// - L'Assistente viene già avviato dal boot dell'app Desktop (Electron
-//   → container.js), duplicarlo qui non serve.
-// - Il resto della pipeline (Scout, Analista, Scorer, Scrittore,
-//   Critico, Sentinella) viene acceso dal CAPITANO secondo il suo
-//   scaling graduale (vedi agents/capitano/capitano.md).
-// Prima questa route avviava tutti e 7 gli agenti in un colpo,
-// saturando Colima e bypassando la logica del Capitano.
-const TEAM = [
-  { role: 'capitano', session: 'CAPITANO', instance: null as string | null },
+// Bootstrap minimale del team:
+//   - Capitano: il coordinatore che poi spawna gli altri agenti (scaling
+//     graduale definito nel suo prompt). start-agent.sh gli invia anche
+//     un kick-off message automatico dopo ~15s di boot del CLI.
+//   - Sentinella: monitor rate-limit/budget in modalita' Vigil. Parte con
+//     un worker (SENTINELLA-WORKER) e un ticker esterno che ogni 10 min
+//     le invia un [TICK] via jht-tmux-send.
+// L'Assistente viene avviato dal boot dell'app Desktop (Electron →
+// container.js), duplicarlo qui non serve. Gli altri ruoli (Scout,
+// Analista, Scorer, Scrittore, Critico) vengono accesi dal Capitano
+// secondo le sue soglie.
+const TEAM: Array<{
+  role: string
+  session: string
+  instance: string | null
+  env?: Record<string, string>
+}> = [
+  { role: 'capitano', session: 'CAPITANO', instance: null },
+  { role: 'sentinella', session: 'SENTINELLA', instance: null, env: { JHT_TICK_INTERVAL: '10' } },
 ]
+
+// Quote POSIX-safe per env var passate a bash -c.
+const shellQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
 
 export async function POST() {
   const authError = await requireAuth()
@@ -25,11 +37,8 @@ export async function POST() {
     const repoRoot = path.resolve(process.cwd(), '..')
     // Deleghiamo tutto a .launcher/start-agent.sh: template copy,
     // env var, rilevamento provider (claude/kimi/codex) dal
-    // jht.config.json, creazione sessione tmux, lancio CLI.
-    // Prima questa route aveva una logica inline che hardcodava
-    // `claude --dangerously-skip-permissions`, ignorando il provider
-    // scelto dall'utente — risultato: con kimi configurato, tutti gli
-    // agenti partivano con `claude: command not found`.
+    // jht.config.json, creazione sessione tmux, lancio CLI, kick-off
+    // automatico per capitano e assistente, worker+ticker per sentinella.
     const startAgentScript = path.join(repoRoot, '.launcher', 'start-agent.sh')
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
@@ -45,8 +54,19 @@ export async function POST() {
       } catch { /* sessione non esiste, procedi */ }
 
       try {
-        const args = agent.instance ? [agent.role, agent.instance] : [agent.role]
-        await runScript(startAgentScript, ...args)
+        if (agent.env && Object.keys(agent.env).length > 0) {
+          // Passiamo env var inline prima di invocare lo script. runScript
+          // non supporta env custom, usiamo runBash con prefisso KEY=VAL.
+          const envPrefix = Object.entries(agent.env)
+            .map(([k, v]) => `${k}=${shellQuote(v)}`)
+            .join(' ')
+          const args = agent.instance ? [agent.role, agent.instance] : [agent.role]
+          const argsStr = args.map(shellQuote).join(' ')
+          await runBash(`${envPrefix} bash ${shellQuote(startAgentScript)} ${argsStr}`)
+        } else {
+          const args = agent.instance ? [agent.role, agent.instance] : [agent.role]
+          await runScript(startAgentScript, ...args)
+        }
         results.push({ session: agent.session, role: agent.role, status: 'started' })
       } catch (err: any) {
         results.push({ session: agent.session, role: agent.role, status: 'error', error: err?.message })
