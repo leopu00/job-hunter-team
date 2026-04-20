@@ -22,13 +22,16 @@ if (process.platform === 'darwin') {
 // web/ checkout, auto-enable the live bind mount so edits to /web show
 // up in the container instantly via Next HMR. Temporary — remove once
 // we lock the image pipeline for end-users.
-if (!app.isPackaged && !('JHT_DEV_WEB_DIR' in process.env)) {
+// Disabled on Windows: NTFS→WSL2 bind mounts don't grant write access to
+// the container `jht` user, so Turbopack crashes with EPERM on .next/*.
+// Opt-in manually by setting JHT_DEV_WEB_DIR / JHT_DEV_REPO_DIR.
+if (!app.isPackaged && process.platform !== 'win32' && !('JHT_DEV_WEB_DIR' in process.env)) {
   const siblingWeb = path.resolve(__dirname, '..', 'web')
   if (require('node:fs').existsSync(path.join(siblingWeb, 'package.json'))) {
     process.env.JHT_DEV_WEB_DIR = siblingWeb
   }
 }
-if (!app.isPackaged && !('JHT_DEV_REPO_DIR' in process.env)) {
+if (!app.isPackaged && process.platform !== 'win32' && !('JHT_DEV_REPO_DIR' in process.env)) {
   const repoRoot = path.resolve(__dirname, '..')
   if (require('node:fs').existsSync(path.join(repoRoot, '.launcher', 'start-agent.sh'))) {
     process.env.JHT_DEV_REPO_DIR = repoRoot
@@ -187,7 +190,7 @@ async function openRuntimeInBrowser() {
     status = await waitForWarmUpDone()
   }
 
-  if (status.running && status.mode === 'running') {
+  if (status.running && (status.mode === 'running' || status.mode === 'external')) {
     await shell.openExternal(status.url)
   }
 
