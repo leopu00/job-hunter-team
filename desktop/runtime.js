@@ -563,7 +563,19 @@ function createRuntimeManager(config = {}) {
   }
 
   async function stopRuntime() {
+    // Fallback robusto: anche quando state.child e' null (perche' Electron
+    // e' stato riavviato o il bind col processo docker e' stato perso)
+    // ci assicuriamo sempre che il container `jht` sia rimosso. Prima
+    // questo early return lasciava il container orfano e "Stop team" non
+    // faceva nulla per l'utente.
     if (!state.child) {
+      if (containerMode) {
+        try {
+          containerRuntime.removeContainerIfExists()
+        } catch {
+          // ignore — container potrebbe non esistere, ok
+        }
+      }
       state.mode = 'stopped'
       return buildStatus()
     }
@@ -593,6 +605,18 @@ function createRuntimeManager(config = {}) {
         // ignore hard kill failures
       }
       await new Promise((resolve) => setTimeout(resolve, 150))
+    }
+
+    // Belt-and-suspenders: rimuove il container anche se il child handle
+    // e' morto senza portarsi dietro il container (es. Docker Desktop
+    // daemon lo ha tenuto in vita). --rm di solito basta, ma abbiamo
+    // visto casi di container orfani (Electron restart nel mezzo).
+    if (containerMode) {
+      try {
+        containerRuntime.removeContainerIfExists()
+      } catch {
+        // ignore
+      }
     }
 
     resetState('stopped')
