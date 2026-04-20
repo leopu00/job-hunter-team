@@ -38,7 +38,11 @@ const PROVIDERS = {
   codex: {
     displayName: 'Codex',
     binary: 'codex',
-    loginArgs: [],
+    // --yolo (alias di --dangerously-bypass-approvals-and-sandbox) salva
+    // la trust-approval per la working dir in ~/.codex al primo lancio,
+    // così gli avvii successivi dell'agente background non si bloccano
+    // sul prompt di approval (equivalente di claude --dangerously-skip-permissions).
+    loginArgs: ['--yolo'],
     install: [{
       entrypoint: 'npm',
       args: ['install', '-g', '@openai/codex@latest'],
@@ -154,6 +158,22 @@ async function installProvider({
   const provider = PROVIDERS[providerId]
   if (!provider) return { ok: false, providerId, error: `unknown provider: ${providerId}` }
   if (!payloadDir) return { ok: false, providerId, error: 'payloadDir required' }
+
+  // Skip install se il binario è già raggiungibile nel container running.
+  // I CLI vivono su un bind-mount persistente (/jht_home/.npm-global),
+  // quindi sopravvivono al ricreare del container. Su NTFS/WSL2 il
+  // reinstall via npm fallisce con EACCES durante rename() atomico, ed è
+  // comunque inutile se l'utente ha già il binario. Check best-effort:
+  // se il container non è up o docker non risponde, proseguiamo normalmente.
+  const probe = await run(
+    'docker',
+    ['exec', service, 'sh', '-c', `command -v ${provider.binary}`],
+    { cwd: payloadDir, onLog: () => {} },
+  )
+  if (probe.ok) {
+    onLog(`[skip] ${provider.displayName} already installed in container`)
+    return { ok: true, providerId, skipped: true }
+  }
 
   for (const step of provider.install) {
     const composeArgs = ['compose', 'run', '--rm', '--no-deps', '--entrypoint', step.entrypoint]
