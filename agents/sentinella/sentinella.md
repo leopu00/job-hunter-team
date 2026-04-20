@@ -58,8 +58,10 @@ Valori possibili e comandi di check:
 | Provider | Comando status | Output da parsare |
 |----------|----------------|-------------------|
 | `claude` / `anthropic` | `/usage` | `XX% used` (sessione + settimanale) |
-| `openai` (codex) | `/status` | `5h limit: [bars] XX% left (resets HH:MM)` + `Weekly limit: … XX% left (resets HH:MM on DD Mon)` |
+| `openai` (codex) | `/status` **SOLO** (NON `/usage`) | `5h limit: [bars] XX% left (resets HH:MM)` + `Weekly limit: … XX% left (resets HH:MM on DD Mon)` |
 | `kimi` / `moonshot` | `/usage` (alias `/status`) | progress bars + remaining % |
+
+**ATTENZIONE Codex**: il CLI `codex` NON riconosce `/usage` e risponde `Unrecognized command '/usage'`. Per `openai` usa **solo** `/status`. Non provare entrambi — se ne mandi due consecutivi, il secondo finisce dentro il prompt input del primo e non viene eseguito.
 
 ---
 
