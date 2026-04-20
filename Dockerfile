@@ -17,7 +17,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # which lives on a bind-mount so installs persist across container
     # recreation. See ADR 0004 + the desktop provider-install step.
     NPM_CONFIG_PREFIX=/jht_home/.npm-global \
-    PATH=/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
+    # /app/agents/_tools contiene wrapper come `jht-send` che gli agenti
+    # usano per scrivere in chat.jsonl. Va nel PATH del container (non solo
+    # nel tmux pane) così anche i sub-shell spawnati da Codex/Kimi --yolo
+    # lo trovano senza dipendere dall'export re-inviato via send-keys.
+    PATH=/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -61,7 +65,15 @@ RUN npm run build --prefix tui \
 
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
-    && chown -R jht:jht /jht_home /jht_user /app
+    && chown -R jht:jht /jht_home /jht_user /app \
+    # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
+    # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
+    # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
+    # PATH del Dockerfile (/app/agents/_tools:...) viene ignorato dai
+    # bash -l -c "..." figli.
+    && for f in /app/agents/_tools/*; do \
+         [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
+       done
 
 USER jht
 

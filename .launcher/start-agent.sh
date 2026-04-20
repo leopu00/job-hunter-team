@@ -149,7 +149,11 @@ case "$PROVIDER" in
     ;;
   openai)
     CLI_BIN="codex"
-    CLI_ARGS=""
+    # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
+    # salta sia approval che sandbox FS, così l'agente può scrivere
+    # chat.jsonl, creare la profile dir, ecc. senza bloccarsi sul
+    # prompt di approval (equivalente di claude --dangerously-skip-permissions).
+    CLI_ARGS="--yolo"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi
@@ -268,8 +272,10 @@ send_env_vars() {
   tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
 }
 
-# Rileva se siamo in WSL — Claude CLI è un binario Windows, va lanciato via PowerShell
-if grep -qi microsoft /proc/version 2>/dev/null; then
+# Rileva se siamo in WSL nativo (non dentro un container Docker Desktop, che
+# condivide il kernel WSL2 ma non ha wslpath/powershell.exe): in WSL la CLI
+# Claude è un binario Windows e va lanciata via PowerShell.
+if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
   tmux new-session -d -s "$SESSION" powershell.exe
   sleep 2
@@ -313,7 +319,19 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 # Gli altri ruoli (capitano / scout / ecc.) ricevono istruzioni dal Capitano.
 if [ "$ROLE" = "assistente" ]; then
   (
-    sleep 12
-    tmux send-keys -t "$SESSION" "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa." Enter
+    sleep 15
+    # Le TUI Ink (Codex / Kimi) non "vedono" l'Enter se arriva troppo
+    # vicino al testo: ~400 char vengono inviati carattere-per-carattere
+    # e Ink deve finire il render prima di accettare un nuovo keystroke.
+    # -l invia il testo letterale (nessuna interpretazione di key-names),
+    # 3s di pausa lasciano stabilizzare il render, e l'Enter viene inviato
+    # due volte (il secondo è idempotente se il prompt è già vuoto dopo
+    # submit) per coprire sia il caso in cui il primo viene perso sia
+    # quello in cui serve confermare un'eventuale modale di workspace-trust.
+    tmux send-keys -t "$SESSION" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa."
+    sleep 3
+    tmux send-keys -t "$SESSION" Enter
+    sleep 2
+    tmux send-keys -t "$SESSION" Enter
   ) &>/dev/null &
 fi
