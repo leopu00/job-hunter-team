@@ -28,7 +28,7 @@ const AGENTS: AgentDef[] = [
   { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff', session: 'SCORER-1',   link: '/scorer',    desc: 'Calculates match score' },
   { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600', session: 'SCRITTORE-1', link: '/scrittore', desc: 'Generates CV and cover letter' },
   { id: 'critico',    name: 'Critico',    role: 'Critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336', session: 'CRITICO',    link: '/critico',   desc: 'Reviews documents' },
-  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/sentinella', desc: 'Monitors budget and rate limits' },
+  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/team/sentinella', desc: 'Monitors budget and rate limits' },
   { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\u{1F468}\u200D\u{1F4BC}',    color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'AI chat for user' },
 ]
 
