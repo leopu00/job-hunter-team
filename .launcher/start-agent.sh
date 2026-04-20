@@ -321,6 +321,22 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 # Solo per role=assistente: dopo che il CLI è pronto, inietta un trigger che
 # fa scrivere al modello il primo messaggio di benvenuto nel chat.jsonl.
 # Gli altri ruoli (capitano / scout / ecc.) ricevono istruzioni dal Capitano.
+# ── Kick-off per il Capitano ────────────────────────────────────────────────
+# Dopo start-agent.sh il CLI e' bootato ma l'agente sta fermo in attesa di
+# input. Il bottone "Avvia team" nella UI web ora delega anche il primo ordine
+# al Capitano: senza questo kick-off, il Comandante deve andare sul pane tmux
+# CAPITANO e dargli manualmente l'avvio.
+if [ "$ROLE" = "capitano" ]; then
+  setsid sh -c '
+    sleep 15
+    tmux send-keys -t "'"$SESSION"'" -l "[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
+    sleep 3
+    tmux send-keys -t "'"$SESSION"'" Enter
+    sleep 2
+    tmux send-keys -t "'"$SESSION"'" Enter
+  ' >/dev/null 2>&1 < /dev/null &
+fi
+
 if [ "$ROLE" = "assistente" ]; then
   # setsid: idem come sopra (survive al parent exit). Senza, la sleep 15
   # viene killata dal backend quando start-agent.sh esce, e il messaggio
