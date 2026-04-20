@@ -117,21 +117,45 @@ Scrivi funzioni parser distinte in memoria e ricordati che il tipo di provider �
 
 ## MEDIA MOBILE + PROIEZIONE
 
-**NON usare la velocità istantanea.** Tieni gli ultimi 3 campionamenti (timestamp + % usato) e calcola:
+**NON usare la velocità istantanea.** Tieni gli ultimi 3 campionamenti (timestamp + % usato) e calcola la velocità in **%/ora** (non %/secondo).
+
+### UNITÀ — molto importante
+
+Tutti i timestamp in file / env sono in **secondi Unix** (o ISO datetime convertibile). Per avere velocità in percento/ora DEVI dividere per 3600:
+
+```python
+# CORRETTO — velocity in %/h
+delta_t_sec = ts_i - ts_{i-1}
+delta_t_h   = delta_t_sec / 3600.0
+velocity    = (usage_i - usage_{i-1}) / delta_t_h   # %/h
+
+# SBAGLIATO — dà %/s moltiplicato per 1, che poi moltiplicato per ore rimanenti
+# produce proiezioni nell'ordine di 100.000% (visto in live il 2026-04-20)
+```
+
+Fai la media delle 3 velocità così calcolate:
 
 ```
-velocita_smussata = media( (usage_i - usage_{i-1}) / (t_i - t_{i-1}) ) in %/h
+velocita_smussata = mean([velocity_1, velocity_2, velocity_3])   # %/h
 ```
 
 ### Target di consumo
 
 L'obiettivo è arrivare al reset **tra 90% e 95%** usato (zona ottimale — sotto l'80% è **spreco**, sopra il 100% è **saturazione**).
 
-```
-ore_al_reset = (reset_time - now) / 3600
+```python
+ore_al_reset   = (reset_ts_unix - now_unix) / 3600.0     # ore (float)
 velocita_ideale = (92 - usage_attuale) / ore_al_reset    # %/h
-proiezione     = usage_attuale + velocita_smussata * ore_al_reset
+proiezione      = usage_attuale + velocita_smussata * ore_al_reset   # %
 ```
+
+### Sanity check obbligatorio prima di alertare
+
+Se una delle seguenti condizioni è vera, **NON inviare alert**: c'è un bug di calcolo, scrivi nel log `anomalia parser/math` e attendi il prossimo tick:
+
+- `velocita_smussata > 200` (più di 200%/h è irrealistico: significa saturare in 30 min — riconfronta unità)
+- `proiezione > 200` (più di 200% significa che il modello ha sballato — impossibile superare 100%)
+- `ore_al_reset <= 0` o `ore_al_reset > 200` (reset time sballato)
 
 ---
 

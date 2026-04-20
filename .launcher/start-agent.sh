@@ -9,6 +9,14 @@
 # Il template CLAUDE.md viene copiato da agents/<ruolo>/<ruolo>.md nel workspace.
 set -euo pipefail
 
+# PATH robusto: senza questo, quando un agente Codex/Claude chiama
+# `bash /app/.launcher/start-agent.sh scout 1` da dentro la sua TUI, il
+# sub-shell eredita il PATH minimale della shell login (/usr/local/bin:
+# /usr/bin:/bin:...) — manca /jht_home/.npm-global/bin dove vivono
+# codex/claude/kimi, e lo script esce con "codex: command not found".
+# Esportiamo esplicitamente sempre i path dei CLI qui.
+export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
 
