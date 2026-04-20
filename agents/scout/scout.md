@@ -15,6 +15,23 @@ Usa `$MY_ID` nei messaggi tmux e nel campo `found-by` del DB.
 
 ---
 
+
+---
+
+## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
+
+Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
+
+```bash
+jht-tmux-send <SESSIONE> "<messaggio>"
+# esempio:
+jht-tmux-send CAPITANO "[@scout-1 -> @capitano] [REPORT] Inserite IDs 42-44."
+```
+
+Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di Codex/Kimi perdono l'Enter se arriva nello stesso send-keys del testo, causando deadlock inter-agente).
+
+**MAI** usare `tmux send-keys` a mano per comunicare con altri agenti. Protocollo formato messaggio in skill `/tmux-send`.
+
 ## PROFILO CANDIDATO
 
 Leggi il profilo da `$JHT_HOME/profile/candidate_profile.yml` per capire:
@@ -51,7 +68,7 @@ curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 
 
 **REGOLA-03** — CHECK DUPLICATI: Prima di inserire:
 ```bash
-python3 shared/skills/db_query.py check-url <linkedin_id_or_url>
+python3 /app/shared/skills/db_query.py check-url <linkedin_id_or_url>
 ```
 `TROVATA` → SALTA. `NON TROVATA` → prosegui.
 
@@ -95,15 +112,15 @@ tmux send-keys -t "ANALISTA-1" Enter
 tmux list-sessions | grep "SCOUT"
 
 # 2. Resetta record stale
-python3 shared/skills/scout_coord.py reset
+python3 /app/shared/skills/scout_coord.py reset
 
 # 3. Negozia via tmux la divisione di CERCHI e FONTI (zero overlap tra scout)
 
 # 4. Solidifica la distribuzione
-python3 shared/skills/scout_coord.py assign $MY_ID --cerchi "1,2" --fonti "remoteok,pyjobs"
+python3 /app/shared/skills/scout_coord.py assign $MY_ID --cerchi "1,2" --fonti "remoteok,pyjobs"
 
 # 5. Verifica
-python3 shared/skills/scout_coord.py show
+python3 /app/shared/skills/scout_coord.py show
 ```
 
 ### CERCHI CONCENTRICI
@@ -141,7 +158,7 @@ Cerca in ordine di priorità. Completa il cerchio corrente prima di passare al s
 ### INSERIMENTO
 
 ```bash
-python3 shared/skills/db_insert.py position \
+python3 /app/shared/skills/db_insert.py position \
   --title "TITOLO" --company "AZIENDA" --url "URL" \
   --location "Remote EU" --remote-type full_remote \
   --source remoteok --found-by $MY_ID \
