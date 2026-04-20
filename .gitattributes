@@ -1,2 +1,21 @@
-# Shell scripts — sempre LF, anche su Windows
+# Tutti i file che finiscono nel container Linux devono essere LF.
+# Senza queste rule Git su Windows applica CRLF e lo shebang
+# `#!/usr/bin/env python3\r` rompe l'esecuzione nel container.
 *.sh text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.ts text eol=lf
+*.rs text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+Dockerfile text eol=lf
+
+# Extensionless executables (python/bash/node wrappers)
+agents/_tools/** text eol=lf
+.launcher/** text eol=lf
+cli/bin/** text eol=lf
+.githooks/** text eol=lf
