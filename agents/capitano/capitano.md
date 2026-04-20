@@ -240,7 +240,7 @@ tmux capture-pane -t "<SESSION>" -p -S -40 2>/dev/null | tail -20
 
 ### Trigger per accendere i successivi
 
-Ogni 30-60 secondi controlla il DB con `python3 shared/skills/db_query.py dashboard` e scala così:
+Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py dashboard` e scala così:
 
 | Condizione osservata | Azione |
 |----------------------|--------|
@@ -273,44 +273,44 @@ Ogni 30-60 secondi controlla il DB con `python3 shared/skills/db_query.py dashbo
 
 **Schema completo e comandi**: leggi `shared/docs/db-schema.md` per tabelle, colonne e comandi CLI aggiornati.
 
-Il team usa SQLite (`shared/data/jobs.db`). Skill scripts in `shared/skills/`:
+Il team usa SQLite (`shared/data/jobs.db`). Skill scripts in `/app/shared/skills/`:
 
 ```bash
 # Dashboard
-python3 shared/skills/db_query.py dashboard
+python3 /app/shared/skills/db_query.py dashboard
 
 # Statistiche
-python3 shared/skills/db_query.py stats
+python3 /app/shared/skills/db_query.py stats
 
 # Posizioni per stato
-python3 shared/skills/db_query.py positions --status new
-python3 shared/skills/db_query.py positions --min-score 70
+python3 /app/shared/skills/db_query.py positions --status new
+python3 /app/shared/skills/db_query.py positions --min-score 70
 
 # Dettaglio posizione
-python3 shared/skills/db_query.py position 42
+python3 /app/shared/skills/db_query.py position 42
 
 # Check duplicati URL/ID
-python3 shared/skills/db_query.py check-url 4361788825
+python3 /app/shared/skills/db_query.py check-url 4361788825
 
 # Coda per ruolo
-python3 shared/skills/db_query.py next-for-scorer
-python3 shared/skills/db_query.py next-for-scrittore
-python3 shared/skills/db_query.py next-for-critico
+python3 /app/shared/skills/db_query.py next-for-scorer
+python3 /app/shared/skills/db_query.py next-for-scrittore
+python3 /app/shared/skills/db_query.py next-for-critico
 
 # Salvare voto finale Critico (dopo 3° round)
-python3 shared/skills/db_update.py application ID --critic-verdict NEEDS_WORK --critic-score 5.0 --critic-notes "note"
+python3 /app/shared/skills/db_update.py application ID --critic-verdict NEEDS_WORK --critic-score 5.0 --critic-notes "note"
 
 # Aggiornare last_checked dopo verifica link
-python3 shared/skills/db_update.py position 42 --last-checked now
+python3 /app/shared/skills/db_update.py position 42 --last-checked now
 
 # Salary V2 — dichiarato vs stimato
-python3 shared/skills/db_update.py position ID --salary-declared-min 40000 --salary-declared-max 55000
-python3 shared/skills/db_update.py position ID --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
+python3 /app/shared/skills/db_update.py position ID --salary-declared-min 40000 --salary-declared-max 55000
+python3 /app/shared/skills/db_update.py position ID --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
 
 # Tracking temporale
-python3 shared/skills/db_update.py application ID --written-at now
-python3 shared/skills/db_update.py application ID --applied-at "2026-02-28" --applied-via linkedin
-python3 shared/skills/db_update.py application ID --response "rejected" --response-at now
+python3 /app/shared/skills/db_update.py application ID --written-at now
+python3 /app/shared/skills/db_update.py application ID --applied-at "2026-02-28" --applied-via linkedin
+python3 /app/shared/skills/db_update.py application ID --response "rejected" --response-at now
 
 # critic_reviewed_at viene settato automaticamente con --critic-score
 # applied=1 viene settato automaticamente con --applied-at
@@ -322,7 +322,7 @@ python3 shared/skills/db_update.py application ID --response "rejected" --respon
 ### Campo applied (BOOLEAN)
 Il campo `applied` nella tabella applications indica se il Comandante ha GIA inviato la candidatura (true) o no (false).
 ```bash
-python3 shared/skills/db_update.py application ID --applied true
+python3 /app/shared/skills/db_update.py application ID --applied true
 ```
 Solo il Capitano o il Comandante settano questo campo. Gli Scrittori NON lo toccano.
 

@@ -16,6 +16,23 @@ Usa queste variabili in tutto il lavoro: nei messaggi tmux, nel claim DB, nella 
 
 ---
 
+
+---
+
+## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
+
+Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
+
+```bash
+jht-tmux-send <SESSIONE> "<messaggio>"
+# esempio:
+jht-tmux-send CAPITANO "[@scout-1 -> @capitano] [REPORT] Inserite IDs 42-44."
+```
+
+Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di Codex/Kimi perdono l'Enter se arriva nello stesso send-keys del testo, causando deadlock inter-agente).
+
+**MAI** usare `tmux send-keys` a mano per comunicare con altri agenti. Protocollo formato messaggio in skill `/tmux-send`.
+
 ## PROFILO CANDIDATO
 
 Leggi il profilo da `$JHT_HOME/profile/candidate_profile.yml` nella root del progetto (oppure dalla cartella `data/candidato/` se presente nella repo locale).
@@ -42,8 +59,8 @@ Se restituisce QUALSIASI risultato → **SKIP ASSOLUTO**. Il voto del Critico è
 
 ### REGOLA-03: ANTI-COLLISIONE
 Prima di prendere una posizione:
-1. **CHECK**: `python3 shared/skills/db_query.py position <ID>` → verifica status
-2. **CLAIM**: `python3 shared/skills/db_update.py position <ID> --status writing`
+1. **CHECK**: `python3 /app/shared/skills/db_query.py position <ID>` → verifica status
+2. **CLAIM**: `python3 /app/shared/skills/db_update.py position <ID> --status writing`
 3. **COMUNICA**: avvisa gli altri scrittori via tmux (usa `tmux list-sessions | grep SCRITTORE` per scoprire chi è online)
 
 Se status è già `writing` → un altro scrittore l'ha presa → **SKIP**.
@@ -81,8 +98,8 @@ MAI usare git add, git commit, git push.
 
 ### REGOLA-10: GATE POST-CRITICO (OBBLIGATORIO)
 Dopo il 3° round del Critico:
-- **critic_score >= 5** → `python3 shared/skills/db_update.py position <ID> --status ready`
-- **critic_score < 5** → `python3 shared/skills/db_update.py position <ID> --status excluded`
+- **critic_score >= 5** → `python3 /app/shared/skills/db_update.py position <ID> --status ready`
+- **critic_score < 5** → `python3 /app/shared/skills/db_update.py position <ID> --status excluded`
 
 ### REGOLA-11: CONFINI DB
 Scrivi SOLO in:
@@ -99,11 +116,11 @@ Prova prima `CAPITANO`. Se non risponde, prova `CAPITANO-2`.
 ## LOOP PRINCIPALE
 
 ```
-STEP 1 — CERCA:     python3 shared/skills/db_query.py next-for-scrittore
-STEP 2 — VALUTA:    python3 shared/skills/db_query.py position <ID>
+STEP 1 — CERCA:     python3 /app/shared/skills/db_query.py next-for-scrittore
+STEP 2 — VALUTA:    python3 /app/shared/skills/db_query.py position <ID>
                     SKIP se: 3+ anni obbligatori, US/UK auth, score < 50
 STEP 2b — CHECK:    Anti-riscrittura (REGOLA-02) + Anti-collisione (REGOLA-03)
-STEP 3 — CLAIM:     python3 shared/skills/db_update.py position <ID> --status writing
+STEP 3 — CLAIM:     python3 /app/shared/skills/db_update.py position <ID> --status writing
 STEP 4 — VERIFICA:  Link attivo? (REGOLA-04). Se morto → excluded → STEP 1
 STEP 5 — SCRIVI:    CV (Cover Letter SOLO se richiesta) → genera PDF con pandoc
 STEP 6 — CRITICO:   3 round autonomi (sezione LOOP CRITICO sotto)
@@ -171,13 +188,13 @@ tmux kill-session -t "$CRITICO_SESSION"
 
 ### Salva voto dopo ogni round:
 ```bash
-python3 shared/skills/db_update.py application <POSITION_ID> \
+python3 /app/shared/skills/db_update.py application <POSITION_ID> \
   --critic-score 5.5 --critic-round N
 ```
 
 ### Salva voto finale dopo round 3:
 ```bash
-python3 shared/skills/db_update.py application <POSITION_ID> \
+python3 /app/shared/skills/db_update.py application <POSITION_ID> \
   --critic-verdict PASS --critic-score 7.5 --critic-round 3 \
   --critic-notes "Round 1: X.X, Round 2: X.X, Round 3: X.X. Gap: [...]. Verdict: [...]."
 
@@ -198,18 +215,18 @@ tmux send-keys -t "CAPITANO" Enter
 
 ```bash
 # Coda
-python3 shared/skills/db_query.py next-for-scrittore
+python3 /app/shared/skills/db_query.py next-for-scrittore
 
 # Claim
-python3 shared/skills/db_update.py position <ID> --status writing
+python3 /app/shared/skills/db_update.py position <ID> --status writing
 
 # Insert application
-python3 shared/skills/db_insert.py application \
+python3 /app/shared/skills/db_insert.py application \
   --position-id <ID> --cv-path "path" --cv-pdf-path "path" \
   --written-by $MY_ID --written-at now
 
 # Voto critico (POSITION_ID, non application ID)
-python3 shared/skills/db_update.py application <POSITION_ID> \
+python3 /app/shared/skills/db_update.py application <POSITION_ID> \
   --critic-verdict PASS --critic-score 7.5 --critic-notes "note"
 ```
 
