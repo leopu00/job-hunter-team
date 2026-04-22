@@ -4,14 +4,14 @@ import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
 
 const AGENTS = [
-  { label: 'Il Capitano',   href: '/capitano',  color: '#ff9100', emoji: '👨‍✈️' },
-  { label: 'Lo Scout',      href: '/scout',     color: '#2196f3', emoji: '🕵️' },
-  { label: "L'Analista",    href: '/analista',  color: '#00e676', emoji: '👨‍🔬' },
-  { label: 'Lo Scorer',     href: '/scorer',    color: '#b388ff', emoji: '👨‍💻' },
-  { label: 'Lo Scrittore',  href: '/scrittore', color: '#ffd600', emoji: '👨‍🏫' },
-  { label: 'Il Critico',    href: '/critico',   color: '#f44336', emoji: '👨‍⚖️' },
-  { label: 'La Sentinella', href: '/sentinella',color: '#607d8b', emoji: '💂' },
-  { label: "L'Assistente",  href: '/assistente',color: '#00e676', emoji: '👨‍💼' },
+  { label: 'Il Capitano',   href: '/team/capitano',  color: '#ff9100', emoji: '👨‍✈️' },
+  { label: 'Lo Scout',      href: '/team/scout',     color: '#2196f3', emoji: '🕵️' },
+  { label: "L'Analista",    href: '/team/analista',  color: '#00e676', emoji: '👨‍🔬' },
+  { label: 'Lo Scorer',     href: '/team/scorer',    color: '#b388ff', emoji: '👨‍💻' },
+  { label: 'Lo Scrittore',  href: '/team/scrittore', color: '#ffd600', emoji: '👨‍🏫' },
+  { label: 'Il Critico',    href: '/team/critico',   color: '#f44336', emoji: '👨‍⚖️' },
+  { label: 'La Sentinella', href: '/team/sentinella',color: '#607d8b', emoji: '💂' },
+  { label: "L'Assistente",  href: '/team/assistente',color: '#00e676', emoji: '👨‍💼' },
 ]
 
 export default function TeamDropdown() {
