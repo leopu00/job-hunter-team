@@ -310,6 +310,37 @@ Obiettivo: landing page, download, onboarding per utenti non tecnici.
 
 ---
 
+## CLI ↔ CONTAINER COORDINATION (TODO)
+
+Obiettivo: poter coordinare l'intero JHT (team, container, sentinella, web) da terminale senza toccare la web UI. Oggi il CLI host (`jht ...`) è un residuato del periodo "agenti locali" e non dialoga con il container dove girano davvero gli agenti.
+
+### Gap attuale (2026-04-22)
+- `jht team status` → "Nessun agente attivo" anche con 11 sessioni tmux vive in `docker exec jht`
+- `jht team stop/start` → non raggiunge il container
+- Nessun `jht container up/down/recreate` che wrappi `docker compose`
+- Nessun `jht sentinella status/tail` per leggere l'ultimo tick senza aprire la UI
+- Stop/start team possibile solo via web UI (POST `/api/team/stop-all` / `/start-all`)
+
+### Task proposti
+1. **`jht team stop|start|status` → proxy container**
+   - Rileva container `jht` vivo (`docker ps`)
+   - Se sì: `docker exec` verso `tmux ls` + `tmux kill-session` (stessa logica di `/api/team/stop-all/route.ts`)
+   - Fallback a comportamento host se container assente (per dev locale)
+2. **`jht container up|down|recreate|logs|status`**
+   - Wrap di `docker compose` con validazione `.env` + warning se team attivo
+   - `recreate` = stop team → compose up -d → start team (un singolo comando per il flusso di oggi)
+3. **`jht sentinella status|tail|graph`**
+   - `status`: leggi ultima riga di `~/.jht/logs/sentinel-data.jsonl` e formatta con colori
+   - `tail -f`: follow del jsonl con pretty-print
+   - `graph`: ASCII chart in terminale (sparkline) dello usage negli ultimi N tick
+4. **`jht web open|restart|logs`** — wrap verso il Next dev-server dentro al container
+5. **Coerenza tra host e container** — oggi `jht` installato sull'host non condivide stato con quello nel container; definire fonte di verità unica (probabilmente il container + proxy).
+
+### Beneficio
+Chi lavora in SSH/tmux o vuole scriptare (CI, cron, TUI futura) non deve più alternare tra browser + terminale. Anche i memory `project_launcher_requirements` e `project_team_location_exclusive` diventano automatizzabili (es. check che un solo team gira prima di `jht team start`).
+
+---
+
 ## BUG NOTI (da sprint precedente)
 
 | Bug | Descrizione | Assegnato a |
