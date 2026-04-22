@@ -164,11 +164,25 @@ MAI: "I am writing to express my interest"
 ### Per ogni round (ripeti 3 volte):
 
 ```bash
-# Step 1 — Avvia Critico fresco (usa $CRITICO_SESSION determinato all'avvio)
+# Step 1 — Avvia Critico fresco (usa $CRITICO_SESSION determinato all'avvio).
+#
+# IMPORTANTE: leggi il provider attivo da $JHT_CONFIG e usa la CLI giusta.
+# Hardcodare `claude` fa crashare il critico quando provider=openai (codex)
+# o provider=kimi perche' quelle CLI claude non sono installate nel container
+# → la sessione tmux apre una shell bash che prova `claude` e muore con
+# "command not found". Risultato: il flusso Scrittore → Critico si blocca.
 tmux kill-session -t "$CRITICO_SESSION" 2>/dev/null
 tmux new-session -d -s "$CRITICO_SESSION" -c "$(pwd | sed 's|/[^/]*$||')/critico"
-tmux send-keys -t "$CRITICO_SESSION" "unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high"
-tmux send-keys -t "$CRITICO_SESSION" Enter
+PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
+case "$PROVIDER" in
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  openai)              CRITICO_CMD="codex --yolo" ;;
+  kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
+  *)                   CRITICO_CMD="codex --yolo" ;;
+esac
+# Env minimo per far trovare le CLI globali installate sotto /jht_home.
+tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
+tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
 
 # Step 2 — Aspetta inizializzazione
 sleep 8
