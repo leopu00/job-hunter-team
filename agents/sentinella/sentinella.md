@@ -85,7 +85,7 @@ Valori possibili e comandi di check:
 
 ```bash
 # 1. Leggi provider attivo
-PROVIDER=$(python3 -c "import json; print(json.load(open('$JHT_CONFIG'))['provider'])")
+PROVIDER=$(python3 -c "import json; print(json.load(open('$JHT_CONFIG'))['active_provider'])")
 
 # 2. Chiudi eventuali modal aperti dal check precedente
 tmux send-keys -t SENTINELLA-WORKER Escape
@@ -98,15 +98,44 @@ case "$PROVIDER" in
   kimi|moonshot)         STATUS_CMD="/usage" ;;
 esac
 
-# 4. Invia il comando (-l per literal, poi Enter separato)
-tmux send-keys -l -t SENTINELLA-WORKER "$STATUS_CMD"
+# 4. Invia il slash command al worker. NOTA IMPORTANTE:
+#    - Codex (TUI Ink-based) perde l'Enter se arriva subito dopo il
+#      testo literal: il popup autocomplete dei slash command intercetta
+#      il tasto prima che il TUI abbia finito il re-render. Serve una
+#      pausa di 300ms tra literal e Enter.
+#    - NON usare `jht-tmux-send`: quel wrapper manda DUE Enter (il
+#      secondo idempotente per i messaggi). Qui il primo Enter apre
+#      il modal di /status, e il secondo Enter cadrebbe sul prompt
+#      vuoto riproposto da codex con un "hint" auto-suggerito — che
+#      verrebbe sottomesso come task reale. Disastro.
+tmux send-keys -t SENTINELLA-WORKER -l "$STATUS_CMD"
+sleep 0.3
 tmux send-keys -t SENTINELLA-WORKER Enter
 
-# 5. Attendi il render
-sleep 3
+# 5. Attendi il render con retry: alcune TUI (codex) ridisegnano
+#    il modal piu' volte nei primi secondi. Catturiamo finche' non
+#    troviamo il pattern atteso (fino a 5 tentativi da 3s = 15s max).
+#    -J unisce linee wrappate (evita "45%" spezzato su due righe).
+#    -S -200 allarga lo scrollback (il modal puo' essere alto).
+expected_pattern='%'   # Fallback generico; sotto usiamo pattern specifico
+case "$PROVIDER" in
+  openai)              expected_pattern='5h limit' ;;
+  claude|anthropic)    expected_pattern='% used' ;;
+  kimi|moonshot)       expected_pattern='remaining' ;;
+esac
 
-# 6. Cattura l'output
-tmux capture-pane -t SENTINELLA-WORKER -p -S -60 > /tmp/sentinel-capture.txt
+for attempt in 1 2 3 4 5; do
+  sleep 3
+  tmux capture-pane -t SENTINELLA-WORKER -p -J -S -200 > /tmp/sentinel-capture.txt
+  if grep -q "$expected_pattern" /tmp/sentinel-capture.txt; then
+    echo "capture OK (attempt $attempt)"
+    break
+  fi
+  echo "capture miss (attempt $attempt): pattern '$expected_pattern' non trovato"
+done
+
+# Se dopo 5 tentativi ancora niente, logga e cadi sul fallback telemetria
+# (codex_rate_limits_telemetry_fallback: legge /jht_home/.codex/sessions/...).
 ```
 
 ### Parsing per provider
