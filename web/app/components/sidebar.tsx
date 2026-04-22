@@ -18,7 +18,7 @@ const NAV: [string, [string, string, number?][]][] = [
   ['CONFIG',     [['/providers','Providers'],['/rate-limiter','Rate Limiter'],['/credentials','Credentials'],['/channels','Channels'],['/plugins','Plugins'],['/templates','Templates'],['/memory','Memory'],['/notifications','Notifications'],['/settings','Settings'],['/cron','Cron']]],
 ]
 
-const APP_CHROME_HIDDEN = ['/dashboard','/profile','/capitano','/scout','/analista','/scorer','/scrittore','/critico','/sentinella','/team','/applications','/positions','/ready','/risposte','/crescita','/assistente','/setup','/onboarding']
+const APP_CHROME_HIDDEN = ['/dashboard','/profile','/team','/applications','/positions','/ready','/risposte','/crescita','/setup','/onboarding']
 
 export default function Sidebar() {
   const pathname    = usePathname()
