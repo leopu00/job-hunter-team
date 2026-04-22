@@ -17,6 +17,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: jht
+    # Override del CMD Dockerfile (--help): avvia la dashboard web
+    # (Next.js dev su :3000 + infra) e resta in foreground.
+    command: ["dashboard", "--no-browser"]
     environment:
       # HOME points at the bind-mounted /jht_home so CLI credential
       # files (~/.claude, ~/.codex, ~/.kimi) land on the host disk
@@ -30,9 +33,29 @@ services:
       - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      # Inotify su bind-mount Windows+WSL2 non fa sempre propagare gli
+      # eventi di modifica: forziamo il polling sia per webpack (fallback)
+      # sia per Turbopack di Next 16.
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - TURBOPACK_WATCH_POLL=true
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
+      # ── Dev bind-mounts ────────────────────────────────────────────
+      # Sorgenti del repo montati dentro /app per hot-reload senza
+      # dover ricostruire l'immagine ad ogni modifica.
+      #   - web/: Next dev-server ricompila quando cambiano i .ts/.tsx
+      #   - agents/: prompt markdown letti da start-agent.sh al lancio
+      #   - shared/: skill Python condivise chiamate dagli agenti
+      # Gli anonymous volumes dopo mascherano node_modules/.next cosi'
+      # i binari linux installati nell'immagine restano intatti anche
+      # se l'host e' Windows/Mac (non hanno un node_modules compatibile).
+      - ./web:/app/web
+      - /app/web/node_modules
+      - /app/web/.next
+      - ./agents:/app/agents
+      - ./shared:/app/shared
     ports:
       - "3000:3000"
     stdin_open: true
