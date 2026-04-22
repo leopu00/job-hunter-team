@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import AgentInteraction from '@/components/AgentInteraction'
 
 type Entry = {
   ts: string
@@ -9,10 +11,12 @@ type Entry = {
   velocity_smooth?: number
   velocity_ideal?: number
   projection?: number
-  status: 'OK' | 'ATTENZIONE' | 'CRITICO' | 'SOTTOUTILIZZO' | 'RESET' | string
+  status: 'OK' | 'ATTENZIONE' | 'CRITICO' | 'SOTTOUTILIZZO' | 'RESET' | 'ANOMALIA' | string
   throttle?: number
   reset_at?: string
 }
+
+type OpStatus = { active: boolean; output: string }
 
 const STATUS_COLOR: Record<string, string> = {
   OK: '#4ade80',
@@ -20,34 +24,23 @@ const STATUS_COLOR: Record<string, string> = {
   ATTENZIONE: '#facc15',
   CRITICO: '#f87171',
   RESET: '#a78bfa',
+  ANOMALIA: '#fb923c',
 }
 
 const THROTTLE_LABEL = ['T0 full', 'T1 30s', 'T2 2 min', 'T3 5 min', 'T4 10 min']
 
 // ── SVG chart (inline, zero deps) ──────────────────────────────────
 function Chart({ entries }: { entries: Entry[] }) {
-  if (entries.length === 0) {
-    return (
-      <div style={{ padding: '40px', opacity: 0.6, textAlign: 'center' }}>
-        Nessun dato ancora. Il primo tick della Sentinella popolera il grafico.
-      </div>
-    )
-  }
-
   const W = 900
   const H = 320
   const PAD = { top: 20, right: 60, bottom: 40, left: 50 }
   const innerW = W - PAD.left - PAD.right
   const innerH = H - PAD.top - PAD.bottom
 
-  // Asse X: indice temporale (i punti non sono equidistanti ma per ora va bene)
   const n = entries.length
-  const xAt = (i: number) => PAD.left + (i / Math.max(1, n - 1)) * innerW
-
-  // Asse Y: 0-100%
+  const xAt = (i: number) => PAD.left + (n <= 1 ? 0.5 : i / (n - 1)) * innerW
   const yAt = (v: number) => PAD.top + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH
 
-  // Path generator
   const pathFor = (key: keyof Entry) =>
     entries
       .map((e, i) => {
@@ -58,15 +51,13 @@ function Chart({ entries }: { entries: Entry[] }) {
       .filter(Boolean)
       .join(' ')
 
-  // Reference lines at 50%, 80%, 95%
   const refLines = [50, 80, 95, 100]
 
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      style={{ width: '100%', maxWidth: W, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, background: '#0f172a' }}
+      style={{ width: '100%', maxWidth: W, border: '1px solid var(--color-border)', borderRadius: 8, background: '#0f172a' }}
     >
-      {/* Ref horizontal lines */}
       {refLines.map(v => (
         <g key={v}>
           <line
@@ -84,16 +75,10 @@ function Chart({ entries }: { entries: Entry[] }) {
         </g>
       ))}
 
-      {/* Proiezione (dashed, dietro) */}
       <path d={pathFor('projection')} stroke="#a78bfa" strokeWidth={1.5} fill="none" strokeDasharray="5 4" opacity={0.7} />
-
-      {/* Velocita ideale (pallida) */}
       <path d={pathFor('velocity_ideal')} stroke="#64748b" strokeWidth={1} fill="none" opacity={0.5} />
-
-      {/* Usage (protagonista) */}
       <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={2.2} fill="none" />
 
-      {/* Punti + colore stato */}
       {entries.map((e, i) => (
         <circle
           key={i}
@@ -108,15 +93,29 @@ function Chart({ entries }: { entries: Entry[] }) {
         </circle>
       ))}
 
-      {/* Axis labels */}
-      <text x={PAD.left} y={H - 10} fontSize={11} fill="rgba(255,255,255,0.5)">
-        {new Date(entries[0].ts).toLocaleTimeString()}
-      </text>
-      <text x={W - PAD.right} y={H - 10} fontSize={11} fill="rgba(255,255,255,0.5)" textAnchor="end">
-        {new Date(entries[entries.length - 1].ts).toLocaleTimeString()}
-      </text>
+      {entries.length > 0 && (
+        <>
+          <text x={PAD.left} y={H - 10} fontSize={11} fill="rgba(255,255,255,0.5)">
+            {new Date(entries[0].ts).toLocaleTimeString()}
+          </text>
+          <text x={W - PAD.right} y={H - 10} fontSize={11} fill="rgba(255,255,255,0.5)" textAnchor="end">
+            {new Date(entries[entries.length - 1].ts).toLocaleTimeString()}
+          </text>
+        </>
+      )}
 
-      {/* Legend */}
+      {entries.length === 0 && (
+        <text
+          x={PAD.left + innerW / 2}
+          y={PAD.top + innerH / 2}
+          fontSize={13}
+          fill="rgba(255,255,255,0.45)"
+          textAnchor="middle"
+        >
+          In attesa del primo tick della Sentinella…
+        </text>
+      )}
+
       <g transform={`translate(${PAD.left}, 10)`}>
         <rect x={0} y={-8} width={14} height={2} fill="#22d3ee" />
         <text x={20} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">usage</text>
@@ -138,7 +137,7 @@ function StatusBadge({ status }: { status: string }) {
       border: `1px solid ${color}`,
       padding: '2px 10px',
       borderRadius: 999,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: 600,
       letterSpacing: 0.5,
     }}>
@@ -147,13 +146,34 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      padding: '10px 14px',
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 6,
+    }}>
+      <div style={{ fontSize: 11, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 16, marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>{value}</div>
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────────
 export default function SentinellaPage() {
+  // Metriche storiche (grafico + cards)
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
-  const load = async () => {
+  // Stato operativo tmux (active + output terminale)
+  const [op, setOp] = useState<OpStatus | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [startMsg, setStartMsg] = useState<string | null>(null)
+  const termRef = useRef<HTMLDivElement>(null)
+
+  const loadData = useCallback(async () => {
     try {
       const r = await fetch('/api/sentinella/data', { cache: 'no-store' })
       const j = await r.json()
@@ -168,35 +188,124 @@ export default function SentinellaPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    load()
-    const id = setInterval(load, 30_000) // refresh ogni 30s (tick e' ogni 10 min)
-    return () => clearInterval(id)
   }, [])
 
+  const loadOp = useCallback(async () => {
+    try {
+      const r = await fetch('/api/sentinella/status')
+      const j: OpStatus = await r.json()
+      setOp(j)
+    } catch {
+      setOp({ active: false, output: '' })
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+    loadOp()
+    const dataId = setInterval(loadData, 30_000) // tick ogni 10 min, refresh UI ogni 30s
+    const opId = setInterval(loadOp, 5_000)     // terminale live
+    return () => { clearInterval(dataId); clearInterval(opId) }
+  }, [loadData, loadOp])
+
+  useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
+  }, [op?.output])
+
+  const handleStart = async () => {
+    setStarting(true)
+    setStartMsg(null)
+    try {
+      const r = await fetch('/api/sentinella/start', { method: 'POST' })
+      const j = await r.json()
+      setStartMsg(j.message ?? (j.ok ? 'Avviata' : j.error))
+      await loadOp()
+    } catch {
+      setStartMsg('Errore di rete')
+    } finally {
+      setStarting(false)
+    }
+  }
+
   const last = entries[entries.length - 1]
+  const isActive = op?.active ?? false
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>👁️ Sentinella</h1>
-        {last && <StatusBadge status={last.status} />}
+    <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto', animation: 'fade-in 0.35s ease both' }}>
+      {/* Header con breadcrumb */}
+      <div className="mb-6 pb-4 border-b border-[var(--color-border)]">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+            Dashboard
+          </Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <Link href="/team" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+            Team
+          </Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Sentinella</span>
+        </nav>
+
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <div className="text-3xl leading-none select-none">💂</div>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]" style={{ margin: 0 }}>Sentinella</h1>
+          {last && <StatusBadge status={last.status} />}
+        </div>
+        <p className="text-[var(--color-muted)] text-[11px] mt-2" style={{ margin: '8px 0 0' }}>
+          Monitor rate-limit e budget del provider AI attivo. Tick ogni 10 min, UI aggiorna ogni 30 s.
+        </p>
       </div>
-      <p style={{ opacity: 0.6, marginTop: 0, fontSize: 13 }}>
-        Monitor rate-limit e budget del provider AI attivo. Aggiorna ogni 30 secondi.
-      </p>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center', opacity: 0.6 }}>Caricamento…</div>}
+      {/* Stato operativo + Avvia */}
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <div className="flex items-center gap-2 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-2">
+          <div
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              background: op == null ? 'var(--color-dim)' : isActive ? '#22c55e' : 'var(--color-dim)',
+              animation: isActive ? 'pulse-dot 2s ease-in-out infinite' : undefined,
+            }}
+          />
+          <span
+            className="text-[11px] font-semibold tracking-widest uppercase"
+            style={{ color: op == null ? 'var(--color-dim)' : isActive ? '#22c55e' : 'var(--color-dim)' }}
+          >
+            {op == null ? 'connessione…' : isActive ? 'sessione tmux attiva' : 'sessione tmux inattiva'}
+          </span>
+        </div>
 
+        {!isActive && (
+          <button
+            onClick={handleStart}
+            disabled={starting || op == null}
+            className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+            style={{
+              background: starting || op == null ? 'var(--color-border)' : '#607d8b',
+              color: starting || op == null ? 'var(--color-dim)' : '#fff',
+              cursor: starting || op == null ? 'not-allowed' : 'pointer',
+              opacity: starting ? 0.7 : 1,
+            }}
+          >
+            {starting ? 'Avvio in corso…' : 'Avvia Sentinella'}
+          </button>
+        )}
+
+        {startMsg && (
+          <span className="text-[11px] text-[var(--color-muted)]">{startMsg}</span>
+        )}
+      </div>
+
+      {/* Errori fetch dati */}
       {err && (
         <div style={{ padding: 12, background: '#f8717110', color: '#f87171', border: '1px solid #f8717150', borderRadius: 6, marginBottom: 16 }}>
-          Errore: {err}
+          Errore caricamento storico: {err}
         </div>
       )}
 
-      {last && (
+      {/* Metric cards */}
+      {loading ? (
+        <div style={{ padding: 20, textAlign: 'center', opacity: 0.6, fontSize: 12 }}>Caricamento storico…</div>
+      ) : last ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
           <Metric label="provider" value={last.provider} />
           <Metric label="usage" value={`${last.usage}%`} />
@@ -207,29 +316,50 @@ export default function SentinellaPage() {
           <Metric label="reset at" value={last.reset_at || '—'} />
           <Metric label="ultimo tick" value={new Date(last.ts).toLocaleTimeString()} />
         </div>
-      )}
+      ) : null}
 
+      {/* Grafico — sempre visibile */}
       <Chart entries={entries} />
 
       {entries.length > 0 && (
-        <div style={{ marginTop: 24, fontSize: 12, opacity: 0.6 }}>
-          {entries.length} campionamenti totali mostrati (ultimi 500).
+        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.6 }}>
+          {entries.length} campionamenti dalla sessione corrente (ultimi 500).
         </div>
       )}
-    </div>
-  )
-}
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      padding: '10px 14px',
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 6,
-    }}>
-      <div style={{ fontSize: 11, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 16, marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>{value}</div>
+      {/* Terminale live — solo se tmux attiva */}
+      {isActive && (
+        <div style={{ animation: 'fade-in 0.25s ease both', marginTop: 28 }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="section-label">Output terminale</div>
+            <span className="text-[9px] text-[var(--color-dim)] font-mono">
+              aggiornamento ogni 5s · sessione SENTINELLA
+            </span>
+          </div>
+          <div
+            ref={termRef}
+            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 font-mono text-[11px] leading-relaxed overflow-auto"
+            style={{
+              height: '40vh',
+              background: '#0d1117',
+              color: 'var(--color-base)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              borderColor: '#607d8b30',
+            }}
+          >
+            {op?.output
+              ? op.output
+              : <span style={{ color: 'var(--color-dim)' }}>nessun output…</span>
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Pannello messaggistica al Capitano/alla Sentinella */}
+      <div style={{ marginTop: 28 }}>
+        <AgentInteraction sessionPrefix="SENTINELLA" color="#607d8b" label="Sentinella" />
+      </div>
     </div>
   )
 }
