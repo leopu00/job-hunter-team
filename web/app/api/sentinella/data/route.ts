@@ -22,7 +22,7 @@ type Entry = {
   velocity_smooth?: number
   velocity_ideal?: number
   projection?: number
-  status: 'OK' | 'ATTENZIONE' | 'CRITICO' | 'SOTTOUTILIZZO' | 'RESET' | string
+  status: 'OK' | 'ATTENZIONE' | 'CRITICO' | 'SOTTOUTILIZZO' | 'RESET' | 'ANOMALIA' | string
   throttle?: number
   reset_at?: string
 }
@@ -62,7 +62,14 @@ export async function GET() {
     }
   }
 
-  // Keep only last 500 entries per rendere il grafico leggero.
-  const trimmed = entries.slice(-500)
+  // Mostra solo la sessione corrente: dal piu' recente RESET in poi.
+  // Senza questo filtro il grafico trascina sample di sessioni vecchie
+  // (anche di giorni fa) comprimendo l'asse x su gap enormi.
+  let lastResetIdx = -1
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].status === 'RESET') { lastResetIdx = i; break }
+  }
+  const sessionEntries = lastResetIdx >= 0 ? entries.slice(lastResetIdx) : entries
+  const trimmed = sessionEntries.slice(-500)
   return NextResponse.json({ ok: true, entries: trimmed, file, count: trimmed.length })
 }
