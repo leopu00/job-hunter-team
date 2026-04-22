@@ -290,7 +290,7 @@ export default function ProfilePageClient({ profile }: Props) {
         </div>
         <p className="text-[11px] text-[var(--color-base)] leading-relaxed flex-1">
           Vuoi compilare il profilo in modo guidato?{' '}
-          <Link href="/assistente" className="text-[var(--color-green)] font-semibold hover:underline">
+          <Link href="/team/assistente" className="text-[var(--color-green)] font-semibold hover:underline">
             Chatta con l&apos;Assistente →
           </Link>{' '}
           ti farà domande sulla tua storia professionale e completerà il profilo al 100%.
@@ -402,7 +402,7 @@ export default function ProfilePageClient({ profile }: Props) {
                     <p className="text-[11px] font-semibold text-[var(--color-bright)]">Estrazione in corso...</p>
                     <p className="text-[10px] text-[var(--color-muted)]">
                       L&apos;assistente sta elaborando i tuoi documenti.{' '}
-                      <Link href="/assistente" className="text-[var(--color-green)] hover:underline">
+                      <Link href="/team/assistente" className="text-[var(--color-green)] hover:underline">
                         Segui in chat →
                       </Link>
                     </p>

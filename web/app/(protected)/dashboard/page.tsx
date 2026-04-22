@@ -237,7 +237,7 @@ export default async function DashboardPage() {
 
             {/* Assistant — optional helper */}
             <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
-              <Link href="/assistente" className="group flex items-center gap-3 no-underline">
+              <Link href="/team/assistente" className="group flex items-center gap-3 no-underline">
                 <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
                   {t.help_text}
                 </span>
