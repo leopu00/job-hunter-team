@@ -98,7 +98,14 @@ RUN useradd --create-home --shell /bin/bash jht \
     # pacchetti pip ecc.) possono `sudo apt install` / `sudo pip install`
     # al volo senza bloccare il flusso. Il container è isolato dal host.
     && echo 'jht ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/jht \
-    && chmod 0440 /etc/sudoers.d/jht
+    && chmod 0440 /etc/sudoers.d/jht \
+    # Pre-crea /app/web/.next vuota ma con ownership jht. Serve per il
+    # compose dev dove mascheriamo .next con anonymous volume: Docker
+    # copia le perms della dir "sorgente" nel volume, quindi se qui fosse
+    # mancante o root-owned il volume nascerebbe non-scrivibile da jht
+    # e Next.js crasha con "EACCES: mkdir '/app/web/.next/dev'".
+    && mkdir -p /app/web/.next \
+    && chown jht:jht /app/web/.next
 
 USER jht
 
