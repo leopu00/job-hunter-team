@@ -76,15 +76,14 @@ test('installProviders requires at least one id', async () => {
 
 test('installProviders installs each selected provider in order', async () => {
   // claude: 1 probe (miss) + 1 install = 2 calls.
-  // kimi: 1 probe (miss) + 3 installs (uninstall old wrapper, install uv,
-  // uv-install kimi-cli) = 4 calls. Six docker calls total.
+  // kimi: 1 probe (miss) + 2 installs (uninstall old wrapper, combined
+  // uv+kimi-cli install) = 3 calls. Five docker calls total.
   const { run, calls } = recordingRun([
     { result: { ok: false, code: 1 } }, // claude probe miss
     { result: { ok: true, code: 0 } },  // claude install
     { result: { ok: false, code: 1 } }, // kimi probe miss
     { result: { ok: true, code: 0 } },  // kimi uninstall-old
-    { result: { ok: true, code: 0 } },  // kimi install uv
-    { result: { ok: true, code: 0 } },  // kimi install kimi-cli
+    { result: { ok: true, code: 0 } },  // kimi combined uv + kimi-cli install
   ])
   const result = await installProviders({
     providerIds: ['claude', 'kimi'],
@@ -92,7 +91,7 @@ test('installProviders installs each selected provider in order', async () => {
     run,
   })
   assert.equal(result.ok, true)
-  assert.equal(calls.length, 6)
+  assert.equal(calls.length, 5)
   assert.ok(calls[1].args.includes('@anthropic-ai/claude-code@latest'))
   // The kimi install steps (after the probe at index 2) must collectively
   // mention kimi-cli somewhere.

@@ -72,22 +72,33 @@ const PROVIDERS = {
         args: ['-c', 'npm uninstall -g @jacksontian/kimi-cli 2>/dev/null || true'],
         env: NPM_PREFIX_ENV,
       },
-      // uv itself is a single static binary available on PyPI.
-      // --break-system-packages is needed on Debian bookworm where
-      // system pip refuses user-wide installs by default (PEP 668).
-      {
-        entrypoint: 'pip3',
-        args: ['install', '--user', '--break-system-packages', 'uv'],
-      },
-      // uv tool install defaults to ~/.local/bin, but the container's
-      // Dockerfile hardcodes /home/jht/.local/bin in PATH — different
-      // from $HOME/.local/bin since HOME is overridden to /jht_home
-      // at runtime. UV_TOOL_BIN_DIR pins the symlinks into
-      // /jht_home/.npm-global/bin, which *is* on PATH and is already
-      // the bind-mounted location where npm global binaries live.
+      // Install uv + kimi-cli in un unico step atomico.
+      //
+      // Perche' merged e non due step separati: ogni step del provider
+      // install gira in un NUOVO container via `docker compose run --rm`.
+      // Se "pip3 install --user uv" (step N) e "uv tool install" (step N+1)
+      // sono separati, eventuali differenze di HOME/PATH tra le due
+      // invocazioni, o un silent-fail di pip, producono "sh: uv: not found"
+      // senza spiegazione. Incidente 2026-04-22: exit 127 opaco durante
+      // install Kimi dalla JHT Desktop. Fonderlo qui rende l'env coerente
+      // (stesso container, stesso HOME) e aggiunge diagnostica esplicita.
+      //
+      // uv tool install defaults to ~/.local/bin; il Dockerfile hardcoda
+      // /home/jht/.local/bin in PATH, ma HOME runtime e' /jht_home, quindi
+      // UV_TOOL_BIN_DIR punta i symlink in /jht_home/.npm-global/bin che
+      // sta gia' su PATH (bind-mount persistente come gli npm global).
+      // --break-system-packages bypassa la protezione PEP 668 di Debian.
       {
         entrypoint: 'sh',
-        args: ['-c', 'export PATH="$HOME/.local/bin:$PATH" && UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --python 3.13 kimi-cli'],
+        args: ['-c', [
+          'set -e',
+          'echo "[kimi-install] HOME=$HOME"',
+          'pip3 install --user --break-system-packages uv',
+          'export PATH="$HOME/.local/bin:$PATH"',
+          'command -v uv >/dev/null || { echo "[kimi-install] uv MISSING dopo pip install"; echo "Contenuto $HOME/.local/bin/:"; ls -la "$HOME/.local/bin/" 2>&1 || true; exit 1; }',
+          'echo "[kimi-install] uv at $(command -v uv)"',
+          'UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --python 3.13 kimi-cli',
+        ].join(' && ')],
       },
     ],
     loginHint: 'inside TUI: /login',
