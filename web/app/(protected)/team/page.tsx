@@ -196,6 +196,50 @@ export default function TeamPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const prevStatusesRef = useRef<Record<string, AgentStatus> | null>(null)
 
+  /* ── Provider switcher (dev-friendly) ────────────────────────── */
+  const [provider, setProvider] = useState<string>('')
+  const [providerList, setProviderList] = useState<Array<{ id: string; label: string }>>([])
+  const [switching, setSwitching] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/providers')
+      .then(r => r.json())
+      .then((data: { providers?: Array<{ id: string; label: string; active?: boolean }> }) => {
+        const list = data.providers ?? []
+        setProviderList(list.map(p => ({ id: p.id, label: p.label })))
+        const active = list.find(p => p.active)
+        if (active) setProvider(active.id)
+      })
+      .catch(() => { /* endpoint down */ })
+  }, [])
+
+  const switchProvider = async (newProvider: string, restart: boolean) => {
+    if (!newProvider || newProvider === provider) return
+    setSwitching(true)
+    try {
+      const r = await fetch('/api/providers/activate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: newProvider }),
+      })
+      const j = await r.json()
+      if (!j?.ok) { toast(j?.error || 'Errore switch provider', 'warning', 4000); return }
+      setProvider(newProvider)
+      toast(`Provider: ${newProvider}`, 'success', 2000)
+      if (restart) {
+        await fetch('/api/team/stop-all', { method: 'POST' })
+        await new Promise(r => setTimeout(r, 1500))
+        await fetch('/api/team/start-all', { method: 'POST' })
+        toast('Team riavviato col nuovo provider', 'success', 3000)
+        setTimeout(fetchStatus, 2000)
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Errore di rete', 'warning', 4000)
+    } finally {
+      setSwitching(false)
+    }
+  }
+
   const activeCount = AGENTS.filter(a => statuses[a.id] === 'running').length
 
   /* ── Fetch status ────────────────────────────────────────────── */
@@ -325,7 +369,38 @@ export default function TeamPage() {
               {activeCount}/{AGENTS.length} agents active
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {providerList.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-3 py-1.5">
+                <span className="text-[9px] uppercase tracking-[0.15em] text-[var(--color-dim)]">Provider</span>
+                <select
+                  value={provider}
+                  onChange={e => setProvider(e.target.value)}
+                  disabled={switching}
+                  className="bg-transparent text-[11px] text-[var(--color-base)] font-mono outline-none cursor-pointer"
+                  style={{ border: 'none' }}
+                >
+                  {providerList.map(p => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => switchProvider(provider, activeCount > 0)}
+                  disabled={switching}
+                  title={activeCount > 0 ? 'Salva provider + stop/start team' : 'Salva provider'}
+                  className="text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded"
+                  style={{
+                    background: switching ? 'var(--color-border)' : 'rgba(96,125,139,0.2)',
+                    color: switching ? 'var(--color-dim)' : '#90a4ae',
+                    border: '1px solid rgba(96,125,139,0.3)',
+                    cursor: switching ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {switching ? '…' : (activeCount > 0 ? 'Apply + restart' : 'Apply')}
+                </button>
+              </div>
+            )}
             <button
               onClick={startAll}
               disabled={activeCount === AGENTS.length}
