@@ -59,9 +59,14 @@ const nextConfig: NextConfig = {
       '**/*.map',
     ],
   },
-  turbopack: {
-    root: MONOREPO_ROOT,
-  },
+  // Turbopack root: nel container va a MONOREPO_ROOT (/app) per monorepo
+  // file-tracing. Sull'host dev Windows però quel root ha un node_modules
+  // parziale (solo next/react, niente tailwind) che manda in loop il
+  // resolver di @tailwindcss/postcss — ogni risoluzione fallita spawnava
+  // un postcss worker che non moriva. Sull'host lasciamo cwd (web/).
+  turbopack: process.env.JHT_SHELL_VIA?.startsWith('docker:')
+    ? {}
+    : { root: MONOREPO_ROOT },
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   images: {

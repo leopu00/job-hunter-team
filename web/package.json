@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:host": "JHT_SHELL_VIA=docker:jht NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= next dev -p 3001",
     "prebuild": "node -e \"require('fs').copyFileSync('../scripts/install.sh','public/install.sh')\"",
     "build": "next build",
     "start": "next start",
