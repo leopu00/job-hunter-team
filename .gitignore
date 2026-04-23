@@ -115,3 +115,7 @@ supabase/.temp/
 # Sessioni manuali di test end-to-end (note, screenshot, output di checkup, ecc.)
 # Gli e2e automatizzati stanno in e2e/ e sono versionati normalmente.
 e2e-runs/
+
+# ── DEV LAUNCHER LOGS ────────────────────────────────────────────────────────
+# Log generati da scripts/dev-up.sh (host Next su :3001)
+.dev-logs/
