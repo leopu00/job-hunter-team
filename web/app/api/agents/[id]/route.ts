@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runBash, runScript } from '@/lib/shell'
+import { runBash, runScript, toWslPath } from '@/lib/shell'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -112,7 +112,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
     // creazione sessione tmux, lancio CLI. Instance ricavata dal
     // suffisso `-N` della session (SCOUT-1 → instance '1').
     const repoRoot = path.resolve(process.cwd(), '..')
-    const startAgentScript = path.join(repoRoot, '.launcher', 'start-agent.sh')
+    const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
     const instanceMatch = session.match(/-(\d+)$/)
     const args = instanceMatch ? [resolved.id, instanceMatch[1]] : [resolved.id]
     try {
