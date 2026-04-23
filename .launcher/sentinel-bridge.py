@@ -28,6 +28,8 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -129,18 +131,108 @@ def parse_claude(text):
     return {"usage": int(m.group(1)), "reset_at": None, "weekly_usage": None}
 
 
+def _duration_to_hhmm_future(match):
+    """
+    Converte 'Xd Yh Zm', 'Xh Ym', 'Ym' in HH:MM assoluto di quando scatta
+    il reset (ora + delta), arrotondato al minuto.
+    """
+    days = int(match.group("d") or 0)
+    hours = int(match.group("h") or 0)
+    mins = int(match.group("m") or 0)
+    delta = timedelta(days=days, hours=hours, minutes=mins)
+    target = datetime.now() + delta
+    return target.strftime("%H:%M")
+
+
 def parse_kimi(text):
+    """Fallback text parser (non piu' usato in produzione: vedi fetch_kimi_api).
+
+    Il flusso primario per Kimi e' HTTP diretto via fetch_kimi_api. Mantenuto
+    per debugging o se l'API cambia formato.
     """
-    Kimi /usage: progress bar + 'XX% remaining' o simile.
-    Fallback conservativo: cerca 'remaining' o 'used'.
+    m5 = re.search(
+        r"5h\s*limit[^\n]*?(\d+)\s*%\s*left[^\n]*?\(resets?\s*in\s*"
+        r"(?:(?P<d>\d+)\s*d\s*)?(?:(?P<h>\d+)\s*h\s*)?(?:(?P<m>\d+)\s*m\s*)?",
+        text, re.I,
+    )
+    if not m5:
+        return None
+    mw = re.search(r"Weekly\s*limit[^\n]*?(\d+)\s*%\s*left", text, re.I)
+    return {
+        "usage": 100 - int(m5.group(1)),
+        "reset_at": _duration_to_hhmm_future(m5),
+        "weekly_usage": (100 - int(mw.group(1))) if mw else None,
+    }
+
+
+# ── Kimi: chiamata HTTP diretta all'API (no tmux, no LLM) ──────────────
+
+KIMI_CREDENTIALS = JHT_HOME / ".kimi" / "credentials" / "kimi-code.json"
+KIMI_USAGES_URL = "https://api.kimi.com/coding/v1/usages"
+
+
+def _read_kimi_token():
+    try:
+        with KIMI_CREDENTIALS.open(encoding="utf-8") as f:
+            creds = json.load(f)
+        return creds.get("access_token")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def _iso_to_hhmm(ts):
+    """ISO 'YYYY-MM-DDTHH:MM:SSZ' → HH:MM locale o None."""
+    if not ts:
+        return None
+    try:
+        # Parse con timezone: 'Z' = UTC
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return dt.astimezone().strftime("%H:%M")
+    except (ValueError, TypeError):
+        return None
+
+
+def fetch_kimi_api():
     """
-    m_rem = re.search(r"(\d+)\s*%\s*remaining", text, re.I)
-    if m_rem:
-        return {"usage": 100 - int(m_rem.group(1)), "reset_at": None, "weekly_usage": None}
-    m_used = re.search(r"(\d+)\s*%\s*used", text, re.I)
-    if m_used:
-        return {"usage": int(m_used.group(1)), "reset_at": None, "weekly_usage": None}
-    return None
+    Chiama direttamente https://api.kimi.com/coding/v1/usages con OAuth token
+    dal file ~/.kimi/credentials/kimi-code.json.
+
+    Evita completamente la TUI di Kimi: niente tmux send-keys, niente
+    /usage che finisce nel prompt LLM, niente refusal che bruciano token.
+
+    Risposta attesa:
+      { "usage": {"used": "8", "remaining": "92", "resetTime": "..."},  # weekly
+        "limits": [ {"detail": {"used": "38", "remaining": "62",
+                                "resetTime": "..."}}, ... ] }  # 5h
+    """
+    token = _read_kimi_token()
+    if not token:
+        return None
+    req = urllib.request.Request(KIMI_USAGES_URL, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+        data = json.loads(body)
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError, OSError):
+        return None
+
+    weekly = data.get("usage") or {}
+    limits = data.get("limits") or []
+    five_h = (limits[0] or {}).get("detail") if limits else None
+    if not five_h:
+        return None
+
+    try:
+        usage_5h = int(five_h.get("used", 0))
+        weekly_used = int(weekly.get("used", 0)) if weekly.get("used") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        "usage": usage_5h,
+        "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
+        "weekly_usage": weekly_used,
+    }
 
 
 PARSERS = {
@@ -306,13 +398,22 @@ def main():
         tick_min, provider = read_config()
         now_h = datetime.now().strftime("%H:%M:%S")
 
-        raw = query_status(provider)
-        parser = PARSERS.get(provider, parse_codex)
-        parsed = parser(raw)
-        if parsed is None:
-            print(f"[sentinel-bridge] {now_h} — parser fallito (provider={provider})")
-            time.sleep(min(POLL_SECONDS, tick_min * 60))
-            continue
+        # Kimi: HTTP diretto all'API (niente TUI, niente token bruciati su
+        # refusal LLM perche' la TUI non riconosce /usage come slash-command).
+        if provider in ("kimi", "moonshot"):
+            parsed = fetch_kimi_api()
+            if parsed is None:
+                print(f"[sentinel-bridge] {now_h} — fetch_kimi_api fallito (token scaduto? no rete?)")
+                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                continue
+        else:
+            raw = query_status(provider)
+            parser = PARSERS.get(provider, parse_codex)
+            parsed = parser(raw)
+            if parsed is None:
+                print(f"[sentinel-bridge] {now_h} — parser fallito (provider={provider})")
+                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                continue
         parsed["provider"] = provider
 
         last = load_last_sample()
