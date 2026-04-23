@@ -250,18 +250,24 @@ app.whenReady().then(() => {
   // Pre-flight prerequisiti per il dev mode. Torna { ready, missing[] }
   // con i nomi delle cose da sistemare. Il renderer usa questo per
   // decidere se lanciare dev:launch o reindirizzare al wizard di setup.
+  //
+  // Nota: NON verifichiamo la presenza dei binari CLI (claude/codex/kimi)
+  // sul filesystem host. Quei binari vivono dentro il container (i
+  // symlink in ~/.jht/.npm-global/bin/ puntano a path Linux
+  // /home/jht/... o /jht_home/.local/... che sono validi solo dentro al
+  // container). Su Windows host `fs.existsSync` li vedrebbe come
+  // dangling e darebbe falsi negativi. Se il binario manca davvero,
+  // start-agent.sh fallira' con messaggio chiaro ('kimi not found').
   ipcMain.handle('dev:check-prerequisites', async () => {
     const fs = require('node:fs')
     const os = require('node:os')
     const missing = []
-    // 1. Docker daemon raggiungibile
     try {
       const check = await dockerInstaller.checkDocker()
       if (!check?.ok && !check?.running) missing.push('docker')
     } catch {
       missing.push('docker')
     }
-    // 2. jht.config.json con active_provider valido
     const jhtHome = process.env.JHT_HOME || path.join(os.homedir(), '.jht')
     const cfgPath = path.join(jhtHome, 'jht.config.json')
     let activeProvider = null
@@ -274,16 +280,6 @@ app.whenReady().then(() => {
         if (!activeProvider) missing.push('config')
       } catch {
         missing.push('config')
-      }
-    }
-    // 3. CLI del provider attivo installato (check del symlink non dangling)
-    if (activeProvider) {
-      const binMap = { anthropic: 'claude', claude: 'claude', openai: 'codex', kimi: 'kimi', moonshot: 'kimi' }
-      const bin = binMap[activeProvider]
-      if (bin) {
-        const binPath = path.join(jhtHome, '.npm-global', 'bin', bin)
-        // existsSync segue il symlink; se dangling torna false (ok)
-        if (!fs.existsSync(binPath)) missing.push(`cli:${bin}`)
       }
     }
     return { ready: missing.length === 0, missing, activeProvider }
