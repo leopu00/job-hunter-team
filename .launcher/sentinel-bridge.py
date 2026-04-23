@@ -122,13 +122,40 @@ def parse_codex(text):
 
 def parse_claude(text):
     """
-    Claude /usage (pattern approssimativo, formato variabile):
-      'XX% used' + eventuale finestra (settimana/sessione).
+    Claude Code /usage output:
+      Resets 6:10pm (UTC)                                15% used  (session 5h)
+      Resets 7pm (UTC) (all models)                                 (weekly all)
+      Resets 6am (UTC) (Sonnet only)                                (weekly sonnet)
+
+    Orari con/senza minuti, am/pm, UTC esplicito. Il primo match
+    'XX% used' sulla riga dello stesso Resets e' la sessione 5h, che
+    e' quello che monitoriamo come usage principale.
     """
-    m = re.search(r"(\d+)\s*%\s*used", text, re.I)
-    if not m:
-        return None
-    return {"usage": int(m.group(1)), "reset_at": None, "weekly_usage": None}
+    # Pattern: 'Resets <H>[:<M>]<am|pm> (UTC)' seguito (stessa riga) da
+    # 'NN% used'. Se la stessa riga ha '% used' abbiamo il campione 5h.
+    m_session = re.search(
+        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)[^\n]*?(\d+)\s*%\s*used",
+        text, re.I,
+    )
+    if not m_session:
+        # Fallback legacy: solo 'XX% used' senza reset parseabile
+        m_bare = re.search(r"(\d+)\s*%\s*used", text, re.I)
+        if not m_bare:
+            return None
+        return {"usage": int(m_bare.group(1)), "reset_at": None, "weekly_usage": None}
+
+    hour = int(m_session.group(1))
+    minute = int(m_session.group(2) or 0)
+    ampm = m_session.group(3).lower()
+    # 12h → 24h
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    reset_at = f"{hour:02d}:{minute:02d}"  # UTC, consistente con hours_until()
+    usage = int(m_session.group(4))
+
+    return {"usage": usage, "reset_at": reset_at, "weekly_usage": None}
 
 
 def _duration_to_hhmm_future(match):
