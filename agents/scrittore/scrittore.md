@@ -33,6 +33,18 @@ Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di 
 
 **MAI** usare `tmux send-keys` a mano per comunicare con altri agenti. Protocollo formato messaggio in skill `/tmux-send`.
 
+---
+
+## 🛑 FREEZE DAL CAPITANO — OBBLIGO DI STOP
+
+Quando ricevi un messaggio `[@capitano -> @scrittore-N] [URG] FREEZE`, la Sentinella ha rilevato saturazione rate-limit e il Capitano ti ordina di fermarti. **Applicalo senza discutere:**
+
+- ❌ **NON spawnare nuovi CRITICO-S<N>** (niente start-agent.sh critico, niente tmux new-session)
+- ❌ **Non iniziare una nuova bozza** di CV/cover letter
+- ✅ Se stai nel mezzo di un round Critico (bozza già inviata, aspetti il voto), **completa SOLO il round corrente** e poi fermati — NON avviare il round successivo
+- ✅ Rispondi con `[@scrittore-N -> @capitano] [ACK] freeze applicato, in attesa`
+- ✅ Resta in sleep (`sleep 300` o più) finché non ricevi `[URG]` con `throttle=T0` o `T1` dal Capitano
+
 ## PROFILO CANDIDATO
 
 Leggi il profilo da `$JHT_HOME/profile/candidate_profile.yml` nella root del progetto (oppure dalla cartella `data/candidato/` se presente nella repo locale).
