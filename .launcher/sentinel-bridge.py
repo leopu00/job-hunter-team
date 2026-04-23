@@ -120,42 +120,78 @@ def parse_codex(text):
     }
 
 
-def parse_claude(text):
-    """
-    Claude Code /usage output:
-      Resets 6:10pm (UTC)                                15% used  (session 5h)
-      Resets 7pm (UTC) (all models)                                 (weekly all)
-      Resets 6am (UTC) (Sonnet only)                                (weekly sonnet)
-
-    Orari con/senza minuti, am/pm, UTC esplicito. Il primo match
-    'XX% used' sulla riga dello stesso Resets e' la sessione 5h, che
-    e' quello che monitoriamo come usage principale.
-    """
-    # Pattern: 'Resets <H>[:<M>]<am|pm> (UTC)' seguito (stessa riga) da
-    # 'NN% used'. Se la stessa riga ha '% used' abbiamo il campione 5h.
-    m_session = re.search(
-        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)[^\n]*?(\d+)\s*%\s*used",
-        text, re.I,
-    )
-    if not m_session:
-        # Fallback legacy: solo 'XX% used' senza reset parseabile
-        m_bare = re.search(r"(\d+)\s*%\s*used", text, re.I)
-        if not m_bare:
-            return None
-        return {"usage": int(m_bare.group(1)), "reset_at": None, "weekly_usage": None}
-
-    hour = int(m_session.group(1))
-    minute = int(m_session.group(2) or 0)
-    ampm = m_session.group(3).lower()
-    # 12h → 24h
+def _claude_time_to_hhmm(match):
+    """Dai group (hour, minute?, ampm) → 'HH:MM' 24h UTC."""
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    ampm = match.group(3).lower()
     if ampm == "pm" and hour < 12:
         hour += 12
     elif ampm == "am" and hour == 12:
         hour = 0
-    reset_at = f"{hour:02d}:{minute:02d}"  # UTC, consistente con hours_until()
-    usage = int(m_session.group(4))
+    return f"{hour:02d}:{minute:02d}"
 
-    return {"usage": usage, "reset_at": reset_at, "weekly_usage": None}
+
+def parse_claude(text):
+    """
+    Claude Code /usage output:
+      Resets 6:10pm (UTC)                                15% used  ← SESSIONE 5h
+      Resets 7pm (UTC) (all models)                                ← weekly all
+      Resets 6am (UTC) (Sonnet only)                               ← weekly sonnet
+
+    Il primo Resets (quello SENZA suffisso "(all models)" o "(Sonnet
+    only)") e' la sessione 5h — quello che monitoriamo come usage
+    principale.
+
+    Con tmux capture-pane la riga puo' essere wrappata: '% used'
+    finisce sulla riga successiva rispetto a 'Resets'. Il vecchio
+    regex richiedeva stessa riga e falliva ~50% dei tick; in piu'
+    poteva agganciarsi al '% used' di una riga WEEKLY se la session
+    non aveva '% used' catturato, causando salti 19→14 che l'utente
+    ha osservato.
+
+    Nuovo approccio:
+      1. Trova TUTTE le righe 'Resets <time>' nell'output
+      2. Il primo Resets senza 'all models' e 'only' e' la sessione
+      3. Il primo '% used' dopo quel Resets (entro 200 char, cross-line)
+         e' la percentuale di quella sessione
+    Se la session non ha '% used' (es. modal appena aperto, valori non
+    renderizzati), torna None: preferiamo saltare il tick piuttosto
+    che scrivere un valore di un'altra finestra.
+    """
+    # Trova tutte le righe Resets con posizione
+    resets = list(re.finditer(
+        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)([^\n]*)",
+        text, re.I,
+    ))
+    if not resets:
+        return None
+
+    # La sessione 5h: primo Resets la cui "coda di riga" NON contiene
+    # ne' 'all models' ne' 'only' (case insensitive).
+    session_match = None
+    for m in resets:
+        tail = (m.group(4) or "").lower()
+        if "all models" not in tail and "only" not in tail:
+            session_match = m
+            break
+    if session_match is None:
+        # Tutte le righe sono weekly: output incompleto, salta questo tick
+        return None
+
+    # Cerca il primo '\d+% used' nella finestra di 200 char DOPO la
+    # riga Resets (copre line wrap + eventuale spazio di layout).
+    start = session_match.end()
+    window = text[start:start + 200]
+    m_used = re.search(r"(\d+)\s*%\s*used", window, re.I)
+    if not m_used:
+        return None
+
+    return {
+        "usage": int(m_used.group(1)),
+        "reset_at": _claude_time_to_hhmm(session_match),
+        "weekly_usage": None,
+    }
 
 
 def _duration_to_hhmm_future(match):
