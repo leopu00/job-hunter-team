@@ -182,6 +182,10 @@ export default function AssistentePage() {
             Dashboard
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
+          <Link href="/team" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+            Team
+          </Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
           <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Assistente</span>
         </nav>
         <div className="mt-4 flex items-start gap-5">
