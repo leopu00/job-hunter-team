@@ -179,10 +179,19 @@ def parse_claude(text):
         # Tutte le righe sono weekly: output incompleto, salta questo tick
         return None
 
-    # Cerca il primo '\d+% used' nella finestra di 200 char DOPO la
-    # riga Resets (copre line wrap + eventuale spazio di layout).
-    start = session_match.end()
-    window = text[start:start + 200]
+    # Cerca '% used' nella finestra che va dall'inizio della riga Resets
+    # fino al prossimo blocco "Resets" (Current week) o 400 char, quale
+    # arrivi prima. Claude mette il '% used' sulla stessa riga del Resets
+    # OPPURE wrappato subito sotto; in entrambi i casi lo becchiamo.
+    # Fermarsi al prossimo Resets impedisce di 'rubare' il '% used'
+    # della sezione weekly quando la session non ha ancora un valore.
+    start = session_match.start()
+    next_reset_pos = len(text)
+    for m in resets:
+        if m.start() > session_match.start():
+            next_reset_pos = m.start()
+            break
+    window = text[start:min(next_reset_pos, start + 400)]
     m_used = re.search(r"(\d+)\s*%\s*used", window, re.I)
     if not m_used:
         return None
