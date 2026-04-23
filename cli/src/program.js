@@ -29,6 +29,7 @@ import { registerHooksCommand } from './commands/hooks.js';
 import { registerReportCommand } from './commands/report.js';
 import { registerWebhooksCommand } from './commands/webhooks.js';
 import { registerCloudCommand } from './commands/cloud.js';
+import { registerSentinellaCommand } from './commands/sentinella.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -67,6 +68,7 @@ export function buildProgram() {
   registerReportCommand(program);
   registerWebhooksCommand(program);
   registerCloudCommand(program);
+  registerSentinellaCommand(program);
 
   return program;
 }
