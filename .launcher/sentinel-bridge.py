@@ -577,6 +577,40 @@ def load_last_sample():
         return None
 
 
+def load_recent_samples(n=30):
+    """Ultimi n sample (o meno) dal JSONL, in ordine cronologico."""
+    if not DATA_JSONL.exists():
+        return []
+    try:
+        lines = DATA_JSONL.read_text(encoding="utf-8").strip().splitlines()[-n:]
+        out = []
+        for ln in lines:
+            try:
+                out.append(json.loads(ln))
+            except json.JSONDecodeError:
+                continue
+        return out
+    except OSError:
+        return []
+
+
+def cumulative_delta_last_hour(history, now_ts):
+    """Somma delta POSITIVI negli ultimi 60 minuti (indicatore di carico reale)."""
+    cutoff = now_ts - timedelta(minutes=60)
+    total = 0.0
+    for e in history:
+        try:
+            ts = datetime.fromisoformat(e["ts"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if ts < cutoff:
+            continue
+        d = e.get("delta")
+        if isinstance(d, (int, float)) and d > 0:
+            total += float(d)
+    return total
+
+
 def hours_until(reset_hhmm):
     """HH:MM → ore float mancanti; se gia' passata, assume domani."""
     if not reset_hhmm:
@@ -592,11 +626,18 @@ def hours_until(reset_hhmm):
     return (target - now).total_seconds() / 3600
 
 
-def compute_metrics(parsed, last):
-    """Deriva delta, velocity, projection, status, throttle partendo dal campione parsato."""
+def compute_metrics(parsed, last, history=None):
+    """Deriva delta, velocity, projection, status, throttle partendo dal campione parsato.
+
+    history: lista opzionale degli ultimi N entry del JSONL, usata per:
+      - filtro burst: se il delta cumulativo dell'ultima ora e' basso, NON
+        permettiamo alla proiezione di spingere su CRITICO sulla base di un
+        singolo spike di velocity
+    """
     usage = parsed["usage"]
     now = datetime.now(timezone.utc)
     ts = now.isoformat()
+    history = history or []
 
     delta = 0.0
     velocity = 0.0
@@ -609,9 +650,12 @@ def compute_metrics(parsed, last):
         except (TypeError, ValueError):
             pass
 
-    # EMA alpha=0.5 con velocity_smooth precedente (0 se manca)
+    # EMA con alpha=0.2 (finestra effettiva ~10 sample). Prima era 0.5
+    # (~3 sample): un burst di 30s contava per 1/3 della smooth e proiettava
+    # un ritmo non sostenuto. Con 0.2 un burst singolo pesa ~20% e decade
+    # in pochi tick. Patch suggerita dalla Sentinella stessa.
     vs_prev = (last or {}).get("velocity_smooth") or 0.0
-    velocity_smooth = 0.5 * velocity + 0.5 * vs_prev
+    velocity_smooth = 0.2 * velocity + 0.8 * vs_prev
 
     hours_to_reset = hours_until(parsed.get("reset_at"))
     velocity_ideal = None
@@ -622,6 +666,23 @@ def compute_metrics(parsed, last):
         projection = usage + velocity_smooth * hours_to_reset
 
     reset_event = bool(last and usage < (last.get("usage") or 0) - 30)
+
+    # Burst filter: se nell'ultima ora il carico REALE accumulato e' basso
+    # (< 8% cumulativo), proiezioni alte sono artefatti di un burst breve
+    # extrapolato linearmente. Usiamo il delta cumulativo orario come
+    # "verita' empirica" e sovrascriviamo la proiezione con una stima piu'
+    # conservativa basata sulla velocita' media reale osservata.
+    last_hour_delta = cumulative_delta_last_hour(history + [{"ts": ts, "delta": delta}], now)
+    is_burst_artifact = (
+        projection is not None and projection > 100
+        and last_hour_delta < 8.0  # soglia empirica: meno di 8% di crescita in 1h
+        and hours_to_reset and hours_to_reset > 0
+    )
+    if is_burst_artifact:
+        # Rimpiazza projection con extrapolation basata sulla media reale
+        # osservata nell'ultima ora (o fallback a velocity_ideal).
+        realistic_vel = last_hour_delta  # %/h (delta cumulativo in 1h)
+        projection = usage + max(realistic_vel, velocity_ideal or 0) * hours_to_reset
 
     if reset_event:
         status, throttle = "RESET", 0
@@ -784,7 +845,8 @@ def main():
         parsed["provider"] = provider
 
         last = load_last_sample()
-        entry = compute_metrics(parsed, last)
+        history = load_recent_samples(30)
+        entry = compute_metrics(parsed, last, history=history)
         write_jsonl(entry)
         write_log(entry)
         if session_exists(SESSION):
