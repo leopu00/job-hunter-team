@@ -247,44 +247,6 @@ app.whenReady().then(() => {
   // nell'app installata.
   ipcMain.handle('dev:is-available', () => ({ available: !app.isPackaged }))
 
-  // Pre-flight prerequisiti per il dev mode. Torna { ready, missing[] }
-  // con i nomi delle cose da sistemare. Il renderer usa questo per
-  // decidere se lanciare dev:launch o reindirizzare al wizard di setup.
-  //
-  // Nota: NON verifichiamo la presenza dei binari CLI (claude/codex/kimi)
-  // sul filesystem host. Quei binari vivono dentro il container (i
-  // symlink in ~/.jht/.npm-global/bin/ puntano a path Linux
-  // /home/jht/... o /jht_home/.local/... che sono validi solo dentro al
-  // container). Su Windows host `fs.existsSync` li vedrebbe come
-  // dangling e darebbe falsi negativi. Se il binario manca davvero,
-  // start-agent.sh fallira' con messaggio chiaro ('kimi not found').
-  ipcMain.handle('dev:check-prerequisites', async () => {
-    const fs = require('node:fs')
-    const os = require('node:os')
-    const missing = []
-    try {
-      const check = await dockerInstaller.checkDocker()
-      if (!check?.ok && !check?.running) missing.push('docker')
-    } catch {
-      missing.push('docker')
-    }
-    const jhtHome = process.env.JHT_HOME || path.join(os.homedir(), '.jht')
-    const cfgPath = path.join(jhtHome, 'jht.config.json')
-    let activeProvider = null
-    if (!fs.existsSync(cfgPath)) {
-      missing.push('config')
-    } else {
-      try {
-        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
-        activeProvider = cfg?.active_provider || null
-        if (!activeProvider) missing.push('config')
-      } catch {
-        missing.push('config')
-      }
-    }
-    return { ready: missing.length === 0, missing, activeProvider }
-  })
-
   // Dev mode one-shot: skippa il flow installer normale, fa partire
   // il container via docker compose (con bind-mount di .launcher/,
   // agents/, shared/, web/) e Next sull'host su :3001, poi apre il
