@@ -54,7 +54,7 @@ get_agent_info() {
     scorer)     echo "SCORER|medium" ;;
     scrittore)  echo "SCRITTORE|high" ;;
     critico)    echo "CRITICO|high" ;;
-    sentinella) echo "SENTINELLA|low" ;;
+    sentinella) echo "SENTINELLA|medium" ;;
     assistente) echo "ASSISTENTE|medium" ;;
     *)          echo "" ;;
   esac
@@ -393,17 +393,24 @@ if [ "$ROLE" = "sentinella" ]; then
     echo "✓ $WORKER_SESSION avviato (worker per polling /status o /usage)"
   fi
 
-  # Ticker: heartbeat esterno. Intervallo letto da JHT_TICK_INTERVAL
-  # (env var, in minuti). Default nel Python script = 5.
-  TICKER_SCRIPT="/app/.launcher/sentinel-ticker.py"
-  if [ -x "$TICKER_SCRIPT" ]; then
+  # Bridge: polling + parsing + log + notifica alla Sentinella LLM.
+  # Sostituisce il vecchio sentinel-ticker.py (che si limitava a mandare
+  # [TICK] alla Sentinella perche' facesse tutto). Il bridge esegue
+  # /status/usage sul worker, parsa con regex, calcola le metriche,
+  # scrive sentinel-data.jsonl + sentinel-log.txt, e invia alla
+  # Sentinella [BRIDGE TICK] con i dati gia' pronti: l'LLM decide solo
+  # se e come avvisare il Capitano. Intervallo letto dinamicamente da
+  # jht.config.json (sentinella_tick_minutes, range 1-60).
+  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
+  if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
     setsid sh -c "
       sleep 30
-      JHT_SENTINEL_SESSION='$SESSION' JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-5}' \
-        python3 -u $TICKER_SCRIPT >> /tmp/sentinel-ticker.log 2>&1
+      JHT_SENTINEL_SESSION='$SESSION' JHT_SENTINEL_WORKER='$WORKER_SESSION' \
+      JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
+        python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "  → ticker partito (intervallo: ${JHT_TICK_INTERVAL:-5} min, log /tmp/sentinel-ticker.log)"
+    echo "  → bridge partito (intervallo iniziale: ${JHT_TICK_INTERVAL:-10} min, log /tmp/sentinel-bridge.log)"
   else
-    echo "  ⚠ $TICKER_SCRIPT non eseguibile — ticker NON partito"
+    echo "  ⚠ $BRIDGE_SCRIPT non trovato — bridge NON partito"
   fi
 fi
