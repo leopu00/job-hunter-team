@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('launcherApi', {
   stop: () => ipcRenderer.invoke('launcher:stop'),
   openBrowser: () => ipcRenderer.invoke('launcher:open-browser'),
   openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
+  devLaunch: () => ipcRenderer.invoke('dev:launch'),
+  devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
   onPayloadLog: (callback) => {
     const listener = (_event, message) => {
       try {

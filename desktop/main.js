@@ -1,4 +1,5 @@
 const path = require('node:path')
+const { spawn } = require('node:child_process')
 const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
 
 // macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
@@ -239,6 +240,68 @@ app.whenReady().then(() => {
     return status
   })
   ipcMain.handle('launcher:stop', () => runtime.stopRuntime())
+
+  // Probe: il pulsante dev mode e' abilitato solo se il renderer vede
+  // app.isPackaged=false (Electron in dev dalla sorgente). In prod
+  // il bottone viene nascosto perche' scripts/dev-up.sh non esiste
+  // nell'app installata.
+  ipcMain.handle('dev:is-available', () => ({ available: !app.isPackaged }))
+
+  // Dev mode one-shot: skippa il flow installer normale, fa partire
+  // il container via docker compose (con bind-mount di .launcher/,
+  // agents/, shared/, web/) e Next sull'host su :3001, poi apre il
+  // browser sulla porta dev. Disponibile solo quando Electron gira
+  // dal sorgente (app.isPackaged=false): in prod la repo non e'
+  // accessibile per eseguire lo script.
+  ipcMain.handle('dev:launch', async () => {
+    if (app.isPackaged) {
+      return { ok: false, error: 'Dev mode disponibile solo da sorgente (npm run desktop:dev)' }
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-up.sh')
+    // Su Windows passiamo esplicitamente per git-bash (Electron non
+    // eredita il PATH di quello che hai aperto; bash.exe via PATH non
+    // e' garantito). Su mac/linux basta 'bash'.
+    const bashCmd =
+      process.platform === 'win32'
+        ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+        : 'bash'
+    try {
+      const child = spawn(bashCmd, [script], {
+        cwd: repoRoot,
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+      })
+      child.unref()
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    // Il dev-up.sh dura ~20-30s (recreate container + fix chown + start
+    // Next). Aspettiamo in background e apriamo il browser quando :3001
+    // risponde; se dopo 60s non risponde apriamo comunque cosi' l'utente
+    // vede l'errore.
+    const waitForReady = async () => {
+      const { request } = require('node:http')
+      const deadline = Date.now() + 60_000
+      while (Date.now() < deadline) {
+        const alive = await new Promise(resolve => {
+          const req = request('http://localhost:3001/', { method: 'HEAD', timeout: 2000 }, res => {
+            resolve(res.statusCode != null && res.statusCode < 500)
+          })
+          req.on('error', () => resolve(false))
+          req.on('timeout', () => { req.destroy(); resolve(false) })
+          req.end()
+        })
+        if (alive) return true
+        await new Promise(r => setTimeout(r, 2000))
+      }
+      return false
+    }
+    const ready = await waitForReady()
+    try { await shell.openExternal('http://localhost:3001') } catch { /* non-fatal */ }
+    return { ok: true, ready }
+  })
   ipcMain.handle('launcher:open-external', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, error: 'invalid-url' }

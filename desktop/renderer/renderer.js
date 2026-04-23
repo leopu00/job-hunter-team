@@ -914,6 +914,8 @@ const dom = {
   steps: document.querySelectorAll('.step'),
   btnWelcomeBack: document.getElementById('btn-welcome-back'),
   btnWelcomeContinue: document.getElementById('btn-welcome-continue'),
+  devModeActions: document.getElementById('dev-mode-actions'),
+  btnDevMode: document.getElementById('btn-dev-mode'),
   btnSetupBack: document.getElementById('btn-setup-back'),
   btnSetupContinue: document.getElementById('btn-setup-continue'),
   btnStartTeam: document.getElementById('btn-start-team'),
@@ -1610,6 +1612,46 @@ dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
 dom.btnWelcomeContinue.addEventListener('click', async () => {
   await smartAdvanceFromWelcome()
 })
+
+// Dev-mode shortcut: visibile solo quando Electron gira da sorgente.
+// Probe async all'avvio; se disponibile, mostra il pulsante accanto al
+// "Continue" della welcome. Click → dev:launch (compose + host Next :3001
+// + open browser). Vedi main.js IPC 'dev:launch' e scripts/dev-up.sh.
+;(async () => {
+  try {
+    if (!window.launcherApi?.devIsAvailable) return
+    const probe = await window.launcherApi.devIsAvailable()
+    if (!probe?.available || !dom.devModeActions || !dom.btnDevMode) return
+    dom.devModeActions.hidden = false
+    dom.btnDevMode.addEventListener('click', async () => {
+      const original = dom.btnDevMode.textContent
+      dom.btnDevMode.disabled = true
+      dom.btnDevMode.textContent = '⏳ Avvio in corso…'
+      try {
+        const res = await window.launcherApi.devLaunch()
+        if (!res?.ok) {
+          dom.btnDevMode.textContent = `✗ ${res?.error || 'errore sconosciuto'}`
+          setTimeout(() => {
+            dom.btnDevMode.textContent = original
+            dom.btnDevMode.disabled = false
+          }, 5000)
+          return
+        }
+        dom.btnDevMode.textContent = res.ready
+          ? '✓ Pronto — browser aperto su :3001'
+          : '⚠ Partito ma non ancora pronto (apri :3001 manualmente)'
+      } catch (err) {
+        dom.btnDevMode.textContent = `✗ ${err?.message || err}`
+        setTimeout(() => {
+          dom.btnDevMode.textContent = original
+          dom.btnDevMode.disabled = false
+        }, 5000)
+      }
+    })
+  } catch {
+    // probe fallito → prod o Electron vecchio senza l'IPC: lascia nascosto
+  }
+})()
 
 // Decide which step the user actually needs to see, based on what is
 // already set up on their machine. Jumps past steps whose prerequisite
