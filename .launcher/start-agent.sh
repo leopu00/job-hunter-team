@@ -45,17 +45,28 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
-# Mappa ruolo → prefisso sessione | effort
+# Mappa ruolo → prefisso sessione | effort | model
+# model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
+#   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
+#   completo, passato come --model al CLI claude. Per codex/kimi il
+#   model override non e' ancora cablato (aggiungere quando serve).
+#
+# Scelta modelli:
+#   - Sentinella/Assistente: Sonnet high — chat/monitor conversazionale,
+#     non serve ragionamento pesante ma serve reattivita'; Sonnet costa
+#     meno di Opus e un effort high compensa il gap di capability
+#   - Tutti gli altri: default del provider (Opus su claude), effort per
+#     ruolo calibrato (coordinatori/spawn high, scorer medium)
 get_agent_info() {
   case "$1" in
-    capitano)       echo "CAPITANO|high" ;;
-    scout)      echo "SCOUT|high" ;;
-    analista)   echo "ANALISTA|high" ;;
-    scorer)     echo "SCORER|medium" ;;
-    scrittore)  echo "SCRITTORE|high" ;;
-    critico)    echo "CRITICO|high" ;;
-    sentinella) echo "SENTINELLA|medium" ;;
-    assistente) echo "ASSISTENTE|medium" ;;
+    capitano)       echo "CAPITANO|high|" ;;
+    scout)      echo "SCOUT|high|" ;;
+    analista)   echo "ANALISTA|high|" ;;
+    scorer)     echo "SCORER|medium|" ;;
+    scrittore)  echo "SCRITTORE|high|" ;;
+    critico)    echo "CRITICO|high|" ;;
+    sentinella) echo "SENTINELLA|high|sonnet" ;;
+    assistente) echo "ASSISTENTE|high|sonnet" ;;
     *)          echo "" ;;
   esac
 }
@@ -68,7 +79,7 @@ if [ -z "$AGENT_INFO" ]; then
   exit 1
 fi
 
-IFS='|' read -r session_prefix effort <<< "$AGENT_INFO"
+IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
 if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
@@ -151,6 +162,11 @@ case "$PROVIDER" in
   ""|anthropic|claude)
     CLI_BIN="claude"
     CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+    # Override modello per ruoli con model_override settato (es.
+    # sentinella/assistente su sonnet). Default account Claude = opus.
+    if [ -n "$model_override" ]; then
+      CLI_ARGS="$CLI_ARGS --model $model_override"
+    fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="ANTHROPIC_API_KEY='${API_KEY}' "
     fi
