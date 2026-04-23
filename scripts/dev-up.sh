@@ -56,8 +56,9 @@ docker compose up --no-start jht >/dev/null
 # L'anonymous volume che maschera /app/web/.next parte root-owned; il
 # container gira come uid 1001 (jht) e fallirebbe EACCES alla prima
 # compile di Turbopack. Risolto con un one-shot --volumes-from.
+# MSYS_NO_PATHCONV=1 evita che git-bash converta /bin/sh in C:/... su Windows.
 log "Fixo ownership di /app/web/.next (uid 1001)"
-docker run --rm --user root --entrypoint /bin/sh \
+MSYS_NO_PATHCONV=1 docker run --rm --user root --entrypoint /bin/sh \
   --volumes-from jht "$IMAGE" \
   -c "chown -R 1001:1001 /app/web/.next" >/dev/null
 
