@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import fs from 'node:fs/promises'
 import { runBash, runScript, toWslPath } from '@/lib/shell'
 import { requireAuth } from '@/lib/auth'
+import { JHT_CONFIG_PATH } from '@/lib/jht-paths'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
@@ -16,15 +18,32 @@ export const dynamic = 'force-dynamic'
 // container.js), duplicarlo qui non serve. Gli altri ruoli (Scout,
 // Analista, Scorer, Scrittore, Critico) vengono accesi dal Capitano
 // secondo le sue soglie.
-const TEAM: Array<{
+async function readSentinellaTickMinutes(): Promise<number> {
+  // Default 10 min; range 1-60. Il valore e' letto da jht.config.json
+  // (sentinella_tick_minutes) e impostabile dalla UI via /api/sentinella/config.
+  try {
+    const raw = await fs.readFile(JHT_CONFIG_PATH, 'utf8')
+    const cfg = JSON.parse(raw)
+    const n = Number(cfg?.sentinella_tick_minutes)
+    if (Number.isFinite(n) && n >= 1 && n <= 60) return Math.round(n)
+  } catch { /* fallback al default */ }
+  return 10
+}
+
+type TeamAgent = {
   role: string
   session: string
   instance: string | null
   env?: Record<string, string>
-}> = [
-  { role: 'capitano', session: 'CAPITANO', instance: null },
-  { role: 'sentinella', session: 'SENTINELLA', instance: null, env: { JHT_TICK_INTERVAL: '10' } },
-]
+}
+
+async function buildTeam(): Promise<TeamAgent[]> {
+  const tickMin = await readSentinellaTickMinutes()
+  return [
+    { role: 'capitano', session: 'CAPITANO', instance: null },
+    { role: 'sentinella', session: 'SENTINELLA', instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
+  ]
+}
 
 // Quote POSIX-safe per env var passate a bash -c.
 const shellQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
@@ -40,9 +59,10 @@ export async function POST() {
     // jht.config.json, creazione sessione tmux, lancio CLI, kick-off
     // automatico per capitano e assistente, worker+ticker per sentinella.
     const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
+    const team = await buildTeam()
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
-    for (const agent of TEAM) {
+    for (const agent of team) {
       try {
         const { stdout } = await runBash(
           `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`

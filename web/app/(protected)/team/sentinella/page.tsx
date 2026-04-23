@@ -173,6 +173,12 @@ export default function SentinellaPage() {
   const [startMsg, setStartMsg] = useState<string | null>(null)
   const termRef = useRef<HTMLDivElement>(null)
 
+  // Intervallo tick (min) — persistito in jht.config.json via /api/sentinella/config.
+  const [tickMin, setTickMin] = useState<number | null>(null)
+  const [tickDraft, setTickDraft] = useState<number>(10)
+  const [savingTick, setSavingTick] = useState(false)
+  const [tickMsg, setTickMsg] = useState<string | null>(null)
+
   const loadData = useCallback(async () => {
     try {
       const r = await fetch('/api/sentinella/data', { cache: 'no-store' })
@@ -200,13 +206,25 @@ export default function SentinellaPage() {
     }
   }, [])
 
+  const loadTickConfig = useCallback(async () => {
+    try {
+      const r = await fetch('/api/sentinella/config')
+      const j = await r.json()
+      if (j?.ok && typeof j.tick_minutes === 'number') {
+        setTickMin(j.tick_minutes)
+        setTickDraft(j.tick_minutes)
+      }
+    } catch { /* ignora, fallback al default */ }
+  }, [])
+
   useEffect(() => {
     loadData()
     loadOp()
+    loadTickConfig()
     const dataId = setInterval(loadData, 30_000) // tick ogni 10 min, refresh UI ogni 30s
     const opId = setInterval(loadOp, 5_000)     // terminale live
     return () => { clearInterval(dataId); clearInterval(opId) }
-  }, [loadData, loadOp])
+  }, [loadData, loadOp, loadTickConfig])
 
   useEffect(() => {
     if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
@@ -224,6 +242,31 @@ export default function SentinellaPage() {
       setStartMsg('Errore di rete')
     } finally {
       setStarting(false)
+    }
+  }
+
+  const handleSaveTick = async () => {
+    setSavingTick(true)
+    setTickMsg(null)
+    try {
+      const r = await fetch('/api/sentinella/config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tick_minutes: tickDraft }),
+      })
+      const j = await r.json()
+      if (j?.ok) {
+        setTickMin(j.tick_minutes)
+        setTickMsg(isActive
+          ? `Salvato (${j.tick_minutes} min). Riavvia la Sentinella per applicare.`
+          : `Salvato (${j.tick_minutes} min).`)
+      } else {
+        setTickMsg(j?.error ?? 'Errore salvataggio')
+      }
+    } catch {
+      setTickMsg('Errore di rete')
+    } finally {
+      setSavingTick(false)
     }
   }
 
@@ -292,6 +335,39 @@ export default function SentinellaPage() {
 
         {startMsg && (
           <span className="text-[11px] text-[var(--color-muted)]">{startMsg}</span>
+        )}
+      </div>
+
+      {/* Intervallo tick */}
+      <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+        <label htmlFor="tick-min" className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-dim)]">
+          Intervallo tick
+        </label>
+        <input
+          id="tick-min"
+          type="number"
+          min={1}
+          max={60}
+          value={tickDraft}
+          onChange={(e) => setTickDraft(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
+          className="w-16 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
+        />
+        <span className="text-[11px] text-[var(--color-muted)]">min</span>
+        <button
+          onClick={handleSaveTick}
+          disabled={savingTick || tickDraft === tickMin}
+          className="px-3 py-1 rounded text-[11px] font-semibold tracking-wide transition-all"
+          style={{
+            background: savingTick || tickDraft === tickMin ? 'var(--color-border)' : '#607d8b',
+            color: savingTick || tickDraft === tickMin ? 'var(--color-dim)' : '#fff',
+            cursor: savingTick || tickDraft === tickMin ? 'not-allowed' : 'pointer',
+            opacity: savingTick ? 0.7 : 1,
+          }}
+        >
+          {savingTick ? 'Salvo…' : 'Salva'}
+        </button>
+        {tickMsg && (
+          <span className="text-[11px] text-[var(--color-muted)]">{tickMsg}</span>
         )}
       </div>
 
