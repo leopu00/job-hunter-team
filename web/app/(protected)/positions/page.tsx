@@ -30,12 +30,16 @@ function scoreBg(s?: number) {
   return 'var(--color-red)'
 }
 
-function formatSalary(min: number | null, max: number | null, currency?: string | null) {
-  if (!min && !max) return null
-  const c = currency ?? 'EUR'
-  if (min && max) return `${c} ${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}K`
-  if (min) return `${c} ${(min / 1000).toFixed(0)}K+`
-  return null
+function formatFoundAt(ts: string | null | undefined) {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return '—'
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  if (sameDay) {
+    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  }
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 // ── Tier config (dal legacy) ──────────────────────────────────────
@@ -146,7 +150,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Lista posizioni">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Stipendio', 'Score', 'Stato'].map(h => (
+              {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Score', 'Trovato', 'Stato'].map(h => (
                 <th
                   key={h}
                   scope="col"
@@ -204,9 +208,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {p.remote_type?.replace('_', ' ') ?? '—'}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                  {formatSalary(p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency) ?? '—'}
-                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2 justify-end">
                     <span className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}>
@@ -219,6 +220,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       />
                     </div>
                   </div>
+                </td>
+                <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                  {formatFoundAt(p.found_at)}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -274,3 +278,4 @@ function FilterChip({
     </Link>
   )
 }
+// Thu Apr 23 09:14:05 UTC 2026
