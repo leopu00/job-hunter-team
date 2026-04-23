@@ -1,11 +1,16 @@
 // Comandi team list e team status
-import { AGENTS, DEFAULT_TEAM, c, tmuxAvailable, getActiveSessions } from './agents.js';
+import {
+  AGENTS, DEFAULT_TEAM, c,
+  tmuxAvailable, getActiveSessions, usingContainer, isAgentSession,
+} from './agents.js';
 
 export function listAction() {
   const sessions = getActiveSessions();
+  const inContainer = usingContainer();
 
   console.log('');
   console.log(c.bold('Agenti disponibili:'));
+  console.log(c.dim(inContainer ? '  (sorgente: container jht)' : '  (sorgente: tmux host)'));
   console.log('');
   console.log(
     `  ${'Ruolo'.padEnd(14)} ${'Sessione'.padEnd(16)} ${'Tipo'.padEnd(10)} ${'Effort'.padEnd(8)} Descrizione`
@@ -13,9 +18,10 @@ export function listAction() {
   console.log(`  ${'─'.repeat(14)} ${'─'.repeat(16)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(40)}`);
 
   for (const agent of AGENTS) {
-    const sName = agent.multi ? `JHT-${agent.prefix}-N` : `JHT-${agent.prefix}`;
+    const prefix = inContainer ? agent.prefix : `JHT-${agent.prefix}`;
+    const sName = agent.multi ? `${prefix}-N` : prefix;
     const tipo = agent.multi ? 'multiplo' : 'singolo';
-    const active = sessions.some((s) => s.startsWith(`JHT-${agent.prefix}`));
+    const active = sessions.some((s) => isAgentSession(s, agent));
     const status = active ? c.green('●') : c.dim('○');
     console.log(
       `  ${status} ${agent.role.padEnd(12)} ${sName.padEnd(16)} ${tipo.padEnd(10)} ${agent.effort.padEnd(8)} ${agent.desc}`
@@ -28,14 +34,16 @@ export function listAction() {
 }
 
 export function statusAction() {
-  if (!tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato.'));
+  // Se il container gira, tmux sta dentro lui — non serve averlo sull'host.
+  if (!usingContainer() && !tmuxAvailable()) {
+    console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
+    console.error(c.dim('  Avvia il container con: docker compose up -d jht'));
     process.exit(1);
   }
 
   const sessions = getActiveSessions();
   const agentSessions = sessions.filter((s) =>
-    AGENTS.some((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`))
+    AGENTS.some((a) => isAgentSession(s, a))
   );
 
   if (agentSessions.length === 0) {
@@ -47,11 +55,12 @@ export function statusAction() {
   }
 
   console.log('');
-  console.log(c.bold(`Agenti attivi: ${agentSessions.length}`));
+  const source = usingContainer() ? c.dim('(container jht)') : c.dim('(host)');
+  console.log(`${c.bold(`Agenti attivi: ${agentSessions.length}`)} ${source}`);
   console.log('');
 
   for (const s of agentSessions.sort()) {
-    const agent = AGENTS.find((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`));
+    const agent = AGENTS.find((a) => isAgentSession(s, a));
     const desc = agent ? c.dim(agent.desc) : '';
     console.log(`  ${c.green('●')} ${s.padEnd(20)} ${desc}`);
   }
