@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { execSync } from 'child_process'
+import { runBash } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,20 +22,24 @@ const AGENTS = [
   { id: 'assistente', name: 'Assistente',       session: 'ASSISTENTE' },
 ]
 
-/** Verifica se una sessione tmux è attiva */
-function isSessionRunning(session: string): boolean {
+/** Set delle sessioni tmux attive (una sola chiamata shell per GET). */
+async function activeSessions(): Promise<Set<string>> {
   try {
-    execSync(`tmux has-session -t "${session}" 2>/dev/null`, { stdio: 'pipe' })
-    return true
+    const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || true')
+    return new Set(stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean))
   } catch {
-    return false
+    return new Set()
   }
 }
 
 export async function GET() {
+  const active = await activeSessions()
   const agents = AGENTS.map((agent) => ({
     ...agent,
-    status: isSessionRunning(agent.session) ? 'running' : 'stopped',
+    // Match anche con suffisso -N (es. SCOUT matcha SCOUT-1).
+    status: Array.from(active).some(s => s === agent.session || s.startsWith(`${agent.session}-`))
+      ? 'running'
+      : 'stopped',
   }))
   return NextResponse.json({ agents })
 }
@@ -74,7 +78,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const running = isSessionRunning(agent.session)
+  const active = await activeSessions()
+  const running = active.has(agent.session) || Array.from(active).some(s => s.startsWith(`${agent.session}-`))
 
   if (action === 'start' && running) {
     return NextResponse.json({ ok: true, message: 'Agente già attivo', status: 'running' })
@@ -87,7 +92,7 @@ export async function POST(req: NextRequest) {
   // Stop: invia SIGTERM alla sessione tmux
   if (action === 'stop') {
     try {
-      execSync(`tmux send-keys -t "${agent.session}" C-c`, { stdio: 'pipe' })
+      await runBash(`tmux send-keys -t "${agent.session}" C-c`)
       return NextResponse.json({ ok: true, message: 'Stop inviato', status: 'stopping' })
     } catch {
       return NextResponse.json(
