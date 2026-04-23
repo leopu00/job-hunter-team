@@ -56,6 +56,10 @@ services:
       - /app/web/.next
       - ./agents:/app/agents
       - ./shared:/app/shared
+      # .launcher/ contiene start-agent.sh e sentinel-ticker.py: modificati
+      # di frequente in dev. Senza bind-mount il container userebbe la
+      # copia baked dell'immagine e servirebbe un docker cp manuale ad ogni fix.
+      - ./.launcher:/app/.launcher
     ports:
       - "3000:3000"
     stdin_open: true
