@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { runBash, runScript } from '@/lib/shell'
+import { runBash, runScript, toWslPath } from '@/lib/shell'
 import { requireAuth } from '@/lib/auth'
 import path from 'path'
 
@@ -39,7 +39,7 @@ export async function POST() {
     // env var, rilevamento provider (claude/kimi/codex) dal
     // jht.config.json, creazione sessione tmux, lancio CLI, kick-off
     // automatico per capitano e assistente, worker+ticker per sentinella.
-    const startAgentScript = path.join(repoRoot, '.launcher', 'start-agent.sh')
+    const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
     for (const agent of TEAM) {
