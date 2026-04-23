@@ -22,7 +22,6 @@ contextBridge.exposeInMainWorld('launcherApi', {
   openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
   devLaunch: () => ipcRenderer.invoke('dev:launch'),
   devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
-  devCheckPrerequisites: () => ipcRenderer.invoke('dev:check-prerequisites'),
   onPayloadLog: (callback) => {
     const listener = (_event, message) => {
       try {
