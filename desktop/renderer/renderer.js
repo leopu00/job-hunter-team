@@ -1627,25 +1627,28 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
       const original = dom.btnDevMode.textContent
       dom.btnDevMode.disabled = true
       dom.btnDevMode.textContent = '⏳ Avvio in corso…'
+      // Reset del bottone (testo + disabled) dopo `ms`. Serve perche'
+      // senza reset il bottone resta bloccato sul messaggio di stato
+      // e l'utente non puo' ri-cliccare per fare restart (scenario
+      // tipico: cambio a una branch di dev, voglio re-spawnare container).
+      const resetAfter = (ms) => setTimeout(() => {
+        dom.btnDevMode.textContent = original
+        dom.btnDevMode.disabled = false
+      }, ms)
       try {
         const res = await window.launcherApi.devLaunch()
         if (!res?.ok) {
           dom.btnDevMode.textContent = `✗ ${res?.error || 'errore sconosciuto'}`
-          setTimeout(() => {
-            dom.btnDevMode.textContent = original
-            dom.btnDevMode.disabled = false
-          }, 5000)
+          resetAfter(5000)
           return
         }
         dom.btnDevMode.textContent = res.ready
-          ? '✓ Pronto — browser aperto su :3001'
+          ? '✓ Pronto — browser aperto su :3001 (click per restart)'
           : '⚠ Partito ma non ancora pronto (apri :3001 manualmente)'
+        resetAfter(6000)
       } catch (err) {
         dom.btnDevMode.textContent = `✗ ${err?.message || err}`
-        setTimeout(() => {
-          dom.btnDevMode.textContent = original
-          dom.btnDevMode.disabled = false
-        }, 5000)
+        resetAfter(5000)
       }
     })
   } catch {
