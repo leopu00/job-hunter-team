@@ -237,6 +237,115 @@ def parse_kimi(text):
     }
 
 
+# ── Codex: lettura rollout JSONL (no HTTP CF-blocked, no tmux) ──────
+
+CODEX_SESSIONS_DIR = JHT_HOME / ".codex" / "sessions"
+
+
+def fetch_codex_rollout():
+    """
+    Ogni sessione codex scrive eventi in
+    ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<sessid>.jsonl.
+    Gli eventi type='event_msg' payload='token_count' includono:
+      rate_limits: {
+        primary:  { used_percent, window_minutes: 300,  resets_at: <unix> }
+        secondary:{ used_percent, window_minutes: 10080, resets_at: <unix> }
+        plan_type, rate_limit_reached_type, ...
+      }
+    Evita: HTTP (chatgpt.com/backend-api blocca con 403 senza cf_clearance),
+    TUI (/status su worker spesso non parseable), telemetria (solo CLI).
+
+    Strategia:
+      1. Trova il rollout JSONL piu' recente (mtime) sotto sessions/
+      2. Leggi ultime ~200 righe, trova l'ultima con 'rate_limits'
+      3. Estrai primary.used_percent + resets_at
+    Un rate_limits fresh e' prodotto ad ogni turno di qualunque agente
+    codex: se ne gira almeno uno nell'ultima ora, il dato e' fresco.
+    """
+    try:
+        if not CODEX_SESSIONS_DIR.exists():
+            return None
+
+        # Raccogli i 10 rollout piu' recenti (walk ricorsivo, skip < 512B)
+        candidates = []
+        for p in CODEX_SESSIONS_DIR.rglob("rollout-*.jsonl"):
+            try:
+                st = p.stat()
+                if st.st_size >= 512:
+                    candidates.append((st.st_mtime, p))
+            except OSError:
+                continue
+        if not candidates:
+            return None
+        candidates.sort(reverse=True)
+        candidates = candidates[:10]
+
+        # Sessioni che hanno HIT il limite scrivono rate_limits con
+        # primary=null + payload.type=error usage_limit_exceeded. In
+        # quel caso ripieghiamo sui rollout precedenti che hanno i
+        # valori ancora validi.
+        best_rl = None
+        best_ts = None
+        for _, p in candidates:
+            try:
+                with p.open("rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    f.seek(max(0, size - 200_000))
+                    tail = f.read().decode("utf-8", errors="replace")
+            except OSError:
+                continue
+            lines = tail.splitlines()[-300:]
+            for line in reversed(lines):
+                if '"rate_limits"' not in line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                pl = evt.get("payload") or {}
+                rl = pl.get("rate_limits") or ((pl.get("info") or {}).get("rate_limits"))
+                if not rl:
+                    continue
+                primary = rl.get("primary")
+                if not (primary and primary.get("used_percent") is not None):
+                    continue
+                ts_str = evt.get("timestamp")
+                if best_ts is None or (ts_str and ts_str > best_ts):
+                    best_ts = ts_str
+                    best_rl = rl
+                break  # primo rate_limits valido in questo file = piu' recente
+            if best_rl:
+                break  # gia' preso dal file piu' recente disponibile
+
+        if not best_rl:
+            return None
+
+        primary = best_rl.get("primary") or {}
+        secondary = best_rl.get("secondary") or {}
+        try:
+            usage = int(round(float(primary.get("used_percent", 0))))
+            weekly = (
+                int(round(float(secondary.get("used_percent", 0))))
+                if secondary.get("used_percent") is not None else None
+            )
+        except (TypeError, ValueError):
+            return None
+
+        reset_at = None
+        resets_unix = primary.get("resets_at")
+        if isinstance(resets_unix, (int, float)):
+            reset_at = datetime.fromtimestamp(resets_unix, timezone.utc).astimezone().strftime("%H:%M")
+
+        return {
+            "usage": usage,
+            "reset_at": reset_at,
+            "weekly_usage": weekly,
+        }
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 # ── Claude: chiamata HTTP diretta all'API (no tmux, no LLM) ────────────
 
 CLAUDE_CREDENTIALS = JHT_HOME / ".claude" / ".credentials.json"
@@ -630,7 +739,10 @@ def main():
     # Provider con API HTTP (kimi, anthropic/claude) non hanno bisogno
     # del tmux worker — chiamano l'endpoint direttamente. Solo codex
     # e altri provider basati su TUI richiedono WORKER attivo.
-    API_PROVIDERS = {"kimi", "moonshot", "anthropic", "claude"}
+    # kimi/moonshot: HTTP /coding/v1/usages
+    # anthropic/claude: HTTP /api/oauth/usage
+    # openai/codex: lettura dei rollout JSONL in ~/.codex/sessions/
+    API_PROVIDERS = {"kimi", "moonshot", "anthropic", "claude", "openai"}
     while True:
         tick_min, provider = read_config()
         if provider not in API_PROVIDERS and not session_exists(WORKER):
@@ -653,6 +765,12 @@ def main():
             parsed = fetch_claude_api()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_claude_api fallito (token scaduto? no rete?)")
+                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                continue
+        elif provider in ("openai",):
+            parsed = fetch_codex_rollout()
+            if parsed is None:
+                print(f"[sentinel-bridge] {now_h} — fetch_codex_rollout fallito (nessuna sessione codex attiva?)")
                 time.sleep(min(POLL_SECONDS, tick_min * 60))
                 continue
         else:
