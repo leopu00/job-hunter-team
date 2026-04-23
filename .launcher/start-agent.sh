@@ -338,32 +338,61 @@ echo "  Connettiti con: tmux attach -t \"$SESSION\""
 # input. Il bottone "Avvia team" nella UI web ora delega anche il primo ordine
 # al Capitano: senza questo kick-off, il Comandante deve andare sul pane tmux
 # CAPITANO e dargli manualmente l'avvio.
+# Polling di readiness del TUI: cerca nel pane un marker che compare
+# solo dopo il welcome. Match "Welcome to" (kimi/claude) o "OpenAI Codex"
+# o il status line "agents/<role>". Timeout di sicurezza: 60s, oltre cui
+# invia comunque (meglio un kick-off perso nella shell che uno stallo).
+# Kimi boot ~30-45s, Codex ~15s: uno sleep fisso uguale per tutti non
+# funziona.
+
 if [ "$ROLE" = "capitano" ]; then
   setsid sh -c '
-    sleep 15
-    tmux send-keys -t "'"$SESSION"'" -l "[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
+    SESS="'"$SESSION"'"
+    ROLE_LC="'"$ROLE"'"
+    elapsed=0
+    while [ "$elapsed" -lt 60 ]; do
+      pane=$(tmux capture-pane -t "$SESS" -p -S -80 2>/dev/null)
+      case "$pane" in
+        *"Welcome to"*|*"OpenAI Codex"*|*"agents/$ROLE_LC"*) break ;;
+      esac
+      sleep 2
+      elapsed=$((elapsed + 2))
+    done
+    # margine di stabilizzazione dopo il render iniziale
     sleep 3
-    tmux send-keys -t "'"$SESSION"'" Enter
+    tmux send-keys -t "$SESS" -l "[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
+    sleep 3
+    tmux send-keys -t "$SESS" Enter
     sleep 2
-    tmux send-keys -t "'"$SESSION"'" Enter
+    tmux send-keys -t "$SESS" Enter
   ' >/dev/null 2>&1 < /dev/null &
 fi
 
 if [ "$ROLE" = "assistente" ]; then
-  # setsid: idem come sopra (survive al parent exit). Senza, la sleep 15
-  # viene killata dal backend quando start-agent.sh esce, e il messaggio
-  # di welcome non parte mai.
+  # setsid: idem come sopra (survive al parent exit). Stesso polling di
+  # readiness invece di sleep fisso, cosi' si adatta al boot di kimi/codex.
   setsid sh -c '
-    sleep 15
+    SESS="'"$SESSION"'"
+    ROLE_LC="'"$ROLE"'"
+    elapsed=0
+    while [ "$elapsed" -lt 60 ]; do
+      pane=$(tmux capture-pane -t "$SESS" -p -S -80 2>/dev/null)
+      case "$pane" in
+        *"Welcome to"*|*"OpenAI Codex"*|*"agents/$ROLE_LC"*) break ;;
+      esac
+      sleep 2
+      elapsed=$((elapsed + 2))
+    done
+    sleep 3
     # Le TUI Ink (Codex / Kimi) non "vedono" l'\''Enter se arriva troppo
     # vicino al testo: il testo va inviato letterale con -l, poi una
     # pausa, poi l'\''Enter in una chiamata separata. Double-Enter idempotente
     # nel caso il primo venga perso o serva chiudere un trust-modal.
-    tmux send-keys -t "'"$SESSION"'" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'\''utente non sceglie o allega qualcosa."
+    tmux send-keys -t "$SESS" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'\''utente non sceglie o allega qualcosa."
     sleep 3
-    tmux send-keys -t "'"$SESSION"'" Enter
+    tmux send-keys -t "$SESS" Enter
     sleep 2
-    tmux send-keys -t "'"$SESSION"'" Enter
+    tmux send-keys -t "$SESS" Enter
   ' >/dev/null 2>&1 < /dev/null &
 fi
 
