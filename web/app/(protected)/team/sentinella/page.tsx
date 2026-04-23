@@ -257,9 +257,7 @@ export default function SentinellaPage() {
       const j = await r.json()
       if (j?.ok) {
         setTickMin(j.tick_minutes)
-        setTickMsg(isActive
-          ? `Salvato (${j.tick_minutes} min). Riavvia la Sentinella per applicare.`
-          : `Salvato (${j.tick_minutes} min).`)
+        setTickMsg(`Salvato (${j.tick_minutes} min). Attivo entro ~15s.`)
       } else {
         setTickMsg(j?.error ?? 'Errore salvataggio')
       }
