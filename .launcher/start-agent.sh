@@ -59,12 +59,17 @@ MODE="${3:-default}"
 #     ruolo calibrato (coordinatori/spawn high, scorer medium)
 get_agent_info() {
   case "$1" in
-    capitano)       echo "CAPITANO|high|" ;;
-    scout)      echo "SCOUT|high|sonnet" ;;
-    analista)   echo "ANALISTA|high|" ;;
-    scorer)     echo "SCORER|medium|" ;;
+    # Opus high — task con reasoning pesante:
+    # Capitano (coordinatore team), Scrittore (creative writing CV),
+    # Critico (review di qualita' richiede nuance).
+    capitano)   echo "CAPITANO|high|" ;;
     scrittore)  echo "SCRITTORE|high|" ;;
     critico)    echo "CRITICO|high|" ;;
+    # Sonnet high — task I/O-bound, parsing, matching, monitoring:
+    # piu' veloce, costa meno, effort high compensa.
+    scout)      echo "SCOUT|high|sonnet" ;;
+    analista)   echo "ANALISTA|high|sonnet" ;;
+    scorer)     echo "SCORER|high|sonnet" ;;
     sentinella) echo "SENTINELLA|high|sonnet" ;;
     assistente) echo "ASSISTENTE|high|sonnet" ;;
     *)          echo "" ;;
