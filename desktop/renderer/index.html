@@ -50,6 +50,14 @@
             Continue
           </button>
         </div>
+        <!-- Dev-mode shortcut: visibile solo quando Electron gira dal sorgente
+             (npm run desktop:dev, app.isPackaged=false). Skippa tutto il flow
+             installer e fa partire il container via compose + host Next :3001. -->
+        <div class="step__actions step__actions--centered" id="dev-mode-actions" hidden style="margin-top: 16px;">
+          <button class="btn btn--ghost btn--small" id="btn-dev-mode">
+            🛠 Start Dev Mode (:3001)
+          </button>
+        </div>
       </section>
 
       <!-- Step 2: setup / checklist -->
