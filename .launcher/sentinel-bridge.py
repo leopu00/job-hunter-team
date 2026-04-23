@@ -237,6 +237,68 @@ def parse_kimi(text):
     }
 
 
+# ── Claude: chiamata HTTP diretta all'API (no tmux, no LLM) ────────────
+
+CLAUDE_CREDENTIALS = JHT_HOME / ".claude" / ".credentials.json"
+CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+
+
+def _read_claude_token():
+    try:
+        with CLAUDE_CREDENTIALS.open(encoding="utf-8") as f:
+            creds = json.load(f)
+        return (creds.get("claudeAiOauth") or {}).get("accessToken")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def fetch_claude_api():
+    """
+    Chiama direttamente https://api.anthropic.com/api/oauth/usage con
+    OAuth token da ~/.claude/.credentials.json. Endpoint interno usato
+    dal CLI claude per /usage; stabile, strutturato, zero TUI.
+
+    Risposta:
+      {
+        "five_hour":      {"utilization": 47.0, "resets_at": "2026-..."},
+        "seven_day":      {"utilization": 37.0, "resets_at": "..."},
+        "seven_day_sonnet": {"utilization": 4.0,  "resets_at": "..."},
+        "seven_day_opus":   null,
+        ...
+      }
+    """
+    token = _read_claude_token()
+    if not token:
+        return None
+    req = urllib.request.Request(
+        CLAUDE_USAGE_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "anthropic-beta": "oauth-2025-04-20",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+        data = json.loads(body)
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError, OSError):
+        return None
+
+    five_h = data.get("five_hour") or {}
+    seven_d = data.get("seven_day") or {}
+    try:
+        usage_5h = int(round(float(five_h.get("utilization", 0))))
+        weekly = int(round(float(seven_d.get("utilization", 0)))) if seven_d.get("utilization") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        "usage": usage_5h,
+        "reset_at": _iso_to_hhmm(five_h.get("resets_at")),
+        "weekly_usage": weekly,
+    }
+
+
 # ── Kimi: chiamata HTTP diretta all'API (no tmux, no LLM) ──────────────
 
 KIMI_CREDENTIALS = JHT_HOME / ".kimi" / "credentials" / "kimi-code.json"
@@ -565,21 +627,32 @@ def sleep_with_poll(target_min):
 def main():
     print(f"[sentinel-bridge] LLM session: {SESSION}, worker: {WORKER}")
     print(f"[sentinel-bridge] config: {CONFIG_PATH} (bootstrap: {BOOTSTRAP}m)")
+    # Provider con API HTTP (kimi, anthropic/claude) non hanno bisogno
+    # del tmux worker — chiamano l'endpoint direttamente. Solo codex
+    # e altri provider basati su TUI richiedono WORKER attivo.
+    API_PROVIDERS = {"kimi", "moonshot", "anthropic", "claude"}
     while True:
-        if not session_exists(WORKER):
-            print(f"[sentinel-bridge] {WORKER} non attivo, attendo 30s...")
+        tick_min, provider = read_config()
+        if provider not in API_PROVIDERS and not session_exists(WORKER):
+            print(f"[sentinel-bridge] {WORKER} non attivo (provider={provider}), attendo 30s...")
             time.sleep(30)
             continue
-
-        tick_min, provider = read_config()
         now_h = datetime.now().strftime("%H:%M:%S")
 
-        # Kimi: HTTP diretto all'API (niente TUI, niente token bruciati su
-        # refusal LLM perche' la TUI non riconosce /usage come slash-command).
+        # Preferiamo sempre l'API HTTP dove disponibile: stabile,
+        # strutturata, zero TUI fiddling, zero refusal LLM, zero token
+        # sprecati. Fallback al parsing testuale via tmux solo per
+        # provider senza endpoint conosciuto (codex, provider esotici).
         if provider in ("kimi", "moonshot"):
             parsed = fetch_kimi_api()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_kimi_api fallito (token scaduto? no rete?)")
+                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                continue
+        elif provider in ("anthropic", "claude"):
+            parsed = fetch_claude_api()
+            if parsed is None:
+                print(f"[sentinel-bridge] {now_h} — fetch_claude_api fallito (token scaduto? no rete?)")
                 time.sleep(min(POLL_SECONDS, tick_min * 60))
                 continue
         else:
