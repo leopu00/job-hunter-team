@@ -60,7 +60,7 @@ MODE="${3:-default}"
 get_agent_info() {
   case "$1" in
     capitano)       echo "CAPITANO|high|" ;;
-    scout)      echo "SCOUT|high|" ;;
+    scout)      echo "SCOUT|high|sonnet" ;;
     analista)   echo "ANALISTA|high|" ;;
     scorer)     echo "SCORER|medium|" ;;
     scrittore)  echo "SCRITTORE|high|" ;;
