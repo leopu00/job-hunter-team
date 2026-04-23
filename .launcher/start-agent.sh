@@ -161,7 +161,11 @@ case "$PROVIDER" in
     # salta sia approval che sandbox FS, così l'agente può scrivere
     # chat.jsonl, creare la profile dir, ecc. senza bloccarsi sul
     # prompt di approval (equivalente di claude --dangerously-skip-permissions).
-    CLI_ARGS="--yolo"
+    # -c model_reasoning_effort=<effort> applica il livello di reasoning
+    # per ruolo (default del config.toml e' "medium"): capitano/scout/
+    # analista/scrittore/critico vanno su "high", scorer/assistente
+    # restano "medium". Codex non ha un --effort flag; si passa via -c.
+    CLI_ARGS="--yolo -c model_reasoning_effort=$effort"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi
