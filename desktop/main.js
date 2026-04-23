@@ -257,6 +257,19 @@ app.whenReady().then(() => {
     if (app.isPackaged) {
       return { ok: false, error: 'Dev mode disponibile solo da sorgente (npm run desktop:dev)' }
     }
+    // Sincronizza il provider scelto nel wizard → jht.config.json.
+    // Senza questo, Dev Mode riusa il config di una sessione precedente
+    // e il provider dal wizard viene ignorato (bug osservato: utente
+    // seleziona Claude nel wizard, vede partire Kimi perche' il config
+    // aveva ancora active_provider=kimi da una run passata). La versione
+    // standard del bottone 'Start Team' gia' lo faceva.
+    try {
+      syncJhtConfig()
+    } catch (error) {
+      console.error('[dev:launch] syncJhtConfig failed:', error)
+      // non-fatal: il dev-up.sh proseguirà con il config esistente;
+      // se e' incompatibile start-agent.sh ti dira' cosa manca.
+    }
     const repoRoot = path.resolve(__dirname, '..')
     const script = path.join(repoRoot, 'scripts', 'dev-up.sh')
     // Su Windows passiamo esplicitamente per git-bash (Electron non
