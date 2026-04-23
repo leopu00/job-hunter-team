@@ -307,6 +307,84 @@ PARSERS = {
 }
 
 
+# ─── Host resources (CPU / RAM) ──────────────────────────────────────
+
+def read_cpu_count():
+    """Numero di core visibili al container (rispetta cgroup cpuset)."""
+    try:
+        return os.cpu_count() or 1
+    except Exception:
+        return 1
+
+
+def read_host_resources():
+    """
+    Ritorna dict con le metriche di pressione del container:
+      cpu_pct      — load avg 1m normalizzato su numero core (0..100+)
+      ram_pct      — (MemTotal - MemAvailable) / MemTotal * 100
+      ram_used_mb  — memoria in uso in MB
+      ram_total_mb — memoria totale visibile al container
+      load_1m      — valore raw di /proc/loadavg 1 min
+    Su Linux VM di Docker Desktop riflette la fetta di risorse del VM —
+    se satura, il Capitano deve rallentare lo spawn o killare istanze.
+    """
+    try:
+        with open("/proc/loadavg") as f:
+            load_1m = float(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        load_1m = 0.0
+
+    ram_total_kb = 0
+    ram_avail_kb = 0
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    ram_total_kb = int(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    ram_avail_kb = int(line.split()[1])
+                if ram_total_kb and ram_avail_kb:
+                    break
+    except (OSError, ValueError, IndexError):
+        pass
+
+    cores = read_cpu_count()
+    cpu_pct = round((load_1m / cores) * 100, 1) if cores else 0.0
+    ram_used_kb = max(0, ram_total_kb - ram_avail_kb)
+    ram_pct = round(ram_used_kb / ram_total_kb * 100, 1) if ram_total_kb else 0.0
+
+    return {
+        "cpu_pct": cpu_pct,
+        "ram_pct": ram_pct,
+        "ram_used_mb": ram_used_kb // 1024,
+        "ram_total_mb": ram_total_kb // 1024,
+        "load_1m": round(load_1m, 2),
+        "cores": cores,
+    }
+
+
+def host_pressure_level(host):
+    """
+    Combina CPU% e RAM% in un livello 'pressure' usato dalla Sentinella
+    per decidere se forzare un throttle piu' alto anche se il rate-limit
+    e' basso. Soglie calibrate per un VM 12 core / 15 GB (tipico Docker
+    Desktop su Windows):
+      cpu_pct > 95 o ram_pct > 92  → CRITICAL (suggerisci T4)
+      cpu_pct > 80 o ram_pct > 85  → HIGH     (T3)
+      cpu_pct > 60 o ram_pct > 75  → MEDIUM   (T1-T2)
+      altrimenti                   → OK
+    """
+    cpu = host.get("cpu_pct", 0)
+    ram = host.get("ram_pct", 0)
+    if cpu > 95 or ram > 92:
+        return "CRITICAL"
+    if cpu > 80 or ram > 85:
+        return "HIGH"
+    if cpu > 60 or ram > 75:
+        return "MEDIUM"
+    return "OK"
+
+
 # ─── State & metrics ─────────────────────────────────────────────────
 
 def load_last_sample():
@@ -380,6 +458,17 @@ def compute_metrics(parsed, last):
     else:
         status, throttle = "CRITICO", 4
 
+    # Host resources: se la pressione e' alta, forziamo un throttle
+    # minimo anche se l'usage LLM e' basso. Il PC sovraccarico fa
+    # crashare i CLI o il container comunque; meglio fermarsi prima.
+    host = read_host_resources()
+    host_level = host_pressure_level(host)
+    forced_throttle = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "OK": 0}[host_level]
+    if forced_throttle > throttle:
+        throttle = forced_throttle
+        if status not in ("CRITICO", "RESET"):
+            status = "ATTENZIONE" if host_level == "MEDIUM" else "CRITICO"
+
     return {
         "ts": ts,
         "provider": parsed.get("provider", "openai"),
@@ -393,6 +482,8 @@ def compute_metrics(parsed, last):
         "throttle": throttle,
         "reset_at": parsed.get("reset_at"),
         "weekly_usage": parsed.get("weekly_usage"),
+        "host": host,
+        "host_level": host_level,
         "source": "bridge",
     }
 
@@ -405,13 +496,19 @@ def write_jsonl(entry):
 
 
 def write_log(entry):
+    host = entry.get("host") or {}
+    host_str = (
+        f"cpu={host.get('cpu_pct', '-')}% ram={host.get('ram_pct', '-')}% "
+        f"({entry.get('host_level', '-')})"
+    ) if host else "host=-"
     line = (
         f"[{entry['ts']}] provider={entry['provider']} "
         f"usage={entry['usage']}% delta={entry['delta']:+g}% "
         f"vel_smooth={entry['velocity_smooth']:g}%/h "
         f"vel_ideale={entry.get('velocity_ideal') if entry.get('velocity_ideal') is not None else '-'}%/h "
         f"projection={entry.get('projection') if entry.get('projection') is not None else '-'}% "
-        f"STATO={entry['status']} throttle={entry['throttle']} (bridge)"
+        f"STATO={entry['status']} throttle={entry['throttle']} "
+        f"{host_str} (bridge)"
     )
     with LOG_TXT.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
@@ -419,14 +516,21 @@ def write_log(entry):
 
 def notify_sentinella(entry):
     """Manda i dati gia' parsati alla Sentinella LLM."""
+    host = entry.get("host") or {}
+    host_str = (
+        f" host_cpu={host.get('cpu_pct', '-')}% host_ram={host.get('ram_pct', '-')}%"
+        f" ({entry.get('host_level', '-')})"
+    )
     msg = (
         f"[BRIDGE TICK] provider={entry['provider']} "
         f"usage={entry['usage']}% delta={entry['delta']:+g}% "
         f"status={entry['status']} throttle={entry['throttle']} "
         f"projection={entry.get('projection') if entry.get('projection') is not None else '-'}% "
-        f"reset_at={entry.get('reset_at') or '-'}. "
+        f"reset_at={entry.get('reset_at') or '-'}"
+        f"{host_str}. "
         f"I dati sono gia' parsati e loggati dal bridge. NON eseguire /status. "
-        f"Decidi SOLO se e come avvisare il Capitano in base a status/throttle e al cooldown."
+        f"Decidi SOLO se e come avvisare il Capitano in base a status/throttle/host_level e al cooldown. "
+        f"NB: host_level CRITICAL/HIGH = PC saturo, ordina al Capitano T3/T4 anche se usage LLM e' basso."
     )
     jht_tmux_send(SESSION, msg)
 
