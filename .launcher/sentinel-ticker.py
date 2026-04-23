@@ -12,24 +12,40 @@ Perché ticker esterno (pattern ereditato dal dev-team Vigil):
   - Intervallo configurabile senza toccare il prompt dell'agente
   - Separazione responsabilità: ticker = "sveglia", sentinella = "check"
 
+Intervallo: rileggiamo `sentinella_tick_minutes` da $JHT_HOME/jht.config.json
+ogni ciclo di sleep (risoluzione ~15s), quindi cambiando il valore dalla UI
+il ticker si adegua senza bisogno di restart. Fallback: $JHT_TICK_INTERVAL
+env var (usato come bootstrap iniziale se il config non esiste), poi 5.
+
 Uso:
-  python3 sentinel-ticker.py             # default 5 min (oppure $JHT_TICK_INTERVAL)
-  python3 sentinel-ticker.py 10          # ogni 10 min
+  python3 sentinel-ticker.py             # legge dinamicamente dal config
+  python3 sentinel-ticker.py 10          # forza 10 min, ignora config
 
 Config:
-  JHT_TICK_INTERVAL   intervallo in minuti (default 5)
+  JHT_TICK_INTERVAL    bootstrap (min) se jht.config.json non ha il campo
   JHT_SENTINEL_SESSION sessione tmux target (default SENTINELLA)
+  JHT_HOME             dir del config (default ~/.jht)
 """
 
+import json
 import os
 import subprocess
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 
 SESSION = os.environ.get("JHT_SENTINEL_SESSION", "SENTINELLA")
-DEFAULT_INTERVAL = int(os.environ.get("JHT_TICK_INTERVAL", "5"))
+BOOTSTRAP_INTERVAL = int(os.environ.get("JHT_TICK_INTERVAL", "5"))
+CONFIG_PATH = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht"))) / "jht.config.json"
+
+# Granularità del poll del config durante lo sleep fra tick: un cambio
+# da UI diventa effettivo entro questa finestra (es. se sleep era 10 min
+# e l'utente scende a 2 min, il tick successivo parte entro ~15s).
+POLL_SECONDS = 15
+MIN_INTERVAL = 1
+MAX_INTERVAL = 60
 
 
 def session_exists(session: str) -> bool:
@@ -50,22 +66,71 @@ def send_tick(session: str, message: str) -> bool:
     return result.returncode == 0
 
 
+def read_config_minutes(bootstrap: int) -> int:
+    """Legge sentinella_tick_minutes dal jht.config.json con range-check."""
+    try:
+        with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+        raw = cfg.get("sentinella_tick_minutes")
+        if isinstance(raw, (int, float)):
+            n = int(round(raw))
+            if MIN_INTERVAL <= n <= MAX_INTERVAL:
+                return n
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    # Fallback al valore iniziale
+    return max(MIN_INTERVAL, min(MAX_INTERVAL, bootstrap))
+
+
+def sleep_with_config_poll(target_minutes: int, bootstrap: int) -> int:
+    """
+    Dorme fino a target_minutes * 60 secondi, ma ogni POLL_SECONDS rilegge
+    il config: se il valore e' cambiato e il tempo gia' trascorso supera
+    il nuovo intervallo, esce subito. Ritorna il numero di minuti
+    effettivamente usati come intervallo (per log).
+    """
+    total_sec = target_minutes * 60
+    elapsed = 0
+    current = target_minutes
+    while elapsed < total_sec:
+        time.sleep(min(POLL_SECONDS, total_sec - elapsed))
+        elapsed += POLL_SECONDS
+        fresh = read_config_minutes(bootstrap)
+        if fresh != current:
+            # Nuovo intervallo: se gia' oltre, esci subito; altrimenti
+            # aggiorna target e continua.
+            new_total = fresh * 60
+            if elapsed >= new_total:
+                return fresh
+            total_sec = new_total
+            current = fresh
+    return current
+
+
 def main():
-    interval_min = DEFAULT_INTERVAL
+    # Override da argv per test rapidi: se passato, disabilita il poll
+    # dinamico e usa il valore fisso.
+    fixed_arg = None
     if len(sys.argv) > 1:
         try:
-            interval_min = int(sys.argv[1])
+            fixed_arg = int(sys.argv[1])
+            fixed_arg = max(MIN_INTERVAL, min(MAX_INTERVAL, fixed_arg))
         except ValueError:
-            print(f"[sentinel-ticker] arg non numerico '{sys.argv[1]}', uso default {DEFAULT_INTERVAL}m")
+            print(f"[sentinel-ticker] arg non numerico '{sys.argv[1]}', uso config")
 
-    print(f"[sentinel-ticker] intervallo: {interval_min} min")
     print(f"[sentinel-ticker] target: {SESSION}")
+    if fixed_arg is not None:
+        print(f"[sentinel-ticker] intervallo fisso (argv): {fixed_arg} min")
+    else:
+        print(f"[sentinel-ticker] intervallo dinamico da {CONFIG_PATH} (bootstrap: {BOOTSTRAP_INTERVAL} min)")
 
     while True:
         if not session_exists(SESSION):
             print(f"[sentinel-ticker] {SESSION} non attiva — attendo 30s...")
             time.sleep(30)
             continue
+
+        interval_min = fixed_arg if fixed_arg is not None else read_config_minutes(BOOTSTRAP_INTERVAL)
 
         now = datetime.now().strftime("%H:%M:%S")
         msg = (
@@ -76,9 +141,12 @@ def main():
         )
         ok = send_tick(SESSION, msg)
         status = "OK" if ok else "ERRORE"
-        print(f"[sentinel-ticker] {now} — tick inviato: {status}")
+        print(f"[sentinel-ticker] {now} — tick inviato ({interval_min}m): {status}")
 
-        time.sleep(interval_min * 60)
+        if fixed_arg is not None:
+            time.sleep(fixed_arg * 60)
+        else:
+            sleep_with_config_poll(interval_min, BOOTSTRAP_INTERVAL)
 
 
 if __name__ == "__main__":
