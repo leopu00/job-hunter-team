@@ -150,7 +150,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Lista posizioni">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {['ID', 'Titolo', 'Azienda', 'Location', 'Remote', 'Score', 'Trovato', 'Stato'].map(h => (
+              {['ID', 'Titolo', 'Azienda', 'Fonte', 'Location', 'Score', 'Rilevata', 'Stato'].map(h => (
                 <th
                   key={h}
                   scope="col"
@@ -192,21 +192,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate" title={p.company}>
                   {p.company}
                 </td>
+                <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                  {p.source ?? '—'}
+                </td>
                 <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
                   {p.location ?? '—'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <span className="text-[10px]" style={{
-                    color: p.remote_type === 'full_remote'
-                      ? 'var(--color-green)'
-                      : p.remote_type === 'hybrid'
-                      ? 'var(--color-yellow)'
-                      : p.remote_type === 'onsite'
-                      ? 'var(--color-red)'
-                      : 'var(--color-dim)',
-                  }}>
-                    {p.remote_type?.replace('_', ' ') ?? '—'}
-                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2 justify-end">
