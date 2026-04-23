@@ -50,14 +50,6 @@
             Continue
           </button>
         </div>
-        <!-- Dev-mode shortcut: visibile solo quando Electron gira dal sorgente
-             (npm run desktop:dev, app.isPackaged=false). Skippa tutto il flow
-             installer e fa partire il container via compose + host Next :3001. -->
-        <div class="step__actions step__actions--centered" id="dev-mode-actions" hidden style="margin-top: 16px;">
-          <button class="btn btn--ghost btn--small" id="btn-dev-mode">
-            🛠 Start Dev Mode (:3001)
-          </button>
-        </div>
       </section>
 
       <!-- Step 2: setup / checklist -->
@@ -319,6 +311,16 @@
           </button>
           <button class="btn btn--primary btn--large" id="btn-start-team" data-i18n="ready.start">
             Start Job Hunter Team
+          </button>
+        </div>
+        <!-- Dev-mode shortcut: usa la stessa config di provider/credenziali
+             gia' validata dal flow normale, ma lancia il runtime via
+             `docker compose up` (bind-mount di web/agents/shared/.launcher)
+             + Next sull'host su :3001 con hot-reload. Visibile solo se
+             Electron gira dal sorgente (app.isPackaged=false). -->
+        <div class="step__actions step__actions--centered" id="dev-mode-actions" hidden style="margin-top: 12px;">
+          <button class="btn btn--ghost btn--small" id="btn-dev-mode">
+            🛠 Start Dev Mode (:3001, bind-mount)
           </button>
         </div>
       </section>
