@@ -10,6 +10,7 @@ import {
   JHT_AGENTS_DIR,
   JHT_USER_DIR,
 } from '../../jht-paths.js';
+import { containerRunning, listContainerSessions } from '../../utils/container-proxy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,7 +49,20 @@ export function claudeAvailable() {
   catch { return false; }
 }
 
+/**
+ * Sorgente delle sessioni tmux:
+ *   - container 'jht' up → tmux dentro container (i nomi NON hanno prefisso JHT-;
+ *     il web/start-agent.sh crea sessioni come CAPITANO, SCOUT-1, SENTINELLA)
+ *   - altrimenti → tmux host, modalita' legacy (prefix JHT-)
+ */
+export function usingContainer() {
+  return containerRunning();
+}
+
 export function getActiveSessions() {
+  if (usingContainer()) {
+    return listContainerSessions();
+  }
   try {
     const out = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf8' });
     return out.trim().split('\n').filter(Boolean);
@@ -58,8 +72,19 @@ export function getActiveSessions() {
 export function sessionName(role, instance) {
   const agent = AGENTS.find((a) => a.role === role);
   if (!agent) return null;
-  if (agent.multi && instance) return `JHT-${agent.prefix}-${instance}`;
-  return `JHT-${agent.prefix}`;
+  // Container mode: CAPITANO / SCOUT-1. Legacy host: JHT-CAPITANO / JHT-SCOUT-1.
+  const prefix = usingContainer() ? agent.prefix : `JHT-${agent.prefix}`;
+  if (agent.multi && instance) return `${prefix}-${instance}`;
+  return prefix;
+}
+
+/** Matcher universale (accetta entrambi i pattern, container e host). */
+export function isAgentSession(name, agent) {
+  const p = agent.prefix;
+  return (
+    name === p || name.startsWith(`${p}-`) ||
+    name === `JHT-${p}` || name.startsWith(`JHT-${p}-`)
+  );
 }
 
 export function isSessionActive(name) {
