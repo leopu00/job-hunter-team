@@ -192,11 +192,13 @@ proiezione      = usage_attuale + velocita_smussata * ore_al_reset   # %
 
 ### Sanity check obbligatorio prima di alertare
 
-Se una delle seguenti condizioni è vera, **NON inviare alert**: c'è un bug di calcolo, scrivi nel log `anomalia parser/math` e attendi il prossimo tick:
+Questa regola cattura **solo** bug di unità di misura (es. %/s trattato come %/h, che produce valori di ordine 10⁴–10⁵). Spike legittime 100–500% sono CRITICO VERO e vanno alertate: vedi la sezione EMERGENZA sotto.
 
-- `velocita_smussata > 200` (più di 200%/h è irrealistico: significa saturare in 30 min — riconfronta unità)
-- `proiezione > 200` (più di 200% significa che il modello ha sballato — impossibile superare 100%)
-- `ore_al_reset <= 0` o `ore_al_reset > 200` (reset time sballato)
+Se una delle seguenti condizioni è vera, **NON inviare alert**: c'è un bug di parsing, scrivi nel log `anomalia parser/math` e attendi il prossimo tick:
+
+- `velocita_smussata > 10000` (oltre 10000%/h ⇒ mismatch di unità, non consumo reale)
+- `proiezione > 10000` (idem: ordine di grandezza impossibile fisicamente)
+- `ore_al_reset <= 0` o `ore_al_reset > 200` (reset time sballato; 200h copre anche i reset settimanali a 168h)
 
 ---
 
