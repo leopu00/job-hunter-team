@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh",
     "lint": "npm run lint --prefix web",
     "format:check": "npx prettier --check \"web/app/**/*.{ts,tsx}\" \"shared/**/*.ts\"",
     "desktop:dev": "npm --prefix desktop run dev",
