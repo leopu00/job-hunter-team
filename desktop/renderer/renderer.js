@@ -1626,6 +1626,31 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
     dom.btnDevMode.addEventListener('click', async () => {
       const original = dom.btnDevMode.textContent
       dom.btnDevMode.disabled = true
+
+      // Pre-flight: Docker + jht.config.json + CLI del provider attivo.
+      // Se manca qualcosa, meglio rimandare al wizard normale (che ha
+      // gli installer) invece che far partire dev-up.sh e vederlo fallire
+      // in modo criptico.
+      dom.btnDevMode.textContent = '⏳ Check prerequisiti…'
+      let preflight = { ready: true, missing: [] }
+      try {
+        preflight = await window.launcherApi.devCheckPrerequisites()
+      } catch { /* se il probe stesso fallisce, proviamo comunque il launch */ }
+
+      if (!preflight?.ready) {
+        const missing = (preflight?.missing || []).join(', ') || 'setup incompleto'
+        dom.btnDevMode.textContent = `⚠ Setup necessario (${missing}) — vai al wizard`
+        setTimeout(() => {
+          dom.btnDevMode.textContent = original
+          dom.btnDevMode.disabled = false
+          // Nudge: apri il flow normale (smart-advance decide quale step
+          // serve). L'utente puo' ancora cliccare Dev Mode dopo aver
+          // completato il setup.
+          try { smartAdvanceFromWelcome() } catch { /* non-fatal */ }
+        }, 4000)
+        return
+      }
+
       dom.btnDevMode.textContent = '⏳ Avvio in corso…'
       try {
         const res = await window.launcherApi.devLaunch()
