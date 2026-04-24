@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useDevMode } from '@/components/SettingsMenu'
 
 const ACCENT = '#ff9100'
 
@@ -41,6 +42,10 @@ export default function CapitanoPage() {
   const [sending, setSending] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
+  const devMode = useDevMode()
+
+  // Se dev mode si spegne e il terminale era aperto, chiudilo.
+  useEffect(() => { if (!devMode) setShowTerminal(false) }, [devMode])
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<HTMLDivElement>(null)
@@ -322,7 +327,7 @@ export default function CapitanoPage() {
           </button>
         )}
 
-        {isActive && (
+        {isActive && devMode && (
           <button onClick={() => setShowTerminal(v => !v)}
             className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
             {showTerminal ? 'nascondi terminale' : 'mostra terminale'}

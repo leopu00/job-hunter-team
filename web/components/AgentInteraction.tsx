@@ -2,6 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useDevMode } from './SettingsMenu'
 
 type AgentSession = { session: string; active: boolean }
 type Mode = 'chat' | 'terminal'
@@ -27,6 +28,12 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   const [sending, setSending] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const devMode = useDevMode()
+
+  // Se il dev mode si spegne mentre si è sul tab terminale, torna su chat.
+  useEffect(() => {
+    if (!devMode && mode === 'terminal') setMode('chat')
+  }, [devMode, mode])
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<HTMLDivElement>(null)
@@ -155,15 +162,17 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                 }}>
                 chat
               </button>
-              <button
-                onClick={() => setMode('terminal')}
-                className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
-                style={{
-                  color: mode === 'terminal' ? color : 'var(--color-dim)',
-                  background: mode === 'terminal' ? `${color}15` : 'transparent',
-                }}>
-                terminale
-              </button>
+              {devMode && (
+                <button
+                  onClick={() => setMode('terminal')}
+                  className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
+                  style={{
+                    color: mode === 'terminal' ? color : 'var(--color-dim)',
+                    background: mode === 'terminal' ? `${color}15` : 'transparent',
+                  }}>
+                  terminale
+                </button>
+              )}
             </div>
             {/* Selettore sessione se > 1 */}
             {sessions.length > 1 && (
