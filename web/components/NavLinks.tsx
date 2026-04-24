@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useDashboardT } from '@/app/components/DashboardI18n'
-import TeamDropdown from './TeamDropdown'
 
 export default function NavLinks() {
   const { t } = useDashboardT()
@@ -16,7 +15,7 @@ export default function NavLinks() {
       <NavLink href="/risposte" accent="#58a6ff">{t('nav_risposte')}</NavLink>
       <NavLink href="/crescita">{t('nav_crescita')}</NavLink>
       <NavLink href="/reports">{t('nav_reports')}</NavLink>
-      <span data-tour="team" style={{ display: 'inline-flex' }}><TeamDropdown /></span>
+      <NavLink href="/team" tour="team" accent="#ffc107">Team</NavLink>
       <NavLink href="/profile">{t('nav_profile')}</NavLink>
     </div>
   )
