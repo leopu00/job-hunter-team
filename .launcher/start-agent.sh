@@ -454,45 +454,24 @@ if [ "$ROLE" = "assistente" ]; then
   _kickoff "$SESSION" "$_msg"
 fi
 
-# ── Sentinella: worker CLI + ticker in background ────────────────────────────
-# La Sentinella lavora in pattern "Vigil":
-#   1. resta in attesa silenziosa del [TICK HH:MM] dal ticker esterno
-#   2. al tick, polla SENTINELLA-WORKER (stesso CLI del provider attivo) con
-#      /status (codex) o /usage (claude/kimi), parsa, logga, alerta
-# Spawniamo il worker (stesso provider, stesso FULL_CMD) e il ticker Python
-# in background via setsid così sopravvivono al parent exit del launcher.
+# ── Sentinella: bridge Python in background ─────────────────────────────────
+# Il bridge polla il rate limit via HTTP API (kimi/claude) o rollout JSONL
+# (codex), calcola metriche derivate (delta, velocity, projection, status,
+# throttle, host load), scrive sentinel-data.jsonl + sentinel-log.txt, e
+# notifica la Sentinella LLM con [BRIDGE TICK] — che decide solo alert
+# e cooldown. Intervallo letto dinamicamente da jht.config.json
+# (sentinella_tick_minutes, range 1-60).
+#
+# Nota storica: esisteva una sessione SENTINELLA-WORKER (codex TUI fermo
+# dove il bridge mandava /status via send-keys). Rimossa: tutti i
+# provider supportati (kimi, claude, openai) usano HTTP o rollout locali,
+# il worker restava acceso a sprecare rate budget e memoria.
 if [ "$ROLE" = "sentinella" ]; then
-  WORKER_SESSION="SENTINELLA-WORKER"
-  # Worker: stessa CLI, nessun kick-off (resta lì a ricevere /status su keypress)
-  if ! tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
-    tmux new-session -d -s "$WORKER_SESSION" -c "$JHT_HOME"
-    if [ -d "${JHT_HOME:-}" ]; then
-      tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
-    fi
-    tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:$PATH'" C-m
-    tmux send-keys -t "$WORKER_SESSION" "$FULL_CMD" C-m
-    # Auto-accept trust dialog dopo boot CLI
-    setsid sh -c '
-      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
-      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
-      sleep 3  && tmux send-keys -t "'"$WORKER_SESSION"'" Enter
-    ' >/dev/null 2>&1 < /dev/null &
-    echo "✓ $WORKER_SESSION avviato (worker per polling /status o /usage)"
-  fi
-
-  # Bridge: polling + parsing + log + notifica alla Sentinella LLM.
-  # Sostituisce il vecchio sentinel-ticker.py (che si limitava a mandare
-  # [TICK] alla Sentinella perche' facesse tutto). Il bridge esegue
-  # /status/usage sul worker, parsa con regex, calcola le metriche,
-  # scrive sentinel-data.jsonl + sentinel-log.txt, e invia alla
-  # Sentinella [BRIDGE TICK] con i dati gia' pronti: l'LLM decide solo
-  # se e come avvisare il Capitano. Intervallo letto dinamicamente da
-  # jht.config.json (sentinella_tick_minutes, range 1-60).
   BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
   if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
     setsid sh -c "
       sleep 30
-      JHT_SENTINEL_SESSION='$SESSION' JHT_SENTINEL_WORKER='$WORKER_SESSION' \
+      JHT_SENTINEL_SESSION='$SESSION' \
       JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
         python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &

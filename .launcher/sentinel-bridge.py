@@ -2,22 +2,22 @@
 """
 Sentinel Bridge — polling deterministico + trigger alla Sentinella LLM.
 
-Sostituisce il vecchio sentinel-ticker.py: invece di svegliare la
-Sentinella perche' faccia tutto (polling + parsing + matematica + log
-+ alert), il bridge esegue /status (codex) o /usage (claude/kimi) sul
-SENTINELLA-WORKER, parsa l'output con regex, calcola le metriche
-derivate, scrive i file di log, e notifica la Sentinella LLM con i dati
-gia' pronti perche' decida solo se e come avvisare il Capitano.
+Il bridge polla il rate limit del provider attivo via:
+  - HTTP API per kimi (/coding/v1/usages) e claude (/api/oauth/usage)
+  - Lettura dei rollout JSONL in ~/.codex/sessions/ per openai/codex
 
-Vantaggio: parsing e matematica sono deterministici (no allucinazioni
-dell'LLM); l'agente Codex/Kimi/Claude della Sentinella resta in loop
-solo per il decision making (alert, urgenza, cooldown), non per leggere
-e calcolare.
+Parsa i dati, calcola metriche derivate (delta, velocity, projection,
+status, throttle, host CPU/RAM), scrive sentinel-data.jsonl +
+sentinel-log.txt, e notifica la Sentinella LLM con [BRIDGE TICK]: l'LLM
+decide solo se e come avvisare il Capitano, non legge/calcola.
+
+Vantaggi del pattern: matematica deterministica (no allucinazioni LLM),
+token risparmiati (la Sentinella non polla piu' /status direttamente),
+cross-provider (HTTP + file = zero dipendenza da TUI).
 
 Config dinamica:
   sentinella_tick_minutes in $JHT_HOME/jht.config.json (range 1-60)
   JHT_SENTINEL_SESSION     sessione LLM (default SENTINELLA)
-  JHT_SENTINEL_WORKER      sessione worker (default SENTINELLA-WORKER)
   JHT_HOME                 dir config (default ~/.jht)
   JHT_TICK_INTERVAL        bootstrap se il config non ha il campo
 """
@@ -35,7 +35,6 @@ from pathlib import Path
 
 
 SESSION = os.environ.get("JHT_SENTINEL_SESSION", "SENTINELLA")
-WORKER = os.environ.get("JHT_SENTINEL_WORKER", "SENTINELLA-WORKER")
 JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 LOGS_DIR = JHT_HOME / "logs"
@@ -67,174 +66,8 @@ def session_exists(s):
     return r.returncode == 0
 
 
-def tmux_send_keys(session, *keys):
-    return subprocess.run(["tmux", "send-keys", "-t", session, *keys], capture_output=True).returncode == 0
-
-
-def tmux_capture(session, lines=200):
-    r = subprocess.run(["tmux", "capture-pane", "-t", session, "-p", "-S", f"-{lines}"], capture_output=True)
-    return r.stdout.decode("utf-8", errors="replace") if r.returncode == 0 else ""
-
-
 def jht_tmux_send(session, text):
     return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
-
-
-def query_status(provider):
-    """
-    Chiude eventuali modal aperti sul worker, invia /status (codex) o
-    /usage (claude/kimi), attende il render, ritorna il pane catturato.
-    """
-    # Escape × 2 per chiudere modal pendenti (input box, dialog /status, ecc.)
-    for _ in range(2):
-        tmux_send_keys(WORKER, "Escape")
-        time.sleep(0.3)
-
-    cmd = "/status" if provider == "openai" else "/usage"
-    # Testo + Enter separati: alcuni CLI (codex) non accettano slash-command
-    # se il send-keys include gia' C-m.
-    tmux_send_keys(WORKER, cmd)
-    time.sleep(0.4)
-    tmux_send_keys(WORKER, "Enter")
-    time.sleep(4.0)
-    return tmux_capture(WORKER)
-
-
-# ─── Parser per ciascun provider ─────────────────────────────────────
-
-def parse_codex(text):
-    """
-    Codex /status:
-      5h limit:      [bars] XX% left (resets HH:MM)
-      Weekly limit:  [bars] YY% left (resets HH:MM on DD Mon)
-    'XX% left' → usage = 100 - XX.
-    """
-    m5 = re.search(r"5h\s*limit:[^\n]*?(\d+)\s*%\s*left[^\n]*?\(resets?\s*(\d{1,2}:\d{2})", text, re.I)
-    mw = re.search(r"Weekly\s*limit:[^\n]*?(\d+)\s*%\s*left", text, re.I)
-    if not m5:
-        return None
-    return {
-        "usage": 100 - int(m5.group(1)),
-        "reset_at": m5.group(2),
-        "weekly_usage": (100 - int(mw.group(1))) if mw else None,
-    }
-
-
-def _claude_time_to_hhmm(match):
-    """Dai group (hour, minute?, ampm) → 'HH:MM' 24h UTC."""
-    hour = int(match.group(1))
-    minute = int(match.group(2) or 0)
-    ampm = match.group(3).lower()
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    elif ampm == "am" and hour == 12:
-        hour = 0
-    return f"{hour:02d}:{minute:02d}"
-
-
-def parse_claude(text):
-    """
-    Claude Code /usage output:
-      Resets 6:10pm (UTC)                                15% used  ← SESSIONE 5h
-      Resets 7pm (UTC) (all models)                                ← weekly all
-      Resets 6am (UTC) (Sonnet only)                               ← weekly sonnet
-
-    Il primo Resets (quello SENZA suffisso "(all models)" o "(Sonnet
-    only)") e' la sessione 5h — quello che monitoriamo come usage
-    principale.
-
-    Con tmux capture-pane la riga puo' essere wrappata: '% used'
-    finisce sulla riga successiva rispetto a 'Resets'. Il vecchio
-    regex richiedeva stessa riga e falliva ~50% dei tick; in piu'
-    poteva agganciarsi al '% used' di una riga WEEKLY se la session
-    non aveva '% used' catturato, causando salti 19→14 che l'utente
-    ha osservato.
-
-    Nuovo approccio:
-      1. Trova TUTTE le righe 'Resets <time>' nell'output
-      2. Il primo Resets senza 'all models' e 'only' e' la sessione
-      3. Il primo '% used' dopo quel Resets (entro 200 char, cross-line)
-         e' la percentuale di quella sessione
-    Se la session non ha '% used' (es. modal appena aperto, valori non
-    renderizzati), torna None: preferiamo saltare il tick piuttosto
-    che scrivere un valore di un'altra finestra.
-    """
-    # Trova tutte le righe Resets con posizione
-    resets = list(re.finditer(
-        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)([^\n]*)",
-        text, re.I,
-    ))
-    if not resets:
-        return None
-
-    # La sessione 5h: primo Resets la cui "coda di riga" NON contiene
-    # ne' 'all models' ne' 'only' (case insensitive).
-    session_match = None
-    for m in resets:
-        tail = (m.group(4) or "").lower()
-        if "all models" not in tail and "only" not in tail:
-            session_match = m
-            break
-    if session_match is None:
-        # Tutte le righe sono weekly: output incompleto, salta questo tick
-        return None
-
-    # Cerca '% used' nella finestra che va dall'inizio della riga Resets
-    # fino al prossimo blocco "Resets" (Current week) o 400 char, quale
-    # arrivi prima. Claude mette il '% used' sulla stessa riga del Resets
-    # OPPURE wrappato subito sotto; in entrambi i casi lo becchiamo.
-    # Fermarsi al prossimo Resets impedisce di 'rubare' il '% used'
-    # della sezione weekly quando la session non ha ancora un valore.
-    start = session_match.start()
-    next_reset_pos = len(text)
-    for m in resets:
-        if m.start() > session_match.start():
-            next_reset_pos = m.start()
-            break
-    window = text[start:min(next_reset_pos, start + 400)]
-    m_used = re.search(r"(\d+)\s*%\s*used", window, re.I)
-    if not m_used:
-        return None
-
-    return {
-        "usage": int(m_used.group(1)),
-        "reset_at": _claude_time_to_hhmm(session_match),
-        "weekly_usage": None,
-    }
-
-
-def _duration_to_hhmm_future(match):
-    """
-    Converte 'Xd Yh Zm', 'Xh Ym', 'Ym' in HH:MM assoluto di quando scatta
-    il reset (ora + delta), arrotondato al minuto.
-    """
-    days = int(match.group("d") or 0)
-    hours = int(match.group("h") or 0)
-    mins = int(match.group("m") or 0)
-    delta = timedelta(days=days, hours=hours, minutes=mins)
-    target = datetime.now() + delta
-    return target.strftime("%H:%M")
-
-
-def parse_kimi(text):
-    """Fallback text parser (non piu' usato in produzione: vedi fetch_kimi_api).
-
-    Il flusso primario per Kimi e' HTTP diretto via fetch_kimi_api. Mantenuto
-    per debugging o se l'API cambia formato.
-    """
-    m5 = re.search(
-        r"5h\s*limit[^\n]*?(\d+)\s*%\s*left[^\n]*?\(resets?\s*in\s*"
-        r"(?:(?P<d>\d+)\s*d\s*)?(?:(?P<h>\d+)\s*h\s*)?(?:(?P<m>\d+)\s*m\s*)?",
-        text, re.I,
-    )
-    if not m5:
-        return None
-    mw = re.search(r"Weekly\s*limit[^\n]*?(\d+)\s*%\s*left", text, re.I)
-    return {
-        "usage": 100 - int(m5.group(1)),
-        "reset_at": _duration_to_hhmm_future(m5),
-        "weekly_usage": (100 - int(mw.group(1))) if mw else None,
-    }
 
 
 # ── Codex: lettura rollout JSONL (no HTTP CF-blocked, no tmux) ──────
@@ -476,15 +309,6 @@ def fetch_kimi_api():
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
         "weekly_usage": weekly_used,
     }
-
-
-PARSERS = {
-    "openai": parse_codex,
-    "anthropic": parse_claude,
-    "claude": parse_claude,
-    "kimi": parse_kimi,
-    "moonshot": parse_kimi,
-}
 
 
 # ─── Host resources (CPU / RAM) ──────────────────────────────────────
@@ -795,27 +619,18 @@ def sleep_with_poll(target_min):
 
 
 def main():
-    print(f"[sentinel-bridge] LLM session: {SESSION}, worker: {WORKER}")
+    print(f"[sentinel-bridge] LLM session: {SESSION}")
     print(f"[sentinel-bridge] config: {CONFIG_PATH} (bootstrap: {BOOTSTRAP}m)")
-    # Provider con API HTTP (kimi, anthropic/claude) non hanno bisogno
-    # del tmux worker — chiamano l'endpoint direttamente. Solo codex
-    # e altri provider basati su TUI richiedono WORKER attivo.
-    # kimi/moonshot: HTTP /coding/v1/usages
-    # anthropic/claude: HTTP /api/oauth/usage
-    # openai/codex: lettura dei rollout JSONL in ~/.codex/sessions/
-    API_PROVIDERS = {"kimi", "moonshot", "anthropic", "claude", "openai"}
+    # Tutti i provider supportati hanno un canale di polling senza TUI:
+    #   kimi/moonshot      HTTP /coding/v1/usages
+    #   anthropic/claude   HTTP /api/oauth/usage
+    #   openai/codex       rollout JSONL in ~/.codex/sessions/
+    # Nessun fallback tmux necessario — se un provider non riconosciuto
+    # finisce in config, loggiamo e andiamo avanti al prossimo tick.
     while True:
         tick_min, provider = read_config()
-        if provider not in API_PROVIDERS and not session_exists(WORKER):
-            print(f"[sentinel-bridge] {WORKER} non attivo (provider={provider}), attendo 30s...")
-            time.sleep(30)
-            continue
         now_h = datetime.now().strftime("%H:%M:%S")
 
-        # Preferiamo sempre l'API HTTP dove disponibile: stabile,
-        # strutturata, zero TUI fiddling, zero refusal LLM, zero token
-        # sprecati. Fallback al parsing testuale via tmux solo per
-        # provider senza endpoint conosciuto (codex, provider esotici).
         if provider in ("kimi", "moonshot"):
             parsed = fetch_kimi_api()
             if parsed is None:
@@ -835,13 +650,9 @@ def main():
                 time.sleep(min(POLL_SECONDS, tick_min * 60))
                 continue
         else:
-            raw = query_status(provider)
-            parser = PARSERS.get(provider, parse_codex)
-            parsed = parser(raw)
-            if parsed is None:
-                print(f"[sentinel-bridge] {now_h} — parser fallito (provider={provider})")
-                time.sleep(min(POLL_SECONDS, tick_min * 60))
-                continue
+            print(f"[sentinel-bridge] {now_h} — provider '{provider}' non supportato, skip")
+            time.sleep(min(POLL_SECONDS, tick_min * 60))
+            continue
         parsed["provider"] = provider
 
         last = load_last_sample()

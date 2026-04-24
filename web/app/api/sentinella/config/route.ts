@@ -6,9 +6,10 @@ import { JHT_CONFIG_PATH } from '@/lib/jht-paths'
 export const dynamic = 'force-dynamic'
 
 // Limite minimo: 1 min. Massimo: 60 min. Default: 10 min.
-// Il ticker esterno (.launcher/sentinel-ticker.py) legge JHT_TICK_INTERVAL
-// all'avvio, quindi cambiare questo valore richiede un restart della
-// sessione SENTINELLA per prendere effetto.
+// Il bridge (.launcher/sentinel-bridge.py) rilegge sentinella_tick_minutes
+// dal config ad ogni tick (risoluzione ~15s tramite sleep_with_poll), quindi
+// cambiare questo valore dalla UI ha effetto al tick successivo senza
+// bisogno di restart.
 const MIN_MINUTES = 1
 const MAX_MINUTES = 60
 const DEFAULT_MINUTES = 10
