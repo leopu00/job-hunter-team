@@ -19,6 +19,7 @@ export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:$
 
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
+source "$DEV_TEAM_DIR/tui-helpers.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
@@ -222,6 +223,16 @@ if ! command -v tmux &>/dev/null; then
   exit 1
 fi
 
+# ── Soppressione auto-update interattivo di kimi ─────────────────────────────
+# Kimi CLI mostra un blocking gate TUI "kimi-cli update available" con default
+# Enter = "Upgrade now" che esegue `uv tool upgrade kimi-cli` e poi sys.exit.
+# Stessa dinamica di codex: il nostro Enter auto-accept (anche dopo verify)
+# trigga l'update che su NTFS/WSL2 bind-mount fallisce, kimi esce → sessione
+# cade sulla shell. Il binario espone una env var ufficiale: settandola il
+# gate viene saltato interamente. Applicata per tutti gli agenti (l'env var
+# è innocua anche quando kimi non è il provider attivo).
+export KIMI_CLI_NO_AUTO_UPDATE=1
+
 # ── Soppressione auto-update interattivo di codex ────────────────────────────
 # Codex mostra un prompt TUI "Update now / Skip / Skip until next version"
 # quando rileva una versione più recente, con "Update now" selezionato di
@@ -330,6 +341,10 @@ send_env_vars() {
   # quoting a mano. Da lì scriviamo chat.jsonl in modo sicuro.
   AGENT_TOOLS_DIR="/app/agents/_tools"
   tmux send-keys -t "$SESSION" "export PATH='${AGENT_TOOLS_DIR}:$PATH'" C-m
+  # KIMI_CLI_NO_AUTO_UPDATE disabilita il blocking gate di kimi. Lo
+  # esportiamo sempre (anche quando il provider non è kimi) perché è
+  # innocuo se il binario non lo legge.
+  tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
@@ -382,71 +397,61 @@ echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
 
-# ── Prompt di avvio per l'assistente ─────────────────────────────────────────
-# Solo per role=assistente: dopo che il CLI è pronto, inietta un trigger che
-# fa scrivere al modello il primo messaggio di benvenuto nel chat.jsonl.
-# Gli altri ruoli (capitano / scout / ecc.) ricevono istruzioni dal Capitano.
-# ── Kick-off per il Capitano ────────────────────────────────────────────────
+# ── Kick-off Capitano / Assistente ──────────────────────────────────────────
 # Dopo start-agent.sh il CLI e' bootato ma l'agente sta fermo in attesa di
-# input. Il bottone "Avvia team" nella UI web ora delega anche il primo ordine
-# al Capitano: senza questo kick-off, il Comandante deve andare sul pane tmux
-# CAPITANO e dargli manualmente l'avvio.
-# Polling di readiness del TUI: cerca nel pane un marker che compare
-# solo dopo il welcome. Match "Welcome to" (kimi/claude) o "OpenAI Codex"
-# o il status line "agents/<role>". Timeout di sicurezza: 60s, oltre cui
-# invia comunque (meglio un kick-off perso nella shell che uno stallo).
-# Kimi boot ~30-45s, Codex ~15s: uno sleep fisso uguale per tutti non
-# funziona.
+# input. Il Capitano riceve l'ordine di avvio pipeline; l'Assistente riceve
+# il prompt di presentazione CV-first.
+#
+# Detection di readiness: tui_wait_ready (idle-diff) — cerca un pane che
+# rimane identico per 3s, invariante universale cross-provider (Claude /
+# Codex / Kimi). Non dipende da marker hardcoded nei banner, che cambiano
+# tra release (es. codex 0.124 ha aggiunto il banner "Tip: GPT-5.5...").
+#
+# Send: tui_send_verified — dopo il send -l del testo, capture-pane e
+# verifica che la signature sia presente PRIMA di spingere Enter. Con 3
+# retry recuperiamo i casi in cui la TUI non era davvero ricettiva.
+#
+# setsid: scolleghiamo dal process-group di start-agent.sh cosi' il parent
+# puo' uscire senza killare il sub-shell del kick-off.
+
+_kickoff() {
+  local sess="$1"
+  local msg="$2"
+  # Esportiamo via env var invece di interpolare nella stringa sh -c:
+  # i messaggi contengono apostrofi e caratteri speciali che rompono
+  # il quoting sh nested. Env var e' trasparente a qualsiasi charset.
+  #
+  # Log su /tmp/kickoff-<session>.log per troubleshooting: vediamo se
+  # il child ha davvero eseguito, se wait_ready e' terminato, se send
+  # e' andato a buon fine. Log idempotente, viene sovrascritto ogni
+  # volta (conta solo l'ultimo kickoff).
+  JHT_KICKOFF_SESS="$sess" JHT_KICKOFF_MSG="$msg" JHT_KICKOFF_LOG="/tmp/kickoff-$sess.log" \
+  setsid sh -c '
+    exec >"$JHT_KICKOFF_LOG" 2>&1
+    echo "[$(date +%H:%M:%S)] kickoff start for $JHT_KICKOFF_SESS"
+    . /app/.launcher/tui-helpers.sh
+    echo "[$(date +%H:%M:%S)] waiting for ready..."
+    if tui_wait_ready "$JHT_KICKOFF_SESS"; then
+      echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
+      if tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"; then
+        echo "[$(date +%H:%M:%S)] SENT OK"
+      else
+        echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)"
+      fi
+    else
+      echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
+    fi
+  ' </dev/null &
+}
 
 if [ "$ROLE" = "capitano" ]; then
-  setsid sh -c '
-    SESS="'"$SESSION"'"
-    ROLE_LC="'"$ROLE"'"
-    elapsed=0
-    while [ "$elapsed" -lt 60 ]; do
-      pane=$(tmux capture-pane -t "$SESS" -p -S -80 2>/dev/null)
-      case "$pane" in
-        *"Welcome to"*|*"OpenAI Codex"*|*"agents/$ROLE_LC"*) break ;;
-      esac
-      sleep 2
-      elapsed=$((elapsed + 2))
-    done
-    # margine di stabilizzazione dopo il render iniziale
-    sleep 3
-    tmux send-keys -t "$SESS" -l "[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
-    sleep 3
-    tmux send-keys -t "$SESS" Enter
-    sleep 2
-    tmux send-keys -t "$SESS" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
+  _kickoff "$SESSION" "$_msg"
 fi
 
 if [ "$ROLE" = "assistente" ]; then
-  # setsid: idem come sopra (survive al parent exit). Stesso polling di
-  # readiness invece di sleep fisso, cosi' si adatta al boot di kimi/codex.
-  setsid sh -c '
-    SESS="'"$SESSION"'"
-    ROLE_LC="'"$ROLE"'"
-    elapsed=0
-    while [ "$elapsed" -lt 60 ]; do
-      pane=$(tmux capture-pane -t "$SESS" -p -S -80 2>/dev/null)
-      case "$pane" in
-        *"Welcome to"*|*"OpenAI Codex"*|*"agents/$ROLE_LC"*) break ;;
-      esac
-      sleep 2
-      elapsed=$((elapsed + 2))
-    done
-    sleep 3
-    # Le TUI Ink (Codex / Kimi) non "vedono" l'\''Enter se arriva troppo
-    # vicino al testo: il testo va inviato letterale con -l, poi una
-    # pausa, poi l'\''Enter in una chiamata separata. Double-Enter idempotente
-    # nel caso il primo venga perso o serva chiudere un trust-modal.
-    tmux send-keys -t "$SESS" -l "[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'\''utente non sceglie o allega qualcosa."
-    sleep 3
-    tmux send-keys -t "$SESS" Enter
-    sleep 2
-    tmux send-keys -t "$SESS" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+  _msg="[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa."
+  _kickoff "$SESSION" "$_msg"
 fi
 
 # ── Sentinella: worker CLI + ticker in background ────────────────────────────
