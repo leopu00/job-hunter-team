@@ -2,18 +2,43 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const CAPTAIN_AGENT = { emoji: '\u{1F468}\u200D\u2708\uFE0F', name: 'Captain', desc: 'Coordinates the team and assigns operational priorities.' }
-const SENTINEL_AGENT = { emoji: '\uD83D\uDC82', name: 'Sentinel', desc: 'Monitors budget, limits and system health.' }
+// roleId: id lato API (cli/web). name: label mostrato nel chart (EN).
+const CAPTAIN_AGENT = {
+  roleId: 'capitano',
+  emoji: '\u{1F468}\u200D\u2708\uFE0F',
+  name: 'Captain',
+  desc: 'Coordinates the team and assigns operational priorities.',
+}
 
 const PIPELINE_AGENTS = [
-  { emoji: '\uD83D\uDD75\uFE0F', name: 'Scout', desc: 'Searches for new opportunities on job channels.' },
-  { emoji: '\u{1F468}\u200D\uD83D\uDD2C', name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
-  { emoji: '\u{1F468}\u200D\uD83D\uDCBB', name: 'Scorer', desc: 'Calculates priority and match score of offers.' },
-  { emoji: '\u{1F468}\u200D\uD83C\uDFEB', name: 'Writer', desc: 'Prepares tailored CV and cover letter.' },
-  { emoji: '\u{1F468}\u200D\u2696\uFE0F', name: 'Critic', desc: 'Reviews materials and flags what needs correction.' },
+  { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
+  { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
+  { roleId: 'scorer',    emoji: '\u{1F468}\u200D\uD83D\uDCBB',   name: 'Scorer',  desc: 'Calculates priority and match score of offers.' },
+  { roleId: 'scrittore', emoji: '\u{1F468}\u200D\uD83C\uDFEB',   name: 'Writer',  desc: 'Prepares tailored CV and cover letter.' },
+  { roleId: 'critico',   emoji: '\u{1F468}\u200D\u2696\uFE0F',   name: 'Critic',  desc: 'Reviews materials and flags what needs correction.' },
 ]
 
-export default function TeamOrgChart() {
+function ActiveLed({ active }: { active: boolean }) {
+  if (!active) return null
+  return (
+    <span
+      aria-label="online"
+      className="team-orgchart-led"
+      style={{
+        position: 'absolute',
+        top: -2,
+        right: -12,
+        width: 9,
+        height: 9,
+        borderRadius: '50%',
+        background: '#22c55e',
+        boxShadow: '0 0 8px rgba(34,197,94,0.7)',
+      }}
+    />
+  )
+}
+
+export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string> }) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -23,6 +48,8 @@ export default function TeamOrgChart() {
     paths: [],
     chainPaths: [],
   })
+
+  const isActive = (roleId: string) => activeRoles?.has(roleId) ?? false
 
   useEffect(() => {
     let frame = 0
@@ -103,6 +130,17 @@ export default function TeamOrgChart() {
 
   return (
     <div className="hidden md:block">
+      {/* Animazione LED online: pulse leggero verde */}
+      <style>{`
+        @keyframes team-orgchart-pulse {
+          0%, 100% { transform: scale(1);   opacity: 1; }
+          50%      { transform: scale(1.4); opacity: 0.55; }
+        }
+        .team-orgchart-led {
+          animation: team-orgchart-pulse 1.4s ease-in-out infinite;
+        }
+      `}</style>
+
       <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[620px]">
         {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (arrowOverlay.paths.length > 0 || arrowOverlay.chainPaths.length > 0) && (
           <svg
@@ -152,17 +190,15 @@ export default function TeamOrgChart() {
           </svg>
         )}
 
+        {/* Captain da solo al top, centrato (Sentinel rimosso: gestione
+             rate-limit è ora il bridge deterministico, non un agente LLM) */}
         <div className="flex justify-center">
           <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end">
-            <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-2">
-              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
-              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                {SENTINEL_AGENT.desc}
+            <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3">
+              <span className="relative">
+                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
               </span>
-            </span>
-            <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3 -translate-y-3 md:-translate-y-4">
-              <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
               <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
               <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                 {CAPTAIN_AGENT.desc}
@@ -174,14 +210,17 @@ export default function TeamOrgChart() {
         <div className="grid grid-cols-5 justify-items-center items-start mt-14">
           {PIPELINE_AGENTS.map((agent, index) => (
             <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
-              <span
-                ref={(node) => {
-                  agentEmojiRefs.current[index] = node
-                }}
-                className="text-2xl md:text-3xl leading-none"
-                aria-hidden="true"
-              >
-                {agent.emoji}
+              <span className="relative">
+                <span
+                  ref={(node) => {
+                    agentEmojiRefs.current[index] = node
+                  }}
+                  className="text-2xl md:text-3xl leading-none"
+                  aria-hidden="true"
+                >
+                  {agent.emoji}
+                </span>
+                <ActiveLed active={isActive(agent.roleId)} />
               </span>
               <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
               <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
