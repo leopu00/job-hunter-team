@@ -141,7 +141,7 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
         }
       `}</style>
 
-      <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[620px]">
+      <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[820px]">
         {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (arrowOverlay.paths.length > 0 || arrowOverlay.chainPaths.length > 0) && (
           <svg
             aria-hidden="true"
@@ -193,7 +193,7 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
         {/* Captain da solo al top, centrato (Sentinel rimosso: gestione
              rate-limit è ora il bridge deterministico, non un agente LLM) */}
         <div className="flex justify-center">
-          <div className="w-full max-w-[620px] grid grid-cols-5 justify-items-center items-end">
+          <div className="w-full max-w-[820px] grid grid-cols-5 justify-items-center items-end">
             <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3">
               <span className="relative">
                 <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
@@ -207,7 +207,7 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
           </div>
         </div>
 
-        <div className="grid grid-cols-5 justify-items-center items-start mt-14">
+        <div className="grid grid-cols-5 justify-items-center items-start mt-16 gap-x-6">
           {PIPELINE_AGENTS.map((agent, index) => (
             <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
               <span className="relative">
