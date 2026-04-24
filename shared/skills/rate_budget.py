@@ -153,7 +153,7 @@ def plan(entry):
     print(f"  Reset:            tra {remaining} ({local_reset_display(reset_at)})")
     print(f"  Velocity misurata:{velocity_smooth:+g}%/h (EMA)")
     if velocity_ideal is not None:
-        print(f"  Velocity target:  {velocity_ideal:g}%/h (per chiudere a 92% al reset)")
+        print(f"  Velocity target:  {velocity_ideal:g}%/h (per chiudere a 95% al reset)")
     if projection is not None:
         print(f"  Proiezione reset: {projection}%")
     print(f"  Status:           {status}")
