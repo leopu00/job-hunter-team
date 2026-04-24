@@ -464,6 +464,11 @@ def compute_metrics(parsed, last, history=None):
         permettiamo alla proiezione di spingere su CRITICO sulla base di un
         singolo spike di velocity
     """
+    # Target a finestra piena. L'utilizzatore paga per il 100% della
+    # quota, ha senso puntare al 95% (margine piccolo per imprevisti).
+    # Prima era 92%, troppo conservativo.
+    SAFE_TARGET = 95
+
     usage = parsed["usage"]
     now = datetime.now(timezone.utc)
     ts = now.isoformat()
@@ -471,28 +476,40 @@ def compute_metrics(parsed, last, history=None):
 
     delta = 0.0
     velocity = 0.0
+    session_gap_min = 0.0
     if last and isinstance(last.get("usage"), (int, float)):
         try:
             last_ts = datetime.fromisoformat(last["ts"])
+            session_gap_min = (now - last_ts).total_seconds() / 60.0
             dt_h = max(0.01, (now - last_ts).total_seconds() / 3600)
             delta = usage - last["usage"]
             velocity = delta / dt_h
         except (TypeError, ValueError):
             pass
 
-    # EMA con alpha=0.2 (finestra effettiva ~10 sample). Prima era 0.5
-    # (~3 sample): un burst di 30s contava per 1/3 della smooth e proiettava
-    # un ritmo non sostenuto. Con 0.2 un burst singolo pesa ~20% e decade
-    # in pochi tick. Patch suggerita dalla Sentinella stessa.
-    vs_prev = (last or {}).get("velocity_smooth") or 0.0
-    velocity_smooth = 0.2 * velocity + 0.8 * vs_prev
+    # Session discontinuity: se il bridge e' stato fermo per piu' di 20
+    # minuti (crash, restart, team stoppato e riavviato), l'EMA ereditata
+    # dall'ultimo sample non e' piu' rappresentativa del ritmo attuale —
+    # spesso drogava il throttle a CRITICO nei primi tick della nuova
+    # sessione per via di una velocity intensiva misurata ORE fa, anche
+    # se la sessione attuale sta consumando tranquillamente.
+    # Reset cold-start: azzera EMA e delta, riparti da zero.
+    session_discontinuity = session_gap_min > 20
+    if session_discontinuity:
+        velocity = 0.0
+        velocity_smooth = 0.0
+    else:
+        # EMA con alpha=0.2 (finestra effettiva ~10 sample): un burst di
+        # 30s pesa ~20% e decade in pochi tick, quindi evita proiezioni
+        # drogate da spike momentanei.
+        vs_prev = (last or {}).get("velocity_smooth") or 0.0
+        velocity_smooth = 0.2 * velocity + 0.8 * vs_prev
 
     hours_to_reset = hours_until(parsed.get("reset_at"))
     velocity_ideal = None
     projection = None
     if hours_to_reset and hours_to_reset > 0:
-        # Target 92% alla finestra piena (sotto il 100% per margine)
-        velocity_ideal = max(0.0, (92 - usage) / hours_to_reset)
+        velocity_ideal = max(0.0, (SAFE_TARGET - usage) / hours_to_reset)
         projection = usage + velocity_smooth * hours_to_reset
 
     reset_event = bool(last and usage < (last.get("usage") or 0) - 30)
@@ -514,20 +531,33 @@ def compute_metrics(parsed, last, history=None):
         realistic_vel = last_hour_delta  # %/h (delta cumulativo in 1h)
         projection = usage + max(realistic_vel, velocity_ideal or 0) * hours_to_reset
 
+    # Throttle: dominato da USAGE ASSOLUTO, non dalla projection.
+    # La projection e' speculativa (basata su EMA), il rate-limit reale
+    # scatta solo all'usage assoluto. Se siamo al 60% con proiezione
+    # 150%, non ha senso freezare — serve rallentare ma il Capitano deve
+    # comunque lavorare (una nuova sessione inizia sempre col bridge in
+    # stato dubbioso e deve poter osservare il consumo reale).
+    #
+    # Scala:
+    #   usage >= 95%           → T4 freeze (rate-limit imminente)
+    #   usage >= 88%           → T3 critico
+    #   usage >= 75% + proj>100%→ T2 rallenta marcato
+    #   proj > SAFE_TARGET     → T1 rallenta leggero
+    #   default                → T0 full speed
     if reset_event:
         status, throttle = "RESET", 0
-    elif projection is None:
-        status, throttle = ("SOTTOUTILIZZO" if usage < 30 else "OK"), 0
-    elif projection <= 90:
-        status, throttle = ("SOTTOUTILIZZO" if usage < 30 else "OK"), 0
-    elif projection <= 110:
-        status, throttle = "ATTENZIONE", 1
-    elif projection <= 130:
-        status, throttle = "ATTENZIONE", 2
-    elif projection <= 160:
-        status, throttle = "CRITICO", 3
-    else:
+    elif usage >= 95:
         status, throttle = "CRITICO", 4
+    elif usage >= 88:
+        status, throttle = "CRITICO", 3
+    elif usage >= 75 and projection is not None and projection > 100:
+        status, throttle = "ATTENZIONE", 2
+    elif projection is not None and projection > SAFE_TARGET and usage >= 40:
+        status, throttle = "ATTENZIONE", 1
+    elif usage < 30 and (projection is None or projection < 60):
+        status, throttle = "SOTTOUTILIZZO", 0
+    else:
+        status, throttle = "OK", 0
 
     # Host resources: se la pressione e' alta, forziamo un throttle
     # minimo anche se l'usage LLM e' basso. Il PC sovraccarico fa

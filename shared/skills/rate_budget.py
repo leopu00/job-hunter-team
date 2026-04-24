@@ -56,7 +56,12 @@ def load_last_sample():
 
 
 def hours_minutes_until(reset_hhmm):
-    """HH:MM → '2h 34m' oppure None se gia' passato."""
+    """HH:MM (UTC, come lo scrive il bridge) → '2h 34m' remaining.
+
+    Il reset_at nel JSONL e' sempre in UTC (fetch_codex_rollout usa
+    datetime.astimezone() con TZ=UTC del container). Calcoliamo
+    remaining in UTC per essere coerenti con lo storage.
+    """
     if not reset_hhmm:
         return None
     try:
@@ -66,7 +71,6 @@ def hours_minutes_until(reset_hhmm):
     now = datetime.now(timezone.utc)
     target = now.replace(hour=h, minute=m, second=0, microsecond=0)
     if target <= now:
-        # Reset e' gia' passato nel giorno corrente → prossimo e' domani
         from datetime import timedelta
         target = target + timedelta(days=1)
     delta = target - now
@@ -76,6 +80,34 @@ def hours_minutes_until(reset_hhmm):
     h_rem = total_min // 60
     m_rem = total_min % 60
     return f"{h_rem}h {m_rem}m" if h_rem > 0 else f"{m_rem}m"
+
+
+def local_reset_display(reset_hhmm):
+    """Converte HH:MM UTC in 'HH:MM local (HH:MM UTC)' per display user-facing.
+
+    Container di default gira in UTC, ma l'utente legge orari in local
+    (CEST/CET in Italia). Mostrare entrambi evita l'ambiguita' tipica
+    "reset alle 13:49" dove il numero e' UTC e l'utente lo scambia per
+    ora italiana, calcolando remaining errato.
+    """
+    if not reset_hhmm:
+        return "-"
+    try:
+        h, m = map(int, reset_hhmm.split(":"))
+    except ValueError:
+        return reset_hhmm
+    now_utc = datetime.now(timezone.utc)
+    target_utc = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
+    if target_utc <= now_utc:
+        from datetime import timedelta
+        target_utc = target_utc + timedelta(days=1)
+    target_local = target_utc.astimezone()
+    local_hhmm = target_local.strftime("%H:%M")
+    if local_hhmm == reset_hhmm:
+        # Container e' in UTC e pure il "local" risolve a UTC (TZ unset),
+        # oppure l'offset e' 0 — mostra solo UTC senza duplicare.
+        return f"{reset_hhmm} UTC"
+    return f"{local_hhmm} local ({reset_hhmm} UTC)"
 
 
 def status_line(entry):
@@ -89,7 +121,7 @@ def status_line(entry):
     remaining = hours_minutes_until(reset_at) or "-"
     return (
         f"provider={provider} usage={usage}% status={status} throttle=T{throttle} "
-        f"reset={reset_at} (in {remaining})"
+        f"reset_in={remaining} (at {local_reset_display(reset_at)})"
     )
 
 
@@ -118,7 +150,7 @@ def plan(entry):
 
     print(f"=== Rate Budget - {provider} ===")
     print(f"  Utilizzo:         {usage}%")
-    print(f"  Reset:            {reset_at} (tra {remaining})")
+    print(f"  Reset:            tra {remaining} ({local_reset_display(reset_at)})")
     print(f"  Velocity misurata:{velocity_smooth:+g}%/h (EMA)")
     if velocity_ideal is not None:
         print(f"  Velocity target:  {velocity_ideal:g}%/h (per chiudere a 92% al reset)")
@@ -132,9 +164,10 @@ def plan(entry):
 
     # Stima "margine": quanto possiamo spendere prima di rompere il target.
     # Useful per l'LLM che decide quanti agenti parallelli tenere.
-    if isinstance(usage, (int, float)) and usage < 92:
-        remaining_budget = 92 - usage
-        print(f"  Margine al target 92%: {remaining_budget}%")
+    # Target 95%: margine minimo sotto il 100% hard limit.
+    if isinstance(usage, (int, float)) and usage < 95:
+        remaining_budget = 95 - usage
+        print(f"  Margine al target 95%: {remaining_budget}%")
 
     # Timestamp del sample — cosi' l'LLM sa se e' fresco
     ts = entry.get("ts", "-")
