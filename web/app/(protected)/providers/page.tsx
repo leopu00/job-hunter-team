@@ -12,6 +12,10 @@ type ProviderInfo = {
   models: string[]
   activeModel?: string
   keySource: 'config' | 'env' | null
+  installedVersion?: string | null
+  latestVersion?: string | null
+  updateAvailable?: boolean
+  updatable?: boolean
 }
 
 type ProvidersData = {
@@ -28,8 +32,41 @@ const PROVIDER_ICONS: Record<string, string> = {
   minimax: '🔵',
 }
 
-function ProviderCard({ provider }: { provider: ProviderInfo }) {
+function ProviderCard({ provider, onUpdated }: { provider: ProviderInfo; onUpdated: () => void }) {
   const icon = PROVIDER_ICONS[provider.id] ?? '◆'
+  const [updating, setUpdating] = useState(false)
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err' | 'confirm'; msg: string; pendingForce?: boolean } | null>(null)
+
+  const runUpdate = useCallback(async (force: boolean) => {
+    setUpdating(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: provider.id, force }),
+      })
+      const data = await res.json()
+      if (res.status === 409 && data.runningSessions?.length) {
+        setFeedback({
+          kind: 'confirm',
+          msg: `Il provider è attivo. Update richiede di stoppare ${data.runningSessions.length} sessioni (${data.runningSessions.join(', ')}). Continuare?`,
+          pendingForce: true,
+        })
+      } else if (data.ok) {
+        setFeedback({ kind: 'ok', msg: `aggiornato a ${data.installedVersion || '?'}` })
+        onUpdated()
+      } else {
+        const err = (data.stderr || data.error || 'errore sconosciuto').split('\n').slice(-3).join(' ')
+        setFeedback({ kind: 'err', msg: err })
+      }
+    } catch (e) {
+      setFeedback({ kind: 'err', msg: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setUpdating(false)
+    }
+  }, [provider.id, onUpdated])
+
   return (
     <div className="border rounded-lg overflow-hidden transition-colors"
       style={{ borderColor: provider.active ? 'rgba(0,232,122,0.4)' : provider.available ? 'var(--color-border-glow)' : 'var(--color-border)', background: 'var(--color-panel)' }}>
@@ -52,6 +89,11 @@ function ProviderCard({ provider }: { provider: ProviderInfo }) {
             }}>
               {provider.available ? 'configurato' : 'non configurato'}
             </span>
+            {provider.updateAvailable && (
+              <span className="badge text-[9px]" style={{ color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.08)' }}>
+                ⚠ update {provider.latestVersion}
+              </span>
+            )}
           </div>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5 font-mono">{provider.id}</p>
         </div>
@@ -94,6 +136,62 @@ function ProviderCard({ provider }: { provider: ProviderInfo }) {
           <p className="text-[10px] text-[var(--color-dim)] px-3 py-2 rounded border border-[var(--color-border)]" style={{ background: 'var(--color-card)' }}>
             Aggiungi la chiave API in <span className="font-mono text-[var(--color-muted)]">jht.config.json</span> o nella variabile d&apos;ambiente corrispondente.
           </p>
+        )}
+
+        {/* Version + Update */}
+        {provider.updatable && provider.installedVersion && (
+          <div className="flex items-center justify-between text-[11px] pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[var(--color-dim)]">CLI</span>
+              <span className="font-mono text-[var(--color-bright)]">{provider.installedVersion}</span>
+              {provider.latestVersion && provider.latestVersion !== provider.installedVersion && (
+                <span className="text-[10px]" style={{ color: '#f59e0b' }}>→ {provider.latestVersion}</span>
+              )}
+            </div>
+            <button
+              onClick={() => runUpdate(false)}
+              disabled={updating}
+              className="px-3 py-1 rounded text-[10px] font-semibold transition-all"
+              style={{
+                background: updating ? 'var(--color-border)' : provider.updateAvailable ? 'rgba(245,158,11,0.1)' : 'transparent',
+                color: updating ? 'var(--color-dim)' : provider.updateAvailable ? '#f59e0b' : 'var(--color-muted)',
+                border: `1px solid ${updating ? 'var(--color-border)' : provider.updateAvailable ? 'rgba(245,158,11,0.3)' : 'var(--color-border)'}`,
+                cursor: updating ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {updating ? '…' : provider.updateAvailable ? '↑ Update' : 'Check / Update'}
+            </button>
+          </div>
+        )}
+
+        {feedback && (
+          <div className="text-[10px] px-3 py-2 rounded border" style={{
+            background: feedback.kind === 'ok' ? 'rgba(0,232,122,0.06)' : feedback.kind === 'err' ? 'rgba(244,67,54,0.06)' : 'rgba(245,158,11,0.06)',
+            borderColor: feedback.kind === 'ok' ? 'rgba(0,232,122,0.25)' : feedback.kind === 'err' ? 'rgba(244,67,54,0.25)' : 'rgba(245,158,11,0.25)',
+            color: feedback.kind === 'ok' ? 'var(--color-green)' : feedback.kind === 'err' ? '#f44336' : '#f59e0b',
+          }}>
+            <div>{feedback.msg}</div>
+            {feedback.pendingForce && (
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => runUpdate(true)}
+                  disabled={updating}
+                  className="px-2 py-1 rounded text-[10px] font-semibold"
+                  style={{ background: 'rgba(244,67,54,0.1)', color: '#f44336', border: '1px solid rgba(244,67,54,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  Stop team + update
+                </button>
+                <button
+                  onClick={() => setFeedback(null)}
+                  className="px-2 py-1 rounded text-[10px] font-semibold"
+                  style={{ background: 'transparent', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  Annulla
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -144,7 +242,7 @@ export default function ProvidersPage() {
 
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.providers.map((p, i) => <div key={p.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ProviderCard provider={p} /></div>)}
+          {data.providers.map((p, i) => <div key={p.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><ProviderCard provider={p} onUpdated={fetchData} /></div>)}
         </div>
       )}
     </div>
