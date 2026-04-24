@@ -30,11 +30,8 @@ DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
 
 
 THROTTLE_POLICY = {
-    0: ("T0 full speed", "Puoi spawnare in parallelo senza restrizioni. Mantieni ritmo normale."),
-    1: ("T1 rallentato", "Spawn ok ma allarga gli intervalli tra azioni (sleep 30-60s)."),
-    2: ("T2 spawn bloccato", "NON spawnare nuovi agenti. Quelli esistenti: sleep 2 min tra azioni."),
-    3: ("T3 critico", "NON spawnare. Agenti esistenti in pausa operativa (sleep 5 min)."),
-    4: ("T4 freeze totale", "STOP TOTALE. Freeze tutti gli agenti. Aspetta BRIDGE ORDER di downgrade."),
+    0: ("OK", "Proiezione dentro o sotto la finestra ottimale. Procedi col piano, spawna liberamente se hai coda."),
+    1: ("ATTENZIONE", "Proiezione > 95% al reset: stai bruciando troppo. Blocca nuovi spawn, allunga gli sleep degli agenti attivi fino a rientrare. Il bridge te lo ripeterà ogni minuto finché sei fuori zona."),
 }
 
 
@@ -120,7 +117,7 @@ def status_line(entry):
     reset_at = entry.get("reset_at", "-")
     remaining = hours_minutes_until(reset_at) or "-"
     return (
-        f"provider={provider} usage={usage}% status={status} throttle=T{throttle} "
+        f"provider={provider} usage={usage}% status={status} throttle={throttle} "
         f"reset_in={remaining} (at {local_reset_display(reset_at)})"
     )
 
@@ -146,7 +143,7 @@ def plan(entry):
     host = entry.get("host") or {}
     host_level = entry.get("host_level", "OK")
 
-    label, advice = THROTTLE_POLICY.get(throttle, (f"T{throttle}", "Segui l'ordine del bridge."))
+    label, advice = THROTTLE_POLICY.get(throttle, (str(throttle), "Segui l'ordine del bridge."))
 
     print(f"=== Rate Budget - {provider} ===")
     print(f"  Utilizzo:         {usage}%")
