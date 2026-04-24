@@ -822,8 +822,44 @@ def sleep_with_poll(target_min):
             current = fresh_user_tick
 
 
+PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def acquire_singleton_lock():
+    """Esci se c'e' gia' un'altra istanza del bridge viva.
+
+    Bug osservato: ogni restart del Capitano via start-agent.sh spawnava un
+    nuovo bridge senza killare i precedenti → accumulo di N istanze (fino a
+    11 in un caso reale) che:
+      - scrivono nel JSONL in parallelo (sample fantasma / timestamp duplicati)
+      - aggiornano il policy state file in race → notify edge-detection rotta
+      - pollano il provider in parallelo (consumo rate raddoppiato/triplicato)
+
+    Lock via PID file: se esiste e il PID e' ancora vivo → esci. Altrimenti
+    sovrascrivi col mio PID. Best-effort, OK se non riusciamo a scrivere.
+    """
+    try:
+        if PID_FILE.exists():
+            old_pid = int(PID_FILE.read_text(encoding="utf-8").strip() or "0")
+            if old_pid and old_pid != os.getpid() and _pid_alive(old_pid):
+                print(f"[sentinel-bridge] another instance running (pid={old_pid}), exit")
+                sys.exit(0)
+        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except (OSError, ValueError):
+        pass  # non siamo in grado di fare lock → proseguiamo, caso limite
+
+
 def main():
-    print(f"[sentinel-bridge] target session: {TARGET_SESSION}")
+    acquire_singleton_lock()
+    print(f"[sentinel-bridge] target session: {TARGET_SESSION} (pid={os.getpid()})")
     print(f"[sentinel-bridge] config: {CONFIG_PATH} (bootstrap: {BOOTSTRAP}m)")
     # Tutti i provider supportati hanno un canale di polling senza TUI:
     #   kimi/moonshot      HTTP /coding/v1/usages

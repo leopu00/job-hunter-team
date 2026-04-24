@@ -460,6 +460,18 @@ if [ "$ROLE" = "capitano" ]; then
   # gira a fianco del Capitano come servizio deterministico.
   BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
   if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
+    # Kill bridge preesistenti prima di spawnarne uno nuovo. Bug
+    # osservato: ogni restart del Capitano spawnava un bridge senza
+    # killare il precedente → accumulo (fino a 11 istanze insieme),
+    # race sul policy state file, tick multipli al secondo, usage
+    # "falso" perche' tutti pollavano in parallelo.
+    # Cerchiamo via /proc/*/cmdline perche' pkill non e' installato
+    # nell'immagine (busybox slim); matching su 'sentinel-bridge.py'
+    # copre setsid wrapper + python + eventuali figli.
+    for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill "$_pid" 2>/dev/null || true
+    done
+    sleep 1
     setsid sh -c "
       sleep 20
       JHT_TARGET_SESSION='$SESSION' \
