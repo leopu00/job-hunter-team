@@ -10,17 +10,18 @@ export const dynamic = 'force-dynamic'
 // Bootstrap minimale del team:
 //   - Capitano: il coordinatore che poi spawna gli altri agenti (scaling
 //     graduale definito nel suo prompt). start-agent.sh gli invia anche
-//     un kick-off message automatico dopo ~15s di boot del CLI.
-//   - Sentinella: monitor rate-limit/budget in modalita' Vigil. Parte con
-//     un worker (SENTINELLA-WORKER) e un ticker esterno che ogni 10 min
-//     le invia un [TICK] via jht-tmux-send.
+//     un kick-off message automatico dopo ~15s di boot del CLI. Insieme
+//     al Capitano viene spawnato anche sentinel-bridge.py — il servizio
+//     deterministico che monitora rate-limit + host e invia [BRIDGE ORDER]
+//     al Capitano quando la policy cambia (T0..T4, edge-triggered).
 // L'Assistente viene avviato dal boot dell'app Desktop (Electron →
 // container.js), duplicarlo qui non serve. Gli altri ruoli (Scout,
 // Analista, Scorer, Scrittore, Critico) vengono accesi dal Capitano
 // secondo le sue soglie.
 async function readSentinellaTickMinutes(): Promise<number> {
-  // Default 10 min; range 1-60. Il valore e' letto da jht.config.json
-  // (sentinella_tick_minutes) e impostabile dalla UI via /api/sentinella/config.
+  // Tick idle (default 10 min, range 1-60): il bridge usa questo come
+  // ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
+  // quando status CRITICO / host saturo / team operativo attivo.
   try {
     const raw = await fs.readFile(JHT_CONFIG_PATH, 'utf8')
     const cfg = JSON.parse(raw)
@@ -39,9 +40,10 @@ type TeamAgent = {
 
 async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
+  // Il Capitano riceve JHT_TICK_INTERVAL perche' start-agent.sh lo
+  // propaga al sentinel-bridge.py spawnato in background.
   return [
-    { role: 'capitano', session: 'CAPITANO', instance: null },
-    { role: 'sentinella', session: 'SENTINELLA', instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
+    { role: 'capitano', session: 'CAPITANO', instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
   ]
 }
 
@@ -57,7 +59,8 @@ export async function POST() {
     // Deleghiamo tutto a .launcher/start-agent.sh: template copy,
     // env var, rilevamento provider (claude/kimi/codex) dal
     // jht.config.json, creazione sessione tmux, lancio CLI, kick-off
-    // automatico per capitano e assistente, worker+ticker per sentinella.
+    // automatico per capitano e assistente, spawn bridge rate-limit
+    // al fianco del Capitano.
     const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
     const team = await buildTeam()
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []

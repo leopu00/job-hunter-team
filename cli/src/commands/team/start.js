@@ -10,10 +10,11 @@ import {
 } from './agents.js';
 import { execInContainer } from '../../utils/container-proxy.js';
 
-// In container mode il default team e' solo CAPITANO + SENTINELLA: il
-// Capitano poi scala il resto secondo le sue soglie (come fa la web UI
-// via /api/team/start-all). Su host legacy teniamo il default completo.
-const DEFAULT_TEAM_CONTAINER = ['capitano', 'sentinella'];
+// In container mode il default team e' solo CAPITANO: il bridge di
+// monitoraggio rate-limit nasce con lui da start-agent.sh, e il Capitano
+// poi scala il resto secondo le sue soglie (come fa la web UI via
+// /api/team/start-all). Su host legacy teniamo il default completo.
+const DEFAULT_TEAM_CONTAINER = ['capitano'];
 
 function shellEscape(value) {
   return String(value).replace(/'/g, "'\\''");
@@ -55,9 +56,10 @@ function startActionContainer(agentArg, options = {}) {
     const quoted = scriptArgs.map((a) => `'${shellEscape(a)}'`).join(' ');
     const prefix =
       (mode === 'fast' ? 'JHT_MODE=fast ' : '') +
-      // Bootstrap default del bridge Sentinella (il file config.json
-      // puo' sovrascriverlo dinamicamente, ma questo e' il fallback).
-      (role === 'sentinella' ? 'JHT_TICK_INTERVAL=10 ' : '');
+      // Bootstrap default del bridge di monitoraggio (spawned dal Capitano).
+      // Il file jht.config.json sovrascrive dinamicamente, questo e' il
+      // fallback se il config non ha sentinella_tick_minutes.
+      (role === 'capitano' ? 'JHT_TICK_INTERVAL=10 ' : '');
     const cmd = `${prefix}bash /app/.launcher/start-agent.sh ${quoted}`;
     const r = execInContainer(cmd);
     if (r.code === 0) {

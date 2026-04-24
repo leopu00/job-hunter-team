@@ -15,9 +15,15 @@ Vantaggi del pattern: matematica deterministica (no allucinazioni LLM),
 token risparmiati (la Sentinella non polla piu' /status direttamente),
 cross-provider (HTTP + file = zero dipendenza da TUI).
 
+Policy edge-triggered: il bridge calcola deterministicamente il livello
+throttle (T0..T4) ad ogni tick e manda un [BRIDGE ORDER] alla sessione
+CAPITANO SOLO quando la policy cambia (throttle / host_level / status).
+Niente turn LLM sprecati su fotocopie di stato stabile — il Capitano
+riceve ordini chiari e non duplicati.
+
 Config dinamica:
   sentinella_tick_minutes in $JHT_HOME/jht.config.json (range 1-60)
-  JHT_SENTINEL_SESSION     sessione LLM (default SENTINELLA)
+  JHT_TARGET_SESSION       sessione destinataria ordini (default CAPITANO)
   JHT_HOME                 dir config (default ~/.jht)
   JHT_TICK_INTERVAL        bootstrap se il config non ha il campo
 """
@@ -34,7 +40,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 
-SESSION = os.environ.get("JHT_SENTINEL_SESSION", "SENTINELLA")
+TARGET_SESSION = os.environ.get("JHT_TARGET_SESSION", "CAPITANO")
 JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 LOGS_DIR = JHT_HOME / "logs"
@@ -579,47 +585,169 @@ def write_log(entry):
         f.write(line + "\n")
 
 
-def notify_sentinella(entry):
-    """Manda i dati gia' parsati alla Sentinella LLM."""
-    host = entry.get("host") or {}
-    host_str = (
-        f" host_cpu={host.get('cpu_pct', '-')}% host_ram={host.get('ram_pct', '-')}%"
-        f" ({entry.get('host_level', '-')})"
+## ─── Edge-triggered policy: bridge → Capitano direct ───────────────
+
+STATE_FILE = LOGS_DIR / "sentinel-policy-state.json"
+
+# Descrizione umana dei livelli throttle. Capitano riceve queste frasi
+# cosi' sa esattamente cosa fare senza calcolare lui le soglie. Le
+# stringhe sono parte del protocollo tra bridge e Capitano (stabili).
+THROTTLE_MEANING = {
+    0: "T0 full speed — nessun vincolo",
+    1: "T1 — sleep 30s tra operazioni",
+    2: "T2 — sleep 2 min tra operazioni",
+    3: "T3 — sleep 5 min, freeze spawn non-essenziali",
+    4: "T4 — freeze operativo totale, solo azioni core",
+}
+
+
+def load_policy_state():
+    try:
+        with STATE_FILE.open(encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_policy_state(state):
+    try:
+        STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def policy_reason(entry):
+    """Breve motivazione leggibile da mettere nell'ordine al Capitano."""
+    status = entry.get("status", "?")
+    proj = entry.get("projection")
+    host_level = entry.get("host_level", "OK")
+    bits = [f"status={status}"]
+    if proj is not None:
+        bits.append(f"projection={proj}%")
+    if entry.get("reset_at"):
+        bits.append(f"reset={entry['reset_at']}")
+    if host_level not in ("OK", None):
+        host = entry.get("host") or {}
+        bits.append(f"host={host_level} (cpu={host.get('cpu_pct', '?')}% ram={host.get('ram_pct', '?')}%)")
+    return " ".join(bits)
+
+
+def notify_capitano_if_needed(entry, capitano_session="CAPITANO"):
+    """Edge-triggered: invia al Capitano SOLO quando cambia la policy.
+
+    Il bridge calcola deterministicamente throttle (T0..T4), status e
+    host_level. Se uno di questi cambia rispetto all'ultimo sample
+    notificato, mandiamo un [BRIDGE ORDER] al Capitano con la nuova
+    direttiva + motivazione. Altrimenti silenzio: niente fotocopie di
+    stato stabile che sprecano turn LLM.
+    """
+    state = load_policy_state()
+    new_throttle = entry.get("throttle")
+    new_host_level = entry.get("host_level", "OK")
+    new_status = entry.get("status")
+
+    changed = (
+        state.get("throttle") != new_throttle
+        or state.get("host_level") != new_host_level
+        or state.get("status") != new_status
     )
-    msg = (
-        f"[BRIDGE TICK] provider={entry['provider']} "
-        f"usage={entry['usage']}% delta={entry['delta']:+g}% "
-        f"status={entry['status']} throttle={entry['throttle']} "
-        f"projection={entry.get('projection') if entry.get('projection') is not None else '-'}% "
-        f"reset_at={entry.get('reset_at') or '-'}"
-        f"{host_str}. "
-        f"I dati sono gia' parsati e loggati dal bridge. NON eseguire /status. "
-        f"Decidi SOLO se e come avvisare il Capitano in base a status/throttle/host_level e al cooldown. "
-        f"NB: host_level CRITICAL/HIGH = PC saturo, ordina al Capitano T3/T4 anche se usage LLM e' basso."
-    )
-    jht_tmux_send(SESSION, msg)
+    if not changed:
+        return False
+
+    meaning = THROTTLE_MEANING.get(new_throttle, f"T{new_throttle}")
+    reason = policy_reason(entry)
+    msg = f"[BRIDGE ORDER] {meaning} — {reason}"
+
+    if session_exists(capitano_session):
+        jht_tmux_send(capitano_session, msg)
+
+    state.update({
+        "throttle": new_throttle,
+        "host_level": new_host_level,
+        "status": new_status,
+        "last_notified_at": entry.get("ts"),
+        "last_message": msg,
+    })
+    save_policy_state(state)
+    return True
 
 
 # ─── Loop & sleep dinamico ───────────────────────────────────────────
 
+# Regex dei nomi di sessione tmux che contano come "team at work".
+# Escludiamo CAPITANO / ASSISTENTE perche' sono sempre vivi anche a riposo,
+# includiamo i ruoli operativi spawnati dal Capitano per i job.
+WORKING_SESSION_PATTERN = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO)(-\d+)?$")
+
+
+def count_working_sessions():
+    """Numero di sessioni tmux di agenti operativi attivi."""
+    try:
+        r = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
+            capture_output=True, timeout=5,
+        )
+        if r.returncode != 0:
+            return 0
+        names = r.stdout.decode("utf-8", errors="replace").splitlines()
+        return sum(1 for n in names if WORKING_SESSION_PATTERN.match(n.strip()))
+    except (subprocess.TimeoutExpired, OSError):
+        return 0
+
+
+def compute_next_tick(entry, user_tick):
+    """Calcola dinamicamente l'intervallo fino al prossimo poll.
+
+    Il valore utente (sentinella_tick_minutes da jht.config.json) e'
+    il TETTO usato a riposo: se il team e' fermo e tutto e' OK,
+    non ha senso pollare piu' spesso.
+
+    In pressione aumentiamo la frequenza perche' le transizioni
+    (spawn burst, rate limit close, host saturazione) possono
+    saltare da OK a CRITICO in pochi minuti:
+
+      status CRITICO            →  1 min  (serviamo alert rapidi)
+      host HIGH / CRITICAL      →  1 min  (PC saturo, stop urgente)
+      status ATTENZIONE         →  3 min  (watch)
+      team operativo attivo     →  3 min  (prevenzione)
+      SOTTOUTILIZZO / OK + idle →  tetto utente (default 10 min)
+    """
+    status = entry.get("status") if entry else None
+    host_level = entry.get("host_level") if entry else None
+    working = count_working_sessions()
+
+    if status == "CRITICO" or host_level in ("HIGH", "CRITICAL"):
+        return 1
+    if status == "ATTENZIONE":
+        return min(3, user_tick)
+    if working > 0:
+        return min(3, user_tick)
+    return user_tick
+
+
 def sleep_with_poll(target_min):
+    """Sleep up to target_min minutes, rileggendo il config ogni POLL_SECONDS
+    per permettere modifiche in-flight (es. utente cambia tick_minutes,
+    stato escalata a CRITICO in un altro tick). Se il nuovo target e'
+    inferiore all'elapsed, esci subito.
+    """
     total_sec = target_min * 60
     elapsed = 0
     current = target_min
     while elapsed < total_sec:
         time.sleep(min(POLL_SECONDS, total_sec - elapsed))
         elapsed += POLL_SECONDS
-        fresh, _ = read_config()
-        if fresh != current:
-            new_total = fresh * 60
+        fresh_user_tick, _ = read_config()
+        if fresh_user_tick != current:
+            new_total = fresh_user_tick * 60
             if elapsed >= new_total:
                 return
             total_sec = new_total
-            current = fresh
+            current = fresh_user_tick
 
 
 def main():
-    print(f"[sentinel-bridge] LLM session: {SESSION}")
+    print(f"[sentinel-bridge] target session: {TARGET_SESSION}")
     print(f"[sentinel-bridge] config: {CONFIG_PATH} (bootstrap: {BOOTSTRAP}m)")
     # Tutti i provider supportati hanno un canale di polling senza TUI:
     #   kimi/moonshot      HTTP /coding/v1/usages
@@ -669,15 +797,18 @@ def main():
         entry = compute_metrics(parsed, last, history=history)
         write_jsonl(entry)
         write_log(entry)
-        if session_exists(SESSION):
-            notify_sentinella(entry)
+        notified = notify_capitano_if_needed(entry, capitano_session=TARGET_SESSION)
+        notif_hint = " [ORDER SENT]" if notified else ""
+
+        next_tick = compute_next_tick(entry, tick_min)
 
         print(
             f"[sentinel-bridge] {now_h} — usage={entry['usage']}% "
             f"status={entry['status']} t={entry['throttle']} "
-            f"projection={entry.get('projection') or '-'} (next in {tick_min}m)"
+            f"projection={entry.get('projection') or '-'} "
+            f"(next in {next_tick}m){notif_hint}"
         )
-        sleep_with_poll(tick_min)
+        sleep_with_poll(next_tick)
 
 
 if __name__ == "__main__":

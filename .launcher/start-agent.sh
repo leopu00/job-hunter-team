@@ -53,11 +53,17 @@ MODE="${3:-default}"
 #   model override non e' ancora cablato (aggiungere quando serve).
 #
 # Scelta modelli:
-#   - Sentinella/Assistente: Sonnet high — chat/monitor conversazionale,
-#     non serve ragionamento pesante ma serve reattivita'; Sonnet costa
+#   - Assistente: Sonnet high — chat conversazionale con utente,
+#     non serve reasoning pesante ma serve reattivita'; Sonnet costa
 #     meno di Opus e un effort high compensa il gap di capability
 #   - Tutti gli altri: default del provider (Opus su claude), effort per
 #     ruolo calibrato (coordinatori/spawn high, scorer medium)
+#
+# Nota: il ruolo "sentinella" come agente LLM e' stato rimosso. Il
+# monitoraggio del rate-limit e la policy di throttling sono ora gestiti
+# da .launcher/sentinel-bridge.py (deterministico, edge-triggered) che
+# invia [BRIDGE ORDER] direttamente al Capitano solo quando il livello
+# di throttle cambia. Zero turn LLM sprecati in fotocopie di stato stabile.
 get_agent_info() {
   case "$1" in
     # Opus high — task con reasoning pesante:
@@ -66,12 +72,11 @@ get_agent_info() {
     capitano)   echo "CAPITANO|high|" ;;
     scrittore)  echo "SCRITTORE|high|" ;;
     critico)    echo "CRITICO|high|" ;;
-    # Sonnet high — task I/O-bound, parsing, matching, monitoring:
+    # Sonnet high — task I/O-bound, parsing, matching:
     # piu' veloce, costa meno, effort high compensa.
     scout)      echo "SCOUT|high|sonnet" ;;
     analista)   echo "ANALISTA|high|sonnet" ;;
     scorer)     echo "SCORER|high|sonnet" ;;
-    sentinella) echo "SENTINELLA|high|sonnet" ;;
     assistente) echo "ASSISTENTE|high|sonnet" ;;
     *)          echo "" ;;
   esac
@@ -81,14 +86,14 @@ AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente"
+  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, assistente"
   exit 1
 fi
 
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "assistente" ]; then
   # Agenti singoli — nessun numero
   SESSION="$session_prefix"
 else
@@ -445,8 +450,26 @@ _kickoff() {
 }
 
 if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. La Sentinella e gia attiva con tick ogni 10 min e ti avvisera se il consumo si alza."
+  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. Il bridge di monitoraggio rate-limit e' attivo e ti invia [BRIDGE ORDER] quando devi cambiare throttle (T0..T4): rispetta l'ordine immediatamente, niente ACK necessari."
   _kickoff "$SESSION" "$_msg"
+
+  # Spawna il bridge di monitoraggio rate-limit. Gira in background,
+  # polla il provider (HTTP API o rollout JSONL), calcola le metriche,
+  # e manda [BRIDGE ORDER] al CAPITANO quando la policy cambia
+  # (edge-triggered). Prima era legato al ruolo "sentinella" LLM, ora
+  # gira a fianco del Capitano come servizio deterministico.
+  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
+  if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
+    setsid sh -c "
+      sleep 20
+      JHT_TARGET_SESSION='$SESSION' \
+      JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
+        python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "  → sentinel-bridge partito (target=$SESSION, log /tmp/sentinel-bridge.log)"
+  else
+    echo "  ⚠ $BRIDGE_SCRIPT non trovato — bridge NON partito"
+  fi
 fi
 
 if [ "$ROLE" = "assistente" ]; then
@@ -454,29 +477,3 @@ if [ "$ROLE" = "assistente" ]; then
   _kickoff "$SESSION" "$_msg"
 fi
 
-# ── Sentinella: bridge Python in background ─────────────────────────────────
-# Il bridge polla il rate limit via HTTP API (kimi/claude) o rollout JSONL
-# (codex), calcola metriche derivate (delta, velocity, projection, status,
-# throttle, host load), scrive sentinel-data.jsonl + sentinel-log.txt, e
-# notifica la Sentinella LLM con [BRIDGE TICK] — che decide solo alert
-# e cooldown. Intervallo letto dinamicamente da jht.config.json
-# (sentinella_tick_minutes, range 1-60).
-#
-# Nota storica: esisteva una sessione SENTINELLA-WORKER (codex TUI fermo
-# dove il bridge mandava /status via send-keys). Rimossa: tutti i
-# provider supportati (kimi, claude, openai) usano HTTP o rollout locali,
-# il worker restava acceso a sprecare rate budget e memoria.
-if [ "$ROLE" = "sentinella" ]; then
-  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
-  if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
-    setsid sh -c "
-      sleep 30
-      JHT_SENTINEL_SESSION='$SESSION' \
-      JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
-        python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "  → bridge partito (intervallo iniziale: ${JHT_TICK_INTERVAL:-10} min, log /tmp/sentinel-bridge.log)"
-  else
-    echo "  ⚠ $BRIDGE_SCRIPT non trovato — bridge NON partito"
-  fi
-fi

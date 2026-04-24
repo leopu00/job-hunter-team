@@ -21,7 +21,6 @@ const AGENTS_BY_ID: Record<string, { name: string; session: string; effort: stri
   scorer:     { name: 'Scorer',          session: 'SCORER-1',    effort: 'medium' },
   scrittore:  { name: 'Scrittore',       session: 'SCRITTORE-1', effort: 'high' },
   critico:    { name: 'Critico',         session: 'CRITICO',     effort: 'high' },
-  sentinella: { name: 'Sentinella',      session: 'SENTINELLA',  effort: 'low' },
   assistente: { name: 'Assistente',      session: 'ASSISTENTE',  effort: 'high' },
 }
 

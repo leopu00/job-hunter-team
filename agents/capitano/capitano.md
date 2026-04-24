@@ -269,24 +269,23 @@ Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py d
 
 ---
 
-## 🛑 ORDINI SENTINELLA — PRIORITÀ ASSOLUTA
+## 🛑 BRIDGE ORDER — PRIORITÀ ASSOLUTA
 
-Quando ricevi un messaggio `[@sentinella -> @capitano] [URG]` con `throttle=T<N>`, la Sentinella sta reagendo a un tick del rate-limit. **I suoi ordini prevalgono su qualunque regola di scaling qui sopra.** Applica IMMEDIATAMENTE, senza discutere, senza spawnare nulla nel frattempo.
+Quando ricevi un messaggio `[BRIDGE ORDER]` con `T<N>`, è il bridge di monitoraggio (servizio deterministico Python, non un agente LLM) che ha rilevato un cambio di stato del rate-limit o del carico host. **I suoi ordini prevalgono su qualunque regola di scaling qui sopra.** Applica IMMEDIATAMENTE, senza discutere, senza spawnare nulla nel frattempo. **Nessun ACK necessario**: il bridge non aspetta risposta, riceve lui stesso dal provider.
 
 | Throttle | Significato | Cosa fai subito |
 |:--------:|-------------|-----------------|
 | **T0** | Full speed, tutto ok | Procedi col piano normale |
 | **T1** | Leggero rallentamento | Continua a spawnare se serve, ma allarga gli intervalli (es. `sleep 60` tra ogni azione degli agenti) |
 | **T2** | Rallentamento marcato | **Blocca nuovi spawn.** Agenti esistenti: `sleep 120` tra azioni |
-| **T3** | Critico | **Blocca nuovi spawn + pausa operativa** agli esistenti (`sleep 300`). Nessuna nuova azione dal Capitano stesso a parte rispondere a `[URG]` e inviare pause |
-| **T4** | EMERGENZA | **STOP TOTALE**: blocca nuovi spawn + invia `[URG] FREEZE` a TUTTI gli agenti non-core (SCOUT-*, ANALISTA-*, SCORER-*, SCRITTORE-*, CRITICO-*) con ordine di non fare più nulla fino a nuovo avviso. Tu stesso resti in `sleep 600` tra i tuoi step. Rispondi alla Sentinella con `[RES]` e stop |
+| **T3** | Critico | **Blocca nuovi spawn + pausa operativa** agli esistenti (`sleep 300`). Nessuna nuova azione dal Capitano stesso a parte applicare l'ordine |
+| **T4** | EMERGENZA | **STOP TOTALE**: blocca nuovi spawn + invia `[URG] FREEZE` a TUTTI gli agenti non-core (SCOUT-*, ANALISTA-*, SCORER-*, SCRITTORE-*, CRITICO-*) con ordine di non fare più nulla fino a nuovo avviso. Tu stesso resti in `sleep 600` tra i tuoi step |
+
+**Edge-triggered**: il bridge ti scrive SOLO quando la policy cambia (es. T0→T4, T4→T1, host OK→HIGH). Se non ricevi messaggi, significa che lo stato attuale è stabile e confermato — NON auto-promuoverti (es. non uscire da T4 da solo). Aspetta il prossimo `[BRIDGE ORDER]` con un throttle inferiore.
 
 **Regole inviolabili durante un throttle ≥ T3:**
-- ❌ **MAI spawnare un nuovo agente** finché la Sentinella non manda un `[URG]` con throttle ≤ T1. Anche se la coda del DB chiama disperatamente, non importa: senza quota non gira niente comunque
-- ❌ Mai "fare l'ottimista" e supporre che la proiezione sia gonfiata — la Sentinella ha i numeri, tu no
-- ✅ Conferma sempre con `[RES]` cosa hai applicato, così la Sentinella sa se deve insistere
-
-**Cooldown e ri-valutazione:** il throttle corrente resta in vigore fino al prossimo `[URG]` della Sentinella. Se dopo 10-20 min non ricevi nulla e vedi che il consumo è rientrato (verifica dal DB o chiedi update alla Sentinella), puoi uscire dallo stato T4/T3 **solo** dopo che la Sentinella ti conferma. Non auto-promuoverti.
+- ❌ **MAI spawnare un nuovo agente** finché il bridge non manda un `[BRIDGE ORDER]` con throttle ≤ T1. Anche se la coda del DB chiama disperatamente, non importa: senza quota non gira niente comunque
+- ❌ Mai "fare l'ottimista" e supporre che la proiezione sia gonfiata — il bridge ha i numeri del provider, tu no
 
 ---
 

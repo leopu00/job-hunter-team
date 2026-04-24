@@ -1,8 +1,12 @@
 'use client'
 
+// Questa pagina NON e' piu' un agente LLM: e' il dashboard di monitoraggio
+// del bridge rate-limit (sentinel-bridge.py). Il bridge calcola e notifica
+// policy cambiate direttamente al CAPITANO via [BRIDGE ORDER], zero LLM
+// nel loop di monitoraggio. Qui l'utente vede solo i dati storici.
+
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import AgentInteraction from '@/components/AgentInteraction'
 
 type Entry = {
   ts: string
@@ -430,10 +434,6 @@ export default function SentinellaPage() {
         </div>
       )}
 
-      {/* Pannello messaggistica al Capitano/alla Sentinella */}
-      <div style={{ marginTop: 28 }}>
-        <AgentInteraction sessionPrefix="SENTINELLA" color="#607d8b" label="Sentinella" />
-      </div>
     </div>
   )
 }
