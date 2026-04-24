@@ -18,7 +18,6 @@ const AGENTS = [
   { id: 'scorer',     name: 'Scorer',           session: 'SCORER' },
   { id: 'scrittore',  name: 'Scrittore',        session: 'SCRITTORE' },
   { id: 'critico',    name: 'Critico',          session: 'CRITICO' },
-  { id: 'sentinella', name: 'Sentinella',       session: 'SENTINELLA' },
   { id: 'assistente', name: 'Assistente',       session: 'ASSISTENTE' },
 ]
 

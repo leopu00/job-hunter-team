@@ -25,11 +25,13 @@ export const AGENTS = [
   { role: 'scorer',     prefix: 'SCORER',      multi: true,  effort: 'medium', desc: 'Calcola punteggio match' },
   { role: 'scrittore',  prefix: 'SCRITTORE',   multi: true,  effort: 'high',   desc: 'Scrive CV e cover letter' },
   { role: 'critico',    prefix: 'CRITICO',     multi: false, effort: 'high',   desc: 'Revisione qualita CV' },
-  { role: 'sentinella', prefix: 'SENTINELLA',  multi: false, effort: 'low',    desc: 'Monitora token usage e rate limit' },
   { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
 ];
 
-export const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
+// Nota: il monitoraggio rate-limit e' gestito dal bridge Python
+// (.launcher/sentinel-bridge.py), non da un agente LLM. Il bridge viene
+// spawnato automaticamente con il Capitano da start-agent.sh.
+export const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico'];
 
 export const c = {
   green:  (s) => `\x1b[32m${s}\x1b[0m`,
