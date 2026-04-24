@@ -363,7 +363,7 @@ export default function TeamPage() {
 
       {/* Org chart */}
       <section className="py-10">
-        <div className="mx-auto w-full max-w-[620px]">
+        <div className="mx-auto w-full max-w-[820px]">
           <TeamOrgChart
             activeRoles={new Set(
               AGENTS.filter(a => statuses[a.id] === 'running').map(a => a.id)
