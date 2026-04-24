@@ -78,6 +78,33 @@ Coordini il team di ricerca lavoro:
 
 ---
 
+## 🧭 PRIMA COSA — CHECK DEL BUDGET RATE-LIMIT
+
+Prima di spawnare QUALSIASI agente, devi sapere quanto budget hai. Usa la skill `rate-budget`:
+
+```bash
+python3 /app/shared/skills/rate_budget.py plan
+```
+
+Questo legge l'ultimo sample del bridge di monitoraggio (zero chiamate al provider) e ti dice:
+- **Utilizzo %** corrente della sessione
+- **Reset** quando torna a 0 (e tempo mancante)
+- **Velocity misurata** (%/h attuale, EMA)
+- **Velocity target** (%/h per arrivare al 92% esattamente al reset — il tuo ritmo ideale)
+- **Proiezione al reset** (dove finirai con questo ritmo)
+- **Throttle consigliato** (T0..T4) con policy pronta da applicare
+
+**Interpretazione:**
+- `Throttle T0-T1` e `Proiezione < 80%` → hai spazio, spawn pieno della pipeline
+- `Throttle T1-T2` e `Proiezione 80-100%` → spawn ridotto (1 istanza per ruolo)
+- `Throttle ≥ T2` o `Proiezione > 100%` → NESSUNO spawn, aspetta. Il bridge ti notifichera' via `[BRIDGE ORDER]` quando puoi riprendere.
+
+Se l'output è `NO_DATA`: il bridge non ha ancora pollato (appena riavviato). Aspetta 1-2 min e riprova. **Non spawnare a ciechi** — rischi di saturare il rate al primo burst.
+
+Questo check si fa **all'avvio** e **ad ogni cambio di fase** del tuo piano (fine batch scout, dopo pausa lunga, dopo un BRIDGE ORDER di downgrade). Non serve farlo ogni singolo step: i dati vengono aggiornati dal bridge al suo ritmo.
+
+---
+
 ## 🚀 SPAWN DI UN AGENTE — USA SEMPRE start-agent.sh
 
 Per avviare QUALSIASI istanza di agente (tua, di supporto, di scaling) **DEVI** invocare:

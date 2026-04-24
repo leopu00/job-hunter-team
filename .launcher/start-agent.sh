@@ -450,7 +450,7 @@ _kickoff() {
 }
 
 if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (2) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (3) spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (4) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt. Il bridge di monitoraggio rate-limit e' attivo e ti invia [BRIDGE ORDER] quando devi cambiare throttle (T0..T4): rispetta l'ordine immediatamente, niente ACK necessari."
+  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) CHECK RATE BUDGET con python3 /app/shared/skills/rate_budget.py plan — se NO_DATA aspetta 1-2 min e riprova, se throttle >= T2 NON spawnare nulla; (2) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (3) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (4) se il budget lo permette spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (5) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt e del budget. Il bridge ti inviera' [BRIDGE ORDER] se la policy cambia — rispetta l'ordine immediatamente, niente ACK necessari."
   _kickoff "$SESSION" "$_msg"
 
   # Spawna il bridge di monitoraggio rate-limit. Gira in background,
