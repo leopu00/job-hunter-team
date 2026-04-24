@@ -46,8 +46,8 @@ type HoverState = { index: number; xPct: number; yPct: number } | null
 
 function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState) => void }) {
   const W = 900
-  const H = 220
-  const PAD = { top: 16, right: 56, bottom: 28, left: 44 }
+  const H = 360
+  const PAD = { top: 36, right: 56, bottom: 32, left: 48 }
   const innerW = W - PAD.left - PAD.right
   const innerH = H - PAD.top - PAD.bottom
 
