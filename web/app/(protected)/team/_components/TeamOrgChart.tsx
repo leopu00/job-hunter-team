@@ -1,6 +1,16 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+
+type AgentStatus = 'running' | 'stopped' | 'pending'
+
+type AgentMeta = {
+  status: AgentStatus
+  color: string
+  link?: string | null
+  role?: string
+}
 
 // roleId: id lato API (cli/web). name: label mostrato nel chart (EN).
 const CAPTAIN_AGENT = {
@@ -38,10 +48,151 @@ function ActiveLed({ active }: { active: boolean }) {
   )
 }
 
-export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string> }) {
+function MiniSpinner({ size = 11, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="orgchart-spin" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AgentPopover({
+  roleId,
+  emoji,
+  name,
+  desc,
+  meta,
+  loading,
+  onAction,
+  onClose,
+  placement,
+}: {
+  roleId: string
+  emoji: string
+  name: string
+  desc: string
+  meta?: AgentMeta
+  loading: boolean
+  onAction?: (id: string, action: 'start' | 'stop') => void
+  onClose: () => void
+  placement: 'above' | 'below'
+}) {
+  const status: AgentStatus = meta?.status ?? 'stopped'
+  const color = meta?.color ?? '#ffc107'
+  const isRunning = status === 'running'
+  const isPending = status === 'pending'
+  const disabled = loading || isPending
+
+  const statusText = isRunning ? 'Online' : isPending ? 'Starting...' : 'Offline'
+  const statusColor = isRunning ? '#22c55e' : isPending ? '#f59e0b' : 'var(--color-dim)'
+
+  const posStyle: React.CSSProperties = placement === 'above'
+    ? { bottom: '100%', marginBottom: 12 }
+    : { top: '100%', marginTop: 12 }
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-label={`${name} details`}
+      className="absolute left-1/2 z-30 w-64 -translate-x-1/2 rounded-xl p-3.5 shadow-2xl"
+      style={{
+        ...posStyle,
+        background: 'var(--color-panel)',
+        border: `1px solid ${color}40`,
+        boxShadow: `0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px ${color}15`,
+        animation: 'orgchart-pop 0.15s ease-out',
+      }}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-2 right-2 text-[var(--color-dim)] hover:text-[var(--color-bright)]"
+        style={{ fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 2 }}
+      >
+        ×
+      </button>
+
+      <div className="flex items-center gap-2.5 mb-2">
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
+          style={{ background: `${color}15`, border: `1px solid ${color}30` }}
+        >
+          {emoji}
+        </div>
+        <div className="min-w-0">
+          {meta?.link ? (
+            <Link href={meta.link} className="text-[12px] font-bold no-underline hover:underline" style={{ color: 'var(--color-white)' }}>
+              {name}
+            </Link>
+          ) : (
+            <div className="text-[12px] font-bold" style={{ color: 'var(--color-white)' }}>{name}</div>
+          )}
+          <div className="text-[9px] font-semibold tracking-wide uppercase mt-0.5" style={{ color }}>
+            {meta?.role ?? name}
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10.5px] leading-relaxed mb-3" style={{ color: 'var(--color-muted)' }}>
+        {desc}
+      </p>
+
+      <div className="flex items-center justify-between gap-2 pt-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase" style={{ color: statusColor }}>
+          <span
+            style={{
+              display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+              background: isRunning ? '#22c55e' : isPending ? '#f59e0b' : 'rgba(255,255,255,0.2)',
+              boxShadow: isRunning ? '0 0 6px rgba(34,197,94,0.5)' : isPending ? '0 0 6px rgba(245,158,11,0.5)' : 'none',
+            }}
+          />
+          {statusText}
+        </span>
+
+        {onAction && (
+          <button
+            onClick={() => onAction(roleId, isRunning ? 'stop' : 'start')}
+            disabled={disabled}
+            aria-label={isRunning ? `Stop ${name}` : `Start ${name}`}
+            className="px-3 py-1.5 rounded-lg text-[10.5px] font-semibold transition-all"
+            style={{
+              background: disabled ? 'var(--color-border)' : isRunning ? 'rgba(244,67,54,0.08)' : `${color}15`,
+              color: disabled ? 'var(--color-dim)' : isRunning ? '#f44336' : color,
+              border: `1px solid ${disabled ? 'var(--color-border)' : isRunning ? 'rgba(244,67,54,0.2)' : `${color}30`}`,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {loading ? (
+              <span className="inline-flex items-center gap-1"><MiniSpinner size={10} /> Wait...</span>
+            ) : isRunning ? (
+              '\u25A0 Stop'
+            ) : (
+              '\u25B6 Start'
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type Props = {
+  agents?: Record<string, AgentMeta>
+  onAction?: (id: string, action: 'start' | 'stop') => void
+  actionLoading?: string | null
+  /** Backwards-compat: se `agents` non è fornito, usa activeRoles per i LED. */
+  activeRoles?: Set<string>
+}
+
+export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles }: Props) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
   const [arrowOverlay, setArrowOverlay] = useState<{ width: number; height: number; paths: string[]; chainPaths: string[] }>({
     width: 0,
     height: 0,
@@ -49,7 +200,26 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
     chainPaths: [],
   })
 
-  const isActive = (roleId: string) => activeRoles?.has(roleId) ?? false
+  const isActive = (roleId: string) => {
+    if (agents) return agents[roleId]?.status === 'running'
+    return activeRoles?.has(roleId) ?? false
+  }
+
+  // Close popover on outside click or Esc
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null) }
+    const onClick = (e: MouseEvent) => {
+      const root = containerRef.current
+      if (root && !root.contains(e.target as Node)) setSelected(null)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onClick)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onClick)
+    }
+  }, [selected])
 
   useEffect(() => {
     let frame = 0
@@ -128,16 +298,26 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
     }
   }, [])
 
+  const toggle = (id: string) => setSelected(prev => (prev === id ? null : id))
+
   return (
-    <div className="hidden md:block">
-      {/* Animazione LED online: pulse leggero verde */}
+    <div className="hidden md:block" ref={containerRef}>
       <style>{`
         @keyframes team-orgchart-pulse {
-          0%, 100% { transform: scale(1);   opacity: 1; }
-          50%      { transform: scale(1.4); opacity: 0.55; }
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.35; }
         }
         .team-orgchart-led {
-          animation: team-orgchart-pulse 1.4s ease-in-out infinite;
+          animation: team-orgchart-pulse 3s ease-in-out infinite;
+        }
+        @keyframes orgchart-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        .orgchart-spin { animation: orgchart-spin 0.8s linear infinite; }
+        @keyframes orgchart-pop {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
 
@@ -190,26 +370,53 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
           </svg>
         )}
 
-        {/* Captain da solo al top, centrato (Sentinel rimosso: gestione
-             rate-limit è ora il bridge deterministico, non un agente LLM) */}
+        {/* Captain da solo al top, centrato */}
         <div className="flex justify-center">
           <div className="w-full max-w-[1080px] grid grid-cols-5 justify-items-center items-end">
-            <span className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 col-start-3">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(CAPTAIN_AGENT.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(CAPTAIN_AGENT.roleId) } }}
+              aria-expanded={selected === CAPTAIN_AGENT.roleId}
+              aria-label={`${CAPTAIN_AGENT.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-3 cursor-pointer outline-none"
+            >
               <span className="relative">
                 <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                 <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
               </span>
               <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                {CAPTAIN_AGENT.desc}
-              </span>
-            </span>
+
+              {selected === CAPTAIN_AGENT.roleId && (
+                <AgentPopover
+                  roleId={CAPTAIN_AGENT.roleId}
+                  emoji={CAPTAIN_AGENT.emoji}
+                  name={CAPTAIN_AGENT.name}
+                  desc={CAPTAIN_AGENT.desc}
+                  meta={agents?.[CAPTAIN_AGENT.roleId]}
+                  loading={actionLoading === CAPTAIN_AGENT.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="above"
+                />
+              )}
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12">
           {PIPELINE_AGENTS.map((agent, index) => (
-            <span key={agent.name} className="group relative inline-flex cursor-default select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
+            <div
+              key={agent.name}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(agent.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(agent.roleId) } }}
+              aria-expanded={selected === agent.roleId}
+              aria-label={`${agent.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px] cursor-pointer outline-none"
+            >
               <span className="relative">
                 <span
                   ref={(node) => {
@@ -223,10 +430,21 @@ export default function TeamOrgChart({ activeRoles }: { activeRoles?: Set<string
                 <ActiveLed active={isActive(agent.roleId)} />
               </span>
               <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-3 w-44 -translate-x-1/2 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-center text-[10px] leading-relaxed text-[var(--color-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                {agent.desc}
-              </span>
-            </span>
+
+              {selected === agent.roleId && (
+                <AgentPopover
+                  roleId={agent.roleId}
+                  emoji={agent.emoji}
+                  name={agent.name}
+                  desc={agent.desc}
+                  meta={agents?.[agent.roleId]}
+                  loading={actionLoading === agent.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="above"
+                />
+              )}
+            </div>
           ))}
         </div>
       </div>
