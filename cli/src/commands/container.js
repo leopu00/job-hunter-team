@@ -9,6 +9,7 @@
 
 import { Command } from 'commander';
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { containerRunning, CONTAINER_NAME, execInContainer } from '../utils/container-proxy.js';
@@ -55,8 +56,67 @@ function fixNextOwnership() {
   return r.status === 0;
 }
 
+// Docker daemon reachable (un solo probe, non blocking).
+function dockerDaemonReady() {
+  const r = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+    stdio: 'pipe',
+    env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+  });
+  return r.status === 0;
+}
+
+// Su Windows, se Docker Desktop non gira lo lanciamo e aspettiamo il daemon.
+// Su Linux/Mac se il daemon è down l'utente deve gestirlo (systemctl start docker,
+// colima, ecc.): avviare processi non nostri in background sarebbe invasivo.
+async function ensureDockerDaemon() {
+  if (dockerDaemonReady()) return true;
+
+  if (process.platform !== 'win32') {
+    console.error(c.red('Docker daemon non raggiungibile. Avvialo prima di continuare.'));
+    return false;
+  }
+
+  const candidates = [
+    process.env.ProgramFiles && `${process.env.ProgramFiles}\\Docker\\Docker\\Docker Desktop.exe`,
+    'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
+  ].filter(Boolean);
+  const exe = candidates.find(p => { try { return existsSync(p); } catch { return false; } });
+  if (!exe) {
+    console.error(c.red('Docker Desktop.exe non trovato nei path standard. Avvialo a mano.'));
+    return false;
+  }
+
+  console.log(c.dim('  Docker daemon giu\', avvio Docker Desktop...'));
+  try {
+    spawn(exe, [], { detached: true, stdio: 'ignore', shell: false }).unref();
+  } catch (err) {
+    console.error(c.red(`  Impossibile lanciare Docker Desktop: ${err.message}`));
+    return false;
+  }
+
+  const timeoutMs = 90_000;
+  const pollMs = 2000;
+  const start = Date.now();
+  process.stdout.write(c.dim('  Attendo daemon'));
+  while (Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, pollMs));
+    process.stdout.write(c.dim('.'));
+    if (dockerDaemonReady()) {
+      process.stdout.write('\n');
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      console.log(c.green(`  ✓ Docker Desktop pronto (${elapsed}s)`));
+      return true;
+    }
+  }
+  process.stdout.write('\n');
+  console.error(c.red(`  ✗ Docker Desktop non pronto dopo ${timeoutMs / 1000}s. Riprova a mano.`));
+  return false;
+}
+
 // ── up ─────────────────────────────────────────────────────────────
-function upAction() {
+async function upAction() {
+  if (!(await ensureDockerDaemon())) process.exit(1);
+
   if (containerRunning()) {
     console.log(c.yellow(`Container '${CONTAINER_NAME}' gia' attivo.`));
     return;
@@ -96,7 +156,7 @@ function downAction() {
 }
 
 // ── recreate ───────────────────────────────────────────────────────
-function recreateAction() {
+async function recreateAction() {
   console.log(c.bold('Ricreo container jht (down + up)...'));
   if (containerRunning()) {
     spawnSync('docker', ['rm', '-f', CONTAINER_NAME], {
@@ -104,7 +164,7 @@ function recreateAction() {
       env: { ...process.env, MSYS_NO_PATHCONV: '1' },
     });
   }
-  upAction();
+  await upAction();
 }
 
 // ── status ─────────────────────────────────────────────────────────
