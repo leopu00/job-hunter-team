@@ -646,16 +646,50 @@ def save_policy_state(state):
         pass
 
 
+def _reset_human(reset_hhmm):
+    """Da 'HH:MM' (UTC, come scritto dal bridge) a 'in 2h 43m' — il
+    remaining e' l'unica metrica senza ambiguita' di timezone. Piu'
+    utile all'LLM del Capitano che deve decidere "posso spingere?"
+    rispetto all'ora dell'orologio.
+    """
+    if not reset_hhmm:
+        return None
+    try:
+        h, m = map(int, reset_hhmm.split(":"))
+    except ValueError:
+        return None
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if target <= now:
+        target = target + timedelta(days=1)
+    total_min = int((target - now).total_seconds() // 60)
+    if total_min < 0:
+        return None
+    h_rem, m_rem = divmod(total_min, 60)
+    return f"in {h_rem}h {m_rem}m" if h_rem > 0 else f"in {m_rem}m"
+
+
 def policy_reason(entry):
-    """Breve motivazione leggibile da mettere nell'ordine al Capitano."""
+    """Breve motivazione leggibile da mettere nell'ordine al Capitano.
+
+    Note sul display del reset: il reset_at e' in UTC (bridge usa
+    datetime.astimezone su TZ container=UTC). Mostrare solo "HH:MM"
+    e' ambiguo per utenti in fuso locale diverso (es. "13:49" UTC
+    letto come 13:49 CEST sbaglia il remaining di 2h). Usiamo il
+    formato "in Xh Ym" che e' univoco per tutti.
+    """
     status = entry.get("status", "?")
     proj = entry.get("projection")
     host_level = entry.get("host_level", "OK")
+    usage = entry.get("usage")
     bits = [f"status={status}"]
+    if usage is not None:
+        bits.append(f"usage={usage}%")
     if proj is not None:
         bits.append(f"projection={proj}%")
-    if entry.get("reset_at"):
-        bits.append(f"reset={entry['reset_at']}")
+    reset_remaining = _reset_human(entry.get("reset_at"))
+    if reset_remaining:
+        bits.append(f"reset_{reset_remaining}")
     if host_level not in ("OK", None):
         host = entry.get("host") or {}
         bits.append(f"host={host_level} (cpu={host.get('cpu_pct', '?')}% ram={host.get('ram_pct', '?')}%)")
