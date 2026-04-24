@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
-# jht-tmux-send — consegna atomica di un messaggio a una sessione tmux.
+# jht-tmux-send — consegna atomica e VERIFICATA di un messaggio a una
+# sessione tmux. Pensato per agent-to-agent via TUI (Claude / Codex / Kimi).
 #
-# Le TUI "Ink" (Codex, Kimi Code) non registrano l'Enter se arriva nello
-# stesso send-keys del testo: il testo viene inviato carattere-per-carattere
-# e Ink deve finire il render prima di accettare un nuovo keystroke.
+# Le TUI "Ink" (Codex, Kimi, Claude Code) non registrano l'Enter se
+# arriva prima che il testo sia renderizzato nel prompt: testo e Enter
+# vanno inviati in step separati, e il submit deve arrivare DOPO che il
+# testo e' effettivamente apparso nel pane.
 #
-# Il Capitano (e in generale gli agenti coordinatori) deve quindi inviare
-# testo e Enter in due chiamate separate, con pausa in mezzo. Wrappiamo il
-# pattern qui così l'agente fa una sola tool call atomica, zero modo di
-# "ottimizzare" saltando step.
+# Schema:
+#   1. send -l "$message"      tmux typea il testo carattere per carattere
+#   2. sleep 1                 lascia respirare il render Ink
+#   3. capture-pane            verifica che la signature sia nel pane
+#   4. se NO → retry (fino a 3 volte; la TUI potrebbe stare bootando,
+#              avere un modal aperto, o aver perso focus)
+#   5. se SI → send Enter      submit del prompt
 #
 # Uso:
 #   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
 #
-# Se $SESSION non esiste, esce con codice 2 (il caller può catturarlo).
+# Exit:
+#   0 → messaggio consegnato e submittato
+#   1 → argomenti mancanti
+#   2 → sessione inesistente
+#   3 → testo mai apparso nel pane dopo 3 retry (TUI irricettiva)
 
 set -euo pipefail
 
@@ -25,9 +34,8 @@ fi
 
 session="$1"
 shift
-# Qualunque cosa dopo il primo arg è il messaggio. Supportiamo sia la
-# forma "quotata" (un solo arg) sia lo splat accidentale (più arg con
-# spazi) — in quest'ultimo caso ricomponiamo con spazi.
+# Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
+# (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
 message="$*"
 
 if ! tmux has-session -t "$session" 2>/dev/null; then
@@ -35,15 +43,29 @@ if ! tmux has-session -t "$session" 2>/dev/null; then
   exit 2
 fi
 
-# -l = literal: zero interpretazione di key-names nel testo.
-tmux send-keys -t "$session" -l "$message"
-# Lascia respirare il render Ink prima del submit.
-sleep 0.3
-tmux send-keys -t "$session" Enter
-# Secondo Enter idempotente: se il primo è stato perso dal TUI durante
-# un re-render, il secondo recupera. Se il prompt è già vuoto (submit
-# riuscito), questo Enter cade su input vuoto ed è innocuo.
-sleep 0.5
-tmux send-keys -t "$session" Enter
+# Signature per la verify: primi 30 char del messaggio. Substring perche'
+# le TUI wrappano righe lunghe e il messaggio nel pane puo' essere spezzato
+# su piu' righe, rendendo un match full-string impossibile.
+signature=$(printf '%s' "$message" | head -c 30)
 
-echo "jht-tmux-send: ${#message} chars to $session"
+attempts=3
+for try in $(seq 1 "$attempts"); do
+  tmux send-keys -t "$session" -l "$message"
+  sleep 1
+  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+  case "$pane" in
+    *"$signature"*)
+      # Testo visibile nel prompt. Submit.
+      sleep 0.3
+      tmux send-keys -t "$session" Enter
+      echo "jht-tmux-send: ${#message} chars to $session (try $try)"
+      exit 0
+      ;;
+  esac
+  # Testo perso. La TUI potrebbe essere ancora in boot o avere un modal
+  # aperto che ha mangiato i keystroke. Pausa e ritenta.
+  sleep 1.5
+done
+
+echo "jht-tmux-send: $session non ricettivo dopo $attempts tentativi (testo mai apparso nel pane)" >&2
+exit 3
