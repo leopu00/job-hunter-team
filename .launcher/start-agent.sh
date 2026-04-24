@@ -222,6 +222,38 @@ if ! command -v tmux &>/dev/null; then
   exit 1
 fi
 
+# ── Soppressione auto-update interattivo di codex ────────────────────────────
+# Codex mostra un prompt TUI "Update now / Skip / Skip until next version"
+# quando rileva una versione più recente, con "Update now" selezionato di
+# default. Gli auto-Enter che mandiamo per chiudere il trust-dialog finiscono
+# sul prompt update, codex lancia `npm install -g @openai/codex` che fallisce
+# con EACCES durante il rename() atomico su bind-mount NTFS/WSL2 (rename di
+# @openai/codex mentre il binario è in uso non è supportato), exit 243 →
+# sessione tmux torna al prompt shell, agente risulta "online" ma morto.
+#
+# Fix: settiamo dismissed_version = latest_version in $JHT_HOME/.codex/
+# version.json prima del launch. Chiave confermata guardando le stringhe del
+# binario Rust (dismissed_version accanto a latest_version/last_checked_at).
+if [ "$CLI_BIN" = "codex" ]; then
+  CODEX_VERSION_FILE="${JHT_HOME:-/jht_home}/.codex/version.json"
+  if [ -f "$CODEX_VERSION_FILE" ] && command -v python3 &>/dev/null; then
+    python3 - "$CODEX_VERSION_FILE" <<'PYEOF' || true
+import json, sys
+p = sys.argv[1]
+try:
+    with open(p) as f:
+        data = json.load(f)
+    latest = data.get("latest_version")
+    if latest and data.get("dismissed_version") != latest:
+        data["dismissed_version"] = latest
+        with open(p, "w") as f:
+            json.dump(data, f)
+except Exception:
+    pass
+PYEOF
+  fi
+fi
+
 # ── Cartelle JHT ─────────────────────────────────────────────────────────────
 mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
