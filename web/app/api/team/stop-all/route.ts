@@ -4,8 +4,8 @@ import { runBash } from '@/lib/shell'
 export const dynamic = 'force-dynamic'
 
 // Sessioni che NON fermiamo con "Stop team" (sopravvivono al ciclo).
-// ASSISTENTE e' la chat utente e viene spenta solo chiudendo il container
-// dall'app Desktop.
+// ASSISTENTE è la chat utente, deve stare sempre attiva; viene spenta solo
+// chiudendo il container dall'app Desktop.
 const KEEP_ALIVE = new Set(['ASSISTENTE'])
 
 export async function POST() {
