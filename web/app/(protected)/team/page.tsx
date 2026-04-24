@@ -362,34 +362,40 @@ export default function TeamPage() {
       </div>
 
       {/* Org chart */}
-      <div className="mb-8">
-        <TeamOrgChart />
-      </div>
+      <section className="py-10">
+        <div className="mx-auto w-full max-w-[620px]">
+          <TeamOrgChart />
+        </div>
+      </section>
 
       {/* Rate budget chart */}
-      <div className="mb-8">
-        <UsageChart />
-      </div>
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <UsageChart />
+        </div>
+      </section>
 
       {/* Agent Grid */}
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
-      >
-        {AGENTS.map((agent, i) => (
-          <div key={agent.id} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
-            <AgentCard
-              agent={agent}
-              status={statuses[agent.id] ?? 'stopped'}
-              onAction={handleAction}
-              actionLoading={actionLoading}
-            />
-          </div>
-        ))}
-      </div>
+      <section className="pt-10 pb-8 border-t border-[var(--color-border)]">
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
+        >
+          {AGENTS.map((agent, i) => (
+            <div key={agent.id} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
+              <AgentCard
+                agent={agent}
+                status={statuses[agent.id] ?? 'stopped'}
+                onAction={handleAction}
+                actionLoading={actionLoading}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Footer hint */}
-      <div className="mt-8 pt-4 border-t border-[var(--color-border)] text-center">
+      <div className="mt-6 pt-4 border-t border-[var(--color-border)] text-center">
         <p className="text-[10px] text-[var(--color-dim)]">
           Auto refresh every 5s &middot; Click a name for details
         </p>
