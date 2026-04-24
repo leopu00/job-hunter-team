@@ -1,11 +1,15 @@
 'use client'
 
-// UsageChart — mini-dashboard del budget rate-limit per la pagina Team.
-// Riusa gli stessi dati di /api/sentinella/data (alimentato dal bridge)
-// ma con un layout compatto e un solo fetch (no start/stop, no terminale).
-// Il grafico completo con controlli resta su /team/sentinella.
+// UsageChart — mini-dashboard interattivo del budget rate-limit per la
+// pagina Team. Riusa gli stessi dati di /api/sentinella/data (alimentato
+// dal bridge) + aggiunge:
+//   - range selector (1h / 6h / 24h / all)
+//   - tooltip hover con tutti i metrici del punto
+//   - crosshair verticale che segue il mouse
+//
+// Il grafico completo con controlli e terminale resta su /team/sentinella.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Entry = {
   ts: string
@@ -17,6 +21,8 @@ type Entry = {
   status: string
   throttle?: number
   reset_at?: string
+  host?: { cpu_pct?: number; ram_pct?: number } | null
+  host_level?: string
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -28,16 +34,34 @@ const STATUS_COLOR: Record<string, string> = {
   ANOMALIA: '#fb923c',
 }
 
-function Chart({ entries }: { entries: Entry[] }) {
+const RANGES = [
+  { id: '1h',  label: '1h',  minutes: 60 },
+  { id: '6h',  label: '6h',  minutes: 6 * 60 },
+  { id: '24h', label: '24h', minutes: 24 * 60 },
+  { id: 'all', label: 'tutto', minutes: Infinity },
+] as const
+type RangeId = (typeof RANGES)[number]['id']
+
+type HoverState = { index: number; xPct: number; yPct: number } | null
+
+function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState) => void }) {
   const W = 900
   const H = 220
   const PAD = { top: 16, right: 56, bottom: 28, left: 44 }
   const innerW = W - PAD.left - PAD.right
   const innerH = H - PAD.top - PAD.bottom
 
+  const svgRef = useRef<SVGSVGElement | null>(null)
+
   const n = entries.length
-  const xAt = (i: number) => PAD.left + (n <= 1 ? 0.5 : i / (n - 1)) * innerW
-  const yAt = (v: number) => PAD.top + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH
+  const xAt = useCallback(
+    (i: number) => PAD.left + (n <= 1 ? 0.5 : i / (n - 1)) * innerW,
+    [n, innerW]
+  )
+  const yAt = useCallback(
+    (v: number) => PAD.top + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH,
+    [innerH]
+  )
 
   const pathFor = (key: keyof Entry) =>
     entries
@@ -51,9 +75,30 @@ function Chart({ entries }: { entries: Entry[] }) {
 
   const refLines = [50, 80, 95, 100]
 
+  // Mouse → nearest point index. SVG usa coordinate viewBox, il mouse
+  // arriva in pixel → scaliamo tramite getBoundingClientRect.
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current
+    if (!svg || n === 0) return
+    const rect = svg.getBoundingClientRect()
+    const pxX = e.clientX - rect.left
+    const vbX = (pxX / rect.width) * W
+    // Map vbX → index: inverse di xAt. xAt(i) = PAD.left + i/(n-1) * innerW.
+    const rel = Math.max(0, Math.min(1, (vbX - PAD.left) / innerW))
+    const idx = n <= 1 ? 0 : Math.round(rel * (n - 1))
+    onHover({
+      index: idx,
+      xPct: (xAt(idx) / W) * 100,
+      yPct: (yAt(entries[idx].usage) / H) * 100,
+    })
+  }
+
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
+      onMouseMove={handleMove}
+      onMouseLeave={() => onHover(null)}
       style={{
         width: '100%',
         maxWidth: W,
@@ -61,6 +106,7 @@ function Chart({ entries }: { entries: Entry[] }) {
         borderRadius: 8,
         background: 'var(--color-panel)',
         display: 'block',
+        cursor: n > 0 ? 'crosshair' : 'default',
       }}
     >
       {refLines.map(v => (
@@ -93,9 +139,7 @@ function Chart({ entries }: { entries: Entry[] }) {
           fill={STATUS_COLOR[e.status] || '#22d3ee'}
           stroke="#0f172a"
           strokeWidth={1}
-        >
-          <title>{`${e.ts} • ${e.usage}% • ${e.status}${e.throttle !== undefined ? ' • T' + e.throttle : ''}`}</title>
-        </circle>
+        />
       ))}
 
       {entries.length > 0 && (
@@ -133,9 +177,69 @@ function Chart({ entries }: { entries: Entry[] }) {
   )
 }
 
+function Tooltip({ entry }: { entry: Entry }) {
+  const ts = new Date(entry.ts)
+  const cpu = entry.host?.cpu_pct
+  const ram = entry.host?.ram_pct
+  return (
+    <div className="pointer-events-none">
+      <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
+        {ts.toLocaleTimeString()} · {ts.toLocaleDateString()}
+      </div>
+      <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
+        <div>
+          <span className="text-[var(--color-dim)]">usage:</span>{' '}
+          <span className="text-[var(--color-bright)] font-semibold">{entry.usage}%</span>
+        </div>
+        {entry.projection !== undefined && entry.projection !== null && (
+          <div>
+            <span className="text-[var(--color-dim)]">proj:</span>{' '}
+            <span style={{ color: '#a78bfa' }}>{Math.round(entry.projection)}%</span>
+          </div>
+        )}
+        {entry.velocity_smooth !== undefined && (
+          <div>
+            <span className="text-[var(--color-dim)]">vel:</span>{' '}
+            <span className="text-[var(--color-muted)]">{entry.velocity_smooth.toFixed(1)}%/h</span>
+          </div>
+        )}
+        {entry.velocity_ideal !== undefined && entry.velocity_ideal !== null && (
+          <div>
+            <span className="text-[var(--color-dim)]">ideal:</span>{' '}
+            <span className="text-[var(--color-muted)]">{entry.velocity_ideal.toFixed(1)}%/h</span>
+          </div>
+        )}
+        <div>
+          <span className="text-[var(--color-dim)]">status:</span>{' '}
+          <span style={{ color: STATUS_COLOR[entry.status] || 'var(--color-muted)' }}>{entry.status}</span>
+        </div>
+        <div>
+          <span className="text-[var(--color-dim)]">throttle:</span>{' '}
+          <span className="text-[var(--color-muted)]">T{entry.throttle ?? 0}</span>
+        </div>
+        {cpu !== undefined && (
+          <div>
+            <span className="text-[var(--color-dim)]">cpu:</span>{' '}
+            <span className="text-[var(--color-muted)]">{cpu}%</span>
+          </div>
+        )}
+        {ram !== undefined && (
+          <div>
+            <span className="text-[var(--color-dim)]">ram:</span>{' '}
+            <span className="text-[var(--color-muted)]">{ram}%</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function UsageChart() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState<RangeId>('6h')
+  const [hover, setHover] = useState<HoverState>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -152,12 +256,25 @@ export default function UsageChart() {
     return () => clearInterval(id)
   }, [loadData])
 
-  const last = entries.length > 0 ? entries[entries.length - 1] : null
+  // Filtra per range. "all" disattiva il filtro. Calcolato con useMemo
+  // per evitare ricalcoli ad ogni hover (che resetterebbe il picking).
+  const filtered = useMemo(() => {
+    const meta = RANGES.find(r => r.id === range) ?? RANGES[1]
+    if (!Number.isFinite(meta.minutes)) return entries
+    const cutoff = Date.now() - meta.minutes * 60_000
+    return entries.filter(e => {
+      const t = Date.parse(e.ts)
+      return Number.isFinite(t) && t >= cutoff
+    })
+  }, [entries, range])
+
+  const last = filtered.length > 0 ? filtered[filtered.length - 1] : null
+  const hovered = hover && filtered[hover.index] ? filtered[hover.index] : null
 
   return (
-    <div>
+    <div ref={containerRef}>
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-[var(--color-dim)]">Rate budget</span>
           {last && (
             <>
@@ -170,17 +287,79 @@ export default function UsageChart() {
             </>
           )}
         </div>
-        <a
-          href="/team/sentinella"
-          className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline"
-        >
-          dettagli →
-        </a>
+
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1" role="radiogroup" aria-label="time range">
+            {RANGES.map(r => {
+              const active = r.id === range
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setRange(r.id)}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold transition-colors"
+                  style={{
+                    background: active ? 'rgba(34,211,238,0.15)' : 'transparent',
+                    color: active ? '#22d3ee' : 'var(--color-dim)',
+                    border: `1px solid ${active ? 'rgba(34,211,238,0.4)' : 'var(--color-border)'}`,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {r.label}
+                </button>
+              )
+            })}
+          </div>
+          <a
+            href="/team/sentinella"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline"
+          >
+            dettagli →
+          </a>
+        </div>
       </div>
-      {loading && entries.length === 0 ? (
+
+      {loading && filtered.length === 0 ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">Caricamento…</div>
       ) : (
-        <Chart entries={entries} />
+        <div className="relative">
+          <Chart entries={filtered} onHover={setHover} />
+
+          {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
+          {hover && hovered && (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 bottom-0 w-px"
+                style={{
+                  left: `${hover.xPct}%`,
+                  background: 'rgba(255,255,255,0.2)',
+                }}
+              />
+              <div
+                className="absolute z-10 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 shadow-lg"
+                style={{
+                  left: hover.xPct > 55 ? undefined : `calc(${hover.xPct}% + 12px)`,
+                  right: hover.xPct > 55 ? `calc(${100 - hover.xPct}% + 12px)` : undefined,
+                  top: hover.yPct > 50 ? '8px' : undefined,
+                  bottom: hover.yPct > 50 ? undefined : '8px',
+                  minWidth: 220,
+                }}
+              >
+                <Tooltip entry={hovered} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {filtered.length === 0 && !loading && entries.length > 0 && (
+        <div className="text-[10px] text-[var(--color-dim)] text-center mt-2">
+          Nessun sample nell'intervallo selezionato — prova "tutto".
+        </div>
       )}
     </div>
   )
