@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useDevMode } from '@/components/SettingsMenu'
 
 type Status = { active: boolean; output: string }
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
@@ -45,6 +46,10 @@ export default function AssistentePage() {
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggle = (id: string) => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
+  const devMode = useDevMode()
+
+  // Dev mode off → chiudi il terminale se era aperto.
+  useEffect(() => { if (!devMode) setShowTerminal(false) }, [devMode])
 
   // Blocca scroll del body quando chat è fullscreen
   useEffect(() => {
@@ -206,10 +211,12 @@ export default function AssistentePage() {
               <div className="flex items-center gap-3">
                 {isActive && !collapsed.step3 && (
                   <>
-                    <button onClick={(e) => { e.stopPropagation(); setShowTerminal(v => !v) }}
-                      className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
-                      {showTerminal ? 'nascondi terminale' : 'mostra terminale'}
-                    </button>
+                    {devMode && (
+                      <button onClick={(e) => { e.stopPropagation(); setShowTerminal(v => !v) }}
+                        className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
+                        {showTerminal ? 'nascondi terminale' : 'mostra terminale'}
+                      </button>
+                    )}
                     <button onClick={async (e) => { e.stopPropagation(); await fetch('/api/assistente/terminal', { method: 'POST' }) }}
                       className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
                       {/Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
