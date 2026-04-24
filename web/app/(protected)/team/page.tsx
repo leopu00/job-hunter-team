@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '../../components/Toast'
+import TeamOrgChart from './_components/TeamOrgChart'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -358,6 +359,11 @@ export default function TeamPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Org chart */}
+      <div className="mb-8">
+        <TeamOrgChart />
       </div>
 
       {/* Agent Grid */}
