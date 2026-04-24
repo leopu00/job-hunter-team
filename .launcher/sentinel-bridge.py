@@ -53,6 +53,15 @@ MIN_INTERVAL = 1
 MAX_INTERVAL = 60
 BOOTSTRAP = int(os.environ.get("JHT_TICK_INTERVAL", "10"))
 
+# Finestra ottimale di consumo: 2 soli numeri, 85 e 95.
+#   projection > 95 → stiamo bruciando troppo (alert RALLENTA)
+#   projection < 85 → stiamo sottoutilizzando (alert SPINGI)
+#   85 ≤ projection ≤ 95 → zona target, silenzio
+# Nessuna isteresi: se proj balla sui boundary, il notify on-change
+# ed escalation a dwell (level_entered_at) filtrano comunque lo spam.
+PROJ_HIGH = 95
+PROJ_LOW = 85
+
 
 def read_config():
     """Ritorna (tick_minutes, provider). Fallback ai default se file manca."""
@@ -74,6 +83,26 @@ def session_exists(s):
 
 def jht_tmux_send(session, text):
     return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+
+
+def tmux_capture(session, lines=200):
+    """Leggi le ultime N righe del pane tmux di `session` (stdout del CLI).
+    Usato dai parser TUI di fallback quando l'HTTP API del provider fallisce
+    (es. rate-limit Anthropic sul /usage endpoint)."""
+    r = subprocess.run(
+        ["tmux", "capture-pane", "-t", session, "-p", "-S", f"-{lines}"],
+        capture_output=True,
+    )
+    return r.stdout.decode("utf-8", errors="replace") if r.returncode == 0 else ""
+
+
+def tmux_send_keys(session, *keys):
+    """Invia keypress alla sessione tmux. Non-invasivo: serve solo per
+    pilotare il SENTINELLA-WORKER (CLI idle) dentro i fallback TUI."""
+    return subprocess.run(
+        ["tmux", "send-keys", "-t", session, *keys],
+        capture_output=True,
+    ).returncode == 0
 
 
 # ── Codex: lettura rollout JSONL (no HTTP CF-blocked, no tmux) ──────
@@ -200,21 +229,73 @@ def _read_claude_token():
         return None
 
 
+CLAUDE_USAGE_CACHE = LOGS_DIR / "claude-usage-cache.json"
+CLAUDE_429_COOLDOWN_FILE = LOGS_DIR / "claude-429-cooldown"
+CLAUDE_429_COOLDOWN_S = 300   # 5 min — bug noto Anthropic: l'endpoint
+                              # /api/oauth/usage resta 429 per ore se pressato.
+                              # 5 min dà tempo alla rate-limit window di Anthropic
+                              # di rilassarsi senza tenerci troppo al buio.
+                              # Vedi github.com/anthropics/claude-code/issues/30930
+
+
+def _load_claude_429_cooldown():
+    """Leggi l'epoch di fine cooldown dal file. Persistente tra restart del
+    bridge: un kill&respawn non azzera piu' la protezione e non prende altri
+    429 ritestando l'endpoint inutilmente."""
+    try:
+        return float(CLAUDE_429_COOLDOWN_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _save_claude_429_cooldown(until_epoch):
+    try:
+        CLAUDE_429_COOLDOWN_FILE.write_text(f"{until_epoch:.0f}", encoding="utf-8")
+    except OSError:
+        pass
+
+
+_claude_429_until = _load_claude_429_cooldown()
+
+
+def _cache_load_claude():
+    try:
+        with CLAUDE_USAGE_CACHE.open(encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def _cache_save_claude(parsed):
+    try:
+        CLAUDE_USAGE_CACHE.write_text(
+            json.dumps({"saved_at": time.time(), **parsed}, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
 def fetch_claude_api():
     """
-    Chiama direttamente https://api.anthropic.com/api/oauth/usage con
-    OAuth token da ~/.claude/.credentials.json. Endpoint interno usato
-    dal CLI claude per /usage; stabile, strutturato, zero TUI.
+    Chiama https://api.anthropic.com/api/oauth/usage con OAuth token da
+    ~/.claude/.credentials.json. Endpoint interno usato dal CLI claude
+    per /usage; stabile, strutturato, zero TUI.
 
-    Risposta:
-      {
-        "five_hour":      {"utilization": 47.0, "resets_at": "2026-..."},
-        "seven_day":      {"utilization": 37.0, "resets_at": "..."},
-        "seven_day_sonnet": {"utilization": 4.0,  "resets_at": "..."},
-        "seven_day_opus":   null,
-        ...
-      }
+    Ritorna uno di:
+      dict {usage, reset_at, weekly_usage}  — fetch OK
+      None                                  — fetch KO (token/rete/parse)
+      "RATE_LIMIT"                          — HTTP 429, entra in cooldown
+
+    Bug noto Anthropic: /api/oauth/usage rate-limita aggressivamente
+    (retry-after:0 fuorviante) e resta 429 per ore anche con backoff.
+    Usiamo un cooldown locale (_claude_429_until) per non accanirci,
+    piu' una cache dell'ultimo sample valido per riusarlo stale.
     """
+    global _claude_429_until
+    if time.time() < _claude_429_until:
+        return "RATE_LIMIT"
+
     token = _read_claude_token()
     if not token:
         return None
@@ -229,7 +310,13 @@ def fetch_claude_api():
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
         data = json.loads(body)
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError, OSError):
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            _claude_429_until = time.time() + CLAUDE_429_COOLDOWN_S
+            _save_claude_429_cooldown(_claude_429_until)
+            return "RATE_LIMIT"
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError):
         return None
 
     five_h = data.get("five_hour") or {}
@@ -240,11 +327,181 @@ def fetch_claude_api():
     except (TypeError, ValueError):
         return None
 
-    return {
+    parsed = {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resets_at")),
         "weekly_usage": weekly,
     }
+    _cache_save_claude(parsed)
+    return parsed
+
+
+def fetch_claude_cached(max_age_s=900):
+    """Riusa l'ultimo sample scritto su disco se non troppo vecchio.
+    Per coprire le finestre di 429 senza mentire col valore stale per ore."""
+    cached = _cache_load_claude()
+    if not cached:
+        return None
+    saved_at = cached.get("saved_at", 0)
+    if time.time() - saved_at > max_age_s:
+        return None
+    return {
+        "usage": cached.get("usage"),
+        "reset_at": cached.get("reset_at"),
+        "weekly_usage": cached.get("weekly_usage"),
+    }
+
+
+# ── Claude TUI: fallback parser via tmux capture ─────────────────────────
+# Usato quando /api/oauth/usage fallisce (rate-limit 429, rete, token scaduto).
+# Il parser legge direttamente il pane della sessione CAPITANO: se in buffer
+# c'e' del testo da `/usage` recente (modal o scroll), estrae l'usage della
+# sessione 5h. Se non c'e', ritorna None — a quel punto il bridge logga
+# "nessun dato" ma il loop continua (no crash, no stato stantio).
+
+def _claude_time_to_hhmm(match):
+    """Dai gruppi (hour, minute?, ampm) → 'HH:MM' 24h UTC."""
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    ampm = match.group(3).lower()
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    return f"{hour:02d}:{minute:02d}"
+
+
+def parse_claude_tui(text):
+    """Parsa output della CLI claude per estrarre usage della sessione 5h.
+
+    Formato atteso (output di `/usage`, wrappabile cross-line):
+        Resets 6:10pm (UTC)                                15% used
+        Resets 7pm (UTC) (all models)
+        Resets 6am (UTC) (Sonnet only)
+
+    Il primo Resets SENZA tag "(all models)" / "(Sonnet only)" e' la
+    sessione 5h. Cerchiamo il primo "% used" nei 400 char successivi a
+    quel Resets, fermandoci al prossimo Resets per non 'rubare' valori
+    dalle sezioni weekly.
+    """
+    if not text:
+        return None
+    resets = list(re.finditer(
+        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)([^\n]*)",
+        text, re.I,
+    ))
+    if not resets:
+        return None
+    session_match = None
+    for m in resets:
+        tail = (m.group(4) or "").lower()
+        if "all models" not in tail and "only" not in tail:
+            session_match = m
+            break
+    if session_match is None:
+        return None
+    start = session_match.start()
+    next_reset_pos = len(text)
+    for m in resets:
+        if m.start() > session_match.start():
+            next_reset_pos = m.start()
+            break
+    window = text[start:min(next_reset_pos, start + 400)]
+    m_used = re.search(r"(\d+)\s*%\s*used", window, re.I)
+    if not m_used:
+        return None
+    return {
+        "usage": int(m_used.group(1)),
+        "reset_at": _claude_time_to_hhmm(session_match),
+        "weekly_usage": None,
+    }
+
+
+def fetch_claude_tui(session):
+    """Cattura il pane della sessione claude e prova a estrarre l'usage.
+    Wrapper thin: serve come 2° canale per il main loop."""
+    buf = tmux_capture(session)
+    return parse_claude_tui(buf)
+
+
+WORKER_SESSION = os.environ.get("JHT_SENTINEL_WORKER", "SENTINELLA-WORKER")
+JHT_HOME_PATH = os.environ.get("JHT_HOME", str(Path.home() / ".jht"))
+
+
+def worker_alive():
+    return subprocess.run(
+        ["tmux", "has-session", "-t", WORKER_SESSION],
+        capture_output=True,
+    ).returncode == 0
+
+
+START_AGENT_SH = os.environ.get("JHT_START_AGENT_SH", "/app/.launcher/start-agent.sh")
+
+
+def spawn_claude_worker():
+    """Crea la sessione SENTINELLA-WORKER delegando a start-agent.sh worker.
+    Riusa il path robusto del launcher (dimensioni tmux, env setup, auto-accept
+    trust dialog) invece di duplicare la logica qui. Idempotente: se il worker
+    è gia' vivo lo script esce senza fare nulla."""
+    if worker_alive():
+        return True
+    try:
+        r = subprocess.run(
+            ["bash", START_AGENT_SH, "worker"],
+            capture_output=True, timeout=10,
+        )
+        if r.returncode != 0:
+            # Log dell'errore per debugging (non fatale: il tick successivo
+            # ritenta lo spawn).
+            err = (r.stderr or b"").decode("utf-8", errors="replace").strip()[:200]
+            if err:
+                print(f"[sentinel-bridge] spawn worker fallito: {err}")
+            return False
+        return True
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"[sentinel-bridge] spawn worker exception: {e}")
+        return False
+
+
+def kill_worker():
+    """Termina la sessione SENTINELLA-WORKER. Idempotente."""
+    subprocess.run(
+        ["tmux", "kill-session", "-t", WORKER_SESSION],
+        capture_output=True,
+    )
+
+
+def query_claude_worker():
+    """Fallback pro-attivo: interroga SENTINELLA-WORKER col comando `/usage`,
+    aspetta il render, cattura il pane e parsa. A differenza di fetch_claude_tui
+    (che legge la sessione del Capitano passivamente), qui DIGITIAMO `/usage`
+    nella worker session apposita → il dato c'è sempre, non dipende dall'umore
+    del Capitano. Usato quando l'HTTP API è 429 o irraggiungibile.
+
+    Flusso:
+      /usage → Enter → 4s render → capture → parse.
+
+    NON mandiamo Esc prima: se il CLI claude è ancora nel dialog "trust
+    directory" (boot iniziale), Esc = cancel → CLI esce → i comandi
+    successivi vanno in bash e /usage diventa 'command not found'. Enter
+    da solo è safe: in idle inserisce empty input (harmless), in dialog
+    accetta (default button). Se il CLI è in mezzo ad altro input, peggio
+    che possa succedere è che il prossimo tick riprova.
+    """
+    r = subprocess.run(
+        ["tmux", "has-session", "-t", WORKER_SESSION],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        return None
+    # Testo + Enter separati: alcune CLI non interpretano la slash se il
+    # send-keys include gia' C-m nel testo.
+    tmux_send_keys(WORKER_SESSION, "/usage")
+    time.sleep(0.4)
+    tmux_send_keys(WORKER_SESSION, "Enter")
+    time.sleep(4.0)
+    buf = tmux_capture(WORKER_SESSION)
+    return parse_claude_tui(buf)
 
 
 # ── Kimi: chiamata HTTP diretta all'API (no tmux, no LLM) ──────────────
@@ -469,6 +726,9 @@ def compute_metrics(parsed, last, history=None):
     # Prima era 92%, troppo conservativo.
     SAFE_TARGET = 95
 
+    # Finestra ottimale di consumo (applicata più sotto via PROJ_HIGH/LOW).
+    # Vedi i constants a livello modulo.
+
     usage = parsed["usage"]
     now = datetime.now(timezone.utc)
     ts = now.isoformat()
@@ -531,44 +791,22 @@ def compute_metrics(parsed, last, history=None):
         realistic_vel = last_hour_delta  # %/h (delta cumulativo in 1h)
         projection = usage + max(realistic_vel, velocity_ideal or 0) * hours_to_reset
 
-    # Throttle: dominato da USAGE ASSOLUTO, non dalla projection.
-    # La projection e' speculativa (basata su EMA), il rate-limit reale
-    # scatta solo all'usage assoluto. Se siamo al 60% con proiezione
-    # 150%, non ha senso freezare — serve rallentare ma il Capitano deve
-    # comunque lavorare (una nuova sessione inizia sempre col bridge in
-    # stato dubbioso e deve poter osservare il consumo reale).
-    #
-    # Scala:
-    #   usage >= 95%           → T4 freeze (rate-limit imminente)
-    #   usage >= 88%           → T3 critico
-    #   usage >= 75% + proj>100%→ T2 rallenta marcato
-    #   proj > SAFE_TARGET     → T1 rallenta leggero
-    #   default                → T0 full speed
+    # Finestra ottimale: projection ∈ [85, 95].
+    # Sopra 95 → stiamo bruciando troppo, avvisare (RALLENTA).
+    # Sotto 85 → stiamo sottoutilizzando, avvisare (SPINGI).
+    # Tra 85 e 95 → OK, silenzio.
+    # L'avviso host viene applicato in notify_capitano_if_needed.
     if reset_event:
         status, throttle = "RESET", 0
-    elif usage >= 95:
-        status, throttle = "CRITICO", 4
-    elif usage >= 88:
-        status, throttle = "CRITICO", 3
-    elif usage >= 75 and projection is not None and projection > 100:
-        status, throttle = "ATTENZIONE", 2
-    elif projection is not None and projection > SAFE_TARGET and usage >= 40:
+    elif projection is not None and projection > PROJ_HIGH:
         status, throttle = "ATTENZIONE", 1
-    elif usage < 30 and (projection is None or projection < 60):
+    elif projection is not None and projection < PROJ_LOW:
         status, throttle = "SOTTOUTILIZZO", 0
     else:
         status, throttle = "OK", 0
 
-    # Host resources: se la pressione e' alta, forziamo un throttle
-    # minimo anche se l'usage LLM e' basso. Il PC sovraccarico fa
-    # crashare i CLI o il container comunque; meglio fermarsi prima.
     host = read_host_resources()
     host_level = host_pressure_level(host)
-    forced_throttle = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "OK": 0}[host_level]
-    if forced_throttle > throttle:
-        throttle = forced_throttle
-        if status not in ("CRITICO", "RESET"):
-            status = "ATTENZIONE" if host_level == "MEDIUM" else "CRITICO"
 
     return {
         "ts": ts,
@@ -623,11 +861,8 @@ STATE_FILE = LOGS_DIR / "sentinel-policy-state.json"
 # cosi' sa esattamente cosa fare senza calcolare lui le soglie. Le
 # stringhe sono parte del protocollo tra bridge e Capitano (stabili).
 THROTTLE_MEANING = {
-    0: "T0 full speed — nessun vincolo",
-    1: "T1 — sleep 30s tra operazioni",
-    2: "T2 — sleep 2 min tra operazioni",
-    3: "T3 — sleep 5 min, freeze spawn non-essenziali",
-    4: "T4 — freeze operativo totale, solo azioni core",
+    0: "OK",
+    1: "ATTENZIONE",
 }
 
 
@@ -696,54 +931,220 @@ def policy_reason(entry):
     return " ".join(bits)
 
 
+def _resolve_zone(_prev_zone, projection):
+    """Zona pura dalla proiezione, niente isteresi. Il flap sui boundary
+    è comunque filtrato dal notify on-change (escalation con dwell).
+    Il `_prev_zone` resta nella firma per compat storica."""
+    if projection is None:
+        return "OK"
+    if projection > PROJ_HIGH:
+        return "HIGH"
+    if projection < PROJ_LOW:
+        return "LOW"
+    return "OK"
+
+
+def freeze_all_workers(exclude=("CAPITANO", "ASSISTENTE", "SENTINELLA-WORKER")):
+    """Invia Esc × 2 a tutte le sessioni tmux degli agenti operativi per
+    abortire i task in corso e congelare il team. Ultima spiaggia quando
+    il Capitano non risponde in tempo alle escalations e si rischia di
+    sforare la quota prima del reset.
+    """
+    try:
+        r = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
+            capture_output=True, timeout=5,
+        )
+        if r.returncode != 0:
+            return []
+        names = r.stdout.decode("utf-8", errors="replace").splitlines()
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+
+    frozen = []
+    for name in names:
+        name = name.strip()
+        if not name or name in exclude:
+            continue
+        tmux_send_keys(name, "Escape")
+        time.sleep(0.1)
+        tmux_send_keys(name, "Escape")
+        frozen.append(name)
+    return frozen
+
+
+def _compute_escalation_level(current_level, level_entered_iso, entry, now):
+    """Determina il livello target (0-3) usando current + dwell + severity.
+
+      0 = no alert; 1 = RALLENTA; 2 = STOP EXTRAS; 3 = FREEZE (auto-Esc).
+    Dwell accelerato se reset < 30 min.
+    """
+    projection = entry.get("projection") or 0
+    usage = entry.get("usage") or 0
+    hours_to_reset = hours_until(entry.get("reset_at"))
+    if hours_to_reset is None:
+        hours_to_reset = 999.0
+
+    level_entered = _parse_ts(level_entered_iso) if level_entered_iso else None
+    time_in_level_min = (now - level_entered).total_seconds() / 60 if level_entered else 0
+
+    accel = hours_to_reset < 0.5
+    dwell_12 = 4 if accel else 8
+    dwell_23 = 3 if accel else 6
+
+    new_level = max(current_level, 1)
+    if current_level == 1 and time_in_level_min >= dwell_12:
+        new_level = 2
+    elif current_level == 2 and time_in_level_min >= dwell_23:
+        new_level = 3
+
+    # Severity override (situazione drammatica → salta livelli)
+    if hours_to_reset < 0.25 and projection > 110:
+        new_level = 3
+    elif hours_to_reset < 0.5 and (projection > 120 or usage > 85):
+        new_level = max(new_level, 2)
+
+    return new_level
+
+
+def _build_high_message(level, projection, usage, reset_in, time_in_level_min, frozen_list):
+    """Messaggio operativo. Finestra target 85-95, soglia superiore 95."""
+    if level == 1:
+        return (
+            f"⬆ RALLENTA — projection {projection}% oltre 95 "
+            f"(usage {usage}%, reset {reset_in}). Riduci il ritmo: allunga gli sleep, "
+            f"non spawnare nuovi agenti. Target di rientro: 85-95. "
+            f"Ti ricontatto solo se non rientri."
+        )
+    if level == 2:
+        return (
+            f"⛔ STOP EXTRAS — projection {projection}% non rientra sotto 95 dopo "
+            f"~{time_in_level_min:.0f} min (usage {usage}%, reset {reset_in}). "
+            f"Ferma subito gli agenti non-essenziali (tieni 1 sola istanza per ruolo critico)."
+        )
+    frozen_str = ", ".join(frozen_list) if frozen_list else "nessuno"
+    return (
+        f"🧊 FREEZE EMERGENZA — projection {projection}% non rientra "
+        f"(usage {usage}%, reset {reset_in}). Ho inviato Esc a tutti gli agenti operativi "
+        f"({frozen_str}). Aspetta il reset, non spawnare nulla."
+    )
+
+
 def notify_capitano_if_needed(entry, capitano_session="CAPITANO"):
-    """Edge-triggered: invia al Capitano SOLO quando cambia la POLICY OPERATIVA.
+    """Notifica il Capitano con escalation graduale a livelli.
 
-    "Policy operativa" = (throttle, host_level). Questi DRIVE il
-    comportamento del Capitano (spawn / pausa / freeze).
+      HIGH zone (projection > 95):
+        level 1  RALLENTA (soft)                   — una volta sola
+        level 2  STOP EXTRAS                       — se non rientra dopo ~8m
+        level 3  FREEZE auto (Esc agenti)          — se non rientra dopo ~6m
+        Dwell dimezzati se reset < 30 min. Severity override: se reset
+        imminente + proiezione molto alta, saltiamo livelli.
 
-    NOTA BENE: il campo `status` (OK / SOTTOUTILIZZO / ATTENZIONE /
-    CRITICO) NON e' incluso nel trigger perche' oscilla con facilita'
-    attorno ai boundary (es. projection 58% vs 62% → OK vs SOTTOUTILIZZO)
-    anche quando il throttle resta stabile a T0. In passato lo includevamo
-    → il Capitano veniva massacrato da [BRIDGE ORDER] identici tranne
-    per il tag status, mentre la direttiva operativa era la stessa.
-    Lo status resta visibile nel grafico /team/sentinella ma non alerta.
+      LOW zone → avviso una tantum (transizione)
+      host HIGH/CRITICAL → accoda in coda al messaggio
+      Recovery da escalation → messaggio "✅ rientrata, escalation rimossa"
 
-    Il throttle e' gia' una funzione DETERMINISTICA di usage/projection
-    con soglie ampie (0/75/88/95%) → cambia solo su transizioni reali.
+    Il Capitano è intelligente: un ordine è sufficiente, non lo inondiamo
+    di messaggi identici. Re-alert solo se la situazione peggiora.
     """
     state = load_policy_state()
-    new_throttle = entry.get("throttle")
-    new_host_level = entry.get("host_level", "OK")
-    new_status = entry.get("status")
+    prev_zone = state.get("zone", "OK")
+    projection = entry.get("projection")
+    usage = entry.get("usage")
+    host_level = entry.get("host_level", "OK")
+    host = entry.get("host") or {}
 
-    changed = (
-        state.get("throttle") != new_throttle
-        or state.get("host_level") != new_host_level
-    )
-    if not changed:
-        # Teniamo comunque lo status aggiornato nel state file per
-        # coerenza con i log/dashboard; non triggera notifiche.
-        if state.get("status") != new_status:
-            state["status"] = new_status
+    zone = _resolve_zone(prev_zone, projection)
+    host_alert = host_level in ("HIGH", "CRITICAL")
+    reset_in = _reset_human(entry.get("reset_at")) or "?"
+
+    # ─── HIGH zone: escalation state machine ───────────────────────────
+    if zone == "HIGH":
+        now = _parse_ts(entry.get("ts")) or datetime.now(timezone.utc)
+        prev_level = int(state.get("escalation_level", 0) or 0)
+        prev_entered = state.get("level_entered_at")
+        new_level = _compute_escalation_level(prev_level, prev_entered, entry, now)
+        if prev_level == 0:
+            new_level = max(new_level, 1)
+
+        level_changed = new_level != prev_level
+        frozen: list[str] = []
+        if level_changed and new_level == 3:
+            frozen = freeze_all_workers()
+
+        level_entered_iso = now.isoformat() if level_changed else (prev_entered or now.isoformat())
+        level_entered_dt = _parse_ts(level_entered_iso)
+        time_in_level_min = (
+            (now - level_entered_dt).total_seconds() / 60 if level_entered_dt else 0
+        )
+
+        state.update({
+            "zone": "HIGH",
+            "host_level": host_level,
+            "status": entry.get("status"),
+            "throttle": 1,
+            "escalation_level": new_level,
+            "level_entered_at": level_entered_iso,
+        })
+
+        if not level_changed:
             save_policy_state(state)
+            return False
+
+        msg_core = _build_high_message(
+            new_level, projection, usage, reset_in, time_in_level_min, frozen
+        )
+        host_str = (
+            f" · 💻 host={host_level} cpu={host.get('cpu_pct', '?')}% ram={host.get('ram_pct', '?')}%"
+            if host_alert else ""
+        )
+        msg = f"[BRIDGE ORDER] {msg_core}{host_str}"
+
+        if session_exists(capitano_session):
+            jht_tmux_send(capitano_session, msg)
+        state["last_notified_at"] = entry.get("ts")
+        state["last_message"] = msg
+        save_policy_state(state)
+        return True
+
+    # ─── Fuori HIGH: reset escalation se era attiva, notifica transizioni ───
+    prev_level = int(state.get("escalation_level", 0) or 0)
+    escalation_recovered = prev_level > 0
+    state.update({
+        "zone": zone,
+        "host_level": host_level,
+        "status": entry.get("status"),
+        "throttle": 0,
+        "escalation_level": 0,
+        "level_entered_at": None,
+    })
+
+    parts: list[str] = []
+    if escalation_recovered:
+        parts.append(
+            f"✅ projection {projection}% rientrata (usage {usage}%, reset {reset_in}) — "
+            f"escalation rimossa, procedi col piano"
+        )
+    elif zone == "LOW" and prev_zone != "LOW":
+        parts.append(
+            f"⬇ projection {projection}% sotto zona target 85-95 (usage {usage}%, reset {reset_in}) — "
+            f"SPINGI il team, quota residua"
+        )
+    if host_alert:
+        parts.append(
+            f"💻 host={host_level} cpu={host.get('cpu_pct', '?')}% ram={host.get('ram_pct', '?')}% — "
+            f"alleggerisci / freeze spawn non-essenziali"
+        )
+
+    if not parts:
+        save_policy_state(state)
         return False
 
-    meaning = THROTTLE_MEANING.get(new_throttle, f"T{new_throttle}")
-    reason = policy_reason(entry)
-    msg = f"[BRIDGE ORDER] {meaning} — {reason}"
-
+    msg = "[BRIDGE ORDER] " + " · ".join(parts)
     if session_exists(capitano_session):
         jht_tmux_send(capitano_session, msg)
-
-    state.update({
-        "throttle": new_throttle,
-        "host_level": new_host_level,
-        "status": new_status,
-        "last_notified_at": entry.get("ts"),
-        "last_message": msg,
-    })
+    state["last_notified_at"] = entry.get("ts")
+    state["last_message"] = msg
     save_policy_state(state)
     return True
 
@@ -771,34 +1172,94 @@ def count_working_sessions():
         return 0
 
 
-def compute_next_tick(entry, user_tick):
-    """Calcola dinamicamente l'intervallo fino al prossimo poll.
+def _zone_of(projection):
+    """HIGH / TARGET / LOW a partire dal valore di projection.
+    None se projection non disponibile."""
+    if projection is None:
+        return None
+    if projection > PROJ_HIGH:
+        return "HIGH"
+    if projection < PROJ_LOW:
+        return "LOW"
+    return "TARGET"
 
-    Il valore utente (sentinella_tick_minutes da jht.config.json) e'
-    il TETTO usato a riposo: se il team e' fermo e tutto e' OK,
-    non ha senso pollare piu' spesso.
 
-    In pressione aumentiamo la frequenza perche' le transizioni
-    (spawn burst, rate limit close, host saturazione) possono
-    saltare da OK a CRITICO in pochi minuti:
+def _parse_ts(ts_str):
+    try:
+        return datetime.fromisoformat(ts_str)
+    except (TypeError, ValueError):
+        return None
 
-      status CRITICO            →  1 min  (serviamo alert rapidi)
-      host HIGH / CRITICAL      →  1 min  (PC saturo, stop urgente)
-      status ATTENZIONE         →  3 min  (watch)
-      team operativo attivo     →  3 min  (prevenzione)
-      SOTTOUTILIZZO / OK + idle →  tetto utente (default 10 min)
+
+STATE_WINDOW_MINUTES = 10   # finestra su cui valutare stabilità/oscillazione
+
+
+def classify_state(entry, history):
+    """Classifica lo stato del flusso negli ultimi STATE_WINDOW_MINUTES:
+
+      CRITICAL     — usage >= 85% o host HIGH/CRITICAL (rate-limit/host a muro)
+      OSCILLATING  — la projection ha toccato 2+ zone (HIGH/TARGET/LOW)
+                     all'interno della finestra → ritmo non stabile
+      STABLE       — tutta la finestra è in una sola zona
+
+    Ritorna ("STATE", "reason stringa breve per il log").
+
+    Il criterio "oscillante" copre esattamente il caso dell'utente:
+      - projection passa da 95→100+ (TARGET↔HIGH) → OSCILLATING
+      - projection passa da 85→80 (TARGET↔LOW) → OSCILLATING
+      - projection resta in [85,95] per 10 min interi → STABLE
+      - projection resta sempre sopra 95 per 10 min → STABLE (in zona HIGH ma stabile)
+        (il bridge ha gia' spedito l'ordine RALLENTA, polling può rallentare:
+         non serve urgenza — è già sotto controllo del Capitano)
     """
-    status = entry.get("status") if entry else None
-    host_level = entry.get("host_level") if entry else None
-    working = count_working_sessions()
+    if not entry:
+        return ("STABLE", "no data")
 
-    if status == "CRITICO" or host_level in ("HIGH", "CRITICAL"):
-        return 1
-    if status == "ATTENZIONE":
-        return min(3, user_tick)
-    if working > 0:
-        return min(3, user_tick)
-    return user_tick
+    usage = entry.get("usage") or 0
+    host_level = entry.get("host_level") or "OK"
+    if usage >= 85:
+        return ("CRITICAL", f"usage {usage}%>=85")
+    if host_level in ("HIGH", "CRITICAL"):
+        return ("CRITICAL", f"host={host_level}")
+
+    # Finestra: tutti i sample degli ultimi STATE_WINDOW_MINUTES + quello corrente.
+    entry_ts = _parse_ts(entry.get("ts")) or datetime.now(timezone.utc)
+    cutoff = entry_ts - timedelta(minutes=STATE_WINDOW_MINUTES)
+    window = [entry]
+    for e in (history or []):
+        ts = _parse_ts(e.get("ts"))
+        if ts and ts >= cutoff:
+            window.append(e)
+
+    zones = {_zone_of(e.get("projection")) for e in window}
+    zones.discard(None)
+    if len(zones) >= 2:
+        return ("OSCILLATING", f"zones={sorted(zones)} in {STATE_WINDOW_MINUTES}m")
+    only = next(iter(zones)) if zones else "UNKNOWN"
+    return ("STABLE", f"zone={only} da {STATE_WINDOW_MINUTES}m")
+
+
+def compute_next_tick(entry, user_tick, history=None):
+    """Adaptive polling interval.
+
+      CRITICAL    → 1 min  (serviamo alert rapidi)
+      OSCILLATING → 2 min  (zona in movimento, servono dati vicini)
+      STABLE      → 3 min  (flusso fermo, meno hit sull'API)
+
+    `user_tick` (sentinella_tick_minutes) resta come floor: se l'utente
+    chiede >= 3min anche in zona critica (setup conservativi), onoriamo.
+    Ma tipicamente è 1 e l'adaptive governa.
+
+    Razionale: l'endpoint /api/oauth/usage di Anthropic rate-limita
+    aggressivamente (bug noto gh anthropics/claude-code#30930).
+    Rallentare in zona stabile dimezza le chiamate e riduce i 429.
+    """
+    if not entry:
+        return max(1, min(user_tick or 3, 3))
+
+    state, _reason = classify_state(entry, history)
+    base = {"CRITICAL": 1, "OSCILLATING": 2, "STABLE": 3}[state]
+    return max(base, user_tick or 0)
 
 
 def sleep_with_poll(target_min):
@@ -867,6 +1328,7 @@ def main():
     #   openai/codex       rollout JSONL in ~/.codex/sessions/
     # Nessun fallback tmux necessario — se un provider non riconosciuto
     # finisce in config, loggiamo e andiamo avanti al prossimo tick.
+    claude_api_ok_streak = 0   # streak tick OK consecutivi → trigger kill WORKER
     while True:
         tick_min, provider = read_config()
         now_h = datetime.now().strftime("%H:%M:%S")
@@ -875,19 +1337,63 @@ def main():
             parsed = fetch_kimi_api()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_kimi_api fallito (token scaduto? no rete?)")
-                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                # Sleep fino al prossimo tick intero. Prima qui c'era
+                # min(POLL_SECONDS, tick_min*60) → con tick_min=1 faceva
+                # retry ogni 15s. L'endpoint /api/oauth/usage di Anthropic
+                # ha un suo rate-limit: ripeterlo 4x al minuto ci faceva
+                # beccare 429 cascading. Aspettare il tick pieno dà margine.
+                time.sleep(tick_min * 60)
                 continue
         elif provider in ("anthropic", "claude"):
             parsed = fetch_claude_api()
-            if parsed is None:
-                print(f"[sentinel-bridge] {now_h} — fetch_claude_api fallito (token scaduto? no rete?)")
-                time.sleep(min(POLL_SECONDS, tick_min * 60))
-                continue
+            if parsed in ("RATE_LIMIT", None):
+                reason = "429" if parsed == "RATE_LIMIT" else "token/rete"
+                claude_api_ok_streak = 0
+
+                # Lazy-spawn del WORKER: se non c'è, creane uno; il boot dura
+                # ~10s, quindi al primo tick dopo lo spawn la query fallirà.
+                # Dal tick successivo in poi il WORKER risponde a /usage.
+                if not worker_alive():
+                    if spawn_claude_worker():
+                        print(f"[sentinel-bridge] {now_h} — claude API {reason}, spawn WORKER (sarà pronto al prossimo tick)")
+
+                # Fallback: solo sorgenti LIVE, mai cache come sample.
+                # Usare la cache come sample "ts=now" causa uno spike di
+                # velocity al prossimo fetch reale (12s tra cache stantia
+                # e dato vero → delta enorme). Meglio un buco onesto nel
+                # grafico che un artefatto che fa sparare proj a 300%.
+                worker = query_claude_worker()
+                if worker is not None:
+                    parsed = worker
+                    print(f"[sentinel-bridge] {now_h} — claude API {reason}, fallback WORKER: usage={parsed.get('usage')}%")
+                else:
+                    passive = fetch_claude_tui(TARGET_SESSION)
+                    if passive is not None:
+                        parsed = passive
+                        print(f"[sentinel-bridge] {now_h} — claude API {reason}, fallback TUI passivo (CAPITANO): usage={parsed.get('usage')}%")
+                    else:
+                        print(f"[sentinel-bridge] {now_h} — claude API {reason}, WORKER non ancora pronto, nessun fallback live — skip tick")
+                        time.sleep(tick_min * 60)
+                        continue
+            else:
+                # API OK: incrementa streak; dopo 2 tick consecutivi puliamo
+                # il worker se ancora in piedi (liberiamo RAM e 1 slot di
+                # sessione claude concurrent). 2 e non 1 per evitare flap
+                # spawn/kill se il 429 oscilla.
+                claude_api_ok_streak += 1
+                if claude_api_ok_streak >= 2 and worker_alive():
+                    kill_worker()
+                    print(f"[sentinel-bridge] {now_h} — claude API stabile, WORKER terminato (liberata la sessione fallback)")
         elif provider in ("openai",):
             parsed = fetch_codex_rollout()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_codex_rollout fallito (nessuna sessione codex attiva?)")
-                time.sleep(min(POLL_SECONDS, tick_min * 60))
+                # Sleep fino al prossimo tick intero. Prima qui c'era
+                # min(POLL_SECONDS, tick_min*60) → con tick_min=1 faceva
+                # retry ogni 15s. L'endpoint /api/oauth/usage di Anthropic
+                # ha un suo rate-limit: ripeterlo 4x al minuto ci faceva
+                # beccare 429 cascading. Aspettare il tick pieno dà margine.
+                time.sleep(tick_min * 60)
                 continue
         else:
             print(f"[sentinel-bridge] {now_h} — provider '{provider}' non supportato, skip")
@@ -912,13 +1418,14 @@ def main():
         notified = notify_capitano_if_needed(entry, capitano_session=TARGET_SESSION)
         notif_hint = " [ORDER SENT]" if notified else ""
 
-        next_tick = compute_next_tick(entry, tick_min)
+        next_tick = compute_next_tick(entry, tick_min, history=history)
+        state_label, state_reason = classify_state(entry, history)
 
         print(
             f"[sentinel-bridge] {now_h} — usage={entry['usage']}% "
             f"status={entry['status']} t={entry['throttle']} "
             f"projection={entry.get('projection') or '-'} "
-            f"(next in {next_tick}m){notif_hint}"
+            f"[{state_label}: {state_reason}] (next in {next_tick}m){notif_hint}"
         )
         sleep_with_poll(next_tick)
 
