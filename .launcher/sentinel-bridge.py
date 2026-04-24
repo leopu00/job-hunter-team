@@ -697,13 +697,21 @@ def policy_reason(entry):
 
 
 def notify_capitano_if_needed(entry, capitano_session="CAPITANO"):
-    """Edge-triggered: invia al Capitano SOLO quando cambia la policy.
+    """Edge-triggered: invia al Capitano SOLO quando cambia la POLICY OPERATIVA.
 
-    Il bridge calcola deterministicamente throttle (T0..T4), status e
-    host_level. Se uno di questi cambia rispetto all'ultimo sample
-    notificato, mandiamo un [BRIDGE ORDER] al Capitano con la nuova
-    direttiva + motivazione. Altrimenti silenzio: niente fotocopie di
-    stato stabile che sprecano turn LLM.
+    "Policy operativa" = (throttle, host_level). Questi DRIVE il
+    comportamento del Capitano (spawn / pausa / freeze).
+
+    NOTA BENE: il campo `status` (OK / SOTTOUTILIZZO / ATTENZIONE /
+    CRITICO) NON e' incluso nel trigger perche' oscilla con facilita'
+    attorno ai boundary (es. projection 58% vs 62% → OK vs SOTTOUTILIZZO)
+    anche quando il throttle resta stabile a T0. In passato lo includevamo
+    → il Capitano veniva massacrato da [BRIDGE ORDER] identici tranne
+    per il tag status, mentre la direttiva operativa era la stessa.
+    Lo status resta visibile nel grafico /team/sentinella ma non alerta.
+
+    Il throttle e' gia' una funzione DETERMINISTICA di usage/projection
+    con soglie ampie (0/75/88/95%) → cambia solo su transizioni reali.
     """
     state = load_policy_state()
     new_throttle = entry.get("throttle")
@@ -713,9 +721,13 @@ def notify_capitano_if_needed(entry, capitano_session="CAPITANO"):
     changed = (
         state.get("throttle") != new_throttle
         or state.get("host_level") != new_host_level
-        or state.get("status") != new_status
     )
     if not changed:
+        # Teniamo comunque lo status aggiornato nel state file per
+        # coerenza con i log/dashboard; non triggera notifiche.
+        if state.get("status") != new_status:
+            state["status"] = new_status
+            save_policy_state(state)
         return False
 
     meaning = THROTTLE_MEANING.get(new_throttle, f"T{new_throttle}")
