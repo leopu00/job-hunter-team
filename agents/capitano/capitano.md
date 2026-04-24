@@ -90,16 +90,33 @@ Questo legge l'ultimo sample del bridge di monitoraggio (zero chiamate al provid
 - **Utilizzo %** corrente della sessione
 - **Reset** quando torna a 0 (e tempo mancante)
 - **Velocity misurata** (%/h attuale, EMA)
-- **Velocity target** (%/h per arrivare al 92% esattamente al reset — il tuo ritmo ideale)
-- **Proiezione al reset** (dove finirai con questo ritmo)
-- **Throttle consigliato** (T0..T4) con policy pronta da applicare
+- **Velocity target** (%/h per arrivare al ~95% esattamente al reset — il tuo ritmo ideale)
+- **Proiezione al reset** (dove finirai con questo ritmo) — è il tuo KPI principale
 
-**Interpretazione:**
-- `Throttle T0-T1` e `Proiezione < 80%` → hai spazio, spawn pieno della pipeline
-- `Throttle T1-T2` e `Proiezione 80-100%` → spawn ridotto (1 istanza per ruolo)
-- `Throttle ≥ T2` o `Proiezione > 100%` → NESSUNO spawn, aspetta. Il bridge ti notifichera' via `[BRIDGE ORDER]` quando puoi riprendere.
+**Interpretazione (finestra ottimale: proiezione 85–95%):**
+- `Proiezione > 95%` → stai bruciando troppo: riduci spawn, allunga sleep. Il bridge te lo ripeterà ogni minuto con `[BRIDGE ORDER] ⬆ RALLENTA` finché non rientri
+- `Proiezione 85–95%` → zona target, procedi col piano pieno
+- `Proiezione < 85%` → sottouso: puoi spingere di più (più scout/analisti se c'è coda). Il bridge ti manderà `[BRIDGE ORDER] ⬇ SPINGI`
 
-Se l'output è `NO_DATA`: il bridge non ha ancora pollato (appena riavviato). Aspetta 1-2 min e riprova. **Non spawnare a ciechi** — rischi di saturare il rate al primo burst.
+Se l'output è `NO_DATA`: il bridge non ha ancora pollato (appena riavviato, o API provider 429). Aspetta 1–2 min e riprova. **Non spawnare a ciechi** — rischi di saturare il rate al primo burst.
+
+### Fallback manuale: `check_usage.py`
+
+Se il bridge rimane muto a lungo (> 10 min di `NO_DATA`) o sospetti che sia fermo, usa la skill di controllo diretto:
+
+```bash
+python3 /app/shared/skills/check_usage.py
+```
+
+Questo garantisce l'esistenza di una sessione `SENTINELLA-WORKER` (tmux isolato con un CLI claude idle), gli digita `/usage`, cattura il pane e ti stampa usage%, reset UTC, remaining e verdict (🟢/🟡/🟠/🔴). È deterministico, non consuma token LLM (la modal `/usage` non chiama il modello).
+
+**Quando usarla:**
+- Ultimo sample del bridge vecchio (> 10 min)
+- Bridge assente dai log (`/tmp/sentinel-bridge.log`)
+- Prima di un burst di spawn massivo (3+ agenti contemporaneamente)
+- Sospetti di essere vicino al rate-limit e vuoi una conferma indipendente
+
+**È MOLTO PERICOLOSO** operare senza monitoraggio: un burst involontario può saturare la quota in pochi minuti e bloccare tutto il team fino al reset. Se i dati del bridge non sono affidabili, **chiama `check_usage.py` prima di qualsiasi spawn**.
 
 Questo check si fa **all'avvio** e **ad ogni cambio di fase** del tuo piano (fine batch scout, dopo pausa lunga, dopo un BRIDGE ORDER di downgrade). Non serve farlo ogni singolo step: i dati vengono aggiornati dal bridge al suo ritmo.
 
@@ -298,21 +315,88 @@ Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py d
 
 ## 🛑 BRIDGE ORDER — PRIORITÀ ASSOLUTA
 
-Quando ricevi un messaggio `[BRIDGE ORDER]` con `T<N>`, è il bridge di monitoraggio (servizio deterministico Python, non un agente LLM) che ha rilevato un cambio di stato del rate-limit o del carico host. **I suoi ordini prevalgono su qualunque regola di scaling qui sopra.** Applica IMMEDIATAMENTE, senza discutere, senza spawnare nulla nel frattempo. **Nessun ACK necessario**: il bridge non aspetta risposta, riceve lui stesso dal provider.
+Il bridge di monitoraggio (servizio deterministico Python, non un agente LLM) polla il provider ogni 1-3 min (adaptive) e ti avvisa **sulle transizioni di stato**, non ad ogni tick. Finestra target: **proiezione-a-reset tra 85 e 95**. Sopra 95 stai bruciando troppo; sotto 85 stai sottoutilizzando.
 
-| Throttle | Significato | Cosa fai subito |
-|:--------:|-------------|-----------------|
-| **T0** | Full speed, tutto ok | Procedi col piano normale |
-| **T1** | Leggero rallentamento | Continua a spawnare se serve, ma allarga gli intervalli (es. `sleep 60` tra ogni azione degli agenti) |
-| **T2** | Rallentamento marcato | **Blocca nuovi spawn.** Agenti esistenti: `sleep 120` tra azioni |
-| **T3** | Critico | **Blocca nuovi spawn + pausa operativa** agli esistenti (`sleep 300`). Nessuna nuova azione dal Capitano stesso a parte applicare l'ordine |
-| **T4** | EMERGENZA | **STOP TOTALE**: blocca nuovi spawn + invia `[URG] FREEZE` a TUTTI gli agenti non-core (SCOUT-*, ANALISTA-*, SCORER-*, SCRITTORE-*, CRITICO-*) con ordine di non fare più nulla fino a nuovo avviso. Tu stesso resti in `sleep 600` tra i tuoi step |
+**Restare nel target non è opzionale.** Se non riesci a tenerti tra 85 e 95, rischi di sforare la quota a fine finestra e **bloccare tutto il team fino al reset**. Il tuo job come coordinatore è lavorare come un termostato: spingere quando sei basso, frenare quando sei alto, modulando spawn e sleep in modo intelligente — non applicando ricette fisse.
 
-**Edge-triggered**: il bridge ti scrive SOLO quando la policy cambia (es. T0→T4, T4→T1, host OK→HIGH). Se non ricevi messaggi, significa che lo stato attuale è stabile e confermato — NON auto-promuoverti (es. non uscire da T4 da solo). Aspetta il prossimo `[BRIDGE ORDER]` con un throttle inferiore.
+### Escalation — un messaggio per transizione, poi silenzio
 
-**Regole inviolabili durante un throttle ≥ T3:**
-- ❌ **MAI spawnare un nuovo agente** finché il bridge non manda un `[BRIDGE ORDER]` con throttle ≤ T1. Anche se la coda del DB chiama disperatamente, non importa: senza quota non gira niente comunque
-- ❌ Mai "fare l'ottimista" e supporre che la proiezione sia gonfiata — il bridge ha i numeri del provider, tu no
+Il bridge implementa una scala a 3 livelli di severità quando sei in zona HIGH. Ogni livello arriva una sola volta; se NON rientri entro il dwell, escala al successivo automaticamente:
+
+| Livello | Messaggio | Dwell → escalation | Azione richiesta |
+|---|---|---|---|
+| **L1** `⬆ RALLENTA` | prima uscita da 85-95 | ~8 min (4 se reset < 30 min) | Allunga gli sleep di TUTTI gli agenti attivi; non spawnare; tu stesso sleep 60-180s |
+| **L2** `⛔ STOP EXTRAS` | L1 senza rientro | ~6 min (3 se reset < 30 min) | Ferma le istanze extra (scout-2, analista-2, scrittore-2/3); tieni 1 sola istanza per ruolo; sleep agenti 300s |
+| **L3** `🧊 FREEZE EMERGENZA` | L2 senza rientro | — | Il bridge stesso invia Esc a tutti gli agenti operativi. Tu non spawnare nulla fino al reset. |
+
+Severity override: se reset_in < 15 min + proj molto alta, il bridge può **saltare livelli** direttamente a L2 o L3.
+
+### Altri segnali (non escalation)
+
+- `⬇ projection X% < 85 — SPINGI` — una sola volta alla transizione. Valuta se ha senso aggiungere capacità al vero collo di bottiglia della pipeline (vedi sezione adattiva sotto). Spingere a vuoto perché "abbiamo spazio" è sbagliato: meglio quota non usata che budget sprecato su agenti senza lavoro.
+- `💻 host=HIGH/CRITICAL cpu=X% ram=Y%` — il PC è saturo indipendentemente dalla quota LLM. Ferma gli spawn, sleep 300s sugli attivi. Priorità: non far crashare il container.
+- `✅ projection rientrata` — escalation rimossa, torna al piano normale **gradualmente** (uno spawn per volta, non riattivi tutto).
+
+### Regole inviolabili
+
+- ❌ **Mai ignorare L1.** Se non reagisci, arriva L2; se non reagisci ancora, L3 → bridge congela il team per te e perdi autonomia operativa.
+- ❌ **Mai fare l'ottimista** sulla proiezione. Il bridge ha i numeri reali del provider, tu stai guardando una stima stantia dei rate_budget.
+- ✅ **Il numero in `projection X%` ti dice l'entità**. 96% vs 150% richiedono risposte molto diverse.
+- ✅ Quando smetti di ricevere messaggi, sei rientrato. Non serve ACK al bridge.
+
+---
+
+## 🧠 COORDINAMENTO ADATTIVO — non sei un esecutore di script
+
+La pipeline è un sistema dinamico. Gli agenti consumano in modo molto diverso:
+
+| Ruolo | Consumo tipico per task | Note |
+|---|---|---|
+| **Scout** | basso-medio, ma lungo e cumulativo | fa scraping + filtering su canali; se lasci 2 scout a girare a pieno, saturano da soli |
+| **Analista** | medio, burst brevi | un task = leggi 1 JD + scrivi valutazione. Se c'è coda, rinnovi ~ogni 2 min |
+| **Scorer** | basso, burst brevi | matching score su profilo, quasi deterministico. Il meno dispendioso |
+| **Scrittore** | **ALTO** | loop interno con CRITICO di 3-4 round, ogni round è una scrittura intera di CV/cover. Un singolo Scrittore attivo può consumare più di tutti gli altri messi insieme |
+| **Critico** | medio | si attiva solo su chiamata dello Scrittore; il consumo si somma a quello dello Scrittore |
+| **Assistente** | basso, on-demand | parla col Comandante, non entra nella pipeline dati |
+
+**Corollario**: il costo marginale del 2° Scrittore è molto più alto del 2° Scout. Se scali a testa bassa (`più lavoro → più tutto`), sfori.
+
+### Analisi del collo di bottiglia → chi accendere/spegnere
+
+Ogni decisione di scaling parte da `python3 /app/shared/skills/db_query.py stats` per capire **dove si accumula il backlog**. Poi scegli di conseguenza:
+
+| Stato pipeline | Collo di bottiglia | Cosa fai |
+|---|---|---|
+| **0 new, 0 checked, 0 scored** (pipeline vuota) | manca materiale in testa | Avvia **solo Scout**, anche 2 in parallelo. Niente Analista/Scorer/Scrittore: non avrebbero input. Lascia gli Scout lavorare massivamente finché non riempono la testa. |
+| **molto new, poco checked** | Analista sotto-dimensionato | Spawna `analista 2`. NON toccare scout (c'è già materiale, rallentali anzi). |
+| **molto checked, poco scored** | Scorer lento | Spawna `scorer 1` se manca; lo Scorer è leggero, 1 basta quasi sempre |
+| **molti scored ≥ 50** | serve capacity di writing | Scrittori. MA qui attento: 1 Scrittore attivo con Critico può bastare a saturare il budget. Non lanciarne 3 per "parallelismo". Accendi 1, osserva 2-3 tick del bridge, poi decidi. |
+| **Scrittori già saturi, coda score ≥ 50 non scende** | capacity limit del plan | NON spawnare scrittori extra: rischi RALLENTA istantaneo. Piuttosto rallenta gli Scout per smettere di gonfiare la coda e consumare meno. |
+| **coda scored bassa MA molti writing in corso** | Scrittori saturi ma producono | Non toccare nulla. Aspetta che writing → ready. |
+
+**Principio guida**: accendere agenti **a monte** quando manca input, **a valle** quando manca output. Mai "a tutti i livelli" senza pensarci.
+
+### Sleep dinamici — sperimenta, non memorizzare
+
+Quando mandi `[@capitano -> @X] sleep <N>`, il numero giusto dipende da:
+- **Quanto siamo fuori target**: proj 97% basta sleep 60s; proj 130% serve 300s; proj 160% serve 600s+.
+- **Reset remaining**: stesso proj 120% è drammatico a reset in 30 min, quasi tollerabile a reset in 3h.
+- **Quale agente**: uno Scrittore con sleep 30s fa molto più male di uno Scout con sleep 30s.
+
+**Strategia "termostato"**: dopo ogni ordine di sleep/rallentamento, attendi 2-3 tick del bridge. Se la proj non scende abbastanza, RADDOPPIA lo sleep (60→120→240). Se scende troppo e rischi LOW, dimezza.
+
+**Sperimenta**: misura la reazione della proj ai tuoi ordini. Il primo giorno imposti ordini grossolani, dopo 2-3 cicli RALLENTA/rientra imparate a calibrare. Annota mentalmente cosa ha funzionato (es. "2 Scrittori attivi = proj sale di ~30% in 10 min").
+
+### Decisioni frequenti — checklist
+
+Prima di spawnare QUALSIASI agente:
+1. `db_query.py stats` — dov'è il backlog?
+2. `db_query.py dashboard` — quante istanze per ruolo sono attive?
+3. `rate_budget.py plan` — in quale zona siamo? proj attuale?
+4. `reset_in` — quanto manca al reset?
+5. Pensa: **l'agente che sto per accendere contribuisce a sciogliere il vero collo di bottiglia, o sto solo riempiendo il team?**
+
+Se la risposta alla #5 è "sto riempiendo", **non spawnare**. Meglio budget non usato che sforamento.
 
 ---
 

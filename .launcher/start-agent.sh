@@ -46,6 +46,34 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
+# ── Worker sentinel (fallback /usage per bridge) ─────────────────────
+# Short-circuit per un ruolo speciale "worker": spawna una sessione
+# SENTINELLA-WORKER con un claude CLI idle, da interrogare col comando
+# /usage quando l'HTTP /api/oauth/usage di Anthropic e' 429. Non e' un
+# agente del team: niente template, niente profile sync, niente kickoff,
+# niente bridge. Singleton: se gia' viva, exit 0 senza errori.
+if [ "$ROLE" = "worker" ]; then
+  WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
+  if tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
+    echo "✓ $WORKER_SESSION gia' attivo"
+    exit 0
+  fi
+  : "${JHT_HOME:=/jht_home}"
+  tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
+  tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
+  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
+  tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
+  # Auto-accept trust dialog × 3 (safety net: se il CLI e' gia' trusted
+  # le Enter extra sono innocue; se chiede il prompt, rispondiamo).
+  setsid sh -c "
+    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
+    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
+    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
+  exit 0
+fi
+
 # Mappa ruolo → prefisso sessione | effort | model
 # model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
 #   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
@@ -362,7 +390,7 @@ send_env_vars() {
 # Claude è un binario Windows e va lanciata via PowerShell.
 if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
-  tmux new-session -d -s "$SESSION" powershell.exe
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe
   sleep 2
   tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
@@ -376,7 +404,12 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   sleep 8
   tmux send-keys -t "$SESSION" Enter
 else
-  tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
+  # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
+  # 80x24 quando la sessione è detached, e capture-pane restituisce output
+  # troncato a 80 colonne — leggibilità terribile nella webUI. 220x50 dà
+  # margine per dashboard / task lists del CLI senza esagerare con i byte
+  # da leggere a ogni tick.
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-accept any first-launch trust / approval dialog the CLI
@@ -452,6 +485,12 @@ _kickoff() {
 if [ "$ROLE" = "capitano" ]; then
   _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) CHECK RATE BUDGET con python3 /app/shared/skills/rate_budget.py plan — se NO_DATA aspetta 1-2 min e riprova, se throttle >= T2 NON spawnare nulla; (2) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (3) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (4) se il budget lo permette spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (5) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt e del budget. Il bridge ti inviera' [BRIDGE ORDER] se la policy cambia — rispetta l'ordine immediatamente, niente ACK necessari."
   _kickoff "$SESSION" "$_msg"
+
+  # Il SENTINELLA-WORKER (sessione tmux con claude CLI idle per fallback
+  # /usage) non viene più spawnato qui all'avvio: il bridge lo crea lazy
+  # solo quando l'HTTP API fallisce, e lo killa dopo 2 tick OK consecutivi.
+  # Risparmia RAM e una sessione concurrent di Claude Max nei periodi in
+  # cui l'endpoint regge.
 
   # Spawna il bridge di monitoraggio rate-limit. Gira in background,
   # polla il provider (HTTP API o rollout JSONL), calcola le metriche,
