@@ -17,7 +17,12 @@ import subprocess
 import urllib.parse
 
 SKILLS_DIR = os.path.dirname(os.path.abspath(__file__))
+# DATA_DIR legacy (repo bind-mount): usato per leggere i test-report .txt
+# committati e come fallback di lettura per i PDF nelle worktree. Le nuove
+# scritture runtime vanno in RUNTIME_DATA_DIR, bind-mount persistente
+# (~/.jht/data) fuori dal repo.
 DATA_DIR = os.path.join(SKILLS_DIR, '..', 'data')
+RUNTIME_DATA_DIR = os.path.join(os.environ.get('JHT_HOME') or SKILLS_DIR + '/..', 'data')
 GENERATE_SCRIPT = os.path.join(SKILLS_DIR, 'generate_dashboard.py')
 
 sys.path.insert(0, SKILLS_DIR)
@@ -1925,10 +1930,17 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._json_response(data)
             return
 
-        # API: gap report (generato dal Mentor)
+        # API: gap report (generato dal Mentor).
+        # Cerca prima in RUNTIME_DATA_DIR (nuovo path $JHT_HOME/data/),
+        # poi fallback DATA_DIR legacy (repo bind-mount) per retro-compat.
         if path == '/api/gap':
-            gap_path = os.path.join(DATA_DIR, 'gap-report.json')
-            if os.path.exists(gap_path):
+            gap_path = None
+            for _base in (RUNTIME_DATA_DIR, DATA_DIR):
+                _cand = os.path.join(_base, 'gap-report.json')
+                if os.path.exists(_cand):
+                    gap_path = _cand
+                    break
+            if gap_path:
                 with open(gap_path, 'r') as f:
                     self._json_response(json.load(f))
             else:

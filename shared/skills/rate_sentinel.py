@@ -44,7 +44,13 @@ CAPTAIN_SESSION = os.environ.get("JHT_CAPTAIN_SESSION", "ALFA")
 WARNING_PCT = 70
 CRITICAL_PCT = 90
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+# DATA_DIR: prima $JHT_HOME/data/ (bind-mount persistente ~/.jht, fuori
+# repo), poi fallback __file__/../data per esecuzioni ad-hoc fuori
+# container. Stessa logica di _db.py (jobs.db). Senza questo, le scritture
+# finivano in /app/shared/data/ che è bind-mount del repo → state file e
+# log leakano come untracked files in git.
+_jht_home = os.environ.get("JHT_HOME")
+DATA_DIR = Path(_jht_home) / "data" if _jht_home else Path(__file__).parent.parent / "data"
 STATE_FILE = DATA_DIR / "rate_sentinel_state.json"
 LOG_FILE = DATA_DIR / "rate_sentinel.log"
 
