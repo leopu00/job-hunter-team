@@ -26,13 +26,13 @@ function ActiveLed({ active }: { active: boolean }) {
       className="team-orgchart-led"
       style={{
         position: 'absolute',
-        top: -2,
-        right: -12,
-        width: 9,
-        height: 9,
+        top: 0,
+        right: -8,
+        width: 5,
+        height: 5,
         borderRadius: '50%',
         background: '#22c55e',
-        boxShadow: '0 0 8px rgba(34,197,94,0.7)',
+        boxShadow: '0 0 5px rgba(34,197,94,0.7)',
       }}
     />
   )
