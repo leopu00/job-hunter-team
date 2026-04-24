@@ -845,7 +845,16 @@ def main():
         parsed["provider"] = provider
 
         last = load_last_sample()
-        history = load_recent_samples(30)
+        # Provider switch guard: se l'ultimo sample era di un provider diverso
+        # (es. utente cambia da kimi a openai), le scale di usage sono
+        # indipendenti e il delta sarebbe un artefatto (kimi=1% → openai=49%
+        # appare come delta=+48%, velocity=777, projection=508%). Invalida
+        # last e history come se fosse un boot pulito per il nuovo provider.
+        if last and last.get("provider") != provider:
+            last = None
+            history = []
+        else:
+            history = load_recent_samples(30)
         entry = compute_metrics(parsed, last, history=history)
         write_jsonl(entry)
         write_log(entry)
