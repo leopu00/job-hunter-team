@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import LoginButton from './LoginButton'
 import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
+import SettingsMenu from './SettingsMenu'
 import UserMenu from './UserMenu'
 
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
@@ -51,12 +52,14 @@ export default function Navbar({ user, workspace }: NavbarProps) {
         {user ? (
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher direction="down" />
+            <SettingsMenu />
             <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
           </div>
         ) : (
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher direction="down" />
             {workspace && <WorkspacePath path={workspace} />}
+            <SettingsMenu />
             <LoginButton />
           </div>
         )}
