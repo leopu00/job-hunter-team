@@ -35,6 +35,8 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const RANGES = [
+  { id: '10m', label: '10m', minutes: 10 },
+  { id: '30m', label: '30m', minutes: 30 },
   { id: '1h',  label: '1h',  minutes: 60 },
   { id: '6h',  label: '6h',  minutes: 6 * 60 },
   { id: '24h', label: '24h', minutes: 24 * 60 },
@@ -44,7 +46,11 @@ type RangeId = (typeof RANGES)[number]['id']
 
 type HoverState = { index: number; xPct: number; yPct: number } | null
 
-function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState) => void }) {
+function Chart({
+  entries, tMin, tMax, onHover,
+}: {
+  entries: Entry[]; tMin: number; tMax: number; onHover: (h: HoverState) => void;
+}) {
   const W = 900
   const H = 360
   const PAD = { top: 36, right: 56, bottom: 32, left: 48 }
@@ -53,43 +59,85 @@ function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState
 
   const svgRef = useRef<SVGSVGElement | null>(null)
 
-  const n = entries.length
+  // x-axis time-based: il grafico copre l'intervallo [tMin, tMax] che il
+  // parent aggiorna al wall-clock. I sample si posizionano al loro ts reale,
+  // non in posizione uniforme tra 0 e n — cosi' gap temporali si vedono e
+  // l'asse scorre anche senza nuovi dati.
+  const tSpan = Math.max(1, tMax - tMin)
   const xAt = useCallback(
-    (i: number) => PAD.left + (n <= 1 ? 0.5 : i / (n - 1)) * innerW,
-    [n, innerW]
+    (ts: number) => PAD.left + ((ts - tMin) / tSpan) * innerW,
+    [tMin, tSpan, innerW]
   )
+
+  // yMax dinamico: scala la verticale in base al valore massimo visibile
+  // (usage, projection, velocity_ideal). Minimo 100 così quando tutto è
+  // sotto quota vediamo comunque la scala 0-100%. Se invece c'è una
+  // projection a 132%, la scala cresce fino a ~150 (round-up a multiplo
+  // di 10 + 10 di margine).
+  const yMax = useMemo(() => {
+    let m = 100
+    for (const e of entries) {
+      for (const v of [e.usage, e.projection, e.velocity_ideal] as (number | undefined | null)[]) {
+        if (typeof v === 'number' && Number.isFinite(v) && v > m) m = v
+      }
+    }
+    return Math.ceil(m / 10) * 10 + 10
+  }, [entries])
+
   const yAt = useCallback(
-    (v: number) => PAD.top + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH,
-    [innerH]
+    (v: number) => PAD.top + innerH - (Math.max(0, Math.min(yMax, v)) / yMax) * innerH,
+    [innerH, yMax]
   )
 
-  const pathFor = (key: keyof Entry) =>
-    entries
-      .map((e, i) => {
-        const v = e[key] as number | undefined
-        if (v === undefined || v === null || Number.isNaN(v)) return null
-        return `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`
-      })
-      .filter(Boolean)
-      .join(' ')
+  // Soglia di gap: se due sample adiacenti distano piu' di GAP_MS nel
+  // tempo reale, interrompiamo il path (usa M invece di L). Cosi' quando
+  // il bridge salta tick (API 429, restart, ecc.) vediamo un buco onesto
+  // invece di una retta che interpola inesistente.
+  const GAP_MS = 3 * 60 * 1000 // 3 minuti: tick default 1m, 3x di slack
 
-  const refLines = [50, 80, 95, 100]
+  const pathFor = (key: keyof Entry) => {
+    const parts: string[] = []
+    let prevTs: number | null = null
+    entries.forEach((e) => {
+      const v = e[key] as number | undefined
+      if (v === undefined || v === null || Number.isNaN(v)) {
+        prevTs = null
+        return
+      }
+      const ts = new Date(e.ts).getTime()
+      const isGap = prevTs !== null && (ts - prevTs) > GAP_MS
+      const cmd = parts.length === 0 || isGap ? 'M' : 'L'
+      parts.push(`${cmd} ${xAt(ts).toFixed(1)} ${yAt(v).toFixed(1)}`)
+      prevTs = ts
+    })
+    return parts.join(' ')
+  }
 
-  // Mouse → nearest point index. SVG usa coordinate viewBox, il mouse
-  // arriva in pixel → scaliamo tramite getBoundingClientRect.
+  const refLines = yMax > 110 ? [50, 80, 95, 100, yMax] : [50, 80, 95, 100]
+
+  // Mouse → nearest sample (by time). Inverse di xAt (time-based):
+  // pxX → vbX → ts → trova il sample col ts più vicino.
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
-    if (!svg || n === 0) return
+    if (!svg || entries.length === 0) return
     const rect = svg.getBoundingClientRect()
     const pxX = e.clientX - rect.left
     const vbX = (pxX / rect.width) * W
-    // Map vbX → index: inverse di xAt. xAt(i) = PAD.left + i/(n-1) * innerW.
     const rel = Math.max(0, Math.min(1, (vbX - PAD.left) / innerW))
-    const idx = n <= 1 ? 0 : Math.round(rel * (n - 1))
+    const targetTs = tMin + rel * tSpan
+    let bestIdx = 0
+    let bestDiff = Infinity
+    entries.forEach((en, i) => {
+      const ts = Date.parse(en.ts)
+      if (!Number.isFinite(ts)) return
+      const diff = Math.abs(ts - targetTs)
+      if (diff < bestDiff) { bestDiff = diff; bestIdx = i }
+    })
+    const bestTs = Date.parse(entries[bestIdx].ts)
     onHover({
-      index: idx,
-      xPct: (xAt(idx) / W) * 100,
-      yPct: (yAt(entries[idx].usage) / H) * 100,
+      index: bestIdx,
+      xPct: (xAt(bestTs) / W) * 100,
+      yPct: (yAt(entries[bestIdx].usage) / H) * 100,
     })
   }
 
@@ -106,52 +154,90 @@ function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState
         borderRadius: 8,
         background: 'var(--color-panel)',
         display: 'block',
-        cursor: n > 0 ? 'crosshair' : 'default',
+        cursor: entries.length > 0 ? 'crosshair' : 'default',
       }}
     >
-      {refLines.map(v => (
-        <g key={v}>
-          <line
-            x1={PAD.left}
-            x2={W - PAD.right}
-            y1={yAt(v)}
-            y2={yAt(v)}
-            stroke={v === 100 ? '#f87171' : v === 95 ? '#facc15' : 'rgba(255,255,255,0.08)'}
-            strokeDasharray={v >= 95 ? '4 4' : '2 6'}
-            strokeWidth={v >= 95 ? 1 : 0.5}
-          />
-          <text x={W - PAD.right + 5} y={yAt(v) + 4} fontSize={10} fill="rgba(255,255,255,0.5)">
-            {v}%
-          </text>
-        </g>
-      ))}
+      {/* Sweet spot: banda 85%-95% dove vogliamo stare.
+           Projection sotto 85 = sottouso (SPINGI), sopra 95 = alert RALLENTA. */}
+      <rect
+        x={PAD.left}
+        y={yAt(95)}
+        width={innerW}
+        height={yAt(85) - yAt(95)}
+        fill="#22c55e"
+        opacity={0.08}
+      />
+      <line
+        x1={PAD.left} x2={W - PAD.right}
+        y1={yAt(95)} y2={yAt(95)}
+        stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
+      />
+      <line
+        x1={PAD.left} x2={W - PAD.right}
+        y1={yAt(85)} y2={yAt(85)}
+        stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
+      />
+      <text
+        x={W - PAD.right + 5}
+        y={yAt(90) + 3}
+        fontSize={9}
+        fill="rgba(34,197,94,0.75)"
+        fontWeight="600"
+      >
+        target
+      </text>
+
+      {refLines.map(v => {
+        const isQuota = v === 100
+        const isTargetEdge = v === 95
+        const highlighted = isQuota || isTargetEdge
+        return (
+          <g key={v}>
+            <line
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={yAt(v)}
+              y2={yAt(v)}
+              stroke={isQuota ? '#f87171' : isTargetEdge ? '#facc15' : 'rgba(255,255,255,0.08)'}
+              strokeDasharray={highlighted ? '4 4' : '2 6'}
+              strokeWidth={highlighted ? 1 : 0.5}
+            />
+            <text x={W - PAD.right + 5} y={yAt(v) + 4} fontSize={10} fill="rgba(255,255,255,0.5)">
+              {v}%
+            </text>
+          </g>
+        )
+      })}
 
       <path d={pathFor('projection')} stroke="#a78bfa" strokeWidth={1.3} fill="none" strokeDasharray="5 4" opacity={0.7} />
       <path d={pathFor('velocity_ideal')} stroke="#64748b" strokeWidth={1} fill="none" opacity={0.5} />
       <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={2} fill="none" />
 
-      {entries.map((e, i) => (
-        <circle
-          key={i}
-          cx={xAt(i)}
-          cy={yAt(e.usage)}
-          r={2.6}
-          fill={STATUS_COLOR[e.status] || '#22d3ee'}
-          stroke="#0f172a"
-          strokeWidth={1}
-        />
-      ))}
+      {entries.map((e, i) => {
+        const ts = Date.parse(e.ts)
+        if (!Number.isFinite(ts)) return null
+        return (
+          <circle
+            key={i}
+            cx={xAt(ts)}
+            cy={yAt(e.usage)}
+            r={2.6}
+            fill={STATUS_COLOR[e.status] || '#22d3ee'}
+            stroke="#0f172a"
+            strokeWidth={1}
+          />
+        )
+      })}
 
-      {entries.length > 0 && (
-        <>
-          <text x={PAD.left} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)">
-            {new Date(entries[0].ts).toLocaleTimeString()}
-          </text>
-          <text x={W - PAD.right} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)" textAnchor="end">
-            {new Date(entries[entries.length - 1].ts).toLocaleTimeString()}
-          </text>
-        </>
-      )}
+      {/* Etichette asse tempo: tMin e tMax (wall-clock), non il primo/ultimo
+          sample. Cosi' gli estremi riflettono la finestra selezionata anche
+          se non ci sono sample recenti. */}
+      <text x={PAD.left} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)">
+        {new Date(tMin).toLocaleTimeString()}
+      </text>
+      <text x={W - PAD.right} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)" textAnchor="end">
+        {new Date(tMax).toLocaleTimeString()}
+      </text>
 
       {entries.length === 0 && (
         <text
@@ -165,16 +251,65 @@ function Chart({ entries, onHover }: { entries: Entry[]; onHover: (h: HoverState
         </text>
       )}
 
-      <g transform={`translate(${PAD.left}, 10)`}>
-        <rect x={0} y={-7} width={12} height={2} fill="#22d3ee" />
-        <text x={16} y={-2} fontSize={10} fill="rgba(255,255,255,0.8)">usage</text>
-        <rect x={62} y={-7} width={12} height={2} fill="#a78bfa" />
-        <text x={78} y={-2} fontSize={10} fill="rgba(255,255,255,0.8)">proiezione</text>
-        <rect x={148} y={-7} width={12} height={2} fill="#64748b" />
-        <text x={164} y={-2} fontSize={10} fill="rgba(255,255,255,0.8)">ideale</text>
-      </g>
     </svg>
   )
+}
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 mt-2 text-[10px] text-[var(--color-muted)]">
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#22d3ee' }} />
+        usage
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-block', width: 14, height: 2,
+            background: 'repeating-linear-gradient(90deg, #a78bfa 0 4px, transparent 4px 7px)',
+          }}
+        />
+        proiezione
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#64748b' }} />
+        ideale
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-block', width: 14, height: 7,
+            background: 'rgba(34,197,94,0.18)',
+            border: '1px solid rgba(34,197,94,0.5)',
+          }}
+        />
+        target 85-95%
+      </span>
+    </div>
+  )
+}
+
+/** UTC "HH:MM" → "reset tra 2h 14m (19:30 Europe/Rome)". Se tra <60m, solo minuti. */
+function formatResetDisplay(reset_at?: string | null): string {
+  if (!reset_at) return ''
+  const [hStr, mStr] = reset_at.split(':')
+  const h = Number(hStr), m = Number(mStr)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return ''
+  const now = new Date()
+  const resetUTC = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0
+  ))
+  if (resetUTC.getTime() <= now.getTime()) {
+    resetUTC.setUTCDate(resetUTC.getUTCDate() + 1)
+  }
+  const deltaMin = Math.max(0, Math.round((resetUTC.getTime() - now.getTime()) / 60000))
+  const hh = Math.floor(deltaMin / 60)
+  const mm = deltaMin % 60
+  const remaining = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`
+  const localHHMM = resetUTC.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return `reset tra ${remaining} (${localHHMM})`
 }
 
 function Tooltip({ entry }: { entry: Entry }) {
@@ -194,7 +329,7 @@ function Tooltip({ entry }: { entry: Entry }) {
         {entry.projection !== undefined && entry.projection !== null && (
           <div>
             <span className="text-[var(--color-dim)]">proj:</span>{' '}
-            <span style={{ color: '#a78bfa' }}>{Math.round(entry.projection)}%</span>
+            <span style={{ color: '#a78bfa' }}>{entry.projection.toFixed(1)}%</span>
           </div>
         )}
         {entry.velocity_smooth !== undefined && (
@@ -239,6 +374,7 @@ export default function UsageChart() {
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<RangeId>('6h')
   const [hover, setHover] = useState<HoverState>(null)
+  const [nowTs, setNowTs] = useState(() => Date.now())
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const loadData = useCallback(async () => {
@@ -252,21 +388,36 @@ export default function UsageChart() {
 
   useEffect(() => {
     loadData()
-    const id = setInterval(loadData, 30_000)
-    return () => clearInterval(id)
+    // Data fetch ogni 10s — cadenza indipendente dal bridge (1-3m adaptive):
+    // appena il bridge scrive un nuovo sample, lo vediamo entro 10s.
+    const dataId = setInterval(loadData, 10_000)
+    // Wall-clock tick ogni 10s per far scorrere l'asse x. Cosi' anche se
+    // non arrivano nuovi dati, il tempo avanza, l'ultimo sample scorre a
+    // sinistra e vediamo il chart "vivo" invece che congelato sul punto.
+    const clockId = setInterval(() => setNowTs(Date.now()), 10_000)
+    return () => { clearInterval(dataId); clearInterval(clockId) }
   }, [loadData])
 
-  // Filtra per range. "all" disattiva il filtro. Calcolato con useMemo
-  // per evitare ricalcoli ad ogni hover (che resetterebbe il picking).
-  const filtered = useMemo(() => {
+  // Range temporale: tMax = now (ancorato al clock wall-clock), tMin =
+  // now - rangeMinutes. Se "tutto", tMin = timestamp del primo sample.
+  // Ricalcolato al tick del clock cosi' l'asse scorre nel tempo.
+  const { tMin, tMax } = useMemo(() => {
     const meta = RANGES.find(r => r.id === range) ?? RANGES[1]
-    if (!Number.isFinite(meta.minutes)) return entries
-    const cutoff = Date.now() - meta.minutes * 60_000
+    const tMaxCalc = nowTs
+    if (!Number.isFinite(meta.minutes)) {
+      // "tutto": usa il primo sample come tMin, o 10 min fa se vuoto
+      const firstTs = entries.length > 0 ? Date.parse(entries[0].ts) : tMaxCalc - 10 * 60_000
+      return { tMin: Number.isFinite(firstTs) ? firstTs : tMaxCalc - 10 * 60_000, tMax: tMaxCalc }
+    }
+    return { tMin: tMaxCalc - meta.minutes * 60_000, tMax: tMaxCalc }
+  }, [range, nowTs, entries])
+
+  const filtered = useMemo(() => {
     return entries.filter(e => {
       const t = Date.parse(e.ts)
-      return Number.isFinite(t) && t >= cutoff
+      return Number.isFinite(t) && t >= tMin && t <= tMax
     })
-  }, [entries, range])
+  }, [entries, tMin, tMax])
 
   const last = filtered.length > 0 ? filtered[filtered.length - 1] : null
   const hovered = hover && filtered[hover.index] ? filtered[hover.index] : null
@@ -284,6 +435,11 @@ export default function UsageChart() {
               <span className="text-[10px]" style={{ color: STATUS_COLOR[last.status] || 'var(--color-muted)' }}>
                 {last.status}
               </span>
+              {last.reset_at && (
+                <span className="text-[10px] text-[var(--color-dim)]">
+                  {formatResetDisplay(last.reset_at)}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -325,8 +481,9 @@ export default function UsageChart() {
       {loading && filtered.length === 0 ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">Caricamento…</div>
       ) : (
+        <div>
         <div className="relative">
-          <Chart entries={filtered} onHover={setHover} />
+          <Chart entries={filtered} tMin={tMin} tMax={tMax} onHover={setHover} />
 
           {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
           {hover && hovered && (
@@ -353,6 +510,9 @@ export default function UsageChart() {
               </div>
             </>
           )}
+        </div>
+        {/* Legenda sotto il frame del chart */}
+        <Legend />
         </div>
       )}
 
