@@ -97,7 +97,14 @@ const PROVIDERS = {
           'export PATH="$HOME/.local/bin:$PATH"',
           'command -v uv >/dev/null || { echo "[kimi-install] uv MISSING dopo pip install"; echo "Contenuto $HOME/.local/bin/:"; ls -la "$HOME/.local/bin/" 2>&1 || true; exit 1; }',
           'echo "[kimi-install] uv at $(command -v uv)"',
-          'UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --python 3.13 kimi-cli',
+          // --force: il bind-mount /jht_home/.local/share/uv/ persiste
+          // tra container (bind di ~/.jht). Se l'utente ha gia' installato
+          // kimi in un container precedente e ora ricrea il container, la
+          // skip-probe (command -v kimi) fallisce col PATH nuovo, ma uv
+          // vede i suoi file ancora li' e rifiuta con "Executables already
+          // exist: kimi, kimi-cli (use --force)". --force e' idempotente
+          // su install fresca, su re-install pinna l'ultima versione.
+          'UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --force --python 3.13 kimi-cli',
         ].join(' && ')],
       },
     ],
