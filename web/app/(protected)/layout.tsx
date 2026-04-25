@@ -3,7 +3,6 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
-import { JHT_USER_DIR } from '@/lib/jht-paths'
 import { readWorkspaceProfile, isProfileComplete } from '@/lib/profile-reader'
 import Navbar from '@/components/NavbarChrome'
 import MainChrome from '@/components/MainChrome'
@@ -62,7 +61,7 @@ export default async function ProtectedLayout({
   // Local mode OR localhost request with cloud config: no auth.
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
-      <Navbar user={null} workspace={JHT_USER_DIR} />
+      <Navbar user={null} />
       <MainChrome>{children}</MainChrome>
     </div>
   )
