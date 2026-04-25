@@ -42,8 +42,13 @@ async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
   // Il Capitano riceve JHT_TICK_INTERVAL perche' start-agent.sh lo
   // propaga al sentinel-bridge.py spawnato in background.
+  // La Sentinella e' un watchdog LLM leggero: gira sempre durante
+  // l'attivita' del team per coprire il bridge se fallisce / 429 /
+  // dati incoerenti. Spawn automatico al boot del team, no spawn
+  // ricorsivo da Capitano.
   return [
-    { role: 'capitano', session: 'CAPITANO', instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
+    { role: 'capitano',   session: 'CAPITANO',   instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
+    { role: 'sentinella', session: 'SENTINELLA', instance: null },
   ]
 }
 
