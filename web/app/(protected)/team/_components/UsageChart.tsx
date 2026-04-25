@@ -104,7 +104,14 @@ function Chart({
   // tempo reale, interrompiamo il path (usa M invece di L). Cosi' quando
   // il bridge salta tick (API 429, restart, ecc.) vediamo un buco onesto
   // invece di una retta che interpola inesistente.
-  const GAP_MS = 3 * 60 * 1000 // 3 minuti: tick default 1m, 3x di slack
+  // Gap tra sample oltre il quale la linea si spezza (per evitare di
+  // interpolare un buco di osservazione come se fosse continuità).
+  // Calibrazione: post-2026-04-25 il bridge tickka ogni 5 min e la
+  // Sentinella scrive a ogni tick → gap fisiologico ~5 min. Alziamo a
+  // 12 min (2.4x del tick) così la linea si connette regolarmente; se
+  // c'è un vero blackout (>12 min senza sample) la linea si spezza
+  // come segnale visivo.
+  const GAP_MS = 12 * 60 * 1000
 
   const pathFor = (key: keyof Entry) => {
     const parts: string[] = []
