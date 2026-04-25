@@ -11,10 +11,9 @@ const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher
 
 interface NavbarProps {
   user: User | null
-  workspace?: string | null
 }
 
-export default function Navbar({ user, workspace }: NavbarProps) {
+export default function Navbar({ user }: NavbarProps) {
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
   const fullName  = user?.user_metadata?.full_name as string | undefined
   const email     = user?.email ?? ''
@@ -58,7 +57,6 @@ export default function Navbar({ user, workspace }: NavbarProps) {
         ) : (
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher direction="down" />
-            {workspace && <WorkspacePath path={workspace} />}
             <SettingsMenu />
             <LoginButton />
           </div>
@@ -68,35 +66,3 @@ export default function Navbar({ user, workspace }: NavbarProps) {
   )
 }
 
-function WorkspacePath({ path }: { path: string }) {
-  const segments = path.split('/').filter(Boolean)
-  // Rimuovi i segmenti "Users" e username per un path piu' pulito
-  const homeIdx = segments.indexOf('Users')
-  const display = homeIdx !== -1 && homeIdx + 2 < segments.length
-    ? segments.slice(homeIdx + 2)
-    : segments.slice(-3)
-
-  return (
-    <Link
-      href="/?change=true"
-      className="hidden sm:flex items-center gap-1.5 max-w-[320px] no-underline hover:opacity-75 transition-opacity cursor-pointer"
-    >
-      <span className="text-[11px] flex-shrink-0" role="img" aria-label="cartella">📁</span>
-      {display.map((seg, i) => (
-        <span key={i} className="flex items-center gap-1.5 min-w-0">
-          {i > 0 && <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0">›</span>}
-          <span
-            className="text-[10px] font-medium truncate"
-            title={seg}
-            style={{
-              color: i === display.length - 1 ? 'var(--color-bright)' : 'var(--color-dim)',
-              maxWidth: i === display.length - 1 ? '140px' : '80px',
-            }}
-          >
-            {seg}
-          </span>
-        </span>
-      ))}
-    </Link>
-  )
-}
