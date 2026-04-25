@@ -177,6 +177,10 @@ a:hover { text-decoration: underline; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Lo shrink del <main> quando l'assistente fluttuante e` aperto e` gestito
+   via inline style direttamente dal componente ProfileAssistantFab — usare
+   CSS qui creava conflitti di specificity con `mx-auto` e simili utility. */
+
 /* ── Forms ───────────────────────────────────────────────────────── */
 input, textarea, select {
   font-family: var(--font-mono);
