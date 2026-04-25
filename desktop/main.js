@@ -297,9 +297,11 @@ app.whenReady().then(() => {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
     // Il dev-up.sh dura ~20-30s (recreate container + fix chown + start
-    // Next). Aspettiamo in background e apriamo il browser quando :3001
-    // risponde; se dopo 60s non risponde apriamo comunque cosi' l'utente
-    // vede l'errore.
+    // Next). Aspettiamo in background che :3001 risponda e ritorniamo
+    // il flag `ready` al renderer. NON apriamo piu' il browser
+    // automaticamente (rimosso 2026-04-25 su richiesta utente: forzava
+    // Chrome che non e' il browser scelto). L'utente apre da solo o usa
+    // il bottone dedicato `home-btn-dev-open` nella card Avanzate.
     const waitForReady = async () => {
       const { request } = require('node:http')
       const deadline = Date.now() + 60_000
@@ -318,7 +320,6 @@ app.whenReady().then(() => {
       return false
     }
     const ready = await waitForReady()
-    try { await shell.openExternal('http://localhost:3001') } catch { /* non-fatal */ }
     return { ok: true, ready }
   })
   // Dev mode probe: una HEAD su localhost:3001 dice se il Next host
