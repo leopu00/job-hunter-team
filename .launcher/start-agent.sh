@@ -515,8 +515,12 @@ if [ "$ROLE" = "capitano" ]; then
       kill "$_pid" 2>/dev/null || true
     done
     sleep 1
+    # Bridge V4: fa subito fetch+sample al boot per popolare il grafico
+    # PRIMA che il Capitano faccia il suo primo rate_budget live. Rimosso
+    # il vecchio `sleep 20` (legacy V1, serviva ad aspettare che il CLI
+    # claude del Capitano fosse stabile prima di parsare il pane TUI —
+    # in V4 il bridge non legge il pane, va in fetch API diretto).
     setsid sh -c "
-      sleep 20
       JHT_TARGET_SESSION='$SESSION' \
       JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
         python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
