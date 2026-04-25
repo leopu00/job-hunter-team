@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import type { CandidateProfile } from '@/lib/types'
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -37,26 +38,29 @@ function useLang(): Lang {
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
-type CompletionCheck = { ok: boolean; label: Record<Lang, string> }
+type CompletionCheck = { ok: boolean; label: Record<Lang, string>; anchor: string }
 
+// `anchor` punta all'id della FormSection corrispondente in /profile/edit.
+// Cambiando un'ancora qui aggiorna anche il deep-link cliccando il chip
+// del campo mancante.
 function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
   if (!p) return []
   return [
-    { ok: !!p.name, label: { it: 'Nome', en: 'Name' } },
-    { ok: !!p.email, label: { it: 'Email', en: 'Email' } },
-    { ok: !!p.target_role, label: { it: 'Ruolo target', en: 'Target role' } },
-    { ok: !!p.location, label: { it: 'Location', en: 'Location' } },
-    { ok: p.experience_years != null, label: { it: 'Anni esperienza', en: 'Experience years' } },
-    { ok: !!(p.skills && Object.keys(p.skills).length > 0), label: { it: 'Skills', en: 'Skills' } },
-    { ok: !!(p.languages && p.languages.length > 0), label: { it: 'Lingue', en: 'Languages' } },
-    { ok: !!(p.job_titles && p.job_titles.length > 0), label: { it: 'Ruoli desiderati', en: 'Desired roles' } },
-    { ok: !!(p.location_preferences && p.location_preferences.length > 0), label: { it: 'Preferenze sede', en: 'Location prefs' } },
-    { ok: p.salary_target != null, label: { it: 'Salary target', en: 'Salary target' } },
-    { ok: !!(p.positioning?.contacts && Object.values(p.positioning.contacts).some(Boolean)), label: { it: 'Contatti', en: 'Contacts' } },
-    { ok: !!(p.positioning?.experience && (p.positioning.experience as unknown[]).length > 0), label: { it: 'Esperienza', en: 'Experience' } },
-    { ok: !!(p.positioning?.education && (p.positioning.education as unknown[]).length > 0), label: { it: 'Formazione', en: 'Education' } },
-    { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), label: { it: 'Obiettivi carriera', en: 'Career goals' } },
-    { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), label: { it: 'Punti di forza', en: 'Strengths' } },
+    { ok: !!p.name, label: { it: 'Nome', en: 'Name' }, anchor: 'info-base' },
+    { ok: !!p.email, label: { it: 'Email', en: 'Email' }, anchor: 'info-base' },
+    { ok: !!p.target_role, label: { it: 'Ruolo target', en: 'Target role' }, anchor: 'info-base' },
+    { ok: !!p.location, label: { it: 'Location', en: 'Location' }, anchor: 'info-base' },
+    { ok: p.experience_years != null, label: { it: 'Anni esperienza', en: 'Experience years' }, anchor: 'info-base' },
+    { ok: !!(p.skills && Object.keys(p.skills).length > 0), label: { it: 'Skills', en: 'Skills' }, anchor: 'skills' },
+    { ok: !!(p.languages && p.languages.length > 0), label: { it: 'Lingue', en: 'Languages' }, anchor: 'lingue' },
+    { ok: !!(p.job_titles && p.job_titles.length > 0), label: { it: 'Ruoli desiderati', en: 'Desired roles' }, anchor: 'ruoli-target' },
+    { ok: !!(p.location_preferences && p.location_preferences.length > 0), label: { it: 'Preferenze sede', en: 'Location prefs' }, anchor: 'location-preferite' },
+    { ok: p.salary_target != null, label: { it: 'Salary target', en: 'Salary target' }, anchor: 'salary-target' },
+    { ok: !!(p.positioning?.contacts && Object.values(p.positioning.contacts).some(Boolean)), label: { it: 'Contatti', en: 'Contacts' }, anchor: 'contatti' },
+    { ok: !!(p.positioning?.experience && (p.positioning.experience as unknown[]).length > 0), label: { it: 'Esperienza', en: 'Experience' }, anchor: 'esperienza-lavorativa' },
+    { ok: !!(p.positioning?.education && (p.positioning.education as unknown[]).length > 0), label: { it: 'Formazione', en: 'Education' }, anchor: 'formazione' },
+    { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), label: { it: 'Obiettivi carriera', en: 'Career goals' }, anchor: 'obiettivi-carriera' },
+    { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), label: { it: 'Punti di forza', en: 'Strengths' }, anchor: 'punti-di-forza' },
   ]
 }
 
@@ -326,13 +330,15 @@ export default function ProfileStats({ profile }: Props) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {missingFields.map((f, i) => (
-              <span
+              <Link
                 key={i}
-                className="text-[10px] px-2 py-0.5 rounded border font-semibold"
+                href={`/profile/edit#${f.anchor}`}
+                title={lang === 'it' ? `Vai a "${f.label.it}"` : `Go to "${f.label.en}"`}
+                className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
               >
                 {f.label[lang]}
-              </span>
+              </Link>
             ))}
           </div>
         </div>
