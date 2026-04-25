@@ -247,16 +247,69 @@ def live():
     reset_at = sample.get("reset_at")
     weekly = sample.get("weekly_usage")
     remaining = hours_minutes_until(reset_at) or "-"
+
+    # Auto-registra il sample nel JSONL del bridge marcando il source
+    # in base a chi sta eseguendo la skill. Permette al grafico di
+    # mostrare TUTTI i check (capitano + sentinella + bridge), non solo
+    # quelli del bridge clock. Non bloccante: se il record fallisce il
+    # comando deve ancora stampare l'output utile al chiamante.
+    detected_source = _detect_source_from_env()
+    try:
+        _record_sample_via_skill({
+            "usage": usage,
+            "reset_at": reset_at,
+            "provider": provider,
+            "weekly_usage": weekly,
+        }, source=detected_source)
+    except Exception as e:
+        print(f"warn: auto-record JSONL fallito: {e}", file=sys.stderr)
+
     parts = [
         f"provider={provider}",
         f"usage={usage}%",
         f"reset_in={remaining}",
         f"reset_at={local_reset_display(reset_at)}",
-        "source=live",
+        f"source={detected_source}",
     ]
     if weekly is not None:
         parts.append(f"weekly={weekly}%")
     print(" ".join(parts))
+
+
+def _detect_source_from_env():
+    """Capisce chi sta chiamando la skill leggendo $JHT_AGENT_DIR
+    (settato da start-agent.sh per ogni agente del team).
+
+    Mapping:
+      .../agents/capitano       -> 'capitano'
+      .../agents/sentinella     -> 'sentinella-api'   (ramo API,
+                                   il worker fallback usa --manual)
+      qualsiasi altro path o env mancante -> 'manual'
+    """
+    agent_dir = (os.environ.get("JHT_AGENT_DIR") or "").rstrip("/")
+    if not agent_dir:
+        return "manual"
+    leaf = agent_dir.rsplit("/", 1)[-1].lower()
+    if leaf == "capitano":
+        return "capitano"
+    if leaf == "sentinella":
+        return "sentinella-api"
+    return "manual"
+
+
+def _record_sample_via_skill(parsed, source):
+    """Chiama la skill usage_record per scrivere il sample nel JSONL
+    (con calcolo delle metriche derivate). Path-import per riuso.
+    """
+    here = Path(__file__).resolve().parent
+    record_path = here / "usage_record.py"
+    if not record_path.exists():
+        return  # skill non installata, niente record (non fatale)
+    spec = importlib.util.spec_from_file_location("usage_record", record_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sample = mod.make_sample(parsed, source=source)
+    mod.append_sample(sample)
 
 
 def main():
