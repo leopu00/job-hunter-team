@@ -59,14 +59,12 @@ const nextConfig: NextConfig = {
       '**/*.map',
     ],
   },
-  // Turbopack root: nel container va a MONOREPO_ROOT (/app) per monorepo
-  // file-tracing. Sull'host dev Windows però quel root ha un node_modules
-  // parziale (solo next/react, niente tailwind) che manda in loop il
-  // resolver di @tailwindcss/postcss — ogni risoluzione fallita spawnava
-  // un postcss worker che non moriva. Sull'host lasciamo cwd (web/).
-  turbopack: process.env.JHT_SHELL_VIA?.startsWith('docker:')
-    ? {}
-    : { root: MONOREPO_ROOT },
+  // Turbopack root: lasciamo sempre cwd (web/). Usare MONOREPO_ROOT scatena
+  // un loop nel resolver di @tailwindcss/postcss che spawna worker che non
+  // muoiono (leak RAM lineare → freeze Mac, vedi crash 25/04). Per il
+  // file-tracing del build resta outputFileTracingRoot sopra; quello vale
+  // per `next build --output=standalone` e non tocca il dev server.
+  turbopack: {},
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   images: {
