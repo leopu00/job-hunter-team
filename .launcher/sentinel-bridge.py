@@ -1453,78 +1453,162 @@ def _ensure_sentinella_alive():
     return None, out or "unknown_skill_response"
 
 
+CAPITANO_ALERT_FAIL_THRESHOLD = 3  # tick consecutivi falliti prima di alert al Capitano
+
+
+def _do_fetch_for_provider(provider):
+    """Wrapper provider-aware del fetch. Ritorna (parsed_dict, fail_reason).
+    Riusa le funzioni fetch_* gia' presenti come libreria nel modulo.
+    """
+    if provider in ("kimi", "moonshot"):
+        parsed = fetch_kimi_api()
+        return (parsed, None) if parsed else (None, "kimi_api_none")
+    if provider in ("anthropic", "claude"):
+        result = fetch_claude_api()
+        if result == "RATE_LIMIT":
+            return None, "claude_429"
+        if result is None:
+            return None, "claude_api_none"
+        return result, None
+    if provider in ("openai",):
+        parsed = fetch_codex_rollout()
+        return (parsed, None) if parsed else (None, "codex_rollout_none")
+    return None, f"provider_unsupported_{provider}"
+
+
 def main():
-    """Bridge clock semplificato (post-rifattorizzazione 2026-04-25).
+    """Bridge V3 — fetch attivo + Sentinella come fallback (2026-04-25).
 
-    Architettura nuova decisa con Leone:
-      • il bridge NON fa più fetch API / calcoli / escalation.
-      • ogni TICK_INTERVAL_MIN minuti:
-          1) verifica che la sessione SENTINELLA sia viva (sentinel_health.py)
-             - se morta, sentinel_health la rispawna automaticamente
-             - se irrecuperabile, manda warning al Capitano
-          2) invia un breve [BRIDGE TICK] alla SENTINELLA, che eseguirà
-             le sue skill (rate_budget live + fallback worker tmux) e
-             scriverà il sample nel JSONL con source=sentinella-*
-      • il Capitano ha la sua skill rate_budget live (auto-record con
-        source=capitano) e la usa a sua discrezione dopo gli spawn.
+    Architettura V3 (richiesta da Leone dopo aver osservato il consumo
+    LLM idle del modello V2 clock-only):
 
-    Vantaggi rispetto al bridge precedente:
-      • zero rischio di timeout API (non chiama nessuna API)
-      • robustezza: se Sentinella muore, viene resuscitata; se non
-        riparte, il Capitano è informato e si arrangia con la sua skill
-      • singola responsabilità: ORA il bridge è un cron, non un cervello
+      • Ogni TICK_INTERVAL_MIN minuti:
+          1) fetch del provider attivo (codex JSONL / kimi HTTP / claude HTTP)
+          2) se OK: compute_metrics + scrive sample con source=bridge
+          3) se FAIL: chiama sentinel_health (Sentinella alive?) e invia
+             [BRIDGE FAILURE] alla Sentinella che fa fallback (rate_budget
+             live → check_usage worker tmux). Reset del contatore al
+             prossimo fetch riuscito (recovery message).
+
+      • Al fail #CAPITANO_ALERT_FAIL_THRESHOLD consecutivo: alert al
+        Capitano (situazione persistente, anche la Sentinella potrebbe
+        non riuscire a coprire).
+
+      • La Sentinella resta IDLE in regime normale — zero turn LLM
+        consumati per check periodici. Si attiva solo su [BRIDGE FAILURE]
+        o [BRIDGE ALERT degraded persistente].
+
+    Vantaggi rispetto a V2 (clock-only):
+      • Sentinella non consuma turn LLM ogni 5 min (~5%/h risparmio rate)
+      • Sample primario sempre dal bridge (deterministico, niente LLM
+        che ragiona sul "verdict" se non serve)
+      • Sentinella diventa davvero "rete di sicurezza", non esecutore
+        primario
+
+    Robustezza per claude (API rate-limited): il bridge va in 429? Manda
+    [BRIDGE FAILURE] alla Sentinella che esegue check_usage (worker
+    fallback TUI con /usage modal claude, indipendente dall'API HTTP).
     """
     acquire_singleton_lock()
-    print(f"[sentinel-bridge] CLOCK MODE — target sentinella={SENTINELLA_SESSION}, "
-          f"capitano={TARGET_SESSION} (pid={os.getpid()})")
+    print(f"[sentinel-bridge] V3 — fetch+record, sentinella as fallback")
+    print(f"[sentinel-bridge] target sentinella={SENTINELLA_SESSION}, capitano={TARGET_SESSION} (pid={os.getpid()})")
     print(f"[sentinel-bridge] tick interval: {TICK_INTERVAL_MIN} min")
 
-    sentinella_was_recovered = False  # per messaggio una-tantum al capitano
+    fetch_fail_count = 0
+    sentinella_was_fatal = False  # per recovery message una-tantum
+    capitano_alerted = False       # per evitare alert ripetuti al Capitano
+
     while True:
         now_h = datetime.now().strftime("%H:%M:%S")
+        tick_min, provider = read_config()
 
-        health, detail = _ensure_sentinella_alive()
-        if health is None:
-            # Sentinella irrecuperabile: avvisa il Capitano una sola volta
-            # per "episodio" e prosegui (lui avrà rate_budget per i suoi
-            # check autonomi). Quando torna recuperabile, manda recovery.
-            if not sentinella_was_recovered:
-                if session_exists(TARGET_SESSION):
+        # ── Fetch primario (provider-aware) ────────────────────────────
+        parsed, fail_reason = _do_fetch_for_provider(provider)
+
+        if parsed is not None:
+            # ── Path successo: scrivi sample con source=bridge ─────────
+            parsed["provider"] = provider
+            last = load_last_sample()
+            # Provider switch guard: se l'ultimo sample era altro provider,
+            # invalida last/history come boot pulito (vedi commento in V1).
+            if last and last.get("provider") != provider:
+                last = None
+                history = []
+            else:
+                history = load_recent_samples(30)
+            entry = compute_metrics(parsed, last, history=history)
+            entry["source"] = "bridge"
+            write_jsonl(entry)
+            write_log(entry)
+
+            print(f"[sentinel-bridge] {now_h} — fetch OK source=bridge "
+                  f"usage={entry['usage']}% proj={entry.get('projection') or '-'} "
+                  f"(fail_streak={fetch_fail_count})")
+
+            # Recovery: se ero in stato di failure persistente, notifica
+            # i ruoli interessati che la sorgente è tornata responsiva.
+            if fetch_fail_count > 0:
+                if session_exists(SENTINELLA_SESSION):
+                    jht_tmux_send(
+                        SENTINELLA_SESSION,
+                        f"[BRIDGE INFO] fetch tornato OK dopo {fetch_fail_count} fail. "
+                        "Torno io a scrivere i sample, tu torna idle."
+                    )
+                if capitano_alerted and session_exists(TARGET_SESSION):
                     jht_tmux_send(
                         TARGET_SESSION,
-                        f"[BRIDGE ALERT] Sentinella morta e non recuperabile ({detail}). "
-                        "Continua i tuoi check autonomi via rate_budget live "
-                        "finché non riparte (il prossimo `start-agent.sh sentinella` la rimette su)."
+                        "[BRIDGE INFO] Sorgente usage tornata responsiva, monitoraggio normale ripreso."
                     )
-                sentinella_was_recovered = True
-                print(f"[sentinel-bridge] {now_h} — sentinella FATAL ({detail}), Capitano avvisato, skip tick")
-            else:
-                print(f"[sentinel-bridge] {now_h} — sentinella ancora ko ({detail}), skip tick silenzioso")
-            time.sleep(TICK_INTERVAL_MIN * 60)
-            continue
+                fetch_fail_count = 0
+                capitano_alerted = False
 
-        # Sentinella viva (o appena rispawnata): se ero in stato "fatal",
-        # segnala recovery al Capitano una volta sola.
-        if sentinella_was_recovered:
-            sentinella_was_recovered = False
-            if session_exists(TARGET_SESSION):
-                jht_tmux_send(
-                    TARGET_SESSION,
-                    "[BRIDGE INFO] Sentinella tornata viva, monitoraggio ripreso."
-                )
-
-        # Manda il TICK alla Sentinella. Il messaggio è breve apposta:
-        # la Sentinella sa già cosa fare (vedi suo prompt).
-        if health == "restarted":
-            print(f"[sentinel-bridge] {now_h} — sentinella RESTARTED ({detail}), invio tick")
         else:
-            print(f"[sentinel-bridge] {now_h} — sentinella OK, invio tick")
+            # ── Path fallimento: incrementa counter + delega Sentinella ─
+            fetch_fail_count += 1
+            print(f"[sentinel-bridge] {now_h} — FETCH FAIL #{fetch_fail_count} reason={fail_reason}")
 
-        if session_exists(SENTINELLA_SESSION):
-            jht_tmux_send(
-                SENTINELLA_SESSION,
-                f"[BRIDGE TICK] {now_h} — esegui il check usage come da tuo prompt."
-            )
+            # Verifica che la Sentinella sia viva (la rispawna se serve).
+            # Lo facciamo SOLO on-failure per minimizzare overhead in regime normale.
+            health, sentinella_detail = _ensure_sentinella_alive()
+
+            if health is None:
+                # Sentinella irrecuperabile + bridge fail: situazione critica.
+                # Al primo episodio avvisa il Capitano (lui ha sue skill di
+                # check autonomo).
+                if not sentinella_was_fatal and session_exists(TARGET_SESSION):
+                    jht_tmux_send(
+                        TARGET_SESSION,
+                        f"[BRIDGE ALERT] sorgente usage degraded ({fail_reason}) E Sentinella morta non recuperabile ({sentinella_detail}). "
+                        "Usa rate_budget live in autonomia, opera prudente."
+                    )
+                    sentinella_was_fatal = True
+            else:
+                if sentinella_was_fatal:
+                    sentinella_was_fatal = False  # sentinella tornata recuperabile
+
+                # Notifica la Sentinella SOLO al primo fail dell'episodio
+                # (per gli altri fail consecutivi, lei sa già che deve
+                # continuare a coprire). Recovery la sveglia di nuovo.
+                if fetch_fail_count == 1 and session_exists(SENTINELLA_SESSION):
+                    jht_tmux_send(
+                        SENTINELLA_SESSION,
+                        f"[BRIDGE FAILURE] fetch fallito (reason={fail_reason}). "
+                        "Esegui fallback come da prompt: rate_budget live, "
+                        "se anche quello fallisce fai check_usage worker tmux. "
+                        "Continua a coprire finché non ti dico [BRIDGE INFO]."
+                    )
+
+                # Alert al Capitano solo al N° fail consecutivo, una volta.
+                if fetch_fail_count == CAPITANO_ALERT_FAIL_THRESHOLD and not capitano_alerted:
+                    if session_exists(TARGET_SESSION):
+                        jht_tmux_send(
+                            TARGET_SESSION,
+                            f"[BRIDGE ALERT] sorgente usage degraded da {CAPITANO_ALERT_FAIL_THRESHOLD} tick "
+                            f"(~{CAPITANO_ALERT_FAIL_THRESHOLD * TICK_INTERVAL_MIN} min, reason={fail_reason}). "
+                            "La Sentinella sta coprendo con fallback ma il dato potrebbe essere stantio. "
+                            "Aumenta i tuoi rate_budget live autonomi e opera prudente."
+                        )
+                    capitano_alerted = True
 
         time.sleep(TICK_INTERVAL_MIN * 60)
 
