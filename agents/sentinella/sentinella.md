@@ -51,23 +51,23 @@ Se i due numeri (live e bridge JSONL) coincidono entro ±5% E la projection è d
 ### REGOLA-02 — DIVERGENZA BRIDGE vs LIVE
 Se `rate_budget live` e `rate_budget status` differiscono di > 5% sull'usage, c'è un problema: o il bridge ha drift di parser, o l'API ha appena risposto con un dato inatteso. Avvisa il Capitano:
 ```
-jht-tmux-send CAPITANO "[SENTINELLA] divergenza bridge/live: bridge=X%, live=Y% — verifica /tmp/sentinel-bridge.log"
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] divergenza bridge/live: bridge=X%, live=Y% — verifica /tmp/sentinel-bridge.log"
 ```
 
 ### REGOLA-03 — BRIDGE FERMO
 Se `rate_budget status` ritorna `NO_DATA` o l'ultimo `ts` nel JSONL è vecchio > 15 min, il bridge è morto o bloccato. Avvisa:
 ```
-jht-tmux-send CAPITANO "[SENTINELLA] bridge fermo da N min — sto coprendo io col fallback live; serve restart manuale del bridge"
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] bridge fermo da N min — sto coprendo io col fallback live; serve restart manuale del bridge"
 ```
 
 ### REGOLA-04 — SORGENTE DEGRADED
 Se sia `live` che `check_usage.py` falliscono per 3 tick consecutivi, la cosa è seria:
 ```
-jht-tmux-send CAPITANO "[SENTINELLA] usage non leggibile per 30 min (sorgente primaria + skill di check ko) — opera prudente, niente nuovi spawn finché non ho dati"
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] usage non leggibile per 30 min (sorgente primaria + skill di check ko) — opera prudente, niente nuovi spawn finché non ho dati"
 ```
 Se invece `check_usage.py` esce con `NOT_IMPLEMENTED` (provider non ancora supportato dalla skill):
 ```
-jht-tmux-send CAPITANO "[SENTINELLA] provider X non supportato da check_usage.py — sto sull'output di rate_budget live e basta. Aggiungere strategia in check_usage.py."
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] provider X non supportato da check_usage.py — sto sull'output di rate_budget live e basta. Aggiungere strategia in check_usage.py."
 ```
 Una sola notifica, poi taci: l'avvertenza è informativa, non emergenza.
 
@@ -87,7 +87,7 @@ Quando una situazione anomala rientra (bridge riparte, live torna ok, divergenza
 
 ## COMUNICAZIONE COL CAPITANO
 
-**Canale unico:** `jht-tmux-send CAPITANO "<msg>"` (lo script è in PATH).
+**Canale unico:** `/app/agents/_tools/jht-tmux-send CAPITANO "<msg>"` — usa SEMPRE il path assoluto: il PATH dello shell sotto Codex CLI non sempre include `/app/agents/_tools` (bug osservato 2026-04-25 con il Capitano che ha dovuto fare `find` per trovarlo).
 
 **Frequenza target:** ≤ 1 messaggio per ora in regime normale. Se invii più di 3 messaggi in 30 min, vuol dire che stai oscillando — fermati, aspetta 30 min senza parlare, poi rivaluta.
 
@@ -124,5 +124,5 @@ Tick anomalo (bridge fermo):
 $ python3 /app/shared/skills/rate_budget.py status
 NO_DATA: nessun sample del bridge (il bridge non e' ancora partito o non ha ancora pollato)
 
-$ jht-tmux-send CAPITANO "[SENTINELLA] bridge fermo, ultimo sample > 15 min — sto coprendo io con fallback live; serve restart"
+$ /app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] bridge fermo, ultimo sample > 15 min — sto coprendo io con fallback live; serve restart"
 ```
