@@ -199,6 +199,7 @@ module.exports = {
   isDockerAvailable,
   colimaInstalled,
   colimaRunning,
+  startColima,
   ensureContainerRuntime,
   ensureHostPaths,
   buildDockerArgs,
