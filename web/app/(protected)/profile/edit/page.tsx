@@ -4,6 +4,7 @@ import React, { useState, useEffect, useTransition, useRef, useId, type FormEven
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { CandidateProfile, Language } from '@/lib/types'
+import ProfileAssistantFab from '@/components/ProfileAssistantFab'
 
 type UploadedFile = { name: string; size: number; modified: number }
 
@@ -164,6 +165,19 @@ export default function ProfileEditPage() {
     load()
     loadFiles()
   }, [])
+
+  // Deep-link da /profile (chip "campi mancanti"): dopo che il form e` stato
+  // popolato e le FormSection sono nel DOM, scrolla manualmente all'ancora
+  // — il browser non lo fa di default perche` la pagina e` un client
+  // component che renderizza dopo il primo paint.
+  useEffect(() => {
+    if (loading) return
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [loading])
 
   const loadFiles = async () => {
     try {
@@ -328,6 +342,7 @@ export default function ProfileEditPage() {
   }
 
   return (
+    <>
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
@@ -346,7 +361,7 @@ export default function ProfileEditPage() {
       <form aria-label="Modifica profilo" onSubmit={handleSubmit} aria-busy={isPending} className="max-w-2xl space-y-8">
 
         {/* ── Info Base ── */}
-        <FormSection title="Info Base">
+        <FormSection id="info-base" title="Info Base">
           <FormRow>
             <FormField label="Nome completo">
               <input type="text" value={form.name} placeholder="Es. Mario Rossi"
@@ -379,7 +394,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Contatti ── */}
-        <FormSection title="Contatti">
+        <FormSection id="contatti" title="Contatti">
           <FormRow>
             <FormField label="Email">
               <input type="email" value={form.email} placeholder="nome@example.com"
@@ -407,7 +422,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Skills ── */}
-        <FormSection title="Skills">
+        <FormSection id="skills" title="Skills">
           <FormField label="Skills (separate da virgola)">
             <textarea rows={3} value={form.skills_raw}
               placeholder="Python, JavaScript, FastAPI, PostgreSQL, Docker, Git"
@@ -416,7 +431,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Lingue ── */}
-        <FormSection title="Lingue">
+        <FormSection id="lingue" title="Lingue">
           {languages.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {languages.map((l, i) => (
@@ -455,7 +470,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Esperienza ── */}
-        <FormSection title="Esperienza Lavorativa">
+        <FormSection id="esperienza-lavorativa" title="Esperienza Lavorativa">
           {experience.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {experience.map((e, i) => (
@@ -503,7 +518,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Formazione ── */}
-        <FormSection title="Formazione">
+        <FormSection id="formazione" title="Formazione">
           {education.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
               {education.map((e, i) => (
@@ -589,7 +604,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Location preferences ── */}
-        <FormSection title="Location preferite">
+        <FormSection id="location-preferite" title="Location preferite">
           <FormField label="Location accettate (separate da virgola)">
             <input type="text" value={form.location_preferences_raw}
               placeholder="Remote EU, Remote Worldwide, Hybrid Milano"
@@ -598,7 +613,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Ruoli target ── */}
-        <FormSection title="Ruoli target (in ordine di priorità)">
+        <FormSection id="ruoli-target" title="Ruoli target (in ordine di priorità)">
           <FormField label="Un ruolo per riga (dal più al meno prioritario)">
             <textarea rows={4} value={form.job_titles_raw}
               placeholder={'Backend Developer\nPython Developer\nFull Stack Developer'}
@@ -607,7 +622,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Salary ── */}
-        <FormSection title="Salary Target">
+        <FormSection id="salary-target" title="Salary Target">
           <FormRow>
             <FormField label="Italia min (€/anno)">
               <input type="number" value={form.salary_italy_min} placeholder="Es. 40000"
@@ -631,7 +646,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Punti di forza ── */}
-        <FormSection title="Punti di forza">
+        <FormSection id="punti-di-forza" title="Punti di forza">
           <FormField label="Un punto di forza per riga">
             <textarea rows={3} value={form.strengths_raw}
               placeholder={'Problem solving\nComunicazione tecnica\nAutonomia'}
@@ -640,7 +655,7 @@ export default function ProfileEditPage() {
         </FormSection>
 
         {/* ── Obiettivi di carriera ── */}
-        <FormSection title="Obiettivi di Carriera">
+        <FormSection id="obiettivi-carriera" title="Obiettivi di Carriera">
           <FormRow>
             <FormField label="Direzione">
               <input type="text" value={form.cg_direction} placeholder="Es. Staff Engineer"
@@ -756,12 +771,16 @@ export default function ProfileEditPage() {
         </div>
       </form>
     </div>
+    <ProfileAssistantFab />
+    </>
   )
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
+  // scroll-mt-20 evita che il deep-link da /profile (#anchor) finisca dietro
+  // la navbar fissa quando si arriva alla sezione.
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6">
+    <div id={id} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 scroll-mt-20">
       <div className="section-label mb-5">{title}</div>
       <div className="space-y-4">{children}</div>
     </div>
