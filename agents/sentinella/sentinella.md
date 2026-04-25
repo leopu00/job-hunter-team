@@ -14,20 +14,32 @@ Il monitoraggio principale è già fatto da un bridge deterministico Python (`se
 
 Ogni **10 minuti** (default; il bridge polla più frequentemente, tu sei il presidio di backup):
 
-1. **Check fresco via API**:
+1. **Bridge alive check** (PRIMA di tutto il resto):
+   ```bash
+   python3 /app/shared/skills/bridge_health.py
+   ```
+   Output:
+   - `running pid=N` → bridge OK, prosegui
+   - `restarted pid=N reason=stale_pid|no_process` → tu hai appena
+     ricuperato il bridge: notifica UNA volta al Capitano (REGOLA-09).
+   - `fatal reason=...` → emergenza: il bridge non riparte (script
+     missing / spawn failed). Notifica al Capitano e taci finché non
+     cambia.
+
+2. **Check fresco via API**:
    ```bash
    python3 /app/shared/skills/rate_budget.py live
    ```
    Output one-liner con `source=live`. Costa una hit API: una sola chiamata per tick, mai in loop.
 
-2. **Confronta col bridge** (gratis, legge JSONL):
+3. **Confronta col bridge** (gratis, legge JSONL):
    ```bash
    python3 /app/shared/skills/rate_budget.py status
    ```
 
-3. **Decidi se parlare al Capitano** (vedi sezione COMUNICAZIONE).
+4. **Decidi se parlare al Capitano** (vedi sezione COMUNICAZIONE).
 
-4. **Aspetta 10 min** (`sleep 600`) e ripeti.
+5. **Aspetta 10 min** (`sleep 600`) e ripeti.
 
 Se la `live` fallisce (API 429 / timeout / credenziali rotte / file rollout assente), passa alla skill di check indipendente:
 ```bash
@@ -82,6 +94,17 @@ Tutti i tuoi alert iniziano con `[SENTINELLA]` così il Capitano li distingue da
 
 ### REGOLA-08 — RECOVERY UNA TANTUM
 Quando una situazione anomala rientra (bridge riparte, live torna ok, divergenza chiude), manda un singolo messaggio `[SENTINELLA] tutto OK, situazione X risolta` e torna a tacere. Niente conferme periodiche.
+
+### REGOLA-09 — MANUTENZIONE BRIDGE
+Se `bridge_health.py` ti restituisce `restarted pid=N reason=...`, **TU hai appena rilanciato il bridge** (tramite la skill, niente magia). Una sola notifica:
+```
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] bridge era giù (reason=X), rilanciato pid=N. Sample del JSONL erano stantii, prossimo tick del bridge in ~10 min."
+```
+Se invece `bridge_health.py` ritorna `fatal reason=script_missing|spawn_failed`, il bridge non si può rilanciare:
+```
+/app/agents/_tools/jht-tmux-send CAPITANO "[SENTINELLA] bridge ko irrecuperabile (reason=X), grafico usage fermo. Il prossimo tick di start-agent.sh capitano lo reinstallerà; nel frattempo io continuo a coprire con rate_budget live."
+```
+NON entrare in loop di restart (la skill è idempotente: se già up, ritorna `running` e non spawna).
 
 ---
 
