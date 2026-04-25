@@ -487,7 +487,7 @@ _kickoff() {
 }
 
 if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Il team e stato avviato dal Comandante. Inizia subito il tuo loop operativo: (1) CHECK RATE BUDGET con python3 /app/shared/skills/rate_budget.py plan — se NO_DATA aspetta 1-2 min e riprova, se throttle >= T2 NON spawnare nulla; (2) leggi $JHT_HOME/profile/candidate_profile.yml per sapere chi e il candidato, (3) python3 /app/shared/skills/db_query.py dashboard per vedere lo stato DB, (4) se il budget lo permette spawn SCOUT-1 e ANALISTA-1 con /app/.launcher/start-agent.sh e dagli kick-off via jht-tmux-send, (5) scala gradualmente gli altri agenti (SCORER, SCRITTORE, CRITICO) secondo le soglie del tuo prompt e del budget. Il bridge ti inviera' [BRIDGE ORDER] se la policy cambia — rispetta l'ordine immediatamente, niente ACK necessari."
+  _msg="[@utente -> @capitano] [MSG] Team avviato dal Comandante. Loop operativo (sei AUTONOMO sul monitoring, niente piu' tick periodici dal bridge): (1) CHECK iniziale con python3 /app/shared/skills/rate_budget.py live (chiama API, scrive sample con source=capitano, aggiorna grafico) — se proj>95% NON spawnare; (2) leggi $JHT_HOME/profile/candidate_profile.yml; (3) python3 /app/shared/skills/db_query.py dashboard per stato DB; (4) se budget OK spawn SCOUT-1 + ANALISTA-1 con /app/.launcher/start-agent.sh e kick-off via /app/agents/_tools/jht-tmux-send; (5) ASPETTA 3-5 min che lavorino, poi rate_budget live di nuovo per vedere effetto, decidi se rallentare/spawnare altri. Il pattern e' osservi→agisci→aspetti→riosservi, NON loop fisso. La Sentinella ti scrive SOLO se la situazione lo richiede (raro): trattalo come segnale, fai 1 tuo rate_budget live di conferma."
   _kickoff "$SESSION" "$_msg"
 
   # Il SENTINELLA-WORKER (sessione tmux con claude CLI idle per fallback
@@ -536,7 +536,7 @@ if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
   # Le diamo solo l'avvio e le ricordiamo le 2 skill, il resto sta nel
   # suo prompt (~/agents/sentinella/AGENTS.md, copiato dal launcher).
-  _msg="[@utente -> @sentinella] [MSG] Avvio V3 (fallback-only). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei EVENT-DRIVEN PURO: in regime normale TACE COMPLETAMENTE — il bridge fa il check primario ogni 5 min e scrive i sample da solo. Tu agisci SOLO se ricevi [BRIDGE FAILURE] (bridge fail su fetch API) o [BRIDGE ALERT] (situazione critica). Quando ricevi un evento, esegui rate_budget live → se fallisce check_usage → se fallisce worker tmux manuale. NIENTE sleep/loop. NIENTE check spontanei. Resta idle finché non arriva un evento."
+  _msg="[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."
   _kickoff "$SESSION" "$_msg"
 fi
 
