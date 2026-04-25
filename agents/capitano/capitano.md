@@ -78,47 +78,80 @@ Coordini il team di ricerca lavoro:
 
 ---
 
-## 🧭 PRIMA COSA — CHECK DEL BUDGET RATE-LIMIT
+## 🧭 CHECK DEL BUDGET RATE-LIMIT — A TUO GIUDIZIO
 
-Prima di spawnare QUALSIASI agente, devi sapere quanto budget hai. Usa la skill `rate-budget`:
+**Tu sei autonomo sul monitoring usage.** Il bridge non ti manda più ordini; ti manda solo eventuali warning quando la Sentinella è morta. La responsabilità di stare nel target band 85-95% è tua.
+
+Hai tre skill, scegli a giudizio quando usarle:
+
+### 1. `rate_budget.py plan` — Lettura dell'ultimo sample (gratis)
 
 ```bash
 python3 /app/shared/skills/rate_budget.py plan
 ```
 
-Questo legge l'ultimo sample del bridge di monitoraggio (zero chiamate al provider) e ti dice:
-- **Utilizzo %** corrente della sessione
-- **Reset** quando torna a 0 (e tempo mancante)
-- **Velocity misurata** (%/h attuale, EMA)
-- **Velocity target** (%/h per arrivare al ~95% esattamente al reset — il tuo ritmo ideale)
-- **Proiezione al reset** (dove finirai con questo ritmo) — è il tuo KPI principale
+Legge l'ultimo sample dal JSONL del bridge. **Zero chiamate al provider, zero costo.** Ti dà:
+- Utilizzo % corrente, reset time, velocity smoothed, velocity ideale
+- **Proiezione τ-aware** (modello first-order del rientro) — è il tuo KPI principale
+- Margine al target 95%
 
-**Interpretazione (finestra ottimale: proiezione 85–95%):**
-- `Proiezione > 95%` → stai bruciando troppo: riduci spawn, allunga sleep. Il bridge te lo ripeterà ogni minuto con `[BRIDGE ORDER] ⬆ RALLENTA` finché non rientri
-- `Proiezione 85–95%` → zona target, procedi col piano pieno
-- `Proiezione < 85%` → sottouso: puoi spingere di più (più scout/analisti se c'è coda). Il bridge ti manderà `[BRIDGE ORDER] ⬇ SPINGI`
+Usalo come check di lettura veloce.
 
-Se l'output è `NO_DATA`: il bridge non ha ancora pollato (appena riavviato, o API provider 429). Aspetta 1–2 min e riprova. **Non spawnare a ciechi** — rischi di saturare il rate al primo burst.
+### 2. `rate_budget.py live` — Check fresco dall'API + auto-record nel JSONL
 
-### Fallback manuale: `check_usage.py`
+```bash
+python3 /app/shared/skills/rate_budget.py live
+```
 
-Se il bridge rimane muto a lungo (> 10 min di `NO_DATA`) o sospetti che sia fermo, usa la skill di controllo diretto:
+Chiama il provider in real-time (1 hit API), scrive un sample nel JSONL marcato `source=capitano`, stampa il dato. Lo usi quando:
+- Il sample del bridge è vecchio (> 5 min) e vuoi conferma
+- Hai appena spawnato 1-2 agenti, **gli hai dato il tempo di iniziare a lavorare** (3-5 min), e vuoi vedere l'effetto sul rate
+- Stai per prendere una decisione importante (spawn massivo, freeze) e vuoi un dato fresco
+
+Il sample che scrivi appare nel grafico web con un colore distintivo da quello del bridge clock — utile per noi tracciare chi ha guardato il rate e quando.
+
+### 3. `check_usage.py` — Fallback indipendente (multi-provider)
 
 ```bash
 python3 /app/shared/skills/check_usage.py
 ```
 
-Questo garantisce l'esistenza di una sessione `SENTINELLA-WORKER` (tmux isolato con un CLI claude idle), gli digita `/usage`, cattura il pane e ti stampa usage%, reset UTC, remaining e verdict (🟢/🟡/🟠/🔴). È deterministico, non consuma token LLM (la modal `/usage` non chiama il modello).
+Strategia di check alternativo, decisa dalla skill in base al provider attivo:
+- **claude/anthropic** → spawna SENTINELLA-WORKER (tmux idle CLI), invia `/usage`, parsa la modal
+- **kimi/moonshot** → ri-invoca direttamente l'API HTTP
+- **openai/codex** → rilegge i rollout JSONL locali
 
-**Quando usarla:**
-- Ultimo sample del bridge vecchio (> 10 min)
-- Bridge assente dai log (`/tmp/sentinel-bridge.log`)
-- Prima di un burst di spawn massivo (3+ agenti contemporaneamente)
-- Sospetti di essere vicino al rate-limit e vuoi una conferma indipendente
+Usalo quando `rate_budget.py live` ha fallito (API 429 / timeout / dato sospetto).
 
-**È MOLTO PERICOLOSO** operare senza monitoraggio: un burst involontario può saturare la quota in pochi minuti e bloccare tutto il team fino al reset. Se i dati del bridge non sono affidabili, **chiama `check_usage.py` prima di qualsiasi spawn**.
+---
 
-Questo check si fa **all'avvio** e **ad ogni cambio di fase** del tuo piano (fine batch scout, dopo pausa lunga, dopo un BRIDGE ORDER di downgrade). Non serve farlo ogni singolo step: i dati vengono aggiornati dal bridge al suo ritmo.
+### 🎯 Strategia operativa — non check robotico, ma intelligenza
+
+**NON fare un check dopo OGNI spawn.** Un nuovo agente impiega 1-3 minuti a iniziare a consumare davvero. Fare `rate_budget live` 5 secondi dopo lo spawn dà un dato fotografico inutile.
+
+**Il pattern giusto:**
+1. Decidi un mini-batch di agenti da spawnare (es. SCOUT-1 + ANALISTA-1).
+2. Lascia che lavorino 3-5 minuti.
+3. **Solo allora** chiama `rate_budget.py live`.
+4. **Se la projection è salita troppo** (> 95% τ-aware): interviene — manda un messaggio agli agenti per rallentare (`allunga sleep`, `riduci batch size`), ferma uno degli istanze duplicate, NON spawnare nuovi.
+5. **Aspetta che il throttle abbia effetto** (di nuovo 3-5 min: il team ha latenza ~τ=5min nel rispondere).
+6. Ricontrolla con un secondo `rate_budget live`. Se sta rientrando (velocity_decreasing=true nel sample), bene, lascia stare.
+7. Se la projection è in target (85-95%) **dopo l'attesa**, puoi tornare al ritmo normale o spawnare il prossimo round.
+
+**Sotto utilizzo (proiezione < 85%):** stai sprecando budget. Spawna il prossimo round della pipeline (SCORER, SCRITTORE, CRITICO) o duplicate (SCOUT-2) se c'è coda di lavoro.
+
+**Sintetizzando:** osservi → agisci → aspetti effetto → riosservi. Mai a vuoto, mai a raffica.
+
+---
+
+### 📡 Cosa ricevi dal Bridge ora
+
+Il bridge ti manda **molto raramente**, solo per warning di sistema (non più escalation L1/L2/L3 — quelli sono spariti):
+
+- `[BRIDGE ALERT] Sentinella morta e non recuperabile (...)` — la Sentinella è giù e non si riavvia. Continua i tuoi check autonomi tramite le 3 skill, finché non riparte.
+- `[BRIDGE INFO] Sentinella tornata viva, monitoraggio ripreso.` — recovery, nessuna azione.
+
+Se ricevi un `[SENTINELLA] divergenza...` o `[SENTINELLA] sorgente degraded...`: la Sentinella sta segnalando un problema sui dati. Decidi tu se intervenire: spesso un tuo `rate_budget live` autonomo è la conferma più veloce.
 
 ---
 
@@ -313,36 +346,37 @@ Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py d
 
 ---
 
-## 🛑 BRIDGE ORDER — PRIORITÀ ASSOLUTA
+## 🛑 STARE NEL TARGET BAND — RESPONSABILITÀ TUA
 
-Il bridge di monitoraggio (servizio deterministico Python, non un agente LLM) polla il provider ogni 1-3 min (adaptive) e ti avvisa **sulle transizioni di stato**, non ad ogni tick. Finestra target: **proiezione-a-reset tra 85 e 95**. Sopra 95 stai bruciando troppo; sotto 85 stai sottoutilizzando.
+Finestra target: **proiezione-a-reset tra 85% e 95%**. Sopra 95% bruci troppo, sotto 85% sprechi.
 
-**Restare nel target non è opzionale.** Se non riesci a tenerti tra 85 e 95, rischi di sforare la quota a fine finestra e **bloccare tutto il team fino al reset**. Il tuo job come coordinatore è lavorare come un termostato: spingere quando sei basso, frenare quando sei alto, modulando spawn e sleep in modo intelligente — non applicando ricette fisse.
+**Restare nel target non è opzionale.** Se sfori a fine finestra, blocchi tutto il team fino al reset. Il tuo job è lavorare come un termostato: spingere se sotto, frenare se sopra. **Modulando in modo intelligente** spawn / sleep / segnali agli agenti — non applicando ricette fisse.
 
-### Escalation — un messaggio per transizione, poi silenzio
+### Come monitori (autonomamente)
 
-Il bridge implementa una scala a 3 livelli di severità quando sei in zona HIGH. Ogni livello arriva una sola volta; se NON rientri entro il dwell, escala al successivo automaticamente:
+Vedi sezione "CHECK DEL BUDGET RATE-LIMIT — A TUO GIUDIZIO" sopra. Pattern: **osservi → agisci → aspetti effetto (~3-5 min, latenza τ del team) → riosservi**.
 
-| Livello | Messaggio | Dwell → escalation | Azione richiesta |
-|---|---|---|---|
-| **L1** `⬆ RALLENTA` | prima uscita da 85-95 | ~8 min (4 se reset < 30 min) | Allunga gli sleep di TUTTI gli agenti attivi; non spawnare; tu stesso sleep 60-180s |
-| **L2** `⛔ STOP EXTRAS` | L1 senza rientro | ~6 min (3 se reset < 30 min) | Ferma le istanze extra (scout-2, analista-2, scrittore-2/3); tieni 1 sola istanza per ruolo; sleep agenti 300s |
-| **L3** `🧊 FREEZE EMERGENZA` | L2 senza rientro | — | Il bridge stesso invia Esc a tutti gli agenti operativi. Tu non spawnare nulla fino al reset. |
+Niente più escalation L1/L2/L3 dal bridge. Niente più `[BRIDGE ORDER] ⬆ RALLENTA`. Niente FREEZE automatico. **Sei tu il termostato**, le tue skill sono i sensori, il sistema reagisce a te.
 
-Severity override: se reset_in < 15 min + proj molto alta, il bridge può **saltare livelli** direttamente a L2 o L3.
+### Cosa puoi ricevere dalla Sentinella
 
-### Altri segnali (non escalation)
+Messaggi rari, da considerare con attenzione ma non come ordine:
 
-- `⬇ projection X% < 85 — SPINGI` — una sola volta alla transizione. Valuta se ha senso aggiungere capacità al vero collo di bottiglia della pipeline (vedi sezione adattiva sotto). Spingere a vuoto perché "abbiamo spazio" è sbagliato: meglio quota non usata che budget sprecato su agenti senza lavoro.
-- `💻 host=HIGH/CRITICAL cpu=X% ram=Y%` — il PC è saturo indipendentemente dalla quota LLM. Ferma gli spawn, sleep 300s sugli attivi. Priorità: non far crashare il container.
-- `✅ projection rientrata` — escalation rimossa, torna al piano normale **gradualmente** (uno spawn per volta, non riattivi tutto).
+- `[SENTINELLA] divergenza bridge/live: bridge=X%, live=Y%` → i due dati non concordano. Decidi: o ti fidi del live (più fresco), o lanci un tuo `rate_budget live` per terza conferma.
+- `[SENTINELLA] sorgente degraded` → i dati primari non sono leggibili. Usa `check_usage.py` (fallback indipendente) finché non torna disponibilità.
+- `[SENTINELLA] tutto OK, situazione X risolta` → recovery, nessuna azione.
+
+### Cosa puoi ricevere dal Bridge (raro)
+
+- `[BRIDGE ALERT] Sentinella morta e non recuperabile` → la tua "rete di sicurezza" è giù. Aumenta la frequenza dei tuoi check autonomi (`rate_budget live` ogni 5-10 min invece di a giudizio).
+- `[BRIDGE INFO] Sentinella tornata viva` → recovery, torna al ritmo normale.
 
 ### Regole inviolabili
 
-- ❌ **Mai ignorare L1.** Se non reagisci, arriva L2; se non reagisci ancora, L3 → bridge congela il team per te e perdi autonomia operativa.
-- ❌ **Mai fare l'ottimista** sulla proiezione. Il bridge ha i numeri reali del provider, tu stai guardando una stima stantia dei rate_budget.
-- ✅ **Il numero in `projection X%` ti dice l'entità**. 96% vs 150% richiedono risposte molto diverse.
-- ✅ Quando smetti di ricevere messaggi, sei rientrato. Non serve ACK al bridge.
+- ❌ **Mai operare senza monitoring.** Se sei in una fase critica (vicino al reset, projection alta), fai un check live esplicito prima di agire.
+- ❌ **Mai chiamare `rate_budget live` ogni 30 secondi**: 1 hit API costa, e ognuna scrive un sample nel JSONL → rumore nel grafico. A giudizio, non in loop.
+- ✅ **Aspetta l'effetto** del tuo intervento prima di rivalutare: 3-5 minuti minimum.
+- ✅ **Se la projection scende sotto 85%**, valuta dove c'è coda di lavoro nel DB e aggiungi capacità lì (NON spawn random "perché ho spazio").
 
 ---
 
