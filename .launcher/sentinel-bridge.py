@@ -1419,17 +1419,120 @@ def acquire_singleton_lock():
         pass  # non siamo in grado di fare lock → proseguiamo, caso limite
 
 
+SENTINELLA_SESSION = "SENTINELLA"
+SENTINEL_HEALTH_SCRIPT = "/app/shared/skills/sentinel_health.py"
+TICK_INTERVAL_MIN = 5  # fisso post-rifattorizzazione (era adattivo 1/3/5)
+
+
+def _ensure_sentinella_alive():
+    """Chiama sentinel_health.py per garantire che la Sentinella esista.
+
+    Output ammessi:
+      'running'                          → ok
+      'restarted reason=...'             → ho appena rispawnato
+      'fatal reason=...'                 → unrecoverable (ritorna None)
+    Ritorna ('running'|'restarted'|None, dettaglio_per_log).
+    """
+    if not Path(SENTINEL_HEALTH_SCRIPT).exists():
+        return None, "skill_missing"
+    try:
+        r = subprocess.run(
+            ["python3", SENTINEL_HEALTH_SCRIPT, "ensure"],
+            capture_output=True, timeout=15,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return None, f"skill_error:{e}"
+    out = r.stdout.decode("utf-8", errors="replace").strip()
+    err = r.stderr.decode("utf-8", errors="replace").strip()
+    if r.returncode != 0:
+        return None, err or "skill_fatal"
+    if out.startswith("running"):
+        return "running", out
+    if out.startswith("restarted"):
+        return "restarted", out
+    return None, out or "unknown_skill_response"
+
+
 def main():
+    """Bridge clock semplificato (post-rifattorizzazione 2026-04-25).
+
+    Architettura nuova decisa con Leone:
+      • il bridge NON fa più fetch API / calcoli / escalation.
+      • ogni TICK_INTERVAL_MIN minuti:
+          1) verifica che la sessione SENTINELLA sia viva (sentinel_health.py)
+             - se morta, sentinel_health la rispawna automaticamente
+             - se irrecuperabile, manda warning al Capitano
+          2) invia un breve [BRIDGE TICK] alla SENTINELLA, che eseguirà
+             le sue skill (rate_budget live + fallback worker tmux) e
+             scriverà il sample nel JSONL con source=sentinella-*
+      • il Capitano ha la sua skill rate_budget live (auto-record con
+        source=capitano) e la usa a sua discrezione dopo gli spawn.
+
+    Vantaggi rispetto al bridge precedente:
+      • zero rischio di timeout API (non chiama nessuna API)
+      • robustezza: se Sentinella muore, viene resuscitata; se non
+        riparte, il Capitano è informato e si arrangia con la sua skill
+      • singola responsabilità: ORA il bridge è un cron, non un cervello
+    """
     acquire_singleton_lock()
-    print(f"[sentinel-bridge] target session: {TARGET_SESSION} (pid={os.getpid()})")
-    print(f"[sentinel-bridge] config: {CONFIG_PATH} (bootstrap: {BOOTSTRAP}m)")
-    # Tutti i provider supportati hanno un canale di polling senza TUI:
-    #   kimi/moonshot      HTTP /coding/v1/usages
-    #   anthropic/claude   HTTP /api/oauth/usage
-    #   openai/codex       rollout JSONL in ~/.codex/sessions/
-    # Nessun fallback tmux necessario — se un provider non riconosciuto
-    # finisce in config, loggiamo e andiamo avanti al prossimo tick.
-    claude_api_ok_streak = 0   # streak tick OK consecutivi → trigger kill WORKER
+    print(f"[sentinel-bridge] CLOCK MODE — target sentinella={SENTINELLA_SESSION}, "
+          f"capitano={TARGET_SESSION} (pid={os.getpid()})")
+    print(f"[sentinel-bridge] tick interval: {TICK_INTERVAL_MIN} min")
+
+    sentinella_was_recovered = False  # per messaggio una-tantum al capitano
+    while True:
+        now_h = datetime.now().strftime("%H:%M:%S")
+
+        health, detail = _ensure_sentinella_alive()
+        if health is None:
+            # Sentinella irrecuperabile: avvisa il Capitano una sola volta
+            # per "episodio" e prosegui (lui avrà rate_budget per i suoi
+            # check autonomi). Quando torna recuperabile, manda recovery.
+            if not sentinella_was_recovered:
+                if session_exists(TARGET_SESSION):
+                    jht_tmux_send(
+                        TARGET_SESSION,
+                        f"[BRIDGE ALERT] Sentinella morta e non recuperabile ({detail}). "
+                        "Continua i tuoi check autonomi via rate_budget live "
+                        "finché non riparte (il prossimo `start-agent.sh sentinella` la rimette su)."
+                    )
+                sentinella_was_recovered = True
+                print(f"[sentinel-bridge] {now_h} — sentinella FATAL ({detail}), Capitano avvisato, skip tick")
+            else:
+                print(f"[sentinel-bridge] {now_h} — sentinella ancora ko ({detail}), skip tick silenzioso")
+            time.sleep(TICK_INTERVAL_MIN * 60)
+            continue
+
+        # Sentinella viva (o appena rispawnata): se ero in stato "fatal",
+        # segnala recovery al Capitano una volta sola.
+        if sentinella_was_recovered:
+            sentinella_was_recovered = False
+            if session_exists(TARGET_SESSION):
+                jht_tmux_send(
+                    TARGET_SESSION,
+                    "[BRIDGE INFO] Sentinella tornata viva, monitoraggio ripreso."
+                )
+
+        # Manda il TICK alla Sentinella. Il messaggio è breve apposta:
+        # la Sentinella sa già cosa fare (vedi suo prompt).
+        if health == "restarted":
+            print(f"[sentinel-bridge] {now_h} — sentinella RESTARTED ({detail}), invio tick")
+        else:
+            print(f"[sentinel-bridge] {now_h} — sentinella OK, invio tick")
+
+        if session_exists(SENTINELLA_SESSION):
+            jht_tmux_send(
+                SENTINELLA_SESSION,
+                f"[BRIDGE TICK] {now_h} — esegui il check usage come da tuo prompt."
+            )
+
+        time.sleep(TICK_INTERVAL_MIN * 60)
+
+
+def _legacy_main_unused():
+    """Versione precedente del main loop, conservata come riferimento.
+    NON viene chiamata. Eliminabile in un cleanup successivo."""
+    claude_api_ok_streak = 0
     while True:
         tick_min, provider = read_config()
         now_h = datetime.now().strftime("%H:%M:%S")
