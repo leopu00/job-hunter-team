@@ -29,6 +29,7 @@ Config dinamica:
 """
 
 import json
+import math
 import os
 import re
 import subprocess
@@ -61,6 +62,14 @@ BOOTSTRAP = int(os.environ.get("JHT_TICK_INTERVAL", "10"))
 # ed escalation a dwell (level_entered_at) filtrano comunque lo spam.
 PROJ_HIGH = 95
 PROJ_LOW = 85
+
+# Costante di tempo del rientro: dopo un ordine di throttle, gli agenti
+# impiegano ~5 min a rallentare davvero (sleep allungati, completamento
+# turni in corso). Modellare τ permette alla projection di prevedere il
+# rientro invece di estrapolare linearmente la velocity istantanea —
+# senza questa correzione il bridge oscilla (RALLENTA → SOTTO →
+# RALLENTA …) come una doccia con miscelatore in ritardo.
+TAU_HOURS = 5.0 / 60.0
 
 
 def read_config():
@@ -768,9 +777,31 @@ def compute_metrics(parsed, last, history=None):
     hours_to_reset = hours_until(parsed.get("reset_at"))
     velocity_ideal = None
     projection = None
+    projection_naive = None  # solo per logging / debug
     if hours_to_reset and hours_to_reset > 0:
         velocity_ideal = max(0.0, (SAFE_TARGET - usage) / hours_to_reset)
-        projection = usage + velocity_smooth * hours_to_reset
+        projection_naive = usage + velocity_smooth * hours_to_reset
+        # Modello first-order del rientro (vedi TAU_HOURS):
+        #   v(t) = v_ideal + (v_now − v_ideal) · exp(−t/τ)
+        # Integrale da 0 a hours_to_reset:
+        #   ∫v dt = v_ideal · h + (v_now − v_ideal) · τ · (1 − exp(−h/τ))
+        # Quando τ → 0 (adattamento immediato) ⇒ projection = usage + v_ideal·h ≈ SAFE_TARGET.
+        # Quando τ → ∞ (nessun adattamento) ⇒ projection = projection_naive.
+        delta_v = velocity_smooth - velocity_ideal
+        decay = math.exp(-hours_to_reset / TAU_HOURS) if TAU_HOURS > 0 else 0.0
+        adapted_increase = velocity_ideal * hours_to_reset + delta_v * TAU_HOURS * (1 - decay)
+        projection = usage + adapted_increase
+
+    # Dead-band: la velocity smoothed sta calando rispetto al sample
+    # precedente? Se sì, il sistema sta già rientrando: il notifier
+    # userà questo flag per NON escalare il livello di throttle anche
+    # quando projection > 95 — evita la frusta "rallenta-rallenta-
+    # rallenta" mentre il team si sta già adattando.
+    vs_prev = (last or {}).get("velocity_smooth")
+    if isinstance(vs_prev, (int, float)) and abs(vs_prev) > 1e-3:
+        velocity_decreasing = velocity_smooth < vs_prev - 0.5
+    else:
+        velocity_decreasing = False
 
     reset_event = bool(last and usage < (last.get("usage") or 0) - 30)
 
@@ -817,6 +848,8 @@ def compute_metrics(parsed, last, history=None):
         "velocity_smooth": round(velocity_smooth, 2),
         "velocity_ideal": round(velocity_ideal, 2) if velocity_ideal is not None else None,
         "projection": round(projection, 2) if projection is not None else None,
+        "projection_naive": round(projection_naive, 2) if projection_naive is not None else None,
+        "velocity_decreasing": velocity_decreasing,
         "status": status,
         "throttle": throttle,
         "reset_at": parsed.get("reset_at"),
@@ -879,6 +912,60 @@ def save_policy_state(state):
         STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     except OSError:
         pass
+
+
+# ─── Watchdog: sentinella di sicurezza quando il bridge non vede l'API ───
+#
+# Reintrodotta su richiesta di Leone (2026-04-25) ma in forma degraded-mode
+# anziché ruolo agente separato: la sentinella LLM autonoma sarebbe duplicata
+# rispetto al bridge deterministico (ora già stabile post-2aea9235). Quando
+# però l'API risponde 429 persistente o nessun fetch va a buon fine per N
+# tick, il bridge non può più dire al Capitano che cosa sta succedendo —
+# qui l'unico modo sicuro è notificare al Capitano "API DEGRADED, fai
+# fallback con check_usage.py / rate_budget.py live" e fargli decidere.
+#
+# Una sola notifica per episodio (idempotente via flag in policy state),
+# auto-clear quando torna a fluire.
+
+FETCH_FAIL_THRESHOLD = 3  # tick consecutivi prima di alert (≈ 15 min con base 5m)
+
+
+def record_fetch_failure(reason, capitano_session=None):
+    """Incrementa il contatore di fetch falliti consecutivi. Se supera la
+    soglia, invia un singolo BRIDGE ALERT al Capitano con istruzioni di
+    fallback. Idempotente: il flag `degraded_alerted` impedisce ripetizioni.
+    """
+    state = load_policy_state()
+    fails = int(state.get("fetch_fails_consecutive", 0) or 0) + 1
+    state["fetch_fails_consecutive"] = fails
+    state["last_fetch_fail_reason"] = reason
+    if fails >= FETCH_FAIL_THRESHOLD and not state.get("degraded_alerted"):
+        msg = (
+            f"[BRIDGE ALERT] API DEGRADED — {fails} fetch consecutivi falliti "
+            f"({reason}). Il grafico usage non si aggiorna. Fallback consigliati:\n"
+            f"  • python3 /app/shared/skills/rate_budget.py live   (chiamata API on-demand)\n"
+            f"  • python3 /app/shared/skills/check_usage.py        (TUI fallback via WORKER tmux)\n"
+            f"Decidi tu se aspettare o ridurre il throttle preventivamente."
+        )
+        if capitano_session and session_exists(capitano_session):
+            jht_tmux_send(capitano_session, msg)
+        state["degraded_alerted"] = True
+        state["degraded_since_ts"] = datetime.now(timezone.utc).isoformat()
+    save_policy_state(state)
+
+
+def record_fetch_success():
+    """Reset contatore. Se eravamo in degraded e ora l'API risponde di
+    nuovo, manda un singolo messaggio di "ripristino" al Capitano (utile
+    perché potrebbe avere già rallentato preventivamente)."""
+    state = load_policy_state()
+    was_alerted = bool(state.get("degraded_alerted"))
+    state["fetch_fails_consecutive"] = 0
+    state["last_fetch_fail_reason"] = None
+    state["degraded_alerted"] = False
+    state["degraded_since_ts"] = None
+    save_policy_state(state)
+    return was_alerted
 
 
 def _reset_human(reset_hhmm):
@@ -978,9 +1065,17 @@ def _compute_escalation_level(current_level, level_entered_iso, entry, now):
 
       0 = no alert; 1 = RALLENTA; 2 = STOP EXTRAS; 3 = FREEZE (auto-Esc).
     Dwell accelerato se reset < 30 min.
+
+    Dead-band anti-oscillazione: se la velocity_smooth sta calando rispetto
+    al sample precedente (`velocity_decreasing=True`), il sistema sta GIÀ
+    rientrando e non bisogna escalare ulteriormente — l'escalation
+    proseguirebbe nel ciclo "rallenta-rallenta-rallenta" anche dopo che il
+    capitano ha già reagito. La severity override resta attiva (catastrofi
+    veramente vicine al reset bypassano il dead-band).
     """
     projection = entry.get("projection") or 0
     usage = entry.get("usage") or 0
+    velocity_decreasing = bool(entry.get("velocity_decreasing"))
     hours_to_reset = hours_until(entry.get("reset_at"))
     if hours_to_reset is None:
         hours_to_reset = 999.0
@@ -993,12 +1088,17 @@ def _compute_escalation_level(current_level, level_entered_iso, entry, now):
     dwell_23 = 3 if accel else 6
 
     new_level = max(current_level, 1)
-    if current_level == 1 and time_in_level_min >= dwell_12:
-        new_level = 2
-    elif current_level == 2 and time_in_level_min >= dwell_23:
-        new_level = 3
+    if velocity_decreasing:
+        # Sistema in rientro: tieni il livello corrente, lascia che il
+        # throttle già imposto faccia effetto. Saltiamo dwell-based escalation.
+        new_level = max(current_level, 1)
+    else:
+        if current_level == 1 and time_in_level_min >= dwell_12:
+            new_level = 2
+        elif current_level == 2 and time_in_level_min >= dwell_23:
+            new_level = 3
 
-    # Severity override (situazione drammatica → salta livelli)
+    # Severity override (situazione drammatica → salta livelli, ignora dead-band)
     if hours_to_reset < 0.25 and projection > 110:
         new_level = 3
     elif hours_to_reset < 0.5 and (projection > 120 or usage > 85):
@@ -1243,22 +1343,23 @@ def compute_next_tick(entry, user_tick, history=None):
     """Adaptive polling interval.
 
       CRITICAL    → 1 min  (serviamo alert rapidi)
-      OSCILLATING → 2 min  (zona in movimento, servono dati vicini)
-      STABLE      → 3 min  (flusso fermo, meno hit sull'API)
+      OSCILLATING → 3 min  (zona in movimento, servono dati vicini)
+      STABLE      → 5 min  (flusso fermo, meno hit sull'API — default)
 
     `user_tick` (sentinella_tick_minutes) resta come floor: se l'utente
-    chiede >= 3min anche in zona critica (setup conservativi), onoriamo.
-    Ma tipicamente è 1 e l'adaptive governa.
+    chiede >= 5 min anche in zona critica (setup conservativi), onoriamo.
+    Tipicamente è 0 e l'adaptive governa con base 5 min.
 
     Razionale: l'endpoint /api/oauth/usage di Anthropic rate-limita
-    aggressivamente (bug noto gh anthropics/claude-code#30930).
-    Rallentare in zona stabile dimezza le chiamate e riduce i 429.
+    aggressivamente (bug noto gh anthropics/claude-code#30930). Polling
+    ogni 1 min ha causato burst 429 → 5 min di blackout grafico. La
+    base STABLE a 5 min è il default sicuro chiesto da Leone (2026-04-25).
     """
     if not entry:
-        return max(1, min(user_tick or 3, 3))
+        return max(1, min(user_tick or 5, 5))
 
     state, _reason = classify_state(entry, history)
-    base = {"CRITICAL": 1, "OSCILLATING": 2, "STABLE": 3}[state]
+    base = {"CRITICAL": 1, "OSCILLATING": 3, "STABLE": 5}[state]
     return max(base, user_tick or 0)
 
 
@@ -1337,6 +1438,7 @@ def main():
             parsed = fetch_kimi_api()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_kimi_api fallito (token scaduto? no rete?)")
+                record_fetch_failure("kimi_api_none", capitano_session=TARGET_SESSION)
                 # Sleep fino al prossimo tick intero. Prima qui c'era
                 # min(POLL_SECONDS, tick_min*60) → con tick_min=1 faceva
                 # retry ogni 15s. L'endpoint /api/oauth/usage di Anthropic
@@ -1373,6 +1475,7 @@ def main():
                         print(f"[sentinel-bridge] {now_h} — claude API {reason}, fallback TUI passivo (CAPITANO): usage={parsed.get('usage')}%")
                     else:
                         print(f"[sentinel-bridge] {now_h} — claude API {reason}, WORKER non ancora pronto, nessun fallback live — skip tick")
+                        record_fetch_failure(f"claude_{reason}_no_fallback", capitano_session=TARGET_SESSION)
                         time.sleep(tick_min * 60)
                         continue
             else:
@@ -1388,6 +1491,7 @@ def main():
             parsed = fetch_codex_rollout()
             if parsed is None:
                 print(f"[sentinel-bridge] {now_h} — fetch_codex_rollout fallito (nessuna sessione codex attiva?)")
+                record_fetch_failure("codex_rollout_none", capitano_session=TARGET_SESSION)
                 # Sleep fino al prossimo tick intero. Prima qui c'era
                 # min(POLL_SECONDS, tick_min*60) → con tick_min=1 faceva
                 # retry ogni 15s. L'endpoint /api/oauth/usage di Anthropic
@@ -1399,6 +1503,17 @@ def main():
             print(f"[sentinel-bridge] {now_h} — provider '{provider}' non supportato, skip")
             time.sleep(min(POLL_SECONDS, tick_min * 60))
             continue
+
+        # Fetch riuscito: reset watchdog. Se eravamo in degraded, segnalo
+        # al Capitano che l'API è tornata responsiva (utile perché potrebbe
+        # avere già rallentato preventivamente).
+        was_alerted = record_fetch_success()
+        if was_alerted and session_exists(TARGET_SESSION):
+            jht_tmux_send(
+                TARGET_SESSION,
+                "[BRIDGE INFO] API tornata responsiva, grafico usage si aggiorna di nuovo. "
+                "Puoi tornare al ritmo normale se avevi rallentato preventivamente."
+            )
         parsed["provider"] = provider
 
         last = load_last_sample()
