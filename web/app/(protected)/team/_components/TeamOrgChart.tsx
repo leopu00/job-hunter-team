@@ -89,7 +89,9 @@ function AgentPopover({
   onAction,
   onClose,
   placement,
+  extraContent,
 }: {
+  extraContent?: React.ReactNode
   roleId: string
   emoji: string
   name: string
@@ -160,6 +162,10 @@ function AgentPopover({
       <p className="text-[10.5px] leading-relaxed mb-3" style={{ color: 'var(--color-muted)' }}>
         {desc}
       </p>
+
+      {extraContent && (
+        <div className="mb-3">{extraContent}</div>
+      )}
 
       <div className="flex items-center justify-between gap-2 pt-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>
         <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase" style={{ color: statusColor }}>
@@ -309,7 +315,55 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   // prossimo fire e ricalcoliamo il delta ogni secondo.
   const [nextBridgeTickAt, setNextBridgeTickAt] = useState<number | null>(null)
   const [bridgeCountdown, setBridgeCountdown] = useState<number | null>(null)
-  const BRIDGE_TICK_INTERVAL_MS = 15000
+  // Stato del process Python sentinel-bridge.py (sì/no via /api/bridge/status).
+  // Quando il bridge è giù, niente LED, niente countdown, niente animazione
+  // demo Bridge→Sentinella. La freccia resta disegnata ma più tenue.
+  const [bridgeRunning, setBridgeRunning] = useState<boolean>(false)
+  const [bridgePending, setBridgePending] = useState<boolean>(false)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const r = await fetch('/api/bridge/status', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as { running: boolean }
+        if (!cancelled) setBridgeRunning(!!j.running)
+      } catch { /* ignore */ }
+    }
+    check()
+    const interval = setInterval(check, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  const handleBridgeAction = async (_id: string, action: 'start' | 'stop') => {
+    setBridgePending(true)
+    try {
+      await fetch(`/api/bridge/${action}`, { method: 'POST' })
+      // Refresh status subito dopo il toggle (il polling 3s ci penserebbe ma
+      // così l'utente vede il LED reagire immediatamente).
+      const r = await fetch('/api/bridge/status', { cache: 'no-store' })
+      if (r.ok) {
+        const j = await r.json() as { running: boolean }
+        setBridgeRunning(!!j.running)
+      }
+    } catch { /* ignore */ } finally {
+      setBridgePending(false)
+    }
+  }
+  // Intervallo demo del Bridge tick: configurabile dall'utente cliccando
+  // sull'emoji Bridge. Default 15s. localStorage per persistere la scelta
+  // tra i reload (così non devi riselezionare ogni volta).
+  const [bridgeIntervalMs, setBridgeIntervalMs] = useState<number>(() => {
+    if (typeof window === 'undefined') return 15000
+    const saved = window.localStorage.getItem('jht-bridge-interval-ms')
+    const n = saved ? Number.parseInt(saved, 10) : NaN
+    return Number.isFinite(n) && n >= 1000 ? n : 15000
+  })
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('jht-bridge-interval-ms', String(bridgeIntervalMs))
+    }
+  }, [bridgeIntervalMs])
 
   const isActive = (roleId: string) => {
     if (agents) return agents[roleId]?.status === 'running'
@@ -511,16 +565,21 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   // manda alla Sentinella ogni 5 min.
   useEffect(() => {
     if (!arrowOverlay.bridgePath) return
+    if (!bridgeRunning) {
+      // Bridge giù: niente fire, niente countdown.
+      setNextBridgeTickAt(null)
+      return
+    }
     const pathId = arrowOverlay.bridgePath.id
     const fire = () => {
-      setNextBridgeTickAt(Date.now() + BRIDGE_TICK_INTERVAL_MS)
+      setNextBridgeTickAt(Date.now() + bridgeIntervalMs)
       pushAnim(pathId, { color: colorFor('bridge') })
     }
     fire()
-    const interval = setInterval(fire, BRIDGE_TICK_INTERVAL_MS)
+    const interval = setInterval(fire, bridgeIntervalMs)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arrowOverlay.bridgePath])
+  }, [arrowOverlay.bridgePath, bridgeIntervalMs, bridgeRunning])
 
   // Countdown ticker: aggiorna bridgeCountdown ogni 250ms così la cifra
   // visibile cambia precisamente al secondo. ceil() per non mostrare 0
@@ -594,7 +653,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                 id={arrowOverlay.bridgePath.id}
                 d={arrowOverlay.bridgePath.d}
                 fill="none"
-                stroke="rgba(255,255,255,0.28)"
+                stroke={bridgeRunning ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'}
                 strokeWidth="1.75"
                 strokeLinecap="round"
                 markerEnd="url(#team-orgchart-arrowhead)"
@@ -712,13 +771,13 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                     è inizializzato). Per ora è legato al demo cyclic locale
                     — quando collegheremo il vero stato del process Python
                     bastera' sostituire la condizione con il flag dal backend. */}
-                <ActiveLed active={bridgeCountdown !== null} />
+                <ActiveLed active={bridgeRunning} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{BRIDGE_NODE.name}</span>
               {/* Countdown in absolute così non altera l'altezza del nodo
                   Bridge — altrimenti `items-end` del grid top-row solleverebbe
                   l'emoji per allineare i fondi, sfasando la freccia. */}
-              {bridgeCountdown !== null && (
+              {bridgeRunning && bridgeCountdown !== null && (
                 <span
                   className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
                   style={{ color: 'var(--color-dim)' }}
@@ -734,10 +793,40 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   emoji={BRIDGE_NODE.emoji}
                   name={BRIDGE_NODE.name}
                   desc={BRIDGE_NODE.desc}
-                  meta={agents?.[BRIDGE_NODE.roleId]}
-                  loading={actionLoading === BRIDGE_NODE.roleId}
+                  meta={{
+                    status: bridgeRunning ? 'running' : 'stopped',
+                    color: AGENT_COLORS.bridge,
+                    role: 'Bridge',
+                  }}
+                  loading={bridgePending}
+                  onAction={handleBridgeAction}
                   onClose={() => setSelected(null)}
-                  placement="above"
+                  placement="below"
+                  extraContent={
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <label className="block text-[9px] font-semibold tracking-wide uppercase mb-1.5" style={{ color: 'var(--color-dim)' }}>
+                        Tick interval
+                      </label>
+                      <select
+                        value={bridgeIntervalMs}
+                        onChange={(e) => setBridgeIntervalMs(Number(e.target.value))}
+                        className="w-full rounded-md px-2 py-1.5 text-[11px] font-mono"
+                        style={{
+                          background: 'var(--color-bg)',
+                          color: 'var(--color-bright)',
+                          border: '1px solid var(--color-border)',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        <option value={5000}>5 seconds</option>
+                        <option value={10000}>10 seconds</option>
+                        <option value={15000}>15 seconds</option>
+                        <option value={30000}>30 seconds</option>
+                        <option value={60000}>1 minute</option>
+                        <option value={300000}>5 minutes (real bridge)</option>
+                      </select>
+                    </div>
+                  }
                 />
               )}
             </div>
@@ -767,7 +856,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   loading={actionLoading === SENTINEL_AGENT.roleId}
                   onAction={onAction}
                   onClose={() => setSelected(null)}
-                  placement="above"
+                  placement="below"
                 />
               )}
             </div>
@@ -797,7 +886,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   loading={actionLoading === CAPTAIN_AGENT.roleId}
                   onAction={onAction}
                   onClose={() => setSelected(null)}
-                  placement="above"
+                  placement="below"
                 />
               )}
             </div>
