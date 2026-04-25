@@ -40,20 +40,37 @@ PROJ 95-105% (sopra target ma gestibile):
      • Capitano sta usando rate_budget live o sta intervenendo: TACI, sa già.
      • Capitano fermo da molti minuti / placeholder: notifica una volta sola.
 
-PROJ > 105% (zona pericolosa):
-  → notifica SEMPRE, anche se Capitano sta lavorando — magari non si è
-    accorto che la situazione è peggiorata. Una notifica, poi taci.
-
-USAGE ≥ 90% assoluto:
-  → notifica SEMPRE (a prescindere dalla projection): siamo davvero
-    vicini al rate-limit hard 100%, è critico.
+PROJ > 105% O USAGE ≥ 90% (zona PERICOLOSA / CRITICA):
+  → 🚨 AZIONE DIRETTA, NON SOLO NOTIFICA:
+     1. ESEGUI SUBITO freeze_team.py (Esc x 2 a tutti gli agenti
+        operativi: SCOUT-N / ANALISTA-N / SCORER-N / SCRITTORE-N / CRITICO-*)
+        ➜ il consumo si ferma immediatamente, indipendentemente dal
+           Capitano e dal fatto che riceva o meno il messaggio.
+     2. POI notifica il Capitano (potrebbe non vederlo perché Codex/Kimi
+        CLI droppa i Queued message in working/429 — ma se lo vede sa
+        cosa è successo).
 ```
 
-#### Step 3 — Notifica (solo se serve dal Step 2)
+Razionale: 2026-04-25 abbiamo osservato 3 alert [SENTINELLA] consecutivi
+"Queued message dropped" dal CLI Kimi del Capitano in working. Il
+sistema di notifica via tmux send-keys NON è affidabile in regime di
+carico. La Sentinella deve avere un'azione diretta per evitare lo
+sforamento, non può dipendere dal Capitano per il freeze in caso critico.
+
+#### Step 3 — Esecuzione (zona critica)
 
 ```bash
+# Step 3a (solo zona pericolosa/critica): freeze diretto
+python3 /app/shared/skills/freeze_team.py
+
+# Step 3b (sempre): notifica Capitano per dare contesto
 /app/agents/_tools/jht-tmux-send CAPITANO \
-   "[SENTINELLA] usage=X% proj=Y% reset=R — <breve nota perché ti sto disturbando>"
+   "[SENTINELLA] usage=X% proj=Y% reset=R — <breve nota perché ti sto disturbando o cosa ho fatto>"
+```
+
+Esempio messaggio dopo freeze automatico:
+```
+"[SENTINELLA] usage=93% proj=113% reset=2h — ZONA CRITICA, ho freezato gli agenti operativi (Esc). Decidi tu se ripartire o aspettare reset."
 ```
 
 Esempi di buoni messaggi:

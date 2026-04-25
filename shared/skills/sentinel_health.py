@@ -50,23 +50,27 @@ def tmux_capture(name, lines=20):
 def session_looks_alive(name):
     """La sessione esiste E il pane non è in uno stato di shell-vuota.
 
-    Match grezzo ma robusto: se nelle ultime righe vediamo il prompt
-    della shell ($ o #) senza traccia di Codex CLI/codex/gpt, la session
-    è "morta" (CLI uscito, shell rimasta). Codex stampa box ASCII e
-    'gpt-5.5' nel header che resta visibile.
+    Match provider-aware: se il pane mostra marker tipici di un CLI
+    LLM (Codex / Claude / Kimi), la sessione è viva. Se vediamo solo
+    il prompt shell senza marker, il CLI è uscito (dead_pane).
+
+    Bug fix 2026-04-25: prima era hardcoded 'gpt-/codex/openai' →
+    quando attivi kimi (banner "Kimi-k2.6", footer "yolo agent (Kimi-..."),
+    nessun marker matchava → dead_pane → restart loop ad ogni tick
+    del bridge → 10 rispawn osservati, contesto Sentinella perso ogni volta.
     """
     if not tmux_has_session(name):
         return False, "missing_session"
     pane = tmux_capture(name, lines=40)
     if not pane.strip():
         return False, "empty_pane"
-    # Heuristic: se vedo "gpt-" o "Codex" o "codex --yolo" nel pane,
-    # il CLI sta girando. Se vedo solo il prompt (riga che termina con
-    # "$ " o "# "), il CLI è uscito.
-    has_codex_marker = ("gpt-" in pane.lower()
-                       or "codex" in pane.lower()
-                       or "openai" in pane.lower())
-    if has_codex_marker:
+    pane_low = pane.lower()
+    # Marker dei 3 CLI LLM supportati. "yolo agent" copre tutti i Codex
+    # CLI (header common). "kimi" copre Kimi-k2.6 / kimi cli. "claude"
+    # copre claude-code. "gpt-" copre Codex banner. Se nessuno matcha
+    # → CLI uscito, pane in stato shell.
+    markers = ("yolo agent", "kimi", "claude", "gpt-", "codex", "openai", "anthropic")
+    if any(m in pane_low for m in markers):
         return True, None
     return False, "dead_pane"
 
