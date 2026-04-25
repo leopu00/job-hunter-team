@@ -87,11 +87,12 @@ fi
 #   - Tutti gli altri: default del provider (Opus su claude), effort per
 #     ruolo calibrato (coordinatori/spawn high, scorer medium)
 #
-# Nota: il ruolo "sentinella" come agente LLM e' stato rimosso. Il
-# monitoraggio del rate-limit e la policy di throttling sono ora gestiti
-# da .launcher/sentinel-bridge.py (deterministico, edge-triggered) che
-# invia [BRIDGE ORDER] direttamente al Capitano solo quando il livello
-# di throttle cambia. Zero turn LLM sprecati in fotocopie di stato stabile.
+# Nota: il ruolo "sentinella" e' stato reintrodotto come watchdog leggero
+# (2026-04-25). Il monitoraggio principale del rate-limit resta del
+# bridge deterministico (.launcher/sentinel-bridge.py); la sentinella LLM
+# e' un livello di sicurezza sopra che interviene quando il bridge fallisce
+# o serve un check fresco indipendente. Vedi agents/sentinella/sentinella.md
+# per il loop e le regole. Una sola istanza, polling 10 min, sonnet.
 get_agent_info() {
   case "$1" in
     # Opus high — task con reasoning pesante:
@@ -106,6 +107,9 @@ get_agent_info() {
     analista)   echo "ANALISTA|high|sonnet" ;;
     scorer)     echo "SCORER|high|sonnet" ;;
     assistente) echo "ASSISTENTE|high|sonnet" ;;
+    # Sonnet (no high) — watchdog: logica if-then semplice, non serve
+    # reasoning profondo. Riduce il costo del polling 10-min sostenuto.
+    sentinella) echo "SENTINELLA|medium|sonnet" ;;
     *)          echo "" ;;
   esac
 }
@@ -114,14 +118,14 @@ AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, assistente"
+  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente"
   exit 1
 fi
 
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "assistente" ]; then
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
   # Agenti singoli — nessun numero
   SESSION="$session_prefix"
 else
