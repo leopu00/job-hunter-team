@@ -91,7 +91,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
 
   useEffect(() => {
     if (activeSession) fetchTerminal()
-    const id = setInterval(fetchTerminal, 3000)
+    // 1500ms (era 3000): refresh piu' "live" del pane tmux. Lo stick-to-
+    // bottom condizionale (vedi termAtBottomRef sotto) impedisce che il
+    // refresh frequente diventi fastidioso quando l'utente legge in
+    // mezzo — non scrolla finche' non e' in fondo per scelta.
+    const id = setInterval(fetchTerminal, 1500)
     return () => clearInterval(id)
   }, [activeSession, fetchTerminal])
 
@@ -105,9 +109,24 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     prevMsgCountRef.current = messages.length
   }, [messages])
 
-  // Scroll terminale
+  // Scroll terminale: stick-to-bottom condizionale.
+  // Bug fix 2026-04-25: prima ogni nuovo output sparava scroll a bottom,
+  // anche se l'utente stava leggendo in mezzo → la posizione saltava ad
+  // ogni tick. Ora teniamo un flag aggiornato dall'onScroll handler:
+  //  - utente in fondo (entro 50px) ⇒ auto-scroll su nuovo output
+  //  - utente scrollato in alto       ⇒ NO auto-scroll, lascia leggere
+  //  - utente torna in fondo a mano   ⇒ il flag torna true, auto-scroll riprende
+  const termAtBottomRef = useRef(true)
+  const handleTermScroll = useCallback(() => {
+    const el = termRef.current
+    if (!el) return
+    const slack = 50  // px di tolleranza per evitare flicker su rounding
+    termAtBottomRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - slack
+  }, [])
   useEffect(() => {
-    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
+    if (termRef.current && termAtBottomRef.current) {
+      termRef.current.scrollTop = termRef.current.scrollHeight
+    }
   }, [output])
 
   const handleSend = async () => {
@@ -266,6 +285,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
         ) : (
           /* Terminale raw */
           <div ref={termRef}
+            onScroll={handleTermScroll}
             className="px-4 py-4 font-mono text-[11px] leading-relaxed overflow-auto"
             style={{
               height: chatFullscreen ? undefined : '45vh',
