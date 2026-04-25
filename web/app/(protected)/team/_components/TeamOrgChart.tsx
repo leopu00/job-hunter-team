@@ -211,6 +211,25 @@ type Props = {
 
 type ArrowPath = { id: string; d: string }
 
+// Colori per il pallino del messaggio: stesso codice usato dal parent
+// team/page.tsx per le card agenti, così il pallino "ha la voce" del
+// mittente. Bridge è grigio acciaio (strumento elettronico, non agente).
+const AGENT_COLORS: Record<string, string> = {
+  bridge:     '#94a3b8',
+  sentinella: '#9c27b0',
+  capitano:   '#ff9100',
+  scout:      '#2196f3',
+  analista:   '#00e676',
+  scorer:     '#b388ff',
+  scrittore:  '#ffd600',
+  critico:    '#f44336',
+  assistente: '#26c6da',
+}
+const colorFor = (roleish: string): string => {
+  const key = roleish.toLowerCase().split('-')[0]
+  return AGENT_COLORS[key] ?? '#34d399'
+}
+
 export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles }: Props) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
@@ -243,7 +262,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   // rimosso da questa lista. Per ora alimentato da un demo cyclic interno
   // (vedi useEffect più sotto); in futuro si collegherà ai messaggi reali
   // tra agenti.
-  const [messageAnims, setMessageAnims] = useState<{ key: number; pathId: string; reverse?: boolean; durationMs: number }[]>([])
+  const [messageAnims, setMessageAnims] = useState<{ key: number; pathId: string; reverse?: boolean; durationMs: number; color: string }[]>([])
   const animKeyRef = useRef(0)
   // Velocità del pallino in px/sec — costante a prescindere dalla lunghezza
   // del path (così Bridge→Sentinel breve e Captain→Scout lungo hanno la
@@ -254,16 +273,17 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   const MIN_DURATION_MS = 600
 
   // Helper: aggiunge un'animazione su pathId calcolando la durata in base
-  // alla lunghezza reale del path SVG (getTotalLength). Usato dal demo
-  // Bridge cyclic e dal polling /api/team/messages.
-  const pushAnim = (pathId: string, reverse?: boolean) => {
+  // alla lunghezza reale del path SVG (getTotalLength). Il color è quello
+  // del mittente — il pallino "ha la voce" dell'agente che parla.
+  const pushAnim = (pathId: string, opts?: { reverse?: boolean; color?: string }) => {
     const pathEl = typeof document !== 'undefined'
       ? (document.getElementById(pathId) as unknown as SVGPathElement | null)
       : null
     const length = pathEl?.getTotalLength?.() ?? 0
     const durationMs = Math.max(MIN_DURATION_MS, Math.round((length / PX_PER_SEC) * 1000))
     const key = ++animKeyRef.current
-    setMessageAnims((prev) => [...prev, { key, pathId, reverse, durationMs }])
+    const color = opts?.color ?? '#34d399'
+    setMessageAnims((prev) => [...prev, { key, pathId, reverse: opts?.reverse, durationMs, color }])
     setTimeout(() => {
       setMessageAnims((prev) => prev.filter((a) => a.key !== key))
     }, durationMs + 800)
@@ -476,7 +496,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         for (const m of j.messages) {
           const route = messageRouteToPathId(m.from, m.to)
           if (!route) continue
-          pushAnim(route.id, route.reverse)
+          pushAnim(route.id, { reverse: route.reverse, color: colorFor(m.from) })
         }
       } catch { /* network blip → retry next tick */ }
     }
@@ -494,7 +514,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     const pathId = arrowOverlay.bridgePath.id
     const fire = () => {
       setNextBridgeTickAt(Date.now() + BRIDGE_TICK_INTERVAL_MS)
-      pushAnim(pathId)
+      pushAnim(pathId, { color: colorFor('bridge') })
     }
     fire()
     const interval = setInterval(fire, BRIDGE_TICK_INTERVAL_MS)
@@ -567,11 +587,6 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               >
                 <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
               </marker>
-              <radialGradient id="team-orgchart-msg-grad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#34d399" stopOpacity="1" />
-                <stop offset="60%" stopColor="#22c55e" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-              </radialGradient>
             </defs>
 
             {arrowOverlay.bridgePath && (
@@ -639,9 +654,11 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                 15s fa, sei in ritardo, salta alla fine"). Soluzione: begin=
                 "indefinite" + beginElement() chiamato dal callback ref nel
                 momento in cui l'elemento entra nel DOM. */}
-            {messageAnims.map(({ key, pathId, reverse, durationMs }) => (
+            {messageAnims.map(({ key, pathId, reverse, durationMs, color }) => (
               <g key={key}>
-                <circle cx="0" cy="0" r="9" fill="url(#team-orgchart-msg-grad)" opacity="0.7">
+                {/* Halo: stesso colore del mittente, opacità bassa per
+                    leggerlo anche su sfondo scuro. */}
+                <circle cx="0" cy="0" r="9" fill={color} opacity="0.28">
                   <animateMotion
                     ref={beginAnim}
                     dur={`${durationMs}ms`}
@@ -654,7 +671,8 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                     <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
                   </animateMotion>
                 </circle>
-                <circle cx="0" cy="0" r="3.2" fill="#34d399">
+                {/* Pallino centrale: colore pieno del mittente. */}
+                <circle cx="0" cy="0" r="3.4" fill={color}>
                   <animateMotion
                     ref={beginAnim}
                     dur={`${durationMs}ms`}
