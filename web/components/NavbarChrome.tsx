@@ -12,7 +12,6 @@ const FULLSCREEN_FLOWS = ['/onboarding']
 
 interface Props {
   user: User | null
-  workspace?: string | null
 }
 
 export default function NavbarChrome(props: Props) {
