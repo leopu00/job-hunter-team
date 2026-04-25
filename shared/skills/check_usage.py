@@ -1,40 +1,47 @@
 #!/usr/bin/env python3
 """
-check_usage — controllo manuale dell'usage Claude via TUI fallback.
+check_usage — controllo manuale dell'usage del provider AI attivo.
 
 Uso:
     python3 /app/shared/skills/check_usage.py
 
 Cosa fa:
-  1. Garantisce l'esistenza della sessione SENTINELLA-WORKER (la spawn via
-     /app/.launcher/start-agent.sh worker se non c'è, aspettando il boot
-     del CLI claude).
-  2. Invia il comando `/usage` al CLI nella sessione worker.
-  3. Cattura il pane tmux e parsa l'output della modal `/usage`.
-  4. Stampa usage corrente, reset UTC, reset remaining, weekly usage.
-  5. Valuta se siamo in zona di rischio (projection > 95% con i dati
-     osservabili) e stampa un'indicazione operativa.
+  Rileva il provider attivo (jht.config.json -> active_provider) e
+  applica la strategia di fallback piu' robusta per quel provider:
+
+    claude/anthropic   TUI fallback: spawna SENTINELLA-WORKER (CLI claude
+                       idle), invia /usage, parsa la modal. Indipendente
+                       dall'HTTP /api/oauth/usage che ha rate-limit
+                       aggressivo (gh anthropics/claude-code#30930).
+
+    kimi/moonshot      Chiamata diretta /coding/v1/usages riusando il
+                       fetcher del bridge. L'API e' stabile, qui non
+                       serve fallback indipendente: la skill conferma
+                       solo che il dato e' fresco e leggibile.
+
+    openai/codex       Lettura diretta dei rollout JSONL in
+                       ~/.codex/sessions/, riusando il fetcher del
+                       bridge. Zero dipendenze esterne (file locali).
+
+    altri              Placeholder NOT_IMPLEMENTED, exit 4.
+
+Output unificato (one-liner scriptable + verdict umano):
+    provider=X usage=Y% reset=hhmm_utc reset_in=Ah Bm verdict=...
 
 Quando serve:
-  - Il bridge (sentinel-bridge.py) è fermo / in errore
-  - L'ultimo sample in /jht_home/logs/sentinel-data.jsonl è troppo vecchio
-    (> 10 min) e non sai se il budget è ancora buono
-  - Vuoi una conferma indipendente prima di spawnare un burst di agenti
+  - Bridge fermo / in errore (degraded mode)
+  - Ultimo sample sentinel-data.jsonl > 10 min, dato sospetto
+  - Conferma indipendente prima di operazioni critiche (spawn 3+ agenti)
 
-È DETERMINISTICO (niente LLM), usa solo tmux + CLI claude idle.
-Il comando `/usage` non consuma token significativi: apre una modal
-locale senza inviare richieste al modello. Quindi il check in sé
-non scala il budget.
-
-Raccomandazione: chiama questo ogni tanto come "dentista" (una volta
-ogni 15-20 min se sei in dubbio) o sempre prima di operazioni critiche
-tipo spawn di 3+ agenti contemporanei.
+DETERMINISTICO (niente LLM nel loop di parsing).
 """
+import importlib.util
 import re
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 WORKER_SESSION = "SENTINELLA-WORKER"
 START_AGENT_SH = "/app/.launcher/start-agent.sh"
@@ -44,6 +51,58 @@ CAPTURE_LINES = 300            # righe recenti del pane da catturare
 
 SAFE_CEILING = 95              # soglia di allerta usata dal bridge
 
+
+# ── Provider detection ──────────────────────────────────────────────
+
+def _import_bridge():
+    """Carica .launcher/sentinel-bridge.py per riusare read_config / fetch_*.
+
+    Path-import (filename con trattino, non importabile come package). Se
+    il bridge non e' raggiungibile (host vs container, struttura diversa),
+    la skill si degrada a errore esplicito invece di crashare.
+    """
+    candidates = [
+        Path("/app/.launcher/sentinel-bridge.py"),
+        Path(__file__).resolve().parent.parent.parent / ".launcher" / "sentinel-bridge.py",
+    ]
+    for p in candidates:
+        if p.exists():
+            spec = importlib.util.spec_from_file_location("sentinel_bridge", p)
+            mod = importlib.util.module_from_spec(spec)
+            try:
+                spec.loader.exec_module(mod)
+                return mod
+            except Exception as e:
+                print(f"[check_usage] errore caricamento bridge ({p}): {e}", file=sys.stderr)
+                return None
+    return None
+
+
+def detect_provider():
+    """Ritorna lo slug normalizzato del provider attivo, o None se sconosciuto.
+
+    Normalizzazione: claude/anthropic -> claude; kimi/moonshot -> kimi;
+    openai/codex -> openai. Permette ai branch di check_usage di non
+    moltiplicare le casistiche.
+    """
+    bridge = _import_bridge()
+    if bridge is None:
+        return None
+    try:
+        _tick, raw = bridge.read_config()
+    except Exception:
+        return None
+    raw = (raw or "").strip().lower()
+    if raw in ("claude", "anthropic"):
+        return "claude"
+    if raw in ("kimi", "moonshot"):
+        return "kimi"
+    if raw in ("openai", "codex"):
+        return "openai"
+    return raw or None
+
+
+# ── tmux helpers (usati solo da claude) ─────────────────────────────
 
 def tmux_has_session(name):
     return subprocess.run(
@@ -135,6 +194,8 @@ def parse_claude_usage(text):
 
 
 def hours_until_reset(reset_hhmm_utc):
+    if not reset_hhmm_utc:
+        return None
     try:
         h, m = map(int, reset_hhmm_utc.split(":"))
     except ValueError:
@@ -146,7 +207,18 @@ def hours_until_reset(reset_hhmm_utc):
     return (target - now).total_seconds() / 3600
 
 
-def query_worker():
+def remaining_str(reset_hhmm_utc):
+    h = hours_until_reset(reset_hhmm_utc)
+    if h is None:
+        return "?"
+    hh = int(h)
+    mm = int((h - hh) * 60)
+    return f"{hh}h {mm}m" if hh > 0 else f"{mm}m"
+
+
+# ── Strategie per provider ──────────────────────────────────────────
+
+def query_claude_worker():
     """/usage → Enter → 4s → capture. Niente Esc: durante il trust dialog
     iniziale (se il CLI è appena partito) Esc = cancel → CLI esce →
     /usage finisce in bash. Enter da solo è safe in tutti gli stati."""
@@ -157,65 +229,132 @@ def query_worker():
     return capture_pane(WORKER_SESSION)
 
 
-def main():
+def check_claude():
+    """TUI fallback per claude/anthropic. Spawn WORKER se serve, manda
+    /usage, parsa la modal."""
     spawned_now = False
     if not tmux_has_session(WORKER_SESSION):
         print(f"[check_usage] {WORKER_SESSION} non attiva, la spawno via start-agent.sh worker...")
         if not spawn_worker():
             print("[check_usage] ERRORE: spawn fallito", file=sys.stderr)
-            sys.exit(1)
+            return None, "spawn_failed"
         print(f"[check_usage] attendo {WORKER_BOOT_WAIT_S}s per boot CLI...")
         time.sleep(WORKER_BOOT_WAIT_S)
         spawned_now = True
 
-    # Prima tentata: potrebbe ancora essere in boot dopo prima volta.
-    buf = query_worker()
+    buf = query_claude_worker()
     parsed = parse_claude_usage(buf)
-
-    # Retry una volta in più se il primo tentativo ha fallito e abbiamo
-    # appena spawnato il worker (il CLI potrebbe non aver finito di caricare).
     if parsed is None and spawned_now:
         print("[check_usage] primo /usage senza output utile, retry dopo 8s...")
         time.sleep(8)
-        buf = query_worker()
+        buf = query_claude_worker()
         parsed = parse_claude_usage(buf)
 
     if parsed is None:
         print("[check_usage] IMPOSSIBILE PARSARE /usage output.", file=sys.stderr)
         print("--- ultimi 500 char del pane ---", file=sys.stderr)
         print(buf[-500:], file=sys.stderr)
+        return None, "parse_failed"
+
+    return {
+        "usage": parsed["usage"],
+        "reset_hhmm_utc": parsed["reset_hhmm_utc"],
+        "weekly": None,
+        "source": "tui:/usage",
+    }, None
+
+
+def check_via_bridge_fetcher(bridge, fn_name, source_label):
+    """Fallback comune kimi/openai: ri-invoca il fetcher del bridge.
+
+    Per questi provider l'API/file e' la sorgente primaria — non c'e' un
+    canale "indipendente" come la TUI claude. Qui la skill conferma solo
+    che il dato e' leggibile fresco. Se torna None, lo segnaliamo come
+    sorgente non disponibile (tipico: container down per kimi, sessione
+    codex non avviata).
+    """
+    fn = getattr(bridge, fn_name, None)
+    if fn is None:
+        return None, f"missing_fetcher:{fn_name}"
+    try:
+        sample = fn()
+    except Exception as e:
+        return None, f"fetch_error:{e}"
+    if not sample:
+        return None, "fetch_empty"
+    return {
+        "usage": sample.get("usage"),
+        "reset_hhmm_utc": sample.get("reset_at"),
+        "weekly": sample.get("weekly_usage"),
+        "source": source_label,
+    }, None
+
+
+# ── Verdict comune ──────────────────────────────────────────────────
+
+def compute_verdict(usage):
+    if not isinstance(usage, (int, float)):
+        return "⚪ sconosciuto"
+    if usage >= 88:
+        return "🔴 CRITICO: vicino al rate-limit, freeza subito tutti gli spawn"
+    if usage >= 75:
+        return "🟠 ATTENZIONE: riduci al minimo, niente spawn extra"
+    if usage >= SAFE_CEILING:
+        return "🟡 SOGLIA: al ceiling del budget, monitora"
+    return "🟢 OK: margine disponibile"
+
+
+# ── Main: dispatch per provider ─────────────────────────────────────
+
+def main():
+    provider = detect_provider()
+    if provider is None:
+        print("[check_usage] provider non rilevabile (config mancante o bridge non importabile)", file=sys.stderr)
+        sys.exit(3)
+
+    if provider == "claude":
+        result, err = check_claude()
+    elif provider in ("kimi", "openai"):
+        bridge = _import_bridge()
+        if bridge is None:
+            print("[check_usage] bridge non disponibile per fallback non-claude", file=sys.stderr)
+            sys.exit(3)
+        if provider == "kimi":
+            result, err = check_via_bridge_fetcher(bridge, "fetch_kimi_api", "http:/coding/v1/usages")
+        else:  # openai
+            result, err = check_via_bridge_fetcher(bridge, "fetch_codex_rollout", "file:rollout-jsonl")
+    else:
+        # Placeholder esplicito: provider riconosciuto dalla config ma non
+        # ancora implementato qui. Intenzionalmente NON facciamo guessing.
+        print(f"[check_usage] NOT_IMPLEMENTED: provider '{provider}' non ha ancora una strategia di fallback dedicata. "
+              "Aggiungi un branch in check_usage.py + un fetch_<provider>_api() in sentinel-bridge.py.",
+              file=sys.stderr)
+        sys.exit(4)
+
+    if result is None:
+        print(f"[check_usage] FAIL provider={provider} reason={err}", file=sys.stderr)
         sys.exit(2)
 
-    usage = parsed["usage"]
-    reset_utc = parsed["reset_hhmm_utc"]
-    hours_rem = hours_until_reset(reset_utc)
-    rem_str = "?"
-    if hours_rem is not None:
-        hh = int(hours_rem)
-        mm = int((hours_rem - hh) * 60)
-        rem_str = f"{hh}h {mm}m" if hh > 0 else f"{mm}m"
+    usage = result["usage"]
+    reset = result["reset_hhmm_utc"]
+    rem = remaining_str(reset)
+    weekly = result.get("weekly")
+    src = result.get("source", "?")
+    verdict = compute_verdict(usage)
 
-    # Stampa umana
-    print("=== Claude /usage (via WORKER TUI) ===")
-    print(f"  Usage (sessione 5h):  {usage}%")
-    print(f"  Reset UTC:            {reset_utc}")
-    print(f"  Reset remaining:      {rem_str}")
+    # One-liner scriptable (machine-friendly)
+    parts = [f"provider={provider}", f"usage={usage}%"]
+    if reset:
+        parts.append(f"reset={reset}_utc")
+        parts.append(f"reset_in={rem}")
+    if weekly is not None:
+        parts.append(f"weekly={weekly}%")
+    parts.append(f"source={src}")
+    print(" ".join(parts))
 
-    # Indicazione operativa semplice. Non abbiamo velocity qui (serve
-    # una serie di tick del bridge per quello), ma diamo un flag grezzo.
-    if usage >= 88:
-        verdict = "🔴 CRITICO: vicino al rate-limit, freeza subito tutti gli spawn"
-    elif usage >= 75:
-        verdict = "🟠 ATTENZIONE: riduci al minimo, niente spawn extra"
-    elif usage >= SAFE_CEILING:
-        verdict = "🟡 SOGLIA: al ceiling del budget, monitora"
-    else:
-        verdict = "🟢 OK: margine disponibile"
-    print(f"  Verdict:              {verdict}")
-    print("")
-    print("Note: questo check è indipendente dal bridge. Se il bridge è vivo")
-    print("e i suoi sample sono freschi, preferisci rate_budget.py plan che")
-    print("include anche velocity / projection / host / isteresi zone.")
+    # Verdict umano (riga successiva, opzionale per LLM Capitano)
+    print(f"verdict: {verdict}")
+    print("note: check indipendente dal bridge. Se il bridge è vivo e fresco, preferisci `rate_budget.py plan`.")
 
 
 if __name__ == "__main__":
