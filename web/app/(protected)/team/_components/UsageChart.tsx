@@ -23,6 +23,7 @@ type Entry = {
   reset_at?: string
   host?: { cpu_pct?: number; ram_pct?: number } | null
   host_level?: string
+  source?: string  // 'bridge' | 'capitano' | 'sentinella-api' | 'sentinella-worker' | 'manual'
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -32,6 +33,16 @@ const STATUS_COLOR: Record<string, string> = {
   CRITICO: '#f87171',
   RESET: '#a78bfa',
   ANOMALIA: '#fb923c',
+}
+
+// Palette per chi ha generato il sample (arch nuova 2026-04-25).
+// Permette di vedere a colpo d'occhio chi ha fatto il check.
+const SOURCE_COLOR: Record<string, string> = {
+  bridge:              '#22d3ee',  // cyan — orologio automatico
+  capitano:            '#22c55e',  // verde — check on-demand del Capitano
+  'sentinella-api':    '#a855f7',  // viola — Sentinella ramo API
+  'sentinella-worker': '#facc15',  // giallo — Sentinella fallback TUI manuale
+  manual:              '#94a3b8',  // grigio — debug
 }
 
 const RANGES = [
@@ -216,13 +227,19 @@ function Chart({
       {entries.map((e, i) => {
         const ts = Date.parse(e.ts)
         if (!Number.isFinite(ts)) return null
+        // Colore per source (chi ha fatto il check). Backward compat: i
+        // sample legacy senza source cadono su STATUS_COLOR.
+        const src = e.source || ''
+        const sourceColor = SOURCE_COLOR[src]
+        const fill = sourceColor || STATUS_COLOR[e.status] || '#22d3ee'
+        const r = (src === 'capitano' || src.startsWith('sentinella')) ? 3.5 : 2.6
         return (
           <circle
             key={i}
             cx={xAt(ts)}
             cy={yAt(e.usage)}
-            r={2.6}
-            fill={STATUS_COLOR[e.status] || '#22d3ee'}
+            r={r}
+            fill={fill}
             stroke="#0f172a"
             strokeWidth={1}
           />
@@ -256,37 +273,53 @@ function Chart({
 }
 
 function Legend() {
+  const dot = (color: string, size = 7) => (
+    <span aria-hidden="true" style={{
+      display: 'inline-block', width: size, height: size, borderRadius: '50%',
+      background: color, border: '1px solid #0f172a',
+    }} />
+  )
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 mt-2 text-[10px] text-[var(--color-muted)]">
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#22d3ee' }} />
-        usage
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'inline-block', width: 14, height: 2,
-            background: 'repeating-linear-gradient(90deg, #a78bfa 0 4px, transparent 4px 7px)',
-          }}
-        />
-        proiezione
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#64748b' }} />
-        ideale
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'inline-block', width: 14, height: 7,
-            background: 'rgba(34,197,94,0.18)',
-            border: '1px solid rgba(34,197,94,0.5)',
-          }}
-        />
-        target 85-95%
-      </span>
+    <div className="px-1 mt-2 text-[10px] text-[var(--color-muted)] space-y-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#22d3ee' }} />
+          usage
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block', width: 14, height: 2,
+              background: 'repeating-linear-gradient(90deg, #a78bfa 0 4px, transparent 4px 7px)',
+            }}
+          />
+          proiezione
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#64748b' }} />
+          ideale
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block', width: 14, height: 7,
+              background: 'rgba(34,197,94,0.18)',
+              border: '1px solid rgba(34,197,94,0.5)',
+            }}
+          />
+          target 85-95%
+        </span>
+      </div>
+      {/* Punti — chi ha fatto il check (source label nel JSONL) */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="text-[var(--color-dim)]">check da:</span>
+        <span className="inline-flex items-center gap-1.5">{dot(SOURCE_COLOR.bridge)} bridge</span>
+        <span className="inline-flex items-center gap-1.5">{dot(SOURCE_COLOR.capitano, 8)} capitano</span>
+        <span className="inline-flex items-center gap-1.5">{dot(SOURCE_COLOR['sentinella-api'], 8)} sentinella·api</span>
+        <span className="inline-flex items-center gap-1.5">{dot(SOURCE_COLOR['sentinella-worker'], 8)} sentinella·worker</span>
+      </div>
     </div>
   )
 }
