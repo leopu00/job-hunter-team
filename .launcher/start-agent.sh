@@ -536,7 +536,7 @@ if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
   # Le diamo solo l'avvio e le ricordiamo le 2 skill, il resto sta nel
   # suo prompt (~/agents/sentinella/AGENTS.md, copiato dal launcher).
-  _msg="[@utente -> @sentinella] [MSG] Avvio. Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei EVENT-DRIVEN: il bridge ti notifica con [BRIDGE TICK] ogni 5 min, tu reagisci eseguendo le tue skill (rate_budget live → confronto con status → eventualmente fallback check_usage o worker manuale). NIENTE sleep/loop bash nel terminale. Comunichi al CAPITANO solo via /app/agents/_tools/jht-tmux-send con prefisso [SENTINELLA]. Aspetta il primo [BRIDGE TICK] (arriva subito) e parti."
+  _msg="[@utente -> @sentinella] [MSG] Avvio V3 (fallback-only). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei EVENT-DRIVEN PURO: in regime normale TACE COMPLETAMENTE — il bridge fa il check primario ogni 5 min e scrive i sample da solo. Tu agisci SOLO se ricevi [BRIDGE FAILURE] (bridge fail su fetch API) o [BRIDGE ALERT] (situazione critica). Quando ricevi un evento, esegui rate_budget live → se fallisce check_usage → se fallisce worker tmux manuale. NIENTE sleep/loop. NIENTE check spontanei. Resta idle finché non arriva un evento."
   _kickoff "$SESSION" "$_msg"
 fi
 
