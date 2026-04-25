@@ -254,8 +254,9 @@ def live():
     # quelli del bridge clock. Non bloccante: se il record fallisce il
     # comando deve ancora stampare l'output utile al chiamante.
     detected_source = _detect_source_from_env()
+    recorded_sample = None
     try:
-        _record_sample_via_skill({
+        recorded_sample = _record_sample_via_skill({
             "usage": usage,
             "reset_at": reset_at,
             "provider": provider,
@@ -264,9 +265,24 @@ def live():
     except Exception as e:
         print(f"warn: auto-record JSONL fallito: {e}", file=sys.stderr)
 
+    # Bug fix 2026-04-25: prima il one-liner stampava solo usage/reset/
+    # weekly. La projection — l'unica metrica che il prompt del Capitano
+    # gli dice di guardare per giudicare il target band 85-95 — era
+    # nascosta. Risultato osservato: usage 16-99% letto come "tutto OK"
+    # mentre projection era già 96-114% dal minuto 5. Ora `live` stampa
+    # anche proj e status (calcolati da compute_metrics in record).
+    proj = recorded_sample.get("projection") if recorded_sample else None
+    status = recorded_sample.get("status") if recorded_sample else None
+
     parts = [
         f"provider={provider}",
         f"usage={usage}%",
+    ]
+    if proj is not None:
+        parts.append(f"proj={proj}%")
+    if status is not None:
+        parts.append(f"status={status}")
+    parts += [
         f"reset_in={remaining}",
         f"reset_at={local_reset_display(reset_at)}",
         f"source={detected_source}",
@@ -300,16 +316,20 @@ def _detect_source_from_env():
 def _record_sample_via_skill(parsed, source):
     """Chiama la skill usage_record per scrivere il sample nel JSONL
     (con calcolo delle metriche derivate). Path-import per riuso.
+
+    Ritorna il sample scritto (dict completo con projection, status,
+    velocity_smooth, ecc.) così il chiamante può mostrarli in output.
     """
     here = Path(__file__).resolve().parent
     record_path = here / "usage_record.py"
     if not record_path.exists():
-        return  # skill non installata, niente record (non fatale)
+        return None
     spec = importlib.util.spec_from_file_location("usage_record", record_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     sample = mod.make_sample(parsed, source=source)
     mod.append_sample(sample)
+    return sample
 
 
 def main():
