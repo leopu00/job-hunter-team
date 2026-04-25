@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('setupApi', {
   getExtraDeps: () => ipcRenderer.invoke('setup:get-extra-deps'),
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
   openDockerDesktop: () => ipcRenderer.invoke('setup:open-docker-desktop'),
+  startColima: () => ipcRenderer.invoke('setup:start-colima'),
   installDocker: () => ipcRenderer.invoke('setup:install-docker'),
   installWindowsStack: () => ipcRenderer.invoke('setup:install-windows-stack'),
   reboot: () => ipcRenderer.invoke('setup:reboot'),

@@ -2973,21 +2973,16 @@ const homeDom = {
   btnDevStop: document.getElementById('home-btn-dev-stop'),
 }
 
-// "Setup complete": Docker runtime ready, container image pulled, one
-// provider picked, and that provider is signed in. Any of these failing
-// sends the user back through the wizard.
+// Wizard appears only on first launch. The discriminator is "has the
+// user ever picked a provider": `providers.saved.length > 0` means they
+// already went through onboarding at least once, so on later launches
+// land them on the home view even if Docker is down or kimi isn't
+// authed — those are recoverable runtime states the home surfaces with
+// banners, not setup-incomplete states that warrant the full wizard.
 function isSetupComplete(status) {
   if (!status) return false
-  // setup:get-status returns docker as the raw checkDocker() result —
-  // shape { state, installed, responsive, hintKey } — NOT wrapped in
-  // a `check` field. (setup:get-docker-status wraps it; this one
-  // doesn't.) Reading `docker.check.state` here always returns
-  // undefined → home never opens. See main.js setup:get-status.
-  const dockerOk = status.docker?.state === 'ok'
-  const imageOk = status.image?.present === true
   const saved = Array.isArray(status.providers?.saved) ? status.providers.saved : []
-  const unauthed = Array.isArray(status.providers?.unauthed) ? status.providers.unauthed : []
-  return dockerOk && imageOk && saved.length > 0 && unauthed.length === 0
+  return saved.length > 0
 }
 
 function showWizard(step = STEP_WELCOME) {
@@ -3171,8 +3166,20 @@ async function refreshHomeDocker() {
     const imgOk = full?.image?.present === true
     homeDom.dockerImage.textContent = imgOk ? t('home.docker.imagePresent') : t('home.docker.imageMissing')
     homeDom.dockerImage.style.color = imgOk ? 'var(--success)' : 'var(--warn)'
-    // Docker Desktop su linux non esiste; nascondi il pulsante.
-    homeDom.btnDockerOpen.hidden = dockerStatus?.platform === 'linux'
+    // Bottone "accendi runtime": label e azione cambiano per OS.
+    // Linux: nessun bottone (il daemon parte da systemctl). Mac: "Avvia
+    // Colima" → fa partire il VM Colima. Win: "Apri Docker Desktop".
+    // Mostrato solo se il runtime non è già pronto.
+    const platform = dockerStatus?.platform
+    const isOk = s === 'ok'
+    if (platform === 'linux' || isOk) {
+      homeDom.btnDockerOpen.hidden = true
+    } else {
+      homeDom.btnDockerOpen.hidden = false
+      homeDom.btnDockerOpen.textContent = platform === 'darwin'
+        ? t('docker.action.startColima')
+        : t('home.docker.openDesktop')
+    }
   } catch (error) {
     appendLog(`refreshHomeDocker: ${error.message || error}`)
   }
@@ -3188,7 +3195,26 @@ homeDom.btnOpen.addEventListener('click', () => window.launcherApi.openBrowser()
 homeDom.btnProviderLogin.addEventListener('click', () => showWizard(STEP_PROVIDER_LOGIN))
 homeDom.btnProviderChange.addEventListener('click', () => showWizard(STEP_PROVIDER_CHOOSE))
 homeDom.btnDockerRefresh.addEventListener('click', () => refreshHomeDocker())
-homeDom.btnDockerOpen.addEventListener('click', () => window.setupApi.openDockerDesktop())
+homeDom.btnDockerOpen.addEventListener('click', async () => {
+  const platform = window.platformInfo?.platform
+  if (platform === 'darwin') {
+    const original = homeDom.btnDockerOpen.textContent
+    homeDom.btnDockerOpen.disabled = true
+    homeDom.btnDockerOpen.textContent = t('docker.install.daemonStart') || 'Avvio Colima...'
+    try {
+      const r = await window.setupApi.startColima()
+      if (!r?.ok) appendLog(`startColima: ${r?.error || 'failed'}`)
+    } catch (error) {
+      appendLog(`startColima: ${error.message || error}`)
+    } finally {
+      homeDom.btnDockerOpen.disabled = false
+      homeDom.btnDockerOpen.textContent = original
+      await refreshHomeDocker()
+    }
+  } else {
+    await window.setupApi.openDockerDesktop()
+  }
+})
 homeDom.btnReopenWizard.addEventListener('click', () => showWizard(STEP_WELCOME))
 
 // Dev mode card: probe sincrono al boot. Se Electron e' packaged la
