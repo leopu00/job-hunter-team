@@ -53,7 +53,16 @@ export default async function ProtectedLayout({
     return (
       <div style={{ position: 'relative', zIndex: 1 }}>
         <Navbar user={user} />
-        <MainChrome>{children}</MainChrome>
+        <div className="flex items-stretch">
+          <div className="flex-1 min-w-0">
+            <MainChrome>{children}</MainChrome>
+          </div>
+          {/* Mount point per side panel (es. assistente profilo). Se vuoto,
+              non occupa spazio (display:contents). Quando il portal monta
+              un pannello qui dentro, diventa flex item della riga sopra
+              e il main-area si stringe automaticamente via flex-1. */}
+          <div id="protected-side-panel" className="contents" />
+        </div>
       </div>
     )
   }
@@ -62,7 +71,12 @@ export default async function ProtectedLayout({
   return (
     <div style={{ position: 'relative', zIndex: 1 }}>
       <Navbar user={null} />
-      <MainChrome>{children}</MainChrome>
+      <div className="flex items-stretch">
+        <div className="flex-1 min-w-0">
+          <MainChrome>{children}</MainChrome>
+        </div>
+        <div id="protected-side-panel" className="contents" />
+      </div>
     </div>
   )
 }
