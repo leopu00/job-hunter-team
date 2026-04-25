@@ -335,6 +335,17 @@ export default function SentinellaPage() {
           </button>
         )}
 
+        {isActive && (
+          <button
+            onClick={async () => {
+              await fetch('/api/team/terminal/open?session=SENTINELLA', { method: 'POST' })
+            }}
+            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+          >
+            {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
+          </button>
+        )}
+
         {startMsg && (
           <span className="text-[11px] text-[var(--color-muted)]">{startMsg}</span>
         )}
