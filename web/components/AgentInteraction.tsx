@@ -198,6 +198,14 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                 pulisci
               </button>
             )}
+            {activeSession && (
+              <button onClick={async () => {
+                  await fetch(`/api/team/terminal/open?session=${encodeURIComponent(activeSession)}`, { method: 'POST' })
+                }}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
+                {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
+              </button>
+            )}
             <button onClick={() => setChatFullscreen(v => !v)}
               className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
               {chatFullscreen ? 'esci' : 'espandi'}
