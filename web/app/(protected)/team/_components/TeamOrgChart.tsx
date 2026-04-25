@@ -20,6 +20,16 @@ const CAPTAIN_AGENT = {
   desc: 'Coordinates the team and assigns operational priorities.',
 }
 
+// Sentinel: agente di sicurezza che presidia il monitoring usage. Non
+// fa parte della pipeline operativa (scout → critic), siede di lato al
+// Captain con un proprio canale di osservazione del rate-limit.
+const SENTINEL_AGENT = {
+  roleId: 'sentinella',
+  emoji: '💂',
+  name: 'Sentinel',
+  desc: 'Monitors usage and rate-limit health, alerts the Captain on degradations.',
+}
+
 const PIPELINE_AGENTS = [
   { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
   { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
@@ -370,9 +380,40 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           </svg>
         )}
 
-        {/* Captain da solo al top, centrato */}
+        {/* Top row: Sentinel a sx (col 2), Captain centrato (col 3).
+            Sentinel è laterale perché non comanda, osserva. */}
         <div className="flex justify-center">
           <div className="w-full max-w-[1080px] grid grid-cols-5 justify-items-center items-end">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(SENTINEL_AGENT.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(SENTINEL_AGENT.roleId) } }}
+              aria-expanded={selected === SENTINEL_AGENT.roleId}
+              aria-label={`${SENTINEL_AGENT.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-2 cursor-pointer outline-none"
+            >
+              <span className="relative">
+                <span className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} />
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+
+              {selected === SENTINEL_AGENT.roleId && (
+                <AgentPopover
+                  roleId={SENTINEL_AGENT.roleId}
+                  emoji={SENTINEL_AGENT.emoji}
+                  name={SENTINEL_AGENT.name}
+                  desc={SENTINEL_AGENT.desc}
+                  meta={agents?.[SENTINEL_AGENT.roleId]}
+                  loading={actionLoading === SENTINEL_AGENT.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="above"
+                />
+              )}
+            </div>
+
             <div
               role="button"
               tabIndex={0}
