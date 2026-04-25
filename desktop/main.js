@@ -111,6 +111,12 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'))
 
+  // Dev: apri DevTools detached per vedere i log del renderer fianco
+  // alla finestra. Solo da sorgente, mai in build packaged.
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+
   // Force every link/URL open to go through the host's default browser
   // via shell.openExternal. Without this, Electron would happily spawn
   // a nested BrowserWindow for things like window.open(...) — which
@@ -315,6 +321,54 @@ app.whenReady().then(() => {
     try { await shell.openExternal('http://localhost:3001') } catch { /* non-fatal */ }
     return { ok: true, ready }
   })
+  // Dev mode probe: una HEAD su localhost:3001 dice se il Next host
+  // (lanciato da dev-up.sh) è attualmente attivo. Renderer lo usa per
+  // mostrare il badge running/stopped nella card Avanzate.
+  ipcMain.handle('dev:probe', async () => {
+    const { request } = require('node:http')
+    const alive = await new Promise((resolve) => {
+      const req = request('http://localhost:3001/', { method: 'HEAD', timeout: 1500 }, (res) => {
+        resolve(res.statusCode != null && res.statusCode < 500)
+      })
+      req.on('error', () => resolve(false))
+      req.on('timeout', () => { req.destroy(); resolve(false) })
+      req.end()
+    })
+    return { running: alive }
+  })
+
+  // Dev mode stop: lancia scripts/dev-down.sh in foreground, raccoglie
+  // l'exit code. dev-down.sh ferma sia il container `jht` sia il Next
+  // sull'host (kill -TERM dei processi `next dev -p 3001`).
+  ipcMain.handle('dev:stop', async () => {
+    if (app.isPackaged) {
+      return { ok: false, error: 'Dev mode disponibile solo da sorgente' }
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-down.sh')
+    const bashCmd =
+      process.platform === 'win32'
+        ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+        : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stderr = ''
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          if (code === 0) resolve({ ok: true })
+          else resolve({ ok: false, error: stderr.trim() || `dev-down.sh exit ${code}` })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
   ipcMain.handle('launcher:open-external', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, error: 'invalid-url' }

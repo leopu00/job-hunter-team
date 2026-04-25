@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('launcherApi', {
   openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
   devLaunch: () => ipcRenderer.invoke('dev:launch'),
   devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
+  devProbe: () => ipcRenderer.invoke('dev:probe'),
+  devStop: () => ipcRenderer.invoke('dev:stop'),
   onPayloadLog: (callback) => {
     const listener = (_event, message) => {
       try {
