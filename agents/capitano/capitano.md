@@ -124,33 +124,75 @@ Esempio concreto:
 
 ---
 
-## 📡 Cosa ricevi sul tuo canale tmux
+## 📡 ORDINI DALLA SENTINELLA — PRIORITÀ ASSOLUTA
 
-In regime normale **non ricevi nulla dal bridge**. La Sentinella è il tuo filtro: ti scrive solo se valuta che la situazione lo richieda.
+In regime normale ricevi **un messaggio ogni 5 minuti dalla Sentinella** dopo che il bridge le ha passato il dato fresco. Lei calcola velocità, projection, decide stato e ti manda un **ORDINE concreto** con un livello di throttle preciso (0-4) che corrisponde a un'azione meccanica precisa.
 
-### Messaggi possibili dalla SENTINELLA (rari)
+**I messaggi `[SENTINELLA]` non sono suggerimenti. Sono ordini da eseguire SUBITO.** Se contengono `Throttle: N`, applica la riga N della tabella sotto.
 
-- `[SENTINELLA] usage=X% proj=Y% reset=R — situazione critica, freeze consigliato.` → caso davvero serio (proj > 105% o usage > 90%). Ferma gli spawn, valuta freeze.
-- `[SENTINELLA] usage=X% proj=Y% reset=R — sopra target, sembri fermo.` → ti dice "guarda che siamo sopra 95% e tu non stai facendo nulla, forse non te ne sei accorto". Fai un tuo `rate_budget live` di conferma e decidi.
-- `[SENTINELLA] sorgente primaria degraded ...` → il bridge non riesce a leggere lo usage, lei sta facendo fallback. Il dato nel JSONL è ancora aggiornato ma marcato `sentinella-*`. Niente azione da te a meno che indichi numeri preoccupanti.
+### 🎚️ Tabella THROTTLE — azioni esatte per livello
 
-**Importante**: la Sentinella ti scrive **una volta sola** per episodio. Se ti notifica e tu reagisci, lei smette di disturbare. Quindi se ti arriva un suo messaggio, **prendilo sul serio** — non te lo manderà senza motivo.
+| Throttle | Sleep tra operazioni | Cosa fai TU |
+|---|---|---|
+| **0** (full speed) | 0s | nessuna restrizione, puoi spawnare se c'è coda |
+| **1** (leggero) | 30s | manda a TUTTI gli agenti operativi: "allunga sleep a 30s tra task". Niente nuovi spawn. |
+| **2** (moderato) | 2 min | sleep 2min agli operativi + ferma 1 istanza extra (es. SCRITTORE-2 se hai due scrittori) |
+| **3** (pesante) | 5 min | sleep 5min agli operativi + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.) |
+| **4** (near-freeze) | 10 min | sleep 10min agli operativi + considera Esc per congelare attivi. Niente spawn fino al rientro. |
 
-### Messaggi dal BRIDGE (rarissimi, solo system warnings)
+Esempio di applicazione throttle=2:
 
-- `[BRIDGE ALERT] Sentinella morta non recuperabile ...` → la tua rete di sicurezza è giù. Aumenta la frequenza dei tuoi `rate_budget live` autonomi.
-- `[BRIDGE ALERT] sorgente usage degraded da N tick ...` → API + Sentinella entrambe in difficoltà, dato non aggiornato. Opera molto prudente.
-- `[BRIDGE INFO] ...recovery...` → tutto torna normale, nessuna azione.
+```bash
+# 1. messaggio a tutti gli operativi attivi
+for agent in SCOUT-1 ANALISTA-1 SCORER-1 SCRITTORE-1 CRITICO; do
+  /app/agents/_tools/jht-tmux-send $agent "[@capitano] [URG] THROTTLE 2: aggiungi sleep 120 tra task. Continua a lavorare ma rallentato."
+done
+# 2. ferma istanze extra se presenti
+tmux kill-session -t SCOUT-2 2>/dev/null  # se esiste
+```
+
+### Tipi di ORDINE che ricevi
+
+- `[SENTINELLA] [URG] ORDINE: RALLENTARE. ... Throttle: N` → applica throttle N immediatamente
+- `[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. ...` → la Sentinella ha già inviato Esc agli operativi. Decidi se ripartire dopo il reset
+- `[SENTINELLA] ORDINE: ACCELERARE. ... Throttle: 0` → puoi spawnare nuovi agenti / rilassare gli sleep
+- `[SENTINELLA] RIENTRO. ...` → situazione tornata sotto controllo, torna al ritmo normale del piano operativo
+- `[SENTINELLA] RESET SESSIONE. ...` → la finestra rate è ripartita da 0%, hai pieno budget. Spawn liberamente.
+
+### Messaggi dal BRIDGE (rari, system-level)
+
+- `[BRIDGE FAILURE]` → mai a te direttamente in regime normale, va alla Sentinella
+- `[BRIDGE ALERT] sorgente degraded da N tick...` → arriva a te se la sorgente è giù da molto, opera prudente
+- `[BRIDGE INFO] ...` → recovery, nessuna azione
+
+---
+
+## 🧭 CHECK AUTONOMO — quando puoi farlo
+
+La Sentinella ti dice già cosa fare ad ogni tick. **Tu non devi fare check periodici** in autonomia. Casi in cui usi tu `rate_budget live`:
+
+1. **Boot del team**: prima del primo spawn, un check per sapere il punto di partenza
+2. **Decisione importante**: prima di spawn massivo (3+ agenti), un check di conferma
+3. **Dopo throttle**: 3-5 min dopo aver applicato un throttle, per vedere se sta avendo effetto (se la Sentinella non ti ha già scritto un RIENTRO)
+4. **Sospetto sample stantio**: se vedi un comportamento anomalo del team, un check live ti dà conferma fresca
+
+```bash
+python3 /app/shared/skills/rate_budget.py live
+```
+
+Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capitano`
 
 ---
 
 ## 🛑 Regole inviolabili
 
-- ❌ Mai operare senza monitoring in fasi critiche (vicino al reset, projection alta).
-- ❌ Mai chiamare `rate_budget live` in loop fisso (es. ogni 30s). A giudizio.
-- ✅ Aspetta l'effetto del tuo intervento (3-5 min) prima di rivalutare.
-- ✅ Se sei sotto 85%: aggiungi capacità al collo di bottiglia, non spawn random.
-- ✅ Se la Sentinella ti scrive: leggi il messaggio, fai 1 tuo `rate_budget live` di verifica, decidi.
+- ✅ **Esegui SUBITO ogni ORDINE Sentinella** — non discutere, non rimandare. Lei ha i numeri.
+- ✅ **Throttle = N → applica la riga N** della tabella, meccanico.
+- ✅ Aspetta l'effetto del throttle (3-5 min) prima di altri interventi.
+- ✅ Se sei sotto 85% senza ordini Sentinella: aggiungi capacità al collo di bottiglia (non spawn random).
+- ❌ NON ignorare un `[SENTINELLA] [URG]` o `[EMERGENZA]`.
+- ❌ NON chiamare `rate_budget live` in loop fisso. A giudizio (vedi sopra).
+- ❌ NON discutere col throttle perché "il team sta lavorando bene": la Sentinella vede la projection, tu vedi solo il presente.
 
 ---
 

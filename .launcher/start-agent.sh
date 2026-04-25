@@ -540,7 +540,7 @@ if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
   # Le diamo solo l'avvio e le ricordiamo le 2 skill, il resto sta nel
   # suo prompt (~/agents/sentinella/AGENTS.md, copiato dal launcher).
-  _msg="[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."
+  _msg="[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
 
