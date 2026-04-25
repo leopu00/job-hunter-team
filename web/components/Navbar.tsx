@@ -20,15 +20,14 @@ export default function Navbar({ user }: NavbarProps) {
 
   return (
     <header
-      style={{ position: 'relative', zIndex: 10 }}
-      className="border-b border-[var(--color-border)] bg-[var(--color-panel)]"
+      className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav aria-label="Navigazione app" className="relative px-5 sm:px-6 h-14 flex items-center gap-4">
+      <nav aria-label="Navigazione app" className="px-5 sm:px-6 h-14 flex items-center gap-4">
 
         {/* Brand */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2.5 no-underline group"
+          className="flex items-center gap-2.5 no-underline group flex-shrink-0"
         >
           <div
             className="w-2 h-2 group-hover:opacity-80 transition-opacity"
@@ -39,8 +38,10 @@ export default function Navbar({ user }: NavbarProps) {
           </span>
         </Link>
 
-        {/* Nav links (desktop) — absolute centered */}
-        <div className="absolute left-1/2 top-0 h-full -translate-x-1/2 hidden md:flex items-center">
+        {/* Nav links (desktop) — in flow, centrati con mx-auto cosi` su
+            viewport stretto non finiscono mai sopra logo o controlli a
+            destra (col vecchio `absolute left-1/2` succedeva). */}
+        <div className="hidden md:flex items-center mx-auto">
           <NavLinks />
         </div>
 
@@ -49,13 +50,13 @@ export default function Navbar({ user }: NavbarProps) {
 
         {/* User / Login */}
         {user ? (
-          <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <LanguageSwitcher direction="down" />
             <SettingsMenu />
             <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
           </div>
         ) : (
-          <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <LanguageSwitcher direction="down" />
             <SettingsMenu />
             <LoginButton />
