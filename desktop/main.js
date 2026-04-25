@@ -705,6 +705,20 @@ app.whenReady().then(() => {
     }
   })
 
+  // Mac path al "Open Docker Desktop": qui non esiste un .app da aprire,
+  // il runtime è Colima e va acceso da CLI. `colima start` è sincrono e
+  // può durare ~30-60s la prima volta — il renderer disabilita il
+  // bottone per la durata.
+  ipcMain.handle('setup:start-colima', async () => {
+    try {
+      containerRuntime.startColima()
+      return { ok: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: message }
+    }
+  })
+
   createWindow()
 
   app.on('activate', () => {
