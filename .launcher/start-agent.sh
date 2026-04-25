@@ -536,7 +536,7 @@ if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
   # Le diamo solo l'avvio e le ricordiamo le 2 skill, il resto sta nel
   # suo prompt (~/agents/sentinella/AGENTS.md, copiato dal launcher).
-  _msg="[@utente -> @sentinella] [MSG] Avvio. Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md) e inizia il loop watchdog: ogni 10 minuti esegui (1) python3 /app/shared/skills/rate_budget.py live e (2) python3 /app/shared/skills/rate_budget.py status, confronta i due output, applica le tue regole 1-8 (taci di default, parla solo per divergenza > 5%, bridge fermo > 15 min, sorgente degraded 3 tick consecutivi). Comunichi al CAPITANO solo via /app/agents/_tools/jht-tmux-send con prefisso [SENTINELLA]. Niente ACK al Comandante, parti il primo tick subito poi sleep 600 e ripeti."
+  _msg="[@utente -> @sentinella] [MSG] Avvio. Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md) e inizia il loop watchdog: ogni 10 minuti esegui (1) python3 /app/shared/skills/bridge_health.py — se restarted notifica UNA volta al Capitano (REGOLA-09); (2) python3 /app/shared/skills/rate_budget.py live; (3) python3 /app/shared/skills/rate_budget.py status; confronta i due output, applica le tue regole 1-9 (taci di default, parla solo per divergenza > 5%, bridge fermo > 15 min, sorgente degraded 3 tick, bridge restarted). Comunichi al CAPITANO solo via /app/agents/_tools/jht-tmux-send con prefisso [SENTINELLA]. Niente ACK al Comandante, parti il primo tick subito poi sleep 600 e ripeti."
   _kickoff "$SESSION" "$_msg"
 fi
 
