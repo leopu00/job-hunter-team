@@ -1378,3 +1378,226 @@ body { display: flex; flex-direction: column; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ── Home (post-setup dashboard) ───────────────────────────
+   Sidebar fissa + area content con pannelli switchabili.
+   Mostrata quando Docker/container/provider/auth sono tutti OK. */
+
+.home {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.home[hidden] { display: none; }
+
+.home__sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 24px 14px;
+  border-right: 1px solid var(--border);
+  background: var(--panel-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+}
+
+.home__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.home__brand-mark { font-size: 22px; }
+
+.home__brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.home__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+  font-family: inherit;
+}
+
+.home__nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.home__nav-item.is-active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.home__nav-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.home__nav-label { flex: 1; }
+
+.home__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 48px;
+}
+
+.home__panel[hidden] { display: none; }
+
+.home__header {
+  margin-bottom: 24px;
+  max-width: 640px;
+}
+
+.home__title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home__subtitle {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.home__card {
+  max-width: 640px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.home__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.home__row:last-of-type { border-bottom: none; padding-bottom: 0; }
+
+.home__row--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.home__row-label {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.home__row-value {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.home__row-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.home__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--panel-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.home__status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+}
+
+.home__status-dot[data-state="running"] {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(126, 200, 154, 0.18);
+}
+
+.home__status-dot[data-state="starting"] {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(230, 196, 96, 0.18);
+  animation: home-pulse 1.2s ease-in-out infinite;
+}
+
+.home__status-dot[data-state="error"] {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(232, 138, 122, 0.18);
+}
+
+@keyframes home-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.home__status-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.home__team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--panel-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.home__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.home__actions--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.home__content .lang-select { max-width: 280px; }

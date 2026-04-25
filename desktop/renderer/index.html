@@ -348,6 +348,210 @@
       </section>
     </main>
 
+    <!-- Home: post-setup dashboard. Mostrata quando Docker + container image +
+         provider + auth sono tutti OK. Il wizard sopra resta attivo solo al
+         primo avvio o se una precondizione decade (es. logout). -->
+    <div class="home" id="home" hidden>
+      <aside class="home__sidebar">
+        <div class="home__brand">
+          <span class="home__brand-mark">🎯</span>
+          <span class="home__brand-name">JHT Desktop</span>
+        </div>
+        <nav class="home__nav" role="tablist">
+          <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+            <span class="home__nav-icon">🚀</span>
+            <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="provider" role="tab">
+            <span class="home__nav-icon">🧠</span>
+            <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="docker" role="tab">
+            <span class="home__nav-icon">🐳</span>
+            <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="language" role="tab">
+            <span class="home__nav-icon">🌐</span>
+            <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+            <span class="home__nav-icon">⚙️</span>
+            <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+          </button>
+        </nav>
+      </aside>
+
+      <section class="home__content">
+        <!-- Team: avvio/stop runtime + dashboard -->
+        <div class="home__panel is-active" data-section="team">
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.team.title">Job Hunter Team</h1>
+            <p class="home__subtitle" id="home-team-subtitle" data-i18n="home.team.subtitleStopped">
+              Il team è fermo. Avvialo per lanciare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__status">
+              <span class="home__status-dot" id="home-team-dot" data-state="stopped"></span>
+              <span class="home__status-label" id="home-team-status" data-i18n="home.team.statusStopped">
+                Fermo
+              </span>
+            </div>
+            <div class="home__team-info" id="home-team-info" hidden></div>
+            <div class="home__actions">
+              <button class="btn btn--primary btn--large" id="home-btn-start" data-i18n="home.team.start">
+                Avvia team
+              </button>
+              <button class="btn btn--primary" id="home-btn-open" hidden data-i18n="home.team.openDashboard">
+                Apri dashboard
+              </button>
+              <button class="btn btn--ghost" id="home-btn-stop" hidden data-i18n="home.team.stop">
+                Ferma team
+              </button>
+            </div>
+            <details class="advanced" id="home-team-advanced" hidden>
+              <summary data-i18n="home.team.advanced">Dettagli tecnici</summary>
+              <pre class="advanced__log" id="home-team-log"></pre>
+            </details>
+          </div>
+        </div>
+
+        <!-- Provider: vendor + plan + login -->
+        <div class="home__panel" data-section="provider" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.provider.title">Provider AI</h1>
+            <p class="home__subtitle" data-i18n="home.provider.subtitle">
+              CLI selezionato, piano di sottoscrizione e stato del login.
+            </p>
+          </header>
+          <div class="home__card" id="home-provider-card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.current">Provider attuale</span>
+              <span class="home__row-value" id="home-provider-name">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.plan">Piano</span>
+              <span class="home__row-value" id="home-provider-plan">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.authStatus">Stato login</span>
+              <span class="home__row-value" id="home-provider-auth">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-provider-login" data-i18n="home.provider.manageLogin">
+                Gestisci login
+              </button>
+              <button class="btn btn--ghost" id="home-btn-provider-change" data-i18n="home.provider.change">
+                Cambia provider
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Docker: runtime + azioni -->
+        <div class="home__panel" data-section="docker" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.docker.title">Docker</h1>
+            <p class="home__subtitle" data-i18n="home.docker.subtitle">
+              Runtime container usato per isolare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.state">Stato</span>
+              <span class="home__row-value" id="home-docker-state">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.image">Immagine JHT</span>
+              <span class="home__row-value" id="home-docker-image">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-docker-refresh" data-i18n="home.docker.refresh">
+                Ricontrolla
+              </button>
+              <button class="btn btn--ghost" id="home-btn-docker-open" hidden data-i18n="home.docker.openDesktop">
+                Apri Docker Desktop
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lingua -->
+        <div class="home__panel" data-section="language" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.language.title">Lingua</h1>
+            <p class="home__subtitle" data-i18n="home.language.subtitle">
+              Lingua dell'interfaccia del launcher.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="lang-select" id="home-lang-select">
+              <button
+                type="button"
+                class="lang-select__toggle"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span class="flag" data-lang-flag></span>
+                <span class="lang-select__label" data-lang-label></span>
+              </button>
+              <ul class="lang-select__menu" role="listbox" hidden></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Avanzate: reset setup -->
+        <div class="home__panel" data-section="advanced" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.advanced.title">Avanzate</h1>
+            <p class="home__subtitle" data-i18n="home.advanced.subtitle">
+              Strumenti per diagnostica e manutenzione.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.wizardLabel">Ripeti il setup</span>
+              <span class="home__row-hint" data-i18n="home.advanced.wizardHint">
+                Rilancia il wizard iniziale (scelta provider, login, verifica Docker).
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-reopen-wizard" data-i18n="home.advanced.reopenWizard">
+                Riapri wizard
+              </button>
+            </div>
+          </div>
+
+          <!-- Dev mode: visibile solo se Electron gira da sorgente (probe
+               via launcher:dev-is-available). Avvia il container con
+               bind-mount + Next sull'host su :3001 con hot reload. -->
+          <div class="home__card" id="home-dev-card" hidden>
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.devLabel">Modalità sviluppatore</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devHint">
+                Avvia il runtime con bind-mount di web/agents/.launcher e Next sull'host su :3001 con hot reload. Usa il provider già configurato.
+              </span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.advanced.devStatus">Stato</span>
+              <span class="home__row-value" id="home-dev-status">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-dev-start" data-i18n="home.advanced.devStart">
+                Avvia in dev mode (:3001)
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-open" data-i18n="home.advanced.devOpen">
+                Apri :3001
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-stop" hidden data-i18n="home.advanced.devStop">
+                Ferma dev mode
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <!-- Terminal modal: reusable xterm host for CLI login sessions. -->
     <div class="terminal-modal" id="terminal-modal" hidden>
       <div class="terminal-modal__panel">

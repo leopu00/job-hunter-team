@@ -361,6 +361,60 @@ const TRANSLATIONS = {
     'running.stop': 'Stop team',
     'running.advanced': 'Technical details',
     'running.startingBtn': 'Starting…',
+    'home.nav.team': 'Team',
+    'home.nav.provider': 'Provider',
+    'home.nav.docker': 'Docker',
+    'home.nav.language': 'Language',
+    'home.nav.advanced': 'Advanced',
+    'home.team.title': 'Job Hunter Team',
+    'home.team.subtitleStopped': 'The team is stopped. Start it to launch the agents.',
+    'home.team.subtitleRunning': 'The team is running. Open the dashboard to manage it.',
+    'home.team.subtitleStarting': 'Starting up the runtime…',
+    'home.team.statusStopped': 'Stopped',
+    'home.team.statusRunning': 'Running',
+    'home.team.statusStarting': 'Starting',
+    'home.team.statusError': 'Error',
+    'home.team.start': 'Start team',
+    'home.team.openDashboard': 'Open dashboard',
+    'home.team.stop': 'Stop team',
+    'home.team.advanced': 'Technical details',
+    'home.provider.title': 'AI provider',
+    'home.provider.subtitle': 'Selected CLI, subscription plan and login status.',
+    'home.provider.current': 'Current provider',
+    'home.provider.plan': 'Plan',
+    'home.provider.authStatus': 'Login status',
+    'home.provider.authed': 'Signed in',
+    'home.provider.unauthed': 'Not signed in',
+    'home.provider.manageLogin': 'Manage login',
+    'home.provider.change': 'Change provider',
+    'home.docker.title': 'Docker',
+    'home.docker.subtitle': 'Container runtime used to isolate the agents.',
+    'home.docker.state': 'State',
+    'home.docker.image': 'JHT image',
+    'home.docker.imagePresent': 'Present locally',
+    'home.docker.imageMissing': 'Missing',
+    'home.docker.refresh': 'Re-check',
+    'home.docker.openDesktop': 'Open Docker Desktop',
+    'home.language.title': 'Language',
+    'home.language.subtitle': 'Launcher interface language.',
+    'home.advanced.title': 'Advanced',
+    'home.advanced.subtitle': 'Diagnostic and maintenance tools.',
+    'home.advanced.wizardLabel': 'Re-run setup',
+    'home.advanced.wizardHint': 'Reopens the initial wizard (provider, login, Docker check).',
+    'home.advanced.reopenWizard': 'Reopen wizard',
+    'home.advanced.devLabel': 'Developer mode',
+    'home.advanced.devHint': 'Starts the runtime with bind-mounts for web/agents/.launcher and Next on the host at :3001 with hot reload. Uses the configured provider.',
+    'home.advanced.devStatus': 'Status',
+    'home.advanced.devStart': 'Start dev mode (:3001)',
+    'home.advanced.devOpen': 'Open :3001',
+    'home.advanced.devStarting': 'Starting…',
+    'home.advanced.devReady': 'Ready · open the browser at :3001',
+    'home.advanced.devNotReady': 'Started but :3001 not responding yet',
+    'home.advanced.devIdle': 'Stopped',
+    'home.advanced.devRunning': 'Running on :3001',
+    'home.advanced.devStopping': 'Stopping…',
+    'home.advanced.devStop': 'Stop dev mode',
+    'home.advanced.devError': 'Error: {msg}',
   },
   it: {
     'topbar.alpha': 'Beta · test interno',
@@ -560,6 +614,60 @@ const TRANSLATIONS = {
     'running.stop': 'Ferma team',
     'running.advanced': 'Dettagli tecnici',
     'running.startingBtn': 'Avvio in corso…',
+    'home.nav.team': 'Team',
+    'home.nav.provider': 'Provider',
+    'home.nav.docker': 'Docker',
+    'home.nav.language': 'Lingua',
+    'home.nav.advanced': 'Avanzate',
+    'home.team.title': 'Job Hunter Team',
+    'home.team.subtitleStopped': 'Il team è fermo. Avvialo per lanciare gli agenti.',
+    'home.team.subtitleRunning': 'Il team è in esecuzione. Apri la dashboard per gestirlo.',
+    'home.team.subtitleStarting': 'Avvio del runtime in corso…',
+    'home.team.statusStopped': 'Fermo',
+    'home.team.statusRunning': 'In esecuzione',
+    'home.team.statusStarting': 'In avvio',
+    'home.team.statusError': 'Errore',
+    'home.team.start': 'Avvia team',
+    'home.team.openDashboard': 'Apri dashboard',
+    'home.team.stop': 'Ferma team',
+    'home.team.advanced': 'Dettagli tecnici',
+    'home.provider.title': 'Provider AI',
+    'home.provider.subtitle': 'CLI selezionato, piano di sottoscrizione e stato del login.',
+    'home.provider.current': 'Provider attuale',
+    'home.provider.plan': 'Piano',
+    'home.provider.authStatus': 'Stato login',
+    'home.provider.authed': 'Connesso',
+    'home.provider.unauthed': 'Non connesso',
+    'home.provider.manageLogin': 'Gestisci login',
+    'home.provider.change': 'Cambia provider',
+    'home.docker.title': 'Docker',
+    'home.docker.subtitle': 'Runtime container usato per isolare gli agenti.',
+    'home.docker.state': 'Stato',
+    'home.docker.image': 'Immagine JHT',
+    'home.docker.imagePresent': 'Presente in locale',
+    'home.docker.imageMissing': 'Assente',
+    'home.docker.refresh': 'Ricontrolla',
+    'home.docker.openDesktop': 'Apri Docker Desktop',
+    'home.language.title': 'Lingua',
+    'home.language.subtitle': "Lingua dell'interfaccia del launcher.",
+    'home.advanced.title': 'Avanzate',
+    'home.advanced.subtitle': 'Strumenti per diagnostica e manutenzione.',
+    'home.advanced.wizardLabel': 'Ripeti il setup',
+    'home.advanced.wizardHint': 'Rilancia il wizard iniziale (provider, login, verifica Docker).',
+    'home.advanced.reopenWizard': 'Riapri wizard',
+    'home.advanced.devLabel': 'Modalità sviluppatore',
+    'home.advanced.devHint': "Avvia il runtime con bind-mount di web/agents/.launcher e Next sull'host su :3001 con hot reload. Usa il provider già configurato.",
+    'home.advanced.devStatus': 'Stato',
+    'home.advanced.devStart': 'Avvia in dev mode (:3001)',
+    'home.advanced.devOpen': 'Apri :3001',
+    'home.advanced.devStarting': 'Avvio in corso…',
+    'home.advanced.devReady': 'Pronto · apri il browser su :3001',
+    'home.advanced.devNotReady': 'Partito ma :3001 non ancora disponibile',
+    'home.advanced.devIdle': 'Fermo',
+    'home.advanced.devRunning': 'In esecuzione su :3001',
+    'home.advanced.devStopping': 'Arresto in corso…',
+    'home.advanced.devStop': 'Ferma dev mode',
+    'home.advanced.devError': 'Errore: {msg}',
   },
   hu: {
     'topbar.alpha': 'Béta · belső tesztelés',
@@ -759,6 +867,60 @@ const TRANSLATIONS = {
     'running.stop': 'Csapat leállítása',
     'running.advanced': 'Technikai részletek',
     'running.startingBtn': 'Indítás…',
+    'home.nav.team': 'Csapat',
+    'home.nav.provider': 'Szolgáltató',
+    'home.nav.docker': 'Docker',
+    'home.nav.language': 'Nyelv',
+    'home.nav.advanced': 'Speciális',
+    'home.team.title': 'Job Hunter Team',
+    'home.team.subtitleStopped': 'A csapat leállt. Indítsd el az ügynökök futtatásához.',
+    'home.team.subtitleRunning': 'A csapat fut. Nyisd meg a vezérlőpultot a kezeléséhez.',
+    'home.team.subtitleStarting': 'Futtatókörnyezet indítása…',
+    'home.team.statusStopped': 'Leállítva',
+    'home.team.statusRunning': 'Fut',
+    'home.team.statusStarting': 'Indul',
+    'home.team.statusError': 'Hiba',
+    'home.team.start': 'Csapat indítása',
+    'home.team.openDashboard': 'Vezérlőpult megnyitása',
+    'home.team.stop': 'Csapat leállítása',
+    'home.team.advanced': 'Technikai részletek',
+    'home.provider.title': 'AI szolgáltató',
+    'home.provider.subtitle': 'Kiválasztott CLI, előfizetési csomag és bejelentkezési állapot.',
+    'home.provider.current': 'Jelenlegi szolgáltató',
+    'home.provider.plan': 'Csomag',
+    'home.provider.authStatus': 'Bejelentkezés állapota',
+    'home.provider.authed': 'Bejelentkezve',
+    'home.provider.unauthed': 'Nincs bejelentkezve',
+    'home.provider.manageLogin': 'Bejelentkezés kezelése',
+    'home.provider.change': 'Szolgáltató váltása',
+    'home.docker.title': 'Docker',
+    'home.docker.subtitle': 'Az ügynökök izolálásához használt konténer futtatókörnyezet.',
+    'home.docker.state': 'Állapot',
+    'home.docker.image': 'JHT image',
+    'home.docker.imagePresent': 'Helyben elérhető',
+    'home.docker.imageMissing': 'Hiányzik',
+    'home.docker.refresh': 'Újraellenőrzés',
+    'home.docker.openDesktop': 'Docker Desktop megnyitása',
+    'home.language.title': 'Nyelv',
+    'home.language.subtitle': 'Az indító felületének nyelve.',
+    'home.advanced.title': 'Speciális',
+    'home.advanced.subtitle': 'Diagnosztikai és karbantartó eszközök.',
+    'home.advanced.wizardLabel': 'Telepítés újraindítása',
+    'home.advanced.wizardHint': 'Újranyitja az indító varázslót (szolgáltató, bejelentkezés, Docker ellenőrzés).',
+    'home.advanced.reopenWizard': 'Varázsló újranyitása',
+    'home.advanced.devLabel': 'Fejlesztői mód',
+    'home.advanced.devHint': 'Elindítja a runtime-ot bind-mountokkal (web/agents/.launcher) és a Next szervert a hoston :3001 porton hot reload-dal. A beállított szolgáltatót használja.',
+    'home.advanced.devStatus': 'Állapot',
+    'home.advanced.devStart': 'Indítás dev módban (:3001)',
+    'home.advanced.devOpen': ':3001 megnyitása',
+    'home.advanced.devStarting': 'Indítás…',
+    'home.advanced.devReady': 'Kész · nyisd meg a böngészőt a :3001 címen',
+    'home.advanced.devNotReady': 'Elindult, de a :3001 még nem válaszol',
+    'home.advanced.devIdle': 'Leállítva',
+    'home.advanced.devRunning': 'Fut a :3001 porton',
+    'home.advanced.devStopping': 'Leállítás…',
+    'home.advanced.devStop': 'Dev mód leállítása',
+    'home.advanced.devError': 'Hiba: {msg}',
   },
 }
 
@@ -908,6 +1070,11 @@ const state = {
   // clicked "Open Docker Desktop". Drives the Docker row to a spinner
   // state and hides the "Install everything" button to avoid confusion.
   winDockerStarting: false,
+  // Which top-level screen is showing: 'wizard' (first-run flow) or
+  // 'home' (post-setup dashboard with sidebar). Set by showWizard /
+  // showHome; drives which UI the polling timers refresh.
+  view: 'wizard',
+  homeSection: 'team',
 }
 
 const dom = {
@@ -2771,18 +2938,369 @@ setInterval(() => {
   if (state.step === STEP_RUNNING) refreshRunningStatus()
 }, 3000)
 
+// -------- Home (post-setup dashboard) --------
+
+const HOME_SECTIONS = ['team', 'provider', 'docker', 'language', 'advanced']
+
+const homeDom = {
+  root: document.getElementById('home'),
+  wizardRoot: document.getElementById('wizard'),
+  navItems: Array.from(document.querySelectorAll('.home__nav-item')),
+  panels: Array.from(document.querySelectorAll('.home__panel')),
+  teamSubtitle: document.getElementById('home-team-subtitle'),
+  teamDot: document.getElementById('home-team-dot'),
+  teamStatus: document.getElementById('home-team-status'),
+  teamInfo: document.getElementById('home-team-info'),
+  teamAdvanced: document.getElementById('home-team-advanced'),
+  teamLog: document.getElementById('home-team-log'),
+  btnStart: document.getElementById('home-btn-start'),
+  btnOpen: document.getElementById('home-btn-open'),
+  btnStop: document.getElementById('home-btn-stop'),
+  providerName: document.getElementById('home-provider-name'),
+  providerPlan: document.getElementById('home-provider-plan'),
+  providerAuth: document.getElementById('home-provider-auth'),
+  btnProviderLogin: document.getElementById('home-btn-provider-login'),
+  btnProviderChange: document.getElementById('home-btn-provider-change'),
+  dockerState: document.getElementById('home-docker-state'),
+  dockerImage: document.getElementById('home-docker-image'),
+  btnDockerRefresh: document.getElementById('home-btn-docker-refresh'),
+  btnDockerOpen: document.getElementById('home-btn-docker-open'),
+  btnReopenWizard: document.getElementById('home-btn-reopen-wizard'),
+  devCard: document.getElementById('home-dev-card'),
+  devStatus: document.getElementById('home-dev-status'),
+  btnDevStart: document.getElementById('home-btn-dev-start'),
+  btnDevOpen: document.getElementById('home-btn-dev-open'),
+  btnDevStop: document.getElementById('home-btn-dev-stop'),
+}
+
+// "Setup complete": Docker runtime ready, container image pulled, one
+// provider picked, and that provider is signed in. Any of these failing
+// sends the user back through the wizard.
+function isSetupComplete(status) {
+  if (!status) return false
+  // setup:get-status returns docker as the raw checkDocker() result —
+  // shape { state, installed, responsive, hintKey } — NOT wrapped in
+  // a `check` field. (setup:get-docker-status wraps it; this one
+  // doesn't.) Reading `docker.check.state` here always returns
+  // undefined → home never opens. See main.js setup:get-status.
+  const dockerOk = status.docker?.state === 'ok'
+  const imageOk = status.image?.present === true
+  const saved = Array.isArray(status.providers?.saved) ? status.providers.saved : []
+  const unauthed = Array.isArray(status.providers?.unauthed) ? status.providers.unauthed : []
+  return dockerOk && imageOk && saved.length > 0 && unauthed.length === 0
+}
+
+function showWizard(step = STEP_WELCOME) {
+  homeDom.root.hidden = true
+  homeDom.wizardRoot.hidden = false
+  state.view = 'wizard'
+  showStep(step)
+}
+
+async function showHome(section = 'team') {
+  homeDom.wizardRoot.hidden = true
+  homeDom.root.hidden = false
+  state.view = 'home'
+  setHomeSection(section)
+  await refreshHomeAll()
+}
+
+function setHomeSection(name) {
+  if (!HOME_SECTIONS.includes(name)) name = 'team'
+  state.homeSection = name
+  for (const btn of homeDom.navItems) {
+    const active = btn.dataset.section === name
+    btn.classList.toggle('is-active', active)
+    btn.setAttribute('aria-selected', active ? 'true' : 'false')
+  }
+  for (const panel of homeDom.panels) {
+    panel.hidden = panel.dataset.section !== name
+  }
+  if (name === 'team') refreshHomeTeam()
+  else if (name === 'provider') refreshHomeProvider()
+  else if (name === 'docker') refreshHomeDocker()
+}
+
+async function refreshHomeAll() {
+  await Promise.all([
+    refreshHomeTeam().catch(() => {}),
+    refreshHomeProvider().catch(() => {}),
+    refreshHomeDocker().catch(() => {}),
+  ])
+}
+
+function renderHomeTeamStatus(status) {
+  const mode = status?.mode
+  const running = !!status?.running && (mode === 'running' || mode === 'external')
+  const starting = mode === 'starting' || mode === 'warming'
+  const errored = mode === 'error'
+  let dotState = 'stopped'
+  let subtitleKey = 'home.team.subtitleStopped'
+  let statusKey = 'home.team.statusStopped'
+  if (running) {
+    dotState = 'running'
+    subtitleKey = 'home.team.subtitleRunning'
+    statusKey = 'home.team.statusRunning'
+  } else if (starting) {
+    dotState = 'starting'
+    subtitleKey = 'home.team.subtitleStarting'
+    statusKey = 'home.team.statusStarting'
+  } else if (errored) {
+    dotState = 'error'
+    statusKey = 'home.team.statusError'
+  }
+  homeDom.teamDot.dataset.state = dotState
+  homeDom.teamStatus.textContent = t(statusKey)
+  homeDom.teamSubtitle.textContent = t(subtitleKey)
+  homeDom.btnStart.hidden = running || starting
+  homeDom.btnOpen.hidden = !running
+  homeDom.btnStop.hidden = !(running || starting)
+  // Info rows
+  homeDom.teamInfo.innerHTML = ''
+  const pushRow = (label, value) => {
+    if (value === undefined || value === null || value === '') return
+    const row = document.createElement('div')
+    row.className = 'info-row'
+    const l = document.createElement('span')
+    l.className = 'info-row__label'
+    l.textContent = label
+    const v = document.createElement('span')
+    v.className = 'info-row__value'
+    v.textContent = value
+    row.append(l, v)
+    homeDom.teamInfo.appendChild(row)
+  }
+  if (status?.url) pushRow(t('running.info.url'), status.url)
+  if (status?.port) pushRow(t('running.info.port'), String(status.port))
+  if (mode) pushRow(t('running.info.mode'), mode)
+  homeDom.teamInfo.hidden = homeDom.teamInfo.childElementCount === 0
+  if (status?.lastError) {
+    homeDom.teamAdvanced.hidden = false
+    homeDom.teamLog.textContent = String(status.lastError)
+  } else {
+    homeDom.teamAdvanced.hidden = true
+    homeDom.teamLog.textContent = ''
+  }
+}
+
+async function refreshHomeTeam() {
+  try {
+    const status = await window.launcherApi.getStatus()
+    renderHomeTeamStatus(status)
+  } catch (error) {
+    appendLog(`refreshHomeTeam: ${error.message || error}`)
+  }
+}
+
+async function startTeamFromHome() {
+  if (state.starting) return
+  state.starting = true
+  homeDom.btnStart.disabled = true
+  const original = homeDom.btnStart.textContent
+  homeDom.btnStart.textContent = t('running.startingBtn')
+  renderHomeTeamStatus({ mode: 'starting', running: false })
+  try {
+    const payloadInfo = await window.launcherApi.getPayloadDir()
+    if (!payloadInfo?.present) {
+      const result = await window.launcherApi.ensurePayload({ update: false })
+      if (!result?.ok) throw new Error(result?.error || 'download failed')
+    }
+    const status = await window.launcherApi.start({})
+    renderHomeTeamStatus(status)
+    if (status?.running && status?.url) {
+      await window.launcherApi.openBrowser().catch(() => {})
+    }
+  } catch (error) {
+    appendLog(`startTeamFromHome: ${error.message || error}`)
+    renderHomeTeamStatus({ mode: 'error', lastError: error.message || String(error) })
+  } finally {
+    state.starting = false
+    homeDom.btnStart.disabled = false
+    homeDom.btnStart.textContent = original
+  }
+}
+
+async function stopTeamFromHome() {
+  homeDom.btnStop.disabled = true
+  try {
+    await window.launcherApi.stop()
+    await refreshHomeTeam()
+  } catch (error) {
+    appendLog(`stopTeamFromHome: ${error.message || error}`)
+  } finally {
+    homeDom.btnStop.disabled = false
+  }
+}
+
+async function refreshHomeProvider() {
+  try {
+    const sel = await window.setupApi.getSelection()
+    const opt = PROVIDER_OPTIONS.find((p) => p.id === sel?.provider)
+    homeDom.providerName.textContent = opt ? opt.label : (sel?.provider || '—')
+    const plan = sel?.plan ? (PROVIDER_PLANS[sel.provider] || []).find((p) => p.id === sel.plan) : null
+    homeDom.providerPlan.textContent = plan ? plan.name : (sel?.plan || '—')
+    const authResp = await window.setupApi.getAuthStates()
+    const authList = Array.isArray(authResp?.auth) ? authResp.auth : []
+    const row = authList.find((a) => a.id === sel?.provider)
+    if (row?.authed) {
+      homeDom.providerAuth.textContent = t('home.provider.authed')
+      homeDom.providerAuth.style.color = 'var(--success)'
+    } else {
+      homeDom.providerAuth.textContent = t('home.provider.unauthed')
+      homeDom.providerAuth.style.color = 'var(--danger)'
+    }
+  } catch (error) {
+    appendLog(`refreshHomeProvider: ${error.message || error}`)
+  }
+}
+
+async function refreshHomeDocker() {
+  try {
+    const dockerStatus = await window.setupApi.getDockerStatus()
+    const s = dockerStatus?.check?.state
+    if (s === 'ok') {
+      homeDom.dockerState.textContent = t('docker.state.ok')
+      homeDom.dockerState.style.color = 'var(--success)'
+    } else {
+      const key = `docker.state.${s || 'missing'}`
+      const label = t(key)
+      homeDom.dockerState.textContent = label !== key ? label : (s || '—')
+      homeDom.dockerState.style.color = 'var(--warn)'
+    }
+    const full = await window.setupApi.getStatus()
+    const imgOk = full?.image?.present === true
+    homeDom.dockerImage.textContent = imgOk ? t('home.docker.imagePresent') : t('home.docker.imageMissing')
+    homeDom.dockerImage.style.color = imgOk ? 'var(--success)' : 'var(--warn)'
+    // Docker Desktop su linux non esiste; nascondi il pulsante.
+    homeDom.btnDockerOpen.hidden = dockerStatus?.platform === 'linux'
+  } catch (error) {
+    appendLog(`refreshHomeDocker: ${error.message || error}`)
+  }
+}
+
+// Wiring home
+for (const btn of homeDom.navItems) {
+  btn.addEventListener('click', () => setHomeSection(btn.dataset.section))
+}
+homeDom.btnStart.addEventListener('click', startTeamFromHome)
+homeDom.btnStop.addEventListener('click', stopTeamFromHome)
+homeDom.btnOpen.addEventListener('click', () => window.launcherApi.openBrowser())
+homeDom.btnProviderLogin.addEventListener('click', () => showWizard(STEP_PROVIDER_LOGIN))
+homeDom.btnProviderChange.addEventListener('click', () => showWizard(STEP_PROVIDER_CHOOSE))
+homeDom.btnDockerRefresh.addEventListener('click', () => refreshHomeDocker())
+homeDom.btnDockerOpen.addEventListener('click', () => window.setupApi.openDockerDesktop())
+homeDom.btnReopenWizard.addEventListener('click', () => showWizard(STEP_WELCOME))
+
+// Dev mode card: probe sincrono al boot. Se Electron e' packaged la
+// card resta nascosta (l'IPC ritorna available:false e scripts/dev-up.sh
+// non e' disponibile nell'app distribuita). Quando visibile, la card
+// rifletta lo stato runtime di Next host su :3001 (probe HEAD ogni 4s
+// solo mentre l'utente e' nel pannello Avanzate).
+async function refreshDevStatus() {
+  try {
+    const probe = await window.launcherApi.devProbe()
+    const running = !!probe?.running
+    homeDom.devStatus.textContent = running
+      ? t('home.advanced.devRunning')
+      : t('home.advanced.devIdle')
+    homeDom.devStatus.style.color = running ? 'var(--success)' : 'var(--text-dim)'
+    homeDom.btnDevStart.hidden = running
+    homeDom.btnDevStop.hidden = !running
+  } catch {
+    /* probe failed: lascia ultima label */
+  }
+}
+
+;(async () => {
+  try {
+    const probe = await window.launcherApi.devIsAvailable()
+    if (!probe?.available) return
+    homeDom.devCard.hidden = false
+    homeDom.devStatus.textContent = t('home.advanced.devIdle')
+
+    homeDom.btnDevStart.addEventListener('click', async () => {
+      homeDom.btnDevStart.disabled = true
+      homeDom.devStatus.textContent = t('home.advanced.devStarting')
+      try {
+        const res = await window.launcherApi.devLaunch()
+        if (!res?.ok) {
+          homeDom.devStatus.textContent = t('home.advanced.devError', { msg: res?.error || '?' })
+          return
+        }
+        await refreshDevStatus()
+      } catch (error) {
+        homeDom.devStatus.textContent = t('home.advanced.devError', { msg: error?.message || error })
+      } finally {
+        homeDom.btnDevStart.disabled = false
+      }
+    })
+
+    homeDom.btnDevStop.addEventListener('click', async () => {
+      homeDom.btnDevStop.disabled = true
+      homeDom.devStatus.textContent = t('home.advanced.devStopping')
+      try {
+        const res = await window.launcherApi.devStop()
+        if (!res?.ok) {
+          homeDom.devStatus.textContent = t('home.advanced.devError', { msg: res?.error || '?' })
+          return
+        }
+        await refreshDevStatus()
+      } catch (error) {
+        homeDom.devStatus.textContent = t('home.advanced.devError', { msg: error?.message || error })
+      } finally {
+        homeDom.btnDevStop.disabled = false
+      }
+    })
+
+    homeDom.btnDevOpen.addEventListener('click', () => {
+      window.launcherApi.openExternal('http://localhost:3001').catch(() => {})
+    })
+
+    // Stato iniziale + polling solo mentre il pannello Avanzate è attivo.
+    await refreshDevStatus()
+    setInterval(() => {
+      if (state.view === 'home' && state.homeSection === 'advanced') refreshDevStatus()
+    }, 4000)
+  } catch {
+    // probe failed (old Electron or packaged) — leave card hidden.
+  }
+})()
+
+const homeLangDropdown = initLangDropdown(document.getElementById('home-lang-select'), {
+  onPick: (lang) => setLang(lang),
+})
+if (homeLangDropdown) dropdowns.push(homeLangDropdown)
+
+// Poll team status only while the home→Team panel is visible. Same
+// cadence as the wizard's running-step poller (3s) — not cumulative,
+// the two run in different views.
+setInterval(() => {
+  if (state.view === 'home' && state.homeSection === 'team') refreshHomeTeam()
+}, 3000)
+
 // -------- Boot --------
 
 const stored = (() => {
   try { return localStorage.getItem(LANG_STORAGE_KEY) } catch (_) { return null }
 })()
 
-if (stored && SUPPORTED_LANGS.includes(stored)) {
+async function boot() {
+  if (!(stored && SUPPORTED_LANGS.includes(stored))) {
+    setLang(DEFAULT_LANG, { persist: false })
+    showWizard(STEP_LANGUAGE)
+    return
+  }
   setLang(stored, { persist: false })
-  showStep(STEP_WELCOME)
-} else {
-  setLang(DEFAULT_LANG, { persist: false })
-  showStep(STEP_LANGUAGE)
+  try {
+    const status = await window.setupApi.getStatus()
+    if (isSetupComplete(status)) {
+      await showHome('team')
+      return
+    }
+  } catch (error) {
+    appendLog(`boot probe: ${error.message || error}`)
+  }
+  showWizard(STEP_WELCOME)
 }
 
 // Paint platform-specific docker-card shape synchronously — before the
@@ -2791,3 +3309,5 @@ if (stored && SUPPORTED_LANGS.includes(stored)) {
 if (window.platformInfo && window.platformInfo.platform) {
   applyPlatformSkeleton(window.platformInfo.platform)
 }
+
+boot()
