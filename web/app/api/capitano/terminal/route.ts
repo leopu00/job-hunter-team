@@ -8,6 +8,18 @@ const execAsync = promisify(exec)
 
 export const dynamic = 'force-dynamic'
 
+// Quando Next gira sull'host (dev mode) e tmux gira dentro al container,
+// JHT_SHELL_VIA=docker:<c> dirige il check di esistenza sessione dentro
+// al container. Il comando di attach lanciato da osascript/Terminal deve
+// quindi anch'esso usare `docker exec -it <c>` per agganciarsi al tmux
+// del container, altrimenti cerca un tmux host inesistente. Fuori dal
+// dev mode (JHT_SHELL_VIA non settata) si usa l'attach diretto host.
+const shellVia = process.env.JHT_SHELL_VIA
+const dockerContainer = shellVia?.startsWith('docker:') ? shellVia.slice('docker:'.length) : null
+const ATTACH_CMD = dockerContainer
+  ? `docker exec -it ${dockerContainer} tmux attach -t CAPITANO`
+  : 'tmux attach -t CAPITANO'
+
 /** Apre una finestra terminale con tmux attach alla sessione CAPITANO */
 export async function POST() {
   const authError = await requireAuth()
@@ -29,28 +41,28 @@ export async function POST() {
     if (process.platform === 'win32') {
       // Apri Windows Terminal o PowerShell con wsl tmux attach
       await execAsync(
-        `start powershell -NoExit -Command "wsl -d Ubuntu-22.04 -- tmux attach -t CAPITANO"`,
+        `start powershell -NoExit -Command "wsl -d Ubuntu-22.04 -- ${ATTACH_CMD}"`,
         { timeout: 10000 }
       ).catch(() => {
         return execAsync(
-          `cmd /c start powershell -NoExit -Command "wsl tmux attach -t CAPITANO"`,
+          `cmd /c start powershell -NoExit -Command "wsl ${ATTACH_CMD}"`,
           { timeout: 10000 }
         )
       })
     } else if (process.platform === 'darwin') {
       // Mac: apri Terminal.app e porta in primo piano con 'activate'
       await execAsync(
-        `osascript -e 'tell application "Terminal"' -e 'activate' -e 'do script "tmux attach -t CAPITANO"' -e 'end tell'`,
+        `osascript -e 'tell application "Terminal"' -e 'activate' -e 'do script "${ATTACH_CMD}"' -e 'end tell'`,
         { timeout: 10000 }
       )
     } else {
       // Linux: prova x-terminal-emulator, fallback gnome-terminal
       await execAsync(
-        `x-terminal-emulator -e "tmux attach -t CAPITANO"`,
+        `x-terminal-emulator -e "${ATTACH_CMD}"`,
         { timeout: 10000 }
       ).catch(() =>
         execAsync(
-          `gnome-terminal -- bash -c "tmux attach -t CAPITANO; exec bash"`,
+          `gnome-terminal -- bash -c "${ATTACH_CMD}; exec bash"`,
           { timeout: 10000 }
         )
       ).catch(() => {})
