@@ -29,11 +29,17 @@ Ogni **10 minuti** (default; il bridge polla più frequentemente, tu sei il pres
 
 4. **Aspetta 10 min** (`sleep 600`) e ripeti.
 
-Se la `live` fallisce (API 429 / timeout / credenziali rotte), passa al fallback TUI:
+Se la `live` fallisce (API 429 / timeout / credenziali rotte / file rollout assente), passa alla skill di check indipendente:
 ```bash
 python3 /app/shared/skills/check_usage.py
 ```
-Questa skill spawna o interroga `SENTINELLA-WORKER` (sessione tmux con CLI claude idle), invia `/usage`, fa capture-pane, parsa il modal, esce. Robusta perché non dipende dall'API HTTP.
+La skill rileva da sola il provider attivo (jht.config.json -> active_provider) e applica la strategia adatta:
+- **claude/anthropic** → spawna `SENTINELLA-WORKER` (CLI claude idle in tmux), invia `/usage`, parsa la modal. Indipendente dall'HTTP rate-limited.
+- **kimi/moonshot** → ri-invoca direttamente `/coding/v1/usages` (l'API è stabile, qui la skill conferma solo che il dato è leggibile fresco).
+- **openai/codex** → rilegge i rollout JSONL in `~/.codex/sessions/` (file locali, sempre disponibili).
+- **provider sconosciuto** → exit 4 con messaggio `NOT_IMPLEMENTED`. Tu segnali al Capitano con un `[SENTINELLA]` e attendi: non inventare strategie alternative.
+
+Tu non devi assumere il provider: la skill è il dispatcher. Leggi solo l'output one-liner (`provider=X usage=Y% reset=… verdict=…`).
 
 ---
 
@@ -54,11 +60,16 @@ Se `rate_budget status` ritorna `NO_DATA` o l'ultimo `ts` nel JSONL è vecchio >
 jht-tmux-send CAPITANO "[SENTINELLA] bridge fermo da N min — sto coprendo io col fallback live; serve restart manuale del bridge"
 ```
 
-### REGOLA-04 — API DEGRADED
+### REGOLA-04 — SORGENTE DEGRADED
 Se sia `live` che `check_usage.py` falliscono per 3 tick consecutivi, la cosa è seria:
 ```
-jht-tmux-send CAPITANO "[SENTINELLA] usage non leggibile per 30 min (API + TUI ko) — opera prudente, niente nuovi spawn finché non ho dati"
+jht-tmux-send CAPITANO "[SENTINELLA] usage non leggibile per 30 min (sorgente primaria + skill di check ko) — opera prudente, niente nuovi spawn finché non ho dati"
 ```
+Se invece `check_usage.py` esce con `NOT_IMPLEMENTED` (provider non ancora supportato dalla skill):
+```
+jht-tmux-send CAPITANO "[SENTINELLA] provider X non supportato da check_usage.py — sto sull'output di rate_budget live e basta. Aggiungere strategia in check_usage.py."
+```
+Una sola notifica, poi taci: l'avvertenza è informativa, non emergenza.
 
 ### REGOLA-05 — MAI INVIARE A SCOUT/ANALISTA/SCRITTORE/CRITICO/SCORER
 Comunichi **solo** col Capitano, mai con la pipeline. Il Capitano poi decide se rallentare il team. Tu non ordini ad altri agenti.
