@@ -65,6 +65,9 @@ const nextConfig: NextConfig = {
   // file-tracing del build resta outputFileTracingRoot sopra; quello vale
   // per `next build --output=standalone` e non tocca il dev server.
   turbopack: {},
+  // Sposta il devtools indicator a bottom-right per liberare bottom-left
+  // ai widget custom dell'app (es. ProfileAssistantFab).
+  devIndicators: { position: 'bottom-right' },
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   images: {

@@ -6,6 +6,7 @@ import { isLocalRequest } from '@/lib/auth'
 import type { CandidateProfile } from '@/lib/types'
 import ProfilePageClient from '@/components/ProfilePageClient'
 import ProfileStats from '@/components/ProfileStats'
+import ProfileAssistantFab from '@/components/ProfileAssistantFab'
 
 const SKILL_CATEGORY_COLORS = [
   'var(--color-blue)',
@@ -67,6 +68,7 @@ export default async function ProfilePage() {
   const hasAspirations = aspirations.short_term || aspirations.long_term || aspirations.ambitious
 
   return (
+    <>
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
@@ -493,6 +495,8 @@ export default async function ProfilePage() {
 
       <ProfilePageClient profile={profile} />
     </div>
+    <ProfileAssistantFab />
+    </>
   )
 }
 
