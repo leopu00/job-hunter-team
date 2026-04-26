@@ -52,8 +52,23 @@ if command -v python3 >/dev/null 2>&1; then
 import json, os, re, sys
 from datetime import datetime, timezone
 session, msg = sys.argv[1], sys.argv[2]
+# 1) formato standard agente→agente: "[@from -> @to] [TYPE] ..."
 m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+)\])?', msg)
-from_, to_, kind = (m.group(1), m.group(2), m.group(3) or "") if m else ("", "", "")
+if m:
+    from_, to_, kind = m.group(1), m.group(2), m.group(3) or ""
+else:
+    # 2) bridge automatico: "[BRIDGE TICK|FAILURE|ALERT|INFO] ..." → la
+    #    destinazione è la session destinataria (passata come argv[1]).
+    mb = re.match(r'^\s*\[BRIDGE\s+([A-Z]+)\]', msg)
+    if mb:
+        from_, to_, kind = "bridge", session.lower(), mb.group(1)
+    else:
+        # 3) sentinella autonoma: "[SENTINELLA] ..." o "[SENTINELLA] [TYPE] ..."
+        ms = re.match(r'^\s*\[SENTINELLA\]\s*(?:\[([A-Z]+)\])?', msg)
+        if ms:
+            from_, to_, kind = "sentinella", session.lower(), ms.group(1) or ""
+        else:
+            from_, to_, kind = "", "", ""
 log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
 os.makedirs(log_dir, exist_ok=True)
 out = {
