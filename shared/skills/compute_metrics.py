@@ -27,9 +27,19 @@ from datetime import datetime, timezone, timedelta
 
 # ─── Costanti modello (in sync col bridge) ─────────────────────────────
 
-# Banda target di consumo: sopra → ATTENZIONE, sotto → SOTTOUTILIZZO.
+# Banda target di consumo: sopra → ATTENZIONE, dentro → STEADY (zona G-spot
+# 90-95%), sotto → SOTTOUTILIZZO.
+# Nota: lo stato "STEADY" qui è single-tick (proj nella fascia in QUESTO
+# sample). La conferma "stabile nel G-spot" richiede 3 tick consecutivi:
+# è la Sentinella che la fa, contando tick_steady_count nella sua memoria
+# e mandando MANTIENI solo quando count >= 3.
+# G-spot più stretto a 90-95% (era 85-95%): impostato dopo aver visto
+# che il sistema riesce a mantenere precisione fine al confine (target
+# più aggressivo per usare meglio il budget).
 PROJ_HIGH = 95
-PROJ_LOW = 85
+PROJ_STEADY_LOW = 90   # entrata zona G-spot (alzato da 85)
+PROJ_STEADY_HIGH = 95  # uscita zona G-spot (= PROJ_HIGH)
+PROJ_LOW = 90          # sotto = sottoutilizzo (alzato da 85)
 SAFE_TARGET = 95
 
 # Costante di tempo del rientro (modello first-order):
@@ -55,6 +65,21 @@ BURST_FILTER_THRESHOLD = 8.0
 # Reset event: un calo di > 30 punti percentuali = il provider ha
 # resettato la finestra. Trattiamo come start sessione nuova.
 RESET_DROP = 30
+
+# Cold-start: sotto questa soglia di velocità smussata trattiamo il sample
+# come "fermi". Senza dati di consumo reale il modello first-order non ha
+# senso (assumerebbe rientro a velocity_ideal = useremo tutto il budget).
+# Meglio una proiezione naive = usage attuale, che dice "se continui così
+# resti dove sei". Soglia 0.5%/h è ~ rumore di quantizzazione del provider.
+EPSILON_VEL = 0.5
+
+# Anti-spike: solo veri burst (sample <30s) sono noise di quantizzazione
+# che gonfiano fittiziamente la velocità. A 30s+ il dato è realistico
+# anche se viene da un check ad-hoc del Capitano/Sentinella, e va
+# usato come info aggiuntiva per i calcoli, non scartato.
+# Inoltre c'è effective_vel in compute_metrics che corregge l'EMA se
+# diverge troppo da last_hour_delta (= seconda linea di difesa).
+MIN_DT_MIN_FOR_VELOCITY = 0.5
 
 
 def hours_until(reset_hhmm):
@@ -126,24 +151,91 @@ def compute_metrics(parsed, last, history=None):
     if session_discontinuity:
         velocity = 0.0
         velocity_smooth = 0.0
+    elif last and session_gap_min < MIN_DT_MIN_FOR_VELOCITY:
+        # Anti-spike: sample troppo ravvicinato → l'EMA non viene
+        # aggiornata, ereditiamo la velocity_smooth precedente. Il
+        # delta tra usage cambia di 1 punto in 30s genera velocità
+        # 120%/h che è rumore, non segnale.
+        velocity = 0.0
+        velocity_smooth = (last or {}).get("velocity_smooth") or 0.0
     else:
         vs_prev = (last or {}).get("velocity_smooth") or 0.0
         velocity_smooth = EMA_ALPHA * velocity + (1 - EMA_ALPHA) * vs_prev
 
-    # ── Projection τ-aware ──
+    # ── Reset event: il provider ha azzerato la finestra ──
+    reset_event = bool(last and usage < (last.get("usage") or 0) - RESET_DROP)
+
+    # ── Session ID: identifica univocamente la finestra rate-limit ──
+    # Calcolato qui presto perché serve sotto per session-avg projection.
+    if last is None or session_discontinuity or reset_event:
+        session_id = now.strftime("%Y%m%dT%H%M%SZ")
+    else:
+        session_id = last.get("session_id") or now.strftime("%Y%m%dT%H%M%SZ")
+
+    # ── Projection: velocità media DALLA NASCITA della sessione ──
+    #
+    # Strategia (sostituisce EMA + last_hour_delta che oscillavano troppo
+    # con tick rapido + dati quantizzati interi):
+    #
+    #   effective_vel = (usage_now - usage_first_session) / elapsed_h_session
+    #
+    # Stabilizza naturalmente: i primi tick possono oscillare ma dopo
+    # 10 minuti la metrica è praticamente piatta perché il denominatore
+    # cresce in modo continuo. Reset automatico su cambio session_id
+    # (drop usage > 30 punti = nuova finestra rate-limit del provider).
+    #
+    # Manteniamo velocity_smooth (EMA) per indicatori tecnici / debug,
+    # ma il proj usa la session_avg.
     hours_to_reset = hours_until(parsed.get("reset_at"))
     velocity_ideal = None
     projection = None
     projection_naive = None
+    last_hour_delta = cumulative_delta_last_hour(
+        history + [{"ts": ts, "delta": delta}], now
+    ) if history is not None else 0.0
+
     if hours_to_reset and hours_to_reset > 0:
         velocity_ideal = max(0.0, (SAFE_TARGET - usage) / hours_to_reset)
         projection_naive = usage + velocity_smooth * hours_to_reset
-        # Modello first-order: v(t)=v_ideal + (v_now-v_ideal)·exp(-t/τ)
-        # ∫v dt = v_ideal·h + (v_now-v_ideal)·τ·(1-exp(-h/τ))
-        delta_v = velocity_smooth - velocity_ideal
-        decay = math.exp(-hours_to_reset / TAU_HOURS) if TAU_HOURS > 0 else 0.0
-        adapted_increase = velocity_ideal * hours_to_reset + delta_v * TAU_HOURS * (1 - decay)
-        projection = usage + adapted_increase
+
+        cold_start = (
+            last is None
+            or session_discontinuity
+            or reset_event
+        )
+        if cold_start:
+            # Sessione nuova: niente media disponibile, vel=0
+            effective_vel = 0.0
+        else:
+            # Trova il primo sample della sessione corrente (stesso
+            # session_id). La sessione cambia su drop>30 / gap>20min,
+            # quindi è automaticamente "scoped" alla finestra corrente.
+            session_first = None
+            for h in history or []:
+                if h.get("session_id") == session_id and h.get("provider") == provider:
+                    session_first = h
+                    break
+            if session_first is None:
+                # Niente storia in sessione → fallback EMA (caso raro:
+                # storia esiste ma session_id appena cambiato)
+                effective_vel = velocity_smooth
+            else:
+                first_ts = _parse_iso(session_first.get("ts"))
+                if first_ts:
+                    elapsed_h = (now - first_ts).total_seconds() / 3600
+                else:
+                    elapsed_h = 0
+                first_usage = session_first.get("usage")
+                if elapsed_h > 0.05 and isinstance(first_usage, (int, float)):
+                    # vel media reale dalla nascita della sessione:
+                    # robusta a oscillazioni di 1 punto, si stabilizza
+                    # in ~10 min, niente parser/EMA fragile.
+                    effective_vel = (usage - first_usage) / elapsed_h
+                else:
+                    # < 3 minuti dall'inizio sessione: dato troppo grezzo,
+                    # vel=0 finché abbiamo abbastanza tempo per misurare
+                    effective_vel = 0.0
+        projection = usage + effective_vel * hours_to_reset
 
     # ── Dead-band: velocity in calo? ──
     vs_prev = (last or {}).get("velocity_smooth")
@@ -152,28 +244,19 @@ def compute_metrics(parsed, last, history=None):
     else:
         velocity_decreasing = False
 
-    # ── Reset event: provider ha azzerato la finestra ──
-    reset_event = bool(last and usage < (last.get("usage") or 0) - RESET_DROP)
-
-    # ── Burst filter ──
-    last_hour_delta = cumulative_delta_last_hour(
-        history + [{"ts": ts, "delta": delta}], now
-    )
-    is_burst_artifact = (
-        projection is not None and projection > 100
-        and last_hour_delta < BURST_FILTER_THRESHOLD
-        and hours_to_reset and hours_to_reset > 0
-    )
-    if is_burst_artifact:
-        realistic_vel = last_hour_delta
-        projection = usage + max(realistic_vel, velocity_ideal or 0) * hours_to_reset
+    # session_id già calcolato sopra (serviva per il blocco projection).
 
     # ── Status / throttle (solo informativi: il vero throttle lo
     # decide il Capitano consultando questi numeri) ──
+    # Stato STEADY = "G-spot" 80-95%: zona target dove il team consuma
+    # bene il budget senza sforare. La Sentinella lo legge per dire al
+    # Capitano "MANTIENI".
     if reset_event:
         status, throttle = "RESET", 0
     elif projection is not None and projection > PROJ_HIGH:
         status, throttle = "ATTENZIONE", 1
+    elif projection is not None and PROJ_STEADY_LOW <= projection <= PROJ_STEADY_HIGH:
+        status, throttle = "STEADY", 0
     elif projection is not None and projection < PROJ_LOW:
         status, throttle = "SOTTOUTILIZZO", 0
     else:
@@ -182,6 +265,7 @@ def compute_metrics(parsed, last, history=None):
     return {
         "ts": ts,
         "provider": provider,
+        "session_id": session_id,
         "usage": usage,
         "delta": round(delta, 2),
         "velocity": round(velocity, 2),
