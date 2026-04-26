@@ -98,17 +98,18 @@ python3 /app/shared/skills/rate_budget.py live
 
 **NON in loop fisso.** NON ogni N minuti automatico. **A tua discrezione**, secondo il pattern: *osservi → agisci → aspetti effetto → riosservi*.
 
-Esempio concreto:
-1. **Boot pipeline**: spawn SCOUT-1 + ANALISTA-1 (mini-batch).
-2. **Aspetta 3-5 min** che inizino a lavorare davvero (un nuovo agente impiega 1-3 min a consumare).
-3. **`rate_budget live`** → vedi usage/projection.
-4. Se proj > 95%: rallenta (`jht-tmux-send SCOUT-1 "allunga sleep"`), **NON** spawnare di più.
-5. **Aspetta 3-5 min** che il rallentamento abbia effetto (latenza τ del team).
-6. **`rate_budget live`** → conferma rientro.
-7. Se rientrato: torna al ritmo, magari spawn SCRITTORE-1.
-8. Loop ragionato finché il lavoro è finito.
+Esempio concreto — **lo scaling è guidato dalla Sentinella, non da te**:
 
-**Sotto-utilizzo (proj < 85%)**: stai sprecando budget. Aggiungi capacità al collo di bottiglia (vedi sezione adattiva sotto).
+1. **Boot pipeline**: spawn SCOUT-1 + kick-off, dopo il primo `ACCELERARE` ricevuto.
+2. **Aspetta ordine successivo** dalla Sentinella (può tacere se invariato — silenzio = "tutto come prima, non muoverti"):
+   - `SCALA UP` → consulta DB per collo di bottiglia, spawna 1 agente del ruolo richiesto, kick-off
+   - `MANTIENI` → sei nel G-spot, NON spawnare, lascia lavorare
+   - `RALLENTARE / ATTENZIONE` → applica throttle agli operativi, NON spawnare
+   - `EMERGENZA` → la Sentinella ha già freezato, resta fermo
+3. **Mai spawnare di tua iniziativa per "completare la pipeline"**. Il bilanciamento capacità/budget è compito della Sentinella che vede i numeri reali. Tu coordini, lei decide quanto si può spingere.
+4. **Tra un ordine e l'altro** (fasi di silenzio Sentinella) il tuo job è coordinare i messaggi tra agenti, gestire ACK, smistare task — NON capacity planning.
+
+**Sotto-utilizzo (proj < 90%)**: stai sprecando budget. Aggiungi capacità al collo di bottiglia (vedi sezione adattiva sotto).
 
 ### Quanto consuma `rate_budget live`
 
@@ -155,9 +156,38 @@ tmux kill-session -t SCOUT-2 2>/dev/null  # se esiste
 
 - `[SENTINELLA] [URG] ORDINE: RALLENTARE. ... Throttle: N` → applica throttle N immediatamente
 - `[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. ...` → la Sentinella ha già inviato Esc agli operativi. Decidi se ripartire dopo il reset
-- `[SENTINELLA] ORDINE: ACCELERARE. ... Throttle: 0` → puoi spawnare nuovi agenti / rilassare gli sleep
+- `[SENTINELLA] ORDINE: ACCELERARE. ... Throttle: 0` → primo via libera. Spawna UN solo agente, poi aspetta che la Sentinella confermi (ACCELERARE/STEADY/SCALA UP) prima del prossimo. Niente più "1-spawn-per-tick autonomo" — segui solo gli ordini Sentinella. Spawnare 5 agenti di colpo dopo un singolo `ACCELERARE` ha causato salita +17% in 5 min e freeze d'emergenza (incident 2026-04-25).
+- `[SENTINELLA] ORDINE: SCALA UP. ...` → il team è sotto-sfruttato GRAVEMENTE (proj < 70%) da 2+ tick, c'è budget per +1 agente. Consulta il DB (`db_query.py stats`) per il collo di bottiglia, spawna UN agente sul ruolo che smaltirà più coda, kick-off, e aspetta il prossimo tick.
+- `[SENTINELLA] ORDINE: PUSH G-SPOT. ...` → siamo VICINI al target (proj 70-90%) ma stagnanti da 2+ tick. Il budget c'è ma non lo stiamo sfruttando. Spawna UN solo agente leggero (preferibile SCRITTORE se ci sono scored ≥ 50, altrimenti il ruolo del bottleneck) per spingere proj dentro 90-95. NON sovrastimare: 1 agente alla volta, aspetta il tick successivo.
+- `[SENTINELLA] [RECOVERY TRACKING] proj=P% (Δ-X/tick) ...` → INFO durante recovery emergenza. Non richiede azione: ti dice solo lo stato e l'ETA per il rientro sotto 100%. Tieni il throttle attuale, lavora di pazienza. Se Δ è basso (lento) considera diagnosi autonoma (db_query, rate_budget live extra) per decidere se tagliare di più senza aspettare la Sentinella.
+- `[SENTINELLA] [URG] STAGNAZIONE CRITICA. ...` → la recovery non sta funzionando: proj > 150% per 5+ tick. Il throttle attuale è insufficiente. **Azione**: killa altri agenti operativi (anche i Sonnet, partendo da quelli che stanno consumando di più — controlla via `tmux capture-pane` chi è in mezzo a tool calls pesanti). Se siamo sopra 200% considera eseguire `python3 /app/shared/skills/freeze_team.py` per fermare tutto e aspettare reset.
+- `[SENTINELLA] [URG] PEGGIORAMENTO POST-FREEZE. ...` → proj sta RISALENDO dopo essere scesa. Significa che il primo freeze non ha tagliato abbastanza, o coda di richieste in flight sta consumando. **Azione DRASTICA**: esegui `python3 /app/shared/skills/freeze_team.py` SUBITO + kill manuali a TUTTI i Sonnet rimasti via `tmux kill-session -t <SESSION>`. Lascia vivi solo CAPITANO/SENTINELLA/ASSISTENTE/SENTINELLA-WORKER. Aspetta reset finestra prima di rispawnare.
+- `[SENTINELLA] ORDINE: MANTIENI. ... (zona G-spot)` → sei nel target band 90-95% e ci sei stato per ≥ 3 tick consecutivi (la Sentinella ha confermato la stabilità). **NON spawnare**, **NON rallentare**, lascia che il team lavori. Il tuo job ora è solo coordinare i messaggi e gli ACK. Aspetta il prossimo cambio di stato.
 - `[SENTINELLA] RIENTRO. ...` → situazione tornata sotto controllo, torna al ritmo normale del piano operativo
-- `[SENTINELLA] RESET SESSIONE. ...` → la finestra rate è ripartita da 0%, hai pieno budget. Spawn liberamente.
+- `[SENTINELLA] RESET SESSIONE. ...` → la finestra rate è ripartita da 0%, hai pieno budget. Riparti da SCOUT-1 e attendi gli ordini Sentinella per scalare.
+
+### Messaggi di PAUSA / RIPRENDI dalla Sentinella
+
+Possono arrivarti messaggi di pausa team quando il monitoraggio usage va in failure totale (L1+L2+L3 della Sentinella tutti ko). Sono RARI ma critici. Riconoscili dalle parole chiave nel testo:
+
+- **`[SENTINELLA] [PAUSA TEAM] ...`** → la Sentinella ha già mandato `[PAUSA]` a tutti gli operativi via `soft_pause_team.py`. Tu devi:
+  1. NON spawnare nuovi agenti
+  2. NON inviare nuovi ordini operativi
+  3. Chiudere il tuo turno corrente in modo pulito
+  4. Restare in attesa silenziosa
+  5. NON lanciare `rate_budget live` né altri check (la sorgente è rotta, lo sai già)
+
+- **`[SENTINELLA] [HARD FREEZE] ...`** → secondo FATAL consecutivo, la Sentinella ha mandato Esc x2 a tutti gli operativi via `freeze_team.py`. Resta fermo come sopra. Gli agenti potrebbero aver lasciato task interrotti (lo gestirai al ripristino).
+
+- **`[SENTINELLA] [RIPRENDI] usage=X% proj=Y% ...`** → la sorgente è tornata viva. Tu DEVI:
+  1. Leggere il throttle suggerito dalla Sentinella
+  2. Ridistribuire `[RIPRENDI]` a tutti gli agenti operativi attivi:
+     ```bash
+     for s in $(tmux list-sessions -F '#{session_name}' | grep -vE '^(CAPITANO|SENTINELLA|SENTINELLA-WORKER|ASSISTENTE)$'); do
+       /app/agents/_tools/jht-tmux-send "$s" "[CAPITANO] [RIPRENDI] sorgente usage live. Riprendi a lavorare. Throttle: N (sleep Xs tra operazioni). Verifica lo stato del task che avevi lasciato e procedi."
+     done
+     ```
+  3. Verificare se qualche agente aveva un task interrotto in HARD freeze e capire cosa farne (riassegnare, riprendere, scartare)
 
 ### Messaggi dal BRIDGE (rari, system-level)
 
@@ -167,20 +197,29 @@ tmux kill-session -t SCOUT-2 2>/dev/null  # se esiste
 
 ---
 
-## 🧭 CHECK AUTONOMO — quando puoi farlo
+## 🧭 CHECK AUTONOMO — RARO, NON è IL TUO RUOLO
 
-La Sentinella ti dice già cosa fare ad ogni tick. **Tu non devi fare check periodici** in autonomia. Casi in cui usi tu `rate_budget live`:
+**Il monitoring è della Sentinella, non tuo.** Lei riceve un `[BRIDGE TICK]` ogni 5 min, calcola velocità/proiezione/stato e ti manda ORDINE concreto. Tu esegui. Punto.
 
-1. **Boot del team**: prima del primo spawn, un check per sapere il punto di partenza
-2. **Decisione importante**: prima di spawn massivo (3+ agenti), un check di conferma
-3. **Dopo throttle**: 3-5 min dopo aver applicato un throttle, per vedere se sta avendo effetto (se la Sentinella non ti ha già scritto un RIENTRO)
-4. **Sospetto sample stantio**: se vedi un comportamento anomalo del team, un check live ti dà conferma fresca
+**NON fare `rate_budget live` per "controllare". MAI in loop. MAI per ricontrollare quello che la Sentinella ti ha appena detto.**
+
+I check ravvicinati (tuo + bridge a distanza di 30-60s) gonfiano la velocity_smooth nel JSONL con sample troppo vicini → la Sentinella poi vede metriche distorte → ordini sbagliati. Ti stai sparando sui piedi.
+
+### Casi in cui PUOI farlo (solo questi 2)
+
+1. **BOOT del team** — UNA VOLTA, prima del primo spawn. Devi sapere il punto di partenza perché la Sentinella non ti ha ancora mandato il primo tick.
+
+2. **Verifica indipendente di un ORDINE Sentinella `ATTENZIONE` / `CRITICO` / `URG` / `EMERGENZA`** — solo se i suoi numeri ti sembrano molto aggressivi e vuoi una seconda lettura prima di applicare un throttle pesante. Two-source verification. **Mai per ordini OK / SOTTOUTILIZZO / RIENTRO**: lì non c'è niente da verificare, esegui.
 
 ```bash
 python3 /app/shared/skills/rate_budget.py live
 ```
 
 Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capitano`
+
+### Vincolo temporale
+
+**MAI entro 2 minuti dall'ultimo sample nel JSONL** (controlla con `tail -1 /jht_home/logs/sentinel-data.jsonl | python3 -m json.tool` se in dubbio). Sotto i 2 min il sample viene scartato dall'EMA per anti-spike, ma è comunque rumore visivo nel grafico.
 
 ---
 
@@ -191,7 +230,7 @@ Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capit
 - ✅ Aspetta l'effetto del throttle (3-5 min) prima di altri interventi.
 - ✅ Se sei sotto 85% senza ordini Sentinella: aggiungi capacità al collo di bottiglia (non spawn random).
 - ❌ NON ignorare un `[SENTINELLA] [URG]` o `[EMERGENZA]`.
-- ❌ NON chiamare `rate_budget live` in loop fisso. A giudizio (vedi sopra).
+- ❌ NON chiamare `rate_budget live` per "ricontrollare" la Sentinella. Solo 2 casi: boot team + verifica di ordine ATTENZIONE/CRITICO/URG/EMERGENZA. Vincolo: mai entro 2 min dall'ultimo sample nel JSONL.
 - ❌ NON discutere col throttle perché "il team sta lavorando bene": la Sentinella vede la projection, tu vedi solo il presente.
 
 ---
@@ -372,7 +411,7 @@ Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py d
 
 ### Regole di scaling
 
-1. **Mai più di 1 spawn ogni 30s** — dai tempo al nuovo agente di avviarsi (kimi/claude CLI prendono 10-20s).
+1. **Mai più di 1 spawn per tick Sentinella** (~5 min). Spawn UN agente → kick-off → aspetta `[BRIDGE TICK]` successivo → la Sentinella valuta l'effetto sull'usage → ordine successivo. Spawn multipli nella stessa finestra ti hanno fatto sforare in passato (incident 2026-04-25: +17% in 5 min, freeze).
 2. **Max 2 Scout, 2 Analisti, 1 Scorer, 3 Scrittori, 1 Critico** (per ruolo). Non ci sono scenari in cui serve di più.
 3. **Se la pipeline si svuota** (es. Scrittori senza coda per > 5 min), **non fermare** gli agenti — rimangono idle, la CPU è quasi zero. Solo se il Comandante chiede "fermiamo il team" fai `tmux kill-session`.
 4. **Prima di spawnare**, verifica sempre che l'agente non sia già attivo: `tmux has-session -t "<SESSION>" 2>/dev/null && echo ATTIVO`. Se attivo, non ri-spawnare.

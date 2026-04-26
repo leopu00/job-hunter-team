@@ -72,6 +72,13 @@ curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 
 ```
 Se match → `excluded` subito.
 
+**Sempre `-L` per seguire i redirect.** Un 302 senza `-L` non è un link morto: è solo un redirect. Verifica lo stato finale, non quello iniziale.
+
+**Workable — distingui le due URL**:
+- `apply.workable.com/...` → form di apply: ritorna 302 quando la job è chiusa (può ingannarti come [LINK_MORTO]).
+- `jobs.workable.com/...` → pagina canonical della JD: HTTP 200 + JSON-LD valido se la posizione è viva.
+Verifica SEMPRE la pagina canonical (`jobs.workable.com`), non la apply page. Stesso principio per Greenhouse, Lever, Ashby: usa la URL pubblica della JD, non quella del form.
+
 Per LinkedIn: usa `linkedin_check.py` con profilo autenticato (path nel profilo locale). MAI curl o screenshot senza login per LinkedIn.
 
 **REGOLA-04** — 5 CAMPI STRUTTURATI OBBLIGATORI nelle notes di ogni posizione analizzata:
