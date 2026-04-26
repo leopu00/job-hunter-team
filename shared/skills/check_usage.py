@@ -144,19 +144,80 @@ def spawn_worker():
 def parse_claude_usage(text):
     """Estrae usage% e reset HH:MM UTC dalla modal /usage.
 
-    Output atteso (può essere wrappato cross-line):
-        Resets 6:10pm (UTC)                                42% used
-        Resets 7pm (UTC) (all models)                      12% used
-        Resets 6am (UTC) (Sonnet only)                     3% used
+    Supporta DUE formati:
 
-    Il primo Resets SENZA tag 'all models' / 'only' è la sessione 5h.
+    v2.1+ (Claude Code attuale, "Current session" header, % used PRIMA di Resets):
+        Current session
+        ██████████████████                  36% used
+        Resets 4:40am (UTC)
+
+        Current week (all models)
+        ████████████▌                       25% used
+        Resets Apr 27, 5am (UTC)
+
+    Vecchio formato (pre-v2.1, % used DOPO Resets sulla stessa riga):
+        Resets 6:10pm (UTC)                 42% used
+        Resets 7pm (UTC) (all models)       12% used
+
+    Per il nuovo formato cerchiamo l'header "Current session" e da lì
+    estraiamo il percentuale e il Resets nella sezione. Per il vecchio
+    formato fallback alla logica "primo Resets senza tag (all models|only)".
     """
     if not text:
         return None
-    resets = list(re.finditer(
-        r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)([^\n]*)",
-        text, re.I,
+
+    # Guard: se l'ULTIMO output mostra "Loading usage data…" significa che
+    # il TUI ha provato ad aprire la modal ma non ha ricevuto i dati da
+    # Anthropic (sessione/token compromessi, network issue). NON usare la
+    # scrollback con valori cached da modali precedenti — fai fallire il
+    # parse così il bridge cade su HTTP e l'orchestratore può respawnare
+    # il worker.
+    # Cerco l'ULTIMA "Loading usage data" nel testo: se è dopo l'ULTIMA
+    # "Current session" (= modal corrente non caricata), restituisco None.
+    last_loading = text.rfind("Loading usage data")
+    last_session = text.rfind("Current session")
+    if last_loading > last_session:
+        return None
+
+    reset_re = r"Resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)"
+
+    # ── Formato v2.1+: header "Current session" ──
+    # Pattern: "Current session" → progress bar → "XX% used" → "Resets HH(:MM)?(am|pm) (UTC)"
+    # re.S permette al . di matchare newline.
+    #
+    # IMPORTANTE: prendiamo l'ULTIMO match (più recente nel buffer),
+    # non il primo. La scrollback può contenere modali /usage vecchie
+    # (boot CLI, query precedenti) e re.search di default trova la
+    # prima occorrenza che è SEMPRE quella più vecchia → dato stale.
+    matches_v2 = list(re.finditer(
+        r"Current\s+session\s+.*?(\d+)\s*%\s*used.*?" + reset_re,
+        text, re.I | re.S,
     ))
+    m_v2 = matches_v2[-1] if matches_v2 else None
+    if m_v2:
+        h = int(m_v2.group(2))
+        minute = int(m_v2.group(3) or 0)
+        ampm = m_v2.group(4).lower()
+        if ampm == "pm" and h < 12:
+            h += 12
+        elif ampm == "am" and h == 12:
+            h = 0
+        # Estrai weekly: cerca SOLO nel testo dopo l'ultima "Current
+        # session" (il blocco weekly accompagna sempre il session corrente).
+        text_after = text[m_v2.start():]
+        m_weekly = re.search(
+            r"Current\s+week\s*\(all\s+models\).*?(\d+)\s*%\s*used",
+            text_after, re.I | re.S,
+        )
+        weekly = int(m_weekly.group(1)) if m_weekly else None
+        return {
+            "usage": int(m_v2.group(1)),
+            "reset_hhmm_utc": f"{h:02d}:{minute:02d}",
+            "weekly": weekly,
+        }
+
+    # ── Formato vecchio (fallback): primo Resets senza tag ──
+    resets = list(re.finditer(reset_re + r"([^\n]*)", text, re.I))
     if not resets:
         return None
     session_match = None
@@ -219,14 +280,39 @@ def remaining_str(reset_hhmm_utc):
 # ── Strategie per provider ──────────────────────────────────────────
 
 def query_claude_worker():
-    """/usage → Enter → 4s → capture. Niente Esc: durante il trust dialog
-    iniziale (se il CLI è appena partito) Esc = cancel → CLI esce →
-    /usage finisce in bash. Enter da solo è safe in tutti gli stati."""
-    send_keys(WORKER_SESSION, "/usage")
-    time.sleep(0.4)
-    send_keys(WORKER_SESSION, "Enter")
+    """Esc → /usage → Enter → 4s → capture.
+
+    Esc PRIMA di /usage è critico: se la modal /usage è già aperta dal
+    tick precedente, senza Esc il "/usage" finisce nel prompt input
+    della modal stessa (non rilanciato come slash command) → la modal
+    resta sui dati del primo tick, mai aggiornata.
+
+    Caveat: se il CLI è ancora nel trust dialog iniziale (entro 18s
+    dallo spawn), Esc = cancel → CLI esce. Il chiamante DEVE attendere
+    WORKER_BOOT_WAIT_S (18s) dopo lo spawn prima di chiamare questa.
+    Lo facciamo già in spawn_worker() + check_claude(), e il bridge
+    fa lo stesso prima del primo tick.
+    """
+    # Flusso "Esc PRIMA + DOPO" per max robustezza:
+    #   1. Esc prima  → chiude eventuale modal residua dal tick
+    #                   precedente (anche se ci aspettiamo che sia già
+    #                   chiusa dall'Esc di fine ciclo, è una guard)
+    #   2. /usage     → apre modal fresca
+    #   3. capture    → leggi
+    #   4. Esc dopo   → chiudi per il prossimo round (così Anthropic
+    #                   non serve dato cached della modal aperta)
+    #
+    # Anche col fix "ultima modal in scrollback" del parser, mantenere
+    # un solo formato di scrollback (modal aperta → chiusa) rende lo
+    # stato più prevedibile.
+    send_keys(WORKER_SESSION, "Escape")
+    time.sleep(0.5)
+    send_keys(WORKER_SESSION, "/usage", "Enter")
     time.sleep(USAGE_RENDER_WAIT_S)
-    return capture_pane(WORKER_SESSION)
+    buf = capture_pane(WORKER_SESSION)
+    send_keys(WORKER_SESSION, "Escape")
+    time.sleep(0.5)
+    return buf
 
 
 def check_claude():

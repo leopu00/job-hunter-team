@@ -243,6 +243,13 @@ def live():
         print(f"LIVE_FAIL: provider {provider} ha risposto vuoto/None (rate-limit, timeout o credenziali mancanti)", file=sys.stderr)
         sys.exit(4)
 
+    # fetch_claude_api ritorna la stringa "RATE_LIMIT" (sentinel value, non dict)
+    # quando Anthropic ha 429ato. Va trattato come fail esplicito così la
+    # Sentinella sa che deve passare a L2 (TUI worker).
+    if isinstance(sample, str):
+        print(f"LIVE_FAIL: provider {provider} segnale di rate-limit ({sample}). Usa L2 (check_usage.py).", file=sys.stderr)
+        sys.exit(4)
+
     usage = sample.get("usage")
     reset_at = sample.get("reset_at")
     weekly = sample.get("weekly_usage")
