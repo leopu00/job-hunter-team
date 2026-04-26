@@ -58,9 +58,12 @@ type RangeId = (typeof RANGES)[number]['id']
 type HoverState = { index: number; xPct: number; yPct: number } | null
 
 function Chart({
-  entries, tMin, tMax, onHover,
+  entries, tMin, tMax, onHover, onPan,
 }: {
   entries: Entry[]; tMin: number; tMax: number; onHover: (h: HoverState) => void;
+  /** Chiamato durante drag con il delta in millisecondi (positivo = vai avanti
+   *  nel tempo, negativo = vai indietro). Il parent applica al panRightTs. */
+  onPan?: (deltaMs: number) => void;
 }) {
   const W = 900
   const H = 360
@@ -159,12 +162,53 @@ function Chart({
     })
   }
 
+  // Drag-to-pan (pattern d3-zoom): tieni premuto e trascina orizzontalmente
+  // per scorrere nel tempo. Convertiamo il Δpixel in Δtempo usando la stessa
+  // proporzione dell'asse x (pxPerMs). Drag verso destra → vai indietro nel
+  // tempo (deltaMs negativo). hover viene messo in pausa durante il drag così
+  // il tooltip non sfarfalla.
+  const dragRef = useRef<{ startX: number; startTime: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const onSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onPan || entries.length === 0) return
+    if (e.button !== 0) return
+    dragRef.current = { startX: e.clientX, startTime: Date.now() }
+    setIsDragging(true)
+    onHover(null)
+  }
+  const onWindowMouseMove = (e: MouseEvent) => {
+    const drag = dragRef.current
+    const svg = svgRef.current
+    if (!drag || !svg || !onPan) return
+    const rect = svg.getBoundingClientRect()
+    const pxPerMs = (rect.width * (innerW / W)) / tSpan
+    const deltaPx = e.clientX - drag.startX
+    const deltaMs = -deltaPx / pxPerMs   // drag dx → guarda nel passato
+    onPan(deltaMs)
+    drag.startX = e.clientX
+  }
+  const onWindowMouseUp = () => {
+    dragRef.current = null
+    setIsDragging(false)
+  }
+  useEffect(() => {
+    if (!isDragging) return
+    window.addEventListener('mousemove', onWindowMouseMove)
+    window.addEventListener('mouseup', onWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove)
+      window.removeEventListener('mouseup', onWindowMouseUp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDragging])
+
   return (
     <svg
       ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
-      onMouseMove={handleMove}
-      onMouseLeave={() => onHover(null)}
+      onMouseMove={isDragging ? undefined : handleMove}
+      onMouseLeave={() => { if (!isDragging) onHover(null) }}
+      onMouseDown={onSvgMouseDown}
       style={{
         width: '100%',
         maxWidth: W,
@@ -172,7 +216,12 @@ function Chart({
         borderRadius: 8,
         background: 'var(--color-panel)',
         display: 'block',
-        cursor: entries.length > 0 ? 'crosshair' : 'default',
+        cursor: entries.length === 0
+          ? 'default'
+          : isDragging ? 'grabbing'
+          : onPan ? 'grab'
+          : 'crosshair',
+        userSelect: 'none',
       }}
     >
       {/* Sweet spot: banda 85%-95% dove vogliamo stare.
@@ -415,6 +464,12 @@ export default function UsageChart() {
   const [range, setRange] = useState<RangeId>('6h')
   const [hover, setHover] = useState<HoverState>(null)
   const [nowTs, setNowTs] = useState(() => Date.now())
+  // Pan: timestamp in cui termina la finestra del chart (l'estremo destro).
+  // null = live mode (segue nowTs); un numero = finestra ancorata a quel
+  // momento, l'utente sta navigando il passato. Reset a null quando cambia
+  // il range — non ha senso restare ancorati a un istante in 10m se passi a 24h.
+  const [panRightTs, setPanRightTs] = useState<number | null>(null)
+  useEffect(() => { setPanRightTs(null) }, [range])
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const loadData = useCallback(async () => {
@@ -443,14 +498,15 @@ export default function UsageChart() {
   // Ricalcolato al tick del clock cosi' l'asse scorre nel tempo.
   const { tMin, tMax } = useMemo(() => {
     const meta = RANGES.find(r => r.id === range) ?? RANGES[1]
-    const tMaxCalc = nowTs
+    // tMaxCalc: in live mode segue il clock, in pan mode è ancorato a panRightTs
+    const tMaxCalc = panRightTs ?? nowTs
     if (!Number.isFinite(meta.minutes)) {
       // "tutto": usa il primo sample come tMin, o 10 min fa se vuoto
       const firstTs = entries.length > 0 ? Date.parse(entries[0].ts) : tMaxCalc - 10 * 60_000
       return { tMin: Number.isFinite(firstTs) ? firstTs : tMaxCalc - 10 * 60_000, tMax: tMaxCalc }
     }
     return { tMin: tMaxCalc - meta.minutes * 60_000, tMax: tMaxCalc }
-  }, [range, nowTs, entries])
+  }, [range, nowTs, entries, panRightTs])
 
   const filtered = useMemo(() => {
     return entries.filter(e => {
@@ -485,6 +541,25 @@ export default function UsageChart() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* "↺ live" appare solo quando l'utente ha trascinato il chart e
+              non è più ancorato al wall-clock. Click → torna ad ancorarsi a now. */}
+          {panRightTs !== null && (
+            <button
+              type="button"
+              onClick={() => setPanRightTs(null)}
+              className="px-2 py-0.5 rounded text-[10px] font-semibold transition-colors"
+              style={{
+                background: 'rgba(244,67,54,0.10)',
+                color: '#f87171',
+                border: '1px solid rgba(244,67,54,0.3)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Torna al tempo corrente"
+            >
+              ↺ live
+            </button>
+          )}
           <div className="flex gap-1" role="radiogroup" aria-label="time range">
             {RANGES.map(r => {
               const active = r.id === range
@@ -523,7 +598,17 @@ export default function UsageChart() {
       ) : (
         <div>
         <div className="relative">
-          <Chart entries={filtered} tMin={tMin} tMax={tMax} onHover={setHover} />
+          <Chart
+            entries={filtered}
+            tMin={tMin}
+            tMax={tMax}
+            onHover={setHover}
+            onPan={(deltaMs) => {
+              // "ancora" la finestra: snapshot di nowTs al primo drag così
+              // i tick del clock non spostano più la finestra durante il pan.
+              setPanRightTs((prev) => (prev ?? nowTs) + deltaMs)
+            }}
+          />
 
           {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
           {hover && hovered && (
