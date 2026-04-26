@@ -41,13 +41,28 @@ async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null
 }
 
 const DATA_JSONL = path.join(JHT_HOME, 'logs', 'sentinel-data.jsonl')
-// Bridge V5 ha tick fisso a 5 min (TICK_INTERVAL_MIN). Lo cabliamo qui
-// per derivare nextTickAt finché il bridge non lo esporrà esplicitamente.
-const BRIDGE_INTERVAL_MS = 5 * 60_000
 
-/** Cerca l'ultimo sample con source=bridge nel JSONL e ritorna il suo ts.
- *  Più affidabile che dedurre dal /tmp/sentinel-bridge.log (formato testo). */
-async function readLastBridgeSample(): Promise<{ ts: string } | null> {
+// Replica della logica _choose_tick_interval del bridge (sentinel-bridge.py:91).
+// Il bridge V5 NON ha un tick fisso: adatta in base allo stato dell'ultimo
+// sample. Mantenere queste costanti allineate al bridge Python.
+const ADAPTIVE_TICK_FAST_MIN = 1.5      // SOTTOUTILIZZO / ATTENZIONE / CRITICO
+const ADAPTIVE_TICK_SLOW_MIN = 5.0      // STEADY / RESET / OK / null
+const ADAPTIVE_TICK_EMERGENCY_MIN = 1.0 // EMERGENZA o freeze (proj > 100%)
+
+function chooseTickIntervalMin(status: string | null, projection: number | null): number {
+  const freezeActive = typeof projection === 'number' && projection > 100
+  if (freezeActive || status === 'EMERGENZA') return ADAPTIVE_TICK_EMERGENCY_MIN
+  if (status && ['SOTTOUTILIZZO', 'ATTENZIONE', 'CRITICO'].includes(status)) {
+    return ADAPTIVE_TICK_FAST_MIN
+  }
+  return ADAPTIVE_TICK_SLOW_MIN
+}
+
+type BridgeSample = { ts: string; status: string | null; projection: number | null }
+
+/** Cerca l'ultimo sample con source=bridge nel JSONL: ne servono ts +
+ *  status + projection per replicare la logica adattiva del tick. */
+async function readLastBridgeSample(): Promise<BridgeSample | null> {
   let raw: string
   try { raw = await fs.readFile(DATA_JSONL, 'utf-8') }
   catch { return null }
@@ -56,8 +71,14 @@ async function readLastBridgeSample(): Promise<{ ts: string } | null> {
     const line = lines[i]
     if (!line) continue
     try {
-      const e = JSON.parse(line) as { source?: string; ts?: string }
-      if (e.source === 'bridge' && typeof e.ts === 'string') return { ts: e.ts }
+      const e = JSON.parse(line) as { source?: string; ts?: string; status?: string; projection?: number }
+      if (e.source === 'bridge' && typeof e.ts === 'string') {
+        return {
+          ts: e.ts,
+          status: e.status ?? null,
+          projection: typeof e.projection === 'number' ? e.projection : null,
+        }
+      }
     } catch { /* skip */ }
   }
   return null
@@ -66,14 +87,26 @@ async function readLastBridgeSample(): Promise<{ ts: string } | null> {
 export async function GET() {
   const [status, lastSample] = await Promise.all([isBridgeRunning(), readLastBridgeSample()])
   const lastTickAt = lastSample?.ts ?? null
+  // Tick interval calcolato dallo stato dell'ultimo sample, esattamente
+  // come fa il bridge prima di chiamare time.sleep(). Se lastSample è null
+  // (cold-start) cadiamo sullo SLOW = 5 min.
+  const intervalMin = chooseTickIntervalMin(
+    lastSample?.status ?? null,
+    lastSample?.projection ?? null,
+  )
+  const intervalMs = Math.round(intervalMin * 60_000)
   const nextTickAt = lastTickAt && status.running
-    ? new Date(new Date(lastTickAt).getTime() + BRIDGE_INTERVAL_MS).toISOString()
+    ? new Date(new Date(lastTickAt).getTime() + intervalMs).toISOString()
     : null
   return NextResponse.json({
     ...status,
     lastTickAt,
+    lastStatus: lastSample?.status ?? null,
+    lastProjection: lastSample?.projection ?? null,
     nextTickAt,
-    intervalMs: BRIDGE_INTERVAL_MS,
+    intervalMs,
+    intervalMin,
   })
 }
+
 
