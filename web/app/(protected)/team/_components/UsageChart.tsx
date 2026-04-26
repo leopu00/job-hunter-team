@@ -224,13 +224,13 @@ function Chart({
         userSelect: 'none',
       }}
     >
-      {/* Sweet spot: banda 85%-95% dove vogliamo stare.
-           Projection sotto 85 = sottouso (SPINGI), sopra 95 = alert RALLENTA. */}
+      {/* Sweet spot: banda 90%-95% dove vogliamo stare (G-spot).
+           Projection sotto 90 = sottouso (SPINGI), sopra 95 = alert RALLENTA. */}
       <rect
         x={PAD.left}
         y={yAt(95)}
         width={innerW}
-        height={yAt(85) - yAt(95)}
+        height={yAt(90) - yAt(95)}
         fill="#22c55e"
         opacity={0.08}
       />
@@ -241,12 +241,12 @@ function Chart({
       />
       <line
         x1={PAD.left} x2={W - PAD.right}
-        y1={yAt(85)} y2={yAt(85)}
+        y1={yAt(90)} y2={yAt(90)}
         stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
       />
       <text
         x={W - PAD.right + 5}
-        y={yAt(90) + 3}
+        y={yAt(92.5) + 3}
         fontSize={9}
         fill="rgba(34,197,94,0.75)"
         fontWeight="600"
@@ -365,7 +365,7 @@ function Legend() {
               border: '1px solid rgba(34,197,94,0.5)',
             }}
           />
-          target 85-95%
+          target 90-95%
         </span>
       </div>
       {/* Punti — chi ha fatto il check (source label nel JSONL) */}
