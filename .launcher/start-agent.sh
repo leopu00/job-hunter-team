@@ -74,6 +74,35 @@ if [ "$ROLE" = "worker" ]; then
   exit 0
 fi
 
+# ── Bridge sentinel (V5: ruolo dedicato, non più appiccicato al capitano) ──
+# Short-circuit per "bridge": spawna il sentinel-bridge.py in background.
+# Non è una sessione tmux, è un processo Python detached. Singleton: killa
+# eventuali bridge preesistenti prima di spawnarne uno nuovo (bug storico:
+# ogni restart del Capitano accumulava un bridge in più).
+#
+# Lanciato dopo che CAPITANO e SENTINELLA sono già partiti e stabili, così
+# il primo [BRIDGE TICK] arriva alla SENTINELLA che è già pronta a riceverlo.
+if [ "$ROLE" = "bridge" ]; then
+  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
+  if [ ! -f "$BRIDGE_SCRIPT" ]; then
+    echo "✗ $BRIDGE_SCRIPT non trovato — bridge NON partito"
+    exit 1
+  fi
+  # Kill bridge preesistenti via /proc/*/cmdline (pkill non è installato
+  # nell'immagine busybox slim). Matching su 'sentinel-bridge.py' copre
+  # setsid wrapper + python + eventuali figli.
+  for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  setsid sh -c "
+    JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+      python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/sentinel-bridge.log)"
+  exit 0
+fi
+
 # Mappa ruolo → prefisso sessione | effort | model
 # model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
 #   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
@@ -487,48 +516,15 @@ _kickoff() {
 }
 
 if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Team avviato dal Comandante. Loop operativo (sei AUTONOMO sul monitoring, niente piu' tick periodici dal bridge): (1) CHECK iniziale con python3 /app/shared/skills/rate_budget.py live (chiama API, scrive sample con source=capitano, aggiorna grafico) — se proj>95% NON spawnare; (2) leggi $JHT_HOME/profile/candidate_profile.yml; (3) python3 /app/shared/skills/db_query.py dashboard per stato DB; (4) se budget OK spawn SCOUT-1 + ANALISTA-1 con /app/.launcher/start-agent.sh e kick-off via /app/agents/_tools/jht-tmux-send; (5) ASPETTA 3-5 min che lavorino, poi rate_budget live di nuovo per vedere effetto, decidi se rallentare/spawnare altri. Il pattern e' osservi→agisci→aspetti→riosservi, NON loop fisso. La Sentinella ti scrive SOLO se la situazione lo richiede (raro): trattalo come segnale, fai 1 tuo rate_budget live di conferma."
+  _msg="[@utente -> @capitano] [MSG] Team avviato dal Comandante. Boot: (1) UN check iniziale con python3 /app/shared/skills/rate_budget.py live per sapere il punto di partenza — se proj>95% NON spawnare; (2) leggi $JHT_HOME/profile/candidate_profile.yml; (3) python3 /app/shared/skills/db_query.py dashboard per stato DB; (4) se budget OK spawn SCOUT-1 (UN solo agente) con /app/.launcher/start-agent.sh + kick-off via /app/agents/_tools/jht-tmux-send. REGOLA D'ORO: 1 SPAWN ALLA VOLTA, POI ASPETTA IL PROSSIMO [BRIDGE TICK] DELLA SENTINELLA (~5 min) PRIMA DI SPAWNARNE UN ALTRO. La Sentinella valuta l'effetto del tuo spawn sull'usage e ti dirà se puoi aggiungere capacità o devi fermarti. Spawnare 5 agenti dopo un singolo ACCELERARE ha causato incident +17% in 5 min e freeze d'emergenza il 2026-04-25 — non ripeterlo. POI BASTA con rate_budget live: il monitoring è della SENTINELLA, lei riceve [BRIDGE TICK] ogni 5 min e ti manda ORDINE concreto, tu esegui. Solo eccezione: ORDINE Sentinella ATTENZIONE/CRITICO/URG/EMERGENZA può richiedere una verifica indipendente prima di applicare throttle pesante (mai entro 2 min dall'ultimo sample)."
   _kickoff "$SESSION" "$_msg"
 
-  # Il SENTINELLA-WORKER (sessione tmux con claude CLI idle per fallback
-  # /usage) non viene più spawnato qui all'avvio: il bridge lo crea lazy
-  # solo quando l'HTTP API fallisce, e lo killa dopo 2 tick OK consecutivi.
-  # Risparmia RAM e una sessione concurrent di Claude Max nei periodi in
-  # cui l'endpoint regge.
-
-  # Spawna il bridge di monitoraggio rate-limit. Gira in background,
-  # polla il provider (HTTP API o rollout JSONL), calcola le metriche,
-  # e manda [BRIDGE ORDER] al CAPITANO quando la policy cambia
-  # (edge-triggered). Prima era legato al ruolo "sentinella" LLM, ora
-  # gira a fianco del Capitano come servizio deterministico.
-  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
-  if [ -x "$BRIDGE_SCRIPT" ] || [ -f "$BRIDGE_SCRIPT" ]; then
-    # Kill bridge preesistenti prima di spawnarne uno nuovo. Bug
-    # osservato: ogni restart del Capitano spawnava un bridge senza
-    # killare il precedente → accumulo (fino a 11 istanze insieme),
-    # race sul policy state file, tick multipli al secondo, usage
-    # "falso" perche' tutti pollavano in parallelo.
-    # Cerchiamo via /proc/*/cmdline perche' pkill non e' installato
-    # nell'immagine (busybox slim); matching su 'sentinel-bridge.py'
-    # copre setsid wrapper + python + eventuali figli.
-    for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill "$_pid" 2>/dev/null || true
-    done
-    sleep 1
-    # Bridge V4: fa subito fetch+sample al boot per popolare il grafico
-    # PRIMA che il Capitano faccia il suo primo rate_budget live. Rimosso
-    # il vecchio `sleep 20` (legacy V1, serviva ad aspettare che il CLI
-    # claude del Capitano fosse stabile prima di parsare il pane TUI —
-    # in V4 il bridge non legge il pane, va in fetch API diretto).
-    setsid sh -c "
-      JHT_TARGET_SESSION='$SESSION' \
-      JHT_TICK_INTERVAL='${JHT_TICK_INTERVAL:-10}' \
-        python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "  → sentinel-bridge partito (target=$SESSION, log /tmp/sentinel-bridge.log)"
-  else
-    echo "  ⚠ $BRIDGE_SCRIPT non trovato — bridge NON partito"
-  fi
+  # Nota V5: il sentinel-bridge.py NON viene più spawnato qui. È un ruolo
+  # separato (`start-agent.sh bridge`) lanciato esplicitamente da
+  # /api/team/start-all dopo che CAPITANO e SENTINELLA sono già attivi,
+  # per garantire che il primo [BRIDGE TICK] arrivi alla SENTINELLA quando
+  # è già pronta a riceverlo. Il SENTINELLA-WORKER (Claude TUI fallback)
+  # è creato lazy dalla skill check_usage.py quando serve.
 fi
 
 if [ "$ROLE" = "assistente" ]; then

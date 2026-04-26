@@ -36,19 +36,37 @@ type TeamAgent = {
   session: string
   instance: string | null
   env?: Record<string, string>
+  /** Sleep in ms PRIMA di lanciare questo agente (per dare tempo al
+   *  predecessore di stabilizzarsi). 0 = parte subito. */
+  preDelayMs?: number
+  /** Se true, l'agente non è una sessione tmux (es. bridge background).
+   *  Skippa il check has-session. */
+  notATmuxSession?: boolean
 }
 
 async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
-  // Il Capitano riceve JHT_TICK_INTERVAL perche' start-agent.sh lo
-  // propaga al sentinel-bridge.py spawnato in background.
-  // La Sentinella e' un watchdog LLM leggero: gira sempre durante
-  // l'attivita' del team per coprire il bridge se fallisce / 429 /
-  // dati incoerenti. Spawn automatico al boot del team, no spawn
-  // ricorsivo da Capitano.
+  // Sequenza V5 ordinata (rivista 2026-04-26):
+  //   1. SENTINELLA: tmux session + CLI boot + kick-off, da SOLA
+  //      (così è pronta a ricevere il primo [BRIDGE TICK])
+  //   2. BRIDGE: processo Python background, fa il primo fetch e manda
+  //      il primo tick alla SENTINELLA che è già attiva
+  //   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per
+  //      ULTIMO così quando parte il monitoring è già stabile e ha
+  //      almeno un sample fresco da consultare
+  //
+  // Pre-delay rivisti per PC lenti:
+  //   • bridge:    20s dopo sentinella  (CLI boot lento + trust dialog)
+  //   • capitano:   5s dopo bridge      (lascia che il primo fetch
+  //                                      arrivi prima del kick-off)
   return [
-    { role: 'capitano',   session: 'CAPITANO',   instance: null, env: { JHT_TICK_INTERVAL: String(tickMin) } },
     { role: 'sentinella', session: 'SENTINELLA', instance: null },
+    { role: 'bridge',     session: 'BRIDGE',     instance: null,
+      preDelayMs: 20000, notATmuxSession: true,
+      env: { JHT_TARGET_SESSION: 'CAPITANO' } },
+    { role: 'capitano',   session: 'CAPITANO',   instance: null,
+      preDelayMs: 5000,
+      env: { JHT_TICK_INTERVAL: String(tickMin) } },
   ]
 }
 
@@ -71,15 +89,26 @@ export async function POST() {
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
     for (const agent of team) {
-      try {
-        const { stdout } = await runBash(
-          `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`
-        )
-        if (stdout.trim() === 'EXISTS') {
-          results.push({ session: agent.session, role: agent.role, status: 'already_active' })
-          continue
-        }
-      } catch { /* sessione non esiste, procedi */ }
+      // Pre-delay opzionale: lasciato al singolo agent (es. bridge attende
+      // che capitano+sentinella siano stabili prima di partire).
+      if (agent.preDelayMs && agent.preDelayMs > 0) {
+        await new Promise((r) => setTimeout(r, agent.preDelayMs))
+      }
+
+      // I "ruoli" che NON sono sessioni tmux (es. bridge = processo
+      // Python background) skippano il check has-session: start-agent.sh
+      // gestisce il singleton internamente.
+      if (!agent.notATmuxSession) {
+        try {
+          const { stdout } = await runBash(
+            `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`
+          )
+          if (stdout.trim() === 'EXISTS') {
+            results.push({ session: agent.session, role: agent.role, status: 'already_active' })
+            continue
+          }
+        } catch { /* sessione non esiste, procedi */ }
+      }
 
       try {
         if (agent.env && Object.keys(agent.env).length > 0) {
