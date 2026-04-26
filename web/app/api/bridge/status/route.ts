@@ -40,7 +40,40 @@ async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null
   }
 }
 
-export async function GET() {
-  const status = await isBridgeRunning()
-  return NextResponse.json(status)
+const DATA_JSONL = path.join(JHT_HOME, 'logs', 'sentinel-data.jsonl')
+// Bridge V5 ha tick fisso a 5 min (TICK_INTERVAL_MIN). Lo cabliamo qui
+// per derivare nextTickAt finché il bridge non lo esporrà esplicitamente.
+const BRIDGE_INTERVAL_MS = 5 * 60_000
+
+/** Cerca l'ultimo sample con source=bridge nel JSONL e ritorna il suo ts.
+ *  Più affidabile che dedurre dal /tmp/sentinel-bridge.log (formato testo). */
+async function readLastBridgeSample(): Promise<{ ts: string } | null> {
+  let raw: string
+  try { raw = await fs.readFile(DATA_JSONL, 'utf-8') }
+  catch { return null }
+  const lines = raw.split('\n')
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]
+    if (!line) continue
+    try {
+      const e = JSON.parse(line) as { source?: string; ts?: string }
+      if (e.source === 'bridge' && typeof e.ts === 'string') return { ts: e.ts }
+    } catch { /* skip */ }
+  }
+  return null
 }
+
+export async function GET() {
+  const [status, lastSample] = await Promise.all([isBridgeRunning(), readLastBridgeSample()])
+  const lastTickAt = lastSample?.ts ?? null
+  const nextTickAt = lastTickAt && status.running
+    ? new Date(new Date(lastTickAt).getTime() + BRIDGE_INTERVAL_MS).toISOString()
+    : null
+  return NextResponse.json({
+    ...status,
+    lastTickAt,
+    nextTickAt,
+    intervalMs: BRIDGE_INTERVAL_MS,
+  })
+}
+
