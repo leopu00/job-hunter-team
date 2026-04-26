@@ -56,22 +56,65 @@ DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 
-TICK_INTERVAL_MIN = 5                  # fisso post-V5
+DEFAULT_TICK_MINUTES = 5               # default se config mancante
+MIN_TICK_SECONDS = 15                  # safety floor: <15s spammerebbe il provider
 FETCH_FAIL_THRESHOLD = 3               # alert capitano dopo N fail consecutivi
+
+# Adaptive tick: in fase di calibrazione (sottoutilizzo / attenzione /
+# emergenza) serve velocità di reazione → tick più rapido. In steady
+# state (G-spot 80-95%) basta cadenza normale.
+# Override esplicito: se sentinella_tick_minutes è settato in config,
+# vince e disattiva l'adattivo (per debug / test manuale).
+ADAPTIVE_TICK_FAST_MIN = 1.5           # SOTTOUTILIZZO / ATTENZIONE / CRITICO
+ADAPTIVE_TICK_SLOW_MIN = 5.0           # STEADY / RESET / OK
+ADAPTIVE_TICK_EMERGENCY_MIN = 1.0      # EMERGENZA (proj > 100% / freeze)
 
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
 def read_config():
-    """Ritorna (tick_minutes, provider). Tick non più usato dal bridge,
-    mantenuto nel return per compat con skill che importano questa funzione."""
+    """Ritorna (tick_override, provider). tick_override è il valore esplicito
+    di sentinella_tick_minutes nel config (float, es. 0.5 = 30s) o None se
+    non settato. Quando None, il bridge usa il tick adattivo in base allo
+    stato dell'ultimo sample (vedi _choose_tick_interval)."""
     try:
         with CONFIG_PATH.open(encoding="utf-8") as f:
             cfg = json.load(f)
         provider = cfg.get("active_provider") or "openai"
-        return TICK_INTERVAL_MIN, provider
+        raw_tick = cfg.get("sentinella_tick_minutes")
+        tick_override = float(raw_tick) if isinstance(raw_tick, (int, float)) and raw_tick > 0 else None
+        return tick_override, provider
     except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return TICK_INTERVAL_MIN, "openai"
+        return None, "openai"
+
+
+def _choose_tick_interval(recent_statuses, freeze_active, override_min=None):
+    """Decide il prossimo tick interval in minuti.
+
+    Priorità:
+      1. Se override_min esplicitamente settato in config → usa quello (debug/test).
+      2. Adatta in base agli ULTIMI 3 STATUS:
+         - EMERGENZA o freeze_active → fast (1 min)
+         - 3 tick consecutivi STEADY → slow (5 min) — solo conferma stabile
+         - tutti gli altri (anche un singolo STEADY) → fast (1.5 min)
+
+    Cosi' "uno STEADY isolato" tra SOTTOUTILIZZO e ATTENZIONE NON fa
+    rallentare il bridge: la zona G-spot deve essere DAVVERO stabile
+    (3 letture consecutive) prima di rilassare la cadenza.
+    """
+    if override_min is not None:
+        return override_min
+    last_status = recent_statuses[-1] if recent_statuses else None
+    if freeze_active or last_status == "EMERGENZA":
+        return ADAPTIVE_TICK_EMERGENCY_MIN
+    # Slow tick solo se gli ultimi 3 sample sono TUTTI STEADY
+    if len(recent_statuses) >= 3 and all(s == "STEADY" for s in recent_statuses[-3:]):
+        return ADAPTIVE_TICK_SLOW_MIN
+    if last_status in (None, "RESET"):
+        # Cold-start o reset finestra: aspetta un po' prima di stressare
+        return ADAPTIVE_TICK_SLOW_MIN
+    # SOTTOUTILIZZO, ATTENZIONE, CRITICO, STEADY isolato → fast
+    return ADAPTIVE_TICK_FAST_MIN
 
 
 def session_exists(s):
@@ -305,28 +348,46 @@ def fetch_kimi_api():
 
 # ── Storage I/O ─────────────────────────────────────────────────────────
 
-def load_last_sample():
+def load_last_sample(source=None):
+    """Ultimo sample dal JSONL, opzionalmente filtrato per source.
+    Quando il bridge calcola velocità deve usare solo i propri sample
+    (source='bridge'), altrimenti i sample ad-hoc del Capitano
+    (rate_budget live) si infilano tra tick e fanno scattare anti-spike."""
     if not DATA_JSONL.exists():
         return None
     try:
         raw = DATA_JSONL.read_text(encoding="utf-8").strip().splitlines()
-        return json.loads(raw[-1]) if raw else None
+        if source is None:
+            return json.loads(raw[-1]) if raw else None
+        # Filtra per source: cerca dall'ultimo verso il primo
+        for line in reversed(raw):
+            try:
+                s = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if s.get("source") == source:
+                return s
+        return None
     except (OSError, json.JSONDecodeError, IndexError):
         return None
 
 
-def load_recent_samples(n=30):
+def load_recent_samples(n=30, source=None):
+    """Ultimi N sample dal JSONL, opzionalmente filtrati per source."""
     if not DATA_JSONL.exists():
         return []
     try:
         raw = DATA_JSONL.read_text(encoding="utf-8").strip().splitlines()
         out = []
-        for line in raw[-n:]:
+        for line in raw:
             try:
-                out.append(json.loads(line))
+                s = json.loads(line)
             except json.JSONDecodeError:
                 continue
-        return out
+            if source is not None and s.get("source") != source:
+                continue
+            out.append(s)
+        return out[-n:]
     except OSError:
         return []
 
@@ -396,50 +457,218 @@ def _compute_metrics_via_skill(parsed, last, history):
     return cm.compute_metrics(parsed, last, history=history)
 
 
+# ── Claude TUI parser (libreria importata da check_usage) ──────────────
+
+WORKER_SESSION = "SENTINELLA-WORKER"
+START_AGENT_SH = "/app/.launcher/start-agent.sh"
+
+# Mitigazioni anti-stale TUI Claude:
+#   • restart periodico worker per igiene (sessione TUI può "scadere"
+#     dopo ore: cache locale corrotta, token oauth scaduto, modal in
+#     loop "Loading usage data…")
+#   • cross-check con HTTP ogni N tick per detectare divergenze
+#   • detect "Loading…" → return None → cascata su HTTP, e respawn
+#     worker prima del prossimo tick
+WORKER_RESTART_INTERVAL_MIN = 20     # restart worker ogni 20 min (igiene proattiva)
+HTTP_CROSSCHECK_EVERY_N_TICKS = 5    # confronto TUI vs HTTP ogni 5 tick
+TUI_HTTP_DIVERGENCE_THRESHOLD = 5    # se diff > 5 punti = stale TUI
+
+# State module-level per il TUI parser (mantenuto tra chiamate)
+_worker_last_restart_ts = None
+_tui_tick_counter = 0
+
+
+def _kill_worker():
+    """Killa SENTINELLA-WORKER in modo non bloccante."""
+    try:
+        subprocess.run(
+            ["tmux", "kill-session", "-t", WORKER_SESSION],
+            capture_output=True, timeout=5,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
+def _try_claude_tui_parser():
+    """Primario per Claude: capture-pane SENTINELLA-WORKER + parse.
+
+    Mitigazioni applicate:
+      1. Restart periodico worker ogni WORKER_RESTART_INTERVAL_MIN (60 min)
+         per evitare che la sessione TUI vada in stato stale.
+      2. Cross-check con HTTP ogni HTTP_CROSSCHECK_EVERY_N_TICKS (5)
+         per detectare TUI che mostra dati cached.
+      3. Detect "Loading usage data…" nel parser → return None →
+         cade su HTTP, respawn worker prima del prossimo tick.
+
+    Ritorna parsed dict {usage, reset_at, weekly_usage} o None se fail.
+    """
+    global _worker_last_restart_ts, _tui_tick_counter
+
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "check_usage", "/app/shared/skills/check_usage.py"
+        )
+        if spec is None or spec.loader is None:
+            return None
+        cu = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cu)
+    except (OSError, ImportError):
+        return None
+
+    now = time.time()
+
+    # ── 1. Restart periodico per igiene ──
+    if _worker_last_restart_ts is None:
+        # Primo boot: marca solo
+        _worker_last_restart_ts = now
+    elif (now - _worker_last_restart_ts) > WORKER_RESTART_INTERVAL_MIN * 60:
+        print(f"[bridge V5] worker restart periodico (>{WORKER_RESTART_INTERVAL_MIN} min)")
+        _kill_worker()
+        _worker_last_restart_ts = now
+        _tui_tick_counter = 0
+        # Non blocco con sleep qui: il check sotto rispawnerà se serve
+        # e per QUESTO tick fallisce → cade su HTTP
+
+    # Worker deve essere attivo. Se non lo è, spawn + 18s wait.
+    if not cu.tmux_has_session(WORKER_SESSION):
+        try:
+            subprocess.run(
+                ["bash", START_AGENT_SH, "worker"],
+                capture_output=True, timeout=10,
+            )
+            time.sleep(cu.WORKER_BOOT_WAIT_S)
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        if not cu.tmux_has_session(WORKER_SESSION):
+            return None
+
+    # Query il worker
+    buf = cu.query_claude_worker()
+    parsed = cu.parse_claude_usage(buf)
+
+    # ── 3. Detect "Loading…" failure: parsed=None + Loading nel buf ──
+    if parsed is None:
+        if buf and "Loading usage data" in buf:
+            print("[bridge V5] TUI in 'Loading...' loop, kill+respawn worker")
+            _kill_worker()
+            _worker_last_restart_ts = now  # forza re-spawn dopo
+        return None
+
+    _tui_tick_counter += 1
+
+    # Schema: check_usage {usage, reset_hhmm_utc, weekly}
+    # → bridge {usage, reset_at, weekly_usage}
+    tui_result = {
+        "usage": parsed["usage"],
+        "reset_at": parsed.get("reset_hhmm_utc"),
+        "weekly_usage": parsed.get("weekly"),
+    }
+
+    # ── 2. Cross-check HTTP ogni N tick ──
+    if _tui_tick_counter % HTTP_CROSSCHECK_EVERY_N_TICKS == 0:
+        http = fetch_claude_api()
+        if isinstance(http, dict) and isinstance(http.get("usage"), (int, float)):
+            tui_u = tui_result["usage"]
+            http_u = http["usage"]
+            diff = abs(tui_u - http_u)
+            if diff > TUI_HTTP_DIVERGENCE_THRESHOLD:
+                print(f"[bridge V5] TUI/HTTP divergono: TUI={tui_u}% HTTP={http_u}% (Δ{diff}>5), uso HTTP + kill worker")
+                _kill_worker()
+                _worker_last_restart_ts = now
+                return http  # USA HTTP per questo tick
+
+    return tui_result
+
+
 # ── Main loop V5 ────────────────────────────────────────────────────────
 
 def _do_fetch(provider):
-    """Wrapper provider-aware. Ritorna (parsed, fail_reason)."""
+    """Cascata di fallback provider-aware. Ritorna (parsed, fail_reason).
+
+    Per Claude:  TUI parser → HTTP /oauth/usage → fail (Sentinella prende il rilievo).
+    Per Kimi:    HTTP /coding/v1/usages → fail.
+    Per Codex:   JSONL rollout file → fail.
+
+    Per kimi/codex la sorgente primaria è già stabile (no rate-limit),
+    quindi non serve cascata interna. Per Claude invece la cascata è
+    importante perché /oauth/usage rate-limita aggressivamente con tick
+    rapido.
+    """
     if provider in ("kimi", "moonshot"):
         p = fetch_kimi_api()
         return (p, None) if p else (None, "kimi_api_none")
+
     if provider in ("anthropic", "claude"):
+        # 1. PRIMARIO: TUI parser (no rate-limit, fragile a cambi modal)
+        p = _try_claude_tui_parser()
+        if p:
+            return p, None
+        # 2. FALLBACK: HTTP /oauth/usage (rate-limit possibile)
         r = fetch_claude_api()
         if r == "RATE_LIMIT":
-            return None, "claude_429"
+            return None, "claude_tui_fail+claude_429"
         if r is None:
-            return None, "claude_api_none"
+            return None, "claude_tui_fail+claude_api_none"
         return r, None
+
     if provider == "openai":
         p = fetch_codex_rollout()
         return (p, None) if p else (None, "codex_rollout_none")
+
     return None, f"unsupported:{provider}"
 
 
 def main():
+    """Bridge V5: fetch usage + invia a Sentinella.
+
+    Cascata di fetch:
+      1. PRIMARIO: TUI parser (capture-pane SENTINELLA-WORKER persistente)
+      2. FALLBACK: HTTP /oauth/usage (Claude) o equivalente
+      3. Se entrambi falliscono → manda [BRIDGE FAILURE] alla Sentinella
+         che farà fallback manuale con skill TUI worker.
+
+    Il bridge scrive il sample (con compute_metrics) nel JSONL e manda
+    [BRIDGE TICK] ricco con dati alla Sentinella, che decide se mandare
+    ordini al Capitano.
+
+    Anti-stale TUI: worker restart periodico (20 min), cross-check HTTP
+    ogni 5 tick, detect "Loading…" → restart.
+    """
     acquire_singleton_lock()
+    override_min, _ = read_config()
     print(f"[bridge V5] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
-    print(f"[bridge V5] tick interval: {TICK_INTERVAL_MIN} min")
+    if override_min is not None:
+        print(f"[bridge V5] tick interval: {override_min} min (override da config)")
+    else:
+        print(f"[bridge V5] tick interval: ADAPTIVE (fast={ADAPTIVE_TICK_FAST_MIN}min calibrazione, slow={ADAPTIVE_TICK_SLOW_MIN}min steady, emergenza={ADAPTIVE_TICK_EMERGENCY_MIN}min)")
 
     fail_streak = 0
-    capitano_alerted = False  # alert al capitano già mandato per questo episodio?
+    capitano_alerted = False   # alert al capitano già mandato per questo episodio?
+    is_first_tick = True        # cold-start forzato al primo tick post-boot
+    recent_statuses = []        # ultimi N status (per tick adattivo: slow solo se 3 STEADY)
+    freeze_active = False       # True se l'ultimo ordine era EMERGENZA/freeze
 
     while True:
         now_h = datetime.now().strftime("%H:%M:%S")
-        _, provider = read_config()
+        override_min, provider = read_config()
 
         parsed, fail_reason = _do_fetch(provider)
 
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
             parsed["provider"] = provider
-            last = load_last_sample()
-            if last and last.get("provider") != provider:
-                # Provider switch: invalida history come boot pulito
+            if is_first_tick:
                 last = None
                 history = []
+                is_first_tick = False
             else:
-                history = load_recent_samples(30)
+                last = load_last_sample()
+                if last and last.get("provider") != provider:
+                    last = None
+                    history = []
+                else:
+                    history = load_recent_samples(30)
             entry = _compute_metrics_via_skill(parsed, last, history)
             entry["source"] = "bridge"
             write_jsonl(entry)
@@ -449,12 +678,15 @@ def main():
             proj = entry.get("projection")
             status = entry.get("status")
             reset = entry.get("reset_at") or "?"
+            recent_statuses.append(status)
+            recent_statuses = recent_statuses[-10:]
+            freeze_active = (isinstance(proj, (int, float)) and proj > 100)
             print(f"[bridge V5] {now_h} OK usage={usage}% proj={proj} status={status}")
 
             if session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
-                    f"[BRIDGE TICK] usage={usage}% proj={proj}% status={status} reset={reset} src=bridge."
+                    f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% status={status} reset={reset} src=bridge."
                 )
 
             # Recovery se eravamo in failure streak
@@ -476,21 +708,25 @@ def main():
             if fail_streak == 1 and session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
-                    f"[BRIDGE FAILURE] fetch fallito (reason={fail_reason}). Esegui fallback come da prompt."
+                    f"[BRIDGE FAILURE] ts={now_h} fetch fallito (reason={fail_reason}). Esegui fallback come da prompt."
                 )
 
             # Alert al Capitano al N° fail consecutivo
             if fail_streak == FETCH_FAIL_THRESHOLD and not capitano_alerted:
                 if session_exists(CAPITANO_SESSION):
+                    eff_min = _choose_tick_interval(recent_statuses, freeze_active, override_min)
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         f"[BRIDGE ALERT] sorgente usage degraded da {FETCH_FAIL_THRESHOLD} tick "
-                        f"(~{FETCH_FAIL_THRESHOLD * TICK_INTERVAL_MIN} min, reason={fail_reason}). "
+                        f"(~{FETCH_FAIL_THRESHOLD * eff_min:.0f} min, reason={fail_reason}). "
                         "La Sentinella sta coprendo con fallback. Opera prudente."
                     )
                 capitano_alerted = True
 
-        time.sleep(TICK_INTERVAL_MIN * 60)
+        # Tick adattivo: slow (5min) solo se 3 STEADY consecutivi.
+        next_tick_min = _choose_tick_interval(recent_statuses, freeze_active, override_min)
+        sleep_sec = max(MIN_TICK_SECONDS, next_tick_min * 60)
+        time.sleep(sleep_sec)
 
 
 if __name__ == "__main__":
