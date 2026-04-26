@@ -406,13 +406,14 @@ export default function SentinellaPage() {
         <input
           id="tick-min"
           type="number"
-          min={1}
+          min={0.25}
           max={60}
+          step={0.25}
           value={tickDraft}
-          onChange={(e) => setTickDraft(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
-          className="w-16 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
+          onChange={(e) => setTickDraft(Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)))}
+          className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
         />
-        <span className="text-[11px] text-[var(--color-muted)]">min</span>
+        <span className="text-[11px] text-[var(--color-muted)]">min (0.5 = 30s)</span>
         <button
           onClick={handleSaveTick}
           disabled={savingTick || tickDraft === tickMin}
