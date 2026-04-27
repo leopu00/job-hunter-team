@@ -80,11 +80,11 @@ Hardening importante ma non bloccante.
 
 ### High
 
-- [ ] **H3** — `JHT_SHELL_VIA` validato + `execFile` array-based
+- [x] **H3** — `JHT_SHELL_VIA` validato + `execFile` array-based
   - Files: `web/app/api/team/terminal/open/route.ts`, `web/app/api/capitano/terminal/route.ts`
   - Validate `dockerContainer` con `^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`; usare `execFile` dove cross-platform consente
   - Effort: 3h
-  - Merged: _—_
+  - Merged: e0d24b60
 
 - [ ] **H4** — Sostituire fallback machine-derived con keyring + env-var
   - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`
