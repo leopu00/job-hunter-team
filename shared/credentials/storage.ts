@@ -6,6 +6,7 @@
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { JHT_CREDENTIALS_DIR } from "../paths.js";
 import { decrypt, deriveKey, encrypt, generateSalt, isValidPayload } from "./crypto.js";
