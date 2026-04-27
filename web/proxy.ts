@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
 import { isLocalRequestFromHeaders } from '@/lib/auth'
 import { LOCAL_TOKEN_COOKIE, getOrCreateLocalToken } from '@/lib/local-token'
+import { shouldRejectBrowserMutation } from '@/lib/csrf'
 
 // --- CORS Config ---
 
@@ -100,6 +101,27 @@ export async function proxy(request: NextRequest) {
     for (const [k, v] of Object.entries(getCorsHeaders(origin))) res.headers.set(k, v)
     logRequest(request, 204, Date.now() - start)
     return res
+  }
+
+  // --- API: CSRF guard sui metodi mutanti ---
+  // Browser cross-origin POST/PUT/PATCH/DELETE → 403. Pattern OpenClaw
+  // browserMutationGuardMiddleware. CLI/curl (no Origin/Referer)
+  // continuano a funzionare; SOP + Origin in allowlist coprono i browser.
+  if (isApi) {
+    const reject = shouldRejectBrowserMutation({
+      method: request.method,
+      origin: request.headers.get('origin'),
+      referer: request.headers.get('referer'),
+      secFetchSite: request.headers.get('sec-fetch-site'),
+    })
+    if (reject) {
+      const res = NextResponse.json(
+        { error: 'Cross-origin mutation rejected' },
+        { status: 403 },
+      )
+      logRequest(request, 403, Date.now() - start)
+      return res
+    }
   }
 
   // --- API: Rate limiting ---
