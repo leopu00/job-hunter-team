@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +85,8 @@ function getVersion(): string {
 
 /** GET — health check globale */
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   // Su Vercel serverless non c'e' filesystem locale ne' tmux
   if (IS_SERVERLESS) {
     return NextResponse.json({

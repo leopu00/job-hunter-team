@@ -40,11 +40,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 1h (incluso aggiungere accesso a `req.socket.remoteAddress` in Next route handler)
   - Merged: 721b0b8e
 
-- [ ] **C2** — Add `requireAuth()` to ~25 sensitive routes
-  - Files: `web/app/api/{secrets,database,agents/[id],providers,config,env,backup,health,tasks/[id],history/[id],credentials,sessions,logs,workspace/init}/route.ts`
-  - Implementare local-token system in `~/.jht/.local-token` (mode 0600), modificare CLI + Electron per leggerlo e passarlo in header
+- [x] **C2** — Add `requireAuth()` to 21 sensitive routes
+  - Files: `web/app/api/{secrets,database,agents,agents/[id],agents/metrics,providers,config,env,backup,health,tasks,tasks/[id],history,history/[id],credentials,sessions,sessions/[id],logs,workspace,workspace/init,workspace/browse}/route.ts`
+  - Local-token in `~/.jht/.local-token` (mode 0600) + cookie HttpOnly+SameSite=Strict auto-settato dal middleware su localhost direct (no forwarded headers); `requireAuth()` valida cookie OR `Authorization: Bearer` header. Niente cambi CLI/Electron: il bootstrap del cookie è server-side.
   - Effort: 1 giorno
-  - Merged: _—_
+  - Merged: b5464d11 (+ 38c00b63, bcd5c348, 10d965d8, 8f121644 e middleware df7eae5f/d5565192)
   - Depends on: C1 (altrimenti il bypass è ancora attivo)
 
 ### High
@@ -249,11 +249,11 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 ## 📊 Avanzamento
 
 ```
-Phase 1 (bloccanti):    0/9   ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
+Phase 1 (bloccanti):    8/9   ██████████████████████████████░░░░  89%
 Phase 2 (post-launch):  0/12  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
 Phase 3 (hardening):    0/13  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                 0/34  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
+TOTALE:                 8/34  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░  24%
 ```
 
 > Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.

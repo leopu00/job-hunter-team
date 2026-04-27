@@ -5,6 +5,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,6 +77,8 @@ function loadAgentTasks(agentId: string): Record<string, unknown>[] {
 type RouteCtx = { params: Promise<{ id: string }> }
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const resolved = resolve(id)
   const tail = parseInt(req.nextUrl.searchParams.get('logs') ?? '100', 10) || 100
@@ -93,6 +96,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const body = await req.json().catch(() => ({})) as { action?: string; workspaceDir?: string }
   const resolved = resolve(id)
