@@ -146,11 +146,11 @@ Hardening importante ma non bloccante.
   - Effort: 1h
   - Merged: 537c4b07
 
-- [ ] **M4** — Error response sanitization
-  - Files: pattern globale, `web/app/api/**` routes che ritornano `${err}`
-  - Logger interno + risposta generica `{error:'internal'}` in produzione
+- [x] **M4** — Error response sanitization
+  - Files: nuovo `web/lib/error-response.ts` + sweep su 19 route (`backup`, `database`, `alerts`, `archive`, `automations`, `channels`, `contacts`, `daemon`, `errors`, `feedback`, `goals`, `i18n`, `migrations`, `monitoring`, `scheduler`, `webhooks`, `saved-searches`, `resume`, `reminders`).
+  - Helper `sanitizedError(err, { scope, status, publicMessage })`: log `console.error` con scope + dettaglio dell'errore, response `{error:<publicMessage>}` in prod, dettaglio in body solo in `NODE_ENV=development`.
   - Effort: 4h
-  - Merged: _—_
+  - Merged: 064d4260 (+ ac280a24, ac447aeb, batch finale pending)
 
 ---
 
@@ -250,10 +250,10 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 
 ```
 Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100%
-Phase 2 (post-launch):  4/12  ███████████░░░░░░░░░░░░░░░░░░░░░░░  33%
-Phase 3 (hardening):    0/13  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
+Phase 2 (post-launch): 11/12  ███████████████████████████████░░░  92%
+Phase 3 (hardening):    3/13  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░  23%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                 13/34 █████████████░░░░░░░░░░░░░░░░░░░░░  38%
+TOTALE:                23/34  ███████████████████████░░░░░░░░░░░  68%
 ```
 
 > Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.
