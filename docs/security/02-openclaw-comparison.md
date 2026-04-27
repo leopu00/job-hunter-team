@@ -1,10 +1,12 @@
 # 🔍 OpenClaw vs JHT — Security architecture comparison
 
-**Data:** 2026-04-27
+**Data:** 2026-04-27 (mattina, **pre-fix**)
 **OpenClaw revision:** `0dd2844991` (main, aggiornato il 2026-04-27)
-**JHT revision:** `65f2ec4a` (dev-1)
+**JHT revision:** `65f2ec4a` (dev-1, baseline audit)
 **Metodo:** lettura diretta dei file critici di OpenClaw + grep mirati. Le quote sono testuali.
 
+> 📌 **Stato attuale:** questo documento è la fotografia **pre-fix** (gap -78). Per il bilancio post-sprint (gap chiuso a -25, score 30→74%) vedi [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
+>
 > Riferimento crociato: ogni finding citato qui (C1, C2, …, L5) è definito in [`01-pre-launch-review.md`](01-pre-launch-review.md).
 
 ---
@@ -464,3 +466,5 @@ export function replacePatternBounded(
 5. 🏅 **`SECURITY.md` con threat model** — 28 KB di scrittura, ROI infinito.
 
 → I trade-off di ogni adozione sono in [`03-implementation-tradeoffs.md`](03-implementation-tradeoffs.md).
+
+> 📍 **Stato post-sprint (sha `7a2cb6ae`):** 4 dei 5 top sono stati adottati (#1 C1, #3 timing-safe compare, #4 CSRF middleware, #5 threat model in [`04-threat-model.md`](04-threat-model.md)). **#2 SSRF rimane il principale gap residuo prima del public release.** Dettagli in [`06-post-fix-comparison.md`](06-post-fix-comparison.md).

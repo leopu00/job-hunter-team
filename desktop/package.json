@@ -5,7 +5,7 @@
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
     "name": "Leone Emanuele Puglisi",
-    "email": "leone.puglisi@gmail.com"
+    "email": "leopu00@gmail.com"
   },
   "homepage": "https://jobhunterteam.ai",
   "license": "MIT",
@@ -103,7 +103,7 @@
     "linux": {
       "artifactName": "job-hunter-team-${version}-linux.${ext}",
       "icon": "assets/icon.png",
-      "maintainer": "Leone Emanuele Puglisi <leone.puglisi@gmail.com>",
+      "maintainer": "Leone Emanuele Puglisi <leopu00@gmail.com>",
       "target": [
         "AppImage",
         "deb"

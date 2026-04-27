@@ -1,10 +1,11 @@
 # Security Review — Pre-Launch Open Source
 
-**Data:** 2026-04-27
+**Data audit:** 2026-04-27
 **Branch:** dev-1 @ 65f2ec4a
 **Scope:** intera repo prima del rilascio open source pubblico
 **Tooling:** gitleaks 8.30.1 (full history), npm audit (root/web/desktop), pip-audit, manual code review (3 sub-agent paralleli + verifica diretta)
-**Output:** solo report. Nessun fix è stato committato.
+
+> 📌 **Stato attuale:** questo documento è la fotografia **pre-fix** dell'audit. La maggior parte dei finding qui sotto è stata risolta nel sprint del 2026-04-27 (sha merge `7a2cb6ae`, 31/34 fix). Per lo stato corrente fix-per-fix vedi [`05-checklist.md`](05-checklist.md); per il bilancio vs OpenClaw post-fix vedi [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
 
 ---
 
@@ -543,8 +544,6 @@ Verificati: stringa `'sk-projkey123'` (palesemente fake), label UI (`Debole/Scar
 
 ## Note operative
 
-- **Nessun commit fatto.** Solo report (`docs/security-review-pre-launch.md`).
+- **Stato al momento dell'audit (2026-04-27 mattina):** report only, nessun fix committato. Lo sprint di remediation è partito nel pomeriggio (4 agenti in parallelo su `dev-1`..`dev-4`) e mergiato in `master` la sera (`7a2cb6ae`). Per lo stato fix-per-fix → [`05-checklist.md`](05-checklist.md).
 - I findings degli agent sub-agent sono stati verificati a campione direttamente. False positive identificati e ricalibrati: js-yaml RCE (M1, era HIGH); `/api/database` "SQL injection" (era CRITICAL → riformulato come H2 file-read); osascript injection con session validato (era CRITICAL → H3, env-controlled).
-- Gitleaks output completo: `C:/Users/leone.puglisi/AppData/Local/Temp/gitleaks-report.json` (3 false positive).
-- npm audit JSON: `/tmp/audit-{root,web,desktop}.json`.
-- pip-audit JSON: `/tmp/pip-audit.json` (clean).
+- Output tooling raw (locale, non versionato): gitleaks JSON (3 false positive su 3122 commit), `npm audit` per root/web/desktop, `pip-audit` clean.

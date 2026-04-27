@@ -19,13 +19,13 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
 - [x] **C4** — Add missing `homedir` import
   - File: `shared/credentials/storage.ts:1` (aggiungere `import { homedir } from "node:os"`)
   - Effort: 1 min
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 - [x] **C3** — Refactor `bridge_health.py:spawn_bridge` (no `sh -c`)
   - File: `shared/skills/bridge_health.py:105-114`
   - Sostituire f-string + `sh -c` con `subprocess.Popen([…], env={…})` + validazione regex su `JHT_TARGET_SESSION`
   - Effort: 30 min
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 - [x] **C5** — Remove plaintext fallback in CLI secrets
   - File: `cli/src/commands/secrets.js:80-92`
@@ -57,7 +57,7 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
 - [x] **H9** — `npm audit fix` su `desktop/`
   - Upgrade `electron`, `@xmldom/xmldom`. Test auto-updater + IPC
   - Effort: 4h
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 - [x] **H1** — Auth + rimuovere `?id=` reveal su `/api/secrets`
   - File: `web/app/api/secrets/route.ts` + nuovo `web/app/api/secrets/reveal/route.ts` + `web/app/(protected)/secrets/page.tsx`
@@ -102,7 +102,7 @@ Hardening importante ma non bloccante.
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
   - `realpath` + `startsWith(baseDir + sep)` check
   - Effort: 1h
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 ### Medium
 
@@ -121,7 +121,7 @@ Hardening importante ma non bloccante.
   - Files: `web/app/api/cloud-sync/**`
   - Upstash Redis o `@vercel/ratelimit`. Solo cloud-sync per ora, no localhost.
   - Effort: 4h
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 - [x] **M5** — Documentare passwordless sudo come scelta esplicita
   - Files: `docs/security/04-threat-model.md` (review + polish; promozione a `SECURITY.md` root rinviata al public release)
@@ -138,7 +138,7 @@ Hardening importante ma non bloccante.
   - File: `web/app/api/health/route.ts`
   - GET senza auth → solo `{status:'ok'}`; con auth → dettagli completi
   - Effort: 30 min
-  - Merged: _—_ (dev-2)
+  - Merged: 7a2cb6ae (via dev-2)
 
 - [x] **M1** — `js-yaml.load()` con schema esplicito
   - File: `web/lib/profile-reader.ts`
@@ -246,22 +246,38 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 
 ---
 
+## ➕ Gap aggiuntivi (fuori dai 34 finding originali)
+
+Emersi dal confronto con OpenClaw ([`02-openclaw-comparison.md`](02-openclaw-comparison.md)). Non erano nei 27 finding dell'audit interno ma sono **blockers per il public release**.
+
+- [ ] **SSRF dispatcher generico** — `shared/net/ssrf.ts` mancante
+  - Adottare pattern OpenClaw `src/infra/net/ssrf.ts` (538 righe + DNS pinning + IPv4/IPv6 special-use validation)
+  - Effort: ~1 giorno
+  - Merged: _—_
+
+- [ ] **`resolve-system-bin` strict** — wrapper anti PATH-hijacking per binari sensibili (es. `openssl`)
+  - Adottare pattern OpenClaw `src/infra/resolve-system-bin.ts` (whitelist `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`)
+  - Effort: ~4h
+  - Merged: _—_
+
+---
+
 ## 📊 Avanzamento
 
 ```
 Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100% ✅
 Phase 2 (post-launch): 12/12  ██████████████████████████████████  100% ✅
-Phase 3 (hardening):  10/13   ██████████████████████████░░░░░░░░  77%
+Phase 3 (hardening):  10/13   ██████████████████████████░░░░░░░░   77%
+Gap non-audit:         0/2    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                31/34  ████████████████████████████░░░░░░  91%
+TOTALE:                31/36  ███████████████████████████░░░░░░░   86%
 ```
 
-> Phase 1 chiusa: JHT è pronto per il public open-source release.
-> Restano da chiudere: **L1** (CSP hash-based prod), **tests/security/**, **`jht doctor security`** CLI.
+> Phase 1 + Phase 2 chiuse → JHT è pronto per **internal merge** ed è significativamente più sicuro di OpenClaw su 4 delle 5 aree top-priority.
+> **Per il public release** restano da chiudere: **SSRF dispatcher**, **`resolve-system-bin` strict**, **L1** (CSP hash-based prod). Gli altri Phase 3 (`tests/security/`, `jht doctor security`) sono hardening continuo e non bloccanti.
 
 ## 🆚 Comparazione con OpenClaw
 
 Il confronto post-fix con la repo di riferimento è in [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
 Sintesi: il gap è passato da **-78** (pre-fix) a **-25** (post-fix), con score security che va da
-**36/120 (30%)** a **89/120 (74%)**. L'ultimo gap residuo è SSRF dispatcher generico
-(`shared/net/ssrf.ts` mancante) + `resolve-system-bin` strict trust dirs.
+**36/120 (30%)** a **89/120 (74%)**.
