@@ -42,3 +42,16 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+
+  # Docker base image (pinned by SHA in Dockerfile).
+  # Dependabot bumps the digest when upstream pushes a new tag.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
