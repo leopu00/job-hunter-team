@@ -4,9 +4,9 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { JHT_HOME } from "../tui-paths.js";
+import { resolveJhtPassphrase } from "../../../shared/credentials/passphrase.js";
 import type { OAuthCredentials } from "./openai.js";
 
 const CREDENTIALS_DIR = JHT_HOME;
@@ -15,16 +15,25 @@ const CREDENTIALS_PATH = join(CREDENTIALS_DIR, "credentials.json");
 // Versione del formato storage
 const STORAGE_VERSION = 1;
 
-// Chiave derivata da env var o generata casualmente per sessione
-// NOTA: In produzione, usare un keyring OS-specifico
+/**
+ * Deriva la chiave AES-256 dalla passphrase utente.
+ *
+ * H4: niente piu' fallback machine-derived (`${homedir()}-${USER}`).
+ * Se l'utente non ha settato `JHT_CREDENTIALS_KEY` (o legacy
+ * `JHT_ENCRYPTION_KEY`) ne' un'entry nel keyring, l'helper lancia
+ * `MissingPassphraseError` con istruzioni — molto meglio di un file
+ * cifrato con chiave indovinabile.
+ *
+ * Salt fisso `jht-salt` mantenuto per leggere file gia' presenti
+ * sull'host. Migration verso un salt-per-file e KDF PBKDF2 e' parte
+ * del lavoro H4 follow-up (vedi shared/credentials/crypto.ts).
+ */
 function getEncryptionKey(): Buffer {
-  const envKey = process.env.JHT_ENCRYPTION_KEY;
-  if (envKey) {
-    return scryptSync(envKey, "jht-salt", 32);
-  }
-  // Fallback: chiave derivata da macchina (non sicuro per multi-user)
-  const machineId = `${homedir()}-${process.env.USER || "unknown"}`;
-  return scryptSync(machineId, "jht-fallback-salt", 32);
+  const passphrase = resolveJhtPassphrase({
+    envVar: "JHT_CREDENTIALS_KEY",
+    legacyEnvVars: ["JHT_ENCRYPTION_KEY"],
+  });
+  return scryptSync(passphrase, "jht-salt", 32);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
