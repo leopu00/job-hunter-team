@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,8 @@ function saveStore(store: SessionStore): void {
 
 /** GET — lista sessioni con filtro opzionale per stato */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const state = req.nextUrl.searchParams.get('state') as SessionState | null
   const store = loadStore()
   const sessions = state
@@ -63,6 +66,8 @@ export async function GET(req: NextRequest) {
 
 /** POST — crea nuova sessione */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { channelId?: string; label?: string; userId?: string; provider?: string; model?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }
 
@@ -89,6 +94,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — termina sessione per ID */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false, error: 'id obbligatorio' }, { status: 400 })
 

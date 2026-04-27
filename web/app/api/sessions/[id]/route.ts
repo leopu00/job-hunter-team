@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,8 @@ type RouteCtx = { params: Promise<{ id: string }> }
 
 /** GET /api/sessions/[id] — dettaglio sessione con transcript */
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const store = loadStore()
   const session = store.sessions.find(s => s.id === id)
@@ -66,6 +69,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
 /** PATCH /api/sessions/[id] — aggiorna stato: { state: "paused"|"ended"|"active", reason? } */
 export async function PATCH(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   let body: { state?: SessionState; reason?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }
