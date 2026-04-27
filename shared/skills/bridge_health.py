@@ -26,6 +26,7 @@ Exit code 0 sempre se la verifica e' completata senza errori (anche
 "restarted" è esito atteso, non errore).
 """
 import os
+import re
 import subprocess
 import sys
 import time
@@ -38,6 +39,12 @@ BRIDGE_LOG = Path("/tmp/sentinel-bridge.log")
 BRIDGE_SCRIPT = Path("/app/.launcher/sentinel-bridge.py")
 TARGET_SESSION_DEFAULT = "CAPITANO"
 TICK_INTERVAL_DEFAULT = "10"
+
+# tmux accetta nomi alfanumerici con `_ . -`. Restringiamo qui per evitare
+# che valori malformati arrivino al bridge (e per fail-fast invece di
+# spawnare un processo che poi crasha contro tmux).
+VALID_SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+VALID_INTERVAL_RE = re.compile(r"^[1-9][0-9]{0,3}$")
 
 # Quando rilanciamo, aspettiamo brevemente che il processo prenda piede
 # prima di stampare il PID. Il bridge fa singleton lock + carica il
@@ -98,27 +105,47 @@ def spawn_bridge(target_session, tick_interval):
     Stessa modalita' di start-agent.sh: il process resta vivo anche se
     il padre (Sentinella o lo shell della skill) esce. Output redirezionato
     su /tmp/sentinel-bridge.log per troubleshooting.
+
+    Niente shell: argv come array + env esplicito. Cosi' qualunque
+    metacharacter in JHT_TARGET_SESSION / JHT_TICK_INTERVAL non puo'
+    sfuggire come comando. In aggiunta validiamo i due valori contro
+    una whitelist regex per fallire pulito su input malformati.
     """
     if not BRIDGE_SCRIPT.exists():
         return None
 
-    cmd = (
-        f"JHT_TARGET_SESSION='{target_session}' "
-        f"JHT_TICK_INTERVAL='{tick_interval}' "
-        f"python3 -u {BRIDGE_SCRIPT} >> {BRIDGE_LOG} 2>&1"
-    )
-    # setsid + & garantisce orphan; redirezione I/O fa sì che il subprocess
-    # non venga ucciso quando lo shell della skill chiude.
+    if not VALID_SESSION_RE.match(target_session):
+        return None
+    if not VALID_INTERVAL_RE.match(str(tick_interval)):
+        return None
+
+    env = {
+        **os.environ,
+        "JHT_TARGET_SESSION": target_session,
+        "JHT_TICK_INTERVAL": str(tick_interval),
+    }
+
+    try:
+        log_fp = open(BRIDGE_LOG, "ab")
+    except OSError:
+        return None
+
+    # setsid + start_new_session garantisce orphan; gli fd di log vengono
+    # ereditati dal child (dup() interno di Popen) e poi chiusi nel parent.
     try:
         subprocess.Popen(
-            ["setsid", "sh", "-c", cmd],
+            ["setsid", "python3", "-u", str(BRIDGE_SCRIPT)],
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fp,
+            stderr=log_fp,
             start_new_session=True,
+            env=env,
+            close_fds=True,
         )
     except (OSError, FileNotFoundError):
         return None
+    finally:
+        log_fp.close()
 
     # Attendi che il bridge appaia nei processi.
     deadline = time.time() + SPAWN_GRACE_S + 4.0  # margine di sicurezza
@@ -173,6 +200,13 @@ def main():
     # default 10m: il bridge ha la sua logica adattiva 1/3/5 dentro.
     target_session = os.environ.get("JHT_TARGET_SESSION", TARGET_SESSION_DEFAULT)
     tick_interval = os.environ.get("JHT_TICK_INTERVAL", TICK_INTERVAL_DEFAULT)
+
+    if not VALID_SESSION_RE.match(target_session):
+        status_fatal("invalid_target_session")
+        sys.exit(2)
+    if not VALID_INTERVAL_RE.match(tick_interval):
+        status_fatal("invalid_tick_interval")
+        sys.exit(2)
 
     new_pid = spawn_bridge(target_session, tick_interval)
     if new_pid is None:

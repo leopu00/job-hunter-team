@@ -77,18 +77,22 @@ async function setSecret(options) {
     return;
   }
 
-  await mkdir(CREDS_DIR, { recursive: true });
+  await mkdir(CREDS_DIR, { recursive: true, mode: 0o700 });
   const key = getEncryptionKey();
 
-  if (key) {
-    const encrypted = encrypt(options.value, key);
-    await writeFile(join(CREDS_DIR, `${options.name}.enc`), encrypted, 'utf-8');
-    console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (cifrato).\n`);
-  } else {
-    await writeFile(join(CREDS_DIR, `${options.name}.json`), JSON.stringify({ value: options.value, createdAt: new Date().toISOString() }, null, 2), 'utf-8');
-    console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (plaintext).`);
-    console.log(`  ${DIM}Imposta ${KEY_ENV} per cifratura AES-256.${RESET}\n`);
+  if (!key) {
+    console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} non impostata.${RESET}`);
+    console.error(`  ${DIM}I secret devono essere cifrati a riposo. Imposta una passphrase:${RESET}`);
+    console.error(`    ${BOLD}export ${KEY_ENV}="<passphrase robusta>"${RESET}`);
+    console.error(`  ${DIM}Salvala anche nel tuo shell rc (~/.bashrc, ~/.zshrc) per persistenza,${RESET}`);
+    console.error(`  ${DIM}o in un OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);
+    process.exitCode = 1;
+    return;
   }
+
+  const encrypted = encrypt(options.value, key);
+  await writeFile(join(CREDS_DIR, `${options.name}.enc`), encrypted, { encoding: 'utf-8', mode: 0o600 });
+  console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (cifrato).\n`);
 }
 
 async function getSecret(options) {
