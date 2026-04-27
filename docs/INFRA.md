@@ -1,6 +1,8 @@
 # Infrastructure — Job Hunter Team
 
-> High-level diagram. Source: [`infra.d2`](./infra.d2).
+> 📐 **High-level deployment diagram.** It shows the unit of deployment (the container), the deployment locations (local / dedicated / self-hosted VPS), and the optional sync to managed storage. Not every agent is drawn individually — the full team composition is documented in the [README](../README.md) and in `agents/`.
+>
+> Source: [`infra.d2`](./infra.d2).
 
 ![JHT infrastructure](./infra.svg)
 
@@ -8,30 +10,52 @@
 
 ### 🐳 Docker container — the unit of deployment
 
-Everything that matters runs inside a single container: the 8-agent team (Captain + Sentinel + the pipeline: Scout → Analyst → Scorer → Writer ⇄ Critic + Assistant) monitored by the 📡 Bridge, and local storage (SQLite for structured data, files for CVs and output). Same image, same behavior, whether it runs on a personal PC or a cloud VPS.
+Everything operational runs inside a single container: the agent team and local storage (SQLite for structured data, files for CVs and output). Same image, same behavior, whether it runs on a personal PC, a dedicated home computer, or a self-hosted VPS.
 
-### 🔀 Local vs Cloud — one team, one location
+### 🔀 Where the team runs — three modes, one location at a time
 
-The user picks where the team runs. The choice is **exclusive**: only one container is active at a time — two teams running in parallel (one local, one on VPS) would fight over the same state and corrupt each other.
+The user picks **one** location. The choice is **exclusive**: only one container is active at a time — two teams running in parallel (e.g. one local, one self-hosted on a VPS) would fight over the same state and corrupt each other.
 
-- **Local** — on their own PC. Dashboard served at `localhost:3000` by the container itself.
-- **Cloud** — on a remote VPS. Dashboard served publicly at `jobhunterteam.ai`.
+The same Docker image runs in all three modes — only the host machine changes:
 
-Independently of where the team runs, the **local storage can sync to Cloud Storage** — purely for backup / remote access to data (CVs, positions, applications), not to clone the team.
+1. **🖥️ Local PC** — on the user's everyday machine. Available today. *Not recommended for daily-use machines* (8 agents in parallel = high resource usage + the PC must stay on). Acceptable for very powerful desktops or for night-only runs.
+2. **🏠 Dedicated computer** — a second PC at home (old laptop, mini-PC, spare desktop), plugged in and left on for weeks/months. Same setup as Local, just different hardware. Planned UX in PHASE 2 (LAN discovery + SSH-based setup).
+3. **☁️ Self-hosted VPS** ⭐ **target setup** — a small server rented from a cloud provider (Hetzner ~€4.5/mo, AWS, GCP). Cheaper than buying a dedicated PC and rented only during the active job-hunt months. The team runs in the user's own VPS — there is no managed JHT service. Planned UX in PHASE 3 (one-click provisioning).
 
-### ☁️ Cloud storage
+The dashboard is served by the container itself:
+- Local / Dedicated → `localhost:3000`
+- Self-hosted VPS → published on the VPS's public IP (or behind a tunnel, see [`JHT-CLOUD-06`](../BACKLOG.md))
 
-Two services handle persistent state in the cloud:
+### ☁️ Optional managed storage (read-only mirror)
 
-- **Supabase** — PostgreSQL for structured data and auth.
-- **Google Drive** — user files (CVs, cover letters, generated PDFs).
+Two managed services can hold a **read-only mirror** of the operational state:
 
-The cloud dashboard reads from Supabase + Drive directly, not from the VPS — the VPS only runs the agents.
+- **Supabase** — PostgreSQL for structured metadata (positions, scores, applications) + auth
+- **Google Drive** — user files (CVs, cover letters, generated PDFs)
 
-### 👤 Clients
+This is **opt-in** — the user enables it explicitly via `jht cloud enable` (see [`docs/cli-install.md`](./cli-install.md)). Nothing leaves the local machine until then. Once enabled, the local container periodically pushes a snapshot of the operational state to Supabase + Drive so the user can:
+- Browse positions/applications from another device (phone, work laptop)
+- Have a backup against local data loss
+- Visit `jobhunterteam.ai` and see their own results in the web dashboard
 
-Two channels, with different reach today:
+> 📡 **No LLM calls happen on the managed storage side.** The agents always run inside the local container. Supabase and Drive are storage only.
 
-- **Browser** (web dashboard — `localhost:3000` or `jobhunterteam.ai`) — the user can address **any agent** individually. Talking to the Captain is the recommended default (it coordinates the pipeline), but the user can reach any team member directly if they want.
-- **Telegram** — currently a bidirectional bridge to the **Captain only**. A future upgrade (see [`ROADMAP`](./ROADMAP.md#communication-channels)) will expose a Telegram group with all agents and directed messages, so the user can target a specific agent without spamming the others.
+> ⚠️ **Open question — reverse seed**: today the sync flows local → managed-storage only. If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the managed storage at least once. This is being designed — see memory `project_cloud_sync_direction_open` and the open task `[JHT-CLOUD-SEED-DIRECTION]` *(to be filed)*. For now, the workaround is a manual backup/restore of the Docker volume.
 
+### 👤 Clients — how the user talks to the team
+
+Three channels today, each with a different audience:
+
+- **🌐 Browser** (web dashboard — `localhost:3000` for Local/Dedicated, public URL for self-hosted VPS) — the user can address **any agent** individually. Talking to the Captain is the recommended default (it coordinates the pipeline), but the user can reach any team member directly.
+- **💬 Telegram** — currently a bidirectional bridge to the **Captain only**. Planned upgrade ([`docs/ROADMAP.md`](./ROADMAP.md)): per-agent chats + a "team forum" channel where the user can join the whole team's conversation.
+- **⌨️ CLI + tmux** *(technical users)* — `jht team attach <agent>` to drop directly into the agent's tmux session and watch it work live (raw model output, tool calls, decisions). Useful for debugging, for understanding what the agents are actually doing, and for power users who prefer the terminal.
+
+In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
+
+## Related
+
+- 🎯 [`docs/VISION.md`](./VISION.md) — design philosophy, why local-first, why no SaaS
+- 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions matrix
+- 📊 [`docs/MONITORING-RESULTS.md`](./MONITORING-RESULTS.md) — Bridge/Sentinel test data
+- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
+- 🗺️ [`docs/ROADMAP.md`](./ROADMAP.md) — what's coming next
