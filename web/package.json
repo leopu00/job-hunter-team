@@ -36,6 +36,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "@swc/helpers": "^0.5.17"
+    "@swc/helpers": "^0.5.17",
+    "postcss": "^8.5.10"
   }
 }
