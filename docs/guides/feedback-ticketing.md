@@ -88,5 +88,5 @@ Expected:
 ## 📚 Related
 
 - 🧪 [`docs/BETA.md`](./BETA.md) — beta tester program (the user-facing flow that funnels into `/feedback`)
-- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — Supabase access and Vercel env vars
-- 🚢 [`docs/release.md`](./release.md) — full release flow
+- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — Supabase access and Vercel env vars
+- 🚢 [`docs/release.md`](../internal/release.md) — full release flow

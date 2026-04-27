@@ -2,7 +2,7 @@
 
 This document describes how the one-liner installer works **today**
 (behaviour AS-IS, before any further hardening). It is the reference
-for **Path 3 (One-liner installer)** in the [Quickstart](./quickstart.md):
+for **Path 3 (One-liner installer)** in the [Quickstart](quickstart.md):
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
@@ -134,7 +134,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    > - 🔵 **Codex**: `npm install -g @openai/codex`
    > - 🌙 **Kimi**: see [Moonshot docs](https://github.com/MoonshotAI/kimi-cli) — installed via Python `uv`, not npm
    >
-   > See [`docs/PROVIDERS.md`](./PROVIDERS.md) for the full provider matrix.
+   > See [`docs/PROVIDERS.md`](../about/PROVIDERS.md) for the full provider matrix.
 5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
    $JHT_INSTALL_DIR`. If already present, fetches and `git reset --hard
    origin/$JHT_BRANCH`.
@@ -181,7 +181,7 @@ They do **not** install Docker, Node, or any system dependency — they
 assume the developer already has Python ≥ 3.10, tmux, Node and npm.
 
 If you find yourself reaching for these, you probably want the one-liner
-or `docs/quickstart.md` instead.
+or `docs/guides/quickstart.md` instead.
 
 ---
 
@@ -295,10 +295,10 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 
 ## 📚 Related
 
-- 🚀 [`docs/quickstart.md`](./quickstart.md) — the human-friendly install guide (4 paths)
-- 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions matrix
-- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 📐 [`docs/INFRA.md`](./INFRA.md) — infrastructure diagram and deployment modes
-- 🧪 [`docs/BETA.md`](./BETA.md) — beta tester program (report install issues here)
-- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
+- 🚀 [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly install guide (4 paths)
+- 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
+- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
+- 📐 [`docs/INFRA.md`](../internal/INFRA.md) — infrastructure diagram and deployment modes
+- 🧪 [`docs/BETA.md`](BETA.md) — beta tester program (report install issues here)
+- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
 - 📐 [ADR-0004](./adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys

@@ -29,7 +29,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
          (today)          (Phase 2)          (Phase 3, ⭐ target)
 ```
 
-> See [`docs/INFRA.md`](./INFRA.md) for the deployment diagram and [`docs/VISION.md`](./VISION.md) for the design philosophy.
+> See [`docs/internal/INFRA.md`](../internal/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
 
 **Stack decisions:**
 
@@ -232,7 +232,7 @@ Today Telegram is wired to the **Captain only**. Planned: per-agent chats + a "t
 
 ### 🔄 Cloud sync direction (open architectural question)
 
-Today the sync flows **local → cloud only** (see `docs/INFRA.md` § Optional managed storage). If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the cloud at least once. Possible approaches under evaluation:
+Today the sync flows **local → cloud only** (see `docs/internal/INFRA.md` § Optional managed storage). If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the cloud at least once. Possible approaches under evaluation:
 
 - A) Manual `jht cloud bootstrap` for one-time reverse seed
 - B) Bidirectional sync with conflict resolution
@@ -244,7 +244,7 @@ Today the sync flows **local → cloud only** (see `docs/INFRA.md` § Optional m
 
 The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
 
-→ Spec in [`agents/maestro/maestro.md`](../agents/maestro/maestro.md). See [`docs/VISION.md`](./VISION.md) for the rationale.
+→ Spec in [`agents/maestro/maestro.md`](../../agents/maestro/maestro.md). See [`docs/VISION.md`](VISION.md) for the rationale.
 
 ---
 
@@ -267,9 +267,9 @@ Docker is the **default** in both the CLI installer and the desktop launcher (si
 
 ## 📦 Usage modes (compressed)
 
-For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/INFRA.md`](./INFRA.md) § "Where the team runs".
+For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/internal/INFRA.md`](../internal/INFRA.md) § "Where the team runs".
 
-For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Kimi) → see [`docs/PROVIDERS.md`](./PROVIDERS.md).
+For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Kimi) → see [`docs/PROVIDERS.md`](PROVIDERS.md).
 
 ---
 
@@ -277,10 +277,10 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 
 - 📋 [`BACKLOG.md`](../BACKLOG.md) — tactical, task-by-task work plan
 - 📝 [`CHANGELOG.md`](../CHANGELOG.md) — what's been shipped per release
-- 🎯 [`docs/VISION.md`](./VISION.md) — design philosophy
-- 📐 [`docs/INFRA.md`](./INFRA.md) — deployment diagram
-- 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions
-- 🧪 [`docs/BETA.md`](./BETA.md) — beta program + pre-launch coverage matrix
-- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
+- 🎯 [`docs/VISION.md`](VISION.md) — design philosophy
+- 📐 [`docs/internal/INFRA.md`](../internal/INFRA.md) — deployment diagram
+- 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
+- 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + pre-launch coverage matrix
+- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
+- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
 - 📐 [`docs/adr/`](./adr/) — architectural decision records

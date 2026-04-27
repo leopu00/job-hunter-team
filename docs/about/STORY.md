@@ -44,7 +44,7 @@ Going from "works for Leone" to "works for anyone" is a different project entire
 
 ## Beta testers wanted
 
-I have a couple of friends already lined up to test the public version. If you're job-hunting and want early access in exchange for honest feedback, see [`docs/BETA.md`](BETA.md).
+I have a couple of friends already lined up to test the public version. If you're job-hunting and want early access in exchange for honest feedback, see [`docs/BETA.md`](../guides/BETA.md).
 
 ---
 
