@@ -59,11 +59,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 4h
   - Merged: _—_ (dev-2)
 
-- [ ] **H1** — Auth + rimuovere `?id=` reveal su `/api/secrets`
-  - File: `web/app/api/secrets/route.ts:50-63`
-  - Aggiungere `requireAuth()`; cambiare reveal in POST con conferma; refactor del client UI
+- [x] **H1** — Auth + rimuovere `?id=` reveal su `/api/secrets`
+  - File: `web/app/api/secrets/route.ts` + nuovo `web/app/api/secrets/reveal/route.ts` + `web/app/(protected)/secrets/page.tsx`
+  - GET sempre mascherato (niente `?id=`); reveal solo via `POST /api/secrets/reveal` con `confirm:true`. Client chiede `window.confirm()` prima del reveal.
   - Effort: 2h
-  - Merged: _—_
+  - Merged: 87c1a824
   - Depends on: C2
 
 - [x] **H2** — Allowlist tabelle in `/api/database`
@@ -249,11 +249,11 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 ## 📊 Avanzamento
 
 ```
-Phase 1 (bloccanti):    8/9   ██████████████████████████████░░░░  89%
+Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100%
 Phase 2 (post-launch):  0/12  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
 Phase 3 (hardening):    0/13  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                 8/34  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░  24%
+TOTALE:                 9/34  █████████░░░░░░░░░░░░░░░░░░░░░░░░░  26%
 ```
 
 > Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.

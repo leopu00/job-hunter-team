@@ -35,19 +35,33 @@ export default function SecretsPage() {
 
   useEffect(() => { fetchSecrets() }, [fetchSecrets])
 
-  const reveal = async (id: string) => {
-    const res = await fetch(`/api/secrets?id=${id}`).catch(() => null)
-    if (!res?.ok) return
+  const fetchRevealed = async (id: string): Promise<string | null> => {
+    const res = await fetch('/api/secrets/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, confirm: true }),
+    }).catch(() => null)
+    if (!res?.ok) return null
     const d = await res.json()
-    const updated = d.secrets?.find((s: Secret) => s.id === id)
-    if (updated) setSecrets(prev => prev.map(s => s.id === id ? updated : s))
+    return typeof d.value === 'string' ? d.value : null
+  }
+
+  const reveal = async (secret: Secret) => {
+    if (!secret.masked) {
+      setSecrets(prev => prev.map(s => s.id === secret.id ? { ...s, value: '', masked: true } : s))
+      return
+    }
+    if (!window.confirm(`Mostrare il valore in chiaro di "${secret.name}"?`)) return
+    const value = await fetchRevealed(secret.id)
+    if (value !== null) setSecrets(prev => prev.map(s => s.id === secret.id ? { ...s, value, masked: false } : s))
   }
 
   const copy = async (secret: Secret) => {
     let val = secret.value
     if (secret.masked) {
-      const res = await fetch(`/api/secrets?id=${secret.id}`).catch(() => null)
-      if (res?.ok) { const d = await res.json(); val = d.secrets?.find((s: Secret) => s.id === secret.id)?.value ?? val }
+      const revealed = await fetchRevealed(secret.id)
+      if (revealed === null) return
+      val = revealed
     }
     await navigator.clipboard.writeText(val).catch(() => null)
     setCopied(secret.id)
@@ -126,7 +140,7 @@ export default function SecretsPage() {
                 <p className="text-[10px] font-mono text-[var(--color-dim)] mt-0.5">{s.masked ? s.value : s.value} · {TYPE_LABEL[s.type]} · {fmtDate(s.createdAt)}</p>
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <button onClick={() => reveal(s.id)} aria-label={s.masked ? 'Mostra valore' : 'Nascondi valore'} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}><span aria-hidden="true">{s.masked ? '👁' : '🙈'}</span></button>
+                <button onClick={() => reveal(s)} aria-label={s.masked ? 'Mostra valore' : 'Nascondi valore'} className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: s.masked ? 'var(--color-dim)' : 'var(--color-green)', background: 'transparent' }}><span aria-hidden="true">{s.masked ? '👁' : '🙈'}</span></button>
                 <button onClick={() => copy(s)} aria-label="Copia valore" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid var(--color-border)', color: copied === s.id ? 'var(--color-green)' : 'var(--color-dim)', background: 'transparent' }}><span aria-hidden="true">{copied === s.id ? '✓' : '⎘'}</span></button>
                 <button onClick={() => del(s.id)} aria-label="Elimina segreto" className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors" style={{ border: '1px solid rgba(255,69,96,0.2)', color: 'var(--color-red)', background: 'transparent' }}>✕</button>
               </div>
