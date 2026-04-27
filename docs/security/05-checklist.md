@@ -92,11 +92,11 @@ Hardening importante ma non bloccante.
   - Effort: 2-3 giorni (cross-platform testing)
   - Merged: _—_
 
-- [ ] **H5** — Migrare `cli/src/commands/secrets.js` da AES-CBC a AES-GCM
+- [x] **H5** — Migrare `cli/src/commands/secrets.js` da AES-CBC a AES-GCM
   - File: `cli/src/commands/secrets.js:27-40`
-  - Riusare `shared/credentials/crypto.ts`; migration silenziosa per file esistenti CBC → GCM al primo accesso
+  - AES-256-GCM + PBKDF2 100k SHA-512 con salt random per file. Migration silenziosa: i file CBC legacy (`iv:ciphertext`) vengono ri-cifrati in GCM al primo `get`.
   - Effort: 6h (incl. migration code)
-  - Merged: _—_
+  - Merged: _pending_
 
 - [x] **H6** — Symlink containment check su file-serving
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
