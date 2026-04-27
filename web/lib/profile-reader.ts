@@ -3,12 +3,29 @@ import fs from 'fs'
 import type { CandidateProfile } from './types'
 import { JHT_PROFILE_YAML } from './jht-paths'
 
-export function readProfile(_workspacePath?: string): CandidateProfile | null {
+/**
+ * `CORE_SCHEMA` esclude tutti i tag YAML estesi (es. `!!js/function`,
+ * `!!js/regexp`) lasciando solo str/int/float/bool/null/seq/map. Senza
+ * questa restrizione un attaccante che riesce a scrivere su
+ * `~/.jht/profile/candidate_profile.yml` potrebbe materializzare
+ * oggetti arbitrari al parse-time.
+ */
+const SAFE_YAML = { schema: yaml.CORE_SCHEMA } as const
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function loadProfileYaml(): Record<string, unknown> | null {
   if (!fs.existsSync(JHT_PROFILE_YAML)) return null
+  const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8'), SAFE_YAML)
+  return isPlainObject(raw) ? raw : null
+}
+
+export function readProfile(_workspacePath?: string): CandidateProfile | null {
   try {
-    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
-    if (!raw) return null
-    return mapYamlToProfile(raw)
+    const raw = loadProfileYaml()
+    return raw ? mapYamlToProfile(raw) : null
   } catch {
     return null
   }
@@ -19,9 +36,8 @@ export function readProfile(_workspacePath?: string): CandidateProfile | null {
  * Restituisce null se mancante, vuoto, o con placeholder del template.
  */
 export function readWorkspaceProfile(_workspacePath?: string): CandidateProfile | null {
-  if (!fs.existsSync(JHT_PROFILE_YAML)) return null
   try {
-    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
+    const raw = loadProfileYaml()
     if (!raw) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null

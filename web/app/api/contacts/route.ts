@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     if (!contact.name) return NextResponse.json({ error: 'Nome richiesto' }, { status: 400 });
     const contacts = load(); contacts.push(contact); save(contacts);
     return NextResponse.json({ ok: true, contact });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'contacts' }); }
 }
 
 export async function PUT(req: Request) {
@@ -67,7 +68,7 @@ export async function PUT(req: Request) {
     Object.assign(ct, updates);
     save(contacts);
     return NextResponse.json({ ok: true, contact: ct });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'contacts' }); }
 }
 
 export async function DELETE(req: Request) {
@@ -78,5 +79,5 @@ export async function DELETE(req: Request) {
     if (idx === -1) return NextResponse.json({ error: 'Contatto non trovato' }, { status: 404 });
     contacts.splice(idx, 1); save(contacts);
     return NextResponse.json({ ok: true });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'contacts' }); }
 }
