@@ -173,9 +173,9 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ✅ Public landing page
 ✅ Download page with OS auto-detection (.dmg/.exe/.AppImage/.deb)
 ✅ install.sh served via short URL
-✅ 10 new pre-launch docs (STORY, PROVIDERS, AI-AGENT-INTEGRATION,
-   VISION, MONITORING, RESULTS, BETA, TEST-CAMPAIGN,
-   MAINTAINERS, agents/maestro spec)
+✅ 9 new pre-launch docs (STORY, PROVIDERS, AI-AGENT-INTEGRATION,
+   VISION, MONITORING, RESULTS, BETA, MAINTAINERS,
+   agents/maestro spec)
 ⬜ Subdomain setup (app, docs, api)
 ⬜ Launcher screenshots in docs (soft BLOCKER pre-launch)
 ⬜ Visual FAQ
@@ -280,7 +280,7 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 - 🎯 [`docs/VISION.md`](./VISION.md) — design philosophy
 - 📐 [`docs/INFRA.md`](./INFRA.md) — deployment diagram
 - 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions
-- 🧪 [`docs/TEST-CAMPAIGN.md`](./TEST-CAMPAIGN.md) — pre-launch test matrix
+- 🧪 [`docs/BETA.md`](./BETA.md) — beta program + pre-launch coverage matrix
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
 - 📐 [`docs/adr/`](./adr/) — architectural decision records
