@@ -81,15 +81,14 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
 
 - **📘 README rewritten** end-to-end for pre-launch — story, providers, vision, monitoring stack, AI-agent integration. Manifesto: *"AI on the side of workers, not against them."* Track record callout (~200 offers · ~20 applications · 5 interview invites in 2 weeks). Local-first positioning. Demo placeholder. AI-agent CLI USP section.
 - **📋 BACKLOG rewritten** in English with status refresh — 12 tasks flipped ⬜→✅ (CLOUDSYNC ping/push, ONBOARDING split-screen, FRONTEND 1-5, multi-provider, CLI ↔ container 5/5, JHT-QA-01 with 75+ Playwright specs); 5 known bugs removed (all fixed); restructured by area; added PHASE 6 (Pre-Launch) with 4 BLOCKERs (SECURITY, COC, demo video, security review) + new tasks (test campaign, VPS validate, monitoring weekly window, user work hours, Kimi optimize, Sentinel optimize).
-- **🆕 10 new documents:**
+- **🆕 9 new documents:**
   - `docs/STORY.md` — origin story (legacy team results, why open source)
   - `docs/PROVIDERS.md` — supported subscriptions matrix (🟠 Claude / 🔵 Codex / 🌙 Kimi)
   - `docs/AI-AGENT-INTEGRATION.md` — how Claude Code / 🦞 OpenClaw / Codex / Cursor can drive JHT
   - `docs/VISION.md` — gamification philosophy, agents as characters, anti-goals
   - `docs/MONITORING.md` — Bridge/Sentinel monitoring stack (architecture + test data)
   - `docs/RESULTS.md` — case studies + community template
-  - `docs/BETA.md` — beta tester program
-  - `docs/TEST-CAMPAIGN.md` — coverage matrix (provider × tier × persona × job-category) + status board
+  - `docs/BETA.md` — beta tester program + coverage matrix (provider × persona, 10 cells, 1/10 done) + status board
   - `docs/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
   - `agents/maestro/maestro.md` — planned career-coach agent spec
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
