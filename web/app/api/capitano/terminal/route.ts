@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { runBash } from '@/lib/shell'
 import { requireAuth } from '@/lib/auth'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 export const dynamic = 'force-dynamic'
+
+// Pattern Docker per nomi container (cfr. docker-cli). Validato a
+// module load: una env var `JHT_SHELL_VIA=docker:<bad>` non deve poter
+// iniettare metacaratteri shell nei comandi che la incorporano.
+const DOCKER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/
 
 // Quando Next gira sull'host (dev mode) e tmux gira dentro al container,
 // JHT_SHELL_VIA=docker:<c> dirige il check di esistenza sessione dentro
@@ -15,7 +21,13 @@ export const dynamic = 'force-dynamic'
 // del container, altrimenti cerca un tmux host inesistente. Fuori dal
 // dev mode (JHT_SHELL_VIA non settata) si usa l'attach diretto host.
 const shellVia = process.env.JHT_SHELL_VIA
-const dockerContainer = shellVia?.startsWith('docker:') ? shellVia.slice('docker:'.length) : null
+const rawDockerContainer = shellVia?.startsWith('docker:') ? shellVia.slice('docker:'.length) : null
+const dockerContainer = rawDockerContainer && DOCKER_NAME_RE.test(rawDockerContainer)
+  ? rawDockerContainer
+  : null
+if (rawDockerContainer && !dockerContainer) {
+  console.warn(`[capitano/terminal] JHT_SHELL_VIA container "${rawDockerContainer}" non valido, attach diretto`)
+}
 const ATTACH_CMD = dockerContainer
   ? `docker exec -it ${dockerContainer} tmux attach -t CAPITANO`
   : 'tmux attach -t CAPITANO'
@@ -51,21 +63,17 @@ export async function POST() {
       })
     } else if (process.platform === 'darwin') {
       // Mac: apri Terminal.app e porta in primo piano con 'activate'
-      await execAsync(
-        `osascript -e 'tell application "Terminal"' -e 'activate' -e 'do script "${ATTACH_CMD}"' -e 'end tell'`,
-        { timeout: 10000 }
-      )
+      await execFileAsync('osascript', [
+        '-e', 'tell application "Terminal"',
+        '-e', 'activate',
+        '-e', `do script "${ATTACH_CMD}"`,
+        '-e', 'end tell',
+      ], { timeout: 10000 })
     } else {
       // Linux: prova x-terminal-emulator, fallback gnome-terminal
-      await execAsync(
-        `x-terminal-emulator -e "${ATTACH_CMD}"`,
-        { timeout: 10000 }
-      ).catch(() =>
-        execAsync(
-          `gnome-terminal -- bash -c "${ATTACH_CMD}; exec bash"`,
-          { timeout: 10000 }
-        )
-      ).catch(() => {})
+      await execFileAsync('x-terminal-emulator', ['-e', ATTACH_CMD], { timeout: 10000 })
+        .catch(() => execFileAsync('gnome-terminal', ['--', 'bash', '-c', `${ATTACH_CMD}; exec bash`], { timeout: 10000 }))
+        .catch(() => {})
     }
 
     return NextResponse.json({ ok: true })

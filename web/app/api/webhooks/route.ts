@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,8 +72,8 @@ export async function POST(req: NextRequest) {
       wh.lastStatus = res.status
       save(store)
       return NextResponse.json({ ok: true, status: res.status })
-    } catch (err: any) {
-      return NextResponse.json({ ok: false, error: err.message ?? 'timeout' }, { status: 502 })
+    } catch (err) {
+      return sanitizedError(err, { scope: 'webhooks', status: 502, publicMessage: 'timeout' })
     }
   }
 
