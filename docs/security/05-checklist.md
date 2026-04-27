@@ -27,11 +27,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 30 min
   - Merged: _—_
 
-- [ ] **C5** — Remove plaintext fallback in CLI secrets
+- [x] **C5** — Remove plaintext fallback in CLI secrets
   - File: `cli/src/commands/secrets.js:80-92`
   - Errore esplicito + istruzioni se `JHT_SECRET_KEY` manca; aggiungere `mode: 0o600` su writeFile
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: _pending_
   - Depends on: H4 (così l'utente ha un percorso netto: keyring o env)
 
 - [ ] **C1** — Fix localhost auth bypass via `x-forwarded-host`
