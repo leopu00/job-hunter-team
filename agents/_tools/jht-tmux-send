@@ -43,6 +43,22 @@ if ! tmux has-session -t "$session" 2>/dev/null; then
   exit 2
 fi
 
+# Provider attivo: serve a sapere se la TUI di destinazione è Kimi, che
+# accoda i messaggi inviati con solo Enter mentre l'agente è in mezzo a
+# tool calls in-flight (osservato live: SCOUT-1 con 4 throttle in coda
+# non processati). Soluzione: dopo Enter mandiamo anche Ctrl-S, che in
+# Kimi forza il submit del prompt corrente. Su Claude/Codex Ctrl-S non
+# è atteso, quindi lo aggiungiamo SOLO se active_provider == "kimi".
+provider=""
+config_path="${JHT_HOME:-$HOME/.jht}/jht.config.json"
+if [ -f "$config_path" ] && command -v python3 >/dev/null 2>&1; then
+  provider=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('active_provider',''))
+except Exception:
+  pass" "$config_path" 2>/dev/null || true)
+fi
+
 # Log strutturato per la UI live: parsa il formato "[@from -> @to] [TYPE] ..."
 # e appendix una riga JSONL in $JHT_HOME/logs/messages.jsonl. Il backend
 # Next legge questo file per animare il pallino tra i nodi del team chart.
@@ -99,6 +115,13 @@ for try in $(seq 1 "$attempts"); do
       # Testo visibile nel prompt. Submit.
       sleep 0.3
       tmux send-keys -t "$session" Enter
+      # Kimi: con solo Enter il messaggio puo' restare accodato in pending
+      # input fino a fine batch di tool calls; Ctrl-S forza il submit
+      # immediato del prompt. Innocuo se la TUI ha gia' processato Enter.
+      if [ "$provider" = "kimi" ]; then
+        sleep 0.2
+        tmux send-keys -t "$session" C-s
+      fi
       echo "jht-tmux-send: ${#message} chars to $session (try $try)"
       exit 0
       ;;
