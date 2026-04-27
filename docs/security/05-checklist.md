@@ -213,11 +213,11 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Effort: 1h
   - Merged: _—_
 
-- [ ] Pin Docker base image a SHA256
-  - Files: `Dockerfile:6`, `docker-compose.yml`
-  - `FROM node:22-bookworm-slim@sha256:…`. Setup Renovate/Dependabot per upgrade controllati
+- [x] Pin Docker base image a SHA256
+  - Files: `Dockerfile:6`, `.github/dependabot.yml`
+  - `FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c` + Dependabot weekly bump (label `dependencies/docker/security`). Niente cambi a `docker-compose.yml`: l'immagine è ereditata da `build:.` quindi il pin è già coerente.
   - Effort: 2h (incl. Renovate config)
-  - Merged: _—_
+  - Merged: pending
 
 ### Test security
 
