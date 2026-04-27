@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -20,17 +22,37 @@ const DATA_DIRS = [
   path.join(JHT_HOME, 'status'),
 ];
 
+// Hardcoded allowlist: only these basenames are exposed by the database explorer.
+// Any other JSON file under JHT_HOME — including secrets.json, credential dumps,
+// or future user-added files — is invisible to GET and rejected by POST.
+const ALLOWED_TABLES = new Set<string>([
+  'alerts', 'analytics', 'applications', 'archive', 'automations',
+  'companies', 'contacts', 'cover-letters', 'enabled', 'errors',
+  'goals', 'history', 'interviews', 'jobs', 'notifications',
+  'onboarding', 'reminders', 'resume', 'saved-searches', 'stats',
+  'webhooks', 'circuit-breakers',
+]);
+
+// Defense-in-depth: refuse any basename matching a sensitive prefix even if
+// it slips into ALLOWED_TABLES by mistake.
+const DENY_PATTERN = /^(secrets|credentials|tokens|\.env)/i;
+
+function isAllowedTable(basename: string): boolean {
+  return ALLOWED_TABLES.has(basename) && !DENY_PATTERN.test(basename);
+}
+
 function scanJsonFiles(): TableInfo[] {
   const tables: TableInfo[] = [];
   for (const dir of DATA_DIRS) {
     let files: string[];
     try { files = fs.readdirSync(dir).filter(f => f.endsWith('.json')); } catch { continue; }
     for (const file of files) {
+      const name = file.replace('.json', '');
+      if (!isAllowedTable(name)) continue;
       const fp = path.join(dir, file);
       try {
         const stat = fs.statSync(fp);
         const content = JSON.parse(fs.readFileSync(fp, 'utf-8'));
-        const name = file.replace('.json', '');
         let rowCount = 0; let columns: string[] = [];
         if (Array.isArray(content)) { rowCount = content.length; if (content[0] && typeof content[0] === 'object') columns = Object.keys(content[0]); }
         else if (typeof content === 'object') {
@@ -61,6 +83,7 @@ function scanSqliteFiles(): TableInfo[] {
 }
 
 function queryJson(tableName: string, query: string): { columns: string[]; rows: Record<string, unknown>[]; count: number } | null {
+  if (!isAllowedTable(tableName)) return null;
   const allTables = scanJsonFiles();
   const table = allTables.find(t => t.name === tableName);
   if (!table) return null;
@@ -83,6 +106,8 @@ function queryJson(tableName: string, query: string): { columns: string[]; rows:
 
 // GET — lista tabelle
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const jsonTables = scanJsonFiles();
   const sqliteTables = scanSqliteFiles();
   const tables = [...jsonTables, ...sqliteTables].sort((a, b) => b.sizeKB - a.sizeKB);
@@ -93,6 +118,8 @@ export async function GET() {
 
 // POST — query explorer (SELECT only)
 export async function POST(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   try {
     const { table, query } = await req.json() as { table: string; query: string };
     if (!table || !query) return NextResponse.json({ error: 'table e query richiesti' }, { status: 400 });
@@ -104,5 +131,5 @@ export async function POST(req: Request) {
     const result = queryJson(table, query);
     if (!result) return NextResponse.json({ error: 'Tabella non trovata' }, { status: 404 });
     return NextResponse.json(result);
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'database' }); }
 }
