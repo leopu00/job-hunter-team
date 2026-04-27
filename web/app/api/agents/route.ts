@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { runBash } from '@/lib/shell'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,8 @@ async function activeSessions(): Promise<Set<string>> {
 }
 
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const active = await activeSessions()
   const agents = AGENTS.map((agent) => ({
     ...agent,
@@ -45,6 +48,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: Record<string, unknown>
   try {
     body = await req.json()
