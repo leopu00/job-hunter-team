@@ -22,6 +22,7 @@ type AgentDef = {
 
 const AGENTS: AgentDef[] = [
   { id: 'capitano',   name: 'Capitano',   role: 'Capitano',   color: '#ff9100', link: '/team/capitano'  },
+  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', color: '#9c27b0', link: '/team/sentinella'},
   { id: 'scout',      name: 'Scout',      role: 'Scout',      color: '#2196f3', link: '/team/scout'     },
   { id: 'analista',   name: 'Analista',   role: 'Analista',   color: '#00e676', link: '/team/analista'  },
   { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     color: '#b388ff', link: '/team/scorer'    },

@@ -5,14 +5,14 @@ import { JHT_CONFIG_PATH } from '@/lib/jht-paths'
 
 export const dynamic = 'force-dynamic'
 
-// Limite minimo: 1 min. Massimo: 60 min. Default: 10 min.
-// Il bridge (.launcher/sentinel-bridge.py) rilegge sentinella_tick_minutes
-// dal config ad ogni tick (risoluzione ~15s tramite sleep_with_poll), quindi
-// cambiare questo valore dalla UI ha effetto al tick successivo senza
-// bisogno di restart.
-const MIN_MINUTES = 1
+// Limite minimo: 0.25 min (15s, safety floor lato bridge). Massimo: 60 min.
+// Default: 5 min. Il bridge (.launcher/sentinel-bridge.py) rilegge
+// sentinella_tick_minutes dal config ad ogni tick, quindi cambiare questo
+// valore dalla UI ha effetto al tick successivo senza bisogno di restart.
+// Float ammesso (es. 0.5 = 30 secondi).
+const MIN_MINUTES = 0.25
 const MAX_MINUTES = 60
-const DEFAULT_MINUTES = 10
+const DEFAULT_MINUTES = 5
 
 type Config = {
   active_provider?: string
@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
   }
 
   const cfg = await readConfig()
-  cfg.sentinella_tick_minutes = Math.round(n)
+  // Niente Math.round: vogliamo conservare i float (0.5 = 30s).
+  // Arrotondiamo a 2 decimali per evitare drift tipo 0.50000001.
+  cfg.sentinella_tick_minutes = Math.round(n * 100) / 100
   await writeConfig(cfg)
   return NextResponse.json({ ok: true, tick_minutes: cfg.sentinella_tick_minutes })
 }
