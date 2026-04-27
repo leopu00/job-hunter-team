@@ -15,6 +15,12 @@ const BACKUP_DIR = path.join(JHT_HOME, 'backups');
 const CATALOG_PATH = path.join(BACKUP_DIR, 'catalog.json');
 const JHT_DIR = JHT_HOME;
 
+// Backup id valido: lettere/cifre/underscore/dash. Previene path traversal
+// in PATCH (`path.join(JHT_HOME, 'restored', id)`) e in DELETE (lookup
+// in catalog è già vincolato dal find ma l'archivePath potrebbe essere
+// composto altrove).
+const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 type BackupEntry = {
   id: string; createdAt: number; sizeBytes: number; sources: string[];
   compressed: boolean; archivePath: string; description?: string;
@@ -95,6 +101,7 @@ export async function PATCH(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
+  if (!ID_PATTERN.test(id)) return NextResponse.json({ error: 'id non valido' }, { status: 400 });
 
   try {
     const { restoreBackup } = await loadBackupRunner();
@@ -117,6 +124,7 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
+  if (!ID_PATTERN.test(id)) return NextResponse.json({ error: 'id non valido' }, { status: 400 });
 
   const catalog = loadCatalog();
   const entry = catalog.find(e => e.id === id);
