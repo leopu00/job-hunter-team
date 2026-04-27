@@ -140,11 +140,11 @@ Hardening importante ma non bloccante.
   - Effort: 30 min
   - Merged: _—_
 
-- [ ] **M1** — `js-yaml.load()` con schema esplicito
-  - File: `web/lib/profile-reader.ts:9, 24`
-  - `yaml.load(content, { schema: yaml.CORE_SCHEMA })` + Zod validation sul risultato
+- [x] **M1** — `js-yaml.load()` con schema esplicito
+  - File: `web/lib/profile-reader.ts`
+  - `yaml.load(content, { schema: yaml.CORE_SCHEMA })` (esclude tag estesi tipo `!!js/function`) + helper `isPlainObject` per narrowing al posto di Zod (no nuova dep)
   - Effort: 1h
-  - Merged: _—_
+  - Merged: pending
 
 - [ ] **M4** — Error response sanitization
   - Files: pattern globale, `web/app/api/**` routes che ritornano `${err}`
