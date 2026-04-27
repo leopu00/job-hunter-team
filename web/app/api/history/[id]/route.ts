@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +62,8 @@ type RouteCtx = { params: Promise<{ id: string }> }
 
 /** GET /api/history/[id] — dettaglio conversazione con paginazione messaggi */
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const conv = loadFromStore(id) ?? loadFromTranscript(id)
   if (!conv) return NextResponse.json({ ok: false, error: 'Conversazione non trovata' }, { status: 404 })
@@ -84,6 +87,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
 /** DELETE /api/history/[id] — elimina conversazione */
 export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const store = readJsonSafe<HistoryStore>(HISTORY_PATH)
   if (!store?.conversations) return NextResponse.json({ ok: false, error: 'Store non trovato' }, { status: 500 })
