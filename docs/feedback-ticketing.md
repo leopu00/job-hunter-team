@@ -1,17 +1,18 @@
-# Feedback Ticketing
+# 💬 Feedback Ticketing
 
 Operational runbook for the [`/feedback`](/feedback) page and the [`/api/feedback`](/api/feedback) API.
 
-## Current state
+> 🧪 This is the channel beta testers use to report issues — see [`docs/BETA.md`](./BETA.md).
+
+## 📊 Current state
 
 - The feedback UI is exposed in the side menu.
-- The API no longer uses `~/.jht` in the serverless runtime.
-- In the cloud it tries Supabase first (`feedback_tickets`).
+- In the cloud the API tries Supabase first (`feedback_tickets`).
 - If Supabase isn't configured or the table doesn't exist yet, it falls back to `/tmp/jht/feedback.json`.
 
-## Modes
+## 🔀 Modes
 
-### Persistent mode
+### 💾 Persistent mode
 
 Requires:
 
@@ -25,7 +26,7 @@ In this mode:
 - `POST /api/feedback` inserts into `feedback_tickets`
 - data survives redeploys
 
-### Fallback mode
+### 🪣 Fallback mode
 
 Kicks in when Supabase isn't configured or doesn't respond.
 
@@ -35,9 +36,9 @@ In this mode:
 - the ticketing endpoint doesn't return `500`
 - data is not guaranteed long-term
 
-## Required migration
+## 🗄️ Required migration
 
-File: [`supabase/migrations/005_feedback_tickets.sql`](/Users/leoneemanuelpuglisi/Repos/job-hunter-team/fullstack-3/supabase/migrations/005_feedback_tickets.sql)
+File: [`supabase/migrations/005_feedback_tickets.sql`](../supabase/migrations/005_feedback_tickets.sql)
 
 Creates:
 
@@ -45,7 +46,7 @@ Creates:
 - indexes on `created_at` and `status`
 - RLS `SELECT` and `INSERT` policies for `anon` and `authenticated`
 
-## Deploy
+## 🚢 Deploy
 
 Production deploy:
 
@@ -61,7 +62,7 @@ Notes:
 - the live site must go through a push to `production`, not `vercel deploy --prod` from local branches;
 - create the release tag only after Vercel's Git deploy on `production` reports `READY`.
 
-## Verification
+## ✅ Verification
 
 Quick smoke test:
 
@@ -79,7 +80,13 @@ Expected:
 - `POST /api/feedback` must return `200`
 - `/feedback` must respond `200`
 
-## Operational notes
+## 📝 Operational notes
 
 - If Vercel doesn't have the Supabase env vars configured, the system still works but is non-persistent.
 - For real persistence, apply the migration and configure the Supabase env vars in the connected Vercel project.
+
+## 📚 Related
+
+- 🧪 [`docs/BETA.md`](./BETA.md) — beta tester program (the user-facing flow that funnels into `/feedback`)
+- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — Supabase access and Vercel env vars
+- 🚢 [`docs/release.md`](./release.md) — full release flow
