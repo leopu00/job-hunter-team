@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
 import { requireAuth } from '@/lib/auth'
+import { safeResolveUnder } from '@/lib/fs-safety'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +34,12 @@ function loadFromStore(id: string): Conversation | null {
 function loadFromTranscript(id: string): Conversation | null {
   const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
   for (const name of [`${safe}.jsonl`, `${id}.jsonl`]) {
-    const fp = path.join(HISTORY_DIR, name)
-    if (!fs.existsSync(fp)) continue
+    const candidate = path.join(HISTORY_DIR, name)
+    // safeResolveUnder copre sia il fallback `${id}.jsonl` (id raw,
+    // potrebbe contenere `..`) sia eventuali symlink dentro HISTORY_DIR
+    // che puntano fuori.
+    const fp = safeResolveUnder(HISTORY_DIR, candidate)
+    if (!fp) continue
     try {
       const lines = fs.readFileSync(fp, 'utf-8').trim().split('\n')
       const messages: Message[] = []

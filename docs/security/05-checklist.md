@@ -98,11 +98,11 @@ Hardening importante ma non bloccante.
   - Effort: 6h (incl. migration code)
   - Merged: _—_
 
-- [ ] **H6** — Symlink containment check su file-serving
+- [x] **H6** — Symlink containment check su file-serving
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
   - `realpath` + `startsWith(baseDir + sep)` check
   - Effort: 1h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 ### Medium
 
