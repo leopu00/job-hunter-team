@@ -216,9 +216,9 @@ export default function TeamPage() {
               {bulkLoading === 'start' ? (
                 <span className="inline-flex items-center gap-1.5"><Spinner size={11} color="var(--color-dim)" /> Starting...</span>
               ) : activeCount === TEAM_AGENTS.length ? (
-                '\u2713 All active'
+                '\u2713 Active'
               ) : (
-                '\u25B6 Start all'
+                '\u25B6 Start'
               )}
             </button>
             {activeCount > 0 && (
@@ -238,7 +238,7 @@ export default function TeamPage() {
                 {bulkLoading === 'stop' ? (
                   <span className="inline-flex items-center gap-1.5"><Spinner size={11} color="var(--color-dim)" /> Stopping...</span>
                 ) : (
-                  <>{'\u25A0'} Stop all</>
+                  <>{'\u25A0'} Stop</>
                 )}
               </button>
             )}
