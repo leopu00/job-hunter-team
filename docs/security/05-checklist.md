@@ -112,10 +112,10 @@ Hardening importante ma non bloccante.
   - Effort: 4h (+ testing)
   - Merged: _—_
 
-- [ ] **M6** — Bind compose su `127.0.0.1:3000`
+- [x] **M6** — Bind compose su `127.0.0.1:3000`
   - File: `docker-compose.yml:63-64`
   - Effort: 5 min
-  - Merged: _—_
+  - Merged: e99d3584
 
 - [ ] **M3** — Rate limiting su cloud-sync endpoint
   - Files: `web/app/api/cloud-sync/**`
@@ -128,11 +128,11 @@ Hardening importante ma non bloccante.
   - Effort: 30 min (review + polish)
   - Merged: _—_
 
-- [ ] **M8** — Validate `id` in backup restore
+- [x] **M8** — Validate `id` in backup restore
   - File: `web/app/api/backup/route.ts:87-104`
   - Regex `^[a-zA-Z0-9_-]+$`
   - Effort: 5 min
-  - Merged: _—_
+  - Merged: e99d3584
 
 - [ ] **M7** — `/api/health` versione anonima
   - File: `web/app/api/health/route.ts`
