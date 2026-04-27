@@ -16,10 +16,10 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
 
 ### Critical
 
-- [ ] **C4** — Add missing `homedir` import
+- [x] **C4** — Add missing `homedir` import
   - File: `shared/credentials/storage.ts:1` (aggiungere `import { homedir } from "node:os"`)
   - Effort: 1 min
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [ ] **C3** — Refactor `bridge_health.py:spawn_bridge` (no `sh -c`)
   - File: `shared/skills/bridge_health.py:105-114`
