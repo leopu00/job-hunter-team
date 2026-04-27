@@ -98,11 +98,11 @@ Hardening importante ma non bloccante.
   - Effort: 6h (incl. migration code)
   - Merged: _—_
 
-- [ ] **H6** — Symlink containment check su file-serving
+- [x] **H6** — Symlink containment check su file-serving
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
   - `realpath` + `startsWith(baseDir + sep)` check
   - Effort: 1h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 ### Medium
 
@@ -134,11 +134,11 @@ Hardening importante ma non bloccante.
   - Effort: 5 min
   - Merged: e99d3584
 
-- [ ] **M7** — `/api/health` versione anonima
+- [x] **M7** — `/api/health` versione anonima
   - File: `web/app/api/health/route.ts`
   - GET senza auth → solo `{status:'ok'}`; con auth → dettagli completi
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [x] **M1** — `js-yaml.load()` con schema esplicito
   - File: `web/lib/profile-reader.ts`
