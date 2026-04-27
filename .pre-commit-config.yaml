@@ -9,6 +9,28 @@
 # checklist).
 
 repos:
+  # Secret detection con baseline (snapshot dei false-positive noti).
+  # Failure se nuovi secret vengono aggiunti rispetto a `.secrets.baseline`.
+  # Per accettare un nuovo finding: `detect-secrets scan --baseline .secrets.baseline`
+  # poi `detect-secrets audit .secrets.baseline`.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args:
+          - --baseline
+          - .secrets.baseline
+          - --exclude-files
+          - '\.secrets\.baseline$'
+          - --exclude-files
+          - '\.gitleaksignore$'
+          - --exclude-files
+          - 'package-lock\.json$'
+          - --exclude-files
+          - '\.tsbuildinfo$'
+          - --exclude-files
+          - '^web/\.next/'
+
   # GitHub Actions linter (sintassi workflow + best practice)
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.10
