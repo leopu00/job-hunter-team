@@ -96,7 +96,7 @@ Hardening importante ma non bloccante.
   - File: `cli/src/commands/secrets.js:27-40`
   - AES-256-GCM + PBKDF2 100k SHA-512 con salt random per file. Migration silenziosa: i file CBC legacy (`iv:ciphertext`) vengono ri-cifrati in GCM al primo `get`.
   - Effort: 6h (incl. migration code)
-  - Merged: _pending_
+  - Merged: 6c0e6c05
 
 - [x] **H6** — Symlink containment check su file-serving
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
