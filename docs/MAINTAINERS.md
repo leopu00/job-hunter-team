@@ -95,7 +95,68 @@ For maintainers who use Claude Code: add the official Supabase MCP server to `~/
 
 ## 📦 Release process
 
-See [`docs/release.md`](release.md) for the full release procedure.
+See [`docs/release.md`](release.md) for the active release flow (tag → CI → GitHub Release).
+
+### 🍎 macOS code signing & notarization (deferred post-beta)
+
+> ⏸️ **Currently disabled** — JHT ships unsigned `.dmg` files during beta. The trust signal in beta is open-source transparency + community review, not a paid certificate (see memory `project_open_source_as_trust_signal`). When the project graduates from beta, follow this playbook to enable signing + notarization.
+
+**Why**: without signing + Apple notarization, first launch of `JHT Desktop.app` triggers Gatekeeper's "Apple could not verify this app" block. Non-tech users typically close the app at that point. A signed + notarized DMG opens with the standard "downloaded from the Internet" confirmation only.
+
+Two independent steps required: **code signing** (Developer ID Application certificate) and **notarization** (submit to Apple's notary service + staple ticket). The release workflow performs both automatically when the required secrets are configured.
+
+#### One-time maintainer setup
+
+1. **Apple Developer Program** — paid membership at https://developer.apple.com/programs/ (~99 USD/year). Free accounts cannot issue Developer ID certificates.
+2. **Create the Developer ID Application certificate**:
+   - Keychain Access → Certificate Assistant → Request a Certificate From a CA → fill in email/name → **Saved to disk** → produces a `.certSigningRequest` (CSR)
+   - https://developer.apple.com/account/resources/certificates/list → **+** → **Developer ID Application** → upload CSR → download `.cer`
+   - Double-click `.cer` to import into login keychain (private key from CSR merges with cert)
+3. **Export as `.p12`**:
+   - Keychain Access → locate `Developer ID Application: <Name> (<TEAM_ID>)`, expand to select cert + private key → right-click → **Export 2 items…** → `.p12` format → set strong password (this is `MACOS_CERTIFICATE_PWD`)
+4. **Base64-encode the `.p12`**: `base64 -i developer-id.p12 | pbcopy` (Linux: `base64 -w0`). Output is the `MACOS_CERTIFICATE` secret.
+5. **App-Specific Password for notarytool**: https://appleid.apple.com/account/manage → Sign-In and Security → App-Specific Passwords → generate one labeled `notarytool-jht`. Copy the 4×4 string → `APPLE_APP_SPECIFIC_PASSWORD`.
+6. **Team ID**: https://developer.apple.com/account → Membership details → 10-character alphanumeric → `APPLE_TEAM_ID`.
+
+#### Required GitHub secrets
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE` | Base64 of the `.p12` |
+| `MACOS_CERTIFICATE_PWD` | Password chosen when exporting |
+| `APPLE_ID` | Apple ID email of the developer account |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | 10-character Team ID |
+
+All five must be present. If any is missing, the release workflow falls back to producing an **unsigned** DMG and emits a warning (build doesn't fail, other platforms still publish).
+
+#### What the workflow does
+
+`.github/workflows/release.yml` job `build-desktop` matrix entry `macos-14`, on tag push:
+
+1. Detects whether all five secrets are configured (`HAS_MAC_SIGNING`).
+2. If yes: decodes `MACOS_CERTIFICATE` to a temporary `.p12`, points `CSC_LINK` at it and passes `CSC_KEY_PASSWORD` to electron-builder.
+3. Passes `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` so `@electron/notarize` (invoked by electron-builder when `build.mac.notarize: true`) can submit to Apple's notary.
+4. Post-build, runs `codesign -dv --verbose=4` and `spctl --assess --type open --context context:primary-signature --verbose` on the `.dmg`. Non-zero exit fails the job.
+
+Signing config in `desktop/package.json` → `build.mac`: `hardenedRuntime: true`, `entitlements` → `desktop/build/entitlements.mac.plist` (JIT, unsigned-executable-memory, network.client), `notarize: true`.
+
+#### Verifying a build locally
+
+```bash
+codesign -dv --verbose=4 /path/to/JHT\ Desktop.app
+# expect: Authority=Developer ID Application: ...
+
+spctl --assess --type execute --verbose=4 /path/to/JHT\ Desktop.app
+# expect: accepted + source=Notarized Developer ID
+
+spctl --assess --type open --context context:primary-signature --verbose /path/to/job-hunter-team-<version>-mac.dmg
+# expect: source=Notarized Developer ID
+```
+
+#### Rotating the certificate
+
+Developer ID certs expire after 5 years. To rotate: repeat steps 2–4 with a fresh CSR, replace `MACOS_CERTIFICATE` + `MACOS_CERTIFICATE_PWD`. Old artifacts remain valid as long as the old cert isn't revoked. **Revoke the old cert only after confirming new builds work** — revocation invalidates all artifacts signed with it.
 
 ## 🌍 Compliance / GDPR
 
