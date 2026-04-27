@@ -31,7 +31,7 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - File: `cli/src/commands/secrets.js:80-92`
   - Errore esplicito + istruzioni se `JHT_SECRET_KEY` manca; aggiungere `mode: 0o600` su writeFile
   - Effort: 30 min
-  - Merged: _pending_
+  - Merged: 0494a5c6
   - Depends on: H4 (così l'utente ha un percorso netto: keyring o env)
 
 - [ ] **C1** — Fix localhost auth bypass via `x-forwarded-host`
