@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,8 @@ function generateSampleLogs(date: string): LogEntry[] {
 
 /** GET — log strutturati con filtri: ?date=YYYY-MM-DD&level=error&subsystem=gateway&limit=100&offset=0 */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const sp = req.nextUrl.searchParams
   const date = sp.get('date') ?? formatDate(new Date())
   const level = sp.get('level') as LogLevel | null
