@@ -123,10 +123,10 @@ Hardening importante ma non bloccante.
   - Effort: 4h
   - Merged: _—_
 
-- [ ] **M5** — Documentare passwordless sudo come scelta esplicita
-  - Files: `docs/security/04-threat-model.md` (già fatto, da promuovere a `SECURITY.md` root al public release)
+- [x] **M5** — Documentare passwordless sudo come scelta esplicita
+  - Files: `docs/security/04-threat-model.md` (review + polish; promozione a `SECURITY.md` root rinviata al public release)
   - Effort: 30 min (review + polish)
-  - Merged: _—_
+  - Merged: 1c64276e
 
 - [x] **M8** — Validate `id` in backup restore
   - File: `web/app/api/backup/route.ts:87-104`
@@ -140,11 +140,11 @@ Hardening importante ma non bloccante.
   - Effort: 30 min
   - Merged: _—_
 
-- [ ] **M1** — `js-yaml.load()` con schema esplicito
-  - File: `web/lib/profile-reader.ts:9, 24`
-  - `yaml.load(content, { schema: yaml.CORE_SCHEMA })` + Zod validation sul risultato
+- [x] **M1** — `js-yaml.load()` con schema esplicito
+  - File: `web/lib/profile-reader.ts`
+  - `yaml.load(content, { schema: yaml.CORE_SCHEMA })` (esclude tag estesi tipo `!!js/function`) + helper `isPlainObject` per narrowing al posto di Zod (no nuova dep)
   - Effort: 1h
-  - Merged: _—_
+  - Merged: 537c4b07
 
 - [ ] **M4** — Error response sanitization
   - Files: pattern globale, `web/app/api/**` routes che ritornano `${err}`
