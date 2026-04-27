@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +105,8 @@ function queryJson(tableName: string, query: string): { columns: string[]; rows:
 
 // GET — lista tabelle
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const jsonTables = scanJsonFiles();
   const sqliteTables = scanSqliteFiles();
   const tables = [...jsonTables, ...sqliteTables].sort((a, b) => b.sizeKB - a.sizeKB);
@@ -114,6 +117,8 @@ export async function GET() {
 
 // POST — query explorer (SELECT only)
 export async function POST(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   try {
     const { table, query } = await req.json() as { table: string; query: string };
     if (!table || !query) return NextResponse.json({ error: 'table e query richiesti' }, { status: 400 });
