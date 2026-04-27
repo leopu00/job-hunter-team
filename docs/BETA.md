@@ -5,11 +5,10 @@ JHT is in active beta. We're looking for a small group of real job-seekers who a
 ## Who we're looking for
 
 - 🔍 You're **actively looking for a job** (or about to start) — JHT is not interesting if you don't have a real pipeline to feed it
-- 🛠️ You're comfortable with **basic CLI work** — you don't need to be a developer, but `jht doctor` and editing a YAML file shouldn't scare you
 - 💳 You can afford **at least one supported subscription** — see [`PROVIDERS.md`](PROVIDERS.md). The Kimi €40 tier is our target for beta testers.
 - 💬 You're willing to **report back honestly** — what worked, what didn't, what was confusing
 
-You do *not* need to be technical, an AI expert, or a JHT contributor. You need to be a job-seeker with a couple of hours a week to invest.
+**No technical background required.** JHT runs from a desktop app — installation is one click, and the team's Assistant walks you through anything you don't understand. If you can install a regular app and follow on-screen instructions, you can run JHT.
 
 ## What you get
 
@@ -44,9 +43,10 @@ Before signing up, set expectations:
 - ✅ The 8-agent team runs end-to-end (pipeline + Assistant)
 - ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
 - ✅ Claude Max x20 is rock-solid
-- 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING-RESULTS.md`](MONITORING-RESULTS.md))
+- ✅ macOS installer is signed + notarized (no Gatekeeper warning)
+- 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING.md`](MONITORING.md))
 - 🟠 Onboarding wizard still has rough edges — expect to ask for help once or twice
-- 🔴 No code-signing on Desktop installers yet — your OS may warn you
+- 🔴 Windows / Linux installers are **not signed yet** — your OS will show a "publisher unknown" warning at first launch
 
 If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 

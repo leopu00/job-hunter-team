@@ -86,14 +86,14 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
   - `docs/PROVIDERS.md` — supported subscriptions matrix (🟠 Claude / 🔵 Codex / 🌙 Kimi)
   - `docs/AI-AGENT-INTEGRATION.md` — how Claude Code / 🦞 OpenClaw / Codex / Cursor can drive JHT
   - `docs/VISION.md` — gamification philosophy, agents as characters, anti-goals
-  - `docs/MONITORING-RESULTS.md` — Bridge/Sentinel test data
+  - `docs/MONITORING.md` — Bridge/Sentinel monitoring stack (architecture + test data)
   - `docs/RESULTS.md` — case studies + community template
   - `docs/BETA.md` — beta tester program
   - `docs/TEST-CAMPAIGN.md` — coverage matrix (provider × tier × persona × job-category) + status board
   - `docs/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
   - `agents/maestro/maestro.md` — planned career-coach agent spec
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
-- **📚 ROADMAP, INFRA, BETA, MONITORING-RESULTS** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
+- **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
 - **🦞 OpenClaw integration** — emoji standardized across README + AI-AGENT-INTEGRATION.md
 
 ### 🔒 Security

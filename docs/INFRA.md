@@ -56,6 +56,6 @@ In addition, the `jht ...` CLI is intentionally driveable by other AI agents —
 
 - 🎯 [`docs/VISION.md`](./VISION.md) — design philosophy, why local-first, why no SaaS
 - 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions matrix
-- 📊 [`docs/MONITORING-RESULTS.md`](./MONITORING-RESULTS.md) — Bridge/Sentinel test data
+- 📊 [`docs/MONITORING.md`](./MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
 - 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
 - 🗺️ [`docs/ROADMAP.md`](./ROADMAP.md) — what's coming next
