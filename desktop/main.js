@@ -285,16 +285,28 @@ app.whenReady().then(() => {
       process.platform === 'win32'
         ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
         : 'bash'
+    // Redirige stdout/stderr di dev-up.sh su file, altrimenti gli errori
+    // del compose (es. container zombie, image mancante, docker daemon
+    // down) sono invisibili e il bottone resta in "Avvio…" finche'
+    // waitForReady scade.
+    const fs = require('node:fs')
+    const logDir = path.join(repoRoot, '.dev-logs')
+    const logPath = path.join(logDir, 'dev-up.log')
+    fs.mkdirSync(logDir, { recursive: true })
+    const logFd = fs.openSync(logPath, 'a')
     try {
       const child = spawn(bashCmd, [script], {
         cwd: repoRoot,
         detached: true,
-        stdio: 'ignore',
+        stdio: ['ignore', logFd, logFd],
         env: { ...process.env, MSYS_NO_PATHCONV: '1' },
       })
       child.unref()
     } catch (error) {
+      fs.closeSync(logFd)
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      fs.closeSync(logFd)
     }
     // Il dev-up.sh dura ~20-30s (recreate container + fix chown + start
     // Next). Aspettiamo in background che :3001 risponda e ritorniamo
@@ -320,7 +332,7 @@ app.whenReady().then(() => {
       return false
     }
     const ready = await waitForReady()
-    return { ok: true, ready }
+    return { ok: true, ready, logPath }
   })
   // Dev mode probe: una HEAD su localhost:3001 dice se il Next host
   // (lanciato da dev-up.sh) è attualmente attivo. Renderer lo usa per
