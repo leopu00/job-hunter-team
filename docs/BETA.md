@@ -41,7 +41,7 @@ We will reply within a few days.
 
 Before signing up, set expectations:
 
-- ✅ The 7-agent pipeline runs end-to-end
+- ✅ The 8-agent team runs end-to-end (pipeline + Assistant)
 - ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
 - ✅ Claude Max x20 is rock-solid
 - 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING-RESULTS.md`](MONITORING-RESULTS.md))

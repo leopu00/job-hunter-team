@@ -8,18 +8,18 @@ This page tells you which subscription to pick.
 
 | Profile | Pick |
 |---|---|
-| 💼 You can spend €200/month for the best result | **Claude Max x20** |
-| 🎯 You want JHT to actually work without breaking the bank | **Kimi €40** *(target setup)* |
-| 🧪 You're just testing for an hour | Any base €20 tier *(but expect limits)* |
+| 💼 You can spend €200/month for the best result | 🟠 **Claude Max x20** |
+| 🎯 You want JHT to actually work without breaking the bank | 🌙 **Kimi €40** *(target setup)* |
+| 🧪 Mid-tier with strong reasoning | 🔵 **Codex Plus / Pro €100** *(benchmark in progress)* |
 
 ## Supported subscriptions
 
 | Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
 |---|---|---|---|---|---|
-| 🟣 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel hit ~95% of the 5h window with surgical precision. | Tested, production-ready |
+| 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel hit ~95% of the 5h window with surgical precision. | Tested, production-ready |
 | 🌙 **Kimi** | Pro | ~€40 | ~320M | 🎯 **The mass-market target** — works, but usage projection oscillates ±10–15%. Recommended target: 85% (15% safety buffer). If Kimi €40 holds for a full month under load, JHT becomes affordable for everyone. | Tested, optimization in progress |
-| 🟣 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
-| ⚪ **Codex / OpenAI** | Various | varies | varies | 🔬 Supported by the agent runtime, not yet benchmarked end-to-end | TBD |
+| 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
+| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | 🔬 Supported by the agent runtime, not yet benchmarked end-to-end | TBD |
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
 

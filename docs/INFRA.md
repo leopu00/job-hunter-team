@@ -8,7 +8,7 @@
 
 ### 🐳 Docker container — the unit of deployment
 
-Everything that matters runs inside a single container: the 7-agent team (Captain + Sentinel + the pipeline: Scout → Analyst → Scorer → Writer ⇄ Critic) and local storage (SQLite for structured data, files for CVs and output). Same image, same behavior, whether it runs on a personal PC or a cloud VPS.
+Everything that matters runs inside a single container: the 8-agent team (Captain + Sentinel + the pipeline: Scout → Analyst → Scorer → Writer ⇄ Critic + Assistant) monitored by the 📡 Bridge, and local storage (SQLite for structured data, files for CVs and output). Same image, same behavior, whether it runs on a personal PC or a cloud VPS.
 
 ### 🔀 Local vs Cloud — one team, one location
 

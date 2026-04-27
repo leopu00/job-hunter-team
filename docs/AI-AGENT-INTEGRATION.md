@@ -4,7 +4,7 @@
 
 JHT exposes a complete CLI — `jht` — that is *intentionally* designed to be driven by other AI agents, not just by humans.
 
-If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor, …), you can simply tell it:
+If you already use a personal AI assistant (Claude Code, 🦞 OpenClaw, Codex, Cursor, …), you can simply tell it:
 
 > *"Set up JHT and start the team for me."*
 
@@ -53,7 +53,7 @@ Subscription model: JHT uses LLM subscriptions, not pay-per-use. See docs/PROVID
 Set up Job Hunter Team in this folder. I have a Claude Max x20 subscription. Walk me through what you need.
 ```
 
-### OpenClaw / autonomous agents
+### 🦞 OpenClaw / autonomous agents
 ```
 Install and configure JHT for a full-stack developer profile. Use Kimi as the provider. Start the team and report back when it's running.
 ```

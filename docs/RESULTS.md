@@ -9,9 +9,9 @@ The original private version of JHT, hardcoded for one user.
 | Metric | Value |
 |---|---|
 | 👤 User profile | Full-stack developer |
-| 📅 Period | 2–3 weeks |
+| 📅 Period | 2 weeks |
 | 💳 Subscription | Claude Max x20 (~€200/mo) |
-| 🎯 Job offers analyzed by the pipeline | ~300 |
+| 🎯 Job offers analyzed by the pipeline | ~200 |
 | 📄 Applications sent (CV + cover letter) | ~20 |
 | 💬 Interview invites | 5 |
 | 🎉 Offers received | 0 *(not the goal — see note)* |

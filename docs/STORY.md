@@ -8,9 +8,9 @@ The first version was a quick prototype, hardcoded for my profile, not scalable,
 
 ## What the legacy team did, in numbers
 
-Running it for **2–3 weeks** on a **Claude Max x20 subscription**:
+Running it for **2 weeks** on a **Claude Max x20 subscription**:
 
-- 🎯 **~300 job offers** discovered and analyzed by the pipeline
+- 🎯 **~200 job offers** discovered and analyzed by the pipeline
 - 📄 **~20 high-quality applications** sent (CV + cover letter, fully tailored, perfect match to the JD)
 - 💬 **5 interviews** scheduled within a few weeks
 
