@@ -5,6 +5,8 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
+import { safeResolveUnder } from '@/lib/fs-safety'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,8 +56,11 @@ function loadAgentConfig(agentId: string): Record<string, unknown> | null {
 function loadAgentLogs(agentId: string, tail: number): { ts: string; level: string; msg: string }[] {
   const agentDir = path.join(AGENTS_DIR, agentId)
   for (const name of ['agent.log', 'log.jsonl', 'events.jsonl']) {
-    const logPath = path.join(agentDir, name)
-    if (!fs.existsSync(logPath)) continue
+    const candidate = path.join(agentDir, name)
+    // agentId arriva grezzo da `resolved?.id ?? id` (URL param), quindi
+    // `..` o symlink in AGENTS_DIR potrebbero far uscire dalla base.
+    const logPath = safeResolveUnder(AGENTS_DIR, candidate)
+    if (!logPath) continue
     try {
       return fs.readFileSync(logPath, 'utf-8').trim().split('\n').slice(-tail).map(line => {
         try { const p = JSON.parse(line); return { ts: p.ts ?? p.timestamp ?? '', level: p.level ?? 'info', msg: p.msg ?? p.message ?? line } }
@@ -76,6 +81,8 @@ function loadAgentTasks(agentId: string): Record<string, unknown>[] {
 type RouteCtx = { params: Promise<{ id: string }> }
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const resolved = resolve(id)
   const tail = parseInt(req.nextUrl.searchParams.get('logs') ?? '100', 10) || 100
@@ -84,15 +91,18 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const logs = loadAgentLogs(resolved?.id ?? id, Math.min(tail, 500))
   const tasks = loadAgentTasks(resolved?.id ?? id)
   const agentDir = path.join(AGENTS_DIR, resolved?.id ?? id)
+  const hasDir = safeResolveUnder(AGENTS_DIR, agentDir) !== null
   return NextResponse.json({
     id: resolved?.id ?? id, name: resolved?.info.name ?? config?.name ?? id,
     session: resolved?.info.session ?? null, status,
-    hasDir: fs.existsSync(agentDir), config: config ?? {}, logs, tasks,
+    hasDir, config: config ?? {}, logs, tasks,
     taskCount: tasks.length, logCount: logs.length,
   })
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const body = await req.json().catch(() => ({})) as { action?: string; workspaceDir?: string }
   const resolved = resolve(id)

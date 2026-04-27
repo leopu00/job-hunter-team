@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,16 +48,23 @@ function mask(value: string): string {
   return value.slice(0, 4) + '•'.repeat(Math.min(value.length - 4, 12))
 }
 
-/** GET — lista secrets con valori mascherati (reveal=true per valore completo) */
-export async function GET(req: NextRequest) {
-  const reveal = req.nextUrl.searchParams.get('id')
+/**
+ * GET — lista secrets sempre mascherati. Niente parametro `?id=` reveal:
+ * il valore in chiaro si ottiene solo via `POST /api/secrets/reveal`
+ * (vedi finding H1: il vecchio GET esponeva enumerazione id + reveal
+ * nello stesso endpoint, sufficiente a estrarre tutti i secret con due
+ * GET una volta superato il check auth).
+ */
+export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const store = load()
   const secrets = store.secrets.map(s => ({
     id: s.id,
     name: s.name,
     type: s.type,
-    value: s.id === reveal ? s.value : mask(s.value),
-    masked: s.id !== reveal,
+    value: mask(s.value),
+    masked: true,
     createdAt: s.createdAt,
   }))
   return NextResponse.json({ secrets, total: secrets.length })
@@ -64,6 +72,8 @@ export async function GET(req: NextRequest) {
 
 /** POST — crea nuovo secret */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { name?: string; type?: SecretType; value?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }
 
@@ -88,6 +98,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove secret per ID */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false, error: 'id obbligatorio' }, { status: 400 })
 

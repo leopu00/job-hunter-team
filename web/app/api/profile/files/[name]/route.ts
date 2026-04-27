@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { JHT_USER_UPLOADS_DIR } from '@/lib/jht-paths'
+import { safeResolveUnder } from '@/lib/fs-safety'
 import fs from 'fs'
 import path from 'path'
 
@@ -22,15 +23,19 @@ export async function GET(
 ) {
   const { name } = await params
   const safeName = path.basename(decodeURIComponent(name))
-  const filePath = path.join(JHT_USER_UPLOADS_DIR, safeName)
+  const candidate = path.join(JHT_USER_UPLOADS_DIR, safeName)
 
-  if (!fs.existsSync(filePath)) {
+  // basename() neutralizza ../ ma non un symlink piazzato manualmente
+  // dentro JHT_USER_UPLOADS_DIR che punta fuori. realpath + containment
+  // chiude la via.
+  const realPath = safeResolveUnder(JHT_USER_UPLOADS_DIR, candidate)
+  if (!realPath) {
     return NextResponse.json({ error: 'file non trovato' }, { status: 404 })
   }
 
   const ext = path.extname(safeName).toLowerCase()
   const mime = MIME[ext] ?? 'application/octet-stream'
-  const buf = fs.readFileSync(filePath)
+  const buf = fs.readFileSync(realPath)
 
   return new NextResponse(buf, {
     headers: {

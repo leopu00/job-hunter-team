@@ -3,6 +3,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
+import { safeResolveUnder } from '@/lib/fs-safety'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +34,12 @@ function loadFromStore(id: string): Conversation | null {
 function loadFromTranscript(id: string): Conversation | null {
   const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
   for (const name of [`${safe}.jsonl`, `${id}.jsonl`]) {
-    const fp = path.join(HISTORY_DIR, name)
-    if (!fs.existsSync(fp)) continue
+    const candidate = path.join(HISTORY_DIR, name)
+    // safeResolveUnder copre sia il fallback `${id}.jsonl` (id raw,
+    // potrebbe contenere `..`) sia eventuali symlink dentro HISTORY_DIR
+    // che puntano fuori.
+    const fp = safeResolveUnder(HISTORY_DIR, candidate)
+    if (!fp) continue
     try {
       const lines = fs.readFileSync(fp, 'utf-8').trim().split('\n')
       const messages: Message[] = []
@@ -61,6 +67,8 @@ type RouteCtx = { params: Promise<{ id: string }> }
 
 /** GET /api/history/[id] — dettaglio conversazione con paginazione messaggi */
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const conv = loadFromStore(id) ?? loadFromTranscript(id)
   if (!conv) return NextResponse.json({ ok: false, error: 'Conversazione non trovata' }, { status: 404 })
@@ -84,6 +92,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
 /** DELETE /api/history/[id] — elimina conversazione */
 export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const store = readJsonSafe<HistoryStore>(HISTORY_PATH)
   if (!store?.conversations) return NextResponse.json({ ok: false, error: 'Store non trovato' }, { status: 500 })

@@ -25,6 +25,7 @@ import { registerUpgradeCommand } from './commands/upgrade.js';
 import { registerDashboardCommand } from './commands/dashboard.js';
 import { registerContextCommand } from './commands/context.js';
 import { registerSecretsCommand } from './commands/secrets.js';
+import { registerKeyringCommand } from './commands/keyring.js';
 import { registerHooksCommand } from './commands/hooks.js';
 import { registerReportCommand } from './commands/report.js';
 import { registerWebhooksCommand } from './commands/webhooks.js';
@@ -66,6 +67,7 @@ export function buildProgram() {
   registerDashboardCommand(program);
   registerContextCommand(program);
   registerSecretsCommand(program);
+  registerKeyringCommand(program);
   registerHooksCommand(program);
   registerReportCommand(program);
   registerWebhooksCommand(program);

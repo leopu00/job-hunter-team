@@ -4,20 +4,12 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile, isProfileComplete } from '@/lib/profile-reader'
+import { isLocalRequestFromHeaders } from '@/lib/auth'
 import Navbar from '@/components/NavbarChrome'
 import MainChrome from '@/components/MainChrome'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
-}
-
-// Hostnames that count as "local desktop" — the web app runs inside
-// the user's own container on their machine, so we trust the request
-// origin and skip the Supabase auth redirect. Anywhere else (public
-// deploy) auth stays enforced.
-function isLocalhostHost(host: string): boolean {
-  const h = host.toLowerCase()
-  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(h)
 }
 
 export default async function ProtectedLayout({
@@ -26,8 +18,7 @@ export default async function ProtectedLayout({
   children: React.ReactNode
 }) {
   const hdrs = await headers()
-  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? ''
-  const localRequest = isLocalhostHost(host)
+  const localRequest = isLocalRequestFromHeaders(hdrs)
   const pathname = hdrs.get('x-pathname') ?? ''
 
   // Onboarding gate: finché il profilo locale non è completo l'utente
