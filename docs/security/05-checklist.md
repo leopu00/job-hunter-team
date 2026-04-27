@@ -54,10 +54,10 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 4h
   - Merged: _—_
 
-- [ ] **H9** — `npm audit fix` su `desktop/`
+- [x] **H9** — `npm audit fix` su `desktop/`
   - Upgrade `electron`, `@xmldom/xmldom`. Test auto-updater + IPC
   - Effort: 4h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [ ] **H1** — Auth + rimuovere `?id=` reveal su `/api/secrets`
   - File: `web/app/api/secrets/route.ts:50-63`
