@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from '@/lib/local-token'
 
 /**
  * Riconosce come "macchina dell'utente" gli host che il desktop
@@ -52,15 +53,26 @@ export async function isLocalRequest(): Promise<boolean> {
 }
 
 /**
- * Controlla autenticazione Supabase sulle API route.
- * In modalita' locale (senza Supabase) ritorna null (accesso libero).
- * Anche le richieste provenienti da localhost/127.0.0.1 bypassano
- * il check: l'app Electron apre il browser sul desktop dell'utente
- * e gli endpoint interni devono rispondere senza login Supabase.
+ * Controlla autenticazione sulle API route.
+ *
+ * Tre vie d'accesso, in ordine:
+ *   1. Senza Supabase configurato: pass-through (deploy puramente locale).
+ *   2. Local-token valido (cookie HttpOnly settato dal middleware su
+ *      richieste localhost dirette, oppure header `Authorization: Bearer`
+ *      per chiamate manuali da CLI/curl): pass-through.
+ *   3. Sessione Supabase autenticata: pass-through.
+ *
+ * Negli altri casi 401. La vecchia bypass "l'host e' localhost" non
+ * basta: gli header `Host`/`X-Forwarded-Host` sono client-controllabili
+ * e venivano sfruttati per l'auth bypass (vedi finding C1).
  */
 export async function requireAuth(): Promise<NextResponse | null> {
   if (!isSupabaseConfigured) return null
-  if (await isLocalRequest()) return null
+
+  const hdrs = await headers()
+  const cookieStore = await cookies()
+  const tokenCookie = cookieStore.get(LOCAL_TOKEN_COOKIE)?.value
+  if (isLocalTokenAuthenticated(hdrs.get('authorization'), tokenCookie)) return null
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
