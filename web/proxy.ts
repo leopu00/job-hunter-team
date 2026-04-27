@@ -8,6 +8,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
 import { isLocalRequestFromHeaders } from '@/lib/auth'
+import { LOCAL_TOKEN_COOKIE, getOrCreateLocalToken } from '@/lib/local-token'
 
 // --- CORS Config ---
 
@@ -126,6 +127,29 @@ export async function proxy(request: NextRequest) {
   // --- Auth Supabase ---
   let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
 
+  // Local-token bootstrap: sulle richieste che arrivano davvero da
+  // localhost (niente forwarded headers, host loopback) settiamo un
+  // cookie HttpOnly+SameSite=Strict con il token su disco. Il browser
+  // aperto dal desktop launcher lo presentera' alle chiamate API
+  // successive; `requireAuth` lo accetta come bypass del flow Supabase.
+  // L'attaccante che imposta un x-forwarded-host non passa il check
+  // (vedi finding C1) → niente cookie viene settato per loro.
+  const localRequest = isLocalRequestFromHeaders(request.headers)
+  if (localRequest && !request.cookies.get(LOCAL_TOKEN_COOKIE)) {
+    const token = getOrCreateLocalToken()
+    if (token) {
+      supabaseResponse.cookies.set({
+        name: LOCAL_TOKEN_COOKIE,
+        value: token,
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        secure: false,
+        maxAge: 60 * 60 * 24 * 30,
+      })
+    }
+  }
+
   const supabaseConfig = getSupabaseConfig()
 
   if (supabaseConfig.configured) {
@@ -173,8 +197,6 @@ export async function proxy(request: NextRequest) {
     // Bypass auth per richieste locali (desktop container): il login
     // Supabase è opzionale in locale, "Continua senza" in /onboarding/cloud
     // deve poter accedere a /dashboard senza account.
-    const localRequest = isLocalRequestFromHeaders(request.headers)
-
     if (isProtected && !user && !localRequest) {
       return NextResponse.redirect(new URL('/?login=true', request.url))
     }
