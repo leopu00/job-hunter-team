@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,6 @@ export async function PUT(req: Request) {
     saveErrors(errors);
     return NextResponse.json({ ok: true, id, status });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'errors' });
   }
 }
