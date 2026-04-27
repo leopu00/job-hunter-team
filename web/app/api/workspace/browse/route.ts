@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import { requireAuth } from '@/lib/auth'
 
 const execAsync = promisify(exec)
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const repoRoot = path.resolve(process.cwd(), '..')
   const script = path.join(repoRoot, 'shared', 'skills', 'browse_folder.py')
 
