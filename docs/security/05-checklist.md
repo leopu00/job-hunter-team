@@ -193,11 +193,11 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
 
 ### Pre-commit / CI hardening (ispirato a OpenClaw)
 
-- [ ] Aggiungere `detect-secrets` con baseline
+- [x] Aggiungere `detect-secrets` con baseline
   - File: nuovi `.pre-commit-config.yaml` + `.secrets.baseline`
   - Adottare `.detect-secrets.cfg` di OpenClaw come template
   - Effort: 4h (incl. baseline iniziale)
-  - Merged: _—_
+  - Merged: f5c6068e
 
 - [x] Aggiungere `actionlint` su workflow GitHub Actions
   - File: `.pre-commit-config.yaml`
