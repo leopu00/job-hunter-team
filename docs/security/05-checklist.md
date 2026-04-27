@@ -161,11 +161,11 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
 
 ### Low
 
-- [ ] **L3** — Logger redaction (token/api_key/password/Bearer)
-  - File: nuovo `shared/logging/redact.ts` (pattern OpenClaw `redact-bounded.ts`)
-  - Wrapper che sostituisce console.log/error nei moduli sensibili
+- [x] **L3** — Logger redaction (token/api_key/password/Bearer)
+  - File: nuovo `shared/logger/redact.ts` (pattern OpenClaw `redact-bounded.ts`) + hook in `shared/logger/logger.ts:log()`
+  - `redactString` su pattern (Bearer, JWT, sk-/ant-/jht_sync_, api_key=, hex 32+) + `redactObject` su SENSITIVE_KEYS; `redactedConsole` wrapper per moduli che usano console direttamente
   - Effort: 4h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [ ] **L1** — CSP nonce/hash-based in produzione
   - File: `web/next.config.ts:26`
