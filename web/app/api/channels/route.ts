@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -165,6 +166,6 @@ export async function PUT(req: NextRequest) {
     saveEnabled(data)
     return NextResponse.json({ ok: true, id, enabled: val })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return sanitizedError(err, { scope: 'channels' })
   }
 }
