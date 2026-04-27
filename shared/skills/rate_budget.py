@@ -5,19 +5,26 @@ rate_budget — helper per il Capitano: legge l'ultimo tick dal bridge
 rate-limit del provider attivo. Usato dal Capitano all'avvio per
 decidere quanti agenti spawnare e quale ritmo tenere.
 
-Zero chiamate al provider: il bridge gia' polla ogni 1-10 min e
-scrive in /jht_home/logs/sentinel-data.jsonl. Questo script legge
-solo l'ultimo sample, quindi e' gratis da invocare.
+Zero chiamate al provider per `status`/`plan`: il bridge gia' polla
+ogni 1-10 min e scrive in /jht_home/logs/sentinel-data.jsonl. Questi
+modi leggono solo l'ultimo sample, quindi sono gratis da invocare.
+
+`live` invece bypassa la cache e fa una chiamata API on-demand al
+provider: utile prima di una decisione importante (es. spawn massivo)
+quando l'ultimo sample del bridge e' vecchio o sospetto. Costa una
+hit API, da non usare in loop.
 
 Uso:
-  python3 rate_budget.py              # one-line status scriptable
+  python3 rate_budget.py              # one-line status scriptable (da JSONL)
   python3 rate_budget.py status       # idem
   python3 rate_budget.py plan         # output dettagliato + policy consigliata
+  python3 rate_budget.py live         # one-shot fresh fetch dall'API provider
 
 Output di `plan` e' pensato per essere letto dall'LLM Capitano e
 convertito in azioni (spawn N agenti vs freeze vs attesa reset).
 """
 
+import importlib.util
 import json
 import os
 import sys
@@ -171,15 +178,179 @@ def plan(entry):
     print(f"  Ultimo tick:      {ts}")
 
 
+def _import_bridge():
+    """Carica .launcher/sentinel-bridge.py come modulo per riusare i fetch_*.
+
+    Il bridge non e' importabile in modo standard (filename con trattino,
+    fuori da package). Path-import via importlib mantiene questa skill
+    indipendente: se il bridge non e' disponibile (host vs container),
+    `live` si degrada a errore esplicito, gli altri comandi continuano
+    a funzionare leggendo il JSONL.
+    """
+    bridge_path = Path("/app/.launcher/sentinel-bridge.py")
+    if not bridge_path.exists():
+        # Fallback host-side path (per dev / test non containerizzato)
+        bridge_path = Path(__file__).resolve().parent.parent.parent / ".launcher" / "sentinel-bridge.py"
+    if not bridge_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("sentinel_bridge", bridge_path)
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        return None
+    return mod
+
+
+_PROVIDER_FETCHERS = {
+    "claude": "fetch_claude_api",
+    "kimi": "fetch_kimi_api",
+    "openai": "fetch_codex_rollout",
+}
+
+
+def live():
+    """Chiamata API on-demand al provider attivo. Bypassa cache e JSONL.
+
+    Stampa lo stesso shape di `status` ma marcando 'live' nel testo,
+    cosi' il Capitano puo' distinguere fresh-from-API da
+    cached-from-bridge nei suoi log/decisioni.
+    """
+    bridge = _import_bridge()
+    if bridge is None:
+        print("LIVE_UNAVAILABLE: sentinel-bridge.py non trovato. Uso `status` da JSONL.", file=sys.stderr)
+        print(status_line(load_last_sample()))
+        sys.exit(3)
+
+    try:
+        _tick, provider = bridge.read_config()
+    except Exception as e:
+        print(f"LIVE_UNAVAILABLE: read_config errore: {e}", file=sys.stderr)
+        sys.exit(3)
+
+    fn_name = _PROVIDER_FETCHERS.get(provider)
+    if fn_name is None or not hasattr(bridge, fn_name):
+        print(f"LIVE_UNAVAILABLE: nessun fetcher per provider={provider}", file=sys.stderr)
+        sys.exit(3)
+
+    try:
+        sample = getattr(bridge, fn_name)()
+    except Exception as e:
+        print(f"LIVE_FAIL: chiamata API fallita ({provider}): {e}", file=sys.stderr)
+        sys.exit(4)
+
+    if not sample:
+        print(f"LIVE_FAIL: provider {provider} ha risposto vuoto/None (rate-limit, timeout o credenziali mancanti)", file=sys.stderr)
+        sys.exit(4)
+
+    # fetch_claude_api ritorna la stringa "RATE_LIMIT" (sentinel value, non dict)
+    # quando Anthropic ha 429ato. Va trattato come fail esplicito così la
+    # Sentinella sa che deve passare a L2 (TUI worker).
+    if isinstance(sample, str):
+        print(f"LIVE_FAIL: provider {provider} segnale di rate-limit ({sample}). Usa L2 (check_usage.py).", file=sys.stderr)
+        sys.exit(4)
+
+    usage = sample.get("usage")
+    reset_at = sample.get("reset_at")
+    weekly = sample.get("weekly_usage")
+    remaining = hours_minutes_until(reset_at) or "-"
+
+    # Auto-registra il sample nel JSONL del bridge marcando il source
+    # in base a chi sta eseguendo la skill. Permette al grafico di
+    # mostrare TUTTI i check (capitano + sentinella + bridge), non solo
+    # quelli del bridge clock. Non bloccante: se il record fallisce il
+    # comando deve ancora stampare l'output utile al chiamante.
+    detected_source = _detect_source_from_env()
+    recorded_sample = None
+    try:
+        recorded_sample = _record_sample_via_skill({
+            "usage": usage,
+            "reset_at": reset_at,
+            "provider": provider,
+            "weekly_usage": weekly,
+        }, source=detected_source)
+    except Exception as e:
+        print(f"warn: auto-record JSONL fallito: {e}", file=sys.stderr)
+
+    # Bug fix 2026-04-25: prima il one-liner stampava solo usage/reset/
+    # weekly. La projection — l'unica metrica che il prompt del Capitano
+    # gli dice di guardare per giudicare il target band 85-95 — era
+    # nascosta. Risultato osservato: usage 16-99% letto come "tutto OK"
+    # mentre projection era già 96-114% dal minuto 5. Ora `live` stampa
+    # anche proj e status (calcolati da compute_metrics in record).
+    proj = recorded_sample.get("projection") if recorded_sample else None
+    status = recorded_sample.get("status") if recorded_sample else None
+
+    parts = [
+        f"provider={provider}",
+        f"usage={usage}%",
+    ]
+    if proj is not None:
+        parts.append(f"proj={proj}%")
+    if status is not None:
+        parts.append(f"status={status}")
+    parts += [
+        f"reset_in={remaining}",
+        f"reset_at={local_reset_display(reset_at)}",
+        f"source={detected_source}",
+    ]
+    if weekly is not None:
+        parts.append(f"weekly={weekly}%")
+    print(" ".join(parts))
+
+
+def _detect_source_from_env():
+    """Capisce chi sta chiamando la skill leggendo $JHT_AGENT_DIR
+    (settato da start-agent.sh per ogni agente del team).
+
+    Mapping:
+      .../agents/capitano       -> 'capitano'
+      .../agents/sentinella     -> 'sentinella-api'   (ramo API,
+                                   il worker fallback usa --manual)
+      qualsiasi altro path o env mancante -> 'manual'
+    """
+    agent_dir = (os.environ.get("JHT_AGENT_DIR") or "").rstrip("/")
+    if not agent_dir:
+        return "manual"
+    leaf = agent_dir.rsplit("/", 1)[-1].lower()
+    if leaf == "capitano":
+        return "capitano"
+    if leaf == "sentinella":
+        return "sentinella-api"
+    return "manual"
+
+
+def _record_sample_via_skill(parsed, source):
+    """Chiama la skill usage_record per scrivere il sample nel JSONL
+    (con calcolo delle metriche derivate). Path-import per riuso.
+
+    Ritorna il sample scritto (dict completo con projection, status,
+    velocity_smooth, ecc.) così il chiamante può mostrarli in output.
+    """
+    here = Path(__file__).resolve().parent
+    record_path = here / "usage_record.py"
+    if not record_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("usage_record", record_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sample = mod.make_sample(parsed, source=source)
+    mod.append_sample(sample)
+    return sample
+
+
 def main():
     cmd = (sys.argv[1] if len(sys.argv) > 1 else "status").lower()
+    if cmd == "live":
+        live()
+        return
     entry = load_last_sample()
     if cmd == "plan":
         plan(entry)
     elif cmd in ("status", ""):
         print(status_line(entry))
     else:
-        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: status | plan", file=sys.stderr)
+        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: status | plan | live", file=sys.stderr)
         sys.exit(2)
 
 

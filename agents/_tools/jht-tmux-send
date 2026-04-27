@@ -43,6 +43,63 @@ if ! tmux has-session -t "$session" 2>/dev/null; then
   exit 2
 fi
 
+# Provider attivo: serve a sapere se la TUI di destinazione è Kimi, che
+# accoda i messaggi inviati con solo Enter mentre l'agente è in mezzo a
+# tool calls in-flight (osservato live: SCOUT-1 con 4 throttle in coda
+# non processati). Soluzione: dopo Enter mandiamo anche Ctrl-S, che in
+# Kimi forza il submit del prompt corrente. Su Claude/Codex Ctrl-S non
+# è atteso, quindi lo aggiungiamo SOLO se active_provider == "kimi".
+provider=""
+config_path="${JHT_HOME:-$HOME/.jht}/jht.config.json"
+if [ -f "$config_path" ] && command -v python3 >/dev/null 2>&1; then
+  provider=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('active_provider',''))
+except Exception:
+  pass" "$config_path" 2>/dev/null || true)
+fi
+
+# Log strutturato per la UI live: parsa il formato "[@from -> @to] [TYPE] ..."
+# e appendix una riga JSONL in $JHT_HOME/logs/messages.jsonl. Il backend
+# Next legge questo file per animare il pallino tra i nodi del team chart.
+# Fallisce silenziosamente — il logging non deve mai bloccare l'invio.
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
+import json, os, re, sys
+from datetime import datetime, timezone
+session, msg = sys.argv[1], sys.argv[2]
+# 1) formato standard agente→agente: "[@from -> @to] [TYPE] ..."
+m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+)\])?', msg)
+if m:
+    from_, to_, kind = m.group(1), m.group(2), m.group(3) or ""
+else:
+    # 2) bridge automatico: "[BRIDGE TICK|FAILURE|ALERT|INFO] ..." → la
+    #    destinazione è la session destinataria (passata come argv[1]).
+    mb = re.match(r'^\s*\[BRIDGE\s+([A-Z]+)\]', msg)
+    if mb:
+        from_, to_, kind = "bridge", session.lower(), mb.group(1)
+    else:
+        # 3) sentinella autonoma: "[SENTINELLA] ..." o "[SENTINELLA] [TYPE] ..."
+        ms = re.match(r'^\s*\[SENTINELLA\]\s*(?:\[([A-Z]+)\])?', msg)
+        if ms:
+            from_, to_, kind = "sentinella", session.lower(), ms.group(1) or ""
+        else:
+            from_, to_, kind = "", "", ""
+log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(log_dir, exist_ok=True)
+out = {
+    "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    "session": session,
+    "from": from_.lower(),
+    "to": to_.lower(),
+    "type": kind,
+    "preview": msg[:80],
+}
+with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
+    f.write(json.dumps(out) + "\n")
+PYEOF
+fi
+
 # Signature per la verify: primi 30 char del messaggio. Substring perche'
 # le TUI wrappano righe lunghe e il messaggio nel pane puo' essere spezzato
 # su piu' righe, rendendo un match full-string impossibile.
@@ -58,6 +115,13 @@ for try in $(seq 1 "$attempts"); do
       # Testo visibile nel prompt. Submit.
       sleep 0.3
       tmux send-keys -t "$session" Enter
+      # Kimi: con solo Enter il messaggio puo' restare accodato in pending
+      # input fino a fine batch di tool calls; Ctrl-S forza il submit
+      # immediato del prompt. Innocuo se la TUI ha gia' processato Enter.
+      if [ "$provider" = "kimi" ]; then
+        sleep 0.2
+        tmux send-keys -t "$session" C-s
+      fi
       echo "jht-tmux-send: ${#message} chars to $session (try $try)"
       exit 0
       ;;
