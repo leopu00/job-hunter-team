@@ -80,11 +80,11 @@ Hardening importante ma non bloccante.
 
 ### High
 
-- [ ] **H3** — `JHT_SHELL_VIA` validato + `execFile` array-based
+- [x] **H3** — `JHT_SHELL_VIA` validato + `execFile` array-based
   - Files: `web/app/api/team/terminal/open/route.ts`, `web/app/api/capitano/terminal/route.ts`
   - Validate `dockerContainer` con `^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`; usare `execFile` dove cross-platform consente
   - Effort: 3h
-  - Merged: _—_
+  - Merged: e0d24b60
 
 - [ ] **H4** — Sostituire fallback machine-derived con keyring + env-var
   - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`
@@ -98,19 +98,19 @@ Hardening importante ma non bloccante.
   - Effort: 6h (incl. migration code)
   - Merged: _—_
 
-- [ ] **H6** — Symlink containment check su file-serving
+- [x] **H6** — Symlink containment check su file-serving
   - Files: `web/app/api/profile/files/[name]/route.ts:19-41` + altre route che servono file
   - `realpath` + `startsWith(baseDir + sep)` check
   - Effort: 1h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 ### Medium
 
-- [ ] **M2** — CSRF middleware globale (Origin/Referer/Sec-Fetch-Site)
-  - File: nuovo `web/middleware.ts`
+- [x] **M2** — CSRF middleware globale (Origin/Referer/Sec-Fetch-Site)
+  - File: nuovo `web/lib/csrf.ts` + integrazione in `web/proxy.ts`
   - Pattern OpenClaw `browserMutationGuardMiddleware` adattato a Next.js
   - Effort: 4h (+ testing)
-  - Merged: _—_
+  - Merged: 8ad011fd
 
 - [x] **M6** — Bind compose su `127.0.0.1:3000`
   - File: `docker-compose.yml:63-64`
@@ -134,11 +134,11 @@ Hardening importante ma non bloccante.
   - Effort: 5 min
   - Merged: e99d3584
 
-- [ ] **M7** — `/api/health` versione anonima
+- [x] **M7** — `/api/health` versione anonima
   - File: `web/app/api/health/route.ts`
   - GET senza auth → solo `{status:'ok'}`; con auth → dettagli completi
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [x] **M1** — `js-yaml.load()` con schema esplicito
   - File: `web/lib/profile-reader.ts`
