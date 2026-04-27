@@ -4,7 +4,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, scryptSync } from "node:crypto";
 import { JHT_HOME } from "../tui-paths.js";
 import { resolveJhtPassphrase } from "../../../shared/credentials/passphrase.js";
 import type { OAuthCredentials } from "./openai.js";
@@ -16,24 +16,26 @@ const CREDENTIALS_PATH = join(CREDENTIALS_DIR, "credentials.json");
 const STORAGE_VERSION = 1;
 
 /**
- * Deriva la chiave AES-256 dalla passphrase utente.
+ * Risolve la passphrase utente.
  *
  * H4: niente piu' fallback machine-derived (`${homedir()}-${USER}`).
  * Se l'utente non ha settato `JHT_CREDENTIALS_KEY` (o legacy
  * `JHT_ENCRYPTION_KEY`) ne' un'entry nel keyring, l'helper lancia
- * `MissingPassphraseError` con istruzioni — molto meglio di un file
- * cifrato con chiave indovinabile.
- *
- * Salt fisso `jht-salt` mantenuto per leggere file gia' presenti
- * sull'host. Migration verso un salt-per-file e KDF PBKDF2 e' parte
- * del lavoro H4 follow-up (vedi shared/credentials/crypto.ts).
+ * `MissingPassphraseError` con istruzioni.
  */
-function getEncryptionKey(): Buffer {
-  const passphrase = resolveJhtPassphrase({
+function getPassphrase(): string {
+  return resolveJhtPassphrase({
     envVar: "JHT_CREDENTIALS_KEY",
     legacyEnvVars: ["JHT_ENCRYPTION_KEY"],
   });
-  return scryptSync(passphrase, "jht-salt", 32);
+}
+
+/**
+ * Deriva la chiave AES-256 con PBKDF2 + salt random per file
+ * (H4 iter 2). Allineato al pattern shared/credentials/crypto.ts.
+ */
+function deriveKey(passphrase: string, salt: Buffer): Buffer {
+  return pbkdf2Sync(passphrase, salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,28 +65,82 @@ export type ProviderCredentials =
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ALGORITHM = "aes-256-gcm";
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_DIGEST = "sha512";
+const SALT_BYTES = 32;
+const PAYLOAD_VERSION = 2;
 
-function encrypt(text: string, key: Buffer): string {
+interface EncryptedPayloadV2 {
+  v: 2;
+  salt: string;
+  iv: string;
+  authTag: string;
+  data: string;
+}
+
+function isPayloadV2(obj: unknown): obj is EncryptedPayloadV2 {
+  if (!obj || typeof obj !== "object") return false;
+  const p = obj as Record<string, unknown>;
+  return (
+    p.v === 2 &&
+    typeof p.salt === "string" &&
+    typeof p.iv === "string" &&
+    typeof p.authTag === "string" &&
+    typeof p.data === "string"
+  );
+}
+
+/** Cifra `text` con AES-256-GCM + PBKDF2 + salt random per file. */
+function encrypt(text: string, passphrase: string): string {
+  const salt = randomBytes(SALT_BYTES);
+  const key = deriveKey(passphrase, salt);
   const iv = randomBytes(16);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
-  return iv.toString("hex") + ":" + authTag.toString("hex") + ":" + encrypted.toString("hex");
+  const payload: EncryptedPayloadV2 = {
+    v: PAYLOAD_VERSION,
+    salt: salt.toString("hex"),
+    iv: iv.toString("hex"),
+    authTag: authTag.toString("hex"),
+    data: encrypted.toString("hex"),
+  };
+  return JSON.stringify(payload);
 }
 
-function decrypt(encryptedData: string, key: Buffer): string {
-  const parts = encryptedData.split(":");
+/**
+ * Decifra. Accetta:
+ *   - JSON `EncryptedPayloadV2` (formato attuale, salt random per file)
+ *   - stringa `iv:authTag:ciphertext` (formato legacy con salt fisso
+ *     `jht-salt` derivato via scrypt; compat read-only).
+ */
+function decrypt(blob: string, passphrase: string): string {
+  let parsed: unknown = null;
+  try { parsed = JSON.parse(blob); } catch { /* legacy below */ }
+
+  if (isPayloadV2(parsed)) {
+    const salt = Buffer.from(parsed.salt, "hex");
+    const iv = Buffer.from(parsed.iv, "hex");
+    const authTag = Buffer.from(parsed.authTag, "hex");
+    const encrypted = Buffer.from(parsed.data, "hex");
+    const key = deriveKey(passphrase, salt);
+    const decipher = createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+  }
+
+  // Legacy `iv:authTag:ciphertext` con scrypt + 'jht-salt'
+  const parts = blob.split(":");
   if (parts.length !== 3) {
     throw new Error("Invalid encrypted data format");
   }
   const iv = Buffer.from(parts[0], "hex");
   const authTag = Buffer.from(parts[1], "hex");
   const encrypted = Buffer.from(parts[2], "hex");
-  
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const legacyKey = scryptSync(passphrase, "jht-salt", 32);
+  const decipher = createDecipheriv(ALGORITHM, legacyKey, iv);
   decipher.setAuthTag(authTag);
-  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  return decrypted.toString("utf8");
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,18 +158,26 @@ function loadCredentialsRaw(): StoredCredentials | null {
     if (!existsSync(CREDENTIALS_PATH)) {
       return null;
     }
-    const encrypted = readFileSync(CREDENTIALS_PATH, "utf-8");
-    const key = getEncryptionKey();
-    const decrypted = decrypt(encrypted, key);
+    const encrypted = readFileSync(CREDENTIALS_PATH, "utf-8").trim();
+    const passphrase = getPassphrase();
+    const decrypted = decrypt(encrypted, passphrase);
     const parsed = JSON.parse(decrypted) as StoredCredentials;
-    
+
     // Migrazione se necessario
     if (parsed.version !== STORAGE_VERSION) {
       return migrateCredentials(parsed);
     }
-    
+
+    // Re-write silenzioso se il file era nel formato legacy (salt fisso):
+    // alla prossima save sara' gia' v2 con salt random, ma ri-scrivere
+    // ora chiude la finestra in cui un attaccante con vecchia chiave
+    // potrebbe ancora leggere.
+    if (!encrypted.startsWith("{")) {
+      try { saveCredentialsRaw(parsed); } catch { /* best-effort */ }
+    }
+
     return parsed;
-  } catch (err) {
+  } catch {
     // Se fallisce la lettura/decrittazione, ritorna null
     return null;
   }
@@ -121,8 +185,8 @@ function loadCredentialsRaw(): StoredCredentials | null {
 
 function saveCredentialsRaw(credentials: StoredCredentials): void {
   ensureCredentialsDir();
-  const key = getEncryptionKey();
-  const encrypted = encrypt(JSON.stringify(credentials), key);
+  const passphrase = getPassphrase();
+  const encrypted = encrypt(JSON.stringify(credentials), passphrase);
   writeFileSync(CREDENTIALS_PATH, encrypted, { mode: 0o600 });
   try {
     chmodSync(CREDENTIALS_PATH, 0o600);
