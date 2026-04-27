@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,6 +53,8 @@ function save(store: TaskStore): void {
 
 /** GET — lista task con filtro opzionale: ?status=running|active|terminal */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const filter = req.nextUrl.searchParams.get('status')
   const store = load()
   const tasks = store.tasks.filter(t => {
@@ -65,6 +68,8 @@ export async function GET(req: NextRequest) {
 
 /** POST — crea nuovo task */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { task?: string; agentId?: string; label?: string; runtime?: TaskRuntime } = {}
   try { body = await req.json() } catch { /* ignore */ }
   if (!body.task?.trim()) {
@@ -88,6 +93,8 @@ export async function POST(req: NextRequest) {
 
 /** PATCH — aggiorna stato task (?id=xxx body: { status }) */
 export async function PATCH(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false, error: 'id obbligatorio' }, { status: 400 })
   let body: { status?: TaskStatus } = {}
