@@ -1,0 +1,34 @@
+# Pre-commit hooks for job-hunter-team
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# See https://pre-commit.com for more information.
+# Config minima: solo i tre hook security pre-launch (audit P3 CI).
+# `detect-secrets` resta TODO (ha bisogno di baseline iniziale, vedi
+# checklist).
+
+repos:
+  # GitHub Actions linter (sintassi workflow + best practice)
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.10
+    hooks:
+      - id: actionlint
+
+  # GitHub Actions security audit (poison pipeline, untrusted input,
+  # template injection, ecc.)
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.22.0
+    hooks:
+      - id: zizmor
+        args: [--persona=regular, --min-severity=medium, --min-confidence=medium]
+
+  # Audit npm produzione (cli/desktop/tui/web). Blocca commit se
+  # vulnerabilita' high+ presenti nelle dipendenze prod.
+  - repo: local
+    hooks:
+      - id: npm-audit-prod
+        name: npm-audit-prod
+        entry: node scripts/pre-commit/npm-audit-prod.mjs
+        language: system
+        pass_filenames: false
