@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
 import { requireAuth } from '@/lib/auth'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -130,5 +131,5 @@ export async function POST(req: Request) {
     const result = queryJson(table, query);
     if (!result) return NextResponse.json({ error: 'Tabella non trovata' }, { status: 404 });
     return NextResponse.json(result);
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'database' }); }
 }
