@@ -7,6 +7,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,8 @@ async function loadBackupRunner() {
 
 // GET — lista backup
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const entries = loadCatalog().sort((a, b) => b.createdAt - a.createdAt);
   const totalSize = entries.reduce((s, e) => s + e.sizeBytes, 0);
   return NextResponse.json({ backups: entries, count: entries.length, totalSize });
@@ -51,6 +54,8 @@ export async function GET() {
 
 // POST — crea backup
 export async function POST(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   try {
     const body = await req.json().catch(() => ({}));
     const sources: string[] = body.sources?.length ? body.sources : DEFAULT_SOURCES;
@@ -85,6 +90,8 @@ export async function POST(req: Request) {
 
 // PATCH — ripristina backup
 export async function PATCH(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
@@ -105,6 +112,8 @@ export async function PATCH(req: Request) {
 
 // DELETE — elimina backup
 export async function DELETE(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
