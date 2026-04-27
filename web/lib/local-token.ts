@@ -25,6 +25,11 @@ const TOKEN_HEX_RE = /^[a-f0-9]{64}$/i
 /** Nome del cookie usato per propagare il local-token al browser. */
 export const LOCAL_TOKEN_COOKIE = 'jht_local_token'
 
+// In-memory cache: la prima `getOrCreateLocalToken()` legge/crea il
+// file, le successive ritornano il valore in RAM. Conseguenza: una
+// rotazione manuale del file (`rm ~/.jht/.local-token`) non viene
+// rilevata finche' il processo non riparte. Accettabile per ora —
+// jht non offre rotation in-process.
 let cached: string | null = null
 
 function readToken(): string | null {
