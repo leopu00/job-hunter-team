@@ -198,20 +198,20 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Effort: 4h (incl. baseline iniziale)
   - Merged: _—_
 
-- [ ] Aggiungere `actionlint` su workflow GitHub Actions
+- [x] Aggiungere `actionlint` su workflow GitHub Actions
   - File: `.pre-commit-config.yaml`
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: d5d3842f
 
-- [ ] Aggiungere `zizmor` per audit security workflow
+- [x] Aggiungere `zizmor` per audit security workflow
   - File: `.pre-commit-config.yaml` + `zizmor.yml` (modello OpenClaw)
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d5d3842f
 
-- [ ] Aggiungere `npm audit --audit-level=high` come pre-commit
+- [x] Aggiungere `npm audit --audit-level=high` come pre-commit
   - File: `.pre-commit-config.yaml` + `scripts/pre-commit/npm-audit-prod.mjs`
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d5d3842f
 
 - [ ] Pin Docker base image a SHA256
   - Files: `Dockerfile:6`, `docker-compose.yml`
