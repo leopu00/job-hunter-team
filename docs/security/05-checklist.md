@@ -49,10 +49,10 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
 
 ### High
 
-- [ ] **H8** — `npm audit fix` su `web/`
+- [x] **H8** — `npm audit fix` su `web/`
   - Upgrade `next`, `next-intl`, `postcss`. Branch dedicato + E2E full prima del merge
   - Effort: 4h
-  - Merged: _—_
+  - Merged: c62d7147
 
 - [ ] **H9** — `npm audit fix` su `desktop/`
   - Upgrade `electron`, `@xmldom/xmldom`. Test auto-updater + IPC
