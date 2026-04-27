@@ -4,7 +4,6 @@ import { isSupabaseConfigured } from '@/lib/workspace'
 import { readWorkspaceProfile } from '@/lib/profile-reader'
 import { isLocalRequest } from '@/lib/auth'
 import type { CandidateProfile } from '@/lib/types'
-import ProfilePageClient from '@/components/ProfilePageClient'
 import ProfileStats from '@/components/ProfileStats'
 import ProfileAssistantFab from '@/components/ProfileAssistantFab'
 
@@ -135,7 +134,7 @@ export default async function ProfilePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
         {/* Basic Info */}
-        <ProfileSection title="Info Base">
+        <ProfileSection id="info-base" title="Info Base">
           <ProfileField label="Name" value={profile.name} />
           <ProfileField label="Target role" value={profile.target_role} />
           <ProfileField label="Location" value={profile.location} />
@@ -146,7 +145,7 @@ export default async function ProfilePage() {
 
         {/* Contacts */}
         {(profile.email || hasContacts) && (
-          <ProfileSection title="Contatti">
+          <ProfileSection id="contatti" title="Contatti">
             <div className="flex flex-col gap-2.5">
               {profile.email && (
                 <ContactRow icon={<><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></>} label="Email" value={profile.email} href={`mailto:${profile.email}`} />
@@ -168,7 +167,7 @@ export default async function ProfilePage() {
         )}
 
         {/* Languages */}
-        <ProfileSection title="Lingue">
+        <ProfileSection id="lingue" title="Lingue">
           {profile.languages && profile.languages.length > 0 ? (
             <div className="flex flex-col gap-2">
               {profile.languages.map(l => (
@@ -184,7 +183,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Skills */}
-        <ProfileSection title={`Skills${allSkills.length > 0 ? ` (${allSkills.length})` : ''}`}>
+        <ProfileSection id="skills" title={`Skills${allSkills.length > 0 ? ` (${allSkills.length})` : ''}`}>
           {allSkills.length > 0 ? (
             <div className="flex flex-col gap-3">
               {Object.entries(profile.skills!).map(([category, items], catIdx) => {
@@ -213,7 +212,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Esperienza lavorativa */}
-        <ProfileSection title={`Work Experience${hasExperience ? ` (${experience.length})` : ''}`}>
+        <ProfileSection id="esperienza-lavorativa" title={`Work Experience${hasExperience ? ` (${experience.length})` : ''}`}>
           {hasExperience ? (
             <div className="flex flex-col">
               {experience.map((e, i) => (
@@ -246,7 +245,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Formazione */}
-        <ProfileSection title={`Education & Certifications${hasEducation ? ` (${education.length + certifications.length})` : ''}`}>
+        <ProfileSection id="formazione" title={`Education & Certifications${hasEducation ? ` (${education.length + certifications.length})` : ''}`}>
           {hasEducation ? (
             <div className="flex flex-col">
               {education.map((e, i) => (
@@ -326,7 +325,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Target Roles */}
-        <ProfileSection title={`Ruoli target${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ''}`}>
+        <ProfileSection id="ruoli-target" title={`Ruoli target${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ''}`}>
           {profile.job_titles && profile.job_titles.length > 0 ? (
             <div className="flex flex-col gap-2">
               {profile.job_titles.map((r, i) => (
@@ -351,7 +350,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Preferenze lavoro */}
-        <ProfileSection title="Job Preferences">
+        <ProfileSection id="location-preferite" title="Job Preferences">
           {profile.location_preferences && profile.location_preferences.length > 0 ? (
             <div className="flex flex-wrap gap-2 mb-3">
               {profile.location_preferences.map((lp, i) => (
@@ -378,7 +377,7 @@ export default async function ProfilePage() {
             <span className="text-[var(--color-dim)] text-[11px]">No preferences</span>
           )}
           {profile.salary_target && (profile.salary_target.italy_min != null || profile.salary_target.remote_eu_min != null) && (
-            <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+            <div id="salary-target" className="mt-3 pt-3 border-t border-[var(--color-border)] scroll-mt-20">
               <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">Salary target</div>
               <div className="flex flex-col gap-3">
                 {profile.salary_target.italy_min != null && (
@@ -393,7 +392,7 @@ export default async function ProfilePage() {
         </ProfileSection>
 
         {/* Obiettivi di carriera */}
-        <ProfileSection title="Career Goals">
+        <ProfileSection id="obiettivi-carriera" title="Career Goals">
           {hasCareerGoals ? (
             <div className="flex flex-col gap-2">
               <ProfileField label="Direction" value={careerGoals.direction || null} />
@@ -467,9 +466,10 @@ export default async function ProfilePage() {
           )}
         </ProfileSection>
 
-        {/* Strengths */}
-        {strengths.length > 0 && (
-          <ProfileSection title={`Strengths (${strengths.length})`}>
+        {/* Strengths — sempre renderizzato (anche vuoto) cosi` il deep-link
+            `#punti-di-forza` dai chip "campi mancanti" trova la sezione. */}
+        <ProfileSection id="punti-di-forza" title={`Strengths${strengths.length > 0 ? ` (${strengths.length})` : ''}`}>
+          {strengths.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {strengths.map((s, i) => (
                 <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-[var(--color-green)]/8 text-[var(--color-green)] border border-[var(--color-green)]/20">
@@ -478,8 +478,10 @@ export default async function ProfilePage() {
                 </span>
               ))}
             </div>
-          </ProfileSection>
-        )}
+          ) : (
+            <span className="text-[var(--color-dim)] text-[11px]">No strengths entered</span>
+          )}
+        </ProfileSection>
 
         {/* Note libere — full width */}
         {freeNotes && (
@@ -493,16 +495,17 @@ export default async function ProfilePage() {
       </div>
       )}
 
-      <ProfilePageClient profile={profile} />
     </div>
     <ProfileAssistantFab />
     </>
   )
 }
 
-function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
+function ProfileSection({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
+  // scroll-mt-20: deep-link da chip "campi mancanti" arrivano qui senza
+  // finire sotto la navbar sticky.
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+    <div id={id} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors scroll-mt-20">
       <div className="section-label mb-4">{title}</div>
       {children}
     </div>
