@@ -250,10 +250,10 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 
 ```
 Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100%
-Phase 2 (post-launch):  0/12  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
+Phase 2 (post-launch):  4/12  ███████████░░░░░░░░░░░░░░░░░░░░░░░  33%
 Phase 3 (hardening):    0/13  ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                 9/34  █████████░░░░░░░░░░░░░░░░░░░░░░░░░  26%
+TOTALE:                 13/34 █████████████░░░░░░░░░░░░░░░░░░░░░  38%
 ```
 
 > Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.
