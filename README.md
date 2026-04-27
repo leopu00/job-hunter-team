@@ -158,7 +158,7 @@ Full roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
 - 🧪 **Beta tester?** See [`docs/BETA.md`](docs/BETA.md) — we want real job-seekers to break things and tell us how
-- 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) for responsible disclosure *(coming with the next release)*
+- 🔐 **Found a security issue?** Email `leone.puglisi@gmail.com` for responsible disclosure. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/) (root `SECURITY.md` coming with the next release)
 - 🤝 **Code of conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) *(coming with the next release)*
 
 ## License

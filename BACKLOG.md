@@ -349,7 +349,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
 1. SECURITY.md + CODE_OF_CONDUCT.md (small, fast)
-2. Security review on `dev-1` (already in progress)
+2. ✅ Security review (done — 31/34 fix mergiati, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
 4. Demo video (after monitoring is frozen)
 5. Beta tester recruitment + Show HN draft + Press kit + Awesome lists submissions
@@ -370,11 +370,13 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - Asciinema or screencast full pipeline
 - Embed in README above the fold
 
-#### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ⬜ BLOCKER
+#### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
-- ⏳ **Implementation in progress** on the `dev-1` worktree (agent already running through the prepared review prompt — gitleaks on full git history, dependency audit, route auth checks, command-injection/SSRF scan, credential handling review).
-- Output: `docs/security-review-pre-launch.md` with findings classified by severity (critical/high/medium/low).
-- Awaiting merge before final triage.
+- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 31/34 fix mergiati in `master` (sha `7a2cb6ae`), security score 30% → 74%.
+- **Output:** `docs/security/` (7 file, ~2336 righe) — pre-launch review, OpenClaw comparison, threat model, checklist, post-fix snapshot.
+- **Phase 1 bloccanti pre-launch:** 9/9 ✅ (C1-C5, H1, H2, H8, H9). **Phase 2 post-launch:** 12/12 ✅. **Phase 3 hardening:** 10/13 🟡.
+- **Gap residui (blockers per public release, non per merge interna):** SSRF dispatcher generico (~1d), `resolve-system-bin` strict (~4h), CSP hash-based prod L1 (~4h).
+- **Tooling integrato:** detect-secrets, actionlint, zizmor, npm-audit-prod (pre-commit hooks), Dependabot Docker weekly, Docker base image pinned a SHA256.
 
 #### 🧊 [JHT-LAUNCH-05] Stabilize monitoring architecture
 

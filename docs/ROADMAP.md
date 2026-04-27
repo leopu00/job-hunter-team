@@ -192,13 +192,13 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 > _"Get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists."_
 
 ```
-⚪ Status: STARTED — ~10%
-░░░░░░░░░░░░░░░░░░░░ 
+🟡 Status: IN PROGRESS — ~25%
+█████░░░░░░░░░░░░░░░ 
 
-⬜ 🔐 SECURITY.md (BLOCKER) — responsible disclosure
+⬜ 🔐 SECURITY.md (BLOCKER) — root file with responsible disclosure (audit in docs/security/)
 ⬜ 🤝 CODE_OF_CONDUCT.md (BLOCKER) — Contributor Covenant
 ⬜ 🎬 30s demo video (BLOCKER) — README above the fold
-⬜ 🛡️ Security review (BLOCKER) — gitleaks + audit on dev-1 worktree
+✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (3 gap residui: SSRF, resolve-system-bin, CSP prod)
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
 ✅ 🧪 docs/BETA.md created
 ⬜ 🧪 Beta tester recruitment (publish on r/cscareerquestions, friends list)

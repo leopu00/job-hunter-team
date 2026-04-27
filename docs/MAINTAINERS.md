@@ -166,9 +166,12 @@ Developer ID certs expire after 5 years. To rotate: repeat steps 2–4 with a fr
 
 ## 🛡️ Security review
 
-- Last full security review: in progress on `dev-1` worktree (gitleaks + dependency audit + route auth + command-injection scan + credential handling)
-- Output: `docs/security-review-pre-launch.md` (will be created when review completes)
-- Cadence target: every major release
+- **Last full review:** 2026-04-27 (sprint dev-1..dev-4 in parallelo, mergiato in `master` con `7a2cb6ae`) — 31/34 fix, security score 30% → 74%
+- **Output:** [`docs/security/`](security/) — pre-launch review, OpenClaw comparison, threat model, checklist, post-fix snapshot
+- **Phase status:** Phase 1 (bloccanti pre-launch) 9/9 ✅ · Phase 2 (post-launch) 12/12 ✅ · Phase 3 (hardening) 10/13 🟡
+- **Gap residui (blockers per public release):** SSRF dispatcher generico, `resolve-system-bin` strict, CSP hash-based prod L1
+- **Tooling pre-commit:** gitleaks, detect-secrets, actionlint, zizmor, npm-audit-prod · Dependabot Docker weekly · Docker base image pin SHA256
+- **Cadence target:** every major release
 
 ## 🔧 Infrastructure repos
 
