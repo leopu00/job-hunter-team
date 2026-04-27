@@ -10,6 +10,8 @@ Per ogni fix proposto in [`01-pre-launch-review.md`](01-pre-launch-review.md), q
 
 > Convenzione: i finding sono ordinati per severity. Le label `[C1]`, `[H4]`, ecc. rimandano a `01-pre-launch-review.md`.
 
+> 📌 **Stato attuale:** documento di decisione **pre-implementation**. La quasi totalità dei verdict 🟢/🟡 è stata implementata nello sprint del 2026-04-27 (sha merge `7a2cb6ae`). Effort stimato Phase 1 era `3-5 giorni`, esecuzione reale ~95 min con 4 agenti in parallelo. Per lo stato fix-per-fix vedi [`05-checklist.md`](05-checklist.md). Decisioni esplicitamente rinviate (`H7` multi-user IDOR, `M5b` Dockerfile.strict) restano valide.
+
 ---
 
 ## 🔴 CRITICAL

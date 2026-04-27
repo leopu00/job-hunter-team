@@ -119,7 +119,7 @@ JHT è progettato e testato per:
 
 Per riportare una vulnerabilità:
 1. **NON** aprire una issue pubblica.
-2. Email a `security@jobhunterteam.ai` (TODO: setup) con:
+2. Email a `leopu00@gmail.com` (provvisorio fino al setup di `security@jobhunterteam.ai`) con:
    - Titolo descrittivo
    - Severity stimata (Critical/High/Medium/Low)
    - Path + funzione + righe del codice vulnerabile
@@ -139,8 +139,9 @@ Report che mancano di PoC riproducibile o che non dimostrano boundary bypass pos
 - Modulo legacy `cli/src/commands/secrets.js`: AES-256-CBC. Migrazione a GCM tracciata in `[H5]` di [`05-checklist.md`](05-checklist.md).
 - Salt random per installazione, persistito in `~/.jht/credentials/.salt` con permessi 0600.
 - Master key derivata da:
-  - **GUI desktop**: OS keyring (TODO post-launch — vedi `[H4]` in [`01-pre-launch-review.md`](01-pre-launch-review.md))
+  - **GUI desktop**: OS keyring via `jht keyring set/get/delete` CLI (macOS Keychain / Windows Credential Manager / Linux libsecret) — implementato nello sprint H4
   - **Headless / container**: env var `JHT_CREDENTIALS_KEY` obbligatoria
+  - **Storage OAuth (`tui/src/oauth/storage.ts`)**: PBKDF2 + salt random per file (post-fix H4 iter 2)
 
 ### Data residency
 - Default: **tutto locale** (SQLite in `~/.jht/`).

@@ -20,6 +20,8 @@
  Total fix:        0/34                  31/34 (91%)
 ```
 
+> Nota: il `34` è il totale dei finding **dell'audit interno**. Esistono inoltre 2 gap aggiuntivi (SSRF dispatcher, resolve-system-bin strict) emersi solo dal confronto con OpenClaw — tracciati separatamente come "Gap aggiuntivi non-audit" in [`05-checklist.md`](05-checklist.md). Includendoli, il totale "verso public release" diventa 31/36.
+
 **Nuovi file creati nel repo durante questa sessione:**
 
 | File | Funzione | Pattern OpenClaw di riferimento |
@@ -218,7 +220,7 @@ JHT ha **`docs/security/04-threat-model.md`** con:
 - Single-user assumption esplicita
 - In-scope / out-of-scope enumerati
 - Container ≠ security boundary documentato
-- Reporting policy (TODO `security@jobhunterteam.ai`)
+- Reporting policy (provvisoria a `leopu00@gmail.com` fino al setup di `security@jobhunterteam.ai`)
 - Crypto / data handling section
 - Update / patch policy
 
