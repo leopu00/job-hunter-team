@@ -10,6 +10,7 @@ Questa cartella raccoglie l'analisi di sicurezza del repo e il piano di hardenin
 | [`02-openclaw-comparison.md`](02-openclaw-comparison.md) | Confronto sistematico con OpenClaw: come un progetto agentic maturo affronta gli stessi problemi, file-per-file |
 | [`03-implementation-tradeoffs.md`](03-implementation-tradeoffs.md) | Trade-off di ogni fix proposto: costo dev, UX impact, perf, funzionalità persa, raccomandazione |
 | [`04-threat-model.md`](04-threat-model.md) | Threat model esplicito JHT: cosa è in scope, cosa no, deployment assumptions, decisioni di trust |
+| [`05-checklist.md`](05-checklist.md) | Checklist actionable dei fix da implementare. Si spunta `[x]` quando il commit è mergiato in `master` |
 
 ## Come si legge
 
