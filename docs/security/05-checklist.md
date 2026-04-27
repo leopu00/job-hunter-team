@@ -16,29 +16,29 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
 
 ### Critical
 
-- [ ] **C4** — Add missing `homedir` import
+- [x] **C4** — Add missing `homedir` import
   - File: `shared/credentials/storage.ts:1` (aggiungere `import { homedir } from "node:os"`)
   - Effort: 1 min
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
-- [ ] **C3** — Refactor `bridge_health.py:spawn_bridge` (no `sh -c`)
+- [x] **C3** — Refactor `bridge_health.py:spawn_bridge` (no `sh -c`)
   - File: `shared/skills/bridge_health.py:105-114`
   - Sostituire f-string + `sh -c` con `subprocess.Popen([…], env={…})` + validazione regex su `JHT_TARGET_SESSION`
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
-- [ ] **C5** — Remove plaintext fallback in CLI secrets
+- [x] **C5** — Remove plaintext fallback in CLI secrets
   - File: `cli/src/commands/secrets.js:80-92`
   - Errore esplicito + istruzioni se `JHT_SECRET_KEY` manca; aggiungere `mode: 0o600` su writeFile
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 0494a5c6
   - Depends on: H4 (così l'utente ha un percorso netto: keyring o env)
 
-- [ ] **C1** — Fix localhost auth bypass via `x-forwarded-host`
-  - File: `web/lib/auth.ts:15-19`
+- [x] **C1** — Fix localhost auth bypass via `x-forwarded-host`
+  - File: `web/lib/auth.ts:15-19` + cloni in `web/proxy.ts`, `web/app/(protected)/layout.tsx`, `web/app/(protected)/dashboard/page.tsx`
   - Sostituire con pattern OpenClaw: TCP socket peer + reject se `x-forwarded-*` presente
   - Effort: 1h (incluso aggiungere accesso a `req.socket.remoteAddress` in Next route handler)
-  - Merged: _—_
+  - Merged: 721b0b8e
 
 - [ ] **C2** — Add `requireAuth()` to ~25 sensitive routes
   - Files: `web/app/api/{secrets,database,agents/[id],providers,config,env,backup,health,tasks/[id],history/[id],credentials,sessions,logs,workspace/init}/route.ts`
@@ -54,10 +54,10 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 4h
   - Merged: c62d7147
 
-- [ ] **H9** — `npm audit fix` su `desktop/`
+- [x] **H9** — `npm audit fix` su `desktop/`
   - Upgrade `electron`, `@xmldom/xmldom`. Test auto-updater + IPC
   - Effort: 4h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [ ] **H1** — Auth + rimuovere `?id=` reveal su `/api/secrets`
   - File: `web/app/api/secrets/route.ts:50-63`

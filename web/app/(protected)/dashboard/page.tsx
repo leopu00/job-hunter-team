@@ -10,11 +10,8 @@ import type { PositionWithScore } from '@/lib/types'
 import { getServerLocale } from '@/lib/server-locale'
 import { getDashboardT } from '@/lib/dashboard-i18n'
 import { createClient } from '@/lib/supabase/server'
+import { isLocalRequestFromHeaders } from '@/lib/auth'
 import CloudDownloadLanding from '@/app/components/CloudDownloadLanding'
-
-function isLocalhostHost(host: string): boolean {
-  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(host.toLowerCase())
-}
 
 const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
@@ -55,8 +52,7 @@ export default async function DashboardPage() {
   // path sends unauthenticated local users into the cloud login,
   // which is nonsense for the desktop flow.
   const hdrs = await headers()
-  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? ''
-  const localRequest = isLocalhostHost(host)
+  const localRequest = isLocalRequestFromHeaders(hdrs)
   const useCloudAuth = isSupabaseConfigured && !localRequest
 
   // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
