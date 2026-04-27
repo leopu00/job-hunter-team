@@ -72,7 +72,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 ### 📚 Pre-launch documentation (2026-04-27)
 
 - ✅ README rewritten (story, providers, vision, monitoring, AI-agent integration)
-- ✅ 8 new docs: STORY, PROVIDERS, AI-AGENT-INTEGRATION, VISION, MONITORING-RESULTS, RESULTS, BETA, `agents/maestro/maestro.md` spec
+- ✅ 8 new docs: STORY, PROVIDERS, AI-AGENT-INTEGRATION, VISION, MONITORING, RESULTS, BETA, `agents/maestro/maestro.md` spec
 
 ### 🧪 Real-world tests (preliminary, undocumented)
 
@@ -133,7 +133,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
   2. Adapt projection model for higher variance
   3. Final target: 90%+ with <10% oscillation (= Claude equivalent)
   4. Stress test: 1 month of real job-hunting
-- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/PROVIDERS.md` and `docs/MONITORING-RESULTS.md`.
+- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/PROVIDERS.md` and `docs/MONITORING.md`.
 
 ##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption
 

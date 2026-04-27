@@ -174,7 +174,7 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ✅ Download page with OS auto-detection (.dmg/.exe/.AppImage/.deb)
 ✅ install.sh served via short URL
 ✅ 10 new pre-launch docs (STORY, PROVIDERS, AI-AGENT-INTEGRATION,
-   VISION, MONITORING-RESULTS, RESULTS, BETA, TEST-CAMPAIGN,
+   VISION, MONITORING, RESULTS, BETA, TEST-CAMPAIGN,
    MAINTAINERS, agents/maestro spec)
 ⬜ Subdomain setup (app, docs, api)
 ⬜ Launcher screenshots in docs (soft BLOCKER pre-launch)
