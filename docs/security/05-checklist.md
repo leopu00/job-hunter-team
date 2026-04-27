@@ -123,10 +123,10 @@ Hardening importante ma non bloccante.
   - Effort: 4h
   - Merged: _—_
 
-- [ ] **M5** — Documentare passwordless sudo come scelta esplicita
-  - Files: `docs/security/04-threat-model.md` (già fatto, da promuovere a `SECURITY.md` root al public release)
+- [x] **M5** — Documentare passwordless sudo come scelta esplicita
+  - Files: `docs/security/04-threat-model.md` (review + polish; promozione a `SECURITY.md` root rinviata al public release)
   - Effort: 30 min (review + polish)
-  - Merged: _—_
+  - Merged: 1c64276e
 
 - [ ] **M8** — Validate `id` in backup restore
   - File: `web/app/api/backup/route.ts:87-104`
