@@ -61,7 +61,9 @@ services:
       # copia baked dell'immagine e servirebbe un docker cp manuale ad ogni fix.
       - ./.launcher:/app/.launcher
     ports:
-      - "3000:3000"
+      # Bind solo a 127.0.0.1: previene LAN access. Per esporre in rete,
+      # mettere il container dietro un reverse proxy (nginx/traefik).
+      - "127.0.0.1:3000:3000"
     stdin_open: true
     tty: true
     restart: unless-stopped
