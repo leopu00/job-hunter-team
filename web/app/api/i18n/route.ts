@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ locale, message: `Lingua cambiata a ${locale}` });
   } catch (err) {
     console.log('[API i18n] ERRORE:', err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'i18n' });
   }
 }
