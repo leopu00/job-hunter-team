@@ -1,267 +1,435 @@
 # Changelog
 
-Tutte le modifiche notevoli a questo progetto sono documentate in questo file.
-Formato basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/).
+All notable changes to this project are documented in this file.
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+---
+
+## [Unreleased]
+
+> 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added.
+
+### 🖥️ Desktop launcher
+
+- **Setup wizard rewrite** — i18n (en/it/hu), language picker, new step flow, progress UI; "Install everything" button orchestrates the full one-click setup
+- **🍎 macOS one-click install** — Homebrew auto-installed via official `.pkg` (no Terminal needed for the user), Xcode Command Line Tools installed first, Colima detected and installed via `brew install colima docker`, fall back to QEMU backend (with auto-installed `qemu`) when Colima can't start on Apple VZ
+- **🪟 Windows one-click install** — WSL2 + Docker Desktop installed via single UAC prompt + reboot flow; Git installed via `winget`; checklist unifies all required deps; "Install everything" button moved out of the Docker card to an OS-level action
+- **🔌 Embedded terminal for login** — backed by `@lydell/node-pty` (real Windows prebuilts), xterm + addons, clipboard bridge for right-click copy/paste, ephemeral container spawned via `compose run`, modal stays open on non-zero exit, per-session container cleanup
+- **🚀 Smart boot** — home opens directly if setup is already done (no wizard re-run), runtime button reflects current OS, post-setup home with sidebar + dev-mode card
+- **🔧 Provider modules** — new backend modules: `provider-install`, `provider-store`, `provider-auth`, `container-prep`, `deps`, `disk-space`
+- **🐳 Docker installer module** — refined three-state status (`ok` / `needs-reboot` / `missing`), desktop path, bundled Docker logo, macOS download URL points to Colima guide; status check uses `colima status` on macOS
+- **🍎 macOS code signing** — re-sign ad-hoc bundle with `--deep` to prevent Team ID mismatch at launch; re-sign moved from `afterPack` to `afterSign` so it survives notarization
+- **🛠️ Setup IPC + dev mode** — new `dev:probe` / `dev:stop` IPC handlers to manage dev-mode from UI, "open terminal" buttons for Captain/Sentinel/agent sessions trigger native Terminal with `tmux attach`
+- **🐳 Container hygiene** — runtime container always named `jht`, stale containers cleaned on start; auto-launch Docker Desktop on Windows if daemon is off; drop unused `GEMINI`/`GOOGLE` env vars
+- **🐛 Fixes** — wrong-platform flash on darwin checklist (belt-and-suspenders hide), provider switch from home returns home (not wizard), `@lydell/node-pty-win32-arm64` declared as dependency, `dev-up.sh` stdout/stderr redirected to `.dev-logs/dev-up.log`, don't auto-open browser on `dev:launch`
+
+### 📊 Monitoring & Bridge — non-linear architectural iteration
+
+The 10-day arc was not a clean V1→V5 progression — it was a real-world exploration:
+
+1. **Bridge V1 (clock-only)** — `sentinel-bridge.py` daemon, no LLM, just polls usage on a fixed clock and computes projections
+2. **Sentinel temporarily eliminated** — Bridge talks to Captain directly; Sentinel LLM removed because it was burning too many tokens
+3. **Sentinel reintroduced as LLM watchdog** — turns out a thin LLM layer is needed for nuanced decisions Bridge can't make deterministically
+4. **Bridge V3** — active fetcher, Sentinel as fallback only
+5. **Bridge V4** — Sentinel repositioned as filter between Bridge and Captain
+6. **Bridge V5 (current)** — "Pasqua-style" activates above V4 stack
+- **🚦 Bridge rule-set** — single rule 85–95% with L1/L2/L3 escalation, lazy WORKER fallback, throttle on absolute usage with target 95% and EMA reset on gap, singleton lock + kill-before-spawn in `start-agent.sh`, EMA 10-tick + burst filter on cumulative delta of last hour, invalidate last sample on provider change, notify only on throttle/host change (not on every status), tau-aware projection, watchdog degraded mode, default poll 5min
+- **🌉 Bridge as separate role in launcher** — ordered startup (Captain → Sentinel → Bridge), first usage sample now comes from Bridge (removed pre-Bridge `sleep 20`)
+- **🌉 Bridge API + UI** — `/api/bridge/{start,stop,status}` endpoints, popover in web team page with interval slider, live LED tied to real bridge state, start/stop from UI, countdown + animation synced with the real bridge clock
+- **💂 Sentinel prompt refactor** — from 491 lines (inline) to 130 lines (orchestrator) + 6 on-demand skills:
+  - `check_usage_http` / `check_usage_tui` (multi-source usage checks)
+  - `decision_throttle` (rate-limit decision logic)
+  - `emergency_handling` (rate-limit recovery)
+  - `memory_state` (Sentinel state across ticks)
+  - `order_formats` (orders to Captain)
+  - `bridge_health` (Bridge maintenance from Sentinel)
+- **🛡️ Other Sentinel skills** — `freeze_team`, `soft_pause_team` (graceful team pause), TUI worker fallback
+- **⏰ Captain** — 1-spawn/tick mode, kick-off at boot, tick interval as float with 0.25 step, autonomous mode (no escalation needed for normal operation), new `rate-budget` skill for proactive budget checks, live `rate_budget` command for on-demand API fetch
+- **📊 Monitoring G-spot** — target window raised from 85–95% to 90–95% (more aggressive utilization)
+- **🐛 Fixes** — TUI parser was reading wrong modal (now reads the latest), handles `RATE_LIMIT` as a string; 3 concomitant bugs that caused rate-limit overshoot; `check_usage` dispatcher now multi-provider (no more hardcoded `claude`)
+
+### 🌐 Web platform
+
+- **💬 Live team page** — org-chart with multiple iterations: Sentinel removed then re-added with green LED on active agents, Bridge node added with inter-agent message animations, sender color dot, popover on click, stable LED, more breathing room (width 620 → 820 → 1080, larger gap), smaller LED dots (9px → 5px)
+- **📊 UsageChart** — interactive (hover tooltip + range selector), time-based x-axis with 85–95% target band + 10/30min zoom, multi-source coloring with legend showing which agent did each check, `GAP_MS` 3min → 12min (no more visible line breaks), pan via drag, taller (220 → 360px), section margins + centered charts, mini-chart variant under org-chart
+- **💬 Live event channel** — team message stream for inter-agent communication visible in UI
+- **🖥️ Embedded terminal access** — "open terminal" buttons in Captain/Sentinella/AgentInteraction panels open native Terminal with `tmux attach`; `JHT_SHELL_VIA=docker:<container>` mode for `docker exec` from web; gate behind dev-mode toggle; SettingsMenu with dev-mode toggle + direct Team link (no dropdown)
+- **👤 Profile UI** — `ProfilePageClient` removed (folded into the page), FAB redesigned as flex sibling, deep-links from missing-fields to edit sections, completion-only stats; Floating Assistant Button with chat panel wired to `/api/assistente/*`
+- **🧭 Navbar** — nav links flow-centered with `mx-auto` (no more overlap), workspace-folder widget removed from header
+- **🔌 Provider management** — `/providers` page can check CLI versions and trigger updates from the UI
+- **🌍 Public site restructured for subscription model** — `LandingFooter` added to home, `/download` polished (back link, minimal CLI box, footer), privacy/terms/project rewritten for subscription pricing, deprecated public pages deleted, footer cleaned, admin pages moved under `(protected)` route group
+- **🌍 i18n** — defaults switched to English, Hungarian (`hu.json`) diacritics fixed, subscription copy translated en/it/hu
+- **🚦 Web/team bulk** — bulk action buttons relabeled (shorter: Start / Active / Stop), Stop-all preserves the Assistant agent
+- **🐛 Fixes** — `next.config.ts` `turbopack.root` always set to cwd (avoids postcss leak), `web/AgentInteraction` stick-to-bottom is conditional with 1.5s refresh, Sentinella reachable via `/api/agents` and `/api/health`, role-id → session map updated to include Sentinella
+
+### 🔧 CLI
+
+- **`jht team` / `jht container` / `jht sentinella`** — full container coordination (proxy via `docker exec`, `docker compose` wrapper, JSONL reader + ASCII sparkline)
+- **`jht providers`** — `list/current/use/update/check` with version detection and CLI alias normalization
+- **`jht positions`** — `list/show/dashboard` reading from container's `db_query.py`
+- **`cli/container`** — auto-launch Docker Desktop on Windows when daemon is off
+
+### 🤖 Agents & runtime
+
+- **🌙 Kimi (Moonshot) provider support** — multi-provider start-agent reads `active_provider` from config, Kimi tmux requires Ctrl-S after Enter for immediate submit, TUI parser handles Kimi RATE_LIMIT strings, dismiss `codex` auto-update prompt before launch
+- **🐚 jht-tmux-send** — `verify-then-Enter` pattern + retry to avoid lost characters
+- **🚀 Launcher** — readiness check via idle-diff, verify-then-Enter for kick-off
+- **📁 Skills runtime data** — moved out of repo into `$JHT_HOME/data` (no more polluting the working directory)
+- **🐳 Container** — unbundled CLIs (lighter image), Google → Moonshot provider swap
+
+### 📚 Documentation
+
+- **📘 README rewritten** end-to-end for pre-launch — story, providers, vision, monitoring stack, AI-agent integration. Manifesto: *"AI on the side of workers, not against them."* Track record callout (~200 offers · ~20 applications · 5 interview invites in 2 weeks). Local-first positioning. Demo placeholder. AI-agent CLI USP section.
+- **📋 BACKLOG rewritten** in English with status refresh — 12 tasks flipped ⬜→✅ (CLOUDSYNC ping/push, ONBOARDING split-screen, FRONTEND 1-5, multi-provider, CLI ↔ container 5/5, JHT-QA-01 with 75+ Playwright specs); 5 known bugs removed (all fixed); restructured by area; added PHASE 6 (Pre-Launch) with 4 BLOCKERs (SECURITY, COC, demo video, security review) + new tasks (test campaign, VPS validate, monitoring weekly window, user work hours, Kimi optimize, Sentinel optimize).
+- **🆕 10 new documents:**
+  - `docs/STORY.md` — origin story (legacy team results, why open source)
+  - `docs/PROVIDERS.md` — supported subscriptions matrix (🟠 Claude / 🔵 Codex / 🌙 Kimi)
+  - `docs/AI-AGENT-INTEGRATION.md` — how Claude Code / 🦞 OpenClaw / Codex / Cursor can drive JHT
+  - `docs/VISION.md` — gamification philosophy, agents as characters, anti-goals
+  - `docs/MONITORING-RESULTS.md` — Bridge/Sentinel test data
+  - `docs/RESULTS.md` — case studies + community template
+  - `docs/BETA.md` — beta tester program
+  - `docs/TEST-CAMPAIGN.md` — coverage matrix (provider × tier × persona × job-category) + status board
+  - `docs/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
+  - `agents/maestro/maestro.md` — planned career-coach agent spec
+- **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
+- **📚 ROADMAP, INFRA, BETA, MONITORING-RESULTS** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
+- **🦞 OpenClaw integration** — emoji standardized across README + AI-AGENT-INTEGRATION.md
+
+### 🧪 Testing
+
+- E2E provider smoke test added
+- 75+ Playwright specs already covered web platform end-to-end (auth, dashboard, profile, applications, security headers, accessibility, performance) — now formally tracked in BACKLOG
+
+### 📦 Internal
+
+- `0.1.13-dev` version bump
+- `chore(container)`: unbundle CLIs, switch Google → Moonshot, add ADR-0004
 
 ---
 
 ## [0.1.12] — 2026-04-17
 
-### Fix
+### 🐛 Fixed
 
-- **Bundle**: il DMG/EXE della v0.1.11 crashava al primo avvio con `Cannot find module './docker-installer'` perché il campo `build.files` in `desktop/package.json` è una whitelist esplicita e i nuovi moduli (`disk-space.js`, `docker-installer/**`) non erano stati inclusi. Aggiunti alla lista; i `*.test.js` dei nuovi moduli sono esplicitamente esclusi dal bundle di release.
+- **Bundle**: the v0.1.11 DMG/EXE crashed on first launch with `Cannot find module './docker-installer'` because the `build.files` field in `desktop/package.json` is an explicit whitelist and the new modules (`disk-space.js`, `docker-installer/**`) were not included. Added them to the list; the new modules' `*.test.js` are explicitly excluded from the release bundle.
 
-Nessun'altra modifica funzionale rispetto a v0.1.11: è un bugfix dell'installazione.
+No other functional change vs v0.1.11: this is a pure install-time bugfix.
 
 ---
 
 ## [0.1.11] — 2026-04-17
 
-Release focalizzata sulla riscrittura dell'esperienza del launcher desktop in base al 2° round di test E2E su Windows ARM64 (vedi `e2e-runs/2026-04-17-windows-arm64-round2/`).
+Release focused on rewriting the desktop launcher experience based on the 2nd round of E2E tests on Windows ARM64 (see `e2e-runs/2026-04-17-windows-arm64-round2/`).
 
-### Desktop launcher — riscrittura wizard
+### 🖥️ Desktop launcher — wizard rewrite
 
-- **UI step-based** al posto della pagina unica scrollabile: quattro step discreti — Welcome → Setup → Ready → Running — ognuno con un solo pulsante primario. Il log tecnico non è più visibile di default, sta dietro una disclosure "Dettagli tecnici" nello step Running
-- **Topbar "Alpha · in fase di test"** persistente in tutti gli step, così l'utente sa sempre lo stato del prodotto
-- **Checklist dipendenze essenziale**: la schermata Setup mostra solo Docker (unica dipendenza obbligatoria in container mode). Node/Git/Python sono rimossi dalla superficie principale
-- **Start bloccato** finché Docker non è pronto: il pulsante "Avvia Job Hunter Team" compare solo dallo step Ready, e Ready è raggiungibile solo dopo che la checklist è verde
+- **Step-based UI** instead of a single scrollable page: four discrete steps — Welcome → Setup → Ready → Running — each with a single primary button. The technical log is no longer visible by default; it sits behind a "Technical details" disclosure in the Running step.
+- **"Alpha · in testing" topbar** persistent across all steps, so the user always knows the product status.
+- **Essential dependency checklist**: the Setup screen shows only Docker (the single mandatory dependency in container mode). Node/Git/Python are removed from the main surface.
+- **Start blocked** until Docker is ready: the "Start Job Hunter Team" button only appears in the Ready step, and Ready is only reachable after the checklist is green.
 
-### Setup wizard — gestione dipendenze
+### 🔧 Setup wizard — dependency management
 
-- **Stato Docker a tre valori**: `ok` (pronto), `needs-reboot` (binary presente ma `docker ps` non risponde — tipicamente utente ha installato Docker Desktop ma non ha riavviato), `missing` (non installato)
-- **Flusso install manuale guidato**: quando Docker manca, un pulsante "Scarica installer" apre la pagina ufficiale `docker.com/products/docker-desktop/` nel browser di default. L'utente installa, (se necessario) riavvia, torna al launcher e preme "Ho installato, ricontrolla" / "Ho riavviato, ricontrolla"
-- **Pre-install preview**: prima di installare, la card Docker mostra peso stimato dell'installazione e spazio libero sul disco dell'utente (via `powershell Get-PSDrive` su Windows, `fs.statfs`/`df` su Unix — zero dipendenze npm aggiuntive)
-- Nuovo modulo `desktop/docker-installer/` con `manifest` (strategia per OS), `check` (status a tre valori), `download-url` (URL ufficiale per OS). Policy rispettata: su macOS la strategia è Colima via Homebrew (NON Docker Desktop); su Linux è `get.docker.com`; solo su Windows è Docker Desktop
+- **Docker status with three values**: `ok` (ready), `needs-reboot` (binary present but `docker ps` doesn't respond — typically the user installed Docker Desktop without rebooting), `missing` (not installed).
+- **Guided manual install flow**: when Docker is missing, a "Download installer" button opens the official `docker.com/products/docker-desktop/` page in the default browser. The user installs it, reboots if needed, returns to the launcher and clicks "I installed, recheck" / "I rebooted, recheck".
+- **Pre-install preview**: before installing, the Docker card shows the estimated install size and free disk space (via `powershell Get-PSDrive` on Windows, `fs.statfs`/`df` on Unix — zero extra npm dependencies).
+- New `desktop/docker-installer/` module with `manifest` (per-OS strategy), `check` (three-value status), `download-url` (official URL per OS). Policy respected: macOS strategy is Colima via Homebrew (NOT Docker Desktop); Linux is `get.docker.com`; only Windows uses Docker Desktop.
 
-### IPC
+### 🔌 IPC
 
-- Nuovo canale `setup:get-docker-status` → `{platform, arch, strategy, check, disk}`
-- Nuovo canale `setup:open-docker-download-page` → apre URL ufficiale Docker in browser
-- Esposti al renderer come `window.setupApi`
+- New channel `setup:get-docker-status` → `{platform, arch, strategy, check, disk}`.
+- New channel `setup:open-docker-download-page` → opens the official Docker URL in the browser.
+- Exposed to the renderer as `window.setupApi`.
 
-### Note
+### 📝 Notes
 
-- **F4** (installer Windows si chiude al 1° tentativo, round 1): non affrontato in questa release, ancora aperto
-- Il precedente `launcher:open-external` con whitelist HTTP resta per uso generico; il nuovo `setup:open-docker-download-page` è un endpoint dedicato che non espone URL arbitrari
+- **F4** (Windows installer closes on first attempt, round 1): not addressed in this release, still open.
+- The previous `launcher:open-external` with HTTP whitelist remains for general use; the new `setup:open-docker-download-page` is a dedicated endpoint that does not expose arbitrary URLs.
 
 ---
 
 ## [0.1.10] — 2026-04-16
 
-Release focalizzata sui friction point emersi dai test E2E manuali su Windows ARM64 e macOS (vedi `e2e-runs/2026-04-16-windows-arm64-parallels/` e `e2e-runs/2026-04-16-macos-dev-machine/`).
+Release focused on friction points that emerged from manual E2E tests on Windows ARM64 and macOS (see `e2e-runs/2026-04-16-windows-arm64-parallels/` and `e2e-runs/2026-04-16-macos-dev-machine/`).
 
-### Desktop launcher
-- Nuova **checklist dipendenze** in-app che rileva Docker, Node (≥20), Git e Python con hint di installazione per OS; Start è bloccato finché le dipendenze obbligatorie non sono OK — fix al gap UX trovato durante i test (app non segnalava nulla se mancava Docker)
-- **Thin launcher**: rimosso `extraResources: app-payload` da electron-builder; il payload (webapp) viene scaricato in `userData/app-payload` al primo Start via git sparse-checkout e aggiornabile da UI. Dimensioni `JHT Desktop.app` da ~300 MB a footprint più leggero; niente re-download dell'installer per ogni update della webapp
-- Nuovo pulsante "Come installare" per ogni dipendenza mancante, apre la doc ufficiale in browser
-- `launcher:open-external` IPC handler con whitelist http/https
+### 🖥️ Desktop launcher
 
-### macOS code signing & notarization
-- Config electron-builder con `hardenedRuntime: true`, `notarize: true`, `desktop/build/entitlements.mac.plist` (set minimale: JIT, unsigned-executable-memory, network.client)
-- Workflow release importa cert da `MACOS_CERTIFICATE` + `MACOS_CERTIFICATE_PWD`, passa `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` a `@electron/notarize`
-- Verifica post-build con `codesign -dv --verbose=4` e `spctl --assess` — fallisce il job mac se Gatekeeper non accetta il DMG
-- Fallback a build **unsigned** quando i secrets mancano (warning, build non fallisce → altri OS pubblicano comunque)
-- Playbook maintainer in `docs/release.md` con tutti gli step: CSR → `.p12` → base64, App-Specific Password, Team ID, rotazione certificato
+- New **in-app dependency checklist** that detects Docker, Node (≥20), Git and Python with per-OS install hints; Start is blocked until mandatory dependencies are OK — fixes the UX gap found during testing (the app didn't signal anything if Docker was missing).
+- **Thin launcher**: removed `extraResources: app-payload` from electron-builder; the payload (web app) is downloaded into `userData/app-payload` on first Start via git sparse-checkout and is updatable from the UI. `JHT Desktop.app` size cut from ~300 MB to a much lighter footprint; no more re-download of the installer for every web app update.
+- New "How to install" button per missing dependency, opens the official docs in browser.
+- `launcher:open-external` IPC handler with http/https allowlist.
 
-### Release pipeline
-- Nuovo `scripts/check-release-version.sh` come **primo job CI**: verifica che tag git (`vX.Y.Z`), `package.json` root e `desktop/package.json` siano sulla stessa versione. Blocca la release con exit non-zero se c'è mismatch — fix al bug visto in v0.1.8 (tag `v0.1.8` con asset nominati `0.1.7` perché `desktop/package.json` non era stato bumpato)
-- Pre-release checklist per il maintainer in `docs/release.md`
+### 🍎 macOS code signing & notarization
 
-### Windows
-- **Build ARM64 nativa**: `desktop/package.json` ora produce sia `job-hunter-team-<ver>-windows-x64.exe` sia `job-hunter-team-<ver>-windows-arm64.exe`. Prima c'era solo x64 → su Windows ARM (Surface, Snapdragon, VM Apple Silicon) girava in emulazione
+- electron-builder config with `hardenedRuntime: true`, `notarize: true`, `desktop/build/entitlements.mac.plist` (minimal set: JIT, unsigned-executable-memory, network.client).
+- Release workflow imports cert from `MACOS_CERTIFICATE` + `MACOS_CERTIFICATE_PWD`, passes `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` to `@electron/notarize`.
+- Post-build verification with `codesign -dv --verbose=4` and `spctl --assess` — the mac job fails if Gatekeeper rejects the DMG.
+- Fallback to **unsigned** build when secrets are missing (warning, build doesn't fail → other OSes still publish).
+- Maintainer playbook in `docs/release.md` with all steps: CSR → `.p12` → base64, App-Specific Password, Team ID, certificate rotation.
 
-### Download page
-- `/download` rileva OS e architettura dell'utente **server-side via User-Agent** (`Windows NT ... ARM64` / `aarch64`, `Mac OS X` → default arm64, `Linux`)
-- Mostra una sola CTA primaria con link diretto all'asset corretto della **ultima release** (fetched via `api.github.com/repos/.../releases/latest` con `revalidate: 300`)
-- "Altre opzioni" collassabile per gli altri OS/arch
-- **Niente più redirect a GitHub Releases** — l'utente resta su `jobhunterteam.ai`
-- API `/api/download` riorganizzata attorno al concetto di "variant" (id + arch), backward-compatible con il campo `platforms`
+### 🚢 Release pipeline
 
-### CLI install
-- `scripts/install.sh --dry-run` stampa ogni comando che verrebbe eseguito senza toccare il sistema (utile per debug e pairing)
-- `setup.ps1` allineato a `install.sh` sui dependency checks (parità minima, non è un rewrite completo)
-- Nuovo `docs/cli-install.md` con descrizione AS-IS dello script e sezione "tested environments"
+- New `scripts/check-release-version.sh` as **first CI job**: verifies that git tag (`vX.Y.Z`), root `package.json` and `desktop/package.json` are at the same version. Blocks release with non-zero exit on mismatch — fixes the bug seen in v0.1.8 (tag `v0.1.8` with assets named `0.1.7` because `desktop/package.json` was not bumped).
+- Pre-release checklist for the maintainer in `docs/release.md`.
 
-### Known issues (non risolti in questa release)
-- **F4**: installer Windows si chiude silenziosamente dopo la 2ª schermata al **primo** doppio click (al secondo tentativo parte regolare). Root cause non identificata — va riprodotta su VM fresca guardando Event Viewer e `%TEMP%\nsis*.log`. Documentato in `e2e-runs/2026-04-16-windows-arm64-parallels/README.md`
+### 🪟 Windows
+
+- **Native ARM64 build**: `desktop/package.json` now produces both `job-hunter-team-<ver>-windows-x64.exe` and `job-hunter-team-<ver>-windows-arm64.exe`. Previously only x64 → on Windows ARM (Surface, Snapdragon, Apple Silicon VMs) it ran in emulation.
+
+### ⬇️ Download page
+
+- `/download` detects user OS and architecture **server-side via User-Agent** (`Windows NT ... ARM64` / `aarch64`, `Mac OS X` → default arm64, `Linux`).
+- Shows a single primary CTA with a direct link to the correct asset of the **latest release** (fetched via `api.github.com/repos/.../releases/latest` with `revalidate: 300`).
+- Collapsible "Other options" for the rest of OS/arch combinations.
+- **No more redirects to GitHub Releases** — the user stays on `jobhunterteam.ai`.
+- `/api/download` API reorganized around the "variant" concept (id + arch), backward-compatible with the `platforms` field.
+
+### 📦 CLI install
+
+- `scripts/install.sh --dry-run` prints every command that would be executed without touching the system (useful for debug and pairing).
+- `setup.ps1` aligned with `install.sh` on dependency checks (minimal parity, not a full rewrite).
+- New `docs/cli-install.md` with AS-IS description of the script and a "tested environments" section.
+
+### ⚠️ Known issues (not resolved in this release)
+
+- **F4**: Windows installer closes silently after the 2nd screen on the **first** double-click (works on the second attempt). Root cause not identified — needs to be reproduced on a fresh VM watching Event Viewer and `%TEMP%\nsis*.log`. Documented in `e2e-runs/2026-04-16-windows-arm64-parallels/README.md`.
 
 ---
 
 ## [0.1.9] — 2026-04-11
 
-### Auth
-- Aggiunto login **GitHub OAuth** come secondo provider accanto a Google, target developer e contributor open source
-- Whitelist `avatars.githubusercontent.com` in `next/image` e nel CSP `img-src` per evitare il crash della dashboard al primo login GitHub
+### 🔐 Auth
 
-### Cloud Sync (opt-in)
-- Nuova tabella `cloud_sync_tokens` (migration 006) con RLS per-user, hash SHA-256 del token e soft-delete via `revoked_at`
-- API CRUD `/api/cloud-sync/tokens` (GET lista, POST crea, DELETE revoca) — il token in chiaro viene restituito una sola volta al momento della creazione
-- Pagina `/settings/cloud-sync` per generare, copiare e revocare i token; ogni token ha un nome leggibile per identificare il dispositivo (es. "MacBook Leone", "Linux cron")
-- Endpoint `/api/cloud-sync/ping` per verifica Bearer token (usa service-role admin client per bypassare RLS), aggiorna `last_used_at` a ogni verifica
-- CLI commands `jht cloud enable/status/disable` — `enable` valida il token contro `/api/cloud-sync/ping` e lo persiste in `~/.jht/cloud.json` (chmod 0600); `--url` supporta self-hosted e sviluppo locale
-- Nuovo helper `web/lib/supabase/admin.ts` per client service-role usato solo lato server
-- Migration 007: constraint `UNIQUE (user_id, legacy_id)` su `positions` per permettere upsert atomico delle righe sincronizzate da SQLite locale
-- Endpoint `POST /api/cloud-sync/push` che accetta batch di `positions/scores/applications`: upsert idempotente di positions via `legacy_id`, build del mapping legacy_id → UUID, upsert di scores e applications con i nuovi UUID come FK. Normalizzazione di `status` e `critic_verdict` contro le enum Supabase
-- CLI command `jht cloud push` che legge SQLite tramite `node:sqlite` built-in (richiede Node 22.5+, zero native deps), supporta `--db <path>` e `--dry-run`, gestisce gracefully database/tabelle mancanti
-- Nuovo helper `web/lib/cloud-sync/auth.ts` con `verifyBearerToken` condiviso tra ping e push
-- Nota operativa: la env var `SUPABASE_SERVICE_ROLE_KEY` deve essere configurata su Vercel (Production + Preview) perché gli endpoint cloud-sync funzionino in prod
+- Added **GitHub OAuth** login as a second provider alongside Google, targeting developers and OSS contributors.
+- Whitelisted `avatars.githubusercontent.com` in `next/image` and the CSP `img-src` to avoid the dashboard crash on first GitHub login.
 
-### Docker Runtime (default-on)
-- Nuovo `Dockerfile` root + `docker-compose.yml` per il runtime container JHT, pubblicato come `ghcr.io/leopu00/jht:latest` (multi-arch amd64+arm64)
-- Nuovo workflow GitHub Actions per build e push automatici su GHCR
-- Runtime node bumpato a **Node 22 LTS** per compatibilità con `node:sqlite` built-in usato dal cloud-sync
-- Bootstrap automatico di `shared/` modules e build TUI dentro il container, `dashboard` wired come PID 1
-- `isContainer()` gate (env `IS_CONTAINER=1` o `/.dockerenv`) in tutti i call site di `open/xdg-open/explorer`: invece di lanciare il browser dal container, la CLI stampa path/URL
-- Contratto bind mount: `~/.jht → /jht_home`, `~/Documents/Job Hunter Team → /jht_user`
+### ☁️ Cloud Sync (opt-in)
 
-### Installer
-- `install.sh` riscritto **Docker-by-default**: installa il runtime (Colima su macOS, docker.io su Linux/WSL2), pulla l'immagine GHCR, crea wrapper `jht` in `~/.local/bin` che fa `docker run` con il contratto standard
-- Opt-out con `curl ... | bash -s -- --no-docker` per modalità nativa (expert mode)
-- `install.sh` ora servito come **asset statico Vercel**: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
-- Wrapper compatibile con bash 3.2 (macOS system bash)
-- Fix `--help` line range e leak di `set -e`
-- Hint `cancel-wizard` aggiornato a `jht setup`
+- New `cloud_sync_tokens` table (migration 006) with per-user RLS, SHA-256 token hash, soft-delete via `revoked_at`.
+- API CRUD `/api/cloud-sync/tokens` (GET list, POST create, DELETE revoke) — the plaintext token is returned only once at creation time.
+- `/settings/cloud-sync` page to generate, copy, and revoke tokens; each token has a human-readable name to identify the device (e.g. "MacBook Leone", "Linux cron").
+- `/api/cloud-sync/ping` endpoint for Bearer token verification (uses service-role admin client to bypass RLS), updates `last_used_at` on every check.
+- CLI commands `jht cloud enable/status/disable` — `enable` validates the token against `/api/cloud-sync/ping` and persists it in `~/.jht/cloud.json` (chmod 0600); `--url` supports self-hosted and local development.
+- New helper `web/lib/supabase/admin.ts` for service-role client used only server-side.
+- Migration 007: `UNIQUE (user_id, legacy_id)` constraint on `positions` to allow atomic upsert of rows synced from local SQLite.
+- `POST /api/cloud-sync/push` endpoint accepting batches of `positions/scores/applications`: idempotent positions upsert via `legacy_id`, build of the legacy_id → UUID mapping, upsert of scores and applications with the new UUIDs as FKs. `status` and `critic_verdict` normalization against Supabase enums.
+- CLI command `jht cloud push` reads SQLite via the built-in `node:sqlite` (requires Node 22.5+, zero native deps), supports `--db <path>` and `--dry-run`, gracefully handles missing database/tables.
+- New helper `web/lib/cloud-sync/auth.ts` with `verifyBearerToken` shared between ping and push.
+- Operational note: the env var `SUPABASE_SERVICE_ROLE_KEY` must be configured on Vercel (Production + Preview) for the cloud-sync endpoints to work in prod.
 
-### Desktop Launcher
-- Electron launcher ora spawna `docker run ghcr.io/leopu00/jht:latest dashboard --no-browser` invece del native next dev
-- Bootstrap automatico di Colima su macOS al primo avvio
-- `JHT_NO_DOCKER=1` per fallback in modalità nativa (debug/sviluppo)
+### 🐳 Docker Runtime (default-on)
 
-### Fix
-- **Build Vercel**: `next.config.ts` ora imposta esplicitamente `outputFileTracingRoot` e `turbopack.root` alla root del monorepo, con `outputFileTracingExcludes` per skippare `cli/`, `desktop/`, `tui/`, `agents/`, `e2e/`, `scripts/`, ecc. Questo risolve il limite di 250 MB unzipped per Serverless Function che altrimenti includeva tutto il monorepo
-- **Assistente page**: rimosso blocco JSX orfano `{workspace && (...)}` rimasto dopo il refactor che ha rimosso lo state `workspace` (build rotta con `Cannot find name 'workspace'`)
-- **Banner download**: rimosso il banner giallo "asset pending" dalla pagina `/download` (obsoleto dopo il rilascio dei pacchetti desktop)
-- **Fix post-merge path refactor**: consistency sui path centralizzati su `JHT_HOME`
+- New root `Dockerfile` + `docker-compose.yml` for the JHT container runtime, published as `ghcr.io/leopu00/jht:latest` (multi-arch amd64+arm64).
+- New GitHub Actions workflow for automatic build and push to GHCR.
+- Node runtime bumped to **Node 22 LTS** for compatibility with the built-in `node:sqlite` used by cloud-sync.
+- Automatic bootstrap of `shared/` modules and TUI build inside the container, `dashboard` wired as PID 1.
+- `isContainer()` gate (env `IS_CONTAINER=1` or `/.dockerenv`) at all `open/xdg-open/explorer` call sites: instead of launching the browser from the container, the CLI prints path/URL.
+- Bind mount contract: `~/.jht → /jht_home`, `~/Documents/Job Hunter Team → /jht_user`.
+
+### 📦 Installer
+
+- `install.sh` rewritten **Docker-by-default**: installs the runtime (Colima on macOS, docker.io on Linux/WSL2), pulls the GHCR image, creates a `jht` wrapper in `~/.local/bin` that does `docker run` with the standard contract.
+- Opt-out with `curl ... | bash -s -- --no-docker` for native mode (expert mode).
+- `install.sh` now served as a **Vercel static asset**: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`.
+- Wrapper compatible with bash 3.2 (macOS system bash).
+- Fix `--help` line range and `set -e` leak.
+- `cancel-wizard` hint updated to `jht setup`.
+
+### 🖥️ Desktop Launcher
+
+- Electron launcher now spawns `docker run ghcr.io/leopu00/jht:latest dashboard --no-browser` instead of native `next dev`.
+- Automatic Colima bootstrap on macOS at first launch.
+- `JHT_NO_DOCKER=1` for fallback in native mode (debug/development).
+
+### 🐛 Fixed
+
+- **Vercel build**: `next.config.ts` now explicitly sets `outputFileTracingRoot` and `turbopack.root` to the monorepo root, with `outputFileTracingExcludes` to skip `cli/`, `desktop/`, `tui/`, `agents/`, `e2e/`, `scripts/`, etc. This solves the 250 MB unzipped Serverless Function limit, which otherwise included the entire monorepo.
+- **Assistente page**: removed orphan JSX block `{workspace && (...)}` left over from the refactor that removed the `workspace` state (build broken with `Cannot find name 'workspace'`).
+- **Download banner**: removed the yellow "asset pending" banner from the `/download` page (obsolete after desktop packages were released).
+- **Post-merge path refactor fix**: consistency on paths centralized on `JHT_HOME`.
 
 ---
 
 ## [0.1.8] — 2026-04-10
 
-### Fix
-- Aggiunto `overrides` per `@swc/helpers` nel `package.json` per risolvere conflitti di dipendenze durante `npm ci` nel workflow di release
+### 🐛 Fixed
+
+- Added `overrides` for `@swc/helpers` in `package.json` to resolve dependency conflicts during `npm ci` in the release workflow.
 
 ---
 
 ## [0.1.7] — 2026-04-10
 
-### Web app
-- Rimossa di nuovo dalla home la landing deprecated rientrata durante il recovery della `0.1.6`, mantenendo la versione semplificata prevista per il live
-- Riallineata la pagina iniziale al set di sezioni effettivamente supportato in produzione
+### 🌐 Web app
 
-### Release e deploy
-- Corretto il flusso di verifica Vercel in CI, che ora controlla il progetto Git collegato anche senza metadata locali `.vercel`
-- Bloccata la pubblicazione di tag release che non puntano all'HEAD corrente di `production`
-- Aggiunto workflow dedicato per creare il tag release direttamente dall'HEAD di `production`
+- Removed (again) from the homepage the deprecated landing that had returned during the `0.1.6` recovery, keeping the simplified version intended for live.
+- Realigned the homepage to the section set actually supported in production.
+
+### 🚢 Release & deploy
+
+- Fixed the Vercel verification flow in CI, which now checks the linked Git project even without local `.vercel` metadata.
+- Blocked publication of release tags that don't point to the current `production` HEAD.
+- Added a dedicated workflow to create the release tag directly from `production` HEAD.
+
+---
 
 ## [0.1.6] — 2026-04-09
 
-### Web app
-- Rientrodotto il layer i18n completo con supporto `it` / `en` / `hu`, fallback piu robusti e persistenza lingua corretta tra API, landing e dashboard
-- Riallineate landing, pagina `/project`, download e chrome dell'app con metadata e contenuti coerenti alla release corrente
-- Ripristinati messaggi, layout e loading state tradotti nelle principali pagine protette e pubbliche
+### 🌐 Web app
 
-### TUI
-- Nuovo setup wizard con flusso verticale pulito, file picker corretto e navigazione delle select ripristinata
-- Aggiunto sistema auth multi-provider con supporto OpenAI OAuth PKCE, API key e storage credenziali cifrato
-- Rifinita l'integrazione del wizard con provider, metodo di autenticazione e bootstrap workspace
+- Reintroduced the full i18n layer with `it` / `en` / `hu` support, more robust fallbacks and correct language persistence across API, landing and dashboard.
+- Realigned landing, `/project` page, download and app chrome with metadata and content consistent with the current release.
+- Restored translated messages, layout and loading state in the main protected and public pages.
 
-### Desktop, test e tooling
-- Aggiornato il payload desktop standalone e la preparazione runtime per packaging locale
-- Sistemati test e script runtime collegati al launcher desktop e alla documentazione di setup
-- Versioni e metadati visibili allineati a `0.1.6` in tutti i package tracciati del monorepo
+### 📺 TUI
+
+- New setup wizard with clean vertical flow, fixed file picker and restored select navigation.
+- Added multi-provider auth system with OpenAI OAuth PKCE, API key support and encrypted credential storage.
+- Refined wizard integration with provider, authentication method and workspace bootstrap.
+
+### 🖥️ Desktop, tests & tooling
+
+- Updated standalone desktop payload and runtime preparation for local packaging.
+- Fixed tests and runtime scripts tied to the desktop launcher and setup documentation.
+- Versions and visible metadata aligned to `0.1.6` across all tracked packages in the monorepo.
+
+---
+
+## [0.1.5] — 2026-04-09
+
+### 🎨 UI simplifications
+
+- Web landing simplified, redundant sections removed, dev CSP fixed.
+- Hero and download page polished; download platform ordering finalized.
+- Auth: aligned public login redirects and `app_url` for deployed environments.
+
+### 📺 TUI setup
+
+- macOS workspace picker improved.
+- Setup banner alignment fixed.
+- Workspace config aligned with web side.
+
+### 📝 Internal
+
+- `chore(release)`: `0.1.5` metadata prepared.
+- Restored `FloatingChat` type aliases for the test suite.
+
+---
 
 ## [0.1.4] — 2026-04-08
 
-### Accesso web e setup
-- Login web riorganizzato con accesso cloud-first e fallback immediato al workspace locale
-- Aggiunta `NEXT_PUBLIC_APP_URL` per comporre correttamente il redirect OAuth in ambienti deployati
-- Ignorati file temporanei Supabase e log locali del dev server
+### 🌐 Web access & setup
 
-### TUI
-- Nuovo profilo guidato con validazioni, checkpoint e banner di setup iniziale
-- Vista team ripulita con layout orizzontale, banner ASCII corretto e comando `/workspace`
-- Migliorati prompt, esempi e redraw del wizard profilo
+- Web login reorganized with cloud-first access and immediate fallback to local workspace.
+- Added `NEXT_PUBLIC_APP_URL` to correctly compose the OAuth redirect in deployed environments.
+- Ignored Supabase temp files and dev server local logs.
 
-### Sito pubblico
-- Landing semplificata e resa piu leggibile nelle sezioni hero e CTA
-- Pulizia diffusa delle pagine marketing e forte riduzione del contenuto nella pagina stats
+### 📺 TUI
+
+- New guided profile flow with validations, checkpoints and initial setup banner.
+- Cleaned-up team view with horizontal layout, fixed ASCII banner and `/workspace` command.
+- Improved prompts, examples and redraw of the profile wizard.
+
+### 🌍 Public site
+
+- Landing simplified and made more readable in hero and CTA sections.
+- Widespread cleanup of marketing pages and significant content reduction on the stats page.
+
+---
 
 ## [0.1.3] — 2026-04-08
 
-### Desktop Windows
-- Alleggerito il payload web incluso nell'installer desktop, copiando solo asset e dipendenze di produzione
-- Rimossi cache e sourcemap dal payload pacchettizzato per ridurre dimensione e tempi di installazione su Windows
-- Confermato localmente il build `nsis` con installer Windows sensibilmente più piccolo
+### 🪟 Desktop Windows
+
+- Lightened the web payload included in the desktop installer, copying only production assets and dependencies.
+- Removed cache and sourcemaps from the packaged payload to reduce size and install time on Windows.
+- Confirmed the `nsis` build locally with a noticeably smaller Windows installer.
+
+---
 
 ## [0.1.2] — 2026-04-08
 
-### Release desktop
-- Aggiunti i metadati richiesti da `electron-builder` per il pacchetto Linux `.deb`
-- Confermato il packaging Windows `.exe` e macOS `.dmg` nel workflow release
-- Preparata la release desktop cross-platform pubblicabile via GitHub Actions
+### 📦 Desktop release
+
+- Added the metadata required by `electron-builder` for the Linux `.deb` package.
+- Confirmed Windows `.exe` and macOS `.dmg` packaging in the release workflow.
+- Prepared the cross-platform desktop release publishable via GitHub Actions.
+
+---
 
 ## [0.1.1] — 2026-04-08
 
-### Release desktop
-- Allineate tutte le versioni `package.json` e `package-lock.json` a `0.1.1`
-- Confermato il packaging desktop Electron per macOS, Windows e Linux
-- Workflow GitHub Release pronto a pubblicare installer reali `.dmg`, `.exe`, `.AppImage` e `.deb`
-- Pagina download e API leggono gli asset effettivi della latest release invece di assumere archivi legacy
+### 📦 Desktop release
+
+- Aligned all `package.json` and `package-lock.json` versions to `0.1.1`.
+- Confirmed Electron desktop packaging for macOS, Windows and Linux.
+- GitHub Release workflow ready to publish real `.dmg`, `.exe`, `.AppImage` and `.deb` installers.
+- Download page and API read the actual assets of the latest release instead of assuming legacy archives.
+
+---
 
 ## [0.1.0] — 2026-04-04
 
-### Pipeline multi-agente
-- Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Capitano
-- Agent runner con tool loop, abort e gestione errori
-- Database SQLite condiviso con anti-collision tra agenti
+### 🤖 Multi-agent pipeline
 
-### CLI `jht`
-- Setup wizard interattivo con `@clack/prompts`
-- `jht team start/stop` con prefisso sessioni JHT- per compatibilità TUI
-- `jht status`, `jht config show`, `jht cron list`
-- `jht export/import` (JSON/CSV, dry-run, merge/replace)
-- `jht health` (7 moduli con semafori)
-- `jht backup/restore` con manifest e retention
-- `jht migrate` (versioning config con dry-run)
-- `jht logs`, `jht providers`, `jht stats`
-- `jht plugins`, `jht agents`
+- Scout, Analyst, Scorer, Writer, Critic, Sentinel, Captain.
+- Agent runner with tool loop, abort and error handling.
+- Shared SQLite database with anti-collision between agents.
 
-### TUI (Terminal UI)
-- Navigazione multi-agente con `@mariozechner/pi-tui`
-- Chat panel con streaming, tool messages, thinking blocks
-- Contatore sessioni tmux attive in tempo reale
-- Ctrl+C singolo per uscire
+### ⌨️ CLI `jht`
 
-### Web Dashboard (50+ pagine)
-- Pipeline: agenti, sessioni, candidature, analytics
-- Infrastruttura: health, retry/circuit-breaker, rate-limiter, queue, events SSE
-- Configurazione: settings, credentials, plugins, tools, templates, providers, memory
-- Sistema: overview, gateway, channels, notifications, cron, daemon, deploy
-- Import/export dati, backup, migrazioni, i18n it/en
+- Interactive setup wizard with `@clack/prompts`.
+- `jht team start/stop` with `JHT-` session prefix for TUI compatibility.
+- `jht status`, `jht config show`, `jht cron list`.
+- `jht export/import` (JSON/CSV, dry-run, merge/replace).
+- `jht health` (7 modules with semaphores).
+- `jht backup/restore` with manifest and retention.
+- `jht migrate` (config versioning with dry-run).
+- `jht logs`, `jht providers`, `jht stats`.
+- `jht plugins`, `jht agents`.
 
-### Shared modules
-- `config/` — schema Zod, I/O centralizzato
-- `llm/` — factory Claude, OpenAI, MiniMax
-- `sessions/` — registry con persistenza JSON
-- `hooks/` — source precedence, loader frontmatter
-- `events/` — event bus pub/sub tipizzato
-- `plugins/` — discovery, lifecycle, toggle
-- `context-engine/` — raccolta e prioritizzazione contesto LLM
-- `rate-limiter/`, `retry/` — circuit breaker 3 stati
-- `queue/` — dead-letter, retry backoff esponenziale+jitter
-- `templates/` — variabili, sezioni con budget caratteri
-- `notifications/` — registry adapter multi-canale
-- `analytics/` — token usage, latenza p95, costi provider
-- `credentials/` — AES-256-GCM, OAuth
-- `memory/` — SOUL/IDENTITY/MEMORY
-- `history/`, `tasks/`, `validators/`, `migrations/`, `backup/`, `cache/`, `i18n/`
+### 📺 TUI (Terminal UI)
 
-### Testing
-- 736+ test case su 168 file (vitest)
-- Test unitari, integrazione, E2E CLI e web (Playwright)
+- Multi-agent navigation with `@mariozechner/pi-tui`.
+- Chat panel with streaming, tool messages, thinking blocks.
+- Real-time counter of active tmux sessions.
+- Single Ctrl+C to exit.
 
-### CI/CD
-- GitHub Actions: lint, type-check, vitest matrix, build, deploy Vercel
-- Security: npm audit, gitleaks, Semgrep SAST
-- Dependabot per npm e GitHub Actions
-- PR template, issue templates, CONTRIBUTING.md
+### 🌐 Web Dashboard (50+ pages)
+
+- Pipeline: agents, sessions, applications, analytics.
+- Infrastructure: health, retry/circuit-breaker, rate-limiter, queue, events SSE.
+- Configuration: settings, credentials, plugins, tools, templates, providers, memory.
+- System: overview, gateway, channels, notifications, cron, daemon, deploy.
+- Data import/export, backup, migrations, i18n it/en.
+
+### 🧱 Shared modules
+
+- `config/` — Zod schema, centralized I/O.
+- `llm/` — factory for Claude, OpenAI, MiniMax.
+- `sessions/` — registry with JSON persistence.
+- `hooks/` — source precedence, frontmatter loader.
+- `events/` — typed pub/sub event bus.
+- `plugins/` — discovery, lifecycle, toggle.
+- `context-engine/` — LLM context collection and prioritization.
+- `rate-limiter/`, `retry/` — 3-state circuit breaker.
+- `queue/` — dead-letter, exponential backoff retry + jitter.
+- `templates/` — variables, sections with character budget.
+- `notifications/` — multi-channel adapter registry.
+- `analytics/` — token usage, p95 latency, provider costs.
+- `credentials/` — AES-256-GCM, OAuth.
+- `memory/` — SOUL/IDENTITY/MEMORY.
+- `history/`, `tasks/`, `validators/`, `migrations/`, `backup/`, `cache/`, `i18n/`.
+
+### 🧪 Testing
+
+- 736+ test cases across 168 files (vitest).
+- Unit, integration, E2E CLI and web tests (Playwright).
+
+### 🛠️ CI/CD
+
+- GitHub Actions: lint, type-check, vitest matrix, build, Vercel deploy.
+- Security: npm audit, gitleaks, Semgrep SAST.
+- Dependabot for npm and GitHub Actions.
+- PR template, issue templates, CONTRIBUTING.md.
