@@ -172,23 +172,23 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Effort: 1 giorno
   - Merged: _—_
 
-- [ ] **L2** — Validare `JHT_GATEWAY_URL`
+- [x] **L2** — Validare `JHT_GATEWAY_URL`
   - File: `web/app/api/gateway/route.ts:12`
   - `new URL()` + reject schemi non-http(s) + reject hostname privati senza opt-in
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 6261709a
 
-- [ ] **L4** — `.env.example` rotation guide
+- [x] **L4** — `.env.example` rotation guide
   - File: `.env.example`
   - Sezione finale con link a panel rotation Anthropic/Supabase/Google
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 6261709a
 
-- [ ] **L5** — `.gitleaksignore` per i 3 false positive in test fixture
+- [x] **L5** — `.gitleaksignore` per i 3 false positive in test fixture
   - File: nuovo `.gitleaksignore`
   - Fingerprint: `6f578deeb0...` x2 e `6d6fc187ed...`
   - Effort: 5 min
-  - Merged: _—_
+  - Merged: 6261709a
 
 ### Pre-commit / CI hardening (ispirato a OpenClaw)
 
