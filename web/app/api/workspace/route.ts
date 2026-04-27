@@ -8,6 +8,7 @@ import {
   JHT_USER_UPLOADS_DIR,
   JHT_USER_OUTPUT_DIR,
 } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,10 +19,14 @@ function workspaceState() {
 }
 
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   return NextResponse.json(workspaceState())
 }
 
 export async function POST() {
+  const denied = await requireAuth()
+  if (denied) return denied
   // Cartella utente visibile creata al primo POST (idempotente)
   try {
     fs.mkdirSync(JHT_USER_DIR, { recursive: true })
@@ -36,6 +41,8 @@ export async function POST() {
 }
 
 export async function DELETE() {
+  const denied = await requireAuth()
+  if (denied) return denied
   // Path fisso: non cancellabile. Mantiene compat col frontend.
   return NextResponse.json({ ok: true, ...workspaceState() })
 }
