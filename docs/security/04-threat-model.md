@@ -30,7 +30,7 @@ I seguenti soggetti sono considerati **trusted** e hanno pieno accesso operatore
 - chi ha accesso fisico/SSH al sistema operativo dell'host
 - chi può scrivere in `~/.jht/` (config, credenziali, agenti)
 - chi può modificare `~/Documents/Job Hunter Team/` (CV, allegati)
-- chi è autenticato sulla dashboard `http://localhost:3000` con il local-token o Supabase login
+- chi è autenticato sulla dashboard `http://localhost:3000` via local-token (cookie `jht_local_token` HttpOnly+SameSite=Strict, settato dal middleware solo su richieste localhost dirette senza header `x-forwarded-*`) o Supabase login
 
 ### Untrusted
 
@@ -135,7 +135,8 @@ Report che mancano di PoC riproducibile o che non dimostrano boundary bypass pos
 ## 7. Crypto / data handling
 
 ### Encryption at-rest
-- Credenziali (API key OpenAI/Anthropic, OAuth Google) sono cifrate in `~/.jht/credentials/*.enc.json` con **AES-256-GCM** + **PBKDF2-SHA512 100k iterazioni**.
+- Modulo principale `shared/credentials/`: credenziali (API key OpenAI/Anthropic, OAuth Google) cifrate in `~/.jht/credentials/*.enc.json` con **AES-256-GCM** + **PBKDF2-SHA512 100k iterazioni**.
+- Modulo legacy `cli/src/commands/secrets.js`: AES-256-CBC. Migrazione a GCM tracciata in `[H5]` di [`05-checklist.md`](05-checklist.md).
 - Salt random per installazione, persistito in `~/.jht/credentials/.salt` con permessi 0600.
 - Master key derivata da:
   - **GUI desktop**: OS keyring (TODO post-launch — vedi `[H4]` in [`01-pre-launch-review.md`](01-pre-launch-review.md))
@@ -181,3 +182,4 @@ Per evitare false aspettative:
 **Versione threat model:** 0.1 (bozza)
 **Ultimo aggiornamento:** 2026-04-27
 **Prossima revisione:** quando si fa il primo public release.
+**Stato hardening corrente:** vedi [`05-checklist.md`](05-checklist.md) — Phase 1 (bloccanti) tracciata 9/9 prima del tag `v0.1.0`.
