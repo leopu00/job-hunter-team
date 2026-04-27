@@ -164,7 +164,7 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - File: nuovo `shared/logger/redact.ts` (pattern OpenClaw `redact-bounded.ts`) + hook in `shared/logger/logger.ts:log()`
   - `redactString` su pattern (Bearer, JWT, sk-/ant-/jht_sync_, api_key=, hex 32+) + `redactObject` su SENSITIVE_KEYS; `redactedConsole` wrapper per moduli che usano console direttamente
   - Effort: 4h
-  - Merged: _—_ (dev-2)
+  - Merged: 2b8264ff
 
 - [ ] **L1** — CSP nonce/hash-based in produzione
   - File: `web/next.config.ts:26`
@@ -249,11 +249,19 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 ## 📊 Avanzamento
 
 ```
-Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100%
-Phase 2 (post-launch): 12/12  ██████████████████████████████████  100%
-Phase 3 (hardening):    4/13  ██████████░░░░░░░░░░░░░░░░░░░░░░░░  31%
+Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100% ✅
+Phase 2 (post-launch): 12/12  ██████████████████████████████████  100% ✅
+Phase 3 (hardening):  10/13   ██████████████████████████░░░░░░░░  77%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                25/34  █████████████████████████░░░░░░░░░  74%
+TOTALE:                31/34  ████████████████████████████░░░░░░  91%
 ```
 
-> Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.
+> Phase 1 chiusa: JHT è pronto per il public open-source release.
+> Restano da chiudere: **L1** (CSP hash-based prod), **tests/security/**, **`jht doctor security`** CLI.
+
+## 🆚 Comparazione con OpenClaw
+
+Il confronto post-fix con la repo di riferimento è in [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
+Sintesi: il gap è passato da **-78** (pre-fix) a **-25** (post-fix), con score security che va da
+**36/120 (30%)** a **89/120 (74%)**. L'ultimo gap residuo è SSRF dispatcher generico
+(`shared/net/ssrf.ts` mancante) + `resolve-system-bin` strict trust dirs.
