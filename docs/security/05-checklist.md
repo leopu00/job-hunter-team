@@ -106,11 +106,11 @@ Hardening importante ma non bloccante.
 
 ### Medium
 
-- [ ] **M2** — CSRF middleware globale (Origin/Referer/Sec-Fetch-Site)
-  - File: nuovo `web/middleware.ts`
+- [x] **M2** — CSRF middleware globale (Origin/Referer/Sec-Fetch-Site)
+  - File: nuovo `web/lib/csrf.ts` + integrazione in `web/proxy.ts`
   - Pattern OpenClaw `browserMutationGuardMiddleware` adattato a Next.js
   - Effort: 4h (+ testing)
-  - Merged: _—_
+  - Merged: 8ad011fd
 
 - [x] **M6** — Bind compose su `127.0.0.1:3000`
   - File: `docker-compose.yml:63-64`
