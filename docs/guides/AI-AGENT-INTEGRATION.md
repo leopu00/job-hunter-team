@@ -28,4 +28,4 @@ If a feature requires opening the web dashboard or the Desktop app to be configu
 
 - [`docs/cli-install.md`](cli-install.md) — full CLI reference
 - [`docs/quickstart.md`](quickstart.md) — the human-friendly version of this guide
-- [`docs/PROVIDERS.md`](PROVIDERS.md) — which subscription to pick
+- [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick

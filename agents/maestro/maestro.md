@@ -69,5 +69,5 @@ The Maestro should be deliberately **low-frequency** — one substantive message
 
 ## Related
 
-- [`docs/VISION.md`](../../docs/VISION.md) — why the Maestro is the most important agent we haven't built
-- [`docs/ROADMAP.md`](../../docs/ROADMAP.md) — when this is scheduled
+- [`docs/VISION.md`](../../docs/about/VISION.md) — why the Maestro is the most important agent we haven't built
+- [`docs/ROADMAP.md`](../../docs/about/ROADMAP.md) — when this is scheduled
