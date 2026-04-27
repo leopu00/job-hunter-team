@@ -76,7 +76,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ### 🧪 Real-world tests (preliminary, undocumented)
 
-> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented test matrix (provider × tier × persona × job-category) is a critical pre-launch milestone. Plan + status: [`docs/TEST-CAMPAIGN.md`](docs/TEST-CAMPAIGN.md).
+> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/BETA.md` § Coverage we still need](docs/BETA.md#coverage-we-still-need).
 
 - ✅ Claude Max x20 — pipeline tested for weeks, ±5% usage projection precision
 - 🟡 Kimi €40 — works, ±10–15% oscillation, calibration in progress (mass-market target)
@@ -144,11 +144,12 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
   3. Verify how much the 491→130 line refactor already reduced consumption (measure baseline vs post-refactor)
   4. Target: Sentinel consumes <5% of total team tokens
 
-##### 🧪 [JHT-TEST-CAMPAIGN] Documented test campaign matrix ⬜ BLOCKER pre-launch
+##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/10 cells) ⬜ BLOCKER pre-launch
 
 - **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Plan + status:** see [`docs/TEST-CAMPAIGN.md`](docs/TEST-CAMPAIGN.md) — matrix (provider × tier × persona × job-category), beta-tester assignments, results per cell.
-- **Why:** highest-leverage doc to publish before public launch. The first HN/Reddit question will be "does it work for X?".
+- **Coverage tracker:** [`docs/BETA.md` § Coverage we still need](docs/BETA.md#coverage-we-still-need) — 10 cells (provider × persona), 1 done (maintainer), 9 open. Target: 8/10 filled before launch.
+- **Pipeline:** beta tester applies via [`docs/BETA.md`](docs/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/RESULTS.md`](docs/RESULTS.md) and updating cell status in BETA.
+- **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
 
 ##### 📊 [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard
@@ -344,7 +345,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
-> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (documented test matrix). Treat it as part of this phase mentally.
+> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (coverage matrix in [`docs/BETA.md`](docs/BETA.md#coverage-we-still-need)). Treat it as part of this phase mentally.
 
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
@@ -387,7 +388,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 - ✅ `docs/BETA.md` created
 - ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyJobs, friends list)
-- Feeds the test campaign matrix ([JHT-TEST-CAMPAIGN] in PHASE 1)
+- Feeds the coverage matrix in [`docs/BETA.md`](docs/BETA.md#coverage-we-still-need) ([JHT-TEST-CAMPAIGN] in PHASE 1)
 
 #### ⭐ [JHT-LAUNCH-06] Awesome lists submissions
 
