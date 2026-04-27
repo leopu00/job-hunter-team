@@ -10,7 +10,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 **AI on the side of workers, not against them.**
 
-> 🧪 **Currently in beta** — installer + monitoring (Kimi tier) still maturing. See [`docs/BETA.md`](docs/BETA.md).
+> 🧪 **Currently in beta** — installer + monitoring (Kimi tier) still maturing. See [`docs/guides/BETA.md`](docs/guides/BETA.md).
 
 **Execution modes:**
 
@@ -26,7 +26,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
 - 💬 **Telegram** — today talks to the Captain only; planned: per-agent chat + a "team forum" channel where the user can join the whole team's conversation
-- 🧙‍♂️ **Maestro** career-coach agent (planned) — see [`docs/VISION.md`](docs/VISION.md)
+- 🧙‍♂️ **Maestro** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
 
@@ -76,14 +76,14 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ### 🧪 Real-world tests (preliminary, undocumented)
 
-> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/BETA.md` § Coverage we still need](docs/BETA.md#coverage-we-still-need).
+> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
 
 - ✅ Claude Max x20 — pipeline tested for weeks, ±5% usage projection precision
 - 🟡 Kimi €40 — works, ±10–15% oscillation, calibration in progress (mass-market target)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
 - 🔬 Codex Plus/Pro €100 — supported by runtime, benchmark in progress
 
-For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
+For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
 ---
 
@@ -133,7 +133,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
   2. Adapt projection model for higher variance
   3. Final target: 90%+ with <10% oscillation (= Claude equivalent)
   4. Stress test: 1 month of real job-hunting
-- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/PROVIDERS.md` and `docs/MONITORING.md`.
+- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/about/PROVIDERS.md` and `docs/about/MONITORING.md`.
 
 ##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption
 
@@ -147,8 +147,8 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 ##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/10 cells) ⬜ BLOCKER pre-launch
 
 - **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Coverage tracker:** [`docs/BETA.md` § Coverage we still need](docs/BETA.md#coverage-we-still-need) — 10 cells (provider × persona), 1 done (maintainer), 9 open. Target: 8/10 filled before launch.
-- **Pipeline:** beta tester applies via [`docs/BETA.md`](docs/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/RESULTS.md`](docs/RESULTS.md) and updating cell status in BETA.
+- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 10 cells (provider × persona), 1 done (maintainer), 9 open. Target: 8/10 filled before launch.
+- **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
 
@@ -195,7 +195,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ##### 🦞 [JHT-AI-AGENT-EXAMPLES] Example prompts for OpenClaw / Cursor ⬜
 
-- **Context:** `docs/AI-AGENT-INTEGRATION.md` mentions 🦞 OpenClaw, Claude Code, Codex, Cursor — but no `examples/` directory exists yet.
+- **Context:** `docs/guides/AI-AGENT-INTEGRATION.md` mentions 🦞 OpenClaw, Claude Code, Codex, Cursor — but no `examples/` directory exists yet.
 - **Task:** create `examples/ai-agent-prompts/` directory with tested prompts for each agent CLI (4 subdirs: `claude-code/`, `openclaw/`, `codex/`, `cursor/`).
 
 ##### 🔐 [JHT-WEB-02-CHECKSUM] SHA256 checksum on download page
@@ -238,7 +238,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 - ✅ Build `.dmg` / `.exe` NSIS / `.AppImage` / `.deb` via electron-builder
 - ✅ Release via GitHub Releases
 - ⬜ **Auto-update** via `electron-updater`
-- ⏸️ **Code signing** macOS + Windows — **deferred (post-beta)**. Costs (~€99/yr macOS, ~€200-400/yr Win EV cert) are not justified during beta. Our trust signal in beta is **open source transparency + community review** — users can inspect the code or build from source. We'll document the OS warning workaround in `docs/quickstart.md` (right-click → Open on macOS, "Run anyway" on Windows) and explain the positioning honestly. Schedule code signing once the project graduates from beta.
+- ⏸️ **Code signing** macOS + Windows — **deferred (post-beta)**. Costs (~€99/yr macOS, ~€200-400/yr Win EV cert) are not justified during beta. Our trust signal in beta is **open source transparency + community review** — users can inspect the code or build from source. We'll document the OS warning workaround in `docs/guides/quickstart.md` (right-click → Open on macOS, "Run anyway" on Windows) and explain the positioning honestly. Schedule code signing once the project graduates from beta.
 
 #### 🏠 [JHT-DESKTOP-06] "Dedicated computer" mode
 
@@ -345,7 +345,7 @@ For full provider matrix → see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
-> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (coverage matrix in [`docs/BETA.md`](docs/BETA.md#coverage-we-still-need)). Treat it as part of this phase mentally.
+> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need)). Treat it as part of this phase mentally.
 
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
@@ -386,9 +386,9 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 #### 🧪 [JHT-LAUNCH-07] Beta tester recruitment
 
-- ✅ `docs/BETA.md` created
+- ✅ `docs/guides/BETA.md` created
 - ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyJobs, friends list)
-- Feeds the coverage matrix in [`docs/BETA.md`](docs/BETA.md#coverage-we-still-need) ([JHT-TEST-CAMPAIGN] in PHASE 1)
+- Feeds the coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need) ([JHT-TEST-CAMPAIGN] in PHASE 1)
 
 #### ⭐ [JHT-LAUNCH-06] Awesome lists submissions
 
@@ -444,4 +444,4 @@ No open bugs at the time of this writing. Historical fixes are tracked in git lo
 
 ## 📞 Maintainer reference
 
-Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/MAINTAINERS.md`](docs/MAINTAINERS.md).
+Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).
