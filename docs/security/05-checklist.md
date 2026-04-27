@@ -34,11 +34,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Merged: 0494a5c6
   - Depends on: H4 (così l'utente ha un percorso netto: keyring o env)
 
-- [ ] **C1** — Fix localhost auth bypass via `x-forwarded-host`
-  - File: `web/lib/auth.ts:15-19`
+- [x] **C1** — Fix localhost auth bypass via `x-forwarded-host`
+  - File: `web/lib/auth.ts:15-19` + cloni in `web/proxy.ts`, `web/app/(protected)/layout.tsx`, `web/app/(protected)/dashboard/page.tsx`
   - Sostituire con pattern OpenClaw: TCP socket peer + reject se `x-forwarded-*` presente
   - Effort: 1h (incluso aggiungere accesso a `req.socket.remoteAddress` in Next route handler)
-  - Merged: _—_
+  - Merged: _pending_
 
 - [ ] **C2** — Add `requireAuth()` to ~25 sensitive routes
   - Files: `web/app/api/{secrets,database,agents/[id],providers,config,env,backup,health,tasks/[id],history/[id],credentials,sessions,logs,workspace/init}/route.ts`

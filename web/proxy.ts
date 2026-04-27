@@ -7,7 +7,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
-import { isLocalhostHost } from '@/lib/auth'
+import { isLocalRequestFromHeaders } from '@/lib/auth'
 
 // --- CORS Config ---
 
@@ -173,8 +173,7 @@ export async function proxy(request: NextRequest) {
     // Bypass auth per richieste locali (desktop container): il login
     // Supabase è opzionale in locale, "Continua senza" in /onboarding/cloud
     // deve poter accedere a /dashboard senza account.
-    const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? ''
-    const localRequest = isLocalhostHost(host)
+    const localRequest = isLocalRequestFromHeaders(request.headers)
 
     if (isProtected && !user && !localRequest) {
       return NextResponse.redirect(new URL('/?login=true', request.url))
