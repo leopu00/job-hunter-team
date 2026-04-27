@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync, spawnSync } from 'node:child_process'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -179,6 +180,8 @@ function activeSessionsForProvider(providerId: string): string[] {
 }
 
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const config = loadConfig()
   const activeProvider =
     normalizeProviderId(config.active_provider) ??
@@ -231,6 +234,8 @@ export async function GET() {
 // user jht, /jht_home/.npm-global è scrivibile, e `npm install -g` è il
 // flusso standard del wizard di install (vedi desktop/provider-install.js).
 export async function POST(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { providerId?: string; force?: boolean } = {}
   try { body = await req.json() } catch { /* body vuoto / invalido */ }
 
