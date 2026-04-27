@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,8 @@ function mask(value: string): string {
 
 /** GET — lista secrets con valori mascherati (reveal=true per valore completo) */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const reveal = req.nextUrl.searchParams.get('id')
   const store = load()
   const secrets = store.secrets.map(s => ({
@@ -64,6 +67,8 @@ export async function GET(req: NextRequest) {
 
 /** POST — crea nuovo secret */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { name?: string; type?: SecretType; value?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }
 
@@ -88,6 +93,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove secret per ID */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false, error: 'id obbligatorio' }, { status: 400 })
 
