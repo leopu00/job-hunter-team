@@ -117,11 +117,11 @@ Hardening importante ma non bloccante.
   - Effort: 5 min
   - Merged: e99d3584
 
-- [ ] **M3** — Rate limiting su cloud-sync endpoint
+- [x] **M3** — Rate limiting su cloud-sync endpoint
   - Files: `web/app/api/cloud-sync/**`
   - Upstash Redis o `@vercel/ratelimit`. Solo cloud-sync per ora, no localhost.
   - Effort: 4h
-  - Merged: _—_
+  - Merged: _—_ (dev-2)
 
 - [x] **M5** — Documentare passwordless sudo come scelta esplicita
   - Files: `docs/security/04-threat-model.md` (review + polish; promozione a `SECURITY.md` root rinviata al public release)

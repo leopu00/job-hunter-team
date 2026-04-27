@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
 import { verifyBearerToken } from '@/lib/cloud-sync/auth'
+import { checkCloudSyncRateLimit } from '@/lib/cloud-sync/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,6 +102,23 @@ export async function POST(req: NextRequest) {
   const result = await verifyBearerToken(req)
   if (!result.ok) return result.res
   const { userId, admin } = result.data
+
+  // Push e' write-heavy (positions+scores+applications upsert): cap
+  // stretto a 20/min per token. Il limite globale del proxy resta sopra.
+  const rl = await checkCloudSyncRateLimit('push', result.data.tokenId, 20)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit superato. Riprova tra poco.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.retryAfterSec),
+          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Remaining': '0',
+        },
+      },
+    )
+  }
 
   let body: PushBody
   try {
