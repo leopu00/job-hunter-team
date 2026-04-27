@@ -1,19 +1,19 @@
-# CLI install — `jobhunterteam.ai/install.sh`
+# 📦 CLI install — `jobhunterteam.ai/install.sh`
 
 This document describes how the one-liner installer works **today**
-(behaviour AS-IS, before any further hardening). It is the reference for
-the Path B promised in the README:
+(behaviour AS-IS, before any further hardening). It is the reference
+for **Path 3 (One-liner installer)** in the [Quickstart](./quickstart.md):
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
 For the GUI / desktop launcher path, see the `/download` page.
-For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#legacy-onboarding-setupsh--setupps1).
+For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---
 
-## TL;DR
+## 📋 TL;DR
 
 | Item | Value |
 |------|-------|
@@ -28,7 +28,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 
 ---
 
-## How the endpoint is wired
+## 🔌 How the endpoint is wired
 
 There is **no Next.js API route** behind `/install.sh`. The file is shipped
 as a static asset:
@@ -53,7 +53,7 @@ to `raw.githubusercontent.com/leopu00/job-hunter-team/<tag>/scripts/install.sh`,
 or generate `web/public/install.sh` from the latest GH release tag at
 build time).
 
-### Verifying the endpoint
+### ✅ Verifying the endpoint
 
 ```bash
 curl -sI https://jobhunterteam.ai/install.sh
@@ -65,12 +65,12 @@ curl -fsSL https://jobhunterteam.ai/install.sh | head -5
 
 ---
 
-## What `scripts/install.sh` does
+## 🛠️ What `scripts/install.sh` does
 
 The script is `set -euo pipefail`, idempotent, and prints a step counter
 (`[N/TOTAL]`). It branches into two paths depending on `--no-docker`.
 
-### Common arguments / env vars
+### 🚩 Common arguments / env vars
 
 | Flag / env | Default | Purpose |
 |------------|---------|---------|
@@ -85,7 +85,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_IMAGE` | `ghcr.io/leopu00/jht:latest` | Container image used by the wrapper |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
-### Default path — Docker (5 steps)
+### 🐳 Default path — Docker (5 steps)
 
 1. **Detect system** — `uname -s` → macOS / Linux / WSL (`grep microsoft
    /proc/version`); on Linux/WSL also picks `apt` / `dnf` / `pacman`.
@@ -116,15 +116,25 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    The wrapper is intentionally bash-3.2-compatible (macOS) and avoids
    bash arrays under `set -u`.
 
-### Expert path — native (`--no-docker`, 7 steps)
+### 🛠️ Expert path — native (`--no-docker`, 7 steps)
 
 1. **Detect system** (same as Docker path).
 2. **System deps** — `git`, `tmux`, `curl` via the detected package
    manager; `brew` on macOS.
 3. **Node.js ≥ 22** — NodeSource repo on apt/dnf, `brew install
    node@22` on macOS, `pacman -S nodejs npm` on Arch.
-4. **Claude CLI** — `npm install -g @anthropic-ai/claude-cli`. Failure
+4. **Provider CLI** — `npm install -g @anthropic-ai/claude-cli` (legacy
+   package name, see [Known gaps](#-known-gaps-and-follow-ups)). Failure
    here is non-fatal (warns and continues).
+
+   > 💡 **Native mode installs only Claude today.** If you plan to use
+   > Codex or Kimi instead, install the corresponding CLI manually after
+   > the script finishes:
+   > - 🟠 **Claude Code**: `npm install -g @anthropic-ai/claude-code` *(modern package)*
+   > - 🔵 **Codex**: `npm install -g @openai/codex`
+   > - 🌙 **Kimi**: see [Moonshot docs](https://github.com/MoonshotAI/kimi-cli) — installed via Python `uv`, not npm
+   >
+   > See [`docs/PROVIDERS.md`](./PROVIDERS.md) for the full provider matrix.
 5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
    $JHT_INSTALL_DIR`. If already present, fetches and `git reset --hard
    origin/$JHT_BRANCH`.
@@ -133,14 +143,14 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    declares dependencies.
 7. **Symlink `jht`** — `$JHT_BIN_DIR/jht` → `$JHT_INSTALL_DIR/cli/bin/jht.js`.
 
-### After both paths
+### 🚀 After both paths
 
 - Prints final banner with what was installed, the file layout, and
   uninstall instructions.
 - If stdin/stdout are a TTY and `JHT_SKIP_ONBOARD=0`, prompts to run
   `jht setup` immediately.
 
-### Where things land
+### 📁 Where things land
 
 | Path | Purpose |
 |------|---------|
@@ -154,7 +164,7 @@ If `$JHT_BIN_DIR` is not on `$PATH`, the script warns and prints the
 
 ---
 
-## Legacy onboarding: `setup.sh` / `setup.ps1`
+## 📜 Legacy onboarding: `setup.sh` / `setup.ps1`
 
 The repo also ships `setup.sh` (bash) and `setup.ps1` (PowerShell) at
 the root. **These are not the one-liner installer.** They both print a
@@ -175,7 +185,7 @@ or `docs/quickstart.md` instead.
 
 ---
 
-## Dry-run
+## 🧪 Dry-run
 
 `--dry-run` walks every step of the installer and prints the actions
 that *would* be executed, without touching the system. Nothing is
@@ -244,7 +254,7 @@ What `--dry-run` intentionally does **not** do:
 
 ---
 
-## Tested environments
+## 🧭 Tested environments
 
 | OS | Mode | Date | Result | Notes |
 |----|------|------|--------|-------|
@@ -257,14 +267,38 @@ What `--dry-run` intentionally does **not** do:
 
 ---
 
-## Known gaps and follow-ups
+## 🐛 Known gaps and follow-ups
 
-- Run the installer end-to-end on at least one clean Linux VM and one
-  clean WSL2 host; `--dry-run` on Mac is not a substitute.
-- The endpoint always serves `master`. We may want to pin to the latest
-  GitHub release tag instead, so a stable curl install is reproducible.
-- `setup.ps1` still detects neither CPU architecture (ARM vs AMD64) nor
-  WSL availability before claiming `tmux` works.
-- Quickstart says "Node 20+" but `scripts/install.sh` enforces
-  `MIN_NODE_MAJOR=22`. Aligning these is a doc fix, not an installer
-  change.
+Tickets to file on `scripts/install.sh` itself (not on this doc):
+
+- 🟠 **Wrong Claude package name** — line 505/508 installs the legacy
+  `@anthropic-ai/claude-cli`. The active CLI is `@anthropic-ai/claude-code`
+  (see `desktop/provider-install.js:33`). Update install.sh + add Codex
+  and Kimi as additional optional installs in the native flow.
+- 🌍 **Italian output strings** — install.sh prints user-facing messages
+  in Italian (`Rilevamento sistema`, `Installazione Colima fallita`,
+  `gia' installato`, ...) while the rest of the project is in English.
+  Translate to English (or wire into `shared/i18n/`).
+- 🐧 **Unverified Linux/WSL paths** — run the installer end-to-end on at
+  least one clean Linux VM and one clean WSL2 host; `--dry-run` on Mac
+  is not a substitute.
+- 📌 **Endpoint pins `master`, not a release tag** — a stable curl
+  install would benefit from pinning to the latest GitHub release tag
+  (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
+  or generate `web/public/install.sh` from the latest release at build
+  time).
+- 🪟 **`setup.ps1` arch/WSL detection** — still doesn't detect CPU
+  architecture (ARM vs AMD64) nor WSL availability before claiming
+  `tmux` works.
+
+---
+
+## 📚 Related
+
+- 🚀 [`docs/quickstart.md`](./quickstart.md) — the human-friendly install guide (4 paths)
+- 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions matrix
+- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
+- 📐 [`docs/INFRA.md`](./INFRA.md) — infrastructure diagram and deployment modes
+- 🧪 [`docs/BETA.md`](./BETA.md) — beta tester program (report install issues here)
+- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
+- 📐 [ADR-0004](./adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys
