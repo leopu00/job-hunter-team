@@ -248,7 +248,7 @@ export async function POST(req: Request) {
   const config = loadConfig()
   const active = normalizeProviderId(config.active_provider) ?? 'anthropic'
   const shouldCheck = providerId === active
-  let stopped: string[] = []
+  const stopped: string[] = []
 
   if (shouldCheck && running.length > 0 && !body.force) {
     return NextResponse.json({

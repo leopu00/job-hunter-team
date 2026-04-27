@@ -94,7 +94,7 @@ export default function CloudSyncClient({ initialTokens }: { initialTokens: Sync
       {freshToken && (
         <div className="mb-6 p-4 border border-[var(--color-green)] bg-[var(--color-card)]">
           <div className="text-[var(--color-green)] text-[11px] font-medium mb-2">
-            Token creato — copialo ORA, non verrà piu' mostrato
+            Token creato — copialo ORA, non verrà piu&apos; mostrato
           </div>
           <div className="flex gap-2">
             <code className="flex-1 p-2 bg-[var(--color-bg)] text-[11px] text-[var(--color-bright)] font-mono break-all">
@@ -118,7 +118,7 @@ export default function CloudSyncClient({ initialTokens }: { initialTokens: Sync
 
       <form onSubmit={handleCreate} className="mb-8">
         <label className="block text-[11px] text-[var(--color-dim)] mb-2">
-          Nome dispositivo (es. "MacBook Leone", "Linux cron")
+          Nome dispositivo (es. &quot;MacBook Leone&quot;, &quot;Linux cron&quot;)
         </label>
         <div className="flex gap-2">
           <input

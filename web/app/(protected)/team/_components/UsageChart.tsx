@@ -643,7 +643,7 @@ export default function UsageChart() {
 
       {filtered.length === 0 && !loading && entries.length > 0 && (
         <div className="text-[10px] text-[var(--color-dim)] text-center mt-2">
-          Nessun sample nell'intervallo selezionato — prova "tutto".
+          Nessun sample nell&apos;intervallo selezionato — prova &quot;tutto&quot;.
         </div>
       )}
     </div>
