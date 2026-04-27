@@ -86,11 +86,12 @@ Hardening importante ma non bloccante.
   - Effort: 3h
   - Merged: e0d24b60
 
-- [ ] **H4** — Sostituire fallback machine-derived con keyring + env-var
-  - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`
+- [x] **H4** — Sostituire fallback machine-derived con keyring + env-var
+  - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`, nuovo `shared/credentials/passphrase.ts`
   - Strategia: OS keyring (`@napi-rs/keyring`) se disponibile → env var fallback → errore esplicito (no machine-derived, no plaintext)
   - Effort: 2-3 giorni (cross-platform testing)
-  - Merged: _—_
+  - Merged: 6f35755d
+  - Follow-up: iter 2 (salt random per file in tui/oauth, oggi salt fisso `jht-salt`); iter 3 (`jht keyring set/get/delete` subcommand)
 
 - [x] **H5** — Migrare `cli/src/commands/secrets.js` da AES-CBC a AES-GCM
   - File: `cli/src/commands/secrets.js:27-40`
