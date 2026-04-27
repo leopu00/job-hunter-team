@@ -66,11 +66,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Merged: _—_
   - Depends on: C2
 
-- [ ] **H2** — Allowlist tabelle in `/api/database`
+- [x] **H2** — Allowlist tabelle in `/api/database`
   - File: `web/app/api/database/route.ts:14-21, 95-108`
   - Hardcoded set di table names; escludere file con prefix `secrets|credentials|tokens|.env`
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d6143480
 
 ---
 

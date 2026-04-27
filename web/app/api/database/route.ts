@@ -20,17 +20,37 @@ const DATA_DIRS = [
   path.join(JHT_HOME, 'status'),
 ];
 
+// Hardcoded allowlist: only these basenames are exposed by the database explorer.
+// Any other JSON file under JHT_HOME — including secrets.json, credential dumps,
+// or future user-added files — is invisible to GET and rejected by POST.
+const ALLOWED_TABLES = new Set<string>([
+  'alerts', 'analytics', 'applications', 'archive', 'automations',
+  'companies', 'contacts', 'cover-letters', 'enabled', 'errors',
+  'goals', 'history', 'interviews', 'jobs', 'notifications',
+  'onboarding', 'reminders', 'resume', 'saved-searches', 'stats',
+  'webhooks', 'circuit-breakers',
+]);
+
+// Defense-in-depth: refuse any basename matching a sensitive prefix even if
+// it slips into ALLOWED_TABLES by mistake.
+const DENY_PATTERN = /^(secrets|credentials|tokens|\.env)/i;
+
+function isAllowedTable(basename: string): boolean {
+  return ALLOWED_TABLES.has(basename) && !DENY_PATTERN.test(basename);
+}
+
 function scanJsonFiles(): TableInfo[] {
   const tables: TableInfo[] = [];
   for (const dir of DATA_DIRS) {
     let files: string[];
     try { files = fs.readdirSync(dir).filter(f => f.endsWith('.json')); } catch { continue; }
     for (const file of files) {
+      const name = file.replace('.json', '');
+      if (!isAllowedTable(name)) continue;
       const fp = path.join(dir, file);
       try {
         const stat = fs.statSync(fp);
         const content = JSON.parse(fs.readFileSync(fp, 'utf-8'));
-        const name = file.replace('.json', '');
         let rowCount = 0; let columns: string[] = [];
         if (Array.isArray(content)) { rowCount = content.length; if (content[0] && typeof content[0] === 'object') columns = Object.keys(content[0]); }
         else if (typeof content === 'object') {
@@ -61,6 +81,7 @@ function scanSqliteFiles(): TableInfo[] {
 }
 
 function queryJson(tableName: string, query: string): { columns: string[]; rows: Record<string, unknown>[]; count: number } | null {
+  if (!isAllowedTable(tableName)) return null;
   const allTables = scanJsonFiles();
   const table = allTables.find(t => t.name === tableName);
   if (!table) return null;
