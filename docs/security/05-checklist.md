@@ -27,18 +27,18 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Effort: 30 min
   - Merged: _—_ (dev-2)
 
-- [ ] **C5** — Remove plaintext fallback in CLI secrets
+- [x] **C5** — Remove plaintext fallback in CLI secrets
   - File: `cli/src/commands/secrets.js:80-92`
   - Errore esplicito + istruzioni se `JHT_SECRET_KEY` manca; aggiungere `mode: 0o600` su writeFile
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 0494a5c6
   - Depends on: H4 (così l'utente ha un percorso netto: keyring o env)
 
-- [ ] **C1** — Fix localhost auth bypass via `x-forwarded-host`
-  - File: `web/lib/auth.ts:15-19`
+- [x] **C1** — Fix localhost auth bypass via `x-forwarded-host`
+  - File: `web/lib/auth.ts:15-19` + cloni in `web/proxy.ts`, `web/app/(protected)/layout.tsx`, `web/app/(protected)/dashboard/page.tsx`
   - Sostituire con pattern OpenClaw: TCP socket peer + reject se `x-forwarded-*` presente
   - Effort: 1h (incluso aggiungere accesso a `req.socket.remoteAddress` in Next route handler)
-  - Merged: _—_
+  - Merged: 721b0b8e
 
 - [ ] **C2** — Add `requireAuth()` to ~25 sensitive routes
   - Files: `web/app/api/{secrets,database,agents/[id],providers,config,env,backup,health,tasks/[id],history/[id],credentials,sessions,logs,workspace/init}/route.ts`
@@ -66,11 +66,11 @@ Fix indispensabili prima del primo release pubblico. **Target:** completare prim
   - Merged: _—_
   - Depends on: C2
 
-- [ ] **H2** — Allowlist tabelle in `/api/database`
+- [x] **H2** — Allowlist tabelle in `/api/database`
   - File: `web/app/api/database/route.ts:14-21, 95-108`
   - Hardcoded set di table names; escludere file con prefix `secrets|credentials|tokens|.env`
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d6143480
 
 ---
 
