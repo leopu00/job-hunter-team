@@ -86,11 +86,12 @@ Hardening importante ma non bloccante.
   - Effort: 3h
   - Merged: e0d24b60
 
-- [ ] **H4** — Sostituire fallback machine-derived con keyring + env-var
-  - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`
+- [x] **H4** — Sostituire fallback machine-derived con keyring + env-var
+  - File: `tui/src/oauth/storage.ts:20-28`, `shared/credentials/storage.ts:46-50`, nuovo `shared/credentials/passphrase.ts`
   - Strategia: OS keyring (`@napi-rs/keyring`) se disponibile → env var fallback → errore esplicito (no machine-derived, no plaintext)
   - Effort: 2-3 giorni (cross-platform testing)
-  - Merged: _—_
+  - Merged: 6f35755d
+  - Follow-up: iter 2 (salt random per file in tui/oauth, oggi salt fisso `jht-salt`); iter 3 (`jht keyring set/get/delete` subcommand)
 
 - [x] **H5** — Migrare `cli/src/commands/secrets.js` da AES-CBC a AES-GCM
   - File: `cli/src/commands/secrets.js:27-40`
@@ -172,23 +173,23 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Effort: 1 giorno
   - Merged: _—_
 
-- [ ] **L2** — Validare `JHT_GATEWAY_URL`
+- [x] **L2** — Validare `JHT_GATEWAY_URL`
   - File: `web/app/api/gateway/route.ts:12`
   - `new URL()` + reject schemi non-http(s) + reject hostname privati senza opt-in
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 6261709a
 
-- [ ] **L4** — `.env.example` rotation guide
+- [x] **L4** — `.env.example` rotation guide
   - File: `.env.example`
   - Sezione finale con link a panel rotation Anthropic/Supabase/Google
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: 6261709a
 
-- [ ] **L5** — `.gitleaksignore` per i 3 false positive in test fixture
+- [x] **L5** — `.gitleaksignore` per i 3 false positive in test fixture
   - File: nuovo `.gitleaksignore`
   - Fingerprint: `6f578deeb0...` x2 e `6d6fc187ed...`
   - Effort: 5 min
-  - Merged: _—_
+  - Merged: 6261709a
 
 ### Pre-commit / CI hardening (ispirato a OpenClaw)
 
@@ -198,20 +199,20 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Effort: 4h (incl. baseline iniziale)
   - Merged: _—_
 
-- [ ] Aggiungere `actionlint` su workflow GitHub Actions
+- [x] Aggiungere `actionlint` su workflow GitHub Actions
   - File: `.pre-commit-config.yaml`
   - Effort: 30 min
-  - Merged: _—_
+  - Merged: d5d3842f
 
-- [ ] Aggiungere `zizmor` per audit security workflow
+- [x] Aggiungere `zizmor` per audit security workflow
   - File: `.pre-commit-config.yaml` + `zizmor.yml` (modello OpenClaw)
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d5d3842f
 
-- [ ] Aggiungere `npm audit --audit-level=high` come pre-commit
+- [x] Aggiungere `npm audit --audit-level=high` come pre-commit
   - File: `.pre-commit-config.yaml` + `scripts/pre-commit/npm-audit-prod.mjs`
   - Effort: 1h
-  - Merged: _—_
+  - Merged: d5d3842f
 
 - [x] Pin Docker base image a SHA256
   - Files: `Dockerfile:6`, `.github/dependabot.yml`

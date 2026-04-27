@@ -9,7 +9,32 @@ export const dynamic = 'force-dynamic'
 
 type ChannelId = 'web' | 'telegram' | 'cli'
 
-const GATEWAY_URL = process.env.JHT_GATEWAY_URL ?? 'http://localhost:18789'
+// Valida JHT_GATEWAY_URL al module load: deve essere http/https; un IP
+// privato non-localhost richiede l'opt-in JHT_GATEWAY_ALLOW_PRIVATE=1
+// per non trasformarsi in scanner SSRF accidentale verso la rete locale
+// dell'host.
+function validateGatewayUrl(raw: string): string {
+  let parsed: URL
+  try { parsed = new URL(raw) } catch {
+    throw new Error(`JHT_GATEWAY_URL non è un URL valido: ${raw}`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`JHT_GATEWAY_URL schema non supportato (solo http/https): ${parsed.protocol}`)
+  }
+  const host = parsed.hostname.toLowerCase()
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  const isPrivateIp =
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+    /^fc/.test(host) || /^fd/.test(host)
+  if (!isLocalhost && isPrivateIp && process.env.JHT_GATEWAY_ALLOW_PRIVATE !== '1') {
+    throw new Error(`JHT_GATEWAY_URL punta a IP privato (${host}); per consentirlo: JHT_GATEWAY_ALLOW_PRIVATE=1`)
+  }
+  return raw
+}
+
+const GATEWAY_URL = validateGatewayUrl(process.env.JHT_GATEWAY_URL ?? 'http://localhost:18789')
 const TIMEOUT_MS = 5_000
 
 const DEFAULT_CONFIG = { port: 18789, channels: ['web', 'cli'] as ChannelId[], requestTimeoutMs: 120_000, maxQueueSize: 100 }
