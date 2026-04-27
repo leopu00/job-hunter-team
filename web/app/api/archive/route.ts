@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -60,5 +61,5 @@ export async function DELETE(req: Request) {
     items = items.filter(a => !ids.includes(a.id));
     save(items);
     return NextResponse.json({ deleted: ids.length, remaining: items.length });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'archive' }); }
 }
