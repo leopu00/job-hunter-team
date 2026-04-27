@@ -65,4 +65,4 @@ We will publish aggregate results in this file periodically (anonymized, with co
 
 - [`STORY.md`](STORY.md) — why this project exists
 - [`PROVIDERS.md`](PROVIDERS.md) — which subscription to pick
-- [`MONITORING-RESULTS.md`](MONITORING-RESULTS.md) — technical test data on the monitoring stack
+- [`MONITORING.md`](MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)

@@ -101,7 +101,7 @@ Beta testers self-assign to an open cell:
 
 Once cells start filling:
 
-- 📈 **Aggregate graphs** → published in [`docs/MONITORING-RESULTS.md`](MONITORING-RESULTS.md) (oscillation distribution, cost-per-result by tier, etc.)
+- 📈 **Aggregate graphs** → published in [`docs/MONITORING.md`](MONITORING.md) (oscillation distribution, cost-per-result by tier, etc.)
 - 📚 **Per-cell case studies** → published in [`docs/RESULTS.md`](RESULTS.md) (one section per persona+tier, with the tester's narrative)
 - 📊 **This file** → kept as the source of truth for matrix status
 
@@ -109,5 +109,5 @@ Once cells start filling:
 
 - [`docs/BETA.md`](BETA.md) — beta tester program
 - [`docs/PROVIDERS.md`](PROVIDERS.md) — full provider matrix and pricing
-- [`docs/MONITORING-RESULTS.md`](MONITORING-RESULTS.md) — technical monitoring data (will receive aggregate graphs)
+- [`docs/MONITORING.md`](MONITORING.md) — technical monitoring data (will receive aggregate graphs)
 - [`docs/RESULTS.md`](RESULTS.md) — case studies (will receive per-cell narratives)

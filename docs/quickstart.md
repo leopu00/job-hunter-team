@@ -216,7 +216,7 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 
 - **Setup not finishing?** Run `jht doctor` — it tells you exactly what's missing
 - **Team won't start?** `jht container status` then `jht container logs -f`
-- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/MONITORING-RESULTS.md`](MONITORING-RESULTS.md) for what the numbers mean
+- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/MONITORING.md`](MONITORING.md) for what the numbers mean
 - **Bug or unclear behavior?** Open an issue with the labels suggested in `.github/ISSUE_TEMPLATE/bug_report.md`
 - **Want to be a beta tester?** See [`docs/BETA.md`](BETA.md)
 
@@ -230,7 +230,7 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
 - 🎯 [`docs/VISION.md`](VISION.md) — design philosophy, anti-goals, the Maestro
 - 🧪 [`docs/BETA.md`](BETA.md) — join the beta program
-- 📊 [`docs/MONITORING-RESULTS.md`](MONITORING-RESULTS.md) — Bridge/Sentinel test data
+- 📊 [`docs/MONITORING.md`](MONITORING.md) — Bridge/Sentinel test data
 - 🗺️ [`docs/ROADMAP.md`](ROADMAP.md) — what's coming next
 - 🛠️ [`docs/cli-install.md`](cli-install.md) — full CLI reference
 - 🏗️ [`docs/INFRA.md`](INFRA.md) — infrastructure diagram

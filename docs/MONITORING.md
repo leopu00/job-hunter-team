@@ -1,19 +1,19 @@
-# Monitoring — Test Results
+# Monitoring stack
 
 JHT runs on subscription LLMs, which means the single most important engineering problem is: **how close to 100% of the subscription window can we run, without ever crossing it?**
 
-This page documents what we measured.
+This page documents the monitoring stack (Bridge + Sentinel) and the test data we have so far.
 
-## The setup
+## Architecture
 
-The monitoring stack has two cooperating components:
+Two cooperating components:
 
 - **🌉 Bridge** — runs on a fixed clock, fetches usage samples from the provider, and projects when the team will hit 100% of the current window
-- **🛡️ Sentinel** — event-driven, intervenes only when the Bridge sees the projection drifting too high
+- **🛡️ Sentinel** — event-driven, intervenes on the Captain only when the Bridge sees the projection drifting too high
 
-This separation (clock-only Bridge + event-driven Sentinel) is the result of multiple iterations — see commits tagged `refactor(monitoring): V3/V4/V5`.
+This separation (clock-only Bridge + event-driven Sentinel) is the result of multiple iterations — earlier versions had the Sentinel polling continuously, which itself burned too many tokens.
 
-## Test results
+## Test results so far
 
 ### 🟣 Claude Max x20 — production-ready
 

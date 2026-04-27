@@ -76,7 +76,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 The user has three entry points: **🧙‍♂️ Maestro** for career advice (planned), **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the four pipeline agents (Scout, Analyst, Scorer, Writer) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
 
-Token usage is governed by a two-component monitoring stack: **📡 Bridge** runs on a fixed clock, fetches usage samples from the provider, and notifies the **💂 Sentinel**; the Sentinel stays event-driven and intervenes on the Captain only when the projection drifts toward the window limit. See [`docs/MONITORING-RESULTS.md`](docs/MONITORING-RESULTS.md).
+Token usage is governed by a two-component monitoring stack: **📡 Bridge** runs on a fixed clock, fetches usage samples from the provider, and notifies the **💂 Sentinel**; the Sentinel stays event-driven and intervenes on the Captain only when the projection drifts toward the window limit. See [`docs/MONITORING.md`](docs/MONITORING.md).
 
 Each agent is an autonomous AI session running on one of three supported CLIs: **Claude Code** (configured via `CLAUDE.md`), **Codex**, or **Kimi** (both configured via `AGENTS.md`). A shared SQLite database keeps state in sync across the team.
 

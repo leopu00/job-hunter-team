@@ -32,7 +32,7 @@ Two components prevent runaway spending:
 
 The two together aim for **~95% of the window** at every reset, without crossing 100% (which would trigger a rate-limit and freeze the team).
 
-For the actual numbers we measured during testing, see [`MONITORING-RESULTS.md`](MONITORING-RESULTS.md).
+For the actual numbers we measured during testing, see [`MONITORING.md`](MONITORING.md).
 
 ## What we're working on
 
@@ -44,4 +44,4 @@ For the actual numbers we measured during testing, see [`MONITORING-RESULTS.md`]
 
 Not yet. Future possibility: you give the team a budget + a deadline, the team auto-coordinates within that envelope. But subscription tokens cost ~5x less, so the subscription model wins on every economic axis as long as we can monitor the window precisely.
 
-If you're curious about the test data behind these numbers, jump to [`MONITORING-RESULTS.md`](MONITORING-RESULTS.md).
+If you're curious about the test data behind these numbers, jump to [`MONITORING.md`](MONITORING.md).
