@@ -48,18 +48,23 @@ function mask(value: string): string {
   return value.slice(0, 4) + '•'.repeat(Math.min(value.length - 4, 12))
 }
 
-/** GET — lista secrets con valori mascherati (reveal=true per valore completo) */
-export async function GET(req: NextRequest) {
+/**
+ * GET — lista secrets sempre mascherati. Niente parametro `?id=` reveal:
+ * il valore in chiaro si ottiene solo via `POST /api/secrets/reveal`
+ * (vedi finding H1: il vecchio GET esponeva enumerazione id + reveal
+ * nello stesso endpoint, sufficiente a estrarre tutti i secret con due
+ * GET una volta superato il check auth).
+ */
+export async function GET() {
   const denied = await requireAuth()
   if (denied) return denied
-  const reveal = req.nextUrl.searchParams.get('id')
   const store = load()
   const secrets = store.secrets.map(s => ({
     id: s.id,
     name: s.name,
     type: s.type,
-    value: s.id === reveal ? s.value : mask(s.value),
-    masked: s.id !== reveal,
+    value: mask(s.value),
+    masked: true,
     createdAt: s.createdAt,
   }))
   return NextResponse.json({ secrets, total: secrets.length })
