@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { JHT_HOME } from '@/lib/jht-paths'
 import { requireAuth } from '@/lib/auth'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ backup: result.entry, durationMs: result.durationMs }, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'backup' });
   }
 }
 
@@ -113,7 +114,7 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ restored: result.restoredFiles, targetDir, durationMs: result.durationMs });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'backup' });
   }
 }
 
