@@ -67,7 +67,7 @@ The main UI stays the web dashboard on `localhost`; the desktop app is just the 
 🟢 Status: IN PROGRESS
 ━━━━━━━━━━━━━━━━━━░░░ ~78%
 
-✅ Next.js app with 120 pages (App Router)
+✅ Next.js app with 112 pages (App Router)
 ✅ Google auth configured
 ✅ DB schema V2 (5 tables + RLS)
 ✅ Vercel CI/CD pipeline
