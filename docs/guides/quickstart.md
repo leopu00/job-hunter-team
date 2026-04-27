@@ -8,7 +8,7 @@ Get the team running in **about 10 minutes**, depending on the path you pick.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (8 agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](PROVIDERS.md) and [ADR-0004](adr/0004-subscription-only-no-api-keys.md).
+JHT runs ~**400M tokens/month** (8 agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
 
 You need an active subscription to **one** of:
 
@@ -216,7 +216,7 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 
 - **Setup not finishing?** Run `jht doctor` — it tells you exactly what's missing
 - **Team won't start?** `jht container status` then `jht container logs -f`
-- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/MONITORING.md`](MONITORING.md) for what the numbers mean
+- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/MONITORING.md`](../about/MONITORING.md) for what the numbers mean
 - **Bug or unclear behavior?** Open an issue with the labels suggested in `.github/ISSUE_TEMPLATE/bug_report.md`
 - **Want to be a beta tester?** See [`docs/BETA.md`](BETA.md)
 
@@ -224,13 +224,13 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 
 ## 📚 Where to look next
 
-- 📘 [`README.md`](../README.md) — project overview, story, manifesto
-- 📋 [`docs/STORY.md`](STORY.md) — origin story (legacy team results)
-- 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — which subscription to pick
+- 📘 [`README.md`](../../README.md) — project overview, story, manifesto
+- 📋 [`docs/STORY.md`](../about/STORY.md) — origin story (legacy team results)
+- 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
-- 🎯 [`docs/VISION.md`](VISION.md) — design philosophy, anti-goals, the Maestro
+- 🎯 [`docs/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Maestro
 - 🧪 [`docs/BETA.md`](BETA.md) — join the beta program
-- 📊 [`docs/MONITORING.md`](MONITORING.md) — Bridge/Sentinel test data
-- 🗺️ [`docs/ROADMAP.md`](ROADMAP.md) — what's coming next
+- 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
+- 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
 - 🛠️ [`docs/cli-install.md`](cli-install.md) — full CLI reference
-- 🏗️ [`docs/INFRA.md`](INFRA.md) — infrastructure diagram
+- 🏗️ [`docs/INFRA.md`](../internal/INFRA.md) — infrastructure diagram

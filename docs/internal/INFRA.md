@@ -1,10 +1,10 @@
 # Infrastructure — Job Hunter Team
 
-> 📐 **High-level deployment diagram.** It shows the unit of deployment (the container), the deployment locations (local / dedicated / self-hosted VPS), and the optional sync to managed storage. Not every agent is drawn individually — the full team composition is documented in the [README](../README.md) and in `agents/`.
+> 📐 **High-level deployment diagram.** It shows the unit of deployment (the container), the deployment locations (local / dedicated / self-hosted VPS), and the optional sync to managed storage. Not every agent is drawn individually — the full team composition is documented in the [README](../../README.md) and in `agents/`.
 >
-> Source: [`infra.d2`](./infra.d2).
+> Source: [`infra.d2`](../assets/infra.d2).
 
-![JHT infrastructure](./infra.svg)
+![JHT infrastructure](../assets/infra.svg)
 
 ## At a glance
 
@@ -33,7 +33,7 @@ Two managed services can hold a **read-only mirror** of the operational state:
 - **Supabase** — PostgreSQL for structured metadata (positions, scores, applications) + auth
 - **Google Drive** — user files (CVs, cover letters, generated PDFs)
 
-This is **opt-in** — the user enables it explicitly via `jht cloud enable` (see [`docs/cli-install.md`](./cli-install.md)). Nothing leaves the local machine until then. Once enabled, the local container periodically pushes a snapshot of the operational state to Supabase + Drive so the user can:
+This is **opt-in** — the user enables it explicitly via `jht cloud enable` (see [`docs/cli-install.md`](../guides/cli-install.md)). Nothing leaves the local machine until then. Once enabled, the local container periodically pushes a snapshot of the operational state to Supabase + Drive so the user can:
 - Browse positions/applications from another device (phone, work laptop)
 - Have a backup against local data loss
 - Visit `jobhunterteam.ai` and see their own results in the web dashboard
@@ -47,15 +47,15 @@ This is **opt-in** — the user enables it explicitly via `jht cloud enable` (se
 Three channels today, each with a different audience:
 
 - **🌐 Browser** (web dashboard — `localhost:3000` for Local/Dedicated, public URL for self-hosted VPS) — the user can address **any agent** individually. Talking to the Captain is the recommended default (it coordinates the pipeline), but the user can reach any team member directly.
-- **💬 Telegram** — currently a bidirectional bridge to the **Captain only**. Planned upgrade ([`docs/ROADMAP.md`](./ROADMAP.md)): per-agent chats + a "team forum" channel where the user can join the whole team's conversation.
+- **💬 Telegram** — currently a bidirectional bridge to the **Captain only**. Planned upgrade ([`docs/ROADMAP.md`](../about/ROADMAP.md)): per-agent chats + a "team forum" channel where the user can join the whole team's conversation.
 - **⌨️ CLI + tmux** *(technical users)* — `jht team attach <agent>` to drop directly into the agent's tmux session and watch it work live (raw model output, tool calls, decisions). Useful for debugging, for understanding what the agents are actually doing, and for power users who prefer the terminal.
 
-In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](./AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
+In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
 
 ## Related
 
-- 🎯 [`docs/VISION.md`](./VISION.md) — design philosophy, why local-first, why no SaaS
-- 💳 [`docs/PROVIDERS.md`](./PROVIDERS.md) — supported subscriptions matrix
-- 📊 [`docs/MONITORING.md`](./MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
-- 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — internal operations reference
-- 🗺️ [`docs/ROADMAP.md`](./ROADMAP.md) — what's coming next
+- 🎯 [`docs/VISION.md`](../about/VISION.md) — design philosophy, why local-first, why no SaaS
+- 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
+- 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
+- 🔒 [`docs/MAINTAINERS.md`](MAINTAINERS.md) — internal operations reference
+- 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
