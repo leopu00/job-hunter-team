@@ -48,4 +48,4 @@ I have a couple of friends already lined up to test the public version. If you'r
 
 ---
 
-> The system that found me a job tells me to build the next thing. I keep listening.
+> AI should work for the people who need work — not for the systems built to filter them out.
