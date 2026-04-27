@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-> 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added.
+> 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added, **pre-launch security hardening sprint** (31/34 fix, score 30% → 74%, audit suite in `docs/security/`).
 
 ### 🖥️ Desktop launcher
 
@@ -95,6 +95,19 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
 - **📚 ROADMAP, INFRA, BETA, MONITORING-RESULTS** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
 - **🦞 OpenClaw integration** — emoji standardized across README + AI-AGENT-INTEGRATION.md
+
+### 🔒 Security
+
+- **🛡️ Pre-launch hardening sprint** (sha `7a2cb6ae`) — 4 agenti Claude in parallelo (worktrees dev-1..dev-4), 31/34 fix in ~95min, security score **30% → 74%**, gap vs OpenClaw chiuso da -78 a -25 punti
+- **Phase 1 (bloccanti pre-launch) 9/9 ✅** — C1-C5, H1, H2, H8, H9
+- **Phase 2 (post-launch) 12/12 ✅** — H3-H6, M1-M8
+- **Phase 3 (hardening) 10/13 🟡** — gap residui (blockers per public release): SSRF dispatcher generico, `resolve-system-bin` strict, CSP hash-based prod L1
+- **🆕 Moduli nuovi:** `web/lib/{auth,csrf,error-response,fs-safety,local-token}.ts`, `shared/{credentials/passphrase,credentials/manager,logger/redact}.ts`, `cli/src/commands/keyring.js`
+- **🔑 Innovazioni vs OpenClaw:** dual-channel auth (cookie HttpOnly + Bearer fallback), `jht keyring set/get/delete` CLI, PBKDF2 + salt random per file OAuth storage
+- **🧹 Logger redaction** — pattern segreti (Bearer/PBKDF2/JWT/API key) hookato nel Logger
+- **🐳 Docker base image** pinned a SHA256 + Dependabot Docker weekly
+- **🪝 Pre-commit hooks** — gitleaks, detect-secrets (con baseline), actionlint, zizmor, npm-audit-prod
+- **📚 7 nuovi documenti** in `docs/security/` (~2336 righe) — pre-launch review (27 finding), OpenClaw comparison file-per-file, implementation tradeoffs, threat model, checklist, post-fix snapshot
 
 ### 🧪 Testing
 
