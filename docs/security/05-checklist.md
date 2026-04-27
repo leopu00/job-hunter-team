@@ -217,7 +217,7 @@ Cose da fare gradualmente nei mesi post-launch. Nessun blocco operativo.
   - Files: `Dockerfile:6`, `.github/dependabot.yml`
   - `FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c` + Dependabot weekly bump (label `dependencies/docker/security`). Niente cambi a `docker-compose.yml`: l'immagine è ereditata da `build:.` quindi il pin è già coerente.
   - Effort: 2h (incl. Renovate config)
-  - Merged: pending
+  - Merged: 8fbed8fa
 
 ### Test security
 
@@ -250,10 +250,10 @@ Decisioni esplicite di **non fare** ora, documentate in [`03-implementation-trad
 
 ```
 Phase 1 (bloccanti):    9/9   ██████████████████████████████████  100%
-Phase 2 (post-launch): 11/12  ███████████████████████████████░░░  92%
-Phase 3 (hardening):    3/13  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░  23%
+Phase 2 (post-launch): 12/12  ██████████████████████████████████  100%
+Phase 3 (hardening):    4/13  ██████████░░░░░░░░░░░░░░░░░░░░░░░░  31%
 ─────────────────────────────────────────────────────────────────
-TOTALE:                23/34  ███████████████████████░░░░░░░░░░░  68%
+TOTALE:                25/34  █████████████████████████░░░░░░░░░  74%
 ```
 
 > Aggiornare la barra ad ogni merge. Quando Phase 1 = 9/9, JHT è pronto per il public open-source release.
