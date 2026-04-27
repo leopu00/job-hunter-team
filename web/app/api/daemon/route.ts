@@ -4,6 +4,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +83,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, output: stdout.trim() })
     }
   } catch (err: unknown) {
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })
+    return sanitizedError(err, { scope: 'daemon' })
   }
 }
