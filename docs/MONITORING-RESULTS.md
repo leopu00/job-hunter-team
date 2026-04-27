@@ -45,7 +45,7 @@ If Kimi €40 holds at >90% target with <10% oscillation for a full month under 
 
 ### 🟣 Claude Pro €20 — not viable
 
-A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for a 7-agent team. Re-test deferred until Sentinel token consumption drops.
+A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for an 8-agent team. Re-test deferred until Sentinel token consumption drops.
 
 ## Known issues
 
