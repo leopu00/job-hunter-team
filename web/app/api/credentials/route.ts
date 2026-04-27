@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,8 @@ function validateApiKey(provider: string, key: string): string | null {
 
 /** GET — lista provider con stato credenziali (mai espone chiavi reali) */
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const providers = ALL_PROVIDERS.map(p => {
     const meta = readCredentialMeta(p)
     const isApiKey = (API_KEY_PROVIDERS as readonly string[]).includes(p)
@@ -73,6 +76,8 @@ export async function GET() {
 
 /** POST — salva una credenziale (API key o OAuth token) */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { provider?: string; apiKey?: string; accessToken?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }
 
@@ -101,6 +106,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove credenziale per provider: ?provider=claude */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const provider = req.nextUrl.searchParams.get('provider')
   if (!provider || !isValidProvider(provider)) {
     return NextResponse.json({ ok: false, error: 'Provider non valido' }, { status: 400 })
