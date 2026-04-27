@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +59,8 @@ function maskKeys(cfg: Record<string, unknown>): Record<string, unknown> {
 }
 
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   if (!fs.existsSync(CONFIG_PATH)) return NextResponse.json({ exists: false, config: null, issues: [], valid: false })
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
@@ -69,6 +72,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: { config?: unknown; validateOnly?: boolean }
   try { body = await req.json() } catch { return NextResponse.json({ error: 'body non valido' }, { status: 400 }) }
 
