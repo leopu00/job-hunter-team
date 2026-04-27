@@ -18,6 +18,7 @@ type Entry = {
   status: 'OK' | 'ATTENZIONE' | 'CRITICO' | 'SOTTOUTILIZZO' | 'RESET' | 'ANOMALIA' | string
   throttle?: number
   reset_at?: string
+  source?: string  // 'bridge' | 'capitano' | 'sentinella-api' | 'sentinella-worker' | 'manual'
 }
 
 type OpStatus = { active: boolean; output: string }
@@ -29,6 +30,27 @@ const STATUS_COLOR: Record<string, string> = {
   CRITICO: '#f87171',
   RESET: '#a78bfa',
   ANOMALIA: '#fb923c',
+}
+
+// Palette per chi ha generato il sample. Permette di vedere a colpo
+// d'occhio chi ha fatto il check (bridge clock automatico, capitano
+// post-spawn, sentinella tick, sentinella in fallback worker manuale).
+// Architettura nuova 2026-04-25 (D1-D5): tutti gli attori scrivono nel
+// JSONL e il grafico distingue.
+const SOURCE_COLOR: Record<string, string> = {
+  bridge:              '#22d3ee',  // cyan — orologio automatico
+  capitano:            '#22c55e',  // verde — check on-demand del Capitano
+  'sentinella-api':    '#a855f7',  // viola — Sentinella ramo API
+  'sentinella-worker': '#facc15',  // giallo — Sentinella fallback TUI manuale
+  manual:              '#94a3b8',  // grigio — debug / inserimento a mano
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  bridge:              'bridge',
+  capitano:            'capitano',
+  'sentinella-api':    'sentinella·api',
+  'sentinella-worker': 'sentinella·worker',
+  manual:              'manual',
 }
 
 const THROTTLE_LABEL = ['T0 full', 'T1 30s', 'T2 2 min', 'T3 5 min', 'T4 10 min']
@@ -83,19 +105,31 @@ function Chart({ entries }: { entries: Entry[] }) {
       <path d={pathFor('velocity_ideal')} stroke="#64748b" strokeWidth={1} fill="none" opacity={0.5} />
       <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={2.2} fill="none" />
 
-      {entries.map((e, i) => (
-        <circle
-          key={i}
-          cx={xAt(i)}
-          cy={yAt(e.usage)}
-          r={3}
-          fill={STATUS_COLOR[e.status] || '#22d3ee'}
-          stroke="#0f172a"
-          strokeWidth={1}
-        >
-          <title>{`${e.ts} • ${e.usage}% • ${e.status}${e.throttle !== undefined ? ' • T' + e.throttle : ''}`}</title>
-        </circle>
-      ))}
+      {entries.map((e, i) => {
+        // Colore in base al source (chi ha fatto il check). Se source
+        // mancante (sample vecchi pre-rifattorizzazione 2026-04-25) cade
+        // su STATUS_COLOR per backward compat con grafici storici.
+        const src = e.source || ''
+        const sourceColor = SOURCE_COLOR[src]
+        const fill = sourceColor || STATUS_COLOR[e.status] || '#22d3ee'
+        // Marker più grande per check fatti da agenti (capitano /
+        // sentinella) — sono "eventi" distinti dal cron del bridge.
+        const r = (src === 'capitano' || src.startsWith('sentinella')) ? 4 : 3
+        const sourceLabel = SOURCE_LABEL[src] || src || '(legacy)'
+        return (
+          <circle
+            key={i}
+            cx={xAt(i)}
+            cy={yAt(e.usage)}
+            r={r}
+            fill={fill}
+            stroke="#0f172a"
+            strokeWidth={1}
+          >
+            <title>{`${e.ts} • ${e.usage}% • ${e.status}${e.throttle !== undefined ? ' • T' + e.throttle : ''} • ${sourceLabel}`}</title>
+          </circle>
+        )
+      })}
 
       {entries.length > 0 && (
         <>
@@ -120,6 +154,7 @@ function Chart({ entries }: { entries: Entry[] }) {
         </text>
       )}
 
+      {/* Linee */}
       <g transform={`translate(${PAD.left}, 10)`}>
         <rect x={0} y={-8} width={14} height={2} fill="#22d3ee" />
         <text x={20} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">usage</text>
@@ -127,6 +162,18 @@ function Chart({ entries }: { entries: Entry[] }) {
         <text x={90} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">proiezione</text>
         <rect x={170} y={-8} width={14} height={2} fill="#64748b" />
         <text x={190} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">ideale</text>
+      </g>
+
+      {/* Punti — colorati per source (chi ha fatto il check) */}
+      <g transform={`translate(${PAD.left}, 26)`}>
+        <circle cx={4}   cy={-3} r={3} fill={SOURCE_COLOR.bridge} />
+        <text x={14}  y={0} fontSize={10} fill="rgba(255,255,255,0.7)">bridge</text>
+        <circle cx={64}  cy={-3} r={4} fill={SOURCE_COLOR.capitano} />
+        <text x={74}  y={0} fontSize={10} fill="rgba(255,255,255,0.7)">capitano</text>
+        <circle cx={138} cy={-3} r={4} fill={SOURCE_COLOR['sentinella-api']} />
+        <text x={148} y={0} fontSize={10} fill="rgba(255,255,255,0.7)">sentinella·api</text>
+        <circle cx={236} cy={-3} r={4} fill={SOURCE_COLOR['sentinella-worker']} />
+        <text x={246} y={0} fontSize={10} fill="rgba(255,255,255,0.7)">sentinella·worker</text>
       </g>
     </svg>
   )
@@ -335,6 +382,17 @@ export default function SentinellaPage() {
           </button>
         )}
 
+        {isActive && (
+          <button
+            onClick={async () => {
+              await fetch('/api/team/terminal/open?session=SENTINELLA', { method: 'POST' })
+            }}
+            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+          >
+            {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
+          </button>
+        )}
+
         {startMsg && (
           <span className="text-[11px] text-[var(--color-muted)]">{startMsg}</span>
         )}
@@ -348,13 +406,14 @@ export default function SentinellaPage() {
         <input
           id="tick-min"
           type="number"
-          min={1}
+          min={0.25}
           max={60}
+          step={0.25}
           value={tickDraft}
-          onChange={(e) => setTickDraft(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
-          className="w-16 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
+          onChange={(e) => setTickDraft(Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)))}
+          className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
         />
-        <span className="text-[11px] text-[var(--color-muted)]">min</span>
+        <span className="text-[11px] text-[var(--color-muted)]">min (0.5 = 30s)</span>
         <button
           onClick={handleSaveTick}
           disabled={savingTick || tickDraft === tickMin}

@@ -16,6 +16,7 @@ const TASKS_PATH  = path.join(JHT_DIR, 'tasks', 'tasks.json')
 // Mappa role-id → info agente
 const AGENTS_BY_ID: Record<string, { name: string; session: string; effort: string }> = {
   capitano:       { name: 'Capitano',  session: 'CAPITANO',        effort: 'high' },
+  sentinella: { name: 'Sentinella',      session: 'SENTINELLA',  effort: 'medium' },
   scout:      { name: 'Scout',           session: 'SCOUT-1',     effort: 'high' },
   analista:   { name: 'Analista',        session: 'ANALISTA-1',  effort: 'high' },
   scorer:     { name: 'Scorer',          session: 'SCORER-1',    effort: 'medium' },

@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic'
 // Agenti JHT con le relative sessioni tmux
 const AGENTS = [
   { id: 'capitano',       name: 'Capitano',  session: 'CAPITANO' },
+  { id: 'sentinella', name: 'Sentinella',       session: 'SENTINELLA' },
   { id: 'scout',      name: 'Scout',            session: 'SCOUT' },
   { id: 'analista',   name: 'Analista',         session: 'ANALISTA' },
   { id: 'scorer',     name: 'Scorer',           session: 'SCORER' },

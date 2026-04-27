@@ -2289,18 +2289,33 @@ window.setupApi.onProviderLog((line) => {
 // -------- Step: provider login (tmux/subscription auth) --------
 
 dom.btnLoginBack.addEventListener('click', () => {
-  // If the user opened provider-login from the "Manage login" button
-  // on the ready screen, back should bounce them to ready, not send
-  // them back through the wizard.
+  // Bounce-back per tre origini possibili:
+  //   1. STEP_READY  → utente in setup wizard ha cliccato "Manage login"
+  //   2. 'home'      → utente in home ha cliccato "Cambia provider" o
+  //                    "Provider login": back deve riportare alla home,
+  //                    NON al wizard di setup (era il bug "loop wizard").
+  //   3. default     → flusso wizard normale, torna a provider-choose.
   if (state.loginOrigin === STEP_READY) {
     state.loginOrigin = null
     enterReady()
+  } else if (state.loginOrigin === 'home') {
+    state.loginOrigin = null
+    showHome('team')
   } else {
     showStep(STEP_PROVIDER_CHOOSE)
   }
 })
 dom.btnLoginContinue.addEventListener('click', () => {
   if (dom.btnLoginContinue.disabled) return
+  // Stesso discriminatore del back: se siamo arrivati dalla home,
+  // continue ritorna alla home (provider/auth gia' applicati al
+  // jht.config.json dal flow di login). Niente STEP_READY/startTeam:
+  // quello e' il flow di primo setup, non un cambio provider runtime.
+  if (state.loginOrigin === 'home') {
+    state.loginOrigin = null
+    showHome('team')
+    return
+  }
   state.loginOrigin = null
   enterReady()
 })
@@ -3192,8 +3207,18 @@ for (const btn of homeDom.navItems) {
 homeDom.btnStart.addEventListener('click', startTeamFromHome)
 homeDom.btnStop.addEventListener('click', stopTeamFromHome)
 homeDom.btnOpen.addEventListener('click', () => window.launcherApi.openBrowser())
-homeDom.btnProviderLogin.addEventListener('click', () => showWizard(STEP_PROVIDER_LOGIN))
-homeDom.btnProviderChange.addEventListener('click', () => showWizard(STEP_PROVIDER_CHOOSE))
+// Origin marker: il listener btnLoginBack/btnLoginContinue lo legge per
+// riportare alla home invece che a STEP_READY (che farebbe partire il
+// runtime del wizard di primo setup — non e' quello che vuole un utente
+// gia' settato che sta solo cambiando provider).
+homeDom.btnProviderLogin.addEventListener('click', () => {
+  state.loginOrigin = 'home'
+  showWizard(STEP_PROVIDER_LOGIN)
+})
+homeDom.btnProviderChange.addEventListener('click', () => {
+  state.loginOrigin = 'home'
+  showWizard(STEP_PROVIDER_CHOOSE)
+})
 homeDom.btnDockerRefresh.addEventListener('click', () => refreshHomeDocker())
 homeDom.btnDockerOpen.addEventListener('click', async () => {
   const platform = window.platformInfo?.platform
