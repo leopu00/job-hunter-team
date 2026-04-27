@@ -83,10 +83,18 @@ function getVersion(): string {
   } catch { return '0.0.0' }
 }
 
-/** GET — health check globale */
+/** GET — health check globale.
+ *
+ * Senza auth: ritorna solo `{status:'ok'}` per probe esterni
+ * (load balancer, monitor) senza esporre versione, moduli o
+ * configurazione interna. Con auth: payload completo con dettaglio
+ * per modulo (config, sessions, agenti tmux, ecc.).
+ */
 export async function GET() {
   const denied = await requireAuth()
-  if (denied) return denied
+  if (denied) {
+    return NextResponse.json({ status: 'ok' as Status })
+  }
   // Su Vercel serverless non c'e' filesystem locale ne' tmux
   if (IS_SERVERLESS) {
     return NextResponse.json({
