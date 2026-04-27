@@ -6,10 +6,10 @@
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { JHT_CREDENTIALS_DIR } from "../paths.js";
 import { decrypt, deriveKey, encrypt, generateSalt, isValidPayload } from "./crypto.js";
+import { resolveJhtPassphrase } from "./passphrase.js";
 import type { Credential, EncryptedPayload } from "./types.js";
 
 const CREDENTIALS_DIR = JHT_CREDENTIALS_DIR;
@@ -42,12 +42,12 @@ function resolveMasterKey(passphrase: string): Buffer {
 
 /**
  * Risolve la passphrase per la cifratura.
- * Ordine: env var JHT_CREDENTIALS_KEY → fallback su hostname+user.
+ * Delega all'helper unificato `resolveJhtPassphrase`: env var
+ * `JHT_CREDENTIALS_KEY` → OS keyring (se `@napi-rs/keyring` e' installato)
+ * → throw `MissingPassphraseError`. Niente piu' fallback machine-derived.
  */
 function resolvePassphrase(): string {
-  const envKey = process.env.JHT_CREDENTIALS_KEY?.trim();
-  if (envKey) return envKey;
-  return `jht-${homedir()}-default`;
+  return resolveJhtPassphrase({ envVar: "JHT_CREDENTIALS_KEY" });
 }
 
 function credentialPath(provider: string): string {
