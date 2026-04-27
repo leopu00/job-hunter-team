@@ -265,58 +265,26 @@ export default function ProfileStats({ profile }: Props) {
             <p className="text-[11px] text-[var(--color-muted)] mb-4">{profile.target_role} {profile.location ? `· ${profile.location}` : ''}</p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {/* Completion */}
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-3">
-              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
-                {t('completion')}
-              </div>
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold tabular-nums" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
-                  {animatedCompletion}%
-                </span>
-              </div>
-              <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${completion}%`,
-                    background: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)',
-                  }}
-                />
-              </div>
+          {/* Completion — unica stat utile sul profilo. Match score medio e
+              conteggio candidature appartengono alla dashboard, non al
+              profilo. */}
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-3">
+            <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
+              {t('completion')}
             </div>
-
-            {/* Match score */}
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-3">
-              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
-                {t('match_avg')}
-              </div>
-              <span className="text-2xl font-bold" style={{ color: avgMatch != null ? 'var(--color-blue)' : 'var(--color-dim)' }}>
-                {avgMatch != null ? `${avgMatch}%` : '—'}
+            <div className="flex items-end gap-2">
+              <span className="text-2xl font-bold tabular-nums" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
+                {animatedCompletion}%
               </span>
             </div>
-
-            {/* Applications count */}
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-3 col-span-2 sm:col-span-1">
-              <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
-                {t('applications')}
-              </div>
-              <span className="text-2xl font-bold text-[var(--color-bright)]">{totalApps}</span>
-              {totalApps > 0 && (
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {appCounts['interview'] && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-green)/10', color: 'var(--color-green)', border: '1px solid var(--color-green)/20' }}>
-                      {appCounts['interview']} {t('interview')}
-                    </span>
-                  )}
-                  {appCounts['offer'] && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-green)/10', color: 'var(--color-green)', border: '1px solid var(--color-green)/20' }}>
-                      {appCounts['offer']} {t('offer')}
-                    </span>
-                  )}
-                </div>
-              )}
+            <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${completion}%`,
+                  background: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)',
+                }}
+              />
             </div>
           </div>
         </div>
@@ -332,7 +300,7 @@ export default function ProfileStats({ profile }: Props) {
             {missingFields.map((f, i) => (
               <Link
                 key={i}
-                href={`/profile/edit#${f.anchor}`}
+                href={`/profile#${f.anchor}`}
                 title={lang === 'it' ? `Vai a "${f.label.it}"` : `Go to "${f.label.en}"`}
                 className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
