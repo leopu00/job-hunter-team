@@ -144,7 +144,7 @@ Hardening importante ma non bloccante.
   - File: `web/lib/profile-reader.ts`
   - `yaml.load(content, { schema: yaml.CORE_SCHEMA })` (esclude tag estesi tipo `!!js/function`) + helper `isPlainObject` per narrowing al posto di Zod (no nuova dep)
   - Effort: 1h
-  - Merged: pending
+  - Merged: 537c4b07
 
 - [ ] **M4** — Error response sanitization
   - Files: pattern globale, `web/app/api/**` routes che ritornano `${err}`
