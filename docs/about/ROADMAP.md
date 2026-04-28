@@ -153,6 +153,21 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 ⬜ Fix DEFAULT_LOCALE mismatch (shared/i18n='it' vs desktop wizard='en')
 ⬜ Spanish, German, French, Portuguese translations
 ⬜ Translator-facing documentation
+⬜ **Localize agent prompts & runtime docs**: all files agents read at
+   runtime — agent identity prompts (`agents/<role>/<role>.md`), the
+   operational manual (`agents/_manual/`), the team architecture
+   (`agents/_team/architettura.md`), and the skill markdown bodies
+   (`agents/_skills/<name>/SKILL.md` + `agents/<role>/_skills/`) —
+   must exist in every supported language. When the user picks a
+   language at onboarding, the launcher should pin the team to the
+   matching prompt set so the Captain, Sentinel, Writer, etc. all
+   speak that language end-to-end (orders, feedback, chat replies).
+   Implies: per-language directory layout (e.g. `<role>.it.md` /
+   `<role>.en.md` or a `prompts/<lang>/` overlay), a startup hook
+   in `start-agent.sh` that picks the right file, language tag in
+   `jht.config.json`, and translator workflow for the prompt corpus.
+   Today everything is Italian — keep that as the baseline, plan the
+   English/Hungarian/Spanish/etc. corpus as a follow-up sprint.
 ```
 
 For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
