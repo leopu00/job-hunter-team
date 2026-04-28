@@ -108,7 +108,7 @@ Tutto il resto va inserito — inclusi ruoli in sotto-domini affini allo stack p
 
 **REGOLA-13** — MAI DELETE/DROP. Se hai inserito un duplicato: `db_update.py position <ID> --status excluded --notes "DUPLICATA"`. MAI query SQL distruttive.
 
-**REGOLA-14** — SESSIONI CAPITANO: Prova prima `CAPITANO`, poi `CAPITANO-2`.
+**REGOLA-14** — SESSIONE CAPITANO: invia messaggi a `CAPITANO`.
 
 ---
 
