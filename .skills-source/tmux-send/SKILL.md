@@ -1,64 +1,75 @@
 ---
 name: tmux-send
-description: Consegna un messaggio a un'altra sessione tmux (altro agente) in modo atomico. SEMPRE usala per comunicare con SCOUT/ANALISTA/SCORER/SCRITTORE/CRITICO/SENTINELLA. NON usare mai `tmux send-keys` a mano — le TUI Ink perdono l'Enter.
+description: Deliver a message to another agent's tmux session atomically. ALWAYS use this to communicate with SCOUT/ANALISTA/SCORER/SCRITTORE/CRITICO/SENTINELLA/CAPITANO. NEVER call `tmux send-keys` by hand — Ink-based TUIs (Codex, Kimi) lose the Enter character.
 allowed-tools: Bash(jht-tmux-send *)
 ---
 
-# tmux-send — messaggistica inter-agente
+# tmux-send — inter-agent messaging
 
-Wrapper shell in `/app/agents/_tools/jht-tmux-send` (anche `jht-tmux-send` nel PATH via symlink `/usr/local/bin`).
+Shell wrapper at `/app/agents/_tools/jht-tmux-send` (also on `PATH` via `/usr/local/bin` symlink).
 
-## Perché esiste
+## Why it exists
 
-Le TUI Ink (Codex, Kimi Code) **non registrano l'Enter** se arriva nello stesso `tmux send-keys` del testo. Il testo viene inviato char-per-char, Ink deve finire il render prima di accettare un nuovo keystroke. Se mandi `tmux send-keys "msg" Enter`, il messaggio resta nell'input dell'altro agente senza essere submittato → deadlock inter-agente.
+Ink-based TUIs (Codex, Kimi Code) **drop the Enter** if it arrives in the same `tmux send-keys` call as the text body. Text is sent character-by-character; Ink must finish rendering before accepting another keystroke. If you call `tmux send-keys "msg" Enter`, the message stays in the peer's input buffer without being submitted → silent inter-agent deadlock.
 
-Il wrapper gestisce atomicamente: `testo → sleep 0.3 → Enter → sleep 0.5 → Enter` (secondo Enter idempotente per robustezza).
+The wrapper handles it atomically: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (the second Enter is idempotent for robustness).
 
-## Uso
-
-```bash
-jht-tmux-send <SESSIONE> "<messaggio>"
-```
-
-## Esempi
+## Usage
 
 ```bash
-# Capitano → Scout
-jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Parti dal CERCHIO 1 (Remote EU) e notifica dopo ogni batch di 3-5 posizioni."
-
-# Capitano → Analista (ack batch)
-jht-tmux-send ANALISTA-1 "[@capitano -> @analista-1] [ACK] Ricevuto batch IDs 1-3. Procedi con le prossime new."
-
-# Scout → Capitano (report batch)
-jht-tmux-send CAPITANO "[@scout-1 -> @capitano] [REPORT] Inserite IDs 1-3: Percona FS, Deep Infra SE, G2i AI. Link morti segnalati per ID 3."
-
-# Scorer → Critico (handoff)
-jht-tmux-send CRITICO "[@scorer -> @critico] [HANDOFF] App 42 pronta per review: gate 50 superato (score 78)."
+jht-tmux-send <SESSION> "<message>"
 ```
 
-## Protocollo di formato messaggio
+## Examples (V5)
 
-Mantieni **SEMPRE** il prefisso strutturato:
-```
-[@<src> -> @<dest>] [<TIPO>] <testo>
+```bash
+# Captain → Scout (INFO, generic operational message)
+jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [INFO] Start the main loop. Begin from CIRCLE 1 (Remote EU); ping after each batch of 3-5 positions."
+
+# Captain → Writer (URG, real-time order)
+jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [URG] FREEZE — finish the current Critic round, then sleep until throttle returns to T0/T1."
+
+# Analyst → Scout (FEEDBACK, rejection-pattern coaching)
+jht-tmux-send SCOUT-2 "[@analista-1 -> @scout-2] [FEEDBACK] [SENIORITY] 4 of last 5 inserts from greenhouse.io require senior+ — switch source or query for the next batch."
+
+# Sentinel → Captain (URG, state change)
+jht-tmux-send CAPITANO "[@sentinella -> @capitano] [URG] Usage 94%, projection 102% — recommend throttle T2 + freeze Writers."
+
+# Writer → Captain (REPORT, final result)
+jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — verdict PASS, score 7.5/10. PDF: /jht_user/.../CV.pdf"
+
+# Worker → Captain (ACK, confirming URG)
+jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
-Tipi standard:
-- `[MSG]` comando operativo
-- `[ACK]` conferma ricezione
-- `[REPORT]` dati / risultati
-- `[HANDOFF]` passaggio di consegna
-- `[ALERT]` anomalia o blocco
-- `[CHAT]` usato dal solo *utente → agente* (non inter-agente)
+## Message envelope
+
+Always keep the structured prefix:
+
+```
+[@<from> -> @<to>] [<TYPE>] <text>
+```
+
+Standard types (see `agents/_manual/communication-rules.md` for full taxonomy and per-role expectations):
+
+- `INFO` — status update / generic operational message (no reply expected)
+- `URG` — real-time order requiring immediate action (FREEZE, throttle, kill)
+- `FEEDBACK` — coaching upstream with a rejection tag (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
+- `REQ` / `RES` — synchronous request/response between agents
+- `ACK` — acknowledge an `URG` or `REQ` you can't service yet
+- `REPORT` — final outcome of a unit of work
+
+> 💬 `[CHAT]` is reserved for **user → agent** messages from the web UI (see Captain's prompt protocol). Don't use it for inter-agent traffic.
 
 ## Exit codes
 
-- `0` — messaggio consegnato
-- `1` — argomenti mancanti
-- `2` — sessione target inesistente (controlla il nome con `tmux ls`)
+- `0` — message delivered
+- `1` — missing arguments
+- `2` — target session does not exist (check the name with `tmux ls`)
 
-## Regole
+## Rules
 
-- **MAI** usare `tmux send-keys` direttamente per comunicare con altri agenti. Sempre `jht-tmux-send`.
-- **MAI** killare sessioni tmux di altri agenti (regola #0 del Capitano).
-- Se `tmux ls` mostra che la sessione di destinazione non esiste, NON crearla: chiedi al Capitano (o usa `start-agent.sh` se sei tu il Capitano).
+- **NEVER** use `tmux send-keys` directly to communicate with another agent. Always go through `jht-tmux-send`.
+- **NEVER** kill another agent's tmux session (Captain rule #0).
+- If `tmux ls` shows the target session doesn't exist, **do not create it** — ask the Captain (or use `start-agent.sh` if you *are* the Captain).
+- Default to **DB-driven coordination** for pipeline handoffs (Scout→Analyst→Scorer→Writer); use this skill only for the real-time signals listed above. See `agents/_manual/communication-rules.md`.
