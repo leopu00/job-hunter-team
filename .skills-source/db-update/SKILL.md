@@ -1,64 +1,64 @@
 ---
 name: db-update
-description: Aggiorna record esistenti nel DB JHT (positions / applications). Usalo per promuovere posizioni a checked/excluded, scrivere score/verdict del critico, marcare applicazioni come inviate, aggiornare salary, last-checked ecc. Sempre dopo una `db-query` che conferma il record attuale.
+description: Update existing records in the JHT DB (positions / applications). Use it to promote positions to checked/excluded, write Critic score/verdict, mark applications as sent, update salary, last-checked, etc. Always after a `db-query` that confirms the current record state.
 allowed-tools: Bash(python3 *)
 ---
 
-# db-update — aggiornamento record DB
+# db-update — record updates on the JHT DB
 
-Wrapper in `/app/shared/skills/db_update.py`. Aggiorna campi specifici su record esistenti. **Non crea** record: per quello vedi `db-insert`.
+Wrapper at `/app/shared/skills/db_update.py`. Updates specific fields on existing records. **Does not create** records — for that, see `db-insert`.
 
-## Pattern generale
+## General pattern
 
 ```bash
-python3 /app/shared/skills/db_update.py <tabella> <id> --<campo> <valore> [--<campo> <valore>...]
+python3 /app/shared/skills/db_update.py <table> <id> --<field> <value> [--<field> <value>...]
 ```
 
-Tabelle: `position`, `application`.
+Tables: `position`, `application`.
 
-## Posizioni
+## Positions
 
 ```bash
-# Promuovi a checked / excluded (fatto dall'Analista)
+# Promote to checked / excluded (Analyst's job)
 python3 /app/shared/skills/db_update.py position 42 --status checked
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
-# Marker last-checked (link vivo confermato)
+# last-checked marker (link confirmed alive — also used as anti-collision claim)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 
-# Salary dichiarato nell'annuncio
+# Salary as declared in the JD
 python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 --salary-declared-max 55000
 
-# Salary stimato (glassdoor / levels.fyi / stima analista)
+# Estimated salary (glassdoor / levels.fyi / analyst's estimate)
 python3 /app/shared/skills/db_update.py position 42 --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
 ```
 
 ## Applications
 
 ```bash
-# Verdict del critico (NEEDS_WORK / APPROVE) + score 0-10 + note
-python3 /app/shared/skills/db_update.py application 42 --critic-verdict NEEDS_WORK --critic-score 5.0 --critic-notes "servono più dettagli su progetto X"
+# Critic verdict (per-round: NEEDS_WORK / PASS / REJECT) + score 0-10 + notes
+python3 /app/shared/skills/db_update.py application 42 --critic-verdict NEEDS_WORK --critic-score 5.0 --critic-notes "needs more detail on project X"
 
-# Applicazione scritta (dopo commit del scrittore)
+# CV/cover letter committed (Writer marks as written)
 python3 /app/shared/skills/db_update.py application 42 --written-at now
 
-# Applicazione inviata
+# User confirmed the application was sent
 python3 /app/shared/skills/db_update.py application 42 --applied-at "2026-02-28" --applied-via linkedin
 python3 /app/shared/skills/db_update.py application 42 --applied true
 
-# Risposta ricevuta (anche rejection)
+# Response received (interview / rejection / ghosted)
 python3 /app/shared/skills/db_update.py application 42 --response "rejected" --response-at now
 ```
 
-## Regole di sicurezza
+## Safety rules
 
-1. **Prima leggi**: usa `db-query position <id>` (o `application`) per vedere lo stato attuale. Sovrascrivere a cieco produce record incoerenti.
-2. **Status flow immutabile**: le transizioni legittime sono `new → checked` (o `excluded`), `checked → scored`, `scored → written → sent`. Non tornare indietro.
-3. **Timestamp `now`**: il wrapper converte la stringa `now` nel timestamp corrente. Non passare `$(date)`, il parsing è gestito Python-side.
-4. **Motivazioni `--critic-notes`/`--exclude-reason`**: quando escludi una posizione, SEMPRE motivare col tag standard (`[LINK_MORTO]`, `[SENIORITY]`, `[LOCATION]`, `[STACK]`, `[SALARY]`, `[LANGUAGE]`).
+1. **Read first.** Run `db-query position <id>` (or `application`) to see the current state before writing. Blind overwrites produce inconsistent records.
+2. **Status flow is forward-only.** Legitimate transitions: `new → checked → scored → writing → ready → applied → response`. `excluded` is reachable from any step but no step ever moves backward. Don't reverse.
+3. **`now` timestamp.** The wrapper converts the literal string `now` into the current timestamp. Don't pass `$(date)` — parsing is handled Python-side.
+4. **Exclusion tags in `--notes`.** When marking a position `excluded`, prefix the notes with one of the canonical tags: `[LINK_MORTO]` · `[SCAM]` · `[GEO]` · `[LINGUA]` · `[SENIORITY]` · `[STACK]`. Same taxonomy used by the Analyst (see `agents/analista/analista.md` REGOLA-06).
 
-## NON usare per
+## Don't use it for
 
-- Letture: usa **`db-query`**
-- Creazione record: usa **`db-insert`** (solo Scout insertisce positions)
-- Schema changes: non fare mai `sqlite3` diretto sulla tabella — rompe le foreign key e la journaling WAL di Next.js
+- Reads: use **`db-query`**
+- Creating records: use **`db-insert`** (only the Scout INSERTs positions)
+- Schema changes: never run raw `sqlite3` against the tables — it bypasses foreign keys and Next.js's WAL journaling
