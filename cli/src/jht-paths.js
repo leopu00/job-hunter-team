@@ -6,6 +6,26 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+/**
+ * Guard against Windows-style paths leaking into a POSIX context.
+ * On WSL / git-bash / Linux containers, node's path.join treats `C:\...`
+ * as a relative path and silently builds a literal `<cwd>/C:/...` tree
+ * — exactly what produced the `web/C:/Users/.../CLAUDE.md` cruft on
+ * 2026-03-27. Fail fast with a helpful message instead.
+ */
+function assertPosixSafe(value, name) {
+  if (!value) return;
+  const looksWindows = /^[a-zA-Z]:[\\/]/.test(value) || value.includes('\\');
+  if (looksWindows && process.platform !== 'win32') {
+    throw new Error(
+      `${name}=${JSON.stringify(value)} looks like a Windows path but we're running on ${process.platform}. ` +
+      `On WSL / Linux / containers, use a POSIX path (e.g. /mnt/c/Users/... or /jht_home).`
+    );
+  }
+}
+assertPosixSafe(process.env.JHT_HOME, 'JHT_HOME');
+assertPosixSafe(process.env.JHT_USER_DIR, 'JHT_USER_DIR');
+
 // Zona nascosta
 export const JHT_HOME = process.env.JHT_HOME || join(homedir(), '.jht');
 export const JHT_CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
