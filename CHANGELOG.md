@@ -445,3 +445,23 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 - Security: npm audit, gitleaks, Semgrep SAST.
 - Dependabot for npm and GitHub Actions.
 - PR template, issue templates, CONTRIBUTING.md.
+
+---
+
+## [Pre-0.1.0] — 2026-02-22 — Legacy team optimizations
+
+11 fixes applied to the early V2 worktree-based team (one CLAUDE.md per agent worktree) before the project was packaged as v0.1.0. Captured here for historical traceability after the standalone optimization log (`ottimizzazioni-team.md`) was retired.
+
+- **OPT-001** — *Scout: tool strategy table.* Explicit site→tool mapping in CLAUDE.md; lists sites blocked by robots.txt (LinkedIn, Wellfound, Revolut, WTTJ) so scouts stop wasting turns trying `fetch` on them.
+- **OPT-002** — *Scout: LinkedIn auth fallback.* On intermittent `linkedin` MCP `authentication_failed`, don't retry immediately; wait 2-3 turns and use `jobspy` for bulk search in the meantime.
+- **OPT-003** — *Scout: insert-fast / update-later.* Write the position to DB on discovery (title + company + URL) and fill the JD afterwards, instead of waiting for full data.
+- **OPT-004** — *Scout: stop condition.* One cycle = all assigned sources × 2-3 queries, max 15-20 minutes, mandatory end-of-cycle summary, then STOP and wait for instructions; never re-run on already-covered sources.
+- **OPT-005** — *Scout: Captain (`🐺 ALFA`) communication.* Verify with `tmux has-session` before sending; the Captain reads via `capture-pane`, no message needed.
+- **OPT-006** — *Scout: geographic + relocation availability.* Added "DISPONIBILITÀ GEOGRAFICA" section to the candidate profile in CLAUDE.md; only hard exclusion is "US work authorization required"; queries updated to include city names (Berlin, Amsterdam, London…); removed "On-site fuori Roma" as a negative criterion.
+- **OPT-007** — *Scout: concentric circles protocol.* 5 circles (Remote EU → Roma → Italia → EU capitals → rest of EU) split between scouts by opportunity type (not by source); all scouts use all sources, but with circle-specific queries; added EU tech career-page list (Spotify, Booking, Adyen, Wise).
+- **OPT-008** — *Scorer + Writers: practice-interview tier.* New score tiers 🟢 SERIOUS (≥70) · 🟡 PRACTICE (40-69) · 🔵 REFERENCE_ONLY (<40); writer effort levels match (full personalization · template · skip); on-site penalty rebalanced (relocation OK, US-only −25).
+- **OPT-009** — *Analysts: data cleaning + filtering.* Analysts now correct company name / location / remote_type via `db_update.py` (not just in notes); new `excluded` status for unfit positions (US-only, no Python, senior 5+, scam, UK-only post-Brexit); scorer only ever sees clean, fit-able positions.
+- **OPT-010** — *Scorer: sequential one-at-a-time.* Never load all positions in a bash batch; the loop is query next → detail → score → insert → update → repeat.
+- **OPT-011** — *Scout + Analysts: URL and deadline mandatory.* `--url` is now `required=True` in `db_insert.py position` (script fails without it); new `deadline` column in DB; analysts scrub for missing URLs and mark expired/404 JDs as `excluded`; dashboard surfaces deadline on cards.
+
+> Note: paths in the entries above (`scout-1/CLAUDE.md`, `scrittore-1/CLAUDE.md`, sessione `🐺 ALFA`) reference the pre-0.1.0 worktree-per-agent architecture. The current single-prompt-multi-instance model lives at `agents/<role>/<role>.md`.
