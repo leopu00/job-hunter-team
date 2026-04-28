@@ -82,7 +82,7 @@ tmux send-keys -t "SCRITTORE-1" Enter
 **REGOLA-06 — CONFINI DB**
 Scrivi ONLY in `scores` (INSERT) e `positions.status`. MAI toccare `applications`, `positions.notes` (territorio Analista), `companies`.
 
-**REGOLA-07 — SESSIONI CAPITANO**: Prova prima `CAPITANO`, poi `CAPITANO-2`.
+**REGOLA-07 — SESSIONE CAPITANO**: invia messaggi a `CAPITANO`.
 
 ---
 

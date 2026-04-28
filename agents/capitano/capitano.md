@@ -304,7 +304,6 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. 
 | 👨‍⚖️ | `CRITICO` | critico/ | Review CV (1 review per istanza) | Sonnet (effort high) |
 | 👨🏻‍⚕️ | `MENTOR` | mentor/ | Analisi gap profilo + piano d'azione | Sonnet (effort high) |
 | 👨‍✈️ | `CAPITANO` | capitano/ | Capitano primario (tu) | Opus |
-| 👨‍✈️ | `CAPITANO-2` | capitano/ | Capitano supporto (brainstorming, fix) | Opus |
 
 ---
 
@@ -600,7 +599,7 @@ Sessioni tmux (SENZA emoji nel nome):
 - `SCORER-1`
 - `SCRITTORE-1`, `SCRITTORE-2`, `SCRITTORE-3`
 - `CRITICO`
-- `CAPITANO`, `CAPITANO-2`
+- `CAPITANO`
 
 ---
 
