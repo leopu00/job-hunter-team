@@ -1,41 +1,79 @@
-# Regole di Comunicazione Tmux
+# 💬 Inter-Agent Communication Rules
 
-## Checkpoint obbligatori
+How agents talk to each other through tmux. The protocol is shared by all roles — only the **when** and **what** differ per role.
 
-Ogni agente DEVE comunicare ai colleghi in questi momenti:
+## 📨 Message envelope
 
-### Scout
-- Quando inserisce una nuova posizione nel DB → comunica all'altro Scout e agli Analisti
-- Quando finisce un giro di ricerca → comunica al Capitano
+Every inter-agent message uses a tagged single-line envelope:
 
-### Analista
-- Quando prende una posizione per analisi → comunica all'altro Analista (anti-collisione)
-- Quando finisce un batch di 5 posizioni → comunica ai Scorer ("ho checkato ID X, Y, Z")
-- Quando esclude una posizione (link morto) → comunica al Capitano
-
-### Scorer
-- Quando prende una posizione per scoring → comunica all'altro Scorer (anti-collisione)
-- Quando trova una posizione score >= 50 → comunica agli Scrittori ("nuova posizione ID X score Y")
-- Quando esclude una posizione (PRE-CHECK fallito) → log nel DB
-
-### Scrittore
-- Quando prende una posizione (claim status=writing) → comunica all'altro Scrittore
-- Quando finisce CV+CL → comunica al Capitano
-- Quando avvia/killa il Critico → log nel DB
-
-## Come comunicare
-
-```bash
-# Testo (SENZA Enter)
-tmux send-keys -t "SESSIONE" "[@me -> @dest] [INFO] messaggio"
-# Enter SEPARATO
-tmux send-keys -t "SESSIONE" Enter
+```
+[@from -> @to] [TYPE] payload
 ```
 
-## Come leggere messaggi dei colleghi
+| Type | When to use |
+|---|---|
+| `INFO` | Status update / batch handoff (no reply expected) |
+| `REQ` | Ask the peer to do something |
+| `RES` | Reply to a `REQ` |
+| `REPORT` | Final outcome of a unit of work (e.g. CV finished) |
+| `FEEDBACK` | Coaching upstream (Analyst → Scout, Scorer → Captain) with a tag like `[SENIORITY] · [STACK] · [GEO]` |
+| `URG` | Captain order requiring immediate action (FREEZE, throttle, kill) |
+| `ACK` | Acknowledge an `URG` or `REQ` you can't service yet |
 
-Prima di iniziare qualsiasi lavoro, controlla se ci sono messaggi:
+## 📡 Sending: use `jht-tmux-send`
+
 ```bash
-tmux capture-pane -t "LA_MIA_SESSIONE" -p -S -20
+jht-tmux-send <PEER_SESSION> "[@me -> @peer] [INFO] message body"
 ```
-Se ci sono messaggi non letti, LEGGILI prima di procedere.
+
+⚠️ **Never use raw `tmux send-keys` for inter-agent messages.** Codex and Kimi TUIs lose the Enter character if it arrives in the same `send-keys` call as the text body, causing silent deadlocks. The wrapper handles text + Enter atomically with a render pause. Skill at `agents/_tools/jht-tmux-send`.
+
+## 🧭 Captain sessions
+
+When sending to the Captain, try `CAPITANO` first, then fall back to `CAPITANO-2` if the primary doesn't respond. The Captain-2 is a backup for brainstorming/fix work.
+
+## ⏰ When each role MUST communicate
+
+### 🕵️‍♂️ Scout
+- After every batch (3-5 inserts) → `INFO` to the Analyst pool: `"batch 5 IDs (X-Y) ready for verification"`
+- End of search cycle → `REPORT` to the Captain
+- Receives `FEEDBACK` from Analysts on rejection patterns → adjust queries; reply with `ACK`
+
+### 👨‍🔬 Analyst
+- Excluded position with rare/critical reason (SCAM, systemic source issue) → `INFO` to the Captain
+- 3 consecutive exclusions same source × same tag, OR >60% exclusion rate in a Scout's batch → `FEEDBACK` to that Scout
+
+### 👨‍💻 Scorer
+- Score ≥ 50 → `INFO` to the Writer pool: `"new position ID X · score Y"`
+- Pre-check failed (years/location/degree) → log to DB only, no tmux notification needed
+- Score distribution drift signals → surface to the Captain (Captain then coaches Scouts)
+
+### 👨‍🏫 Writer
+- After 3 Critic rounds → `RES` (or `REPORT`) to the Captain with verdict + PDF path
+- Receives `URG FREEZE` from the Captain → finish current Critic round (never abandon mid-review), then `ACK` and sleep until throttle returns to T0/T1
+
+### 💂 Sentinel
+- Event-driven, **edge-triggered** — only speaks when state actually changes (usage spike, projection breach, agent crash)
+- Sends `URG` with the proposed action (throttle / freeze / kill) to the Captain
+- Never broadcasts to pipeline agents directly; the Captain is the gateway
+
+### 👨‍✈️ Captain
+- Orders: `URG FREEZE` / `URG throttle=T0|T1|T2` to Writers (and other heavy agents) on Sentinel signal
+- Coordination: `INFO` / `REQ` to spawn/stop instances, rebalance the pool
+- User reply path: forwards user feedback from Phase 5 to the relevant role
+- Never reads pipeline agents' tmux directly to second-guess them — uses DB state and `agent_messages`
+
+## 📥 Reading peer messages
+
+Before starting any new unit of work, scan your own pane for unread messages:
+
+```bash
+tmux capture-pane -t "$MY_SESSION" -p -S -20
+```
+
+If anything arrived since your last action, **read it first** and act on it (especially `URG` and `FEEDBACK`).
+
+## 🔗 Related
+
+- 🛡️ [`anti-collision.md`](anti-collision.md) — lock mechanisms (claim before work)
+- 🧭 [`../_team/architettura.md`](../_team/architettura.md) — pipeline overview (who feeds whom)
