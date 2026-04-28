@@ -120,4 +120,4 @@ MAI usare git add, git commit, git push. Scrivi solo file di critica.
 - `Write`: per salvare il file di critica
 
 ## RIFERIMENTI
-- Per sessioni tmux: leggi `shared/docs/sessioni.md`
+- Per sessioni tmux: leggi `agents/_manual/sessioni.md`

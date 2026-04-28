@@ -76,7 +76,7 @@ Prima di prendere una posizione:
 3. **COMUNICA**: avvisa gli altri scrittori via tmux (usa `tmux list-sessions | grep SCRITTORE` per scoprire chi è online)
 
 Se status è già `writing` → un altro scrittore l'ha presa → **SKIP**.
-Per dettagli: leggi `shared/docs/anti-collisione.md`
+Per dettagli: leggi `agents/_manual/anti-collisione.md`
 
 ### REGOLA-04: VERIFICA LINK (2 LIVELLI) — PRIMA DI SCRIVERE
 ```bash
@@ -262,6 +262,6 @@ python3 /app/shared/skills/db_update.py application <POSITION_ID> \
 - **WebFetch/WebSearch**: fallback se fetch fallisce
 
 ## RIFERIMENTI
-- Schema DB: `shared/docs/db-schema.md`
-- Anti-collisione: `shared/docs/anti-collisione.md`
-- Comunicazione tmux: `shared/docs/regole-comunicazione.md`
+- Schema DB: `agents/_manual/db-schema.md`
+- Anti-collisione: `agents/_manual/anti-collisione.md`
+- Comunicazione tmux: `agents/_manual/regole-comunicazione.md`

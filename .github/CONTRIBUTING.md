@@ -78,7 +78,7 @@ Load-bearing invariants live in ADRs — breaking them breaks the rest of the sy
 
 ## Adding a new agent
 
-Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). If you're adding a new one, read [`shared/docs/add-agent.md`](../shared/docs/add-agent.md) first — there are specific contracts (anti-collision, DB schema, memory files) that must be respected.
+Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). If you're adding a new one, read [`agents/_manual/add-agent.md`](../agents/_manual/add-agent.md) first — there are specific contracts (anti-collision, DB schema, memory files) that must be respected.
 
 Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed by [ADR 0002](../docs/adr/0002-three-supported-agent-clis.md). Adding a fourth CLI requires a new ADR, not just a PR.
 
