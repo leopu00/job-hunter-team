@@ -2,7 +2,15 @@
 
 PostgreSQL schema for the Job Hunter Team web platform, designed for Supabase with Row Level Security (RLS).
 
-> 🔧 **Operational details** (project ref, credentials, OAuth setup, region, secrets) live in [`docs/internal/MAINTAINERS.md`](../docs/internal/MAINTAINERS.md). This README covers the schema only.
+## 👀 Who is this for?
+
+JHT supports **two ways** to use cloud sync:
+
+1. 🌐 **Official instance** — sign in at [`jobhunterteam.ai`](https://jobhunterteam.ai) and your data lands in the JHT-operated Supabase. **Zero setup**, RLS isolates your rows from everyone else's. Most users want this. → No need to read this file.
+
+2. 🛠️ **Self-host** — clone the repo, create your **own** Supabase project, apply the migrations below, point JHT at your URL/key. You own the data and the infrastructure cost. → **This README is for you.**
+
+> 🔒 **Operational details** for the official `jobhunterteam.ai` instance (project ref, credentials, OAuth setup, region, secrets) live in [`docs/internal/MAINTAINERS.md`](../docs/internal/MAINTAINERS.md) — those are JHT-internal and don't apply to a self-host setup.
 
 ## Tables
 
