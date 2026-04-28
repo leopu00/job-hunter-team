@@ -333,6 +333,14 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
    agents/_skills/ for shared, into agents/<role>/_skills/ for private)
 ⬜ Add a smoke test: launch each role's tmux session, capture-pane,
    verify the agent reports exactly its expected skill set
+⬜ Full-team integration test inside the container: spin up the actual
+   JHT team (Captain + Scout + Analyst + Scorer + Writer + Critic +
+   Sentinel + Assistant), drive a real run end-to-end, and verify each
+   agent INVOKES the right skills (not just sees them) — i.e. that
+   db-query / db-update / db-insert / rate-budget / tmux-send actually
+   get called from the agent prompts as expected, and that Sentinella's
+   private skills (decision-throttle, emergency-handling, etc.) are
+   loaded only by Sentinella. Capture pane logs + DB diffs for evidence.
 ```
 
 #### Reproducible test scaffold
