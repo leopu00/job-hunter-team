@@ -81,7 +81,7 @@ Load-bearing invariants live in ADRs — breaking them breaks the rest of the sy
 Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). Two folders to know about:
 
 - **[`agents/_team/`](../agents/_team/)** — team-wide overview (composition, pipeline, who-does-what). Start here to understand how the whole team fits together.
-- **[`agents/_manual/`](../agents/_manual/)** — operational reference docs that individual agents consult at runtime (DB schema, anti-collision contract, communication protocol, tmux sessions, optimization notes). If you're adding a new agent, read [`agents/_manual/add-agent.md`](../agents/_manual/add-agent.md) first — there are specific contracts (anti-collision, DB schema, memory files) that must be respected.
+- **[`agents/_manual/`](../agents/_manual/)** — operational reference docs that individual agents consult at runtime (DB schema, anti-collision contract, communication protocol, tmux sessions). If you're adding a new agent, the existing prompts under `agents/<role>/<role>.md` plus the `_manual/` references give you the contracts to respect (anti-collision, DB schema, communication envelope) — no separate guide needed.
 
 Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed by [ADR 0002](../docs/adr/0002-three-supported-agent-clis.md). Adding a fourth CLI requires a new ADR, not just a PR.
 
