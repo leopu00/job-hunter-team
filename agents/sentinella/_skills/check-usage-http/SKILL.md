@@ -1,3 +1,9 @@
+---
+name: check-usage-http
+description: Check provider usage via HTTP fast path (~2s, zero CLI tokens). PRIMARY action when the bridge fails to read usage. Falls back to `check-usage-tui` if HTTP returns RATE_LIMIT or fails.
+allowed-tools: Bash(python3 *)
+---
+
 # Skill — Check usage via HTTP (rapido, ~2s, ZERO token)
 
 ## QUANDO USARLA
@@ -60,10 +66,10 @@ Lo script chiama internamente `compute_metrics` → calcola velocità, projectio
 
 ## Step 5 — Procedi con la decisione
 
-Hai ora un sample fresco con `usage`, `proj`, `status`. Aggiorna la tua memoria interna (vedi memory_state.md) e decidi se mandare ordine al Capitano (vedi order_formats.md).
+Hai ora un sample fresco con `usage`, `proj`, `status`. Aggiorna la tua memoria interna (vedi skill `memory-state`) e decidi se mandare ordine al Capitano (vedi skill `order-formats`).
 
 ## Note
 
 - **No spawn tmux**, no token CLI consumati. ~2s totali.
 - **Per Kimi e Codex**: l'API è stabile, quasi sempre il check va liscio.
-- **Per Claude**: con tick troppo rapidi (< 2 min) Anthropic rate-limita. Se vedi `RATE_LIMIT` → cadi subito su TUI fallback.
+- **Per Claude**: con tick troppo rapidi (< 2 min) Anthropic rate-limita. Se vedi `RATE_LIMIT` → cadi subito su TUI fallback (skill `check-usage-tui`).
