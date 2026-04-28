@@ -1,8 +1,8 @@
 # Database Schema — jobs.db (V2)
 
-**Aggiornato**: 2026-02-28
+**Aggiornato**: 2026-04-28
 **Schema version**: `PRAGMA user_version = 2`
-**Path**: `shared/data/jobs.db`
+**Path**: `$JHT_HOME/jobs.db` (canonical) — fallback `shared/data/jobs.db` per uso fuori container
 **Skill scripts**: `shared/skills/`
 
 Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli agenti devono leggere QUESTO file per conoscere la struttura delle tabelle e i comandi disponibili.
@@ -50,7 +50,7 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | found_by | TEXT | | Chi l'ha trovata (scout-1, etc.) |
 | found_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando trovata |
 | deadline | TEXT | | Scadenza (YYYY-MM-DD o "non presente") |
-| status | TEXT | new | new, checked, excluded, scored, writing, review, ready, applied, response |
+| status | TEXT | new | new → checked → scored → writing → ready → applied → response · `excluded` da qualsiasi step |
 | notes | TEXT | | Note libere |
 | last_checked | TIMESTAMP | | Ultima verifica link/JD |
 
@@ -90,7 +90,7 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | critic_verdict | TEXT | | PASS, NEEDS_WORK, REJECT |
 | critic_score | REAL | | Voto critico (1-10) |
 | critic_notes | TEXT | | Note del critico |
-| status | TEXT | draft | draft, review, approved, applied, response |
+| status | TEXT | draft | draft (default) — il flag operativo è `applied` (BOOLEAN). Gli stati `review/approved` non sono attualmente popolati dagli agenti. |
 | written_at | TIMESTAMP | | Quando il CV e' stato creato |
 | applied_at | TIMESTAMP | | Quando la candidatura e' stata inviata |
 | applied_via | TEXT | | Dove inviata (linkedin, sito, etc.) |
@@ -133,7 +133,7 @@ python3 shared/skills/db_query.py company "Azienda"            # Dettaglio azien
 python3 shared/skills/db_query.py check-url 4361788825         # Check duplicati
 python3 shared/skills/db_query.py next-for-scorer              # Coda scorer
 python3 shared/skills/db_query.py next-for-scrittore           # Coda scrittore
-python3 shared/skills/db_query.py next-for-critico             # Coda critico
+python3 shared/skills/db_query.py next-for-critico             # ⚠️ legacy — il Critico oggi viene spawnato dallo Scrittore, non pulla dalla coda
 ```
 
 ### Insert
@@ -198,10 +198,16 @@ python3 shared/skills/db_update.py application 42 \
 python3 shared/skills/db_update.py application 42 --interview-round 1
 ```
 
-### Sync
+### Sync (storage cloud opt-in)
 ```bash
-python3 shared/skills/db_to_sheets.py sync           # Sync DB → Google Sheets
+python3 shared/skills/db_to_sheets.py sync            # DB → Google Sheets
 python3 shared/skills/db_to_sheets.py sync --dry-run  # Preview senza scrivere
+
+python3 shared/skills/db_to_supabase.py sync          # DB → Supabase (mirror read-only)
+python3 shared/skills/db_to_supabase.py sync --dry-run
+
+python3 shared/skills/db_to_drive.py sync             # CV/CL PDF → Google Drive
+python3 shared/skills/db_to_drive.py sync --dry-run
 ```
 
 ### Migrazione
@@ -225,6 +231,17 @@ python3 shared/skills/db_migrate_v2.py --verify       # Verifica integrita'
 ## Pipeline degli stati
 
 ```
-new → checked → scored → writing → review → ready → applied → response
-                    ↘ excluded (link morto, non qualificati, etc.)
+new → checked → scored → writing → ready → applied → response
+  │       │         │         │       │
+  ▼       ▼         ▼         ▼       ▼
+        excluded (link morto, non qualificato, score < 40, critic_score < 5, ecc.)
 ```
+
+**Stato per fase:**
+- `new` — Scout ha appena inserito (Phase 1)
+- `checked` — Analista ha verificato e promosso (Phase 2) · `excluded` se [LINK_MORTO/SCAM/GEO/LINGUA/SENIORITY/STACK]
+- `scored` — Scorer ha assegnato punteggio (Phase 3) · `excluded` se score < 40
+- `writing` — Scrittore l'ha presa in carico (Phase 4) — claim peer-coordinated
+- `ready` — Round 3 del Critico ha dato score ≥ 5 (Phase 4) · `excluded` se score < 5
+- `applied` — l'utente ha confermato l'invio (Phase 5) — manuale, mai dal team
+- `response` — risposta ricevuta (interview/rejection/ghosted) — flag user-tracked

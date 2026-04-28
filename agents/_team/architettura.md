@@ -185,13 +185,13 @@ When 3 consecutive exclusions hit the same source with the same tag, or a Scout'
 
 ### 🧮 Scoring formula (0-100)
 
-| Component | Weight | What it measures |
-|---|---|---|
-| Stack match | 35 | Required skills vs candidate's stack |
-| Seniority fit | 25 | Years required vs candidate's real years |
-| Remote / location | 20 | Fit with profile location preferences |
-| Salary fit | 10 | Offered range vs target |
-| Stack bonus | 10 | Tech bonus (e.g. AI · cybersec · fintech, if strong areas for the candidate) |
+| Component | Weight | DB column | What it measures |
+|---|---|---|---|
+| Stack match | 35 | `stack_match` | Required skills vs candidate's stack |
+| Seniority fit | 25 | `experience_fit` | Years required vs candidate's real years |
+| Remote / location | 20 | `remote_fit` | Fit with profile location preferences |
+| Salary fit | 10 | `salary_fit` | Offered range vs target |
+| Stack bonus | 10 | `strategic_fit` | Tech bonus (AI · cybersec · fintech, if strong areas for the candidate) |
 
 Penalties applied on top: `−10` mandatory degree without "or equivalent" · `−15` mandatory language not spoken · `−5` vague JD with no concrete requirements.
 
