@@ -240,6 +240,70 @@ Today the sync flows **local → cloud only** (see `docs/internal/INFRA.md` § O
 
 → Will be filed as `[JHT-CLOUD-SEED-DIRECTION]` once decided.
 
+### 🛠️ Skill discovery — convention-aligned per-agent isolation (priority)
+
+Empirically verified on 2026-04-28 (Claude Code 2.1.112): skill discovery walks **up** from each Claude Code session's cwd, cumulating every `.claude/skills/` along the path; **sibling** dirs are never seen. So per-agent skill isolation is achievable using only the standard `.claude/skills/` convention — no custom symlink farm, no scope-map manifest, no Dockerfile patching.
+
+**Target layout for JHT:**
+
+```
+/app/.claude/skills/                                    ← shared by ALL agents
+   db-query/SKILL.md
+   db-update/SKILL.md
+   rate-budget/SKILL.md
+   tmux-send/SKILL.md
+
+/app/agents/sentinella/.claude/skills/                  ← Sentinel-private
+   decision-throttle/SKILL.md
+   emergency-handling/SKILL.md
+   check-usage-http/SKILL.md
+   check-usage-tui/SKILL.md
+   memory-state/SKILL.md
+   order-formats/SKILL.md
+
+/app/agents/<role>/.claude/skills/                      ← future per-role privates
+```
+
+Each agent runs in `cwd = /app/agents/<role>/` → sees `<role>/.claude/skills/` (private) + `/app/.claude/skills/` (shared via walk-up). No bleed across siblings.
+
+**Implementation punch list:**
+
+```
+⬜ Move .skills-source/ -> /app/.claude/skills/ at the repo root
+   (db-query, db-update, rate-budget, tmux-send already in Agent Skills format)
+⬜ Convert agents/sentinella/skills/*.md (plain markdown today) into
+   agents/sentinella/.claude/skills/<name>/SKILL.md (folder + frontmatter:
+   name, description, allowed-tools)
+⬜ Drop the .skills-source -> .claude/skills + .agents/skills symlink farm
+   from Dockerfile (became unnecessary once skills sit at the right path)
+⬜ Update start-agent.sh: each tmux session's cwd should point to
+   /app/agents/<role>/ (already mostly the case — verify)
+⬜ Update CONTRIBUTING + agents/_team/architettura.md (skills section)
+   to describe the new layout
+⬜ Add empty .claude/skills/ placeholder dirs for the other agents (optional;
+   makes the structure self-documenting)
+```
+
+**Open question — Codex / Kimi behaviour:**
+
+The empirical test above was Claude Code only. Codex and Kimi have their own discovery path:
+
+- Codex looks in `.agents/skills/` (per current Dockerfile symlink)
+- Kimi: same `.agents/skills/` convention
+
+Before committing, run an equivalent isolation test for Codex and Kimi:
+
+```
+⬜ Codex: do separate cwds with their own .agents/skills/ get isolated discovery?
+⬜ Kimi: same question
+⬜ If yes → mirror the layout under .agents/skills/ at the same paths
+⬜ If no → either keep a single shared .agents/skills/ for Codex+Kimi (less
+   isolation on those providers, acceptable trade-off given Kimi already
+   collapses tiers), or document the limitation and accept Claude-only isolation
+```
+
+Test reproduced from `~/Desktop/skill-isolation-test/` (3 cwds aldo/giovanni/giacomo with one private skill each + one shared at parent) — same scaffold can be reused for Codex/Kimi by swapping `claude.exe` with `codex` / `kimi` in the tmux launch step.
+
 ### 🧙‍♂️ Maestro — career-coach agent (planned)
 
 The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
