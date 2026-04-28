@@ -157,5 +157,5 @@ python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes 
 ## RIFERIMENTI
 
 - Schema DB: `agents/_manual/db-schema.md`
-- Anti-collisione: `agents/_manual/anti-collisione.md`
-- Comunicazione: `agents/_manual/regole-comunicazione.md`
+- Anti-collisione: `agents/_manual/anti-collision.md`
+- Comunicazione: `agents/_manual/communication-rules.md`

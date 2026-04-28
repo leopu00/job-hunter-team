@@ -69,7 +69,7 @@ Multiple Scouts run in parallel without ever fetching the same posting twice:
 - 🎯 **Circles** — concentric scopes, exhausted inside-out: ① primary preference → ② geo neighbors → ③ targeted relocation → ④ satellite → ⑤ frontier (adjacent roles).
 - 📚 **Source tiers** — drained in order: LinkedIn → ATS aggregators (Greenhouse/Lever/Indeed/Wellfound) → niche boards (PyJobs, RemoteOK, regional) → WebSearch + career pages.
 - ⚖️ **Anti-bias** — if more than 30% of a batch's positions come from the same employer, the Scout switches source/query for the next batch. Without this, one scaleup that dumps 12 roles on a single board would flood the pool, crowding out diversity.
-- 🛡️ **Anti-collision** — dedup check on `positions.url` before every `INSERT` ([`anti-collisione.md`](../_manual/anti-collisione.md)).
+- 🛡️ **Anti-collision** — dedup check on `positions.url` before every `INSERT` ([`anti-collision.md`](../_manual/anti-collision.md)).
 
 ### 🔁 Listening to feedback
 
@@ -132,7 +132,7 @@ Excluded notes start with `ESCLUSA: [TAG]` — `[LINK_MORTO]` · `[SCAM]` · `[G
 ### 🤝 Multi-analyst coordination
 
 - 🕒 **`last_checked` watermark** — Analysts skip records recently updated by a peer.
-- 🛡️ **Anti-collision contract** — [`agents/_manual/anti-collisione.md`](../_manual/anti-collisione.md).
+- 🛡️ **Anti-collision contract** — [`agents/_manual/anti-collision.md`](../_manual/anti-collision.md).
 
 ### 🔁 Feedback to Scouts
 
@@ -199,7 +199,7 @@ Penalties applied on top: `−10` mandatory degree without "or equivalent" · `�
 
 - 🕒 **`last_checked` claim** — Scorer stamps the timestamp before scoring; peers skip records claimed in the last 5 minutes.
 - 🛡️ **DB write boundary** — Scorer writes `scores` (INSERT) and `positions.status` only. Never touches `applications`, `companies`, or `positions.notes` (Analyst's territory).
-- 🛡️ **Anti-collision contract** — [`agents/_manual/anti-collisione.md`](../_manual/anti-collisione.md).
+- 🛡️ **Anti-collision contract** — [`agents/_manual/anti-collision.md`](../_manual/anti-collision.md).
 
 ### 🔁 Feedback to Scouts (via Captain)
 
@@ -411,7 +411,7 @@ Out of the pipeline. Runs continuously alongside it.
     📲 User
 ```
 
-Inter-agent messages use a tagged envelope (`[@scout-1 -> @capitano] [REQ] ...`). Full protocol: [`agents/_manual/regole-comunicazione.md`](../_manual/regole-comunicazione.md).
+Inter-agent messages use a tagged envelope (`[@scout-1 -> @capitano] [REQ] ...`). Full protocol: [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 ---
 
