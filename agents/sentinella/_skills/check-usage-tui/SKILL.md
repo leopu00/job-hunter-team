@@ -1,3 +1,9 @@
+---
+name: check-usage-tui
+description: Check provider usage via TUI worker (~30s, costs CLI tokens). FALLBACK when `check-usage-http` returns RATE_LIMIT or fails. Spawns an ephemeral tmux session, runs `/usage` (or `/status` for Codex), parses the modal, kills the session.
+allowed-tools: Bash(tmux *), Bash(python3 *)
+---
+
 # Skill — Check usage via TUI worker (robusto, ~30s, costoso in token)
 
 ## QUANDO USARLA
@@ -117,7 +123,7 @@ python3 /app/shared/skills/usage_record.py --manual \
 
 ### Step 8 — Procedi con la decisione
 
-Hai ora il sample fresco con proj/status calcolati da compute_metrics. Aggiorna memoria (vedi memory_state.md) e decidi ordine al Capitano (vedi order_formats.md).
+Hai ora il sample fresco con proj/status calcolati da compute_metrics. Aggiorna memoria (vedi skill `memory-state`) e decidi ordine al Capitano (vedi skill `order-formats`).
 
 ## Troubleshooting
 

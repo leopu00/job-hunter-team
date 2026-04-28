@@ -267,32 +267,35 @@ Re-introducing `.git/` into the container just to enable walk-up would inflate t
 
 The launcher (`.launcher/start-agent.sh` or a bootstrap step) populates each agent's `.claude/skills/` *and* `.agents/skills/` with symlinks to the right subset of skills, drawn from a single canonical pool.
 
-**Target layout after refactor:**
+**Target layout (current):**
 
 ```
-/app/.skills-source/                                  ← canonical store, single source of truth
-   _global/                                              ← shared pool (linked to every agent)
-      db-query/SKILL.md
-      db-update/SKILL.md
-      rate-budget/SKILL.md
-      tmux-send/SKILL.md
-   sentinella/                                           ← Sentinel-private pool
-      decision-throttle/SKILL.md
-      emergency-handling/SKILL.md
-      check-usage-http/SKILL.md
-      check-usage-tui/SKILL.md
-      memory-state/SKILL.md
-      order-formats/SKILL.md
-   <role>/                                               ← future per-role privates
+/app/agents/_skills/                                  ← global pool (linked to every agent)
+   _lib/                                                 ← shared Python deps (used by multiple skills)
+   db-query/SKILL.md     + db_query.py                   (script colocation: future commit)
+   db-update/SKILL.md
+   db-insert/SKILL.md
+   rate-budget/SKILL.md
+   tmux-send/SKILL.md
+
+/app/agents/sentinella/_skills/                       ← Sentinel-private pool
+   decision-throttle/SKILL.md
+   emergency-handling/SKILL.md
+   check-usage-http/SKILL.md
+   check-usage-tui/SKILL.md
+   memory-state/SKILL.md
+   order-formats/SKILL.md
+
+/app/agents/<role>/_skills/                           ← future per-role privates
 
 /app/agents/<role>/.claude/skills/                    ← populated at boot via symlink
-/app/agents/<role>/.agents/skills/                       (Codex + Kimi convention, mirror)
+/app/agents/<role>/.agents/skills/                       (Codex + Kimi mirror)
 ```
 
 At team setup, for each role the launcher creates symlinks under `agents/<role>/.claude/skills/` and `agents/<role>/.agents/skills/` pointing to:
 
-1. Every entry under `.skills-source/_global/`
-2. Every entry under `.skills-source/<role>/` (if the dir exists)
+1. Every entry under `agents/_skills/` (excluding `_lib/`)
+2. Every entry under `agents/<role>/_skills/` (if the dir exists)
 
 Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` then sees exactly its allowed set in its **immediate** `.claude/skills/` (or `.agents/skills/`) — no parent walk-up needed, identical behaviour across all 3 providers.
 
@@ -301,26 +304,33 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
 - ✅ **Provider-uniform** — works the same on Claude / Codex / Kimi regardless of `.git/`
 - ✅ **Container-light** — no need to ship `.git/` in the image
 - ✅ **Explicit** — what each agent sees is determined by the symlink set, not by filesystem-search heuristics
-- ✅ **Extensible** — adding a `scout-only` skill is a one-line entry in `.skills-source/scout/`; per-role and shared pools coexist cleanly
-- ✅ **Multi-role groups** — future need for "shared between Captain and Assistant only"? Add `.skills-source/_cap-asst/` and update the distributor's role→pool mapping
+- ✅ **Extensible** — adding a `scout-only` skill is a one-line entry under `agents/scout/_skills/`; per-role and shared pools coexist cleanly
+- ✅ **Multi-role groups** — future need for "shared between Captain and Assistant only"? Add `agents/_skills-cap-asst/` (or similar manifest) and update the distributor's role→pool mapping
 
 #### Implementation punch list
 
 ```
-⬜ Reshape .skills-source/ into _global/ + per-role subdirs
-   (move db-query/db-update/rate-budget/tmux-send into _global/;
-    create sentinella/ with the 6 current sentinella skills)
-⬜ Convert agents/sentinella/skills/*.md (plain markdown today) into
-   .skills-source/sentinella/<name>/SKILL.md (folder + frontmatter:
-   name, description, allowed-tools) — uses the Agent Skills format
+✅ Move .skills-source/* -> agents/_skills/* (global skills relocated)
+✅ Convert agents/sentinella/skills/*.md (plain markdown) into
+   agents/sentinella/_skills/<name>/SKILL.md (folder + frontmatter:
+   name, description, allowed-tools) — Agent Skills format
+✅ Promote db-insert to a SKILL.md wrapper under agents/_skills/db-insert/
+✅ Update Dockerfile symlink loop to source from agents/_skills/ instead
+   of .skills-source/ (kept global flat for now)
+⬜ Move agents/_tools/jht-tmux-send into agents/_skills/tmux-send/ as a
+   colocated artifact (and drop _tools/ if jht-send is not used)
+⬜ Move 1:1 Python scripts into their skill folders + create
+   agents/_skills/_lib/ for shared deps (_db.py, compute_metrics.py,
+   usage_record.py); update sys.path imports + the ~10 prompt files
+   that reference /app/shared/skills/<x>.py absolute paths
 ⬜ Add the symlink-distribution step to .launcher/start-agent.sh:
    for each role, populate <agent_cwd>/.claude/skills/ and
-   <agent_cwd>/.agents/skills/ with links to _global/* + <role>/*
-⬜ Drop the current Dockerfile loop that symlinks .skills-source/* into
-   /app/.claude/skills/ + /app/.agents/skills/ (becomes unnecessary)
+   <agent_cwd>/.agents/skills/ with links to global + role-private
+⬜ Drop the global Dockerfile symlink loop once start-agent.sh handles
+   per-agent distribution at boot (provider-uniform: no .git/ needed)
 ⬜ Update CONTRIBUTING + agents/_team/architettura.md (Skills section)
    to describe the new layout and how to add a skill (drop into
-   _global/ for shared, into <role>/ for private)
+   agents/_skills/ for shared, into agents/<role>/_skills/ for private)
 ⬜ Add a smoke test: launch each role's tmux session, capture-pane,
    verify the agent reports exactly its expected skill set
 ```

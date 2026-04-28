@@ -1,3 +1,9 @@
+---
+name: emergency-handling
+description: How to handle rate-limit emergencies and the FATAL cascade when the bridge goes blind. Includes the cooldown-bypass triggers, the L4-SOFT/L5-HARD recovery path, and the RESET SESSIONE handling on a >30-point usage drop.
+allowed-tools: Bash(python3 *)
+---
+
 # Skill — Gestione emergenze e cascata FATAL
 
 ## 🚨 Bypass cooldown emergenza (manda subito)
@@ -51,10 +57,10 @@ SE proj > emergency_proj_min + 10:
 Quando il bridge non riesce a leggere usage e ricevi `[BRIDGE FAILURE]`:
 
 ```
-L1 — fetch HTTP rapido (vedi check_usage_http.md)
+L1 — fetch HTTP rapido (vedi skill `check-usage-http`)
      • OK → continua normalmente
      • FAIL → ↓
-L2 — TUI worker manuale (vedi check_usage_tui.md)
+L2 — TUI worker manuale (vedi skill `check-usage-tui`)
      • OK → continua normalmente
      • FAIL → ↓
 L3 — FATAL: niente dato dal bridge per N cicli consecutivi
@@ -78,7 +84,7 @@ Imposta `fatal_streak = 1`. Taci finché non arriva BRIDGE TICK valido o INFO.
 python3 /app/shared/skills/freeze_team.py
 ```
 
-Manda Esc x2 a tutti gli operativi (più aggressivo). Inoltre manda al Capitano l'ordine HARD FREEZE (vedi order_formats.md).
+Manda Esc x2 a tutti gli operativi (più aggressivo). Inoltre manda al Capitano l'ordine HARD FREEZE (vedi skill `order-formats`).
 
 Imposta `fatal_streak = 2`.
 
@@ -88,7 +94,7 @@ Quando arriva un `[BRIDGE TICK]` valido o `[BRIDGE INFO]` con `fatal_streak >= 1
 
 1. Reset `fatal_streak = 0`, `freeze_active = False`
 2. Calcola subito throttle dal sample
-3. Manda al Capitano l'ordine RIPRENDI con dati freschi (vedi order_formats.md)
+3. Manda al Capitano l'ordine RIPRENDI con dati freschi (vedi skill `order-formats`)
 4. Il Capitano si occupa di ridistribuire `[RIPRENDI]` ai suoi operativi
 
 ### Tabella riassuntiva FATAL
@@ -103,6 +109,6 @@ Quando arriva un `[BRIDGE TICK]` valido o `[BRIDGE INFO]` con `fatal_streak >= 1
 
 Se in un tick rilevi `usage` sceso di **> 30 punti** rispetto al sample precedente, è un reset finestra:
 
-1. Azzera tutto lo storico (vedi memory_state.md)
-2. Manda RESET SESSIONE al Capitano (vedi order_formats.md)
+1. Azzera tutto lo storico (vedi skill `memory-state`)
+2. Manda RESET SESSIONE al Capitano (vedi skill `order-formats`)
 3. Tratta il prossimo tick come "primo check" (baseline, no ordine)

@@ -85,16 +85,19 @@ RUN useradd --create-home --shell /bin/bash jht \
        done \
     # Skill discovery farm: l'Agent Skills standard (SKILL.md) è letto da
     # Claude Code in .claude/skills/, da Codex e Kimi in .agents/skills/.
-    # Sorgente unica in .skills-source/; creiamo symlink in entrambe le
-    # directory di discovery così i 3 CLI vedono le stesse skill senza
-    # duplicare file. I symlink esistono solo nel container — il repo ha
-    # solo .skills-source/ (evitiamo i guai di symlink+git su Windows).
+    # Sorgente: agents/_skills/ (globali, viste da TUTTI gli agenti) +
+    # agents/<role>/_skills/ (private a un singolo ruolo, distribuite
+    # dal launcher per-cwd — vedi ROADMAP § Skill discovery).
+    # Per ora il symlink farm globale resta unico in /app/.claude/skills/
+    # + /app/.agents/skills/; il distributor per-agente è una follow-up
+    # in start-agent.sh.
     && mkdir -p /app/.claude/skills /app/.agents/skills \
-    && for skill in /app/.skills-source/*/; do \
+    && for skill in /app/agents/_skills/*/; do \
          [ -d "$skill" ] || continue; \
          name=$(basename "$skill"); \
-         ln -sfn "/app/.skills-source/$name" "/app/.claude/skills/$name"; \
-         ln -sfn "/app/.skills-source/$name" "/app/.agents/skills/$name"; \
+         [ "$name" = "_lib" ] && continue; \
+         ln -sfn "/app/agents/_skills/$name" "/app/.claude/skills/$name"; \
+         ln -sfn "/app/agents/_skills/$name" "/app/.agents/skills/$name"; \
        done \
     # Passwordless sudo per l'user jht: gli agenti girano con --yolo in un
     # container disposable — se servono tool extra (pdftohtml, tesseract,

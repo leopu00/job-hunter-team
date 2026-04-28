@@ -1,3 +1,8 @@
+---
+name: decision-throttle
+description: Reference table mapping `proj` (projected usage at reset) to a Sentinel state and a throttle level (0-4). Use it every tick AFTER you have a fresh sample to decide which order to send to the Captain.
+---
+
 # Skill — Tabella stati e throttle
 
 Riferimento per decidere lo stato dal `proj` ricevuto e il livello throttle da imporre al Capitano.
@@ -31,7 +36,7 @@ Se `velocità_ideale ≤ 0` (proj > SAFE_TARGET 95%) → throttle = 4.
 
 ## Bypass emergenza (manda subito, ignora cooldown)
 
-Una di queste condizioni → manda EMERGENZA + esegui freeze_team.py:
+Una di queste condizioni → manda EMERGENZA + esegui freeze_team.py (vedi skill `emergency-handling`):
 
 - `proj > 200%` (catastrofica)
 - `velocità_smussata > velocità_ideale × 5` (esplosione)

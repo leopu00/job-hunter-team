@@ -1,3 +1,8 @@
+---
+name: memory-state
+description: State variables the Sentinel must keep across ticks (last order sent, freeze flag, FATAL streak, per-state counters, emergency history, cooldowns). Use this skill on every tick to update memory and decide if a new order is required (edge-triggered).
+---
+
 # Skill — Memoria di stato (variabili tra tick)
 
 Mantieni queste variabili nella tua memoria conversazionale. Le usi per decidere se notificare il Capitano (edge-triggered).
@@ -98,4 +103,4 @@ emergency_proj_min     = None
 fatal_streak           = 0
 ```
 
-Poi manda ORDINE: RESET SESSIONE al Capitano.
+Poi manda ORDINE: RESET SESSIONE al Capitano (vedi skill `order-formats`).
