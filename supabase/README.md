@@ -1,54 +1,69 @@
-# Supabase — Schema PostgreSQL multi-tenant
+# Supabase — multi-tenant PostgreSQL schema
 
-Schema PostgreSQL per la piattaforma web Job Hunter Team, progettato per Supabase con Row Level Security (RLS).
+PostgreSQL schema for the Job Hunter Team web platform, designed for Supabase with Row Level Security (RLS).
 
-## Tabelle
+> 🔧 **Operational details** (project ref, credentials, OAuth setup, region, secrets) live in [`docs/internal/MAINTAINERS.md`](../docs/internal/MAINTAINERS.md). This README covers the schema only.
 
-| Tabella | Descrizione |
-|---------|-------------|
-| `candidate_profiles` | Profilo candidato (1 per utente) |
-| `positions` | Posizioni lavorative trovate |
-| `companies` | Aziende analizzate |
-| `scores` | Punteggi 0-100 per posizione |
-| `applications` | CV e candidature |
+## Tables
 
-## Sicurezza
+| Table | Purpose |
+|---|---|
+| `candidate_profiles` | Candidate profile (one per user) |
+| `positions` | Job postings discovered by the team |
+| `position_highlights` | Pros/cons attached to a position |
+| `companies` | Companies analysed by the Analyst |
+| `scores` | 0-100 scoring breakdown per position |
+| `applications` | CVs, cover letters, Critic verdict, response lifecycle |
+| `feedback_tickets` | Bug / feature feedback submitted from the in-app `/feedback` page |
+| `cloud_sync_tokens` | Cloud-sync auth tokens (RLS-scoped, SHA-256, soft-delete) |
 
-Tutte le tabelle hanno **Row Level Security (RLS)** attivo. Ogni utente vede solo i propri dati tramite `auth.uid() = user_id`.
+## Security
 
-Policy attive: SELECT, INSERT, UPDATE, DELETE per owner.
+All tables have **Row Level Security (RLS)** enabled. Each user sees only their own rows via `auth.uid() = user_id`.
+
+Active policies: SELECT · INSERT · UPDATE · DELETE for the owner.
 
 ## Setup
 
 ```bash
-# Con Supabase CLI
+# With Supabase CLI
 supabase start
-supabase db reset   # applica migrations + seed
+supabase db reset      # apply migrations + seed
 
-# Solo migration
+# Migrations only (apply pending)
 supabase migration up
 
-# Solo seed (dopo migration)
+# Seed only (after migrations)
 psql $DATABASE_URL -f supabase/seed.sql
 ```
 
-## Struttura file
+## File structure
 
 ```
 supabase/
-  migrations/
-    001_schema.sql    # Tabelle, indici, trigger, RLS
-  seed.sql            # Dati demo (6 posizioni, 4 aziende, 3 score, 2 application)
-  README.md
+├── migrations/
+│   ├── 001_schema.sql                  # Initial schema (5 core tables, RLS)
+│   ├── 002_add_interview_round.sql     # Interview round tracking
+│   ├── 003_align_legacy_schema.sql     # Align with the legacy team schema
+│   ├── 004_add_legacy_id.sql           # legacy_id column for cloud-sync mapping
+│   ├── 005_feedback_tickets.sql        # Feedback / bug ticket table
+│   ├── 006_cloud_sync_tokens.sql       # Cloud-sync auth tokens (RLS, SHA-256)
+│   └── 007_positions_legacy_unique.sql # UNIQUE (user_id, legacy_id) for idempotent push
+├── seed.sql                            # Demo data
+└── README.md
 ```
 
-## Differenze da SQLite (schema V2)
+## Differences from SQLite (schema V2)
+
+The local agent team uses SQLite (`shared/data/jobs.db`); Supabase is the optional multi-tenant cloud mirror.
 
 | SQLite | PostgreSQL |
-|--------|-----------|
+|---|---|
 | `INTEGER PRIMARY KEY` | `UUID PRIMARY KEY DEFAULT gen_random_uuid()` |
-| No multi-tenant | `user_id` FK su ogni tabella |
-| No RLS | RLS con policy per owner |
+| Single-tenant | `user_id` FK on every table |
+| No RLS | RLS with per-owner policies |
 | `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` | `TIMESTAMPTZ DEFAULT now()` |
-| `TEXT` per JSON | `JSONB` nativo |
-| No CHECK constraint | CHECK su status, remote_type, score range |
+| `TEXT` for JSON | `JSONB` native |
+| No CHECK constraints | `CHECK` on status, remote_type, score range |
+
+The local SQLite schema is documented in [`agents/_manual/db-schema.md`](../agents/_manual/db-schema.md).
