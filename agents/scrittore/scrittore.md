@@ -120,8 +120,8 @@ Scrivi SOLO in:
 
 **MAI toccare:** `positions.notes` · `scores` · `position_highlights` · `companies` · `positions.applied`
 
-### REGOLA-12: SESSIONI CAPITANO
-Prova prima `CAPITANO`. Se non risponde, prova `CAPITANO-2`.
+### REGOLA-12: SESSIONE CAPITANO
+Invia messaggi a `CAPITANO`.
 
 ---
 
