@@ -7,7 +7,7 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 - **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
 - **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
 - **Fix a bug / ship a feature** — follow the PR flow below
-- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/feedback-ticketing.md`](../docs/guides/feedback-ticketing.md))
+- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/guides/feedback-ticketing.md`](../docs/guides/feedback-ticketing.md))
 
 ## Setup
 
@@ -24,11 +24,15 @@ cd tests/js && npm install && cd ../..
 # Shared/cron dependencies
 npm install --prefix shared/cron
 
+# Pre-commit hooks (security gates: detect-secrets, actionlint, zizmor, npm-audit-prod)
+pip install pre-commit
+pre-commit install
+
 # Configuration
 jht setup
 ```
 
-Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/quickstart.md`](../docs/guides/quickstart.md#source-setup-for-contributors).
+Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/guides/quickstart.md`](../docs/guides/quickstart.md#source-setup-for-contributors).
 
 ## Branches
 
@@ -58,9 +62,11 @@ Rules:
 
 ## Pre-PR checklist
 
-- [ ] `tsc --noEmit` passes (in `web/`)
+- [ ] `npx tsc --noEmit` passes (in `web/`)
 - [ ] `npm run lint` passes (in `web/`)
+- [ ] `npm run format:check` passes (from repo root)
 - [ ] `npm test` passes (in `tests/js/`)
+- [ ] `pre-commit run --all-files` passes (security hooks: secrets, actionlint, zizmor, npm-audit-prod)
 - [ ] No sensitive files included (PDF, DB, credentials, personal data)
 - [ ] Branch rebased on `master` before opening the PR
 
@@ -83,15 +89,7 @@ the root `package.json` and `desktop/package.json` before tagging —
 electron-builder names artifacts after the desktop version, so forgetting
 it ships assets labeled with the previous release number. The full
 checklist (including the version-consistency gate and the Windows x64 /
-ARM64 split) lives in [`docs/release.md`](../docs/internal/release.md).
-
-## Reporting bugs
-
-Use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) template.
-
-## Proposing features
-
-Use the [Feature Request](ISSUE_TEMPLATE/feature_request.md) template.
+ARM64 split) lives in [`docs/internal/release.md`](../docs/internal/release.md).
 
 ## Code of conduct
 
