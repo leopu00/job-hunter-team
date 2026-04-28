@@ -1,78 +1,71 @@
-# Come aggiungere un nuovo agente
+# 🛠️ Adding a new agent role
 
-Guida per aggiungere un agente al team (es. SCOUT-3).
+Contributor guide for introducing a **new type** of agent to the team (e.g. a Validator after the Critic, a domain-specialist Researcher, an outreach Agent).
 
-## 1. Creare branch e worktree
+> 🔁 **Scaling an existing role is not in scope here.** Adding a new instance of an existing role (e.g. `SCOUT-3` to widen Discovery) is **dynamic** — the Captain spawns it at runtime via `start-agent.sh`. No code change. Skip this file unless you're adding a new agent type.
+
+## 1️⃣ Create the prompt directory
+
+```
+agents/<role>/
+└── <role>.md      # the prompt; identity, rules, loop
+```
+
+Conventions:
+- Lowercase folder name, ASCII (`maestro`, `validator`, `researcher`).
+- Single prompt file `<role>.md` named after the folder.
+- If the role needs runtime helpers, add them under `agents/<role>/skills/`.
+
+## 2️⃣ Register the role in the launcher
+
+Edit `.launcher/start-agent.sh` → `get_agent_info()` and add a case clause:
 
 ```bash
-# Sostituisci $REPO_ROOT con il path della tua repo (es. ~/Repos/job-hunter-team)
-cd $REPO_ROOT/alfa
-git branch scout-3 main
-git worktree add $REPO_ROOT/scout-3 scout-3
+<role>) echo "<SESSION_PREFIX>|<effort>|<model_override>" ;;
 ```
 
-## 2. Copiare CLAUDE.md dal collega
+- `SESSION_PREFIX` — uppercase tmux name (`VALIDATOR`, `RESEARCHER`)
+- `effort` — `medium` or `high` depending on the tier (see step 3)
+- `model_override` — empty for Opus default, `sonnet` for Sonnet
 
-```bash
-cd $REPO_ROOT
-sed 's/Scout-1/Scout-3/g; s/scout-1/scout-3/g; s/SCOUT-1/SCOUT-3/g' scout-1/CLAUDE.md > scout-3/CLAUDE.md
-```
+## 3️⃣ Pick a tier
 
-## 3. Aggiungere MCP config in ~/.claude.json
+Map the role to one of the four documented tiers:
 
-Aggiungere sotto `projects`:
+| Tier | Effort | Model override | Use for |
+|---|---|---|---|
+| 🥇 very smart | high | (empty → Opus) | Critical, irreversible decisions |
+| 🥈 expert | medium | (empty → Opus) | Pattern-matching against well-known templates |
+| 🥉 smart | high | sonnet | Research, parsing, classification, user chat |
+| 🎖️ medium | medium | sonnet | Light watchdog logic |
 
-```json
-"$REPO_ROOT/scout-3": {
-  "allowedTools": [],
-  "mcpServers": {
-    "fetch": {"command": "uvx", "args": ["mcp-server-fetch"]},
-    "jobspy": {"command": "/opt/anaconda3/bin/python3", "args": [".../alfa/tools/jobspy-mcp/job_server.py"]},
-    "linkedin": {"command": "uvx", "args": ["linkedin-scraper-mcp"]},
-    "playwright": {"command": "npx", "args": ["@playwright/mcp@latest", "--headless", "--browser", "chromium"]}
-  },
-  "hasTrustDialogAccepted": true,
-  "hasCompletedProjectOnboarding": true
-}
-```
+Document the tier in `agents/_team/architettura.md` § *How agents are tiered*.
 
-MCP per ruolo:
-- Scout: fetch, jobspy, linkedin, playwright
-- Analista: fetch, playwright
-- Scorer: fetch
-- Scrittore: fetch, pandoc
-- Critico: fetch
+## 4️⃣ Wire pipeline integration
 
-## 4. Aggiungere a start-all.sh
+- **DB schema** — does the role need new columns or a new status value? Review impact in [`db-schema.md`](db-schema.md). If yes, plan a migration.
+- **Position in the pipeline** — what queue does it pull from? What does it write back? Either reuse `next-for-X` patterns or add a new one in `db_query.py`.
+- **Communication** — which messages does it send/receive? See [`communication-rules.md`](communication-rules.md). Default to **DB-driven coordination** for pipeline handoffs; reserve tmux for real-time signals (`URG`, `FEEDBACK`).
+- **Anti-collision** — if it's a pool (multiple instances), pick a lock strategy. See [`anti-collision.md`](anti-collision.md).
 
-In `alfa/scripts/scripts/start-all.sh`, aggiungere all'array AGENTS:
+## 5️⃣ Update the related docs
 
-```bash
-"🔍|scout-3|scout-3|sonnet"
-```
+- [`agents/_team/architettura.md`](../_team/architettura.md) — add to the tier table; if it changes the pipeline shape, add a new phase section
+- [`agents/_manual/sessions.md`](sessions.md) — register the session naming (singleton vs pool vs dynamic)
+- [`docs/adr/`](../../docs/adr/) — if the role introduces a load-bearing architectural decision (a new contract, a non-obvious tradeoff), file an ADR
+- README role list (if user-facing visibility is desired)
 
-## 5. Aggiungere a start-agent.sh
+## 6️⃣ Test
 
-In `alfa/scripts/scripts/start-agent.sh`, aggiungere alla mappa:
+- Boot the team locally and verify the agent starts cleanly under all 3 providers (Claude · Codex · Kimi).
+- Confirm idempotency: agent re-launch should not corrupt state.
+- If multi-instance, validate the anti-collision contract end-to-end.
+- Add a smoke test under `tests/js/` or `tests/` covering the role's main success path and one error path.
 
-```bash
-scout-3) echo "🔍|scout-3|sonnet" ;;  # aggiungere nel case di get_agent_info()
-```
+## 🔗 Related
 
-## 6. Aggiornare status.sh e stop-all.sh
-
-Aggiungere `"🔍|SCOUT-3"` all'array AGENTS.
-
-## 7. Aggiornare send-msg.sh
-
-Aggiungere `scout-3) echo "🔍" ;;  # aggiungere nel case di get_emoji()` alla mappa.
-
-## 8. Aggiornare tabella sessioni in TUTTI i CLAUDE.md
-
-Aggiungere la nuova sessione alla tabella in ogni CLAUDE.md degli altri agenti.
-
-## Note
-
-- Agenti dello stesso ruolo hanno CLAUDE.md identici (tranne il numero)
-- Si coordinano automaticamente via tmux all'avvio
-- Modello: Sonnet per tutti tranne Critico (Opus)
+- 🧭 [`../_team/architettura.md`](../_team/architettura.md) — full team composition + tier mapping
+- 💬 [`communication-rules.md`](communication-rules.md) — DB-driven defaults + tmux for real-time
+- 🛡️ [`anti-collision.md`](anti-collision.md) — peer coordination patterns
+- 🪟 [`sessions.md`](sessions.md) — session naming convention
+- 🗄️ [`db-schema.md`](db-schema.md) — DB columns + CLI tooling
