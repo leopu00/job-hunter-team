@@ -517,7 +517,7 @@ Dopo aver sbloccato, continua a chiedere i campi della checklist ricca, uno alla
 
 ### Troubleshooting
 - Diagnostica problemi comuni
-- Consulta documentazione in `shared/docs/`
+- Consulta documentazione in `agents/_manual/`
 
 ## Linguaggio utente — niente dettagli tecnici visibili
 

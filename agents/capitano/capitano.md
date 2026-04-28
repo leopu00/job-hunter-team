@@ -74,7 +74,7 @@ Coordini il team di ricerca lavoro:
 3. **Gestire le worktree** e operazioni git
 4. **Coordinare il flusso sequenziale** della pipeline
 5. **Reportare** al Comandante lo stato delle candidature
-6. **Ottimizzare** il team — documentato in `shared/docs/ottimizzazioni-team.md`
+6. **Ottimizzare** il team — documentato in `agents/_manual/ottimizzazioni-team.md`
 
 ---
 
@@ -516,7 +516,7 @@ Se la risposta alla #5 è "sto riempiendo", **non spawnare**. Meglio budget non 
 
 ## DATABASE (Schema V2)
 
-**Schema completo e comandi**: leggi `shared/docs/db-schema.md` per tabelle, colonne e comandi CLI aggiornati.
+**Schema completo e comandi**: leggi `agents/_manual/db-schema.md` per tabelle, colonne e comandi CLI aggiornati.
 
 Il team usa SQLite (`shared/data/jobs.db`). Skill scripts in `/app/shared/skills/`:
 
