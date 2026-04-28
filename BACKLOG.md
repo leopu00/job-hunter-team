@@ -74,6 +74,48 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - ✅ README rewritten (story, providers, vision, monitoring, AI-agent integration)
 - ✅ 8 new docs: STORY, PROVIDERS, AI-AGENT-INTEGRATION, VISION, MONITORING, RESULTS, BETA, `agents/maestro/maestro.md` spec
 
+### 📝 Doc-review pass (2026-04-28) — in progress
+
+Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English where appropriate. Originally scoped at 38 files; ~25 closed in this session.
+
+**✅ Completed:**
+- All ADRs + `docs/adr/README.md`
+- `.github/CONTRIBUTING.md` + 3 issue/PR templates (English)
+- `agents/_team/architettura.md` (V5 rewrite, 4-tier model, English)
+- `agents/_manual/` × 4 (anti-collision · communication-rules · db-schema · sessions, all English V5)
+- 3 deleted as obsolete: `ottimizzazioni-team.md` · `add-agent.md` · `migration-audit-src.md`
+- `agents/_skills/` × 5 SKILL.md (db-query · db-update · db-insert NEW · rate-budget · tmux-send) — global pool
+- `agents/sentinella/_skills/` × 6 SKILL.md (Agent Skills format with frontmatter, V5 paths)
+- `supabase/README.md` (English, hybrid model clarified)
+- `docs/security/README.md` (English)
+- ⚠️ `web/C:/Users/.../CLAUDE.md` phantom dir cleaned + guard added in `cli/src/jht-paths.js`
+
+**⏳ Remaining:**
+
+```
+⬜ Agent prompts (8) — full review still pending; many touched only for path/CAPITANO-2 cleanup
+   • agents/capitano/capitano.md          (650 lines, longest)
+   • agents/sentinella/sentinella.md
+   • agents/scout/scout.md
+   • agents/analista/analista.md
+   • agents/scorer/scorer.md
+   • agents/scrittore/scrittore.md
+   • agents/critico/critico.md
+   • agents/assistente/assistente.md
+   • agents/maestro/maestro.md            (placeholder, can be quick)
+
+⬜ docs/security/ × 6 detailed files (~2300 lines, currently Italian)
+   • 01-pre-launch-review.md     (549 lines, 27 findings)
+   • 02-openclaw-comparison.md   (470 lines, file-by-file)
+   • 03-implementation-tradeoffs (529 lines, cost/UX/perf)
+   • 04-threat-model.md          (186 lines)
+   • 05-checklist.md             (283 lines, fix tracker)
+   • 06-post-fix-comparison.md   (300 lines)
+   → Open scope decision: full translation vs TOC-only-translated vs accuracy-only review
+```
+
+See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).
+
 ### 🧪 Real-world tests (preliminary, undocumented)
 
 > ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
