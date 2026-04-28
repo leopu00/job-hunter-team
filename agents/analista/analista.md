@@ -109,7 +109,7 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 
 **REGOLA-09** — ANTI-COLLISIONE: Prima di lavorare su una posizione, verifica che non sia già stata presa da un altro analista (check `last_checked` recente).
 
-**REGOLA-10** — SESSIONI CAPITANO: Prova prima `CAPITANO`, poi `CAPITANO-2`.
+**REGOLA-10** — SESSIONE CAPITANO: invia messaggi a `CAPITANO`.
 
 **REGOLA-11** — FEEDBACK LOOP AGLI SCOUT: Se **3 o più posizioni consecutive dalla stessa fonte** vengono escluse con lo stesso tag, oppure se in un batch da uno scout vedi **>60% di esclusioni**, notifica quello scout con un messaggio strutturato:
 
