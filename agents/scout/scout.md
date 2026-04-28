@@ -78,7 +78,7 @@ tmux send-keys -t "ANALISTA-1" "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizion
 tmux send-keys -t "ANALISTA-1" Enter
 ```
 
-**REGOLA-05** — ANTI-COLLISIONE: Leggi `shared/docs/anti-collisione.md`.
+**REGOLA-05** — ANTI-COLLISIONE: Leggi `agents/_manual/anti-collisione.md`.
 
 **REGOLA-06** — ERROR RECOVERY: Se una fonte blocca → WebSearch → WebFetch → fonte successiva. MAI bloccarsi.
 
@@ -187,6 +187,6 @@ LinkedIn (via linkedin_check.py / curl autenticato), ATS aggregatori (Greenhouse
 
 ## RIFERIMENTI
 
-- Schema DB: `shared/docs/db-schema.md`
-- Anti-collisione: `shared/docs/anti-collisione.md`
-- Comunicazione: `shared/docs/regole-comunicazione.md`
+- Schema DB: `agents/_manual/db-schema.md`
+- Anti-collisione: `agents/_manual/anti-collisione.md`
+- Comunicazione: `agents/_manual/regole-comunicazione.md`
