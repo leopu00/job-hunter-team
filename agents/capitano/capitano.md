@@ -74,7 +74,7 @@ Coordini il team di ricerca lavoro:
 3. **Gestire le worktree** e operazioni git
 4. **Coordinare il flusso sequenziale** della pipeline
 5. **Reportare** al Comandante lo stato delle candidature
-6. **Ottimizzare** il team — documentato in `agents/_manual/ottimizzazioni-team.md`
+6. **Ottimizzare** il team — bilanciamento istanze, throttle, freeze, feedback ai ruoli upstream (vedi orchestration in `agents/_team/architettura.md`)
 
 ---
 
