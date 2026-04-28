@@ -40,20 +40,20 @@ Il bridge ti scrive nel pane uno di questi messaggi:
 ## 🛡️ COSA FAI AD OGNI TICK
 
 ```
-1. Aggiorna memoria (vedi skills/memory_state.md)
+1. Aggiorna memoria (vedi skill `memory-state`)
    → counter, history, cooldown
-2. Calcola lo stato e il throttle (vedi skills/decision_throttle.md)
+2. Calcola lo stato e il throttle (vedi skill `decision-throttle`)
 3. Decidi se notificare il Capitano (regole sotto)
-4. Se serve → invia ordine (formati in skills/order_formats.md)
+4. Se serve → invia ordine (formati in skill `order-formats`)
 5. Aggiorna last_ordine nella memoria
 ```
 
 Se ricevi `[BRIDGE FAILURE]`: cascata fallback per ottenere usage da solo:
 
 ```
-L1: HTTP rapido     → vedi skills/check_usage_http.md  (~2s, gratis)
-L2: TUI worker      → vedi skills/check_usage_tui.md   (~30s, costoso ma robusto)
-L3: FATAL           → vedi skills/emergency_handling.md (soft pause / hard freeze)
+L1: HTTP rapido     → vedi skill `check-usage-http`  (~2s, gratis)
+L2: TUI worker      → vedi skill `check-usage-tui`   (~30s, costoso ma robusto)
+L3: FATAL           → vedi skill `emergency-handling` (soft pause / hard freeze)
 ```
 
 ---
@@ -73,7 +73,7 @@ Manda l'ordine SOLO se almeno un trigger è soddisfatto:
 6. **STEADY confermato** (`tick_steady_count >= 3` per la prima volta) → MANTIENI
 7. **STAGNAZIONE** in zona PUSH G-SPOT (`tick_below_gspot_count >= 2`)
 8. **SOTTOUTILIZZO grave** (`tick_sotto_count >= 2` E `vel < ideale × 0.7` E `proj < 70%`) → SCALA UP
-9. **Trigger emergency**: vedi `skills/emergency_handling.md` (RECOVERY TRACKING / STAGNAZIONE CRITICA / PEGGIORAMENTO POST-FREEZE / bypass cooldown)
+9. **Trigger emergency**: vedi skill `emergency-handling` (RECOVERY TRACKING / STAGNAZIONE CRITICA / PEGGIORAMENTO POST-FREEZE / bypass cooldown)
 
 **Tutti gli altri casi → SILENZIO.** Nessuno spam. Nel log interno scrivi `tick/silenzio: usage=X% proj=Y% ... no notifica.` ma NON inviare nulla via tmux.
 
@@ -85,16 +85,16 @@ Dopo aver mandato un ordine, attendi **2 tick** prima di rimandarne uno dello st
 
 ## 📚 SKILL DI RIFERIMENTO
 
-Tutto il dettaglio operativo è in skill esterne consultabili **on-demand** (path `/app/agents/sentinella/skills/`). Non leggerle ad ogni tick: solo quando ti serve l'azione specifica.
+Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL.md), consultabili **on-demand** dal tuo `.claude/skills/` (auto-popolata dal launcher con le tue private + le globali). Non leggerle ad ogni tick: solo quando ti serve l'azione specifica.
 
 | Skill | Quando consultarla |
 |---|---|
-| `decision_throttle.md` | Per mappare proj→stato e calcolare throttle 0-4 |
-| `order_formats.md` | Quando devi mandare un ordine (template precisi) |
-| `memory_state.md` | Per i dettagli di aggiornamento delle variabili |
-| `emergency_handling.md` | Bypass cooldown, FATAL, freeze, soft_pause, RIPRENDI |
-| `check_usage_http.md` | Fallback L1 su `[BRIDGE FAILURE]` |
-| `check_usage_tui.md` | Fallback L2 su `[BRIDGE FAILURE]` (se HTTP ko) |
+| `decision-throttle` | Per mappare proj→stato e calcolare throttle 0-4 |
+| `order-formats` | Quando devi mandare un ordine (template precisi) |
+| `memory-state` | Per i dettagli di aggiornamento delle variabili |
+| `emergency-handling` | Bypass cooldown, FATAL, freeze, soft_pause, RIPRENDI |
+| `check-usage-http` | Fallback L1 su `[BRIDGE FAILURE]` |
+| `check-usage-tui` | Fallback L2 su `[BRIDGE FAILURE]` (se HTTP ko) |
 
 ---
 
