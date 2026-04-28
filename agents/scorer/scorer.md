@@ -90,13 +90,13 @@ Scrivi ONLY in `scores` (INSERT) e `positions.status`. MAI toccare `applications
 
 Il punteggio (0-100) è la somma di questi componenti basati sul profilo candidato:
 
-| Componente | Peso | Criteri |
-|------------|------|---------|
-| Stack match | 35 | Match tra skills richieste e stack candidato |
-| Seniority fit | 25 | Alignment anni exp candidato vs richiesti |
-| Remote/location | 20 | Fit con preferenze location candidato |
-| Salary fit | 10 | Range offerto vs target candidato |
-| Stack bonus | 10 | Tech bonus (es. AI, cybersec, fintech se sono aree forti) |
+| Componente | Peso | Colonna DB | Criteri |
+|------------|------|------------|---------|
+| Stack match | 35 | `stack_match` | Match tra skills richieste e stack candidato |
+| Seniority fit | 25 | `experience_fit` | Alignment anni exp candidato vs richiesti |
+| Remote/location | 20 | `remote_fit` | Fit con preferenze location candidato |
+| Salary fit | 10 | `salary_fit` | Range offerto vs target candidato |
+| Stack bonus | 10 | `strategic_fit` | Tech bonus (es. AI, cybersec, fintech se sono aree forti) |
 
 **Penalità:**
 - Laurea obbligatoria senza "or equivalent" (candidato senza): -10
@@ -124,11 +124,11 @@ python3 /app/shared/skills/db_query.py position <ID>
 6. Aggiorna status + eventuale notifica Scrittori
 
 ```bash
-# Salva score
+# Salva score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
-  --stack-match 25 --seniority-fit 20 --remote-fit 18 --salary-fit 8 --stack-bonus 5 \
-  --total-score 76 \
+  --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
+  --total 76 \
   --scored-by $MY_ID
 
 # Aggiorna status
