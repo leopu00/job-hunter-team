@@ -1,43 +1,48 @@
-## Descrizione
+## Description
 
-<!-- Cosa fa questa PR? Perché è necessaria? -->
+<!-- What does this PR do? Why is it needed? -->
 
-## Tipo di modifica
+## Type of change
 
 - [ ] Bug fix
-- [ ] Nuova feature
+- [ ] New feature
 - [ ] Refactor
-- [ ] Documentazione
+- [ ] Documentation
 - [ ] Test
 - [ ] CI/CD
 
 ## Checklist
 
-### Codice
-- [ ] Max 200 righe per commit
-- [ ] Nessun file sensibile (PDF, DB, CSV, credenziali, dati personali)
-- [ ] Nessun riferimento a nomi interni del team di sviluppo
-- [ ] Nessun `console.log` di debug lasciato
+### Code
+- [ ] Max ~200 lines per commit
+- [ ] No sensitive files (PDF, DB, CSV, credentials, personal data)
+- [ ] No leftover debug `console.log` / `print` statements
 
-### Frontend (se applicabile)
-- [ ] Componenti verificati nel browser
-- [ ] Nessun errore TypeScript (`tsc --noEmit`)
-- [ ] Lint passato (`npm run lint`)
-- [ ] Build completata (`npm run build`)
+### Frontend (if applicable)
+- [ ] Components verified in the browser
+- [ ] No TypeScript errors (`npx tsc --noEmit` in `web/`)
+- [ ] Lint passes (`npm run lint`)
+- [ ] Build succeeds (`npm run build`)
 
-### Backend / Shared (se applicabile)
-- [ ] Test vitest aggiunti o aggiornati
-- [ ] `npm test` passa senza errori
+### Backend / Shared (if applicable)
+- [ ] Vitest tests added or updated
+- [ ] `npm test` passes (in `tests/js/`)
+
+### Security gates
+- [ ] `pre-commit run --all-files` passes (detect-secrets, actionlint, zizmor, npm-audit-prod)
+
+### Architecture
+- [ ] Non-trivial design decision? An ADR was added in `docs/adr/` (see [CONTRIBUTING](CONTRIBUTING.md#non-trivial-decisions--write-an-adr))
 
 ### Git
-- [ ] Branch aggiornata su master prima della PR
-- [ ] Messaggio commit in formato `tipo(scope): descrizione`
-- [ ] Nessun mega-commit (4+ file non correlati)
+- [ ] Branch rebased on `master` before opening the PR
+- [ ] Commit messages follow `type(scope): description`
+- [ ] No mega-commits (4+ unrelated files)
 
-## Test eseguiti
+## How was this tested?
 
-<!-- Descrivi come hai verificato le modifiche -->
+<!-- Describe how you verified the changes -->
 
-## Screenshot (se frontend)
+## Screenshots (if frontend)
 
-<!-- Aggiungi screenshot se la PR modifica l'UI -->
+<!-- Add screenshots if the PR changes UI -->
