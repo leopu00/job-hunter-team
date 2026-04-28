@@ -246,6 +246,25 @@ The most important agent we haven't built yet. Stands outside the operational pi
 
 → Spec in [`agents/maestro/maestro.md`](../../agents/maestro/maestro.md). See [`docs/VISION.md`](VISION.md) for the rationale.
 
+### 🗄️ Database schema optimization (priority)
+
+The current `jobs.db` schema is functional but **lossy**: state transitions, Critic rounds, and inter-agent feedback all evaporate after the fact, and `positions.notes` hides 5 structured analysis fields as plain text. Plan to address before the public-launch dashboard work:
+
+```
+⬜ position_events  — audit trail of every status change (timeline + replay)
+⬜ application_reviews — persist all 3 Critic rounds, not just the final score
+⬜ agent_messages — log inter-agent [FEEDBACK]/[REQ]/[RES] for pattern analysis
+⬜ position_analysis — promote ESCLUSA-tag + 5-field analyst notes to columns
+⬜ application_artifacts — consolidate cv/cl × md/pdf paths (single artifacts table)
+⬜ Drop redundancies: positions.applied (BOOL) duplicates applications.applied_at;
+                     applications.status overlaps positions.status
+⬜ interview_log — replace single interview_round INT with full interview history
+⬜ user_feedback — capture user reactions in Phase 5 ("tone off" / "good — applying")
+⬜ captain_decisions — orchestration log (spawn +1 analyst, freeze, throttle, etc.)
+```
+
+→ Detailed analysis: [`agents/_manual/db-schema.md`](../../agents/_manual/db-schema.md). Highest-ROI single change is `position_events` — unlocks dashboard timeline + debug + analytics with one new table and zero changes to the existing flow.
+
 ---
 
 ## 🐳 Docker — what we built (compressed)
