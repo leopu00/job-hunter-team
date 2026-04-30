@@ -1,8 +1,11 @@
+import { getNonce } from '@/lib/csp'
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 
 type Crumb = { name: string; path: string }
 
-export default function BreadcrumbJsonLd({ items }: { items: Crumb[] }) {
+export default async function BreadcrumbJsonLd({ items }: { items: Crumb[] }) {
+  const nonce = await getNonce()
   const data = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -19,6 +22,7 @@ export default function BreadcrumbJsonLd({ items }: { items: Crumb[] }) {
 
   return (
     <script
+      nonce={nonce}
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
