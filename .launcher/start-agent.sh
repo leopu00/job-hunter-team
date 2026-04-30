@@ -370,6 +370,64 @@ if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || [ "$TEMPLATE" -nt "$IDEN
   echo "  → $IDENTITY_FILE sincronizzato da template ($ROLE.md)"
 fi
 
+# ── Skill distribution ──────────────────────────────────────────────────────
+# Per-agent skill discovery: each agent only sees the skills it actually
+# uses. The shared library lives at agents/_skills/; the manifest at
+# agents/<role>/skills.list declares which ones the agent consumes.
+# Private skills under agents/<role>/_skills/ are always copied (no
+# manifest needed — they are role-specific by definition).
+#
+# Claude Code reads .claude/skills/ in the cwd; Codex/Kimi read
+# .agents/skills/ — we populate both so the agent works regardless of
+# which CLI start-agent.sh selects via PROVIDER. Each spawn rewrites
+# the workspace skill folders so a manifest change between spawns is
+# picked up cleanly.
+SKILLS_LIB="$REPO_ROOT/agents/_skills"
+SKILL_MANIFEST="$REPO_ROOT/agents/$ROLE/skills.list"
+PRIVATE_SKILLS_DIR="$REPO_ROOT/agents/$ROLE/_skills"
+CLAUDE_SKILLS_DIR="$AGENT_DIR/.claude/skills"
+AGENTS_SKILLS_DIR="$AGENT_DIR/.agents/skills"
+
+rm -rf "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
+mkdir -p "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
+
+_copy_skill() {
+  local src="$1"
+  local name="$2"
+  cp -R "$src" "$CLAUDE_SKILLS_DIR/$name"
+  cp -R "$src" "$AGENTS_SKILLS_DIR/$name"
+}
+
+_skills_count=0
+if [ -f "$SKILL_MANIFEST" ]; then
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    # Strip comments and surrounding whitespace
+    _name="${_line%%#*}"
+    _name="$(echo "$_name" | tr -d '[:space:]')"
+    [ -z "$_name" ] && continue
+    _src="$SKILLS_LIB/$_name"
+    if [ ! -d "$_src" ]; then
+      echo "  ⚠ skill '$_name' listed in $SKILL_MANIFEST but not found at $_src" >&2
+      continue
+    fi
+    _copy_skill "$_src" "$_name"
+    _skills_count=$((_skills_count + 1))
+  done < "$SKILL_MANIFEST"
+fi
+
+if [ -d "$PRIVATE_SKILLS_DIR" ]; then
+  for _skill in "$PRIVATE_SKILLS_DIR"/*/; do
+    [ -d "$_skill" ] || continue
+    _name="$(basename "$_skill")"
+    [ "$_name" = "_lib" ] && continue
+    _copy_skill "$_skill" "$_name"
+    _skills_count=$((_skills_count + 1))
+  done
+fi
+
+echo "  → $_skills_count skill(s) distribuite in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
+unset _line _name _src _skill _skills_count
+
 # ── Avvia agente ─────────────────────────────────────────────────────────────
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "Sessione '$SESSION' già attiva."

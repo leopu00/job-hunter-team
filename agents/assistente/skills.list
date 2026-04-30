@@ -1,0 +1,9 @@
+# Skills the Assistente consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's ~/.claude/skills/ runtime workspace.
+# Note: rate-budget is read-only here — the Assistente uses `plan` only,
+# never `live`.
+tmux-send
+db-query
+rate-budget
