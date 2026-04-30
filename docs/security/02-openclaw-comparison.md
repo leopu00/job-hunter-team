@@ -1,33 +1,33 @@
 # 🔍 OpenClaw vs JHT — Security architecture comparison
 
-**Data:** 2026-04-27 (mattina, **pre-fix**)
-**OpenClaw revision:** `0dd2844991` (main, aggiornato il 2026-04-27)
-**JHT revision:** `65f2ec4a` (dev-1, baseline audit)
-**Metodo:** lettura diretta dei file critici di OpenClaw + grep mirati. Le quote sono testuali.
+**Date:** 2026-04-27 (morning, **pre-fix**)
+**OpenClaw revision:** `0dd2844991` (main, refreshed on 2026-04-27)
+**JHT revision:** `65f2ec4a` (dev-1, audit baseline)
+**Method:** direct reading of OpenClaw's critical files + targeted greps. Quotes are verbatim.
 
-> 📌 **Stato attuale:** questo documento è la fotografia **pre-fix** (gap -78). Per il bilancio post-sprint (gap chiuso a -25, score 30→74%) vedi [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
+> 📌 **Current status:** this document is the **pre-fix** snapshot (gap -78). For the post-sprint balance (gap closed to -25, score 30→74%) see [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
 >
-> Riferimento crociato: ogni finding citato qui (C1, C2, …, L5) è definito in [`01-pre-launch-review.md`](01-pre-launch-review.md).
+> Cross-reference: every finding cited here (C1, C2, …, L5) is defined in [`01-pre-launch-review.md`](01-pre-launch-review.md).
 
 ---
 
-## 0. Snapshot dimensionale
+## 0. Size snapshot
 
 ```
-                    🛡️  OPENCLAW                        🏠  JHT (oggi)
+                    🛡️  OPENCLAW                        🏠  JHT (today)
               ┌────────────────────────────┐    ┌──────────────────────────┐
-              │  528 righe auth.ts         │    │  50 righe auth.ts        │
-              │  538 righe ssrf.ts         │    │  ❌ no SSRF defense      │
-              │  32 moduli src/security/   │    │  ❌ no security/         │
-              │  43 test security          │    │  ❌ 0 test security      │
-              │  63 file sandbox*          │    │  ❌ no sandbox separato  │
-              │  6 test SSRF dedicati      │    │  ❌                      │
-              │  1 file /security/         │    │  ❌                      │
+              │  528 lines auth.ts         │    │  50 lines auth.ts        │
+              │  538 lines ssrf.ts         │    │  ❌ no SSRF defense      │
+              │  32 modules src/security/  │    │  ❌ no security/         │
+              │  43 security tests         │    │  ❌ 0 security tests     │
+              │  63 sandbox files*         │    │  ❌ no separate sandbox  │
+              │  6 dedicated SSRF tests    │    │  ❌                      │
+              │  1 file in /security/      │    │  ❌                      │
               │  secret-equal.ts (12 LOC)  │    │                          │
               └────────────────────────────┘    └──────────────────────────┘
 ```
 
-OpenClaw è una piattaforma multi-channel con plugin SDK pubblici → superficie ENORME, quindi gli investimenti sono giustificati. JHT è single-purpose desktop-first → non serve copiare la massa, serve copiare i **pattern**.
+OpenClaw is a multi-channel platform with public plugin SDKs → HUGE attack surface, so the investment is justified. JHT is single-purpose desktop-first → no need to copy the mass, only the **patterns**.
 
 ---
 
@@ -64,25 +64,25 @@ export function isLocalDirectRequest(req?: IncomingMessage): boolean {
 }
 ```
 
-**Cosa cambia:** OpenClaw considera la richiesta "local diretta" SOLO se (a) la TCP socket peer è loopback E (b) **nessuno** degli header `forwarded*` è presente. La presenza di un header forwarded è treated come "c'è un proxy in mezzo, non posso fidarmi del peer".
+**What changes:** OpenClaw treats a request as "direct local" ONLY if (a) the TCP socket peer is loopback AND (b) **none** of the `forwarded*` headers are present. The presence of any forwarded header is treated as "there's a proxy in the path, I cannot trust the peer".
 
-| Aspetto | OpenClaw | JHT |
+| Aspect | OpenClaw | JHT |
 |---------|----------|-----|
-| Source dell'IP | `req.socket.remoteAddress` (kernel TCP) | `host`/`x-forwarded-host` headers |
-| Spoofable? | No | Sì |
-| Comportamento se proxy presente | Auth obbligatoria | Bypass |
+| IP source | `req.socket.remoteAddress` (kernel TCP) | `host` / `x-forwarded-host` headers |
+| Spoofable? | No | Yes |
+| Behavior when proxy is present | Auth required | Bypass |
 
-**Verdict:** ✅ OpenClaw chiude C1 in modo definitivo.
+**Verdict:** ✅ OpenClaw closes C1 definitively.
 
 ---
 
 ## 2. API auth gating
 
-**JHT:** `requireAuth()` chiamata per-route, e ~25 route sensibili la dimenticano.
+**JHT:** `requireAuth()` is called per-route, and ~25 sensitive routes simply forget it.
 
-**OpenClaw — pattern stratificato:**
+**OpenClaw — layered pattern:**
 
-### 2a. Express middleware globale (`extensions/browser/src/browser/server-middleware.ts`)
+### 2a. Express global middleware (`extensions/browser/src/browser/server-middleware.ts`)
 ```ts
 export function installBrowserAuthMiddleware(app, auth) {
   if (!auth.token && !auth.password) return;
@@ -115,7 +115,7 @@ export function isAuthorizedBrowserRequest(req, auth): boolean {
 }
 ```
 
-### 2c. Constant-time compare (`src/security/secret-equal.ts`, 12 righe!)
+### 2c. Constant-time compare (`src/security/secret-equal.ts`, 12 lines!)
 ```ts
 import { createHash, timingSafeEqual } from "node:crypto";
 
@@ -126,33 +126,33 @@ export function safeEqualSecret(provided, expected): boolean {
 }
 ```
 
-**Trick elegante:** hash SHA-256 entrambi i lati prima di `timingSafeEqual` → buffer same-length, niente leak di lunghezza.
+**Elegant trick:** SHA-256 hashing both sides before `timingSafeEqual` → same-length buffers, no length leak.
 
-**Verdict:** ✅ OpenClaw centralizza, ✅ usa timing-safe compare. JHT può adottare al volo.
+**Verdict:** ✅ OpenClaw centralizes, ✅ uses timing-safe compare. JHT can adopt this on the fly.
 
 ---
 
 ## 3. CSRF / Origin validation
 
-**JHT:** zero. Nessun controllo Origin/Referer.
+**JHT:** zero. No Origin/Referer checks.
 
-**OpenClaw** (`extensions/browser/src/browser/csrf.ts`, 89 righe complete):
+**OpenClaw** (`extensions/browser/src/browser/csrf.ts`, 89 full lines):
 ```ts
 export function shouldRejectBrowserMutation(params): boolean {
   if (!isMutatingMethod(params.method)) return false;
 
-  // 1️⃣ Sec-Fetch-Site cross-site → kill switch (browser-set, non spoofable)
+  // 1️⃣ Sec-Fetch-Site cross-site → kill switch (browser-set, not spoofable)
   if (normalizeLowercaseStringOrEmpty(params.secFetchSite) === "cross-site") {
     return true;
   }
 
-  // 2️⃣ Origin presente → deve essere loopback
+  // 2️⃣ Origin present → must be loopback
   if (origin) return !isLoopbackUrl(origin);
 
   // 3️⃣ Referer fallback
   if (referer) return !isLoopbackUrl(referer);
 
-  // 4️⃣ No Origin/Referer = client non-browser (curl/CLI/undici) → OK
+  // 4️⃣ No Origin/Referer = non-browser client (curl/CLI/undici) → OK
   return false;
 }
 
@@ -168,12 +168,12 @@ export function browserMutationGuardMiddleware() {
 }
 ```
 
-**Tre layer di defense con priorità:**
-1. `Sec-Fetch-Site` (impostato dal browser, **non spoofable** lato client)
-2. `Origin` validato come loopback URL
-3. `Referer` come fallback
+**Three defense layers, ranked:**
+1. `Sec-Fetch-Site` (browser-set, **not client-spoofable**)
+2. `Origin` validated as a loopback URL
+3. `Referer` as a fallback
 
-**Verdict:** ✅ Pattern copiabile letteralmente in JHT (`web/middleware.ts` Next.js adapter + il check function).
+**Verdict:** ✅ Pattern can be copied verbatim into JHT (`web/middleware.ts` Next.js adapter + the check function).
 
 ---
 
@@ -185,7 +185,7 @@ cmd = f"JHT_TARGET_SESSION='{target_session}' python3 -u {BRIDGE_SCRIPT}"
 subprocess.Popen(["setsid", "sh", "-c", cmd])   # ❌ shell + interpolation
 ```
 
-**OpenClaw — SEMPRE array-form:**
+**OpenClaw — ALWAYS array-form:**
 
 `src/infra/gateway-lock.ts:114`:
 ```ts
@@ -219,7 +219,7 @@ const UNIX_BASE_TRUSTED_DIRS = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] as con
 // attacker-planted binaries cannot shadow legitimate system executables.
 ```
 
-### Plus: test dedicati
+### Plus: dedicated tests
 
 ```
 src/security/audit-exec-safe-bins.test.ts
@@ -227,15 +227,15 @@ src/security/audit-exec-sandbox-host.test.ts
 src/security/audit-exec-surface.test.ts
 ```
 
-**Verdict:** ✅ Difesa multi-layer (no shell, path absoluto whitelisted, test in CI). JHT può chiudere C3 con un refactor di 8 righe.
+**Verdict:** ✅ Multi-layered defense (no shell, absolute whitelisted path, tests in CI). JHT can close C3 with an 8-line refactor.
 
 ---
 
 ## 5. SSRF defense
 
-**JHT:** zero. Le skill Python (`shared/skills/check_links.py`) fetchano URL dal DB senza validazione.
+**JHT:** zero. Python skills (`shared/skills/check_links.py`) fetch URLs from the DB without validation.
 
-**OpenClaw** — modulo dedicato di **538 righe** + 6 test files.
+**OpenClaw** — dedicated module of **538 lines** + 6 test files.
 
 `src/infra/net/ssrf.ts:92-96`:
 ```ts
@@ -257,27 +257,27 @@ export type SsrFPolicy = {
 };
 ```
 
-### Moduli correlati
+### Related modules
 
-| File | Cosa fa |
+| File | What it does |
 |------|---------|
-| `src/infra/net/ssrf.ts` | Policy + lookup hook con validazione IPv4/IPv6 (special-use, RFC1918, link-local, multicast) |
-| `src/infra/net/ssrf.dispatcher.test.ts` | Test sull'undici dispatcher hooked |
+| `src/infra/net/ssrf.ts` | Policy + lookup hook with IPv4/IPv6 validation (special-use, RFC1918, link-local, multicast) |
+| `src/infra/net/ssrf.dispatcher.test.ts` | Tests on the hooked undici dispatcher |
 | `src/infra/net/ssrf.pinning.test.ts` | **DNS rebinding defense**: resolve once, validate, connect-by-IP |
-| `src/agents/tools/web-fetch.ssrf.test.ts` | Tool web-fetch coperto |
-| `src/plugin-sdk/ssrf-policy.ts` | Wrapper esposto ai plugin esterni |
+| `src/agents/tools/web-fetch.ssrf.test.ts` | web-fetch tool covered |
+| `src/plugin-sdk/ssrf-policy.ts` | Wrapper exposed to external plugins |
 
-**Verdict:** ✅ Industriale. JHT non ha nulla — questo è il singolo modulo più importante da portare prima del launch.
+**Verdict:** ✅ Industrial-grade. JHT has nothing here — this is the single most important module to port before launch.
 
 ---
 
 ## 6. Secret storage / encryption-at-rest
 
 **JHT:**
-- ✅ Buono: `shared/credentials/crypto.ts` AES-256-GCM + PBKDF2-SHA512 100k iterazioni
-- ❌ Bug critico (C4): `shared/credentials/storage.ts:49` usa `homedir()` senza importarlo → `ReferenceError` silenzioso → fallback fallisce
-- ❌ High (H4): `tui/src/oauth/storage.ts` ha fallback `scrypt(machineId, "jht-fallback-salt", 32)` derivabile da chiunque legga il filesystem
-- ❌ High (H5): `cli/src/commands/secrets.js` usa AES-256-CBC senza auth tag + plaintext fallback
+- ✅ Good: `shared/credentials/crypto.ts` AES-256-GCM + PBKDF2-SHA512 100k iterations
+- ❌ Critical bug (C4): `shared/credentials/storage.ts:49` uses `homedir()` without importing it → silent `ReferenceError` → fallback fails
+- ❌ High (H4): `tui/src/oauth/storage.ts` has a `scrypt(machineId, "jht-fallback-salt", 32)` fallback derivable by anyone reading the filesystem
+- ❌ High (H5): `cli/src/commands/secrets.js` uses AES-256-CBC without auth tag + plaintext fallback
 
 **OpenClaw:**
 ```ts
@@ -286,9 +286,9 @@ log.info("read codex credentials from keychain", { source: "keychain" })
 const keychainCreds = readClaudeCliKeychainCredentials({...})
 ```
 
-→ delega all'**OS keyring nativo** (macOS Keychain → Win Credential Manager → Linux libsecret/SecretService). Niente custom AES/KDF, niente fallback derivable. La chiave non lascia mai l'OS keyring.
+→ delegates to the **native OS keyring** (macOS Keychain → Windows Credential Manager → Linux libsecret/SecretService). No custom AES/KDF, no derivable fallback. The key never leaves the OS keyring.
 
-**Verdict:** OpenClaw evita il problema scegliendo di **non implementare crypto custom**. JHT può fare lo stesso con `keytar` o `@napi-rs/keyring`.
+**Verdict:** OpenClaw avoids the problem by choosing **not to implement custom crypto**. JHT can do the same with `keytar` or `@napi-rs/keyring`.
 
 ---
 
@@ -296,10 +296,10 @@ const keychainCreds = readClaudeCliKeychainCredentials({...})
 
 **JHT** (`web/next.config.ts:26`):
 ```ts
-"script-src 'self' 'unsafe-inline'"   // ❌ XSS aperto
+"script-src 'self' 'unsafe-inline'"   // ❌ XSS open
 ```
 
-**OpenClaw** (`src/gateway/control-ui-csp.ts`, intero file 52 righe):
+**OpenClaw** (`src/gateway/control-ui-csp.ts`, full file 52 lines):
 ```ts
 export function computeInlineScriptHashes(html: string): string[] {
   const hashes: string[] = [];
@@ -325,7 +325,7 @@ export function buildControlUiCspHeader(opts?: { inlineScriptHashes?: string[] }
     "default-src 'self'",
     "base-uri 'none'",
     "object-src 'none'",
-    "frame-ancestors 'none'",         // 🛡️ stricter di X-Frame-Options
+    "frame-ancestors 'none'",         // 🛡️ stricter than X-Frame-Options
     scriptSrc,                         // 'self' + sha256-{...}, NO unsafe-inline
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob:",
@@ -336,7 +336,7 @@ export function buildControlUiCspHeader(opts?: { inlineScriptHashes?: string[] }
 }
 ```
 
-**Verdict:** ✅ Hash-based CSP per inline script. JHT può adottarlo (Next 16 ha API per nonce-based; il pattern hash-based richiede injection middleware ma è accessibile).
+**Verdict:** ✅ Hash-based CSP for inline scripts. JHT can adopt it (Next 16 has nonce-based APIs; the hash-based pattern needs middleware injection but is reachable).
 
 ---
 
@@ -346,9 +346,9 @@ export function buildControlUiCspHeader(opts?: { inlineScriptHashes?: string[] }
 ```dockerfile
 RUN echo 'jht ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/jht
 ```
-Singolo container con sudo passwordless.
+Single container with passwordless sudo.
 
-**OpenClaw — TRE Dockerfile separati:**
+**OpenClaw — THREE separate Dockerfiles:**
 
 `Dockerfile.sandbox`:
 ```dockerfile
@@ -364,14 +364,14 @@ WORKDIR /home/sandbox
 CMD ["sleep", "infinity"]
 ```
 
-| Aspetto | OpenClaw | JHT |
+| Aspect | OpenClaw | JHT |
 |---------|----------|-----|
 | Base image | `debian@sha256:4724b8…` (pinned) | `node:22-bookworm-slim` (mutable tag) |
-| User | `sandbox` non-root | `jht` con sudo NOPASSWD |
-| Tool inclusi | bash, ca-certs, curl, git, jq, python3, ripgrep | runtime completo + build-essential + sudo |
-| Filosofia | "agent può solo distruggere se stesso" | "agent ha pieno accesso al container" |
+| User | non-root `sandbox` | `jht` with NOPASSWD sudo |
+| Tools included | bash, ca-certs, curl, git, jq, python3, ripgrep | full runtime + build-essential + sudo |
+| Philosophy | "agent can only destroy itself" | "agent has full access to the container" |
 
-**Verdict:** ⚠️ Trade-off architetturale grosso (vedi `03-implementation-tradeoffs.md`).
+**Verdict:** ⚠️ Major architectural trade-off (see `03-implementation-tradeoffs.md`).
 
 ---
 
@@ -379,22 +379,22 @@ CMD ["sleep", "infinity"]
 
 | Tool | OpenClaw | JHT |
 |------|----------|-----|
-| `detect-secrets` + baseline 433 KB | ✅ `.pre-commit-config.yaml` | ❌ |
+| `detect-secrets` + 433 KB baseline | ✅ `.pre-commit-config.yaml` | ❌ |
 | `shellcheck --severity=error` | ✅ | ❌ |
 | `actionlint` (GitHub Actions) | ✅ | ❌ |
-| `zizmor` (workflow security audit) | ✅ persona regular, min-severity medium | ❌ |
-| `pnpm-audit-prod --audit-level=high` come **pre-commit** | ✅ | ❌ |
-| `oxlint --type-aware` | ✅ Rust-based, ~10x più veloce di eslint | ❌ |
+| `zizmor` (workflow security audit) | ✅ regular persona, min-severity medium | ❌ |
+| `pnpm-audit-prod --audit-level=high` as **pre-commit** | ✅ | ❌ |
+| `oxlint --type-aware` | ✅ Rust-based, ~10x faster than eslint | ❌ |
 | Pinned Docker base SHA | ✅ | ❌ |
-| Test dedicati exec safety | ✅ 3 file | ❌ |
+| Dedicated exec safety tests | ✅ 3 files | ❌ |
 
-**Verdict:** ✅ JHT può copiare `.pre-commit-config.yaml` quasi as-is.
+**Verdict:** ✅ JHT can copy `.pre-commit-config.yaml` almost as-is.
 
 ---
 
 ## 10. Logging redaction
 
-**JHT:** zero redaction. `console.log` libero ovunque.
+**JHT:** zero redaction. `console.log` everywhere.
 
 **OpenClaw** (`src/logging/redact-bounded.ts`):
 ```ts
@@ -417,27 +417,27 @@ export function replacePatternBounded(
 }
 ```
 
-→ persino la **redazione** dei log è hardened contro ReDoS (chunking della regex).
+→ even **log redaction** is hardened against ReDoS (regex chunking).
 
-**Verdict:** ✅ Pattern semplice (~30 righe) + lista pattern segretari (`token`, `api_key`, `password`, `Bearer`, ecc.). Zero ragioni per non averlo.
+**Verdict:** ✅ Simple pattern (~30 lines) + secret-pattern list (`token`, `api_key`, `password`, `Bearer`, etc.). Zero reasons not to have it.
 
 ---
 
-## 11. Threat model esplicito
+## 11. Explicit threat model
 
-**JHT:** zero. Niente `SECURITY.md`.
+**JHT:** zero. No `SECURITY.md`.
 
 **OpenClaw** (`SECURITY.md`, 28 KB):
-- Sezione **"Operator Trust Model"** con 20+ punti su cosa è in scope
-- Sezione **"Out of Scope"** con 30+ casi documentati (incluso "passwordless sudo nel container è una scelta esplicita di trust, non un bug")
-- Sezione **"Common False-Positive Patterns"** che enumera 25 pattern di report che vengono chiusi come no-action
-- Sezione **"Deployment Assumptions"** che dichiara: "una gateway condivisa tra utenti adversarial NON è un setup raccomandato"
+- Section **"Operator Trust Model"** with 20+ items on what's in scope
+- Section **"Out of Scope"** with 30+ documented cases (including "passwordless sudo inside the container is an explicit trust choice, not a bug")
+- Section **"Common False-Positive Patterns"** that enumerates 25 report patterns closed as no-action
+- Section **"Deployment Assumptions"** that states: "a gateway shared between adversarial users is NOT a recommended setup"
 
-**Verdict:** ✅ Questo documento da SOLO chiude metà delle false positive che arriveranno dopo l'open-source. **Costo zero, ROI massimo.**
+**Verdict:** ✅ This document alone closes half of the false-positives that will arrive after open-sourcing. **Zero cost, max ROI.**
 
 ---
 
-## 12. Score card finale
+## 12. Final score card
 
 | Area                         | OpenClaw | JHT | Gap  |
 |------------------------------|----------|-----|------|
@@ -451,20 +451,20 @@ export function replacePatternBounded(
 | 🚨 CSRF / origin              | **9**    | 2   | -7   |
 | 📝 Logging redaction          | **9**    | 1   | -8   |
 | 🤖 Pre-commit / CI hardening  | **10**   | 3   | -7   |
-| 📜 Threat model documentato   | **10**   | 0   | -10  |
-| 🔬 Security audit infrastr.   | **10**   | 0   | -10  |
-| **TOTALE / 120**              | **114**  | 36  | -78  |
+| 📜 Documented threat model    | **10**   | 0   | -10  |
+| 🔬 Security audit infra       | **10**   | 0   | -10  |
+| **TOTAL / 120**               | **114**  | 36  | -78  |
 
 ---
 
-## 13. Top-5 da rubare subito
+## 13. Top-5 to steal right now
 
-1. 🥇 **`isLocalDirectRequest()`** — 13 righe, fissa C1 critical. (`src/gateway/auth.ts:134-146`)
-2. 🥈 **`SsrFPolicy` + DNS pinning** — modulo singolo, blocca SSRF Day-1. (`src/infra/net/ssrf.ts`)
-3. 🥉 **`safeEqualSecret()`** — 12 righe, timing-safe per ogni token compare. (`src/security/secret-equal.ts`)
-4. 🏅 **`browserMutationGuardMiddleware()`** — 89 righe, chiude CSRF. (`extensions/browser/src/browser/csrf.ts`)
-5. 🏅 **`SECURITY.md` con threat model** — 28 KB di scrittura, ROI infinito.
+1. 🥇 **`isLocalDirectRequest()`** — 13 lines, fixes critical C1. (`src/gateway/auth.ts:134-146`)
+2. 🥈 **`SsrFPolicy` + DNS pinning** — single module, blocks SSRF on Day-1. (`src/infra/net/ssrf.ts`)
+3. 🥉 **`safeEqualSecret()`** — 12 lines, timing-safe for every token compare. (`src/security/secret-equal.ts`)
+4. 🏅 **`browserMutationGuardMiddleware()`** — 89 lines, closes CSRF. (`extensions/browser/src/browser/csrf.ts`)
+5. 🏅 **`SECURITY.md` with threat model** — 28 KB of writing, infinite ROI.
 
-→ I trade-off di ogni adozione sono in [`03-implementation-tradeoffs.md`](03-implementation-tradeoffs.md).
+→ The trade-offs of each adoption are in [`03-implementation-tradeoffs.md`](03-implementation-tradeoffs.md).
 
-> 📍 **Stato post-sprint (sha `7a2cb6ae`):** 4 dei 5 top sono stati adottati (#1 C1, #3 timing-safe compare, #4 CSRF middleware, #5 threat model in [`04-threat-model.md`](04-threat-model.md)). **#2 SSRF rimane il principale gap residuo prima del public release.** Dettagli in [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
+> 📍 **Post-sprint status (sha `7a2cb6ae`):** 4 of the 5 top items have been adopted (#1 C1, #3 timing-safe compare, #4 CSRF middleware, #5 threat model in [`04-threat-model.md`](04-threat-model.md)). **#2 SSRF remains the main residual gap before public release.** Details in [`06-post-fix-comparison.md`](06-post-fix-comparison.md).
