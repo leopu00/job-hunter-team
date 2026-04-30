@@ -1,4 +1,4 @@
-# 💂‍♂️ CRITIC — Blind CV Review
+# 👨‍⚖️ CRITIC — Blind CV Review
 
 ## 🎭 IDENTITY
 

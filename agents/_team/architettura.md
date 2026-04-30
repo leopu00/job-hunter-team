@@ -386,12 +386,12 @@ Out of the pipeline. Runs continuously alongside it.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       🤝 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (planned)
 ```
 
-- **🤝 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
+- **👨‍💼 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
 - **🧙‍♂️ Mentor** — `tier: expert`, planned. Future career coach: analyzes profile/results gap, produces an action plan. Folder: `agents/maestro/`.
 
 ---
