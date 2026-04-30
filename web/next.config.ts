@@ -7,8 +7,9 @@ const CWD = process.cwd()
 const MONOREPO_ROOT =
   CWD.endsWith(`${path.sep}web`) || CWD.endsWith('/web') ? path.dirname(CWD) : CWD
 
-const isDevelopment = process.env.NODE_ENV === 'development'
-
+// Static security headers. The Content-Security-Policy header is *not*
+// here: it carries a per-request nonce and is therefore set by
+// `web/middleware.ts`, which runs on every HTML response.
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -19,21 +20,6 @@ const securityHeaders = [
   // bottone "detta a voce" nell'onboarding). Camera e geolocation
   // restano disabilitate: nessuna pagina le usa al momento.
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
-      "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co",
-      "frame-src 'none'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
-  },
 ]
 
 const nextConfig: NextConfig = {
