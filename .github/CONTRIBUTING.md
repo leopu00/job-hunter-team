@@ -96,7 +96,7 @@ ARM64 split) lives in [`docs/internal/release.md`](../docs/internal/release.md).
 
 ## Code of conduct
 
-Be decent. No harassment, no discrimination. Constructive disagreement is welcome — personal attacks are not.
+This project follows the [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to `leopu00@gmail.com`.
 
 ## License
 

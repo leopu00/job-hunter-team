@@ -85,20 +85,14 @@ function ProjectContent() {
   const { lang } = useLandingI18n()
   const t = T[lang] ?? T.en
 
+  // The WebPage JSON-LD that used to live here was a duplicate of the one
+  // emitted by `project/layout.tsx` (server component) with the same
+  // schema.org @type and isPartOf. The layout's nonce-tagged version is
+  // the canonical one under the strict CSP; this client component cannot
+  // read the nonce, so the duplicate is removed rather than leaving a
+  // CSP-violating tag on the page.
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'WebPage',
-            name: t.title,
-            description: t.subtitle,
-            isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: 'https://jobhunterteam.ai' },
-          }),
-        }}
-      />
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
         <div className="text-center mb-12">
