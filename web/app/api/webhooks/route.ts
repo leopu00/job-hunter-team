@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
 import { sanitizedError } from '@/lib/error-response'
+import { safeFetch, SsrFBlockedError, userControlledFetchOptions } from '@/lib/ssrf'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,17 +63,26 @@ export async function POST(req: NextRequest) {
     const wh = store.webhooks.find(w => w.id === body.id)
     if (!wh) return NextResponse.json({ ok: false, error: 'webhook non trovato' }, { status: 404 })
     try {
-      const res = await fetch(wh.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-JHT-Event': 'ping' },
-        body: JSON.stringify({ event: 'ping', webhookId: wh.id, timestamp: Date.now() }),
-        signal: AbortSignal.timeout(5000),
-      })
+      const { response: res } = await safeFetch(
+        wh.url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-JHT-Event': 'ping' },
+          body: JSON.stringify({ event: 'ping', webhookId: wh.id, timestamp: Date.now() }),
+        },
+        userControlledFetchOptions('webhooks.test'),
+      )
       wh.lastTriggeredAt = Date.now()
       wh.lastStatus = res.status
       save(store)
       return NextResponse.json({ ok: true, status: res.status })
     } catch (err) {
+      if (err instanceof SsrFBlockedError) {
+        return NextResponse.json(
+          { ok: false, error: 'webhook URL blocked by security policy' },
+          { status: 400 },
+        )
+      }
       return sanitizedError(err, { scope: 'webhooks', status: 502, publicMessage: 'timeout' })
     }
   }
