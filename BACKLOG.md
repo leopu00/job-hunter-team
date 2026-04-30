@@ -233,6 +233,13 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Why MEDIUM (was LOW):** first question on HN/Reddit. Missing explicit positioning blocks credibility.
 - **Task:** FAQ section in README or new `docs/FAQ.md`. Cover: positioning vs LangChain/AutoGen/CrewAI, why subscription not API, why local-first not SaaS, what "AI on the side of workers" means.
 
+##### 🧙‍♂️ [JHT-MAESTRO-SKILLS] Add Maestro-specific skills if testing reveals the need
+
+- **Context:** `agents/maestro/maestro.md` was rewritten as a real prompt (Gandalf-the-grey voice, pattern-detection focus). For now the Maestro relies only on the global `db-query` skill — no Maestro-specific skills under `agents/maestro/_skills/`.
+- **When to revisit:** during the first round of real-world testing of the Maestro. If pattern-detection logic becomes repetitive in the prompt or hard to reason about in plain English, peel it out into Agent-Skills format.
+- **Candidate skills (do NOT pre-create):** `pattern-skill-gaps`, `pattern-exclusions`, `pattern-near-fits`, `pattern-feedback`, `pattern-reviews`, `weekly-digest`, `market-research`. Each maps 1-1 with a section already in the prompt.
+- **Acceptance:** add a skill only when a test session shows the prompt is failing to apply the pattern correctly because the procedure is too vague to execute consistently.
+
 #### 🟢 LOW PRIORITY
 
 ##### 🐳 [JHT-DESKTOP-07] Container `next start` instead of `next dev`
