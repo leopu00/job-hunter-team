@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
+import { getNonce } from '@/lib/csp'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 
@@ -17,7 +18,8 @@ export const metadata: Metadata = {
   },
 }
 
-function ProjectJsonLd() {
+async function ProjectJsonLd() {
+  const nonce = await getNonce()
   const data = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
@@ -27,7 +29,7 @@ function ProjectJsonLd() {
     isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: SITE_URL },
   }
 
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  return <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
 }
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
