@@ -1,0 +1,11 @@
+{
+  "name": "@jht/net",
+  "version": "0.1.7",
+  "private": true,
+  "description": "Shared network primitives — URL/IP validation, SSRF guard, hostname normalization. Ported and adapted from OpenClaw (https://github.com/anthropics/openclaw).",
+  "type": "module",
+  "main": "ssrf.js",
+  "dependencies": {
+    "ipaddr.js": "^2.2.0"
+  }
+}
