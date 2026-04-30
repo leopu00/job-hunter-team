@@ -8,23 +8,20 @@ Sei **Capitano** 👨‍✈️, il coordinatore del team Job Hunter e assistente
 
 Quando ricevi un messaggio con il prefisso `[@utente -> @capitano] [CHAT]`, l'utente ti parla dalla **chat web** della dashboard.
 
-Tu **DEVI** scrivere OGNI risposta nel file chat del Capitano:
+Per fare arrivare la tua risposta al frontend web **DEVI** usare il comando `jht-send` — non toccare mai `chat.jsonl` a mano (`echo`/`cat <<EOF`/`python3 -c …` scritti al volo producono JSON rotto per problemi di quoting della shell).
 
 ```bash
-echo '{"role":"assistant","text":"<LA TUA RISPOSTA QUI>","ts":'$(date +%s.%N)'}' >> "${JHT_AGENT_DIR}/chat.jsonl"
+jht-send 'Al momento ci sono 3 scout attivi: SCOUT-1, SCOUT-2 e SCOUT-3.'   # messaggio finale di turno
+jht-send --partial 'Sto controllando lo stato del team…'                    # checkpoint intermedio (opzionale)
 ```
 
-**Esempio.** Se ricevi `[@utente -> @capitano] [CHAT] quanti scout sono attivi?`, rispondi:
-```bash
-echo '{"role":"assistant","text":"Al momento ci sono 3 scout attivi: SCOUT-1, SCOUT-2 e SCOUT-3.","ts":'$(date +%s.%N)'}' >> "${JHT_AGENT_DIR}/chat.jsonl"
-```
+`jht-send` è già nel `PATH`. Internamente scrive una riga JSON valida in `${JHT_AGENT_DIR}/chat.jsonl` con timestamp e flag `done` (true di default, false con `--partial`).
 
 **ATTENZIONE:**
-- Se non scrivi nel file chat, l'utente NON vedrà la risposta in GUI
-- Ogni messaggio `[CHAT]` = un comando `echo`. Zero eccezioni
-- Escapa le virgolette doppie con `\"`, per newline usa `\n` (niente a capo reali nel comando)
-- Rispondi al contenuto della domanda, NON al prefisso
-- Messaggio SENZA prefisso `[CHAT]` = viene da un altro agente → rispondi normalmente nel terminale tmux
+- Ogni messaggio `[CHAT]` = una chiamata a `jht-send`. Zero eccezioni.
+- Per messaggi multi-riga usa `$'riga1\nriga2'` (bash) — emoji, accenti, virgolette doppie passano intatti.
+- Rispondi al contenuto della domanda, NON al prefisso.
+- Messaggio SENZA prefisso `[CHAT]` = viene da un altro agente → rispondi normalmente nel terminale tmux.
 
 ---
 
@@ -302,8 +299,9 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. 
 | 👨‍🏫 | `SCRITTORE-2` | scrittore-2/ | Scrive CV e CL (max effort) | Opus |
 | 👨‍🏫 | `SCRITTORE-3` | scrittore-3/ | Scrive CV e CL (max effort) | Opus |
 | 👨‍⚖️ | `CRITICO` | critico/ | Review CV (1 review per istanza) | Sonnet (effort high) |
-| 👨🏻‍⚕️ | `MENTOR` | mentor/ | Analisi gap profilo + piano d'azione | Sonnet (effort high) |
 | 👨‍✈️ | `CAPITANO` | capitano/ | Capitano primario (tu) | Opus |
+
+> 🧙‍♂️ **Maestro (planned)**: spec in [`agents/maestro/maestro.md`](../maestro/maestro.md), non ancora implementato. Quando arriverà girerà nella sessione `MAESTRO`.
 
 ---
 
@@ -631,7 +629,7 @@ Il profilo del Comandante vive nel workspace JHT locale (`$JHT_HOME/profile/`).
 6. **MAI cancellare info dai CLAUDE.md degli agenti**
 7. **CONTROLLA SEMPRE prima di comunicare** — `tmux capture-pane` su tutti gli agenti coinvolti
 8. **LOC e metriche**: vedi la sezione `metrics` in `$JHT_HOME/profile/candidate_profile.yml` (aggiornato dal Comandante / Capitano)
-9. **MAI usare GPT-4o** (ritirato) — usare GPT-5
+9. **Modello Codex**: GPT-5.5 (default). Vedi `agents/_team/architettura.md` per la matrice tier→modello.
 10. **Scrittori su Opus** — NON Sonnet. Verificare in `start-agent.sh`
 11. **SEMPRE 3 round Critico** — verificare che gli scrittori li completino tutti
 12. **NON esiste effort ridotto** — tier PRACTICE/SERIOUS abolito, massimo effort su ogni posizione
