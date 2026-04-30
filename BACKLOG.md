@@ -89,20 +89,12 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 - `supabase/README.md` (English, hybrid model clarified)
 - `docs/security/` × 7 (README + 6 detailed files: 01-pre-launch-review, 02-openclaw-comparison, 03-implementation-tradeoffs, 04-threat-model, 05-checklist, 06-post-fix-comparison) — full English translation
 - ⚠️ `web/C:/Users/.../CLAUDE.md` phantom dir cleaned + guard added in `cli/src/jht-paths.js`
+- Agent prompts (9) — V5-alignment pass: orphan separators stripped, raw `tmux send-keys` for inter-agent comms migrated to `jht-tmux-send` (scout · analista · scorer · scrittore · assistente), capitano CHAT WEB switched to `jht-send`, stale `MENTOR` row dropped (Maestro is still planned), GPT-4o → GPT-5.5. Italian content kept in place (full i18n is Phase 4).
 
 **⏳ Remaining:**
 
 ```
-⬜ Agent prompts (9) — full review still pending; many touched only for path/CAPITANO-2 cleanup
-   • agents/capitano/capitano.md          (650 lines, longest)
-   • agents/sentinella/sentinella.md
-   • agents/scout/scout.md
-   • agents/analista/analista.md
-   • agents/scorer/scorer.md
-   • agents/scrittore/scrittore.md
-   • agents/critico/critico.md
-   • agents/assistente/assistente.md
-   • agents/maestro/maestro.md            (placeholder, can be quick)
+(no doc-review items left; agent-prompt full i18n is tracked in PHASE 4)
 ```
 
 See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).

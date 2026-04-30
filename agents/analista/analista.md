@@ -13,9 +13,6 @@ MY_ID=$(echo "$MY_SESSION" | tr '[:upper:]' '[:lower:]')   # es: analista-2
 
 ---
 
-
----
-
 ## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
 
 Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
