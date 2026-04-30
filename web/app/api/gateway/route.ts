@@ -4,32 +4,42 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { SsrFBlockedError, validateUrl, type SsrFPolicy } from '@/lib/ssrf'
 
 export const dynamic = 'force-dynamic'
 
 type ChannelId = 'web' | 'telegram' | 'cli'
 
-// Valida JHT_GATEWAY_URL al module load: deve essere http/https; un IP
-// privato non-localhost richiede l'opt-in JHT_GATEWAY_ALLOW_PRIVATE=1
-// per non trasformarsi in scanner SSRF accidentale verso la rete locale
-// dell'host.
+// JHT_GATEWAY_URL points at JHT's own gateway (localhost by default).
+// Localhost / 127.0.0.1 / ::1 are always allowed since the gateway runs
+// in the same machine. Other private network IPs (10.x, 192.168.x,
+// IPv6 ULA, etc.) need the explicit JHT_GATEWAY_ALLOW_PRIVATE=1 opt-in
+// — without it, a misconfigured env var could turn this route into an
+// SSRF scanner aimed at the operator's LAN.
+//
+// IP/hostname classification goes through the shared/net SSRF
+// primitives so we cover IPv6 special-use, IPv4-mapped IPv6, NAT64 /
+// 6to4 / Teredo / ISATAP embedded-IPv4 sentinels, and legacy IPv4
+// literals (0177.0.0.1, 127.1, 2130706433, …) — all evasion paths the
+// previous regex-only check missed.
 function validateGatewayUrl(raw: string): string {
-  let parsed: URL
-  try { parsed = new URL(raw) } catch {
-    throw new Error(`JHT_GATEWAY_URL non è un URL valido: ${raw}`)
+  const allowPrivate = process.env.JHT_GATEWAY_ALLOW_PRIVATE === '1'
+  const policy: SsrFPolicy = {
+    allowedHostnames: ['localhost', '127.0.0.1', '::1'],
+    ...(allowPrivate ? { allowPrivateNetwork: true } : {}),
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`JHT_GATEWAY_URL schema non supportato (solo http/https): ${parsed.protocol}`)
-  }
-  const host = parsed.hostname.toLowerCase()
-  const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-  const isPrivateIp =
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
-    /^fc/.test(host) || /^fd/.test(host)
-  if (!isLocalhost && isPrivateIp && process.env.JHT_GATEWAY_ALLOW_PRIVATE !== '1') {
-    throw new Error(`JHT_GATEWAY_URL punta a IP privato (${host}); per consentirlo: JHT_GATEWAY_ALLOW_PRIVATE=1`)
+  try {
+    validateUrl(raw, policy)
+  } catch (err) {
+    if (err instanceof SsrFBlockedError) {
+      throw new Error(
+        allowPrivate
+          ? `JHT_GATEWAY_URL rejected: ${err.message}`
+          : `JHT_GATEWAY_URL rejected: ${err.message} ` +
+            `(set JHT_GATEWAY_ALLOW_PRIVATE=1 to allow private/internal targets)`,
+      )
+    }
+    throw err
   }
   return raw
 }

@@ -174,6 +174,26 @@ describe("validateUrl — allowPrivateNetwork", () => {
   });
 });
 
+describe("validateUrl — allowedHostnames", () => {
+  // The gateway route relies on this to whitelist localhost without flipping
+  // the global allowPrivateNetwork escape hatch.
+  it("allows a named loopback hostname while still blocking other private IPs", () => {
+    const policy = { allowedHostnames: ["localhost", "127.0.0.1", "::1"] };
+    assert.doesNotThrow(() => validateUrl("http://localhost:18789/status", policy));
+    assert.doesNotThrow(() => validateUrl("http://127.0.0.1:18789/status", policy));
+    assert.doesNotThrow(() => validateUrl("http://[::1]:18789/status", policy));
+
+    assert.throws(
+      () => validateUrl("http://10.0.0.1/status", policy),
+      (err: unknown) => err instanceof SsrFBlockedError,
+    );
+    assert.throws(
+      () => validateUrl("http://169.254.169.254/", policy),
+      (err: unknown) => err instanceof SsrFBlockedError,
+    );
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveAndAssertPublicHostname (mocked DNS)
 // ─────────────────────────────────────────────────────────────────────────────
