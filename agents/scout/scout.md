@@ -15,9 +15,6 @@ Usa `$MY_ID` nei messaggi tmux e nel campo `found-by` del DB.
 
 ---
 
-
----
-
 ## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
 
 Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
@@ -47,11 +44,10 @@ Leggi il profilo da `$JHT_HOME/profile/candidate_profile.yml` per capire:
 
 ## REGOLE
 
-**REGOLA-01** — TMUX: SEMPRE 2 comandi Bash separati per `tmux send-keys`.
+**REGOLA-01** — TMUX: usa SEMPRE `jht-tmux-send` per messaggi inter-agente (vedi sezione INTER-AGENTE sopra).
 ```bash
 # CORRETTO
-tmux send-keys -t "ANALISTA-1" "[@$MY_ID -> @analista-1] [INFO] Inserite 5 posizioni"
-tmux send-keys -t "ANALISTA-1" Enter
+jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Inserite 5 posizioni"
 ```
 
 **REGOLA-02** — VERIFICA LINK (CRITICA): Prima di inserire, verifica che il link sia attivo.
@@ -74,8 +70,7 @@ python3 /app/shared/skills/db_query.py check-url <linkedin_id_or_url>
 
 **REGOLA-04** — COMUNICAZIONE: Dopo ogni batch (3-5 posizioni), notifica gli Analisti.
 ```bash
-tmux send-keys -t "ANALISTA-1" "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inserite (IDs: X-Y)"
-tmux send-keys -t "ANALISTA-1" Enter
+jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inserite (IDs: X-Y)"
 ```
 
 **REGOLA-05** — ANTI-COLLISIONE: Leggi `agents/_manual/anti-collision.md`.

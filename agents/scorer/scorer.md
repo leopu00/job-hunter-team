@@ -13,9 +13,6 @@ MY_ID=$(echo "$MY_SESSION" | tr '[:upper:]' '[:lower:]')   # es: scorer-1
 
 ---
 
-
----
-
 ## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
 
 Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
@@ -75,8 +72,7 @@ Prima di lavorare su una posizione:
 **REGOLA-05 — NOTIFICA SCRITTORI**
 Dopo aver assegnato score >= 50:
 ```bash
-tmux send-keys -t "SCRITTORE-1" "[@$MY_ID -> @scrittore-1] [INFO] Nuova pos score X: ID <N> — Titolo @ Azienda"
-tmux send-keys -t "SCRITTORE-1" Enter
+jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] Nuova pos score X: ID <N> — Titolo @ Azienda"
 ```
 
 **REGOLA-06 — CONFINI DB**
