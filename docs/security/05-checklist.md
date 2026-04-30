@@ -244,6 +244,9 @@ Explicit decisions to **not do** now, documented in [`03-implementation-tradeoff
 - ⏸️ **M5b** — `Dockerfile.strict` with non-root user and minimal tooling (OpenClaw `Dockerfile.sandbox` style)
   - Reason: breaks the `--yolo` workflow (agents running `sudo apt install` on the fly). Container ≠ security boundary by design. Revisit if JHT enables multi-tenant scenarios.
 
+- ⏸️ **Strict `resolve-system-bin`** — anti PATH-hijacking wrapper for sensitive binaries
+  - Reason: JHT's exec surface (~30 `execFile`/`spawn` calls in `desktop/`) targets user-context tools (`docker`, `colima`, `brew`, `git`, `qemu-img`, `codesign`, `osascript`) — none are security-critical binaries like OpenSSL or ffmpeg that the OpenClaw pattern was designed for. `desktop/main.js:12-20` deliberately *prepends* `/opt/homebrew/bin` and `/usr/local/bin` to PATH because Electron-on-macOS strips them; a strict whitelist would break Docker Desktop / Homebrew on macOS. Revisit when JHT introduces real crypto-shell-out (e.g. `openssl` for code signing).
+
 ---
 
 ## ➕ Additional gaps (outside the 34 original findings)
@@ -255,11 +258,6 @@ Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw
   - Effort: ~1 day
   - Merged: _—_
 
-- [ ] **Strict `resolve-system-bin`** — anti PATH-hijacking wrapper for sensitive binaries (e.g. `openssl`)
-  - Adopt the OpenClaw `src/infra/resolve-system-bin.ts` pattern (whitelist `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`)
-  - Effort: ~4h
-  - Merged: _—_
-
 ---
 
 ## 📊 Progress
@@ -268,13 +266,13 @@ Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw
 Phase 1 (blockers):     9/9   ██████████████████████████████████  100% ✅
 Phase 2 (post-launch): 12/12  ██████████████████████████████████  100% ✅
 Phase 3 (hardening):  10/13   ██████████████████████████░░░░░░░░   77%
-Non-audit gap:         0/2    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0%
+Non-audit gap:         0/1    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0%
 ─────────────────────────────────────────────────────────────────
-TOTAL:                31/36  ███████████████████████████░░░░░░░   86%
+TOTAL:                31/35  ██████████████████████████████░░░   89%
 ```
 
 > Phase 1 + Phase 2 closed → JHT is ready for **internal merge** and is materially more secure than OpenClaw on 4 out of the 5 top-priority areas.
-> **For the public release**, what remains is: **SSRF dispatcher**, **strict `resolve-system-bin`**, **L1** (production hash-based CSP). The other Phase 3 items (`tests/security/`, `jht doctor security`) are continuous hardening and not blocking.
+> **For the public release**, what remains is: **SSRF dispatcher** and **L1** (production hash-based CSP). The other Phase 3 items (`tests/security/`, `jht doctor security`) are continuous hardening and not blocking. `resolve-system-bin` was deferred — JHT has no security-critical shell-out binaries today.
 
 ## 🆚 Comparison with OpenClaw
 

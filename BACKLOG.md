@@ -375,7 +375,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
 1. ✅ SECURITY.md + CODE_OF_CONDUCT.md (done — root, EN, Contributor Covenant 2.1)
-2. ✅ Security review (done — 31/34 fix mergiati, see `docs/security/`)
+2. ✅ Security review (done — 31/35 task chiusi, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
 4. Demo video (after monitoring is frozen)
 5. Beta tester recruitment + Show HN draft + Press kit + Awesome lists submissions
@@ -399,7 +399,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
-- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 31/34 fix mergiati in `master` (sha `7a2cb6ae`), security score 30% → 74%.
+- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 31/35 task chiusi in `master` (sha `7a2cb6ae`), security score 30% → 74%.
 - **Output:** `docs/security/` (7 file, ~2336 righe) — pre-launch review, OpenClaw comparison, threat model, checklist, post-fix snapshot.
 - **Phase 1 bloccanti pre-launch:** 9/9 ✅ (C1-C5, H1, H2, H8, H9). **Phase 2 post-launch:** 12/12 ✅. **Phase 3 hardening:** 10/13 🟡.
 - **Gap residui (blockers per public release, non per merge interna):** SSRF dispatcher generico (~1d), `resolve-system-bin` strict (~4h), CSP hash-based prod L1 (~4h).
