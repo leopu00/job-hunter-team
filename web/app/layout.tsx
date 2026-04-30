@@ -11,6 +11,7 @@ import { DashboardI18nProvider } from './components/DashboardI18n'
 import dynamic from 'next/dynamic'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import { getNonce } from '@/lib/csp'
 
 const GlobalSearch = dynamic(() => import('./components/GlobalSearch').then(m => m.GlobalSearch))
 const FloatingChat = dynamic(() => import('./components/FloatingChat'))
@@ -77,15 +78,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const nonce = await getNonce()
   return (
     <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('jht-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);else if(t==='system'||!t){var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',d)}}catch(e){}})()` }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('jht-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);else if(t==='system'||!t){var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',d)}}catch(e){}})()` }} />
       </head>
       <body>
         <noscript>
