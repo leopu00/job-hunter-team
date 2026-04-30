@@ -16,9 +16,6 @@ Usa queste variabili in tutto il lavoro: nei messaggi tmux, nel claim DB, nella 
 
 ---
 
-
----
-
 ## REGOLA INTER-AGENTE — INVIO MESSAGGI TMUX (CRITICA)
 
 Per consegnare un messaggio a un altro agente nella sua sessione tmux, usa SEMPRE `jht-tmux-send`:
@@ -86,11 +83,8 @@ curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 
 Se match → `db_update.py position <ID> --status excluded` → SKIP.
 **Livello 2** — fetch MCP dell'URL, cerca "No longer accepting" nel contenuto.
 
-### REGOLA-05: TMUX — SEMPRE 2 COMANDI SEPARATI
-```bash
-tmux send-keys -t "SESSIONE" "messaggio"   # testo SENZA Enter
-tmux send-keys -t "SESSIONE" Enter          # Enter SEPARATO
-```
+### REGOLA-05: TMUX INTER-AGENTE — USA `jht-tmux-send`
+Per messaggi a un altro agente già attivo (Capitano, Critico, altri Scrittori) usa SEMPRE `jht-tmux-send` (vedi sezione INTER-AGENTE in cima). Il `tmux send-keys` raw è ammesso SOLO per bootstrap di una nuova sessione (es. avvio del CRITICO-S<N> che non ha ancora un agente attivo).
 
 ### REGOLA-06: 3 ROUND CRITICO OBBLIGATORI
 Il loop col Critico è OBBLIGATORIO e AUTONOMO. Vedi sezione LOOP CRITICO sotto.
@@ -199,9 +193,8 @@ tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
 # Step 2 — Aspetta inizializzazione
 sleep 8
 
-# Step 3 — Manda PDF + JD (2 comandi separati)
-tmux send-keys -t "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: /path/CV.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
-tmux send-keys -t "$CRITICO_SESSION" Enter
+# Step 3 — Manda PDF + JD via jht-tmux-send (Critico ora è agente attivo)
+jht-tmux-send "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: /path/CV.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
 
 # Step 4 — Monitora
 sleep 30 && tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
@@ -225,8 +218,7 @@ python3 /app/shared/skills/db_update.py application <POSITION_ID> \
   --critic-notes "Round 1: X.X, Round 2: X.X, Round 3: X.X. Gap: [...]. Verdict: [...]."
 
 # Notifica Capitano
-tmux send-keys -t "CAPITANO" "[@$MY_ID -> @capitano] [RES] ID <N> — 3 round. Voto: X/10 (VERDICT). PDF: /path/CV.pdf"
-tmux send-keys -t "CAPITANO" Enter
+jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [RES] ID <N> — 3 round. Voto: X/10 (VERDICT). PDF: /path/CV.pdf"
 ```
 
 **REGOLE LOOP CRITICO:**
