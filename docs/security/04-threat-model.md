@@ -1,24 +1,24 @@
 # 🎯 JHT Threat Model
 
-> Bozza pre-launch. Quando l'open-source sarà pubblico, questo file (con piccoli aggiustamenti) diventerà `SECURITY.md` alla root del repo.
+> Pre-launch draft. When the project goes public, this file (with minor edits) becomes `SECURITY.md` at the repo root.
 
-**Ispirato a:** [OpenClaw `SECURITY.md`](https://github.com/openclaw/openclaw/blob/main/SECURITY.md) — pattern "personal assistant trust model".
+**Inspired by:** [OpenClaw `SECURITY.md`](https://github.com/openclaw/openclaw/blob/main/SECURITY.md) — "personal assistant trust model" pattern.
 
 ---
 
-## 1. Cos'è JHT
+## 1. What JHT is
 
-JHT è una **desktop app local-first per single user** che:
-- gira sulla macchina dell'utente (Windows/macOS/Linux), via Electron + container Docker
-- espone una dashboard web su `http://localhost:3000`
-- orchestra agenti AI (Claude/Codex/Kimi) in `tmux` dentro al container
-- legge file locali (CV, profilo) e fa fetch HTTP esterno (job listing)
-- opzionalmente sincronizza dati su Supabase via cloud-sync
+JHT is a **local-first desktop app for a single user** that:
+- runs on the user's machine (Windows/macOS/Linux), via Electron + Docker container
+- exposes a web dashboard at `http://localhost:3000`
+- orchestrates AI agents (Claude/Codex/Kimi) inside `tmux` within the container
+- reads local files (CV, profile) and performs outbound HTTP fetches (job listings)
+- optionally syncs data to Supabase via cloud-sync
 
-**JHT NON è:**
-- una piattaforma SaaS multi-tenant
-- un servizio condiviso tra utenti diversi
-- un wrapper di sicurezza per dati di terzi
+**JHT is NOT:**
+- a multi-tenant SaaS platform
+- a service shared between different users
+- a security wrapper for third-party data
 
 ---
 
@@ -26,161 +26,161 @@ JHT è una **desktop app local-first per single user** che:
 
 ### Trusted operators
 
-I seguenti soggetti sono considerati **trusted** e hanno pieno accesso operatore:
-- chi ha accesso fisico/SSH al sistema operativo dell'host
-- chi può scrivere in `~/.jht/` (config, credenziali, agenti)
-- chi può modificare `~/Documents/Job Hunter Team/` (CV, allegati)
-- chi è autenticato sulla dashboard `http://localhost:3000` via local-token (cookie `jht_local_token` HttpOnly+SameSite=Strict, settato dal middleware solo su richieste localhost dirette senza header `x-forwarded-*`) o Supabase login
+The following are considered **trusted** and have full operator access:
+- whoever has physical/SSH access to the host operating system
+- whoever can write to `~/.jht/` (config, credentials, agents)
+- whoever can modify `~/Documents/Job Hunter Team/` (CV, attachments)
+- whoever is authenticated on the dashboard `http://localhost:3000` via local-token (`jht_local_token` HttpOnly+SameSite=Strict cookie, set by the middleware only on direct localhost requests with no `x-forwarded-*` headers) or Supabase login
 
 ### Untrusted
 
-I seguenti sono considerati **untrusted** e NON devono poter raggiungere capability operator:
-- siti web aperti nel browser dell'utente (CSRF/DNS rebinding)
-- altri utenti sulla stessa LAN (se la dashboard è esposta su rete)
-- contenuto fetched dal web (job listing HTML, email, allegati)
-- output dei modelli AI (prompt injection)
+The following are considered **untrusted** and MUST NOT reach operator capability:
+- websites opened in the user's browser (CSRF / DNS rebinding)
+- other users on the same LAN (if the dashboard is exposed on the network)
+- content fetched from the web (job listing HTML, email, attachments)
+- AI model output (prompt injection)
 
 ### Single-user assumption
 
-JHT assume **un utente per macchina**. Se vuoi usare JHT con più persone:
-- usa una macchina/VM/utente OS separata per ciascuna persona
-- non sharare la stessa istanza container tra utenti
+JHT assumes **one user per machine**. If you want to use JHT with multiple people:
+- use a separate machine/VM/OS user for each person
+- do not share the same container instance between users
 
 ---
 
 ## 3. In scope
 
-I seguenti vettori sono trattati come bug security:
+The following vectors are treated as security bugs:
 
-| Vettore | Esempi |
+| Vector | Examples |
 |---------|--------|
-| **Auth bypass** | bypass di `requireAuth()` su route sensibili senza control fisico/SSH dell'host |
-| **CSRF / DNS rebinding** | sito malevolo che riesce a far eseguire side-effect su `localhost:3000` (es. start agent, leggere secret) |
-| **Command injection** | input non-trusted (file content, body API, env config) che diventa esecuzione shell |
-| **Path traversal** | leggere/scrivere file fuori dalle directory previste |
-| **SSRF** | fetch verso `127.0.0.1`/`metadata.google.internal`/RFC1918 da URL untrusted |
-| **Crypto weak** | decifrare credenziali `~/.jht/credentials/*.enc.json` senza la passphrase |
+| **Auth bypass** | bypassing `requireAuth()` on sensitive routes without physical/SSH control of the host |
+| **CSRF / DNS rebinding** | a malicious site that triggers side-effects on `localhost:3000` (e.g. start agent, read secret) |
+| **Command injection** | untrusted input (file content, API body, env config) that becomes shell execution |
+| **Path traversal** | reading/writing files outside the expected directories |
+| **SSRF** | fetch toward `127.0.0.1` / `metadata.google.internal` / RFC1918 from untrusted URLs |
+| **Crypto weak** | decrypting credentials in `~/.jht/credentials/*.enc.json` without the passphrase |
 | **Secret leak** | API key in log/stack trace/response body |
-| **Cloud-sync IDOR** | un utente Supabase che modifica/legge dati di un altro utente |
-| **Prompt-injection con boundary bypass** | prompt injection che bypassa una policy esplicita (es. "non eseguire shell") |
+| **Cloud-sync IDOR** | a Supabase user who modifies/reads another user's data |
+| **Prompt-injection with boundary bypass** | prompt injection that bypasses an explicit policy (e.g. "do not run shell") |
 
 ---
 
 ## 4. Out of scope
 
-I seguenti sono **non security bug** in JHT (ispirato a OpenClaw):
+The following are **not security bugs** in JHT (inspired by OpenClaw):
 
 ### Operator-controlled surfaces
-- L'utente (operatore trusted) che esegue `jht agent start` e l'agente fa cose con il suo container — è exactly cosa JHT fa.
-- Comandi shell eseguiti da agenti `--yolo` dentro al container — è il loro scopo.
-- File scritti in `~/.jht/` da un agente trusted — autorizzato.
+- The user (trusted operator) running `jht agent start` and the agent doing things in their own container — that's exactly what JHT does.
+- Shell commands run by `--yolo` agents inside the container — that's their purpose.
+- Files written to `~/.jht/` by a trusted agent — authorized.
 
 ### Container ≠ security boundary
-- L'utente `jht` ha `sudo NOPASSWD` nel container. Questo è **per design**: gli agenti devono poter installare pacchetti al volo (`pdftotext`, `tesseract`, ecc.). Il container è una sandbox **di convenienza** isolata dall'host, **non** un boundary tra agenti diversi sullo stesso container.
-- Container escape via kernel CVE: out of scope a meno che non si dimostri specifico bug JHT (non Docker).
+- The `jht` user has `sudo NOPASSWD` inside the container. This is **by design**: agents need to install packages on the fly (`pdftotext`, `tesseract`, etc.). The container is a **convenience sandbox** isolated from the host, **not** a boundary between different agents on the same container.
+- Container escape via kernel CVE: out of scope unless a JHT-specific bug is shown (not Docker).
 
-### Prompt injection senza boundary bypass
-- "Ho fatto dire all'agente parolacce" — non è bug.
-- "Ho fatto dire all'agente di eseguire `rm -rf` ma poi l'agente l'ha eseguito perché è in --yolo" — non è bug, è la natura di --yolo.
-- "Ho fatto dire all'agente di leggere `~/.jht/secrets.json` quando la policy diceva 'no read di secret' e l'ha letto comunque" — bug security.
+### Prompt injection without boundary bypass
+- "I made the agent say profanities" — not a bug.
+- "I made the agent run `rm -rf` and the agent did it because it's in --yolo" — not a bug, that's the nature of --yolo.
+- "I made the agent read `~/.jht/secrets.json` when the policy said 'no read of secrets' and it read it anyway" — security bug.
 
 ### Trusted plugin / skill
-- Skill nel repo (`.skills-source/`, `agents/*/skills/`) sono parte del trusted compute base. Una skill che fa cose privilegiate non è bug.
+- Skills in the repo (`.skills-source/`, `agents/*/skills/`) are part of the trusted compute base. A skill doing privileged things is not a bug.
 
-### Backwards compatibility / supply chain di terzi
-- CVE in dipendenze upstream non sfruttabili attraverso JHT specifico → segnaliamo all'upstream, non è JHT bug.
+### Backwards compatibility / third-party supply chain
+- CVEs in upstream dependencies that aren't exploitable through JHT specifically → reported upstream, not a JHT bug.
 
-### Setup pubblicamente esposti
-- Esporre `localhost:3000` su Internet senza Supabase auth è **non raccomandato e non supportato**. Bug solo nel caso il setup raccomandato (loopback only) sia bypassabile.
+### Publicly exposed setups
+- Exposing `localhost:3000` to the internet without Supabase auth is **not recommended and not supported**. Bug only if the recommended setup (loopback only) is bypassable.
 
 ---
 
 ## 5. Deployment assumptions
 
-JHT è progettato e testato per:
+JHT is designed and tested for:
 
-✅ **Setup raccomandato:**
-- Una macchina (laptop/desktop) per utente
-- Container Docker su loopback `127.0.0.1:3000`
-- Optional: cloud-sync verso Supabase (autenticato)
+✅ **Recommended setup:**
+- One machine (laptop/desktop) per user
+- Docker container on loopback `127.0.0.1:3000`
+- Optional: cloud-sync to Supabase (authenticated)
 
-⚠️ **Setup avanzati supportati ma con cautele documentate:**
-- VPS personale per JHT headless: richiede `JHT_CREDENTIALS_KEY` env var, niente keyring
-- Tunnel pubblico (ngrok/Cloudflare) verso JHT: **richiede Supabase auth attiva** (no localhost bypass)
+⚠️ **Advanced setups supported with documented caveats:**
+- Personal VPS for headless JHT: requires `JHT_CREDENTIALS_KEY` env var, no keyring
+- Public tunnel (ngrok/Cloudflare) to JHT: **requires Supabase auth on** (no localhost bypass)
 
-❌ **Setup NON supportati:**
-- Più utenti sullo stesso container
-- Dashboard esposta su LAN/internet senza auth
-- JHT come servizio multi-tenant
+❌ **Setups NOT supported:**
+- Multiple users on the same container
+- Dashboard exposed on LAN/internet without auth
+- JHT as a multi-tenant service
 
 ---
 
 ## 6. Reporting
 
-Per riportare una vulnerabilità:
-1. **NON** aprire una issue pubblica.
-2. Email a `leopu00@gmail.com` (provvisorio fino al setup di `security@jobhunterteam.ai`) con:
-   - Titolo descrittivo
-   - Severity stimata (Critical/High/Medium/Low)
-   - Path + funzione + righe del codice vulnerabile
-   - Versione/commit di JHT su cui hai testato
-   - PoC riproducibile
-   - Impatto dimostrato (cosa si può fare con il bug)
-   - Suggerimento di fix
+To report a vulnerability:
+1. **DO NOT** open a public issue.
+2. Email `leopu00@gmail.com` (interim, until `security@jobhunterteam.ai` is set up) with:
+   - Descriptive title
+   - Estimated severity (Critical/High/Medium/Low)
+   - Path + function + lines of vulnerable code
+   - JHT version/commit you tested on
+   - Reproducible PoC
+   - Demonstrated impact (what the bug enables)
+   - Suggested fix
 
-Report che mancano di PoC riproducibile o che non dimostrano boundary bypass possono essere chiusi come "no-action".
+Reports lacking a reproducible PoC or that fail to demonstrate a boundary bypass may be closed as "no-action".
 
 ---
 
 ## 7. Crypto / data handling
 
 ### Encryption at-rest
-- Modulo principale `shared/credentials/`: credenziali (API key OpenAI/Anthropic, OAuth Google) cifrate in `~/.jht/credentials/*.enc.json` con **AES-256-GCM** + **PBKDF2-SHA512 100k iterazioni**.
-- Modulo legacy `cli/src/commands/secrets.js`: AES-256-CBC. Migrazione a GCM tracciata in `[H5]` di [`05-checklist.md`](05-checklist.md).
-- Salt random per installazione, persistito in `~/.jht/credentials/.salt` con permessi 0600.
-- Master key derivata da:
-  - **GUI desktop**: OS keyring via `jht keyring set/get/delete` CLI (macOS Keychain / Windows Credential Manager / Linux libsecret) — implementato nello sprint H4
-  - **Headless / container**: env var `JHT_CREDENTIALS_KEY` obbligatoria
-  - **Storage OAuth (`tui/src/oauth/storage.ts`)**: PBKDF2 + salt random per file (post-fix H4 iter 2)
+- Primary module `shared/credentials/`: credentials (OpenAI/Anthropic API keys, Google OAuth) encrypted in `~/.jht/credentials/*.enc.json` with **AES-256-GCM** + **PBKDF2-SHA512 100k iterations**.
+- Legacy module `cli/src/commands/secrets.js`: AES-256-CBC. Migration to GCM tracked as `[H5]` in [`05-checklist.md`](05-checklist.md).
+- Random salt per installation, persisted in `~/.jht/credentials/.salt` with 0600 permissions.
+- Master key derived from:
+  - **Desktop GUI**: OS keyring via `jht keyring set/get/delete` CLI (macOS Keychain / Windows Credential Manager / Linux libsecret) — implemented in the H4 sprint
+  - **Headless / container**: `JHT_CREDENTIALS_KEY` env var required
+  - **OAuth storage (`tui/src/oauth/storage.ts`)**: PBKDF2 + random per-file salt (post-fix H4 iter 2)
 
 ### Data residency
-- Default: **tutto locale** (SQLite in `~/.jht/`).
-- Cloud-sync opzionale: Supabase, regione ai sensi del GDPR (vedi `docs/legal/gdpr.md`).
+- Default: **all local** (SQLite in `~/.jht/`).
+- Optional cloud-sync: Supabase. Region selection and GDPR posture are documented for maintainers in the internal compliance notes (not in public docs).
 
 ### Outbound
-- LLM API: requests verso `api.anthropic.com`, `api.openai.com`, `api.minimax.chat` autenticate via API key utente.
-- Cloud-sync: Supabase URL configurato dall'utente.
-- Job scout: fetch verso siti job board (LinkedIn, Greenhouse, Lever, ecc.) — applicare SSRF policy.
+- LLM API: requests to `api.anthropic.com`, `api.openai.com`, `api.minimax.chat` authenticated with the user's API key.
+- Cloud-sync: Supabase URL configured by the user.
+- Job scout: fetch toward job-board sites (LinkedIn, Greenhouse, Lever, etc.) — SSRF policy applied.
 
 ### Telemetry
-- Nessuna telemetria automatica.
+- No automatic telemetry.
 - Crash reporter: **opt-in** (TODO).
 
 ---
 
 ## 8. Update / patch policy
 
-- Security patches: rilasciate in versione patch (`X.Y.Z+1`) entro 7 giorni dalla scoperta per Critical, 30 giorni per High.
-- Annunci tramite GitHub Security Advisory + cambio in CHANGELOG.md.
-- Auto-update Electron: signed updates via Sparkle (TODO).
+- Security patches: shipped as a patch version (`X.Y.Z+1`) within 7 days of discovery for Critical, 30 days for High.
+- Announcements via GitHub Security Advisory + entry in CHANGELOG.md.
+- Electron auto-update: signed updates via Sparkle (TODO).
 
 ---
 
-## 9. Cose che NON facciamo (volutamente)
+## 9. Things we deliberately DON'T do
 
-Per evitare false aspettative:
+To avoid false expectations:
 
-- ❌ **Non offriamo bug bounty** (progetto open-source, no budget)
-- ❌ **Non offriamo SLA enterprise** (use at your own risk)
-- ❌ **Non garantiamo 100% prompt-injection-proof** (è ricerca attiva)
-- ❌ **Non garantiamo container escape** (responsabilità Docker/OS)
-- ❌ **Non firmiamo binary releases** (post-MVP)
+- ❌ **No bug bounty** (open-source project, no budget)
+- ❌ **No enterprise SLA** (use at your own risk)
+- ❌ **No 100% prompt-injection-proof guarantee** (active research)
+- ❌ **No container-escape guarantee** (Docker/OS responsibility)
+- ❌ **No signed binary releases** (post-MVP)
 
 ---
 
 ## 10. Versioning
 
-**Versione threat model:** 0.1 (bozza)
-**Ultimo aggiornamento:** 2026-04-27
-**Prossima revisione:** quando si fa il primo public release.
-**Stato hardening corrente:** vedi [`05-checklist.md`](05-checklist.md) — Phase 1 (bloccanti) tracciata 9/9 prima del tag `v0.1.0`.
+**Threat model version:** 0.1 (draft)
+**Last updated:** 2026-04-27
+**Next review:** at the first public release.
+**Current hardening status:** see [`05-checklist.md`](05-checklist.md) — Phase 1 (blockers) tracked at 9/9 before the `v0.1.0` tag.

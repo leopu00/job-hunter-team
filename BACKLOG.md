@@ -87,13 +87,13 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 - `agents/_skills/` × 5 SKILL.md (db-query · db-update · db-insert NEW · rate-budget · tmux-send) — global pool
 - `agents/sentinella/_skills/` × 6 SKILL.md (Agent Skills format with frontmatter, V5 paths)
 - `supabase/README.md` (English, hybrid model clarified)
-- `docs/security/README.md` (English)
+- `docs/security/` × 7 (README + 6 detailed files: 01-pre-launch-review, 02-openclaw-comparison, 03-implementation-tradeoffs, 04-threat-model, 05-checklist, 06-post-fix-comparison) — full English translation
 - ⚠️ `web/C:/Users/.../CLAUDE.md` phantom dir cleaned + guard added in `cli/src/jht-paths.js`
 
 **⏳ Remaining:**
 
 ```
-⬜ Agent prompts (8) — full review still pending; many touched only for path/CAPITANO-2 cleanup
+⬜ Agent prompts (9) — full review still pending; many touched only for path/CAPITANO-2 cleanup
    • agents/capitano/capitano.md          (650 lines, longest)
    • agents/sentinella/sentinella.md
    • agents/scout/scout.md
@@ -103,15 +103,6 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
    • agents/critico/critico.md
    • agents/assistente/assistente.md
    • agents/maestro/maestro.md            (placeholder, can be quick)
-
-⬜ docs/security/ × 6 detailed files (~2300 lines, currently Italian)
-   • 01-pre-launch-review.md     (549 lines, 27 findings)
-   • 02-openclaw-comparison.md   (470 lines, file-by-file)
-   • 03-implementation-tradeoffs (529 lines, cost/UX/perf)
-   • 04-threat-model.md          (186 lines)
-   • 05-checklist.md             (283 lines, fix tracker)
-   • 06-post-fix-comparison.md   (300 lines)
-   → Open scope decision: full translation vs TOC-only-translated vs accuracy-only review
 ```
 
 See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).
