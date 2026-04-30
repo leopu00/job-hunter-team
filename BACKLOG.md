@@ -374,7 +374,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
-1. SECURITY.md + CODE_OF_CONDUCT.md (small, fast)
+1. ✅ SECURITY.md + CODE_OF_CONDUCT.md (done — root, EN, Contributor Covenant 2.1)
 2. ✅ Security review (done — 31/34 fix mergiati, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
 4. Demo video (after monitoring is frozen)
@@ -382,14 +382,15 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 ---
 
-#### 🔐 [JHT-LAUNCH-01] SECURITY.md ⬜ BLOCKER
+#### 🔐 [JHT-LAUNCH-01] SECURITY.md ✅ DONE
 
-- Responsible disclosure + contact email
-- Standard GitHub `SECURITY.md` format
+- ✅ Responsible disclosure + contact email (`leopu00@gmail.com`)
+- ✅ Standard GitHub `SECURITY.md` format at root, EN, condensed from `docs/security/04-threat-model.md`
 
-#### 🤝 [JHT-LAUNCH-02] CODE_OF_CONDUCT.md ⬜ BLOCKER
+#### 🤝 [JHT-LAUNCH-02] CODE_OF_CONDUCT.md ✅ DONE
 
-- Standard Contributor Covenant
+- ✅ Contributor Covenant 2.1 standard at root, contact `leopu00@gmail.com`
+- ✅ `.github/CONTRIBUTING.md` updated to link the new CoC
 
 #### 🎬 [JHT-LAUNCH-03] 30s demo video ⬜ BLOCKER
 
