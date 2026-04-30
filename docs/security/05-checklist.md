@@ -166,11 +166,10 @@ Things to do gradually in the months after launch. No operational blocker.
   - Effort: 4h
   - Merged: 2b8264ff
 
-- [ ] **L1** — Hash/nonce-based CSP in production
-  - File: `web/next.config.ts:26`
-  - Keep `'unsafe-inline'` only in dev (`isDevelopment`); production uses hash- or nonce-based
-  - Effort: 1 day
-  - Merged: _—_
+- [x] **L1** — Hash/nonce-based CSP in production
+  - Files: new `web/middleware.ts` (per-request nonce + CSP header) + new `web/lib/csp.ts` (`getNonce` server helper) + `web/next.config.ts` (CSP removed from static headers) + 5 inline-script call-sites updated with `nonce={nonce}` (root layout theme bootstrap, BreadcrumbJsonLd, landing/JsonLd, download/layout, project/layout). Duplicate WebPage JSON-LD removed from `app/project/page.tsx` (client component, cannot read nonce).
+  - Production: `script-src 'self' 'nonce-<base64-16>' 'strict-dynamic'`. Dev: `'unsafe-inline'` retained for HMR. style-src kept lenient (script XSS is the dominant vector).
+  - Merged: cda78a17
 
 - [x] **L2** — Validate `JHT_GATEWAY_URL`
   - File: `web/app/api/gateway/route.ts:12`
@@ -253,10 +252,12 @@ Explicit decisions to **not do** now, documented in [`03-implementation-tradeoff
 
 Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw-comparison.md)). Not in the 27 internal-audit findings, but **blockers for the public release**.
 
-- [ ] **Generic SSRF dispatcher** — `shared/net/ssrf.ts` missing
-  - Adopt the OpenClaw `src/infra/net/ssrf.ts` pattern (538 lines + DNS pinning + IPv4/IPv6 special-use validation)
-  - Effort: ~1 day
-  - Merged: _—_
+- [x] **Generic SSRF dispatcher** — `shared/net/ssrf.ts`
+  - Faithful port of OpenClaw `src/shared/net/ip.ts` (IPv4/IPv6 special-use, IPv4-mapped IPv6 normalisation, embedded-IPv4 sentinel detection for 6to4 / Teredo / NAT64 / ISATAP / RFC6052), `infra/net/hostname.ts`, plus a distilled `ssrf.ts` (350 lines): `validateUrl`, `resolveAndAssertPublicHostname`, `safeFetch` with manual redirect handling and per-hop revalidation, `SsrFBlockedError`, hostname allowlist patterns, RFC2544 benchmark policy. Dispatcher-level DNS pinning via undici Agent is deferred (documented limitation: small TOCTOU window if an attacker controls authoritative DNS with very low TTL — out of JHT's single-user threat model).
+  - Tests: 80/80 pass on the OpenClaw fixture set translated to `node:test`.
+  - Integrated at: `web/api/webhooks` test-ping (user-controlled URL → `safeFetch` + strict policy) and `web/api/gateway` (env-controlled → `validateUrl` + `allowedHostnames: ['localhost', '127.0.0.1', '::1']`, replacing the regex-only homemade check that missed IPv6/embedded-IPv4 evasions).
+  - Follow-ups (non-blocker, tracked in BACKLOG): port to Python for `shared/skills/check_links.py`; expose to `cli/` (currently JS-only, would need a build step to consume the TS module); apply to `web/api/{deploy,pipelines,download,cloud-sync}` operator URLs as defence-in-depth.
+  - Merged: 2743c3a6 (primitives) + d55e822d (dispatcher + tests) + 43594a50 (webhooks integration) + fae92be6 (gateway refactor)
 
 ---
 
@@ -265,14 +266,14 @@ Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw
 ```
 Phase 1 (blockers):     9/9   ██████████████████████████████████  100% ✅
 Phase 2 (post-launch): 12/12  ██████████████████████████████████  100% ✅
-Phase 3 (hardening):  10/13   ██████████████████████████░░░░░░░░   77%
-Non-audit gap:         0/1    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0%
+Phase 3 (hardening):  11/13   █████████████████████████████░░░░░   85%
+Non-audit gap:         1/1    ██████████████████████████████████  100% ✅
 ─────────────────────────────────────────────────────────────────
-TOTAL:                31/35  ██████████████████████████████░░░   89%
+TOTAL:                33/35  ████████████████████████████████░░   94%
 ```
 
-> Phase 1 + Phase 2 closed → JHT is ready for **internal merge** and is materially more secure than OpenClaw on 4 out of the 5 top-priority areas.
-> **For the public release**, what remains is: **SSRF dispatcher** and **L1** (production hash-based CSP). The other Phase 3 items (`tests/security/`, `jht doctor security`) are continuous hardening and not blocking. `resolve-system-bin` was deferred — JHT has no security-critical shell-out binaries today.
+> Phase 1 + Phase 2 + the public-release blockers are closed → JHT is ready for **public release** on the security front. Materially more secure than OpenClaw on 5 of the 5 top-priority areas.
+> The 2 remaining items are continuous-hardening, not blocking: `tests/security/` regression suite and the `jht doctor security` CLI diagnostic. `resolve-system-bin` was deferred — JHT has no security-critical shell-out binaries today.
 
 ## 🆚 Comparison with OpenClaw
 
