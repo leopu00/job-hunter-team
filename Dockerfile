@@ -83,22 +83,14 @@ RUN useradd --create-home --shell /bin/bash jht \
     && for f in /app/agents/_tools/*; do \
          [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
        done \
-    # Skill discovery farm: l'Agent Skills standard (SKILL.md) è letto da
-    # Claude Code in .claude/skills/, da Codex e Kimi in .agents/skills/.
-    # Sorgente: agents/_skills/ (globali, viste da TUTTI gli agenti) +
-    # agents/<role>/_skills/ (private a un singolo ruolo, distribuite
-    # dal launcher per-cwd — vedi ROADMAP § Skill discovery).
-    # Per ora il symlink farm globale resta unico in /app/.claude/skills/
-    # + /app/.agents/skills/; il distributor per-agente è una follow-up
-    # in start-agent.sh.
-    && mkdir -p /app/.claude/skills /app/.agents/skills \
-    && for skill in /app/agents/_skills/*/; do \
-         [ -d "$skill" ] || continue; \
-         name=$(basename "$skill"); \
-         [ "$name" = "_lib" ] && continue; \
-         ln -sfn "/app/agents/_skills/$name" "/app/.claude/skills/$name"; \
-         ln -sfn "/app/agents/_skills/$name" "/app/.agents/skills/$name"; \
-       done \
+    # Skill discovery: per-agente, popolato dal launcher.
+    # `agents/_skills/` è la library (single source of truth). Il manifest
+    # `agents/<role>/skills.list` dichiara quali skill l'agente consuma;
+    # `start-agent.sh` legge il manifest e copia le skill richieste in
+    # `~/.claude/skills/` (Claude Code) e `~/.agents/skills/` (Codex/Kimi)
+    # del workspace runtime. Le skill private restano sotto
+    # `agents/<role>/_skills/` e vengono copiate sempre, senza manifest.
+    # Niente farm globale qui: ogni agente vede solo ciò che gli serve.
     # Passwordless sudo per l'user jht: gli agenti girano con --yolo in un
     # container disposable — se servono tool extra (pdftohtml, tesseract,
     # pacchetti pip ecc.) possono `sudo apt install` / `sudo pip install`

@@ -240,6 +240,19 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Candidate skills (do NOT pre-create):** `pattern-skill-gaps`, `pattern-exclusions`, `pattern-near-fits`, `pattern-feedback`, `pattern-reviews`, `weekly-digest`, `market-research`. Each maps 1-1 with a section already in the prompt.
 - **Acceptance:** add a skill only when a test session shows the prompt is failing to apply the pattern correctly because the procedure is too vague to execute consistently.
 
+##### 🔗 [JHT-SKILLS-SYMLINK-TEST] Test if symlinks work for skill discovery on Linux containers
+
+- **Context:** the new launcher copies skills with `cp -R` from `agents/_skills/` into each agent's runtime workspace (`.claude/skills/` + `.agents/skills/`). Copies are explicit and reliable but cost a few hundred KB of duplicated bytes per spawn and force a launcher pass on every skill update.
+- **Task:** in a controlled run, swap `cp -R` for `ln -sfn` in `start-agent.sh` and verify Claude Code, Codex, and Kimi all still discover the skill (i.e. a skill folder reachable via a symlinked dir is read the same way as a real dir). The Anthropic docs do not explicitly confirm symlink behaviour — empirical test only.
+- **Acceptance:** if symlinks work for all three CLIs in the JHT container, switch the launcher over and document the choice in `agents/_skills/README.md`.
+- **Caveat:** keep the copy-based path as a fallback for Windows/WSL setups where symlink permissions are inconsistent.
+
+##### 📚 [JHT-SKILLS-CODEX-KIMI-DISCOVERY] Verify skill-discovery convention in Codex / Kimi docs
+
+- **Context:** the launcher populates both `.claude/skills/` (Claude Code convention) and `.agents/skills/` (assumed for Codex/Kimi) in each agent's workspace. The `.agents/skills/` path is the project's existing convention but it has not been independently confirmed against the Codex CLI docs and the Kimi (Moonshot) `kimi-cli` docs.
+- **Task:** check the official documentation for both CLIs, confirm or correct the path used, and if the convention diverges across CLIs make sure the launcher writes whatever each CLI expects.
+- **Acceptance:** path assumptions in `start-agent.sh` cite the relevant doc URL.
+
 #### 🟢 LOW PRIORITY
 
 ##### 🐳 [JHT-DESKTOP-07] Container `next start` instead of `next dev`
