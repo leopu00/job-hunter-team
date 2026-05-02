@@ -210,8 +210,11 @@ def update_application(args):
             updates.append("written_at = ?")
             params.append(args.written_at)
     if args.applied_at:
-        updates.append("applied_at = ?")
-        params.append(args.applied_at)
+        if args.applied_at == 'now':
+            updates.append("applied_at = datetime('now', 'localtime')")
+        else:
+            updates.append("applied_at = ?")
+            params.append(args.applied_at)
         # Auto-cascade: se si setta applied_at, segna anche applied=1
         updates.append("applied = 1")
     if args.applied_via:
@@ -252,14 +255,67 @@ def update_application(args):
     params.append(args.position_id)
     cursor = conn.execute(f"UPDATE applications SET {', '.join(updates)} WHERE position_id = ?", params)
     if cursor.rowcount == 0:
-        print(f"⚠️  ERRORE: nessuna application trovata per position_id={args.position_id}!")
-        print(f"   Hai forse usato l'application ID invece del position_id?")
-        print(f"   Uso corretto: db_update.py application <POSITION_ID> --critic-score ...")
+        # UPSERT: nessuna application esistente → INSERT iniziale.
+        # Senza questo path, lo Scrittore deve fare INSERT a mano via
+        # python3 -c "import sqlite3 ..." e finiva per passare la stringa
+        # 'now' invece di datetime('now') — bug dei record con
+        # written_at='now' letterale (vedi audit 2026-05-02).
+        # Verifica che la position esista (FK guard).
+        if not conn.execute("SELECT 1 FROM positions WHERE id = ?", (args.position_id,)).fetchone():
+            print(f"⚠️  position_id={args.position_id} non esiste in positions. Abort INSERT.")
+            conn.close()
+            return
+        # Default: written_at=now se non specificato; written_by se passato
+        # via --reviewed-by NON va qui, va nel campo reviewed_by.
+        # Costruiamo INSERT solo coi campi noti dall'UPDATE + position_id.
+        ins_cols = ['position_id']
+        ins_vals = [args.position_id]
+        ins_placeholders = ['?']
+        # Riusa la stessa coerenza UPDATE→INSERT campo-per-campo.
+        for clause, val in _zip_set_clauses(updates, params[:-1]):
+            col = clause.split('=', 1)[0].strip()
+            rhs = clause.split('=', 1)[1].strip()
+            ins_cols.append(col)
+            if rhs == '?':
+                ins_placeholders.append('?')
+                ins_vals.append(val)
+            else:
+                # es. datetime('now', 'localtime') — espressione SQL inline
+                ins_placeholders.append(rhs)
+        # written_at di default a now se non gia' settato
+        if 'written_at' not in ins_cols:
+            ins_cols.append('written_at')
+            ins_placeholders.append("datetime('now', 'localtime')")
+        # written_by da $JHT_AGENT_ID se settato (start-agent.sh lo esporta)
+        if 'written_by' not in ins_cols and os.environ.get('JHT_AGENT_ID'):
+            ins_cols.append('written_by')
+            ins_placeholders.append('?')
+            ins_vals.append(os.environ['JHT_AGENT_ID'])
+        sql = f"INSERT INTO applications ({', '.join(ins_cols)}) VALUES ({', '.join(ins_placeholders)})"
+        conn.execute(sql, ins_vals)
+        conn.commit()
+        print(f"Application per posizione {args.position_id} CREATA (INSERT iniziale).")
         conn.close()
         return
     conn.commit()
     print(f"Application per posizione {args.position_id} aggiornata ({cursor.rowcount} riga)")
     conn.close()
+
+
+def _zip_set_clauses(set_clauses, params):
+    """Itera coppie (clause, param) dove clause = 'col = ?' o 'col = expr'.
+
+    Le clausole con RHS='?' consumano un param dalla lista; quelle con
+    espressione SQL inline (es. datetime(...)) non consumano nulla.
+    """
+    pi = 0
+    for c in set_clauses:
+        rhs = c.split('=', 1)[1].strip()
+        if rhs == '?':
+            yield c, params[pi]
+            pi += 1
+        else:
+            yield c, None
 
 
 def main():
