@@ -15,6 +15,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     JHT_HOME=/jht_home \
     JHT_USER_DIR=/jht_user \
     IS_CONTAINER=1 \
+    # Pin Playwright browsers to /opt/playwright (baked into the image)
+    # instead of the default $HOME/.cache/ms-playwright. With our setup
+    # HOME=/jht_home in every agent shell, that path is bind-mounted to
+    # the user's host ~/.jht/.cache/ — and Playwright's first-run
+    # auto-install was depositing ~928M (full Chromium + headless shell
+    # + ffmpeg) into the user's home on every fresh container.
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
     # Agent CLIs (claude, codex, kimi) are NOT baked into the image.
     # They are installed lazily on first run into /jht_home/.npm-global,
     # which lives on a bind-mount so installs persist across container
@@ -53,7 +60,11 @@ RUN npm ci --prefix cli \
     && npm cache clean --force
 
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt \
+    # Pre-install only the headless shell (used by linkedin_check.py
+    # with headless=True). The full Chromium build is intentionally NOT
+    # installed — it was 602M of dead weight on top of the 323M shell.
+    && playwright install --only-shell chromium
 
 COPY . .
 
@@ -74,7 +85,7 @@ RUN npm run build --prefix tui \
 
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
-    && chown -R jht:jht /jht_home /jht_user /app \
+    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
