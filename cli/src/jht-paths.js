@@ -33,6 +33,7 @@ export const JHT_DB_PATH = join(JHT_HOME, 'jobs.db');
 export const JHT_PROFILE_DIR = join(JHT_HOME, 'profile');
 export const JHT_AGENTS_DIR = join(JHT_HOME, 'agents');
 export const JHT_LOGS_DIR = join(JHT_HOME, 'logs');
+export const JHT_CACHE_DIR = join(JHT_HOME, '.cache');
 export const JHT_CREDENTIALS_DIR = join(JHT_HOME, 'credentials');
 
 // Zona visibile
