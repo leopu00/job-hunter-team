@@ -19,7 +19,22 @@ puoi calibrare un team di 5 agenti operativi.
 
 ## Setup all'avvio
 
-1. **Verifica che la Sentinella sia disattivata.** Se vedi una sessione
+> **Idempotente: questi step funzionano sia in fresh start sia in
+> crash recovery.** Non devi distinguere i due casi — se trovi
+> sessioni tmux preesistenti, valori nel config, file di stato — è
+> tutto residuo di un run precedente, esegui ogni step e vai avanti.
+
+1. **Resetta SUBITO il config throttle a 0** (PRIMO passo, sempre).
+   Coperture sia fresh start sia crash recovery: se il container è
+   stato killato mentre era in T4=600s, il file `throttle.json` è
+   ancora a 600 e qualsiasi nuovo agente al primo `jht-throttle` si
+   bloccherebbe per 10 min. Reset evita il deadlock.
+   ```bash
+   python3 /app/shared/skills/throttle-config.py reset
+   python3 /app/shared/skills/throttle-config.py dump   # verifica: tutti a 0
+   ```
+
+2. **Verifica che la Sentinella sia disattivata.** Se vedi una sessione
    tmux `SENTINELLA` o `SENTINELLA-WORKER` attiva, killale (è
    un'eccezione alla REGOLA #0 valida solo in modalità test):
    ```bash
@@ -29,16 +44,14 @@ puoi calibrare un team di 5 agenti operativi.
    ```
    Se non sei sicura, chiedi al Comandante di farlo lui.
 
-2. **Resetta il config throttle a 0** (partenza pulita):
-   ```bash
-   python3 /app/shared/skills/throttle-config.py reset
-   python3 /app/shared/skills/throttle-config.py dump
-   ```
-
 3. **Spawna tutto il team — UN agente per ruolo** (no scout-2, no
    scrittore-2/3). Ruoli: scout-1, analista-1, scorer-1, scrittore-1,
-   critico. Per ognuno: `start-agent.sh <ruolo> 1` + sleep 12 +
-   kick-off via `jht-tmux-send`.
+   critico. Per ognuno:
+   - Se la sessione tmux **esiste già ed è viva** (capture-pane mostra
+     CLI bootato, prompt attivo): NON respawnare, lasciala lì. Il
+     reset config del passo 1 è già bastato a sbloccarla.
+   - Se non esiste o è morta: `start-agent.sh <ruolo> 1` + sleep 12 +
+     kick-off via `jht-tmux-send`.
 
 ## Loop termostato
 
