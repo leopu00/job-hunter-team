@@ -12,6 +12,8 @@ Uso:
   python3 db_query.py next-for-scorer       # posizioni checked senza score
   python3 db_query.py next-for-scrittore    # posizioni scored >= 50 senza application
   python3 db_query.py next-for-critico      # application in review senza verdict
+  python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
+                                            # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
   python3 db_query.py check-url "https://..."  # cerca per URL esatto
 """
@@ -362,6 +364,54 @@ def next_for_role(role):
     conn.close()
 
 
+def query_application(position_id):
+    """Check anti-riscrittura (REGOLA-02 Scrittore).
+
+    Output stato application + critic info per la position. Exit code:
+      0 — nessuna application, oppure application senza critic_verdict (procedi)
+      1 — critic_verdict valorizzato (SKIP ASSOLUTO, voto del Critico è finale)
+    """
+    conn = get_db()
+    ensure_schema(conn)
+
+    r = conn.execute("""
+        SELECT a.status, a.critic_verdict, a.critic_score, a.critic_notes,
+               a.written_by, a.reviewed_by, a.written_at, a.critic_reviewed_at,
+               a.cv_path, a.cv_pdf_path, a.cl_path, a.cl_pdf_path,
+               a.applied, a.applied_at, a.applied_via,
+               p.title, p.company
+        FROM applications a
+        JOIN positions p ON p.id = a.position_id
+        WHERE a.position_id = ?
+    """, (position_id,)).fetchone()
+
+    if not r:
+        print(f"Nessuna application per posizione {position_id}. PROCEDI.")
+        conn.close()
+        return 0
+
+    print(f"\n  APPLICATION posizione #{position_id}: {r['company']} — {r['title']}")
+    print(f"  Status:        {r['status']}")
+    print(f"  Scritta da:    {r['written_by'] or 'N/D'} ({r['written_at'] or 'N/D'})")
+    print(f"  Critic verdict:{r['critic_verdict'] or 'IN ATTESA'}")
+    if r['critic_verdict']:
+        print(f"  Critic score:  {r['critic_score']}")
+        print(f"  Reviewed by:   {r['reviewed_by'] or 'N/D'} ({r['critic_reviewed_at'] or 'N/D'})")
+        if r['critic_notes']:
+            print(f"  Critic notes:  {r['critic_notes']}")
+    if r['cv_pdf_path']:
+        print(f"  CV PDF:        {r['cv_pdf_path']}")
+    if r['applied']:
+        print(f"  Inviata:       {r['applied_at']} via {r['applied_via'] or 'N/D'}")
+
+    conn.close()
+
+    if r['critic_verdict']:
+        print(f"\n  ⛔ SKIP — il voto del Critico è FINALE (REGOLA-02).")
+        return 1
+    return 0
+
+
 def check_url(url_or_id):
     """Cerca una posizione per URL o job ID LinkedIn."""
     conn = get_db()
@@ -420,6 +470,10 @@ def main():
     sub.add_parser('next-for-scrittore')
     sub.add_parser('next-for-critico')
 
+    # application (anti-riscrittura check)
+    ap = sub.add_parser('application')
+    ap.add_argument('position_id', type=int)
+
     # check-url
     cu = sub.add_parser('check-url')
     cu.add_argument('url', help='URL o job ID numerico LinkedIn')
@@ -438,6 +492,8 @@ def main():
         dashboard()
     elif args.cmd == 'stats':
         stats()
+    elif args.cmd == 'application':
+        return query_application(args.position_id)
     elif args.cmd == 'check-url':
         check_url(args.url)
     elif args.cmd.startswith('next-for-'):
@@ -446,4 +502,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)
