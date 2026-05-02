@@ -547,6 +547,22 @@
                 Ferma dev mode
               </button>
             </div>
+
+            <!-- Dev secondario: avvia un Next dev su altra porta + worktree a scelta. -->
+            <div class="home__row" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--color-dim-border, #2a2a2a);">
+              <span class="home__row-label" data-i18n="home.advanced.devAddLabel">Dev su altra porta</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devAddHint">
+                Lancia un secondo Next dev su un worktree a scelta. Riusa il container :3001, max 2 secondari oltre al primario. .next del worktree viene ricreato per evitare loop SWC.
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline" style="gap: 0.5rem; flex-wrap: wrap;">
+              <select id="home-dev-add-worktree" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; min-width: 280px;">
+                <option value="">— scegli worktree —</option>
+              </select>
+              <input type="number" id="home-dev-add-port" min="3000" max="9999" value="3002" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; width: 90px;" />
+              <button class="btn btn--primary" id="home-btn-dev-add-start" data-i18n="home.advanced.devAddStart">Avvia secondario</button>
+            </div>
+            <div id="home-dev-add-active" style="margin-top: 0.5rem; font-size: 0.85em; color: var(--color-dim, #888);"></div>
           </div>
         </div>
       </section>

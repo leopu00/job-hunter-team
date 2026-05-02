@@ -382,6 +382,165 @@ app.whenReady().then(() => {
     })
   })
 
+  // ── Dev mode SECONDARIO (porta != 3001, su qualsiasi worktree) ──────────
+  // Permette di affiancare al dev primario un secondo Next dev che riusa
+  // il container `jht` condiviso. Vedi scripts/dev-up-additional.sh.
+  // In-memory store dei dev secondari attivi: chiave = porta.
+  const additionalDevs = new Map() // port -> { pid, worktree, startedAt, logPath }
+  const MAX_ADDITIONAL = 2 // Mac M3 18 GB regge max 2 secondari + primario
+
+  ipcMain.handle('dev-additional:list-worktrees', async () => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    return new Promise((resolve) => {
+      try {
+        const child = spawn('git', ['worktree', 'list', '--porcelain'], {
+          cwd: path.resolve(__dirname, '..'),
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (d) => { stdout += d.toString() })
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          if (code !== 0) {
+            resolve({ ok: false, error: stderr.trim() || `git worktree exit ${code}` })
+            return
+          }
+          // Parse porcelain: blocchi separati da riga vuota, ogni blocco ha
+          // `worktree <path>`, `HEAD <sha>`, `branch <ref>`.
+          const worktrees = []
+          for (const block of stdout.split(/\n\n/)) {
+            const lines = block.split('\n').filter(Boolean)
+            const wt = {}
+            for (const line of lines) {
+              const [key, ...rest] = line.split(' ')
+              wt[key] = rest.join(' ')
+            }
+            if (wt.worktree) {
+              worktrees.push({
+                path: wt.worktree,
+                branch: (wt.branch || '').replace('refs/heads/', '') || '(detached)',
+              })
+            }
+          }
+          resolve({ ok: true, worktrees })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:launch', async (_event, args) => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    const { worktree, port } = args || {}
+    if (typeof worktree !== 'string' || !worktree) {
+      return { ok: false, error: 'worktree mancante' }
+    }
+    const portNum = Number(port)
+    if (!Number.isInteger(portNum) || portNum < 3000 || portNum > 9999 || portNum === 3001) {
+      return { ok: false, error: 'porta deve essere 3000-9999, diversa da 3001' }
+    }
+    if (additionalDevs.has(portNum)) {
+      return { ok: false, error: `dev secondario già attivo su :${portNum}` }
+    }
+    if (additionalDevs.size >= MAX_ADDITIONAL) {
+      return { ok: false, error: `max ${MAX_ADDITIONAL} dev secondari (Mac M3 18 GB), ferma uno prima` }
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-up-additional.sh')
+    const bashCmd = process.platform === 'win32'
+      ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+      : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script, worktree, String(portNum)], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (d) => { stdout += d.toString() })
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          // Parse `KEY=VALUE` lines (anche su exit code != 0 — exit 6 = not ready
+          // ma PID è valido, lo vogliamo tracciare comunque).
+          const out = {}
+          for (const line of stdout.split('\n')) {
+            const m = line.match(/^([A-Z_]+)=(.+)$/)
+            if (m) out[m[1]] = m[2]
+          }
+          if (out.PID) {
+            additionalDevs.set(portNum, {
+              pid: Number(out.PID),
+              worktree,
+              startedAt: Date.now(),
+              logPath: out.LOG || null,
+              url: out.URL || `http://localhost:${portNum}`,
+            })
+          }
+          if (code === 0) {
+            resolve({ ok: true, ready: out.READY === '1', ...out, port: portNum })
+          } else {
+            resolve({
+              ok: false,
+              error: stderr.trim() || `dev-up-additional.sh exit ${code}`,
+              partial: out,
+              port: portNum,
+            })
+          }
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:stop', async (_event, args) => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    const portNum = Number(args?.port)
+    if (!Number.isInteger(portNum)) return { ok: false, error: 'porta mancante' }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-down-additional.sh')
+    const bashCmd = process.platform === 'win32'
+      ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+      : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script, String(portNum)], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stderr = ''
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          additionalDevs.delete(portNum)
+          if (code === 0) resolve({ ok: true })
+          else resolve({ ok: false, error: stderr.trim() || `dev-down-additional.sh exit ${code}` })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:list-active', async () => {
+    const list = []
+    for (const [port, info] of additionalDevs) {
+      // Verifica liveness: se il PID è morto, ripulisci.
+      let alive = false
+      try { alive = process.kill(info.pid, 0) || true } catch { alive = false }
+      if (!alive) {
+        additionalDevs.delete(port)
+        continue
+      }
+      list.push({ port, ...info, uptimeMs: Date.now() - info.startedAt })
+    }
+    return { ok: true, active: list, max: MAX_ADDITIONAL }
+  })
+
   ipcMain.handle('launcher:open-external', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, error: 'invalid-url' }
