@@ -30,6 +30,7 @@ Eventi loggati (jsonl):
 import argparse
 import json
 import os
+import signal
 import sys
 import time
 import uuid
@@ -99,6 +100,17 @@ def main() -> int:
         + (f" — {args.reason}" if args.reason else ""),
         file=sys.stderr,
     )
+
+    # SIGTERM handler: il CLI Kimi/Claude killa il subprocess via SIGTERM
+    # quando l'agente passa a un nuovo tool prima della fine dello sleep.
+    # Senza handler Python termina senza scrivere il record `end` →
+    # start orfano nel jsonl, throttle invisibile nel chart. Lo rerouting
+    # a KeyboardInterrupt riusa il path interrupted=True già esistente.
+    def _on_signal(signum, frame):  # noqa: ARG001
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGHUP, _on_signal)
 
     interrupted = False
     try:
