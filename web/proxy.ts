@@ -1,8 +1,9 @@
 /**
- * Proxy — Auth Supabase, CORS, rate limiting, request logging
+ * Proxy — Auth Supabase, CORS, rate limiting, CSP nonce, request logging
  *
  * Sostituisce middleware.ts (deprecato in Next.js 16).
- * Auth su tutte le rotte, CORS + rate limit solo su /api/*.
+ * Auth su tutte le rotte, CORS + rate limit solo su /api/*,
+ * CSP nonce-based su tutte le risposte HTML.
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
@@ -10,6 +11,36 @@ import { getSupabaseConfig } from '@/lib/supabase/config'
 import { isLocalRequestFromHeaders } from '@/lib/auth'
 import { LOCAL_TOKEN_COOKIE, getOrCreateLocalToken } from '@/lib/local-token'
 import { shouldRejectBrowserMutation } from '@/lib/csrf'
+
+// --- CSP nonce ---
+// Production: script-src 'self' 'nonce-XXX' 'strict-dynamic' (no unsafe-inline).
+// Development: 'unsafe-inline' + 'unsafe-eval' for HMR/Fast Refresh.
+function generateNonce(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
+function buildCsp(nonce: string, isDevelopment: boolean): string {
+  const scriptSrc = isDevelopment
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
+    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+
+  return [
+    "default-src 'self'",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
+    "font-src 'self'",
+    "connect-src 'self' https://*.supabase.co",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ')
+}
 
 // --- CORS Config ---
 
@@ -93,6 +124,12 @@ export async function proxy(request: NextRequest) {
   // chiamate in questa funzione clonando le request headers.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-pathname', pathname)
+
+  // CSP nonce: generated per request, exposed to RSCs via x-nonce header
+  // and applied to the final response's Content-Security-Policy.
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  const nonce = generateNonce()
+  requestHeaders.set('x-nonce', nonce)
 
   // --- API: CORS preflight ---
   if (isApi && request.method === 'OPTIONS') {
@@ -236,6 +273,9 @@ export async function proxy(request: NextRequest) {
     supabaseResponse.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
     supabaseResponse.headers.set('X-RateLimit-Remaining', String(rlRemaining ?? RATE_LIMIT_MAX))
     logRequest(request, 200, Date.now() - start)
+  } else {
+    // CSP applies to HTML responses (everything that isn't /api/*).
+    supabaseResponse.headers.set('Content-Security-Policy', buildCsp(nonce, isDevelopment))
   }
 
   return supabaseResponse
