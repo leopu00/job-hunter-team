@@ -1,5 +1,7 @@
+// fresh
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import type {
   DashboardStats,
@@ -12,10 +14,16 @@ import type {
   Application,
 } from '@/lib/types'
 
-// Helper: get workspace or null
+// Source of truth = origine della request:
+//   - host=localhost (Mac dell'utente, JHT Desktop o browser locale) → SQLite
+//   - host pubblico (deploy Vercel) → Supabase
+// Vale per tutte le query (dashboard, positions, applications, scores...).
+// In local mode il banner cloud-sync e il filtro synced/unsynced funzionano
+// perché vediamo TUTTE le row locali e usiamo Supabase come overlay (non
+// come fonte). In cloud puro Supabase è l'unica fonte.
 async function ws(): Promise<string | null> {
-  if (isSupabaseConfigured) return null
-  return getWorkspacePath()
+  if (await isLocalRequest()) return getWorkspacePath()
+  return null
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────

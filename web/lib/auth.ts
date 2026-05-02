@@ -13,6 +13,14 @@ export function isLocalhostHost(host: string): boolean {
 }
 
 /**
+ * IP loopback (IPv4 / IPv6 / wildcard). Usato per validare forwarded
+ * headers che provengono dal proxy interno di Next dev (sempre `::1`).
+ */
+function isLoopbackIp(ip: string): boolean {
+  return /^(::1|127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(ip.trim())
+}
+
+/**
  * Header che indicano la presenza di un reverse-proxy. Quando uno di
  * questi header e' presente la richiesta NON puo' essere considerata
  * "direct localhost": x-forwarded-host e' client-controllable e
@@ -32,6 +40,39 @@ export function hasForwardedRequestHeaders(hdrs: Headers): boolean {
 }
 
 /**
+ * Variante più permissiva di `hasForwardedRequestHeaders`: ammette i
+ * forwarded headers SOLO se l'origine remota è loopback (proxy interno
+ * di Next dev server, che setta `x-forwarded-for=::1` su connessioni
+ * dal Mac). Un attaccante remoto non può fakeare il loopback (l'IP
+ * effettivo della connessione TCP non è loopback, e il proxy reverse
+ * di un deploy reale lo riscrive con l'IP pubblico).
+ *
+ * Restituisce `true` (= proxy esterno NON-trusted, blocca) se uno dei
+ * forwarded header indica origine non-loopback. `false` (= safe) se
+ * mancano forwarded header o se sono tutti loopback.
+ */
+export function hasUntrustedForwardedHeaders(hdrs: Headers): boolean {
+  // RFC 7239 `Forwarded`: difficile da parsare, conservativo: blocca se presente.
+  if (hdrs.get('forwarded') !== null) return true
+
+  const xff = hdrs.get('x-forwarded-for')
+  if (xff !== null) {
+    // Lista "client, proxy1, proxy2"; il client è il primo hop.
+    const firstHop = xff.split(',')[0]?.trim() ?? ''
+    if (!isLoopbackIp(firstHop)) return true
+  }
+
+  const xfh = hdrs.get('x-forwarded-host')
+  if (xfh !== null && !isLocalhostHost(xfh)) return true
+
+  const xri = hdrs.get('x-real-ip')
+  if (xri !== null && !isLoopbackIp(xri)) return true
+
+  // x-forwarded-proto è informativo (http/https), non identifica l'origine.
+  return false
+}
+
+/**
  * Helper sincrono che valuta una richiesta gia' parsata.
  *
  * Bypassa il check Supabase SOLO se la richiesta arriva direttamente
@@ -42,9 +83,18 @@ export function hasForwardedRequestHeaders(hdrs: Headers): boolean {
  * `Headers` siano gia' disponibili senza dover chiamare `headers()`.
  */
 export function isLocalRequestFromHeaders(hdrs: Headers): boolean {
-  if (hasForwardedRequestHeaders(hdrs)) return false
+  // Header `Host` deve essere localhost. Su deploy pubblico questo è
+  // riscritto al dominio reale dal reverse proxy, quindi un attaccante
+  // remoto che setta `Host: localhost` viene comunque bloccato qui.
   const host = hdrs.get('host') ?? ''
-  return isLocalhostHost(host)
+  if (!isLocalhostHost(host)) return false
+
+  // Forwarded headers ammessi se TUTTI loopback (Next dev server li aggiunge
+  // automaticamente sulle request al loopback con valori `::1`/`localhost`).
+  // Un proxy esterno avrà valori non-loopback → blocca.
+  if (hasUntrustedForwardedHeaders(hdrs)) return false
+
+  return true
 }
 
 /** Helper per server components / route handler (App Router async). */
