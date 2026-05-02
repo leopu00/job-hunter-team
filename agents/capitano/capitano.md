@@ -242,10 +242,11 @@ Storage condiviso (`$JHT_HOME/.cache/uv/` + `$JHT_HOME/.codex/logs_2.sqlite`) cr
 node /app/cli/bin/jht.js cache prune
 ```
 
-Esegue 2 step in sequenza:
+Esegue 3 step in sequenza:
 
 1. **uv cache** — chiama `uv cache prune` con `UV_CACHE_DIR=$JHT_HOME/.cache/uv`. Rimuove SOLO entry irraggiungibili (no wheel attivi). Se `uv` non è installato → skip pulito.
 2. **codex logs SQLite** — `DELETE FROM logs WHERE ts < unixepoch('now','-10 days')` + `VACUUM` su `$JHT_HOME/.codex/logs_2.sqlite`. Si attiva SOLO se file > 50 MB E nessuno scrive da almeno 1h (mtime check, evita di toccare il DB mentre il CLI Codex gira). Se le condizioni non sono soddisfatte → skip motivato.
+3. **codex ephemeral** — rimuove cache rigenerabili di Codex: `.codex/.tmp/plugins/` (~15 MB di plugin sync), `.codex/cache/`, `.codex/models_cache.json`. Stessa safety gate del passo 2 (idle > 1h). Lo snapshot dell'idle viene fatto PRIMA del passo 2 per evitare che il VACUUM del passo 2 falsifichi la check del passo 3.
 
 Output: dimensione before/after + bytes liberati per ogni step.
 
