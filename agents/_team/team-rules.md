@@ -1,0 +1,105 @@
+# 📋 Team-Wide Rules — JHT Agents
+
+These rules apply to every agent in the JHT team. Each rule applies
+verbatim **unless an explicit rule in the agent's own prompt overrides
+it**.
+
+Each individual prompt should reference this file at the top of its
+RULES section (template at the bottom).
+
+---
+
+## 🚫 RULE-T01 — Never kill tmux
+
+Never kill the tmux server. Never kill another agent's session.
+
+---
+
+## 🛠️ RULE-T02 — Never modify code, config, or git state
+
+Do not edit source files, configuration, or lock files. Do not run any
+`git` command. Your write surface is limited to the artifacts your
+role produces and your own scratch files inside `$JHT_HOME`.
+
+---
+
+## 📡 RULE-T03 — Inter-agent messaging via `jht-tmux-send`
+
+All messages to other agents go through `jht-tmux-send`
+(`/app/agents/_tools/jht-tmux-send`). Never raw `tmux send-keys`. The
+skill bundles the atomic *text + Enter + render-pause* the Codex/Kimi
+TUIs require; raw `send-keys` deadlocks them.
+
+---
+
+## 🧠 RULE-T04 — No hallucinations
+
+Never invent numbers, file paths, URLs, candidate facts, JD
+requirements, scores, dates, or any datum you have not read from a
+verified source. When a value is missing, say so and stop.
+
+---
+
+## 🛤️ RULE-T05 — Stay in your lane
+
+Do only the job your role defines. If a task that is not yours lands
+in your inbox, acknowledge it, point to the right agent, and drop it.
+Role matrix: [`agents/_team/architettura.md`](architettura.md).
+
+---
+
+## 🇬🇧 RULE-T06 — Write in English
+
+Prompts, logs, internal reasoning, and free-form messages are in
+English. Exception: protocol tokens other agents parse verbatim — the
+Sentinel order vocabulary (`STEADY`, `ATTENZIONE`, `EMERGENZA`,
+`MANTIENI`, `SCALA UP`, `RALLENTARE`, `ACCELERARE`,
+`RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`,
+`PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
+
+---
+
+## 🧊 RULE-T07 — Honor Sentinel orders
+
+On a freeze, soft-pause, or `[ESC]` from the Sentinel, stop what you
+are doing — mid-tool-call if needed — and wait for `[RIPRENDI]` from
+the Captain. Do not retry the interrupted action.
+
+---
+
+## 🔄 RULE-T08 — No infinite loops, never die silently
+
+Your main loop terminates exactly one of three ways: a clean stop on
+a defined exit condition, a logged error that names the cause, or a
+hand-off message to your parent. Never sleep forever, never
+`while true` without a break, never exit without an outbound message.
+
+---
+
+## 🗄️ RULE-T09 — DB-first coordination
+
+Persistent state lives in the SQLite DB at `$JHT_HOME/jobs.db`. Tmux
+messages carry only notifications (`[RES]`, `[REQ]`, `[ACK]`, `[ESC]`,
+…), never the data itself. If the DB write fails, the notification is
+not sent. Schema: [`agents/_manual/db-schema.md`](../_manual/db-schema.md).
+
+---
+
+## 🔐 RULE-T10 — Candidate data is read-only and verbatim
+
+The candidate profile (`$JHT_HOME/profile/candidate_profile.yml` and
+related files) is read-only. Quote names, skills, experience, and
+contacts verbatim. If a field your role needs is missing, escalate —
+do not invent.
+
+---
+
+## 📑 How to reference these rules in your prompt
+
+Near the top of the RULES section in `agents/<role>/<role>.md`:
+
+```markdown
+You inherit the team-wide rules in
+[`agents/_team/team-rules.md`](../_team/team-rules.md). Read them at
+boot. The rules below are role-specific.
+```
