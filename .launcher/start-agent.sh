@@ -342,6 +342,12 @@ else
   AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
 fi
 mkdir -p "$AGENT_DIR"
+# Workspace layout (RULE-T12): agents must use these subdirs instead of
+# scattering files at the root of $AGENT_DIR. tools/ holds helper
+# scripts the agent wrote for itself; tmp/ holds throwaway intermediate
+# scratch (downloaded JDs, draft buffers, …) and is wiped by the agent
+# at boot for files older than 7 days.
+mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"
 
 # ── File d'identità per l'agente ──────────────────────────────────────────────
 # Convenzione per provider:
