@@ -113,6 +113,8 @@ async function cachePrune() {
   console.log('\n  JHT — Cache Prune\n');
   await pruneUvCache();
   console.log('');
+  await pruneNpmCache();
+  console.log('');
   // Snapshot dell'idle di Codex PRIMA dei suoi prune step. Senza questo,
   // il VACUUM del logs DB nel primo step bumpa la mtime e fa fallire la
   // safety gate del secondo step (codex ephemeral) anche quando in
@@ -172,6 +174,48 @@ async function pruneUvCache() {
   const after = await dirSize(uvCacheDir);
   const freed = before.bytes - after.bytes;
   console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il prune`);
+  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Prune ($JHT_HOME/.npm) — chiama `npm cache verify` con npm_config_cache
+// puntato alla cache JHT. Verify è la modalità ufficiale e sicura: GC dei
+// blob non più referenziati, riparazione di entry corrotte, dedup. Non
+// rompe install in corso (usa lock interni di cacache). Non tocca
+// .npm-global/lib/node_modules (binary nativi installati globalmente).
+async function pruneNpmCache() {
+  const npmCacheDir = join(JHT_HOME, '.npm');
+  if (!(await fileExists(npmCacheDir))) {
+    console.log(`  npm cache: ${npmCacheDir} non esiste — niente da fare.`);
+    return;
+  }
+
+  const before = await dirSize(npmCacheDir);
+  console.log(`  npm cache: ${fmtSize(before.bytes)} (${before.files} file) prima del verify`);
+
+  const r = spawnSync('npm', ['cache', 'verify'], {
+    env: { ...process.env, npm_config_cache: npmCacheDir },
+    encoding: 'utf-8',
+    timeout: 180_000,
+  });
+
+  if (r.error) {
+    if (r.error.code === 'ENOENT') {
+      console.error('  ✗ npm non trovato nel PATH. Skip prune.');
+    } else {
+      console.error(`  ✗ npm cache verify fallito: ${r.error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (r.status !== 0) {
+    console.error(`  ✗ npm cache verify exit ${r.status}: ${r.stderr || r.stdout}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const after = await dirSize(npmCacheDir);
+  const freed = before.bytes - after.bytes;
+  console.log(`  npm cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il verify`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
 }
 
