@@ -113,6 +113,8 @@ async function cachePrune() {
   console.log('\n  JHT — Cache Prune\n');
   await pruneUvCache();
   console.log('');
+  await pruneUvTools();
+  console.log('');
   await pruneNpmCache();
   console.log('');
   // Snapshot dell'idle di Codex PRIMA dei suoi prune step. Senza questo,
@@ -175,6 +177,75 @@ async function pruneUvCache() {
   const freed = before.bytes - after.bytes;
   console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il prune`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Dedup ($JHT_HOME/.local/share/uv/tools) — uv tool installa ogni CLI in
+// una cartella autonoma sotto share/uv/tools/. Non c'e' rotation built-in
+// per le installazioni vecchie quando un tool viene reinstallato con un
+// suffisso (es. `kimi-cli`, `kimi-cli-old`, `kimi-cli-bak`). Senza questo
+// step, su un team che gira settimane ogni reinstall lascia un fossile
+// (kimi-cli pesa 230 MB ed e' indispensabile per il provider Kimi — non
+// si tocca; ma se riapparisse `kimi-cli-old` accanto, va via).
+//
+// Strategia conservativa: per ogni "famiglia" (raggruppata per nome base
+// — il primo segmento prima di un suffisso `-old|-bak|-vN.N.N|-N`)
+// teniamo la sotto-cartella con mtime piu' recente, rimuoviamo le altre
+// con `rm -rf` (uv tool dir e' autonoma, niente symlink esterni). Se il
+// gruppo ha 1 sola entry, no-op.
+const UV_TOOLS_DIR = join(JHT_HOME, '.local', 'share', 'uv', 'tools');
+const UV_TOOL_SUFFIX_RE = /-(old|bak|backup|prev|previous|v?\d+(\.\d+)*)$/i;
+
+async function pruneUvTools() {
+  if (!(await fileExists(UV_TOOLS_DIR))) {
+    console.log(`  uv tools: ${UV_TOOLS_DIR} non esiste — niente da fare.`);
+    return;
+  }
+  const entries = await readdir(UV_TOOLS_DIR, { withFileTypes: true });
+  const dirs = entries.filter(e => e.isDirectory());
+  if (dirs.length === 0) {
+    console.log('  uv tools: nessun tool installato.');
+    return;
+  }
+
+  // Raggruppa per "famiglia": kimi-cli e kimi-cli-old → stessa famiglia.
+  const families = new Map();
+  for (const d of dirs) {
+    const base = d.name.replace(UV_TOOL_SUFFIX_RE, '');
+    if (!families.has(base)) families.set(base, []);
+    const full = join(UV_TOOLS_DIR, d.name);
+    const s = await stat(full);
+    families.get(base).push({ name: d.name, path: full, mtimeMs: s.mtimeMs });
+  }
+
+  let kept = 0, removed = 0, freed = 0;
+  for (const [base, members] of families) {
+    if (members.length === 1) {
+      kept++;
+      continue;
+    }
+    // tieni la piu' recente, butta il resto
+    members.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const keep = members[0];
+    const drop = members.slice(1);
+    console.log(`  ${base}: ${members.length} versioni — tengo "${keep.name}", rimuovo: ${drop.map(d => d.name).join(', ')}`);
+    for (const d of drop) {
+      const sz = await dirSize(d.path);
+      try {
+        await rm(d.path, { recursive: true, force: true });
+        freed += sz.bytes;
+        removed++;
+      } catch (err) {
+        console.error(`  ✗ rm ${d.path}: ${err.message}`);
+      }
+    }
+    kept++;
+  }
+
+  if (removed === 0) {
+    console.log(`  uv tools: ${kept} tool, nessuna versione duplicata — niente da fare.`);
+  } else {
+    console.log(`  uv tools: ${kept} tool tenuti, ${removed} fossili rimossi, ${fmtSize(freed)} liberati.`);
+  }
 }
 
 // Prune ($JHT_HOME/.npm) — chiama `npm cache verify` con npm_config_cache
