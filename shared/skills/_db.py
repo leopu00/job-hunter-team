@@ -137,6 +137,35 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+
+    -- Trigger educativi: rifiutano la stringa letterale 'now' nei timestamp
+    -- e suggeriscono il pattern corretto. Audit 2026-05-02 mostro' 8 record
+    -- con written_at='now' (stringa di 3 caratteri) finiti nel DB perche'
+    -- gli Scrittori facevano INSERT inline via `python3 -c "import sqlite3
+    -- ... VALUES (..., 'now', ...)"` invece di chiamare la skill UPSERT
+    -- (db_update.py application). Un fix silenzioso (UPDATE auto a ISO)
+    -- avrebbe mascherato l'anti-pattern; preferiamo RAISE(ABORT) con un
+    -- messaggio che insegna come fare. INSERT/UPDATE legittimi (via skill
+    -- o con datetime('now','localtime') inline) passano: i trigger
+    -- valutano NEW.<col> dopo che le espressioni SQL sono gia' state
+    -- valutate, quindi il valore visto e' l'ISO timestamp, non 'now'.
+    CREATE TRIGGER IF NOT EXISTS applications_reject_str_now_insert
+    BEFORE INSERT ON applications
+    WHEN NEW.written_at = 'now' OR NEW.applied_at = 'now' OR NEW.response_at = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come written_at/applied_at/response_at. USA: python3 /app/shared/skills/db_update.py application <POSITION_ID> ... (la skill UPSERT converte automaticamente). NON fare INSERT inline via python3 -c "import sqlite3 ... VALUES (..., now, ...)". Vedi REGOLA-11b nel tuo prompt.'
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS applications_reject_str_now_update
+    BEFORE UPDATE ON applications
+    WHEN NEW.written_at = 'now' OR NEW.applied_at = 'now' OR NEW.response_at = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE. USA: python3 /app/shared/skills/db_update.py application <POSITION_ID> --written-at now (la skill converte) oppure datetime("now","localtime") in SQL inline.'
+      );
+    END;
     """)
     conn.execute("PRAGMA user_version = 2")
     conn.commit()
