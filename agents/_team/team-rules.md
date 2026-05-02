@@ -200,6 +200,48 @@ the container, escalate to the Captain — do NOT fall back to building
 from source via sudo. The Captain decides whether to add the dep to
 `requirements.txt` (build-time) or skip the task.
 
+### 🔍 Before you `pip install`: check what is already there
+
+Sei libero di installare, ma **non sei libero di installare alla cieca**.
+Prima di ogni `uv pip install --user <pkg>`:
+
+1. **`pip show <pkg>`** — se ritorna metadata, il pacchetto e' gia' nel
+   magazzino: usalo, non reinstallare.
+2. **Pensa alle alternative gia' presenti.** Il magazzino e' grande,
+   spesso una libreria che gia' c'e' fa esattamente quello che ti
+   serve. Esempi del 2026-05:
+   - PDF generation: `weasyprint` (Markdown/HTML → PDF), `fpdf2`,
+     `pymupdf`, `reportlab`, `pypdfium2`, `pandoc` (via skill).
+   - PDF reading: `pypdfium2`, `pymupdf`, `pdfminer.six`, `pdfplumber`,
+     `pypdf`. **Una di queste 5 lo fa**, non aggiungere la sesta.
+   - HTTP fetch: `httpx`, `requests`, `urllib3` — gia' tutte qui.
+   - HTML parsing: `beautifulsoup4`, `lxml` — idem.
+
+   Per vedere cosa c'e': `pip list --user 2>/dev/null | head -50` o
+   `ls $PYTHONUSERBASE/lib/python3.11/site-packages/ | grep -i <topic>`.
+
+3. **Solo se nessuna esistente fa il lavoro** → installa la nuova.
+   Niente Capitano-gate, ti fidiamo: la disciplina e' "check first,
+   install second", non "ask permission".
+
+### 🧹 Periodic team-wide cleanup (Capitano-driven)
+
+Il magazzino non si pulisce da solo. Il Capitano ha la skill
+`py-tools-audit` che lista i pacchetti `--user` e li confronta con
+gli `import` nel codice attivo. ~weekly (o quando `.local/` supera
+800 MB) il Capitano:
+
+1. Lancia `py-tools-audit` → ottiene la lista dei pacchetti senza
+   import attivi (candidate per uninstall).
+2. Manda un broadcast in tmux: *"candidates per uninstall: X, Y, Z.
+   Conferma `[KEEP <pkg>]` entro 1h se ne usi una"*.
+3. Esegue `uv pip uninstall` di quelle non confermate.
+
+Se hai un pacchetto che usi **solo a runtime** (caricato dinamicamente,
+non da un `import` statico) e non vuoi che venga rimosso, dichiaralo
+nel tuo prompt o tieni un commento `# uses: <pkg>` in uno script tuo —
+l'audit grep lo trovera'.
+
 ---
 
 ## 📑 How to reference these rules in your prompt
