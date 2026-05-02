@@ -1,9 +1,6 @@
-import { getNonce } from '@/lib/csp'
-
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 
-export default async function JsonLd() {
-  const nonce = await getNonce()
+export default function JsonLd() {
   const software = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -42,8 +39,8 @@ export default async function JsonLd() {
 
   return (
     <>
-      <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(software) }} />
-      <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(software) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website) }} />
     </>
   )
 }
