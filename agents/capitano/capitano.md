@@ -234,19 +234,24 @@ Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capit
 
 ## 🧹 MANUTENZIONE CACHE — ogni ~24h
 
-`$JHT_HOME/.cache/uv/` (cache pacchetti Python) cresce in modo monotono — senza prune, era arrivata a 364 MB nel test del 2026-05-02. La pulizia è team-wide e va eseguita SOLO da te (single-instance, niente race con peer): gli altri agenti hanno il divieto esplicito (RULE-T12) di toccare cache condivise.
+Storage condiviso (`$JHT_HOME/.cache/uv/` + `$JHT_HOME/.codex/logs_2.sqlite`) cresce in modo monotono. Esempi misurati il 2026-05-02: uv cache 364 MB, codex logs SQLite 223 MB (di cui 71% righe TRACE = rumore). La pulizia è team-wide e va eseguita SOLO da te (single-instance, niente race con peer): gli altri agenti hanno il divieto esplicito (RULE-T12) di toccare cache condivise.
 
-**Comando (safe, no-op se non c'è nulla da pulire):**
+**Comando (safe, idempotente, no-op se non c'è nulla da pulire):**
 
 ```bash
 node /app/cli/bin/jht.js cache prune
 ```
 
-Sotto il cofano chiama `uv cache prune` con `UV_CACHE_DIR` puntato a `$JHT_HOME/.cache/uv`. Rimuove SOLO entry irraggiungibili (no wheel attivi). Output: dimensione before/after + bytes liberati. Se `uv` non è installato → skip pulito, niente crash.
+Esegue 2 step in sequenza:
 
-**Cadenza:** ogni ~24h di run continuo, oppure all'inizio di una nuova "giornata operativa" se il team era idle. NON più frequente: `uv cache prune` è I/O-bound, non vale la pena per recuperi sotto i 50 MB. NON dentro reazioni a `[ORDINE]` Sentinella — è manutenzione di routine, mai a budget critico.
+1. **uv cache** — chiama `uv cache prune` con `UV_CACHE_DIR=$JHT_HOME/.cache/uv`. Rimuove SOLO entry irraggiungibili (no wheel attivi). Se `uv` non è installato → skip pulito.
+2. **codex logs SQLite** — `DELETE FROM logs WHERE ts < unixepoch('now','-10 days')` + `VACUUM` su `$JHT_HOME/.codex/logs_2.sqlite`. Si attiva SOLO se file > 50 MB E nessuno scrive da almeno 1h (mtime check, evita di toccare il DB mentre il CLI Codex gira). Se le condizioni non sono soddisfatte → skip motivato.
 
-**Out-of-bounds:** non eseguire `cache clear` (cancella anche `logs/` e fa perdere lo state della Sentinella). Non toccare `.cache/ms-playwright/` né `.cache/claude-cli-nodejs/` — gestiti dal Dockerfile e dal launcher. Se vedi spazio anomalo fuori da `.cache/uv/`, escala al Comandante.
+Output: dimensione before/after + bytes liberati per ogni step.
+
+**Cadenza:** ogni ~24h di run continuo, oppure all'inizio di una nuova "giornata operativa" se il team era idle. NON più frequente: il prune è I/O-bound (il VACUUM su 200 MB può prendere ~30s) e non vale la pena per recuperi sotto i 50 MB. NON dentro reazioni a `[ORDINE]` Sentinella — è manutenzione di routine, mai a budget critico.
+
+**Out-of-bounds:** non eseguire `cache clear` (cancella anche `logs/` e fa perdere lo state della Sentinella). Non toccare `.cache/ms-playwright/` né `.cache/claude-cli-nodejs/` — gestiti dal Dockerfile e dal launcher. Se vedi spazio anomalo fuori dai due target sopra, escala al Comandante.
 
 ---
 
