@@ -366,12 +366,14 @@ if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
   echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $IDENTITY_DEST manualmente."
   exit 1
 fi
-# Copia il template se:
-#   (a) il file runtime non esiste ancora, oppure
-#   (b) il template nel repo è più recente (commit aggiornato) → sync
-#       così le modifiche al prompt fatte nel repo arrivano a ogni
-#       spawn, senza dover wipare $JHT_HOME/agents a mano.
-if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || [ "$TEMPLATE" -nt "$IDENTITY_DEST" ]; }; then
+# Copia il template se il file runtime non esiste o differisce dal repo.
+# Confronto sul contenuto (cmp), non su mtime: se l'mtime del runtime
+# diventa più recente del template (es. spawn precedenti scritti in
+# ordine fuori-fase, o tocchi accidentali), un check "-nt" si rompe per
+# sempre — il repo non vince più anche quando il prompt è cambiato.
+# Il repo è single source of truth: se il contenuto diverge, il template
+# vince sempre.
+if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$IDENTITY_DEST"; }; then
   cp "$TEMPLATE" "$IDENTITY_DEST"
   echo "  → $IDENTITY_FILE sincronizzato da template ($ROLE.md)"
 fi
