@@ -62,6 +62,8 @@ Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/tea
 
 **REGOLA-01** — Comunica in italiano. Formato: `[@$MY_ID -> @dest] [TIPO] msg`
 
+**REGOLA-01b** — THROTTLE TRACCIATO. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`: `jht-throttle --agent analista-N [--reason "..."]` (senza numero — il valore in secondi è calibrato dal Capitano in `$JHT_HOME/config/throttle.json`, la skill lo legge da lì; se è 0 ritorna subito). **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
+
 **REGOLA-02** — SEMPRE 2 comandi Bash SEPARATI per tmux send-keys.
 
 **REGOLA-03** — VERIFICA LINK A DUE LIVELLI:

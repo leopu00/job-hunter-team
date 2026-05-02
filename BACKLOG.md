@@ -160,14 +160,62 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   4. Stress test: 1 month of real job-hunting
 - **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/about/PROVIDERS.md` and `docs/about/MONITORING.md`.
 
-##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption
+##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption — partially addressed by V6 (2026-05-01)
 
 - **Problem:** Sentinel intervenes too often → eats too many tokens → with the €20 base tier nothing's left for the rest of the team. Bridge is excellent but Sentinel isn't truly "fallback only" yet.
-- **Tasks:**
-  1. Raise the intervention threshold (today it reacts to small drifts)
-  2. Move more logic into the Bridge (deterministic, no LLM)
-  3. Verify how much the 491→130 line refactor already reduced consumption (measure baseline vs post-refactor)
-  4. Target: Sentinel consumes <5% of total team tokens
+- **Status update 2026-05-01:** bridge V6 ships with state machine (`DEFAULT 3min / GSPOT_FAST 2min / GSPOT_STABLE 5min / GSPOT_CALM 10min`), g-spot 80-105 %, Sentinella cooldown 15 min. Self-induced loop closed. Observed in production: projection mean **91 %** (target 92.5 %), Sentinella now wakes ~1× every 15 min during critical windows instead of every minute. Bridge state is exposed via atomic JSON file (`sentinel-bridge-state.json`) read by the web API → no more drift between Python logic and TS replica.
+- **Residual tasks:**
+  1. Raise the intervention threshold (today it reacts to small drifts) — partly done by V6
+  2. Move more logic into the Bridge (deterministic, no LLM) — partly done; finish with V7 (see [JHT-BRIDGE-V7] below)
+  3. Verify how much the 491→130 line refactor already reduced consumption (measure baseline vs post-refactor) — token-meter PoC now provides this measurement
+  4. Target: Sentinel consumes <5% of total team tokens — current observed share ~3 % (44.7 kT / 1356 kT in 46 min)
+
+##### 🌉 [JHT-BRIDGE-V7] Bridge V7 — token-based monitoring + per-agent throttle (NEW 2026-05-01)
+
+- **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/2026-05-01-bridge-and-token-monitoring.md`.
+- **Discovery:** the CLI subscription logs already contain weighted token counts per response, fresher than the provider /usage endpoint. Empirical calibration on Kimi K2 Plan: 1 % rate budget ≈ 30 kT weighted. Per-agent attribution works via `state.json.custom_title` regex (Kimi) or path naming (Claude / Codex).
+- **Observed asymmetry:** in 46 min of work the Scout consumed 1083 kT vs 125 kT for the Capitano (7×). Today the throttle is global ("everyone +30s pause"); the right move is per-agent.
+- **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):**
+  - Token-meter `WINDOW = since reset_at` instead of fixed 5 h (current cumulative ratio is inflated)
+  - Promote token-meter to a persistent service (singleton + autorestart) alongside the bridge
+  - Bridge state file V7 exposes `per_agent_rate` (kT/min, 60 s rolling)
+- **Tier 3 — dedicated session (~1 day):**
+  - `throttle-controller.py`: deterministic (no LLM), reads state every 30 s, computes `error = actual - target_per_agent`, emits `[THROTTLE @<agent> ±Ns]` to the Capitano
+  - Capitano forwards to agents; agents honour the delta in their loop sleep
+  - Initial allocation: Scout 60 % / Critico 15 % / Capitano 15 % / Sentinella 10 %; refit on 24 h of real data
+  - Anti-oscillation: dead-band ±10 %, max ±3 s change per 60 s, integral term for slow drift
+- **Expected gain:** projection stdev 20 % → ~5 %, in-target 68 % → ~95 %. Sentinella becomes interrupt-driven (only strategic decisions: freeze, switch provider, scheduled pauses).
+- **Architectural payoff:** the same V6 / V7 architecture scales to weekly windows ([JHT-MONITORING-WEEKLY]) just by changing thresholds.
+
+##### 🚀 [JHT-BRIDGE-V8] Auto-incentive — bridge accelerates underutilized teams (NEW 2026-05-02)
+
+- **Background:** during the 2026-04-30/05-01 session, the team did NOT fully self-utilize the rate budget toward the end of the window. The Comandante had to send 3 manual nudges (`controlla lo usage`, `non state sfruttando la FINESTRA AL MASSIMO`, `SPINGI AL MASSIMO SENZA SFORARE`) to push consumption from ~70% to ~84%.
+- **Idea:** dual of the V6 cooldown. Today the bridge slows the team down; tomorrow it should also speed them up if it sees budget unused near reset.
+- **Trigger:** `proj < 80% AND reset_window_remaining < 90min AND velocity < target × 0.7`
+- **Action:** bridge sends `[BRIDGE NUDGE] proj 60%, reset in 1h — push harder` to the Capitano (1 message per cooldown_window, like the down-throttle direction).
+- **Effort:** ~2 h after V7 is in place (reuses state machine + cooldown logic).
+- **Effort guard:** must NOT loop — same cooldown discipline as V6 (15 min between nudges).
+
+##### 📚 [JHT-LAUNCH-LOW-PROFILE] Public release strategy — low-profile founder model (NEW 2026-05-02)
+
+- **Decision (2026-05-02):** repo will go public, but NOT immediately and NOT with high-profile founder posture. Target model: Bellard/Sysoev/Collet style (technical reputation, no media exposure).
+- **Target outcomes:** 5-15k stars in 12-18 months, 130-150k€ remote job, no fame, privacy preserved. NOT 247k stars Steinberger style.
+- **Timeline:** 6-8 weeks of prep before public launch.
+- **What to do (sequencing):**
+  - Week 1-2: VPS validate ([JHT-VPS-VALIDATE]) + repo cleanup + governance docs (LICENSE choice: AGPLv3 vs MIT, CONTRIBUTING aggressive, CoC).
+  - Week 3: 1 long technical blog post (3000 words) on bridge V6 + token-meter — numbers and code, no personal storytelling. Test reception privately first.
+  - Week 4-5: 5-10 invited beta testers (brother + friends + 3 strangers from focused forums). Iterate on feedback.
+  - Week 6-7: press kit (no personal photo / video / voice — only product screenshots). Show HN draft with title testing.
+  - Week 8: public release on chosen Tuesday/Wednesday 16:00 IT. Forums: HN once, lobste.rs, r/LocalLLaMA, awesome-llm-apps. NO Twitter/LinkedIn personal account, NO Reddit r/programming auto-promo.
+- **Identity hygiene:**
+  - Pseudonym: "Leone P." or "leopu" (no full name in public commits / READMEs)
+  - No profile photos anywhere project-related
+  - Project email via Fastmail/ProtonMail, not personal Gmail
+  - Domain WHOIS protect
+  - LLC anonymous (EE/MT, ~500€) for sponsor money + IP
+  - No podcast appearances, no conference talks, only async written communication
+- **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
+- **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
 ##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/10 cells) ⬜ BLOCKER pre-launch
 
@@ -515,7 +563,26 @@ All 5 tasks from 04-22 have been implemented:
 
 ## 🐛 KNOWN BUGS
 
-No open bugs at the time of this writing. Historical fixes are tracked in git log + commit messages (see `git log --grep "fix(" --since="2026-04-01"` for recent fixes), and in [`CHANGELOG.md`](CHANGELOG.md) once entries are migrated there.
+### 🔴 [BUG-TUI-BUILD] `tui/` build fail su master — blocca CI Docker
+
+- **File:** `tui/src/oauth/storage.ts:9` importa `../../../shared/credentials/passphrase.js`, ma `tui/tsconfig.json` ha `rootDir: "src"` → `error TS6059: File '/app/shared/credentials/passphrase.ts' is not under 'rootDir' '/app/tui/src'`.
+- **Introdotto da:** `6f35755d fix(credentials): no piu' fallback machine-derived (helper passphrase)`.
+- **Conseguenza:** `npm run build --prefix tui` fallisce → `Dockerfile` step 13 fallisce → CI workflow `Docker — Build & push` (`.github/workflows/docker.yml`) rotta dal commit suddetto. L'immagine `ghcr.io/leopu00/jht:latest` su GHCR è ferma al **19 aprile 2026**: chi pulla l'immagine ha una build vecchia e il dev mode crasha (es. `croner` aggiunto dopo, mancante).
+- **Fix proposto:** opzioni in ordine di pulizia:
+  - Cambiare `tui/tsconfig.json` con `rootDir: ".."` + `include: ["src/**/*", "../shared/credentials/**/*"]` e aggiornare `tui/package.json` `start` a `node dist/tui/src/tui.js` (refactor struttura output).
+  - Oppure introdurre `composite` TS project references con `shared/credentials` come sottoprogetto.
+  - Workaround minimo (sconsigliato, duplica codice): copiare `passphrase.ts` dentro `tui/src/`.
+- **Verifica:** `docker compose build jht` localmente deve passare + `gh run list -w "Docker — Build & push"` deve tornare verde.
+
+### 🟡 [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione
+
+- **File:** `web/app/components/landing/JsonLd.tsx`
+- **Stato:** in dev funziona (CSP usa `'unsafe-inline'`). In produzione il CSP è `script-src 'self' 'nonce-XXX' 'strict-dynamic'`: il browser blocca `<script type="application/ld+json">` senza nonce → si perde il rich snippet di Google (SoftwareApplication + WebSite schema) sulla landing.
+- **Causa:** `app/page.tsx` ha `'use client'` e importa `<JsonLd />`. `JsonLd` per leggere il nonce dovrebbe usare `next/headers`, che è solo Server. Tolto `getNonce()` come quick fix per sbloccare il dev mode.
+- **Fix proposto:** spostare `<JsonLd />` da `app/page.tsx` a un Server Component più alto (es. `app/layout.tsx` per la landing, o un nuovo `app/(landing)/layout.tsx` con guard `pathname === '/'`), poi rimettere `getNonce()` + `nonce={nonce}` sui due `<script>`.
+- **Riferimenti:** introdotto dal commit CSP `cda78a17`, fixato parzialmente dal cleanup successivo.
+
+---
 
 ---
 

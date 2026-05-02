@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# jht-throttle — pausa tracciata per agenti del team.
+#
+# Usalo INVECE di `sleep N` ogni volta che vuoi mettere il tuo loop in
+# pausa per regolare il ritmo (throttle del rate budget). La skill
+# logga ogni evento in $JHT_HOME/logs/throttle-events.jsonl, così il
+# capitano e la dashboard possono vedere chi si ferma e per quanto.
+#
+# Uso:
+#   jht-throttle --agent <name> [--reason "..."]            # legge throttle-config
+#   jht-throttle <seconds> --agent <name> [--reason "..."]  # forza valore esplicito
+#
+# Modalità raccomandata: senza <seconds> — il valore viene letto da
+# $JHT_HOME/config/throttle.json, modificato dal Capitano via
+# `python3 /app/shared/skills/throttle-config.py set <agent> <sec>`.
+# Così il Capitano cambia 1 file e tutti gli agenti applicano il nuovo
+# throttle al prossimo ciclo, senza orchestrazione tmux di 5 messaggi.
+# Se l'agente non è in config (o config è 0) la skill ritorna subito
+# senza loggare — fast path per standby.
+#
+# Modalità esplicita: passa <seconds> per forzare un valore (back-compat
+# coi prompt vecchi). Il config viene ignorato.
+#
+# Esempi:
+#   jht-throttle --agent scout-1 --reason "post-batch cooldown"
+#   jht-throttle 120 --agent scout-1 --reason "override emergenza"
+#
+# Exit:
+#   0 → pausa eseguita e loggata (o no-op se config=0)
+#   1 → argomenti mancanti / invalidi
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  cat >&2 <<EOF
+Usage: jht-throttle [seconds] --agent <name> [--reason "..."]
+       jht-throttle --agent scout-1                    (legge throttle-config)
+       jht-throttle 120 --agent scout-1 --reason "..." (forza valore)
+EOF
+  exit 1
+fi
+
+# Risolvi il path dello script python: prima prova /app (container), poi
+# il percorso relativo dal location del wrapper (utile in dev fuori container).
+SCRIPT="/app/shared/skills/throttle.py"
+if [ ! -f "$SCRIPT" ]; then
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  SCRIPT="${SELF_DIR}/../../shared/skills/throttle.py"
+fi
+
+exec python3 "$SCRIPT" "$@"

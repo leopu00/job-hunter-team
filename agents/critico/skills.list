@@ -3,3 +3,4 @@
 # The launcher (start-agent.sh) reads this file at boot and copies the
 # listed skills into the agent's ~/.claude/skills/ runtime workspace.
 tmux-send
+throttle

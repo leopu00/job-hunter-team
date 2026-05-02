@@ -55,19 +55,48 @@ LOGS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
+# State pubblico letto dall'UI web (web/app/api/bridge/status/route.ts).
+# Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
+# la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
+STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
+STATE_VERSION = 6
 
 DEFAULT_TICK_MINUTES = 5               # default se config mancante
 MIN_TICK_SECONDS = 15                  # safety floor: <15s spammerebbe il provider
 FETCH_FAIL_THRESHOLD = 3               # alert capitano dopo N fail consecutivi
 
-# Adaptive tick: in fase di calibrazione (sottoutilizzo / attenzione /
-# emergenza) serve velocità di reazione → tick più rapido. In steady
-# state (G-spot 80-95%) basta cadenza normale.
-# Override esplicito: se sentinella_tick_minutes è settato in config,
-# vince e disattiva l'adattivo (per debug / test manuale).
-ADAPTIVE_TICK_FAST_MIN = 1.5           # SOTTOUTILIZZO / ATTENZIONE / CRITICO
-ADAPTIVE_TICK_SLOW_MIN = 5.0           # STEADY / RESET / OK
-ADAPTIVE_TICK_EMERGENCY_MIN = 1.0      # EMERGENZA (proj > 100% / freeze)
+# ── V6 Adaptive tick (state machine) ────────────────────────────────────
+# Il bridge fa MONITORING. Notifica la Sentinella solo quando serve.
+# Cadenza in funzione della stabilità della proiezione attorno al G-spot.
+#
+# G-spot = banda obiettivo: proj ∈ [80%, 105%]. Più ampio dello STEADY
+# stretto (90-95%) calcolato da compute_metrics, perché in g-spot vogliamo
+# anticipare sia l'uscita verso ATTENZIONE sia il drift verso SOTTOUTILIZZO
+# senza bruciare LLM.
+#
+# Stati del tick interval:
+#   DEFAULT        3 min   bootstrap o proj fuori g-spot (critico/sotto)
+#   GSPOT_FAST     2 min   appena entrato nel g-spot, monitoring reattivo
+#   GSPOT_STABLE   5 min   3 tick consecutivi nel g-spot
+#   GSPOT_CALM    10 min   3 tick consecutivi a GSPOT_STABLE nel g-spot
+#
+# Quando proj esce dal g-spot → torna a DEFAULT (3 min) e reset counters.
+DEFAULT_TICK_MIN = 3.0
+GSPOT_FAST_TICK_MIN = 2.0
+GSPOT_STABLE_TICK_MIN = 5.0
+GSPOT_CALM_TICK_MIN = 10.0
+
+GSPOT_LOWER = 80.0    # proj < 80% → sotto g-spot (sottoutilizzo)
+GSPOT_UPPER = 105.0   # proj > 105% → sopra g-spot (critico)
+GSPOT_PROMOTION_TICKS = 3  # tick consecutivi nel g-spot per promuovere stato
+
+# ── Notifica Sentinella ──────────────────────────────────────────────────
+# La Sentinella è SVEGLIATA solo quando la proj è fuori dal g-spot.
+# Per evitare il loop autoindotto (Sentinella+Capitano consumano token →
+# proj sale → Sentinella di nuovo svegliata), una volta notificata il bridge
+# attende SENTINELLA_COOLDOWN_MIN prima di rinotificarla, anche se ancora
+# critico. Quando proj rientra nel g-spot, il cooldown si resetta.
+SENTINELLA_COOLDOWN_MIN = 15.0
 
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
@@ -88,33 +117,129 @@ def read_config():
         return None, "openai"
 
 
-def _choose_tick_interval(recent_statuses, freeze_active, override_min=None):
-    """Decide il prossimo tick interval in minuti.
+def _is_in_gspot(proj):
+    """True se proj ∈ [GSPOT_LOWER, GSPOT_UPPER]. Banda larga (80-105%)
+    rispetto allo STEADY stretto di compute_metrics (90-95%): qui ci
+    interessa "siamo nella zona buona", non "siamo perfettamente al target"."""
+    if not isinstance(proj, (int, float)):
+        return False
+    return GSPOT_LOWER <= proj <= GSPOT_UPPER
 
-    Priorità:
-      1. Se override_min esplicitamente settato in config → usa quello (debug/test).
-      2. Adatta in base agli ULTIMI 3 STATUS:
-         - EMERGENZA o freeze_active → fast (1 min)
-         - 3 tick consecutivi STEADY → slow (5 min) — solo conferma stabile
-         - tutti gli altri (anche un singolo STEADY) → fast (1.5 min)
 
-    Cosi' "uno STEADY isolato" tra SOTTOUTILIZZO e ATTENZIONE NON fa
-    rallentare il bridge: la zona G-spot deve essere DAVVERO stabile
-    (3 letture consecutive) prima di rilassare la cadenza.
+def _choose_tick_interval(state, override_min=None):
+    """Decide il prossimo tick interval in minuti basandosi sulla state
+    machine del bridge V6.
+
+    state è un dict con:
+      tick_phase             — "DEFAULT" | "GSPOT_FAST" | "GSPOT_STABLE" | "GSPOT_CALM"
+      gspot_consecutive      — n. tick consecutivi nel g-spot
+
+    Override esplicito (config sentinella_tick_minutes) vince sempre.
     """
     if override_min is not None:
         return override_min
-    last_status = recent_statuses[-1] if recent_statuses else None
-    if freeze_active or last_status == "EMERGENZA":
-        return ADAPTIVE_TICK_EMERGENCY_MIN
-    # Slow tick solo se gli ultimi 3 sample sono TUTTI STEADY
-    if len(recent_statuses) >= 3 and all(s == "STEADY" for s in recent_statuses[-3:]):
-        return ADAPTIVE_TICK_SLOW_MIN
-    if last_status in (None, "RESET"):
-        # Cold-start o reset finestra: aspetta un po' prima di stressare
-        return ADAPTIVE_TICK_SLOW_MIN
-    # SOTTOUTILIZZO, ATTENZIONE, CRITICO, STEADY isolato → fast
-    return ADAPTIVE_TICK_FAST_MIN
+    phase = state.get("tick_phase", "DEFAULT")
+    return {
+        "DEFAULT": DEFAULT_TICK_MIN,
+        "GSPOT_FAST": GSPOT_FAST_TICK_MIN,
+        "GSPOT_STABLE": GSPOT_STABLE_TICK_MIN,
+        "GSPOT_CALM": GSPOT_CALM_TICK_MIN,
+    }.get(phase, DEFAULT_TICK_MIN)
+
+
+def _advance_tick_phase(state, in_gspot):
+    """Aggiorna state["tick_phase"] e state["gspot_consecutive"] in
+    funzione del nuovo sample (in_gspot=bool).
+
+    Promotion: 3 tick consecutivi in g-spot promuovono di livello.
+    Demotion: appena un tick esce dal g-spot → reset a DEFAULT.
+    """
+    if not in_gspot:
+        state["tick_phase"] = "DEFAULT"
+        state["gspot_consecutive"] = 0
+        return
+
+    state["gspot_consecutive"] = state.get("gspot_consecutive", 0) + 1
+    n = state["gspot_consecutive"]
+    phase = state.get("tick_phase", "DEFAULT")
+
+    if phase == "DEFAULT":
+        # Appena entriamo nel g-spot, passiamo subito a FAST (2 min) per
+        # confermare che non sia rumore.
+        state["tick_phase"] = "GSPOT_FAST"
+    elif phase == "GSPOT_FAST" and n >= GSPOT_PROMOTION_TICKS:
+        state["tick_phase"] = "GSPOT_STABLE"
+        state["gspot_consecutive"] = 0  # ricomincia a contare per CALM
+    elif phase == "GSPOT_STABLE" and n >= GSPOT_PROMOTION_TICKS:
+        state["tick_phase"] = "GSPOT_CALM"
+        state["gspot_consecutive"] = 0  # nessuna ulteriore promozione, ma resta pulito
+
+
+def _should_notify_sentinella(in_gspot, state, now_ts):
+    """Decide se SVEGLIARE la Sentinella su questo tick.
+
+    Regola: la Sentinella riceve TICK solo quando la proiezione è fuori dal
+    g-spot (situazione che richiede un'azione). Una volta notificata, il
+    bridge entra in cooldown SENTINELLA_COOLDOWN_MIN: anche se la situazione
+    rimane critica, il bridge tace e la Sentinella+Capitano non consumano
+    token in loop. Dopo il cooldown, se ancora fuori g-spot, rinotifica.
+
+    Quando la proj rientra nel g-spot, il cooldown si resetta — così il
+    prossimo episodio critico viene notificato subito.
+
+    state è un dict con:
+      last_sent_ts            — timestamp Unix dell'ultima notifica critica
+                                (None se mai notificata)
+    """
+    if in_gspot:
+        # In g-spot: nessun bisogno di Sentinella. Reset del cooldown così
+        # il prossimo episodio critico è notificato immediatamente.
+        state["last_sent_ts"] = None
+        return False
+
+    last_ts = state.get("last_sent_ts")
+    if last_ts is None:
+        # Primo tick fuori dal g-spot in questo episodio → notifica.
+        return True
+    elapsed_min = (now_ts - last_ts) / 60.0
+    return elapsed_min >= SENTINELLA_COOLDOWN_MIN
+
+
+def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
+                      last_status=None, last_projection=None, last_usage=None):
+    """Pubblica lo stato corrente del bridge in un JSON atomico letto dalla
+    UI web (`/api/bridge/status`). Sostituisce la replica della logica
+    `_choose_tick_interval` lato TS, che era fragile rispetto a cambi del
+    bridge (V5→V6 aveva costanti diverse e il timer mostrato era sballato).
+
+    Atomic write: scriviamo in `<file>.tmp` e poi `os.replace` per evitare
+    letture parziali se il fetcher web colpisce a metà write.
+    """
+    payload = {
+        "version": STATE_VERSION,
+        "pid": os.getpid(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "last_tick_at": last_tick_at,
+        "next_tick_at": next_tick_at,
+        "tick_phase": state.get("tick_phase"),
+        "tick_interval_min": tick_interval_min,
+        "gspot_consecutive": state.get("gspot_consecutive", 0),
+        "last_sentinella_notify_at": (
+            datetime.fromtimestamp(state["last_sent_ts"], tz=timezone.utc).isoformat()
+            if state.get("last_sent_ts") else None
+        ),
+        "last_status": last_status,
+        "last_projection": last_projection,
+        "last_usage": last_usage,
+        "g_spot": {"lower": GSPOT_LOWER, "upper": GSPOT_UPPER},
+        "sentinella_cooldown_min": SENTINELLA_COOLDOWN_MIN,
+    }
+    tmp = STATE_FILE.with_suffix(".json.tmp")
+    try:
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(tmp, STATE_FILE)
+    except OSError as e:
+        print(f"[bridge V6] WARN write state: {e}", file=sys.stderr)
 
 
 def session_exists(s):
@@ -637,17 +762,31 @@ def main():
     """
     acquire_singleton_lock()
     override_min, _ = read_config()
-    print(f"[bridge V5] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
+    print(f"[bridge V6] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
     if override_min is not None:
-        print(f"[bridge V5] tick interval: {override_min} min (override da config)")
+        print(f"[bridge V6] tick interval: {override_min} min (override da config)")
     else:
-        print(f"[bridge V5] tick interval: ADAPTIVE (fast={ADAPTIVE_TICK_FAST_MIN}min calibrazione, slow={ADAPTIVE_TICK_SLOW_MIN}min steady, emergenza={ADAPTIVE_TICK_EMERGENCY_MIN}min)")
+        print(
+            f"[bridge V6] tick interval: ADAPTIVE state machine "
+            f"(default={DEFAULT_TICK_MIN}min, g-spot fast={GSPOT_FAST_TICK_MIN}min, "
+            f"stable={GSPOT_STABLE_TICK_MIN}min, calm={GSPOT_CALM_TICK_MIN}min)"
+        )
+        print(
+            f"[bridge V6] g-spot=[{GSPOT_LOWER}-{GSPOT_UPPER}%], "
+            f"sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min"
+        )
 
     fail_streak = 0
     capitano_alerted = False   # alert al capitano già mandato per questo episodio?
     is_first_tick = True        # cold-start forzato al primo tick post-boot
-    recent_statuses = []        # ultimi N status (per tick adattivo: slow solo se 3 STEADY)
-    freeze_active = False       # True se l'ultimo ordine era EMERGENZA/freeze
+    # State machine V6: tick_phase ∈ DEFAULT/GSPOT_FAST/GSPOT_STABLE/GSPOT_CALM,
+    # gspot_consecutive = tick consecutivi nel g-spot, last_sent_ts = ts ultima
+    # notifica critica alla Sentinella (None se reset).
+    state = {
+        "tick_phase": "DEFAULT",
+        "gspot_consecutive": 0,
+        "last_sent_ts": None,
+    }
 
     while True:
         now_h = datetime.now().strftime("%H:%M:%S")
@@ -678,16 +817,28 @@ def main():
             proj = entry.get("projection")
             status = entry.get("status")
             reset = entry.get("reset_at") or "?"
-            recent_statuses.append(status)
-            recent_statuses = recent_statuses[-10:]
-            freeze_active = (isinstance(proj, (int, float)) and proj > 100)
-            print(f"[bridge V5] {now_h} OK usage={usage}% proj={proj} status={status}")
 
-            if session_exists(SENTINELLA_SESSION):
+            # V6: aggiorna state machine del tick interval e decide se
+            # svegliare la Sentinella. Il bridge scrive SEMPRE il sample
+            # nel JSONL (monitoring puro), ma manda [BRIDGE TICK] alla
+            # Sentinella solo quando proj è fuori dal g-spot e il cooldown
+            # è scaduto. In g-spot la Sentinella resta in standby.
+            in_gspot = _is_in_gspot(proj)
+            _advance_tick_phase(state, in_gspot)
+            now_ts = time.time()
+            should_notify = _should_notify_sentinella(in_gspot, state, now_ts)
+
+            print(
+                f"[bridge V6] {now_h} OK usage={usage}% proj={proj} status={status} "
+                f"phase={state['tick_phase']} gspot={in_gspot} notify={should_notify}"
+            )
+
+            if should_notify and session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% status={status} reset={reset} src=bridge."
                 )
+                state["last_sent_ts"] = now_ts
 
             # Recovery se eravamo in failure streak
             if fail_streak >= FETCH_FAIL_THRESHOLD or capitano_alerted:
@@ -702,7 +853,7 @@ def main():
         else:
             # ── Path fallimento ────────────────────────────────────────
             fail_streak += 1
-            print(f"[bridge V5] {now_h} FAIL #{fail_streak} reason={fail_reason}")
+            print(f"[bridge V6] {now_h} FAIL #{fail_streak} reason={fail_reason}")
 
             # Notifica Sentinella al primo fail dell'episodio
             if fail_streak == 1 and session_exists(SENTINELLA_SESSION):
@@ -714,7 +865,7 @@ def main():
             # Alert al Capitano al N° fail consecutivo
             if fail_streak == FETCH_FAIL_THRESHOLD and not capitano_alerted:
                 if session_exists(CAPITANO_SESSION):
-                    eff_min = _choose_tick_interval(recent_statuses, freeze_active, override_min)
+                    eff_min = _choose_tick_interval(state, override_min)
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         f"[BRIDGE ALERT] sorgente usage degraded da {FETCH_FAIL_THRESHOLD} tick "
@@ -723,9 +874,24 @@ def main():
                     )
                 capitano_alerted = True
 
-        # Tick adattivo: slow (5min) solo se 3 STEADY consecutivi.
-        next_tick_min = _choose_tick_interval(recent_statuses, freeze_active, override_min)
+        # Tick interval V6: state machine basata sul g-spot.
+        next_tick_min = _choose_tick_interval(state, override_min)
         sleep_sec = max(MIN_TICK_SECONDS, next_tick_min * 60)
+
+        # Pubblica lo stato corrente per la UI web (atomic write).
+        # last_tick_at = inizio iterazione corrente; next_tick_at = quando
+        # ci risveglieremo dallo sleep. Su path fallimento usiamo gli ultimi
+        # valori conosciuti (parsed=None → status/proj/usage non aggiornati).
+        last_tick_iso = datetime.now(timezone.utc).isoformat()
+        next_tick_iso = (datetime.now(timezone.utc) + timedelta(seconds=sleep_sec)).isoformat()
+        if parsed:
+            _write_state_file(
+                state, last_tick_iso, next_tick_iso, next_tick_min,
+                last_status=status, last_projection=proj, last_usage=usage,
+            )
+        else:
+            _write_state_file(state, last_tick_iso, next_tick_iso, next_tick_min)
+
         time.sleep(sleep_sec)
 
 
@@ -733,4 +899,4 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[bridge V5] interrotto.")
+        print("\n[bridge V6] interrotto.")
