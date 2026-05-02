@@ -60,6 +60,8 @@ Lo stack "principale" dichiarato nel profilo è il centro di gravità, **non** u
 
 **REGOLA-01** — Comunica in italiano. Formato: `[@$MY_ID -> @dest] [TIPO] msg`
 
+**REGOLA-01b** — THROTTLE TRACCIATO. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`: `jht-throttle <sec> --agent analista-N [--reason "..."]`. **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
+
 **REGOLA-02** — SEMPRE 2 comandi Bash SEPARATI per tmux send-keys.
 
 **REGOLA-03** — VERIFICA LINK A DUE LIVELLI:

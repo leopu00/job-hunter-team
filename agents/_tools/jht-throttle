@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# jht-throttle — pausa tracciata per agenti del team.
+#
+# Usalo INVECE di `sleep N` ogni volta che vuoi mettere il tuo loop in
+# pausa per regolare il ritmo (throttle del rate budget). La skill
+# logga ogni evento in $JHT_HOME/logs/throttle-events.jsonl, così il
+# capitano e la dashboard possono vedere chi si ferma e per quanto.
+#
+# Uso:
+#   jht-throttle <seconds> --agent <name> [--reason "..."]
+#
+# Esempi:
+#   jht-throttle 120 --agent scout-1 --reason "post-batch cooldown"
+#   jht-throttle 60  --agent capitano
+#
+# Exit:
+#   0 → pausa eseguita e loggata
+#   1 → argomenti mancanti / invalidi
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  cat >&2 <<EOF
+Usage: jht-throttle <seconds> --agent <name> [--reason "..."]
+Esempio: jht-throttle 120 --agent scout-1 --reason "post-batch cooldown"
+EOF
+  exit 1
+fi
+
+# Risolvi il path dello script python: prima prova /app (container), poi
+# il percorso relativo dal location del wrapper (utile in dev fuori container).
+SCRIPT="/app/shared/skills/throttle.py"
+if [ ! -f "$SCRIPT" ]; then
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  SCRIPT="${SELF_DIR}/../../shared/skills/throttle.py"
+fi
+
+exec python3 "$SCRIPT" "$@"
