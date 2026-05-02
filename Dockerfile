@@ -23,6 +23,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # into the system site-packages (sudo on pip is now blocked, see
     # the sudoers whitelist further down).
     PYTHONUSERBASE=/jht_home/.local \
+    # Don't write .pyc / __pycache__ at all. Without this, every import in
+    # an agent shell creates bytecode side-by-side with the .py file —
+    # /jht_home/.local accumulated 85 MB across 448 __pycache__ dirs in
+    # under a week. Bytecode buys nothing for our long-running agent
+    # processes (the import-time cost is paid once at startup, not per
+    # request) and the cleanup is a recurring tax we'd rather not pay.
+    PYTHONDONTWRITEBYTECODE=1 \
     # Pin Playwright browsers to /opt/playwright (baked into the image)
     # instead of the default $HOME/.cache/ms-playwright. With our setup
     # HOME=/jht_home in every agent shell, that path is bind-mounted to
