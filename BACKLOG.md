@@ -253,6 +253,35 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Task:** check the official documentation for both CLIs, confirm or correct the path used, and if the convention diverges across CLIs make sure the launcher writes whatever each CLI expects.
 - **Acceptance:** path assumptions in `start-agent.sh` cite the relevant doc URL.
 
+##### 🤖 [JHT-AGENT-PROMPTS-V2] Deep validation of the 9 agent prompts (section by section)
+
+- **Context:** the V5-alignment pass on 2026-04-30 (`de7774bd`) was a global sweep — drop V4 leftovers, migrate to `jht-tmux-send`, refresh the TEAM table. After that, two prompts were rewritten in depth: Maestro as Gandalf-the-grey (`b61c3e70`) and Critico translated to English with `jht-tmux-send` wired (`47ac5c17`). Sentinella is already mostly EN-clean. The remaining six prompts still carry Italian sections, mixed formatting, and ad-hoc rules that should reference the new `agents/_team/team-rules.md` baseline.
+- **Method:** one agent at a time, one section at a time. Show the raw section, propose the edit, leave protocol tokens verbatim (`STEADY`, `ATTENZIONE`, `EMERGENZA`, `MANTIENI`, `SCALA UP`, `RALLENTARE`, `ACCELERARE`, `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`, `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`) — they are parsed by the Captain by pattern. Validate AVAILABLE TOOLS against `skills.list`. Wire the team-rules header line at the top of each RULES section.
+- **Order (least → most central):** ① Sentinella · ② Assistente · ③ Scout · ④ Analista · ⑤ Scorer · ⑥ Scrittore · ⑦ Capitano (heaviest, 647 lines, last for cross-coherence check).
+- **Linked task:** [JHT-DB-ANALISTA-FIX] (the Analista review must also fix REGOLA-08 to populate `companies` + `position_highlights`).
+
+##### 🗄️ [JHT-DB-CLEANUP] Schema hygiene + path/naming cleanup of `~/.jht`
+
+Found while mapping the runtime filesystem of the JHT container. Schema is sane; agents are instructed inconsistently and naming has drifted. Subtasks:
+
+- **[JHT-DB-RENAME]** Rename `~/.jht/jobs.db` → `~/.jht/db/jht.db`. Move `~/.jht/data/scout_coordination.db` next to it (or absorb — see SCOUT-COORD). Update `.launcher/config.sh:14`, `shared/skills/_db.py` resolver, `check_links.py`, `scout_coord.py`, `rate_sentinel.py`, `agents/_team/team-rules.md`, `agents/_manual/db-schema.md`, plus comments/docstrings in `db_*.py`. Migration: move existing file at boot if not present at the new path.
+- **[JHT-DB-ANALISTA-FIX]** Currently `agents/analista/analista.md` REGOLA-08 says "MAI toccare `companies`, `scores`, `applications`". Result: `companies` table has 0 rows out of 105 positions analyzed — duplicate company names as text in `positions.company`. Skill `agents/_skills/db-insert/SKILL.md` correctly says "Analyst for companies and highlights" but the prompt contradicts it. Fix prompt: Analista IS the agent that INSERTs into `companies` (anagrafica) and `position_highlights` (red flags + perks notabili) on first encounter; on subsequent encounters UPDATEs. Coordinate with [JHT-AGENT-PROMPTS-V2] step ④.
+- **[JHT-DB-STATUS-CHECK]** Add CHECK constraints on `positions.status` and `applications.status`. Today they are open `TEXT` — agents can write "OK", "Done", anything. Canonical enum: `positions.status IN ('new','checked','excluded','scored','written','applied','interview','rejected','offer')`; `applications.status IN ('draft','reviewed','sent','responded','rejected','interview','offer','withdrawn')`. Migration via ALTER + CHECK. Fail-fast at insert/update time instead of silent data drift weeks later.
+- **[JHT-DB-FK-PRAGMA]** Verify `PRAGMA foreign_keys = ON` is executed by `shared/skills/_db.py` on every `connect()`. SQLite default is OFF — without it, FK constraints declared in CREATE TABLE are dichiarate but not enforced; orphaned `position_id` values can be inserted silently.
+- **[JHT-DB-TIMESTAMPS]** Add uniform `created_at`/`updated_at` to all 5 tables with `DEFAULT CURRENT_TIMESTAMP` and an `AFTER UPDATE` trigger on `updated_at`. Keep domain `*_at` fields (`scored_at`, `applied_at`, …) for event semantics. Helps audit ("which row changed last").
+- **[JHT-DB-SCOUT-COORD]** Consolidate `~/.jht/data/scout_coordination.db` (20K, separate file) into the main DB as a table. Verify if it is separate for real reasons (lock contention, isolation) or by accident; if it can rejoin → migration + UPDATE skills that read it. If it cannot → document why in `db-schema.md`.
+
+##### 📁 [JHT-HOME-REFACTOR] Clean up `~/.jht` runtime filesystem
+
+`~/.jht` (= `/jht_home` in the container) has accumulated chaos: deliverables in 7 different paths, leftover dirs, per-agent Python venvs, drifted config files. Top-level audit on 2026-05-01: 73 MB in `agents/`, deliverables in `agents/scrittore-1/cv_output`, `agents/scrittore-1/output`, `agents/scrittore-2/cvs`, `agents/scrittore-2/output`, `agents/scrittore-3/output`, `~/.jht/output/scrittore-3/`, plus the user-facing `~/Documents/Job Hunter Team/cv/`. The user does not know where to look. Subtasks:
+
+- **[JHT-HOME-OUTPUT-UNIFY]** All CV/PDF deliverables → `/jht_user/cv/` (already `~/Documents/Job Hunter Team/cv/`). All Critico reviews → `/jht_user/critiche/` (new). Cover letters → `/jht_user/allegati/`. Final packets → `/jht_user/output/`. Update Scrittore + Critico prompts and PDF generation skills. Migrate existing files at first boot.
+- **[JHT-HOME-PDF-CONSOLIDATE]** `agents/scrittore-1/` ships 4 Python scripts: `generate_cv_pdf.py`, `generate_cv_pdf_qualio.py`, `generate_cv_pdf_satelligence.py`, `md_to_pdf.py` — one per company. Anti-pattern. Consolidate in 1 parametrized skill under `/app/shared/skills/cv-pdf-gen/` (or `agents/_skills/cv-pdf-gen/`) with a `--company` flag. Cleanup `.venv/` and `.venv_uv/` after consolidation if unused.
+- **[JHT-HOME-FONTS-SHARED]** `agents/scrittore-1/fonts/` is private. Other Scrittori do not have it. Move to `/app/shared/fonts/` (read-only, baked into image) or `~/.jht/shared/fonts/` if user-modifiable. Update path in PDF generators.
+- **[JHT-HOME-IDENTITY-CLEANUP]** `agents/capitano/` has both `CLAUDE.md` (Apr 26, old claude provider) and `AGENTS.md` (Apr 30, current kimi provider). On provider switch the inactive file becomes stale and may confuse readers. `start-agent.sh` should remove the other-provider file when writing its own.
+- **[JHT-HOME-CONFIG-GROUP]** 5 config files at the top of `~/.jht/`: `jht.config.json`, `preferences.json`, `cloud.json`, `i18n-prefs.json`, `.claude.json`. Move the first 4 into `~/.jht/config/` (leave `.claude.json` alone — the claude CLI looks for it at `$HOME`). Update readers in `cli/`, `web/`, `tui/`, agents.
+- **[JHT-HOME-LEFTOVERS]** Cleanup empty leftover dirs. `~/.jht/credentials/` (empty since Apr 10), `~/.jht/.config/` (only matplotlib settings). Remove from launcher if no longer created by anyone, or document their purpose.
+
 #### 🟢 LOW PRIORITY
 
 ##### 🐳 [JHT-DESKTOP-07] Container `next start` instead of `next dev`
