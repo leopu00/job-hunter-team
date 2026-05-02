@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '../../components/Toast'
 import TeamOrgChart from './_components/TeamOrgChart'
 import UsageChart from './_components/UsageChart'
+import AgentTokensChart from './_components/AgentTokensChart'
+import ThrottleChart from './_components/ThrottleChart'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -267,6 +269,20 @@ export default function TeamPage() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <UsageChart />
+        </div>
+      </section>
+
+      {/* Token per agente */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <AgentTokensChart />
+        </div>
+      </section>
+
+      {/* Throttle per agente */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <ThrottleChart />
         </div>
       </section>
 
