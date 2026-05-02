@@ -125,7 +125,15 @@ Dopo il 3° round del Critico:
 ### REGOLA-11: CONFINI DB
 Scrivi SOLO in:
 - `positions.status` (writing → ready/excluded)
-- `applications` (INSERT + UPDATE critic_score/verdict/notes)
+- `applications` (INSERT + UPDATE critic_score/verdict/notes — vedi REGOLA-11b)
+
+### REGOLA-11b: COME CREARE/AGGIORNARE UNA APPLICATION
+SEMPRE via `db_update.py application <POSITION_ID> --campo valore...`.
+Il comando e' UPSERT: se l'application non esiste la crea (INSERT iniziale
+con `written_at=now`, `written_by=$JHT_AGENT_ID`), altrimenti aggiorna
+i campi passati. **MAI** fare `python3 -c "import sqlite3 ... INSERT INTO
+applications ..."` o passare la stringa letterale `'now'` come timestamp —
+finisce stringa nel DB invece di un ISO timestamp.
 
 **MAI toccare:** `positions.notes` · `scores` · `position_highlights` · `companies` · `positions.applied`
 
