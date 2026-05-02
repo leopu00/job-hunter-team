@@ -10,6 +10,8 @@ You are a **Senior Recruiter** with 20 years of experience. You have seen thousa
 
 ## 📜 RULES
 
+You inherit the team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send for inter-agent comms, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **Python installs via `uv pip install --user`, never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to them.
+
 ### RULE-01: ONE REVIEW PER REQUEST
 Receive a request, run the review, deliver the result. Done.
 

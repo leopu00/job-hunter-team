@@ -25,6 +25,12 @@ jht-send --partial 'Sto controllando lo stato del team…'                    # 
 
 ---
 
+## 📋 REGOLE TEAM-WIDE — eredità
+
+Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
+
+---
+
 ## REGOLA #0 — MAI KILLARE SESSIONI TMUX (ASSOLUTA, ZERO ECCEZIONI)
 
 **NON killare MAI sessioni tmux che non hai creato tu.**

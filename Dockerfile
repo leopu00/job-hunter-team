@@ -15,6 +15,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     JHT_HOME=/jht_home \
     JHT_USER_DIR=/jht_user \
     IS_CONTAINER=1 \
+    # Centralized Python user-base for ALL agent installs (RULE-T13).
+    # Agents run `uv pip install --user <pkg>` which honours
+    # PYTHONUSERBASE → packages land in $JHT_HOME/.local/lib/python3.X/
+    # site-packages, shared across every Scout/Writer/Critic instance.
+    # No more per-agent .venv duplication, no more `sudo pip install`
+    # into the system site-packages (sudo on pip is now blocked, see
+    # the sudoers whitelist further down).
+    PYTHONUSERBASE=/jht_home/.local \
     # Pin Playwright browsers to /opt/playwright (baked into the image)
     # instead of the default $HOME/.cache/ms-playwright. With our setup
     # HOME=/jht_home in every agent shell, that path is bind-mounted to
@@ -102,11 +110,18 @@ RUN useradd --create-home --shell /bin/bash jht \
     # del workspace runtime. Le skill private restano sotto
     # `agents/<role>/_skills/` e vengono copiate sempre, senza manifest.
     # Niente farm globale qui: ogni agente vede solo ciò che gli serve.
-    # Passwordless sudo per l'user jht: gli agenti girano con --yolo in un
-    # container disposable — se servono tool extra (pdftohtml, tesseract,
-    # pacchetti pip ecc.) possono `sudo apt install` / `sudo pip install`
-    # al volo senza bloccare il flusso. Il container è isolato dal host.
-    && echo 'jht ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/jht \
+    # Passwordless sudo ristretto (RULE-T13): gli agenti girano con
+    # --yolo in container disposable e fino al 2026-05-02 avevano sudo
+    # ALL. Conseguenza: ogni Scrittore/Critico installava pacchetti
+    # python via `sudo pip install` direttamente nel system site-packages
+    # (e ognuno dove gli pareva), accumulando 5 librerie PDF doppie e
+    # ~400M di drift in $JHT_HOME/.local. Whitelist stretta: apt-get/apt
+    # per system tools (pdftohtml, tesseract...) restano permessi; pip e
+    # venv NO via sudo. Le install Python passano per `uv pip install
+    # --user` che scrive in $PYTHONUSERBASE = $JHT_HOME/.local — un
+    # solo magazzino, cache wheel condivisa via $JHT_HOME/.cache/uv,
+    # niente duplicati cross-agente.
+    && echo 'jht ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/apt-cache, /bin/mkdir, /bin/chown, /bin/ln' > /etc/sudoers.d/jht \
     && chmod 0440 /etc/sudoers.d/jht \
     # Pre-crea /app/web/.next vuota ma con ownership jht. Serve per il
     # compose dev dove mascheriamo .next con anonymous volume: Docker
