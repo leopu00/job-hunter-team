@@ -71,7 +71,17 @@ export default function TeamPage() {
     try {
       const res = await fetch('/api/agents')
       const data = await res.json()
-      const agentList: { id: string; status: string }[] = data.agents ?? []
+
+      // Se la response NON è ok (rate-limit 429, 500 server error, auth
+      // 401), `data.agents` è undefined e il fallback `?? 'stopped'`
+      // farebbe diventare TUTTI gli agenti "stopped" → toast falsi
+      // "Agent stopped" anche se gli agenti girano benissimo. Non
+      // toccare lo stato in questo caso: la prossima chiamata che
+      // riesce ricostruisce verità.
+      if (!res.ok || !Array.isArray(data?.agents)) {
+        return
+      }
+      const agentList: { id: string; status: string }[] = data.agents
 
       // Compute next fuori dall'updater: chiamare `toast()` dentro
       // un updater di setState triggera React warning "Cannot update
