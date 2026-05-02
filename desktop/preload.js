@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('launcherApi', {
   devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
   devProbe: () => ipcRenderer.invoke('dev:probe'),
   devStop: () => ipcRenderer.invoke('dev:stop'),
+  devAdditionalListWorktrees: () => ipcRenderer.invoke('dev-additional:list-worktrees'),
+  devAdditionalLaunch: (args) => ipcRenderer.invoke('dev-additional:launch', args),
+  devAdditionalStop: (args) => ipcRenderer.invoke('dev-additional:stop', args),
+  devAdditionalListActive: () => ipcRenderer.invoke('dev-additional:list-active'),
   onPayloadLog: (callback) => {
     const listener = (_event, message) => {
       try {
