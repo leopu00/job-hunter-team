@@ -155,7 +155,8 @@ and breaks rate-limit budgeting.
 **Out of bounds:** never `find -delete` outside `$JHT_AGENT_DIR/tmp/`.
 Never wipe `$JHT_USER_DIR` (deliverables), never wipe sibling agents'
 workspaces, never wipe `~/.cache/` or other shared caches — those are
-managed by the launcher / `jht doctor`, not by you.
+managed by the Captain (`jht cache prune`, single-instance) and by the
+launcher, not by you.
 
 ---
 

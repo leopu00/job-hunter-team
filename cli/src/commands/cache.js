@@ -1,15 +1,12 @@
 import { readdir, rm, stat, access } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { JHT_HOME } from '../jht-paths.js';
-
-const JHT_DIR   = JHT_HOME;
-const CACHE_DIR = join(JHT_DIR, 'cache');
+import { JHT_HOME, JHT_CACHE_DIR } from '../jht-paths.js';
 
 const CACHE_DIRS = [
-  { name: 'cache',    path: CACHE_DIR },
-  { name: 'tmp',      path: join(JHT_DIR, 'tmp') },
-  { name: 'logs',     path: join(JHT_DIR, 'logs') },
+  { name: '.cache',   path: JHT_CACHE_DIR },
+  { name: 'tmp',      path: join(JHT_HOME, 'tmp') },
+  { name: 'logs',     path: join(JHT_HOME, 'logs') },
 ];
 
 async function fileExists(p) {
@@ -42,10 +39,11 @@ function fmtSize(bytes) {
 
 async function handleCache(action) {
   if (!action || action === 'stats') return await cacheStats();
+  if (action === 'prune') return await cachePrune();
   if (action === 'clear') return await cacheClear();
 
   console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: stats, clear');
+  console.error('  Azioni: stats, prune, clear');
   process.exitCode = 1;
 }
 
@@ -90,9 +88,56 @@ async function cacheClear() {
   console.log(`\n  ${cleared} file rimossi in totale.\n`);
 }
 
+// Prune ($JHT_HOME/.cache/uv) — chiama `uv cache prune` con UV_CACHE_DIR
+// puntato alla cache JHT. Safe: rimuove solo entry irraggiungibili (no
+// wheel attivi). Non tocca ms-playwright (gestito dal Dockerfile via
+// PLAYWRIGHT_BROWSERS_PATH=/opt/playwright) né claude-cli-nodejs (cresce
+// linearmente coi cwd, gestito a parte).
+async function cachePrune() {
+  console.log('\n  JHT — Cache Prune\n');
+
+  const uvCacheDir = join(JHT_CACHE_DIR, 'uv');
+  if (!(await fileExists(uvCacheDir))) {
+    console.log(`  uv cache: ${uvCacheDir} non esiste — niente da fare.\n`);
+    return;
+  }
+
+  const before = await dirSize(uvCacheDir);
+  console.log(`  uv cache: ${fmtSize(before.bytes)} (${before.files} file) prima del prune`);
+
+  const r = spawnSync('uv', ['cache', 'prune'], {
+    env: { ...process.env, UV_CACHE_DIR: uvCacheDir },
+    encoding: 'utf-8',
+  });
+
+  if (r.error) {
+    if (r.error.code === 'ENOENT') {
+      console.error('  ✗ uv non trovato nel PATH. Skip prune.');
+      console.error('    (Installa uv: https://docs.astral.sh/uv/getting-started/installation/)');
+    } else {
+      console.error(`  ✗ uv cache prune fallito: ${r.error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (r.status !== 0) {
+    console.error(`  ✗ uv cache prune exit ${r.status}: ${r.stderr || r.stdout}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // uv stampa "Removed N files (X.XMiB)" — la lasciamo passare.
+  if (r.stdout) process.stdout.write(`  ${r.stdout.trim().split('\n').join('\n  ')}\n`);
+
+  const after = await dirSize(uvCacheDir);
+  const freed = before.bytes - after.bytes;
+  console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il prune`);
+  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}\n`);
+}
+
 export function registerCacheCommand(program) {
   program
     .command('cache [action]')
-    .description('Gestione cache (azioni: stats, clear)')
+    .description('Gestione cache JHT (azioni: stats, prune, clear)')
     .action(handleCache);
 }
