@@ -24,10 +24,42 @@ type SyncState =
   | { status: 'success'; result: SyncResult; at: number }
   | { status: 'error'; message: string }
 
+interface Counts { positions: number; scores: number; applications: number }
+
+interface SyncStatus {
+  local: boolean
+  logged_in: boolean
+  last_sync: {
+    at: string
+    summary: {
+      positions: { upserted: number; payload: number }
+      scores: { upserted: number; payload: number }
+      applications: { upserted: number; payload: number }
+    }
+  } | null
+  local_counts: Counts
+  cloud_counts: Counts
+  in_sync: boolean
+}
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (diffMs < 0) return 'in futuro'
+  const sec = Math.floor(diffMs / 1000)
+  if (sec < 60) return sec <= 5 ? 'pochi secondi fa' : `${sec} sec fa`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return min === 1 ? '1 min fa' : `${min} min fa`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return hr === 1 ? '1 ora fa' : `${hr} ore fa`
+  const days = Math.floor(hr / 24)
+  return days === 1 ? '1 giorno fa' : `${days} giorni fa`
+}
+
 export default function CloudSyncClient() {
   const [health, setHealth] = useState<LocalHealth | null>(null)
   const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' })
   const [authError, setAuthError] = useState<string | null>(null)
+  const [status, setStatus] = useState<SyncStatus | null>(null)
 
   async function refreshHealth() {
     try {
@@ -39,8 +71,25 @@ export default function CloudSyncClient() {
     }
   }
 
+  async function refreshStatus() {
+    try {
+      const res = await fetch('/api/local/sync/status')
+      if (!res.ok) return
+      const data: SyncStatus = await res.json()
+      setStatus(data)
+    } catch {
+      /* offline o errore: lascia ultimo stato */
+    }
+  }
+
   useEffect(() => {
     refreshHealth()
+    refreshStatus()
+    // Polling stato ogni 30s mentre la pagina è visibile (no costo se offscreen).
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshStatus()
+    }, 30_000)
+    return () => clearInterval(id)
   }, [])
 
   async function handleLogin() {
@@ -74,6 +123,8 @@ export default function CloudSyncClient() {
         return
       }
       setSyncState({ status: 'success', result: data as SyncResult, at: Date.now() })
+      // Aggiorna stato dopo successo per riflettere "ultimo sync = ora".
+      await refreshStatus()
     } catch (err) {
       setSyncState({
         status: 'error',
@@ -148,6 +199,46 @@ export default function CloudSyncClient() {
               Logout
             </button>
           </div>
+
+          {/* Stato sync — ultimo sync, count locale vs cloud, badge in/out of sync */}
+          {status && (
+            <div className="mb-4 p-3 border border-[var(--color-border)] bg-[rgba(0,0,0,0.2)]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-[var(--color-dim)]">Stato</span>
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded"
+                  style={{
+                    color: status.in_sync ? 'var(--color-green)' : 'var(--color-yellow, #d4a85a)',
+                    border: `1px solid ${status.in_sync ? 'var(--color-green)' : 'var(--color-yellow, #d4a85a)'}`,
+                  }}
+                >
+                  {status.in_sync ? '✓ Sincronizzato' : 'Da sincronizzare'}
+                </span>
+              </div>
+              <div className="text-[11px] text-[var(--color-bright)] mb-1">
+                {status.last_sync ? (
+                  <>Ultimo sync: <span className="text-[var(--color-dim)]">{formatRelativeTime(status.last_sync.at)}</span></>
+                ) : (
+                  <span className="text-[var(--color-dim)]">Mai sincronizzato</span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[10px] mt-2">
+                {(['positions', 'scores', 'applications'] as const).map((t) => {
+                  const local = status.local_counts[t]
+                  const cloud = status.cloud_counts[t]
+                  const eq = local === cloud
+                  return (
+                    <div key={t} className="flex flex-col">
+                      <span className="text-[var(--color-dim)] uppercase tracking-wider">{t}</span>
+                      <span style={{ color: eq ? 'var(--color-bright)' : 'var(--color-yellow, #d4a85a)' }}>
+                        {local} / {cloud} cloud
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handleSync}
