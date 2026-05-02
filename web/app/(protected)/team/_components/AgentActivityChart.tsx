@@ -29,6 +29,8 @@ type Interval = {
   ts_start: string
   ts_end: string
   sec: number
+  interrupted?: boolean
+  orphan?: boolean
 }
 
 type ThrottlePayload = {
@@ -147,7 +149,7 @@ export default function AgentActivityChart() {
   )
 }
 
-type Bar = { x: number; y: number; w: number; h: number; color: string; agent: string; sec: number; tsStart: string; tsEnd: string }
+type Bar = { x: number; y: number; w: number; h: number; color: string; agent: string; sec: number; tsStart: string; tsEnd: string; interrupted: boolean; orphan: boolean }
 
 function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: ThrottlePayload }) {
   const W = 900
@@ -268,6 +270,8 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
         sec: iv.sec,
         tsStart: iv.ts_start,
         tsEnd: iv.ts_end,
+        interrupted: !!iv.interrupted,
+        orphan: !!iv.orphan,
       })
     }
     return out
@@ -387,13 +391,15 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
         {/* barre throttle */}
         {bars.map((b, i) => {
           const active = hoverBar === b
+          const muted = b.interrupted || b.orphan
           return (
             <rect key={`${b.agent}-${i}`}
                   x={b.x} y={b.y} width={b.w} height={b.h}
                   fill={b.color}
-                  opacity={active ? 1 : 0.85}
-                  stroke={active ? '#fff' : 'none'}
-                  strokeWidth={active ? 1 : 0}
+                  opacity={active ? 1 : muted ? 0.4 : 0.85}
+                  stroke={active ? '#fff' : muted ? b.color : 'none'}
+                  strokeWidth={active ? 1 : muted ? 1 : 0}
+                  strokeDasharray={muted && !active ? '2 2' : undefined}
                   rx={0.5}
                   style={{ pointerEvents: 'none' }} />
           )
@@ -454,6 +460,9 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
              }}>
           <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
             evento · {formatSec(hoverBar.sec)}
+            {(hoverBar.interrupted || hoverBar.orphan) && (
+              <span className="ml-1 opacity-70">· {hoverBar.orphan ? 'orfano' : 'interrotto'}</span>
+            )}
           </div>
           <div className="mt-1.5 flex items-center gap-2 text-[11px] font-mono">
             <span style={{ width: 8, height: 8, borderRadius: 2, background: hoverBar.color, flexShrink: 0 }} />

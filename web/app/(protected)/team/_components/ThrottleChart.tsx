@@ -19,6 +19,8 @@ type Interval = {
   ts_start: string
   ts_end: string
   sec: number
+  interrupted?: boolean
+  orphan?: boolean
 }
 
 type Payload = {
@@ -277,7 +279,7 @@ function Chart({
   // (lane = colonna laterale). Più eventi che condividono lo stesso
   // intervallo temporale vengono affiancati invece di coprirsi.
   const BAR_W = 6
-  type Bar = { x: number; y: number; w: number; h: number; color: string; agent: string; v: number; tsStart: string; tsEnd: string }
+  type Bar = { x: number; y: number; w: number; h: number; color: string; agent: string; v: number; tsStart: string; tsEnd: string; interrupted: boolean; orphan: boolean }
   const bars = useMemo<Bar[]>(() => {
     if (mode !== 'rate') return []
     // ordinati per ts_start dal backend, ma riassicuriamoci
@@ -310,6 +312,8 @@ function Chart({
         v: iv.sec,
         tsStart: iv.ts_start,
         tsEnd: iv.ts_end,
+        interrupted: !!iv.interrupted,
+        orphan: !!iv.orphan,
       })
     }
     return out
@@ -431,6 +435,9 @@ function Chart({
         ))}
         {mode === 'rate' && bars.map((b, i) => {
           const active = hoverBar === b
+          // Throttle interrotti / orfani: opacity ridotta + dash stroke,
+          // così sono visibili ma chiaramente distinti dai completati.
+          const muted = b.interrupted || b.orphan
           return (
             <rect
               key={`${b.agent}-${i}`}
@@ -439,9 +446,10 @@ function Chart({
               width={b.w}
               height={b.h}
               fill={b.color}
-              opacity={active ? 1 : 0.9}
-              stroke={active ? '#fff' : 'none'}
-              strokeWidth={active ? 1 : 0}
+              opacity={active ? 1 : muted ? 0.45 : 0.9}
+              stroke={active ? '#fff' : muted ? b.color : 'none'}
+              strokeWidth={active ? 1 : muted ? 1 : 0}
+              strokeDasharray={muted && !active ? '2 2' : undefined}
               rx={0.5}
               style={{ pointerEvents: 'none' }}
             />
@@ -508,6 +516,9 @@ function Chart({
         >
           <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
             evento · {formatSec(hoverBar.v)}
+            {(hoverBar.interrupted || hoverBar.orphan) && (
+              <span className="ml-1 opacity-70">· {hoverBar.orphan ? 'orfano' : 'interrotto'}</span>
+            )}
           </div>
           <div className="mt-1.5 flex items-center gap-2 text-[11px] font-mono">
             <span style={{ width: 8, height: 8, borderRadius: 2, background: hoverBar.color, flexShrink: 0 }} />
