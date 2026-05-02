@@ -11,3 +11,8 @@ pypdf
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
 beautifulsoup4
 lxml
+# Playwright (headless browser): usato da shared/skills/linkedin_check.py
+# per verificare se un annuncio LinkedIn e' ancora attivo via screenshot
+# autenticato. Solo --only-shell chromium viene scaricato a build-time
+# nel Dockerfile (PLAYWRIGHT_BROWSERS_PATH=/opt/playwright).
+playwright
