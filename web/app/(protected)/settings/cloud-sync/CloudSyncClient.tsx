@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface SyncTokenRow {
   id: string
@@ -18,6 +18,27 @@ interface CreateResponse {
   token: string
 }
 
+interface LocalHealth {
+  local: boolean
+  enabled: boolean
+  base_url?: string
+  token_name?: string | null
+}
+
+interface SyncResult {
+  empty: boolean
+  positions: { upserted: number }
+  scores: { upserted: number }
+  applications: { upserted: number }
+  payload?: { positions: number; scores: number; applications: number }
+}
+
+type SyncState =
+  | { status: 'idle' }
+  | { status: 'syncing' }
+  | { status: 'success'; result: SyncResult; at: number }
+  | { status: 'error'; message: string }
+
 export default function CloudSyncClient({ initialTokens }: { initialTokens: SyncTokenRow[] }) {
   const [tokens, setTokens] = useState<SyncTokenRow[]>(initialTokens)
   const [newName, setNewName] = useState('')
@@ -25,6 +46,41 @@ export default function CloudSyncClient({ initialTokens }: { initialTokens: Sync
   const [freshToken, setFreshToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [health, setHealth] = useState<LocalHealth | null>(null)
+  const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' })
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/local/health')
+      .then((res) => res.json())
+      .then((data: LocalHealth) => {
+        if (!cancelled) setHealth(data)
+      })
+      .catch(() => {
+        if (!cancelled) setHealth({ local: false, enabled: false })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleSync() {
+    setSyncState({ status: 'syncing' })
+    try {
+      const res = await fetch('/api/local/sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setSyncState({ status: 'error', message: data.error || `HTTP ${res.status}` })
+        return
+      }
+      setSyncState({ status: 'success', result: data as SyncResult, at: Date.now() })
+    } catch (err) {
+      setSyncState({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Errore di rete',
+      })
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -90,6 +146,51 @@ export default function CloudSyncClient({ initialTokens }: { initialTokens: Sync
           Token per sincronizzare il tuo JHT locale o la CLI headless con il cloud.
         </p>
       </header>
+
+      {health?.local && health.enabled && (
+        <div className="mb-6 p-4 border border-[var(--color-border)] bg-[var(--color-card)]">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="min-w-0">
+              <div className="text-[12px] text-[var(--color-bright)] font-medium">
+                Sync locale → cloud
+              </div>
+              <div className="text-[10px] text-[var(--color-dim)] mt-0.5 truncate">
+                Token {health.token_name ?? 'unnamed'} · {health.base_url}
+              </div>
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={syncState.status === 'syncing'}
+              className="px-4 py-2 border border-[var(--color-border)] text-[12px] font-medium text-[var(--color-bright)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {syncState.status === 'syncing' ? 'Syncing…' : 'Sync now'}
+            </button>
+          </div>
+
+          {syncState.status === 'success' && (
+            <div className="mt-2 text-[11px] text-[var(--color-green)]">
+              {syncState.result.empty ? (
+                <>Nessun dato locale da sincronizzare.</>
+              ) : (
+                <>
+                  ✓ Push completato — positions {syncState.result.positions.upserted}
+                  {syncState.result.payload ? `/${syncState.result.payload.positions}` : ''}
+                  {' · '}scores {syncState.result.scores.upserted}
+                  {syncState.result.payload ? `/${syncState.result.payload.scores}` : ''}
+                  {' · '}applications {syncState.result.applications.upserted}
+                  {syncState.result.payload ? `/${syncState.result.payload.applications}` : ''}
+                </>
+              )}
+            </div>
+          )}
+
+          {syncState.status === 'error' && (
+            <div className="mt-2 text-[11px]" style={{ color: 'var(--color-red)' }}>
+              {syncState.message}
+            </div>
+          )}
+        </div>
+      )}
 
       {freshToken && (
         <div className="mb-6 p-4 border border-[var(--color-green)] bg-[var(--color-card)]">
