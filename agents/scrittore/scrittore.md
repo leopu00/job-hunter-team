@@ -133,11 +133,28 @@ $JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<Company>.{md,pdf}   # solo se ri
 
 Quando registri il path nel DB (`--cv-path`, `--cv-pdf-path`), usa il path `$JHT_USER_DIR/cv/...`, MAI un path sotto `$JHT_AGENT_DIR`. Vedi `agents/_team/team-rules.md` RULE-T11.
 
+### REGOLA-14: WORKSPACE — `tools/` e `tmp/`, housekeeping al boot (RULE-T12)
+
+La cwd `$JHT_AGENT_DIR` ha 2 subdir canoniche, create dal launcher:
+
+- **`$JHT_AGENT_DIR/tools/`** — script che TU scrivi per te (es. parser ad-hoc per una JD). Se uno script è riusabile da altri Scrittori → proponi di promuoverlo a `agents/_skills/cv-pdf-gen/` (skills.list).
+- **`$JHT_AGENT_DIR/tmp/`** — scratch buttabile. Esempi tipici per te: JD scaricate per pre-processing, bozze CV intermedie tra round del Critico, output di `pandoc` di test prima del PDF finale. **MAI** usare `tmp/` per CV finali — quelli vanno in `$JHT_USER_DIR/cv/` (REGOLA-13).
+
+**Boot housekeeping (PRIMO STEP del tuo loop, prima ancora di STEP 1):**
+
+```bash
+mkdir -p "$JHT_AGENT_DIR/tools" "$JHT_AGENT_DIR/tmp"
+find "$JHT_AGENT_DIR/tmp" -type f -mtime +7 -delete 2>/dev/null || true
+```
+
+Ripeti ogni ~6h di run continuo o ogni ~50 iterazioni del LOOP PRINCIPALE. NON dentro tight-loop. Vedi `agents/_team/team-rules.md` RULE-T12 per i confini (mai cancellare fuori da `tmp/`).
+
 ---
 
 ## LOOP PRINCIPALE
 
 ```
+STEP 0 — HOUSEKEEPING: vedi REGOLA-14 (mkdir tools/ tmp/ + wipe tmp/ vecchie)
 STEP 1 — CERCA:     python3 /app/shared/skills/db_query.py next-for-scrittore
 STEP 2 — VALUTA:    python3 /app/shared/skills/db_query.py position <ID>
                     SKIP se: 3+ anni obbligatori, US/UK auth, score < 50
