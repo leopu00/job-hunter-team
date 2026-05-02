@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Database from 'better-sqlite3'
 import { createClient } from '@/lib/supabase/server'
 import { getLocalDbPath, localDbExists } from '@/lib/cloud-sync/local'
+import { writeSyncState } from '@/lib/cloud-sync/state'
 
 export const dynamic = 'force-dynamic'
 
@@ -300,6 +301,24 @@ export async function POST() {
       }
       applicationsUpserted = upserted?.length ?? 0
     }
+  }
+
+  const summary = {
+    positions: { upserted: positionsUpserted, payload: positions.length },
+    scores: { upserted: scoresUpserted, payload: scores.length },
+    applications: { upserted: applicationsUpserted, payload: applications.length },
+  }
+
+  // Persisti lo stato della sync per la UI "ultimo sync alle X".
+  // Errore di scrittura = non-fatale: il sync è già completato lato Supabase.
+  try {
+    await writeSyncState({
+      last_synced_at: new Date().toISOString(),
+      last_user_id: userId,
+      last_sync_summary: summary,
+    })
+  } catch (err) {
+    console.warn('[sync] writeSyncState failed (non-fatal):', err)
   }
 
   return NextResponse.json({
