@@ -58,6 +58,8 @@ Lo stack "principale" dichiarato nel profilo è il centro di gravità, **non** u
 
 ## REGOLE
 
+Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
+
 **REGOLA-01** — Comunica in italiano. Formato: `[@$MY_ID -> @dest] [TIPO] msg`
 
 **REGOLA-02** — SEMPRE 2 comandi Bash SEPARATI per tmux send-keys.

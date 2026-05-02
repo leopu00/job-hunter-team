@@ -53,6 +53,8 @@ Il profilo contiene: anagrafica, stack tecnico, esperienze, progetti, formazione
 
 ## REGOLE
 
+Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
+
 ### REGOLA-01: LOOP CONTINUO
 NON esistono pause. Finito un CV, passa SUBITO al prossimo. Mai `sleep` più di 10 secondi.
 

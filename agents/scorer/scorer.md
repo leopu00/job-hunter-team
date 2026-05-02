@@ -35,6 +35,8 @@ Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, 
 
 ## REGOLE
 
+Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
+
 **REGOLA-01 — PRE-CHECK OBBLIGATORIO (PRIMA di qualsiasi scoring)**
 
 Rispondi a queste 3 domande PRIMA di assegnare qualsiasi punteggio:
