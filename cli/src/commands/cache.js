@@ -98,12 +98,36 @@ const CODEX_LOGS_THRESHOLD_BYTES = 50 * 1024 * 1024; // sotto i 50 MB non vale i
 const CODEX_LOGS_RETENTION_DAYS = 10;                 // allinea con la policy interna di Codex
 const CODEX_LOGS_IDLE_SECONDS = 3600;                 // mtime > 1h fa = nessuno sta scrivendo
 
+// Cache ephemeral di Codex: si rigenerano automaticamente al prossimo
+// run del CLI. Sicuri da rimuovere quando Codex non sta lavorando.
+//   .tmp/plugins              — cache sync di plugin remoti (~20 MB)
+//   cache/                     — cache HTTP/risposte Codex
+//   models_cache.json          — elenco modelli (si rigenera al boot)
+const CODEX_EPHEMERAL_PATHS = [
+  { name: '.codex/.tmp/plugins',      path: join(JHT_HOME, '.codex', '.tmp', 'plugins') },
+  { name: '.codex/cache',             path: join(JHT_HOME, '.codex', 'cache') },
+  { name: '.codex/models_cache.json', path: join(JHT_HOME, '.codex', 'models_cache.json') },
+];
+
 async function cachePrune() {
   console.log('\n  JHT — Cache Prune\n');
   await pruneUvCache();
   console.log('');
-  await pruneCodexLogs();
+  // Snapshot dell'idle di Codex PRIMA dei suoi prune step. Senza questo,
+  // il VACUUM del logs DB nel primo step bumpa la mtime e fa fallire la
+  // safety gate del secondo step (codex ephemeral) anche quando in
+  // realtà Codex non era attivo all'ingresso.
+  const codexIdle = await codexIdleSeconds();
+  await pruneCodexLogs(codexIdle);
   console.log('');
+  await pruneCodexEphemeral(codexIdle);
+  console.log('');
+}
+
+async function codexIdleSeconds() {
+  if (!(await fileExists(CODEX_LOGS_DB))) return Infinity;
+  const s = await stat(CODEX_LOGS_DB);
+  return (Date.now() - s.mtimeMs) / 1000;
 }
 
 // Prune ($JHT_HOME/.cache/uv) — chiama `uv cache prune` con UV_CACHE_DIR
@@ -156,7 +180,7 @@ async function pruneUvCache() {
 // al file da almeno 1 ora (proxy: mtime). Codex usa WAL, quindi
 // modificare il DB mentre il CLI gira può causare lock contention o
 // readers che vedono stato incoerente — la mtime check è la safety.
-async function pruneCodexLogs() {
+async function pruneCodexLogs(idleSecondsArg) {
   if (!(await fileExists(CODEX_LOGS_DB))) {
     console.log('  codex logs: file non presente, skip.');
     return;
@@ -168,7 +192,7 @@ async function pruneCodexLogs() {
     return;
   }
 
-  const idleSeconds = (Date.now() - s.mtimeMs) / 1000;
+  const idleSeconds = idleSecondsArg ?? (Date.now() - s.mtimeMs) / 1000;
   if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
     const idleMin = Math.round(idleSeconds / 60);
     console.log(`  codex logs: ${fmtSize(s.size)} ma scritto ${idleMin}min fa (Codex potrebbe essere attivo) — skip per safety.`);
@@ -206,6 +230,41 @@ async function pruneCodexLogs() {
   const freed = s.size - after.size;
   console.log(`  codex logs: ${fmtSize(after.size)} dopo il prune`);
   console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Rimuove le cache ephemeral di Codex (rigenerabili). Stessa safety
+// gate del prune dei log: se logs_2.sqlite è stato toccato nell'ultima
+// ora, presumiamo che Codex sia attivo e saltiamo. Un .tmp/ rimosso
+// mentre Codex ci sta scrivendo causerebbe errori del sync di plugin.
+async function pruneCodexEphemeral(idleSecondsArg) {
+  const idleSeconds = idleSecondsArg ?? (await codexIdleSeconds());
+  if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
+    const idleMin = Math.round(idleSeconds / 60);
+    console.log(`  codex ephemeral: skip per safety (Codex toccato ${idleMin}min fa)`);
+    return;
+  }
+
+  let totalFreed = 0;
+  let touched = 0;
+  for (const e of CODEX_EPHEMERAL_PATHS) {
+    if (!(await fileExists(e.path))) continue;
+    try {
+      const st = await stat(e.path);
+      const size = st.isDirectory() ? (await dirSize(e.path)).bytes : st.size;
+      await rm(e.path, { recursive: true, force: true });
+      totalFreed += size;
+      touched++;
+      console.log(`  ✓ ${e.name}: ${fmtSize(size)} rimosso`);
+    } catch (err) {
+      console.error(`  ✗ ${e.name}: ${err.message}`);
+    }
+  }
+
+  if (touched === 0) {
+    console.log('  codex ephemeral: niente da pulire.');
+  } else {
+    console.log(`  codex ephemeral: ${fmtSize(totalFreed)} liberati totali`);
+  }
 }
 
 export function registerCacheCommand(program) {
