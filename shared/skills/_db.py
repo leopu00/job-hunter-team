@@ -166,6 +166,47 @@ def ensure_schema(conn: sqlite3.Connection):
         'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE. USA: python3 /app/shared/skills/db_update.py application <POSITION_ID> --written-at now (la skill converte) oppure datetime("now","localtime") in SQL inline.'
       );
     END;
+
+    -- Stessa protezione per positions (found_at, last_checked) e companies
+    -- (analyzed_at). Anti-pattern atteso: Scout/Analista che fanno INSERT
+    -- inline e passano 'now' invece di datetime('now','localtime'). Skill
+    -- canoniche da usare: db_update.py position --last-checked now (gia'
+    -- gestita), insert via skill di scout/analista che usano CURRENT_TIMESTAMP.
+    CREATE TRIGGER IF NOT EXISTS positions_reject_str_now_insert
+    BEFORE INSERT ON positions
+    WHEN NEW.found_at = 'now' OR NEW.last_checked = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come found_at/last_checked di positions. USA: db_update.py position <ID> --last-checked now (converte) oppure datetime("now","localtime") in SQL inline. NON passare la stringa "now" letterale.'
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS positions_reject_str_now_update
+    BEFORE UPDATE ON positions
+    WHEN NEW.found_at = 'now' OR NEW.last_checked = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE positions. USA: db_update.py position <ID> --last-checked now oppure datetime("now","localtime") in SQL inline.'
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS companies_reject_str_now_insert
+    BEFORE INSERT ON companies
+    WHEN NEW.analyzed_at = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" come analyzed_at di companies. USA: db_update.py company "<name>" ... (la skill imposta CURRENT_TIMESTAMP) oppure datetime("now","localtime") in SQL inline.'
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS companies_reject_str_now_update
+    BEFORE UPDATE ON companies
+    WHEN NEW.analyzed_at = 'now'
+    BEGIN
+      SELECT RAISE(ABORT,
+        'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE companies. USA: db_update.py company oppure datetime("now","localtime") in SQL inline.'
+      );
+    END;
     """)
     conn.execute("PRAGMA user_version = 2")
     conn.commit()
