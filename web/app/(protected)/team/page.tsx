@@ -7,6 +7,7 @@ import TeamOrgChart from './_components/TeamOrgChart'
 import UsageChart from './_components/UsageChart'
 import AgentTokensChart from './_components/AgentTokensChart'
 import ThrottleChart from './_components/ThrottleChart'
+import AgentActivityChart from './_components/AgentActivityChart'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -283,6 +284,13 @@ export default function TeamPage() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <ThrottleChart />
+        </div>
+      </section>
+
+      {/* Attività agenti — rate + throttle combinati */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <AgentActivityChart />
         </div>
       </section>
 
