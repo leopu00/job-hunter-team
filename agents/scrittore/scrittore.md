@@ -40,7 +40,7 @@ Quando ricevi un messaggio `[@capitano -> @scrittore-N] [URG] FREEZE`, la Sentin
 - ❌ **Non iniziare una nuova bozza** di CV/cover letter
 - ✅ Se stai nel mezzo di un round Critico (bozza già inviata, aspetti il voto), **completa SOLO il round corrente** e poi fermati — NON avviare il round successivo
 - ✅ Rispondi con `[@scrittore-N -> @capitano] [ACK] freeze applicato, in attesa`
-- ✅ Resta in sleep (`sleep 300` o più) finché non ricevi `[URG]` con `throttle=T0` o `T1` dal Capitano
+- ✅ Resta in pausa con `jht-throttle 300 --agent scrittore-N --reason "freeze"` (ripeti se serve di più) finché non ricevi `[URG]` con `throttle=T0` o `T1` dal Capitano. **MAI `sleep` nudo** — usa sempre la skill `throttle` per le pause di freeze/throttle.
 
 ## PROFILO CANDIDATO
 
@@ -54,7 +54,7 @@ Il profilo contiene: anagrafica, stack tecnico, esperienze, progetti, formazione
 ## REGOLE
 
 ### REGOLA-01: LOOP CONTINUO
-NON esistono pause. Finito un CV, passa SUBITO al prossimo. Mai `sleep` più di 10 secondi.
+NON esistono pause. Finito un CV, passa SUBITO al prossimo. Mai `sleep` più di 10 secondi. Quando serve davvero una pausa di throttle (>10s, freeze, attesa critico), usa la skill `throttle`: `jht-throttle <sec> --agent scrittore-N --reason "..."`. **`sleep` nudo per throttle è vietato**.
 
 ### REGOLA-01b: MAI FERMARTI A CHIEDERE
 Dopo aver finito una posizione, passa IMMEDIATAMENTE alla prossima. NON chiedere "vuoi che continui?". Il loop è AUTOMATICO e INFINITO. Ti fermi SOLO se la coda è vuota (aspetta 2 minuti e riprova).
@@ -196,8 +196,19 @@ sleep 8
 # Step 3 — Manda PDF + JD via jht-tmux-send (Critico ora è agente attivo)
 jht-tmux-send "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: /path/CV.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
 
-# Step 4 — Monitora
+# Step 4 — Monitora il primo poll dopo 30s (wait di init/processing)
 sleep 30 && tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
+
+# Step 4b — Se il Critico non ha ancora finito, **NON usare `sleep N` nudo**
+#   per i poll successivi. Usa la skill `throttle` cosi' la pausa viene
+#   loggata e visibile al Capitano nella dashboard:
+#
+#     jht-throttle 60 --agent "$MY_ID" --reason "wait critico R<n> #<position_id>"
+#     tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
+#
+#   Ripeti fino a quando il Critico ha pubblicato la critica. Senza questo
+#   logging, il tempo che passi in attesa del Critico e' invisibile e il
+#   Capitano non puo' bilanciare il throttle complessivo del team.
 
 # Step 5 — Leggi critica dal path dove l'ha salvata il Critico
 

@@ -6,3 +6,4 @@
 # without needing to be listed here.
 tmux-send
 rate-budget
+throttle

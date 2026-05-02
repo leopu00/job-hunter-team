@@ -80,6 +80,27 @@ You don't need to scan tmux before *every* action — most coordination flows th
 - **Prioritize `URG` and `FEEDBACK`**: act on them before picking up new work.
 - An incoming message arriving while you're mid-task will already be in your context (the wrapper writes it to your pane); you don't need to poll, just notice it before starting the next iteration.
 
+## ⏸️ Throttle: tracked pauses
+
+Whenever you want to slow down your loop to respect the rate budget
+(cooldown after a batch, post-`URG` freeze, "wait for upstream", …),
+**use the `throttle` skill, never plain `sleep`**:
+
+```bash
+jht-throttle <seconds> --agent <your-name> [--reason "..."]
+```
+
+Every call appends an event to `$JHT_HOME/logs/throttle-events.jsonl`,
+so the Captain and the dashboard can see who is pausing and for how
+long. Plain `sleep` is allowed only for very short waits (≤ 5 s)
+between retries, where logging would be noise.
+
+Captain: when you order a worker to slow down, name the skill explicitly,
+e.g. `[URG] Throttle: jht-throttle 180 --agent scout-1 --reason "rate budget"`.
+Don't say "sleep 3 minutes" — that bypasses the logging.
+
+See: [`../_skills/throttle/SKILL.md`](../_skills/throttle/SKILL.md).
+
 ## 🔗 Related
 
 - 🛡️ [`anti-collision.md`](anti-collision.md) — lock mechanisms (claim before work)

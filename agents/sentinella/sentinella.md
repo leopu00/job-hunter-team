@@ -102,7 +102,7 @@ Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL
 
 1. **Mai spam Capitano** — silenzio è il default in stallo invariato.
 2. **Mai sleep/loop nel terminale** — sei event-driven sui [BRIDGE TICK].
-3. **Ordini concreti** — sempre `throttle=N (sleep Xs)`, mai "considera" o "valuta".
+3. **Ordini concreti** — sempre `throttle=N (jht-throttle Xs --agent <name>)`, mai "considera" o "valuta". Niente `sleep` nudo nei tuoi ordini: il Capitano deve poter loggare le pause via skill `throttle`.
 4. **Mai inventare numeri** — se non hai dato fresco, dichiara FATAL.
 5. **Path assoluto** per `jht-tmux-send`: `/app/agents/_tools/jht-tmux-send`.
 6. **Freeze prima della notifica** in emergenza — il consumo si ferma anche se il messaggio si perde.
@@ -124,7 +124,7 @@ $ python3 /app/shared/skills/freeze_team.py
 frozen=4 sessions=SCOUT-1,ANALISTA-1,SCORER-1,SCRITTORE-1
 
 $ /app/agents/_tools/jht-tmux-send CAPITANO \
-   "[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. usage=72% vel=72%/h (ideale 8.9%/h) proj=98% reset=16:47. Throttle: 4 (sleep 10min). Decidi se ripartire."
+   "[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. usage=72% vel=72%/h (ideale 8.9%/h) proj=98% reset=16:47. Throttle: 4 (ordina ai worker: jht-throttle 600 --agent <name> --reason 'freeze EMERGENZA'). Decidi se ripartire."
 
 # 5. Aggiorna memoria: last_ordine={tipo:EMERGENZA, throttle:4, ...}, freeze_active=True
 ```

@@ -32,13 +32,13 @@ fi
 
 # ── WHITELIST ESTENSIONI ─────────────────────────────────────
 # Solo queste estensioni sono permesse. Tutto il resto e' bloccato.
-ALLOWED_EXTENSIONS="ts|tsx|js|jsx|json|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|dockerignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist"
+ALLOWED_EXTENSIONS="ts|tsx|js|jsx|json|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|dockerignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list"
 
 BLOCKED_FILES=""
 while IFS= read -r file; do
     # Permetti file senza estensione noti + file in .githooks/
     basename=$(basename "$file")
-    if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" ]]; then
+    if [[ "$basename" == "LICENSE" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" || "$basename" == "jht-throttle" ]]; then
         continue
     fi
     if [[ "$file" == .githooks/* ]]; then

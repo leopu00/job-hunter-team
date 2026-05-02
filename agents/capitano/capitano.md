@@ -130,20 +130,23 @@ In regime normale ricevi **un messaggio ogni 5 minuti dalla Sentinella** dopo ch
 
 ### 🎚️ Tabella THROTTLE — azioni esatte per livello
 
-| Throttle | Sleep tra operazioni | Cosa fai TU |
+| Throttle | Pausa tra operazioni | Cosa fai TU |
 |---|---|---|
 | **0** (full speed) | 0s | nessuna restrizione, puoi spawnare se c'è coda |
-| **1** (leggero) | 30s | manda a TUTTI gli agenti operativi: "allunga sleep a 30s tra task". Niente nuovi spawn. |
-| **2** (moderato) | 2 min | sleep 2min agli operativi + ferma 1 istanza extra (es. SCRITTORE-2 se hai due scrittori) |
-| **3** (pesante) | 5 min | sleep 5min agli operativi + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.) |
-| **4** (near-freeze) | 10 min | sleep 10min agli operativi + considera Esc per congelare attivi. Niente spawn fino al rientro. |
+| **1** (leggero) | 30s | ordina a TUTTI gli operativi: `jht-throttle 30 --agent <name> --reason "throttle T1"`. Niente nuovi spawn. |
+| **2** (moderato) | 2 min | `jht-throttle 120 --agent <name>` agli operativi + ferma 1 istanza extra (es. SCRITTORE-2) |
+| **3** (pesante) | 5 min | `jht-throttle 300 --agent <name>` agli operativi + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.) |
+| **4** (near-freeze) | 10 min | `jht-throttle 600 --agent <name>` + considera Esc per congelare attivi. Niente spawn fino al rientro. |
+
+**REGOLA THROTTLE**: ordina sempre la skill `jht-throttle`, mai `sleep` nudo. La skill logga ogni pausa in `$JHT_HOME/logs/throttle-events.jsonl` — è il tuo strumento di osservabilità per capire chi ha applicato il throttle, per quanto, e quando. Senza questo logging il sistema è cieco.
 
 Esempio di applicazione throttle=2:
 
 ```bash
 # 1. messaggio a tutti gli operativi attivi
 for agent in SCOUT-1 ANALISTA-1 SCORER-1 SCRITTORE-1 CRITICO; do
-  /app/agents/_tools/jht-tmux-send $agent "[@capitano] [URG] THROTTLE 2: aggiungi sleep 120 tra task. Continua a lavorare ma rallentato."
+  name=$(echo "$agent" | tr '[:upper:]' '[:lower:]')  # SCOUT-1 → scout-1
+  /app/agents/_tools/jht-tmux-send $agent "[@capitano -> @${name}] [URG] THROTTLE 2: esegui jht-throttle 120 --agent ${name} --reason 'throttle T2' tra ogni task. Continua a lavorare ma rallentato."
 done
 # 2. ferma istanze extra se presenti
 tmux kill-session -t SCOUT-2 2>/dev/null  # se esiste

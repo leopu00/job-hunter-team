@@ -6,3 +6,4 @@ tmux-send
 db-query
 db-insert
 db-update
+throttle
