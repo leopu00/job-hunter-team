@@ -87,6 +87,9 @@ export default async function RootLayout({
   return (
     <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
       <head>
+        {/* suppressHydrationWarning: il browser spoglia l'attributo nonce dagli
+            script dopo il parse (HTML spec), quindi React legge "" sul client.
+            È un mismatch atteso per gli inline script con CSP nonce. */}
         <script suppressHydrationWarning nonce={nonce} dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('jht-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);else if(t==='system'||!t){var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',d)}}catch(e){}})()` }} />
       </head>
       <body>
