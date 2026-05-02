@@ -32,26 +32,32 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 EVENTS_FILE = JHT_HOME / "logs" / "throttle-events.jsonl"
 
 
-def collect_events(since_ts: float):
-    """Legge gli eventi di pausa COMPLETATI in [since_ts, now].
+def collect_events(since_ts: float, now_ts: float | None = None):
+    """Legge gli eventi di pausa in [since_ts, now].
 
     Ritorna due strutture:
       • by_agent: dict[agent] -> list[(ts_end, sleep_sec)] — usata per
-        la serie cumulativa.
-      • intervals: list[{agent, ts_start, ts_end, sec}] — un record per
-        pausa completata, con i timestamp di inizio e fine effettivi.
-        Usato dal frontend in modalità "Eventi" per disegnare un
-        rettangolo che copre il PERIODO della pausa, evitando
-        l'illusione "2 throttle attaccati" del bucketing 30s.
+        la serie cumulativa. Solo end completati (matchati con start) o
+        record legacy contano nel cumulativo: se un throttle non
+        completa, non vogliamo gonfiare il totale di tempo "in pausa".
+      • intervals: list[{agent, ts_start, ts_end, sec, interrupted}].
+        Include anche start ORFANI (senza end), renderizzati con
+        ts_end = min(now, ts_start + applied_sec) e interrupted=true.
+        Così SIGKILL e altri kill non catchabili dalla skill restano
+        comunque visibili nel chart eventi.
 
     Filtri intenzionali:
-      - eventi `start` raccolti in `starts` per matcharli col rispettivo
-        `end` via `id`. Se manca l'`end` (agente killato a metà pausa)
-        l'intervallo non viene emesso — coerente col cumulativo.
-      - eventi legacy senza campo `event` (precedenti allo split
-        start/end) trattati come "istante puntiforme": ts_start = ts_end
-        e durata = applied_sec. Mantiene la storia pre-fix nel chart.
+      - end matchato a start via `id`: intervallo "live" (interrupted da
+        flag dell'evento end stesso, scritto da throttle.py).
+      - start senza end + scaduto secondo applied_sec: intervallo
+        "orfano" → interrupted=true sintetico, durata cap = ora.
+      - start senza end + ancora "in volo" (would_end > now): saltato,
+        non lo mostriamo ancora (apparirà al prossimo poll del frontend).
+      - eventi legacy senza campo `event` (pre-fix start/end): trattati
+        come finestra ts → ts+applied_sec, interrupted=false.
     """
+    if now_ts is None:
+        now_ts = float("inf")
     by_agent = defaultdict(list)
     intervals: list[dict] = []
     starts: dict[str, dict] = {}
@@ -68,14 +74,23 @@ def collect_events(since_ts: float):
                 except json.JSONDecodeError:
                     continue
                 ts = e.get("ts_unix")
-                if not isinstance(ts, (int, float)) or ts < since_ts:
+                if not isinstance(ts, (int, float)):
                     continue
                 agent = e.get("agent") or "?unknown"
                 event_type = e.get("event")
                 if event_type == "start":
                     eid = e.get("id")
                     if isinstance(eid, str):
-                        starts[eid] = {"agent": agent, "ts_start": float(ts)}
+                        starts[eid] = {
+                            "agent": agent,
+                            "ts_start": float(ts),
+                            "applied_sec": float(e.get("applied_sec") or 0),
+                        }
+                    continue
+                if ts < since_ts:
+                    # end o legacy fuori finestra: skippiamo, però uno
+                    # `start` precedente alla finestra che si chiude
+                    # qui è ok (gestito sopra: lo start è già in starts).
                     continue
                 if event_type == "end":
                     sleep_sec = e.get("actual_sleep_sec")
@@ -92,9 +107,10 @@ def collect_events(since_ts: float):
                         "ts_start": ts_start,
                         "ts_end": float(ts),
                         "sec": float(sleep_sec),
+                        "interrupted": bool(e.get("interrupted", False)),
                     })
                 else:
-                    # Legacy: niente split start/end. Eventi puntiformi a `ts`.
+                    # Legacy: niente split start/end. Finestra ts → ts+applied.
                     sleep_sec = e.get("applied_sec")
                     if not isinstance(sleep_sec, (int, float)) or sleep_sec <= 0:
                         continue
@@ -104,9 +120,37 @@ def collect_events(since_ts: float):
                         "ts_start": float(ts),
                         "ts_end": float(ts) + float(sleep_sec),
                         "sec": float(sleep_sec),
+                        "interrupted": False,
                     })
     except OSError:
         return by_agent, intervals
+    # Orfani: start mai chiusi. Se la fine prevista è già passata, sono
+    # certamente terminati senza end (SIGKILL o crash). Li mostriamo
+    # come interrupted con ts_end = ts_start + applied_sec ma cap a now,
+    # così non sforano nel futuro nel chart.
+    now_eff = now_ts if now_ts != float("inf") else (
+        max((iv["ts_end"] for iv in intervals), default=0.0)
+    )
+    for s in starts.values():
+        applied = s["applied_sec"]
+        if applied <= 0:
+            continue
+        ts_start = s["ts_start"]
+        if ts_start < since_ts and (ts_start + applied) < since_ts:
+            # orfano interamente fuori finestra
+            continue
+        ts_end_natural = ts_start + applied
+        ts_end_capped = min(ts_end_natural, now_eff)
+        if ts_end_capped <= ts_start:
+            continue  # in volo, niente ancora da disegnare
+        intervals.append({
+            "agent": s["agent"],
+            "ts_start": ts_start,
+            "ts_end": ts_end_capped,
+            "sec": ts_end_capped - ts_start,
+            "interrupted": True,
+            "orphan": True,
+        })
     for a in by_agent:
         by_agent[a].sort()
     intervals.sort(key=lambda r: r["ts_start"])
@@ -157,7 +201,7 @@ def main():
     now_ts = now.timestamp()
     since_ts = since.timestamp()
 
-    by_agent, intervals = collect_events(since_ts)
+    by_agent, intervals = collect_events(since_ts, now_ts)
     agents, series = build_series(by_agent, since_ts, now_ts, args.bucket_sec)
 
     totals_sec = {a: round(sum(s for _, s in by_agent[a]), 1) for a in agents}
@@ -169,6 +213,8 @@ def main():
             "ts_start": datetime.fromtimestamp(iv["ts_start"], tz=timezone.utc).isoformat(),
             "ts_end": datetime.fromtimestamp(iv["ts_end"], tz=timezone.utc).isoformat(),
             "sec": round(iv["sec"], 1),
+            "interrupted": bool(iv.get("interrupted", False)),
+            "orphan": bool(iv.get("orphan", False)),
         }
         for iv in intervals
     ]
