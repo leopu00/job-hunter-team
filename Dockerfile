@@ -6,7 +6,7 @@
 # Base image pinned by digest (multi-arch index). Update tracked by
 # Renovate (.github/renovate.json). Changing the tag without the digest
 # silently re-introduces unverified upstream content.
-FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c
+FROM node:25-bookworm-slim@sha256:e49fd70491eb042270f974167c874d6245287263ffc16422fcf93b3c150409d8
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
