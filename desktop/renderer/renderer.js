@@ -2986,6 +2986,10 @@ const homeDom = {
   btnDevStart: document.getElementById('home-btn-dev-start'),
   btnDevOpen: document.getElementById('home-btn-dev-open'),
   btnDevStop: document.getElementById('home-btn-dev-stop'),
+  devAddWorktree: document.getElementById('home-dev-add-worktree'),
+  devAddPort: document.getElementById('home-dev-add-port'),
+  btnDevAddStart: document.getElementById('home-btn-dev-add-start'),
+  devAddActive: document.getElementById('home-dev-add-active'),
 }
 
 // Wizard appears only on first launch. The discriminator is "has the
@@ -3311,6 +3315,109 @@ async function refreshDevStatus() {
     await refreshDevStatus()
     setInterval(() => {
       if (state.view === 'home' && state.homeSection === 'advanced') refreshDevStatus()
+    }, 4000)
+
+    // ── Dev secondario (porta != 3001 su qualsiasi worktree) ────────────
+    async function refreshDevAddWorktrees() {
+      try {
+        const res = await window.launcherApi.devAdditionalListWorktrees()
+        if (!res?.ok) return
+        const sel = homeDom.devAddWorktree
+        const current = sel.value
+        sel.innerHTML = '<option value="">— scegli worktree —</option>'
+        for (const wt of res.worktrees || []) {
+          const opt = document.createElement('option')
+          opt.value = wt.path
+          // Mostra "<branch> — <path>" troncato per leggibilità
+          const shortPath = wt.path.replace(/^.*\//, '')
+          opt.textContent = `${wt.branch} — ${shortPath}`
+          sel.appendChild(opt)
+        }
+        if (current) sel.value = current
+      } catch {
+        /* ignore */
+      }
+    }
+
+    async function refreshDevAddActive() {
+      try {
+        const res = await window.launcherApi.devAdditionalListActive()
+        if (!res?.ok) return
+        const list = res.active || []
+        if (list.length === 0) {
+          homeDom.devAddActive.textContent = ''
+          return
+        }
+        homeDom.devAddActive.innerHTML = ''
+        for (const dev of list) {
+          const row = document.createElement('div')
+          row.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0;'
+          const label = document.createElement('span')
+          const uptime = Math.floor(dev.uptimeMs / 1000)
+          const shortPath = dev.worktree.replace(/^.*\//, '')
+          label.textContent = `:${dev.port} (${shortPath}, uptime ${uptime}s)`
+          label.style.flex = '1'
+          const openBtn = document.createElement('button')
+          openBtn.className = 'btn btn--ghost'
+          openBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.85em;'
+          openBtn.textContent = `Apri :${dev.port}`
+          openBtn.addEventListener('click', () => {
+            window.launcherApi.openExternal(dev.url || `http://localhost:${dev.port}`).catch(() => {})
+          })
+          const stopBtn = document.createElement('button')
+          stopBtn.className = 'btn btn--ghost'
+          stopBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.85em;'
+          stopBtn.textContent = 'Ferma'
+          stopBtn.addEventListener('click', async () => {
+            stopBtn.disabled = true
+            stopBtn.textContent = '…'
+            try {
+              await window.launcherApi.devAdditionalStop({ port: dev.port })
+              await refreshDevAddActive()
+            } finally {
+              stopBtn.disabled = false
+            }
+          })
+          row.appendChild(label)
+          row.appendChild(openBtn)
+          row.appendChild(stopBtn)
+          homeDom.devAddActive.appendChild(row)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    homeDom.btnDevAddStart.addEventListener('click', async () => {
+      const worktree = homeDom.devAddWorktree.value
+      const port = Number(homeDom.devAddPort.value)
+      if (!worktree) {
+        alert('Scegli un worktree dal menu')
+        return
+      }
+      homeDom.btnDevAddStart.disabled = true
+      const originalText = homeDom.btnDevAddStart.textContent
+      homeDom.btnDevAddStart.textContent = 'Avvio…'
+      try {
+        const res = await window.launcherApi.devAdditionalLaunch({ worktree, port })
+        if (!res?.ok) {
+          alert(`Errore: ${res?.error || 'unknown'}`)
+        } else if (!res.ready) {
+          alert(`Avviato su :${port}, ma non risponde ancora dopo 30s. Controlla log: ${res.LOG || ''}`)
+        }
+        await refreshDevAddActive()
+      } catch (error) {
+        alert(`Errore: ${error?.message || error}`)
+      } finally {
+        homeDom.btnDevAddStart.disabled = false
+        homeDom.btnDevAddStart.textContent = originalText
+      }
+    })
+
+    await refreshDevAddWorktrees()
+    await refreshDevAddActive()
+    setInterval(() => {
+      if (state.view === 'home' && state.homeSection === 'advanced') refreshDevAddActive()
     }, 4000)
   } catch {
     // probe failed (old Electron or packaged) — leave card hidden.
