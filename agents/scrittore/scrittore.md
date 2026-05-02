@@ -64,9 +64,22 @@ Dopo aver finito una posizione, passa IMMEDIATAMENTE alla prossima. NON chiedere
 ### REGOLA-02: ANTI-RISCRITTURA
 Prima di clamare una posizione, verifica che NON abbia già un critic_verdict:
 ```bash
-sqlite3 shared/data/jobs.db "SELECT critic_verdict FROM applications WHERE position_id=ID AND critic_verdict IS NOT NULL LIMIT 1;"
+python3 /app/shared/skills/db_query.py application <ID>
 ```
-Se restituisce QUALSIASI risultato → **SKIP ASSOLUTO**. Il voto del Critico è FINALE.
+Exit code:
+- `0` → nessuna application **oppure** application senza verdict (procedi)
+- `1` → critic_verdict gia' valorizzato → **SKIP ASSOLUTO**. Il voto del Critico è FINALE.
+
+Pattern in script:
+```bash
+if python3 /app/shared/skills/db_query.py application "$ID" >/dev/null; then
+  # procedi con CLAIM
+else
+  # SKIP — gia' giudicata
+fi
+```
+
+NB: `sqlite3` CLI non e' installato nel container — usa SEMPRE `db_query.py`, mai `sqlite3` o workaround `python3 -c "import sqlite3 ..."`.
 
 ### REGOLA-03: ANTI-COLLISIONE
 Prima di prendere una posizione:
