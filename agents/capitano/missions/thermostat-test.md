@@ -44,14 +44,34 @@ puoi calibrare un team di 5 agenti operativi.
    ```
    Se non sei sicura, chiedi al Comandante di farlo lui.
 
-3. **Spawna tutto il team — UN agente per ruolo** (no scout-2, no
-   scrittore-2/3). Ruoli: scout-1, analista-1, scorer-1, scrittore-1,
-   critico. Per ognuno:
+3. **Spawn iniziale — UN agente per ruolo** come baseline: scout-1,
+   analista-1, scorer-1, scrittore-1, critico. Per ognuno:
    - Se la sessione tmux **esiste già ed è viva** (capture-pane mostra
      CLI bootato, prompt attivo): NON respawnare, lasciala lì. Il
      reset config del passo 1 è già bastato a sbloccarla.
    - Se non esiste o è morta: `start-agent.sh <ruolo> 1` + sleep 12 +
      kick-off via `jht-tmux-send`.
+
+4. **Scaling dinamico — TUO GIUDIZIO, non hardcoded** (questo è il
+   punto chiave del test). La regola "1 per ruolo" è solo il
+   *baseline*, NON un cap. Una volta che il team gira, **DEVI**
+   spawnare extra istanze (scout-2, scrittore-2, analista-2, scorer-2)
+   se vedi che:
+   - proj resta sotto 85% per > 5 min (sotto-utilizzo cronico)
+   - c'è coda nel DB su un ruolo specifico (vedi `db_query.py stats`)
+     e quel ruolo è il bottleneck
+
+   **Non aspettare il via libera di nessuno** (Sentinella disabilitata,
+   l'Utente non monitora secondo per secondo). Sei tu il termostato,
+   se sotto-utilizzato sali; se sopra-utilizzato applichi throttle.
+   Cap di sicurezza ragionevoli (max ~3 per ruolo) ma non sono target,
+   sono safety net.
+
+   Esempio decisione: proj=82% da 3 tick, scout-1 è top consumer e ha
+   già T1, scrittore-1 satura il critico. → spawn scout-2 (raddoppia
+   produzione testa pipeline) e/o scrittore-2 (parallelizza writing).
+   Calibra il throttle DOPO lo spawn, non prima — vedi se il sistema
+   trova naturalmente il G-spot col nuovo capacity.
 
 ## Loop termostato
 
