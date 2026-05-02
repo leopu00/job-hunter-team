@@ -120,6 +120,45 @@ not a scratch path under `$JHT_AGENT_DIR`.
 
 ---
 
+## 🧰 RULE-T12 — Workspace layout and periodic housekeeping
+
+Your `$JHT_AGENT_DIR` (= `$JHT_HOME/agents/<role>[-N]/`) is your
+**private workspace** and your tmux cwd. The launcher creates two
+canonical subdirs at boot — use them, do NOT scatter files at the
+root of `$JHT_AGENT_DIR`:
+
+| Subdir | Purpose | Lifetime |
+|---|---|---|
+| `$JHT_AGENT_DIR/tools/` | Helper scripts you wrote for yourself (parsers, one-off automations). Live as long as you find them useful. | Audit every boot. If a script is reusable across roles → propose moving it to `agents/_skills/` (skills.list manifest). If unused for 30+ days → delete. |
+| `$JHT_AGENT_DIR/tmp/` | Intermediate scratch: downloaded JDs for parsing, draft CV revisions, fetch buffers, anything throwaway. | Boot housekeeping deletes files older than 7 days unconditionally. Treat anything you put here as ephemeral. |
+
+**Boot housekeeping (mandatory, first thing in your loop):**
+
+```bash
+# 1. Make sure the subdirs exist (the launcher does this too, but
+#    a fresh role on an old $JHT_HOME may not have them yet).
+mkdir -p "$JHT_AGENT_DIR/tools" "$JHT_AGENT_DIR/tmp"
+
+# 2. Wipe stale tmp/ — files older than 7 days. Errors ignored
+#    (the dir may be empty on first boot).
+find "$JHT_AGENT_DIR/tmp" -type f -mtime +7 -delete 2>/dev/null || true
+
+# 3. Audit tools/ (NEVER auto-delete here — list and decide).
+ls "$JHT_AGENT_DIR/tools" 2>/dev/null
+```
+
+**Periodic housekeeping (every ~6 hours of continuous run, or after
+every 50 main-loop iterations, whichever comes first):** repeat step
+2. Do NOT run housekeeping inside a tight loop — it costs FS calls
+and breaks rate-limit budgeting.
+
+**Out of bounds:** never `find -delete` outside `$JHT_AGENT_DIR/tmp/`.
+Never wipe `$JHT_USER_DIR` (deliverables), never wipe sibling agents'
+workspaces, never wipe `~/.cache/` or other shared caches — those are
+managed by the launcher / `jht doctor`, not by you.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:
