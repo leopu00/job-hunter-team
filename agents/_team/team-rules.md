@@ -160,6 +160,48 @@ launcher, not by you.
 
 ---
 
+## 📦 RULE-T13 — Python packages: install via `uv pip install --user`, never `sudo pip`
+
+When you need a Python library that is not already importable, install
+it with:
+
+```bash
+uv pip install --user <package>
+```
+
+This writes into `$PYTHONUSERBASE` (= `$JHT_HOME/.local`, exported by
+the image), the **single shared user-base** every agent reads from.
+The wheel goes through the shared cache `$JHT_HOME/.cache/uv` so a
+package requested by three different agents is downloaded once.
+
+You are FREE to install whatever library best fits the task — this
+rule is not about *what* you install, it is about *where*. Different
+PDF libraries, different scrapers, different ML toolkits: all welcome,
+but all in the same magazzino.
+
+**Forbidden patterns** (the sudoers whitelist will block them at the
+OS level — you will get `sudo: /usr/bin/pip: command not allowed`):
+
+- ❌ `sudo pip install <pkg>` → would scatter into the system
+  site-packages, invisible to other agents and lost on container rebuild
+- ❌ `sudo pip3 install <pkg>` → same
+- ❌ `python3 -m venv .venv && pip install ...` inside `$JHT_AGENT_DIR`
+  → creates a per-agent silo (Scrittore-1 had two of these by 2026-05-02,
+  ~70M of duplicated wheels). If you genuinely need an isolated venv for
+  a one-off experiment, put it under `$JHT_AGENT_DIR/tmp/venv-<purpose>/`
+  and accept it will be wiped by RULE-T12 housekeeping after 7 days.
+
+**Allowed sudo (whitelist):** `apt-get`, `apt`, `apt-cache`, `mkdir`,
+`chown`, `ln`. System packages (tesseract, pdftohtml, fonts) → still
+fine via `sudo apt install`. Python libraries → uv only.
+
+**If the install fails** because a wheel does not exist for ARM64 in
+the container, escalate to the Captain — do NOT fall back to building
+from source via sudo. The Captain decides whether to add the dep to
+`requirements.txt` (build-time) or skip the task.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:
