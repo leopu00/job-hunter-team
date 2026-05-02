@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# token-rate-now — istantaneo "chi sta consumando ADESSO" per agente.
+#
+# Differenza chiave vs `token-by-agent-rate.py`: quello calcola la MEDIA
+# STORICA (kT_total / span_min su tutta la storia dell'agente), che
+# appiattisce le differenze attuali. Per il Capitano-termostato serve
+# invece il rate ISTANTANEO sugli ultimi N minuti — chi sta dominando
+# il consumo proprio ora.
+#
+# Uso:
+#   token-rate-now             # default ultimi 5 min
+#   token-rate-now 10          # ultimi 10 min
+#
+# Output:
+#   AGENTE          kT/min(Nm)   kT(Nm)   events
+#   ─────────────────────────────────────────────
+#   analista-1          26.31    131.5      22
+#   scrittore-1         16.76     83.8      10
+#   ...
+
+set -euo pipefail
+
+WIN_MIN="${1:-5}"
+
+# Sanity: range 1..120 min (più di 2h non è "ora", usa lo script storico)
+case "$WIN_MIN" in
+  ''|*[!0-9]*)
+    echo "error: window must be an integer (minutes)" >&2
+    exit 1
+    ;;
+esac
+if [ "$WIN_MIN" -lt 1 ] || [ "$WIN_MIN" -gt 120 ]; then
+  echo "error: window must be 1..120 minutes (got $WIN_MIN)" >&2
+  exit 1
+fi
+
+# Bucket fine per finestre piccole (target ~120 punti, floor 5s).
+BUCKET_SEC=$(( WIN_MIN * 60 / 120 ))
+[ "$BUCKET_SEC" -lt 5 ] && BUCKET_SEC=5
+
+SCRIPT="/app/shared/skills/token-by-agent-series.py"
+if [ ! -f "$SCRIPT" ]; then
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  SCRIPT="${SELF_DIR}/../../shared/skills/token-by-agent-series.py"
+fi
+
+python3 "$SCRIPT" --since-min="$WIN_MIN" --bucket-sec="$BUCKET_SEC" \
+  | WIN_MIN="$WIN_MIN" python3 -c "
+import json, os, sys
+d = json.loads(sys.stdin.read())
+win = int(os.environ['WIN_MIN'])
+agents = d.get('agents', [])
+if not agents:
+    print(f'(nessun consumo registrato negli ultimi {win} min)')
+    sys.exit(0)
+print(f'{\"AGENTE\":14s}  {f\"kT/min({win}m)\":>11s}  {f\"kT({win}m)\":>9s}  {\"events\":>6s}')
+print('─' * 50)
+for a in agents:
+    kt = d['totals_kt'].get(a, 0)
+    rate = kt / win
+    ev = d['events'].get(a, 0)
+    print(f'{a:14s}  {rate:>11.2f}  {kt:>9.1f}  {ev:>6d}')
+"

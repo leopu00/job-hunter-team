@@ -134,25 +134,64 @@ In regime normale ricevi **un messaggio ogni 5 minuti dalla Sentinella** dopo ch
 
 **I messaggi `[SENTINELLA]` non sono suggerimenti. Sono ordini da eseguire SUBITO.** Se contengono `Throttle: N`, applica la riga N della tabella sotto.
 
-### 🎚️ Tabella THROTTLE — azioni esatte per livello
+### 🎚️ Tabella THROTTLE — durate per livello (calibrazione via config)
 
-| Throttle | Sleep tra operazioni | Cosa fai TU |
+Il throttle è guidato da `$JHT_HOME/config/throttle.json`. Tu **scrivi**
+il valore in secondi per ogni agente; gli agenti chiamano
+`jht-throttle --agent <name>` (senza numero) e la skill legge il
+config. Niente più 5 messaggi tmux per cambiare T — è 1 write atomico.
+
+| Throttle | Pausa tra operazioni | Cosa fai TU |
 |---|---|---|
-| **0** (full speed) | 0s | nessuna restrizione, puoi spawnare se c'è coda |
-| **1** (leggero) | 30s | manda a TUTTI gli agenti operativi: "allunga sleep a 30s tra task". Niente nuovi spawn. |
-| **2** (moderato) | 2 min | sleep 2min agli operativi + ferma 1 istanza extra (es. SCRITTORE-2 se hai due scrittori) |
-| **3** (pesante) | 5 min | sleep 5min agli operativi + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.) |
-| **4** (near-freeze) | 10 min | sleep 10min agli operativi + considera Esc per congelare attivi. Niente spawn fino al rientro. |
+| **0** (full speed) | 0s | `throttle-config.py set <agent> 0` (o `reset` per tutti). Nessuna restrizione, puoi spawnare se c'è coda. |
+| **1** (leggero) | 30s | `throttle-config.py set <agent> 30` per gli operativi. Niente nuovi spawn. |
+| **2** (moderato) | 120s | `throttle-config.py set <agent> 120` per gli operativi + ferma 1 istanza extra (es. SCRITTORE-2). |
+| **3** (pesante) | 300s | `throttle-config.py set <agent> 300` + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.). |
+| **4** (near-freeze) | 600s | `throttle-config.py set <agent> 600` + considera Esc per congelare attivi. Niente spawn fino al rientro. |
 
-Esempio di applicazione throttle=2:
+**Strumento centrale**: `python3 /app/shared/skills/throttle-config.py`
 
 ```bash
-# 1. messaggio a tutti gli operativi attivi
-for agent in SCOUT-1 ANALISTA-1 SCORER-1 SCRITTORE-1 CRITICO; do
-  /app/agents/_tools/jht-tmux-send $agent "[@capitano] [URG] THROTTLE 2: aggiungi sleep 120 tra task. Continua a lavorare ma rallentato."
-done
-# 2. ferma istanze extra se presenti
-tmux kill-session -t SCOUT-2 2>/dev/null  # se esiste
+throttle-config.py set scout-1 60                          # singolo
+throttle-config.py bulk-set scout-1=60 scrittore-1=120     # multipli atomici
+throttle-config.py get scout-1                             # leggi corrente
+throttle-config.py dump                                    # stato completo
+throttle-config.py reset                                   # tutti a 0
+```
+
+**Throttle differenziato**: la grossa vittoria del modello config è che
+puoi dare valori **diversi** ad ogni agente in un colpo solo, basato
+sul consumo individuale (vedi `token-rate-now` per chi consuma di più
+ADESSO, non in media storica):
+
+```bash
+# Esempio: scout consuma il triplo dello scrittore in questo momento.
+# Throttle pesante a scout, leggero a scrittore, niente agli altri.
+python3 /app/shared/skills/throttle-config.py bulk-set \
+    scout-1=300 scrittore-1=60 analista-1=0 scorer-1=0 critico=0
+```
+
+**Override esplicito (raro)**: se devi forzare un valore one-shot
+ignorando il config (es. emergenza, debug), puoi ancora dire
+all'agente di chiamare `jht-throttle <sec> --agent <name>` esplicito
+via tmux. Ma in regime normale: solo config.
+
+**REGOLA THROTTLE**: ordina sempre la skill `jht-throttle`, mai `sleep`
+nudo. La skill logga ogni pausa in `$JHT_HOME/logs/throttle-events.jsonl`
+— è il tuo strumento di osservabilità per capire chi ha applicato il
+throttle, per quanto, e quando.
+
+### 📡 Comunicazione tmux: solo per "cadenza", non per durata
+
+Quando vuoi calibrare il throttle, NON mandare messaggi tmux con un
+numero specifico (vecchio modello, deprecato). Modifica il config.
+Usa tmux solo per dire all'agente di chiamare `jht-throttle` **più o
+meno spesso** nel suo loop:
+
+```bash
+# Esempio: chiedi allo scrittore di throttlare a metà loop invece che ad
+# ogni round del Critico (frequenza, non durata)
+jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [INFO] Cadenza: chiama jht-throttle dopo OGNI round del Critico, non solo a fine 3°."
 ```
 
 ### Tipi di ORDINE che ricevi

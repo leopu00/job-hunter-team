@@ -12,9 +12,28 @@ export const dynamic = 'force-dynamic'
 //   3. cmdline del pid contiene 'sentinel-bridge.py' (per evitare falsi
 //      positivi su pid riciclati dopo restart container — stesso check
 //      che il bridge usa nel suo singleton lock)
+//
+// Il next_tick_at NON viene calcolato qui: lo legge dal file di stato
+// scritto dal bridge stesso (sentinel-bridge-state.json). Questo evita
+// che la UI mostri timer sballati ogni volta che cambia la logica del
+// bridge (V5 → V6 ecc.). Il file è scritto atomicamente dal bridge a
+// ogni iterazione del loop (vedi `_write_state_file` in sentinel-bridge.py).
 
 const JHT_HOME = process.env.JHT_HOME || path.join(os.homedir(), '.jht')
 const PID_FILE = path.join(JHT_HOME, 'logs', 'sentinel-bridge.pid')
+const STATE_FILE = path.join(JHT_HOME, 'logs', 'sentinel-bridge-state.json')
+const DATA_JSONL = path.join(JHT_HOME, 'logs', 'sentinel-data.jsonl')
+
+// Soglia di staleness dello state file: oltre questo lo trattiamo come
+// "non disponibile" e cadiamo sul fallback (ultimo sample dal JSONL).
+// Il bridge in regime calmo ha tick di 10 min, quindi diamo margine.
+const STATE_STALE_MS = 15 * 60_000
+
+// Fallback: se il file di stato non c'è (o è stale) usiamo questo come
+// stima del prossimo tick. NON è la replica di chooseTickInterval del
+// bridge — è solo un default ragionevole per evitare che la UI mostri
+// "tra qualche secondo" o "mai". Il bridge V6 default è 3 min.
+const FALLBACK_TICK_MIN = 3.0
 
 async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null }> {
   let pidStr: string
@@ -40,28 +59,39 @@ async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null
   }
 }
 
-const DATA_JSONL = path.join(JHT_HOME, 'logs', 'sentinel-data.jsonl')
-
-// Replica della logica _choose_tick_interval del bridge (sentinel-bridge.py:91).
-// Il bridge V5 NON ha un tick fisso: adatta in base allo stato dell'ultimo
-// sample. Mantenere queste costanti allineate al bridge Python.
-const ADAPTIVE_TICK_FAST_MIN = 1.5      // SOTTOUTILIZZO / ATTENZIONE / CRITICO
-const ADAPTIVE_TICK_SLOW_MIN = 5.0      // STEADY / RESET / OK / null
-const ADAPTIVE_TICK_EMERGENCY_MIN = 1.0 // EMERGENZA o freeze (proj > 100%)
-
-function chooseTickIntervalMin(status: string | null, projection: number | null): number {
-  const freezeActive = typeof projection === 'number' && projection > 100
-  if (freezeActive || status === 'EMERGENZA') return ADAPTIVE_TICK_EMERGENCY_MIN
-  if (status && ['SOTTOUTILIZZO', 'ATTENZIONE', 'CRITICO'].includes(status)) {
-    return ADAPTIVE_TICK_FAST_MIN
-  }
-  return ADAPTIVE_TICK_SLOW_MIN
+type BridgeState = {
+  version?: number
+  pid?: number
+  updated_at?: string
+  last_tick_at?: string
+  next_tick_at?: string
+  tick_phase?: string
+  tick_interval_min?: number
+  gspot_consecutive?: number
+  last_sentinella_notify_at?: string | null
+  last_status?: string | null
+  last_projection?: number | null
+  last_usage?: number | null
+  g_spot?: { lower: number; upper: number }
+  sentinella_cooldown_min?: number
 }
 
-type BridgeSample = { ts: string; status: string | null; projection: number | null }
+/** Legge il file di stato pubblico del bridge. È la fonte autoritativa
+ *  del next_tick_at: il bridge stesso lo scrive ad ogni iterazione. */
+async function readBridgeState(): Promise<BridgeState | null> {
+  try {
+    const raw = await fs.readFile(STATE_FILE, 'utf-8')
+    return JSON.parse(raw) as BridgeState
+  } catch {
+    return null
+  }
+}
 
-/** Cerca l'ultimo sample con source=bridge nel JSONL: ne servono ts +
- *  status + projection per replicare la logica adattiva del tick. */
+type BridgeSample = { ts: string; status: string | null; projection: number | null; usage: number | null }
+
+/** Fallback: legge l'ultimo sample del bridge dal JSONL. Usato solo se il
+ *  file di stato non è disponibile (bridge V5 vecchio, o cold-start prima
+ *  che il bridge V6 abbia scritto il primo state). */
 async function readLastBridgeSample(): Promise<BridgeSample | null> {
   let raw: string
   try { raw = await fs.readFile(DATA_JSONL, 'utf-8') }
@@ -71,12 +101,13 @@ async function readLastBridgeSample(): Promise<BridgeSample | null> {
     const line = lines[i]
     if (!line) continue
     try {
-      const e = JSON.parse(line) as { source?: string; ts?: string; status?: string; projection?: number }
+      const e = JSON.parse(line) as { source?: string; ts?: string; status?: string; projection?: number; usage?: number }
       if (e.source === 'bridge' && typeof e.ts === 'string') {
         return {
           ts: e.ts,
           status: e.status ?? null,
           projection: typeof e.projection === 'number' ? e.projection : null,
+          usage: typeof e.usage === 'number' ? e.usage : null,
         }
       }
     } catch { /* skip */ }
@@ -85,16 +116,38 @@ async function readLastBridgeSample(): Promise<BridgeSample | null> {
 }
 
 export async function GET() {
-  const [status, lastSample] = await Promise.all([isBridgeRunning(), readLastBridgeSample()])
+  const [status, bridgeState] = await Promise.all([isBridgeRunning(), readBridgeState()])
+
+  // Path veloce: state file presente e fresco → usa direttamente i suoi
+  // campi. Niente più replica della logica del bridge in TS.
+  if (bridgeState && bridgeState.updated_at && status.running) {
+    const updatedAt = Date.parse(bridgeState.updated_at)
+    const fresh = Number.isFinite(updatedAt) && (Date.now() - updatedAt) < STATE_STALE_MS
+    if (fresh) {
+      const intervalMin = bridgeState.tick_interval_min ?? FALLBACK_TICK_MIN
+      return NextResponse.json({
+        ...status,
+        lastTickAt: bridgeState.last_tick_at ?? null,
+        lastStatus: bridgeState.last_status ?? null,
+        lastProjection: bridgeState.last_projection ?? null,
+        lastUsage: bridgeState.last_usage ?? null,
+        nextTickAt: bridgeState.next_tick_at ?? null,
+        intervalMs: Math.round(intervalMin * 60_000),
+        intervalMin,
+        tickPhase: bridgeState.tick_phase ?? null,
+        gSpot: bridgeState.g_spot ?? null,
+        sentinellaCooldownMin: bridgeState.sentinella_cooldown_min ?? null,
+        source: 'state-file',
+      })
+    }
+  }
+
+  // Fallback: nessun state file utile. Stima dal JSONL con DEFAULT_TICK_MIN
+  // (3 min). Non replichiamo la state machine: se il bridge V6 è stato
+  // killato da > STATE_STALE_MS, mostriamo solo "running=false" / nextTickAt=null.
+  const lastSample = await readLastBridgeSample()
   const lastTickAt = lastSample?.ts ?? null
-  // Tick interval calcolato dallo stato dell'ultimo sample, esattamente
-  // come fa il bridge prima di chiamare time.sleep(). Se lastSample è null
-  // (cold-start) cadiamo sullo SLOW = 5 min.
-  const intervalMin = chooseTickIntervalMin(
-    lastSample?.status ?? null,
-    lastSample?.projection ?? null,
-  )
-  const intervalMs = Math.round(intervalMin * 60_000)
+  const intervalMs = Math.round(FALLBACK_TICK_MIN * 60_000)
   const nextTickAt = lastTickAt && status.running
     ? new Date(new Date(lastTickAt).getTime() + intervalMs).toISOString()
     : null
@@ -103,10 +156,14 @@ export async function GET() {
     lastTickAt,
     lastStatus: lastSample?.status ?? null,
     lastProjection: lastSample?.projection ?? null,
+    lastUsage: lastSample?.usage ?? null,
     nextTickAt,
     intervalMs,
-    intervalMin,
+    intervalMin: FALLBACK_TICK_MIN,
+    tickPhase: null,
+    gSpot: null,
+    sentinellaCooldownMin: null,
+    source: 'jsonl-fallback',
   })
 }
-
-
+// trigger HMR 1777586237
