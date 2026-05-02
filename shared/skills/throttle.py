@@ -9,23 +9,30 @@ chiamata.
 Lo scopo è doppio:
   1. AVERE LOG: sappiamo *chi* si è messo in pausa, *quando*, *per quanto*.
      Senza questo, le pause vivono solo nei prompt e non sono osservabili.
-  2. AVERE UN PUNTO DI INDIREZIONE: in futuro qui possiamo applicare
-     multiplier per-agente (es. scout=2x, sentinella=0.5x) o leggere
-     un profilo modificabile a runtime dal capitano. V1 = passthrough.
+  2. AVERE UN PUNTO DI INDIREZIONE: il Capitano calibra il throttle per
+     ogni agente via throttle-config.json — la skill legge da lì se
+     l'agente non passa esplicitamente `seconds`. Così il Capitano cambia
+     1 file e tutti gli agenti applicano il nuovo valore al prossimo
+     ciclo, senza dover ricevere 5 messaggi tmux.
 
 NB: questo NON è un guard hard — un agente può sempre chiamare `sleep N`
-direttamente. Il valore vero della skill è il logging + la convenzione.
+direttamente. Il valore vero della skill è il logging + il routing al
+config centralizzato.
 
 Uso:
-  python3 throttle.py --agent <name> <seconds> [--reason "..."]
+  python3 throttle.py [seconds] --agent <name> [--reason "..."]
+
+  - Se `seconds` è omesso, viene letto da throttle-config.json
+    (chiave per agente, fallback "default", fallback 0 = no-op).
+  - Se `seconds=0` (esplicito o da config), la skill ritorna subito
+    senza loggare (niente rumore per agenti in standby).
 
 Eventi loggati (jsonl):
   - `event=start` scritto PRIMA dello sleep (visibilità "sta dormendo").
   - `event=end`   scritto DOPO lo sleep, con `actual_sleep_sec` reale e
                   `interrupted` se l'agente non ha aspettato fino in fondo.
-  Lo stesso `id` lega start/end della stessa pausa. Solo gli `end`
-  contano per i chart: vediamo le pause *davvero completate*, così se un
-  agente esegue il comando in background e lo killa, il chart non mente.
+  Lo stesso `id` lega start/end della stessa pausa. Il chart mostra anche
+  start orfani (interrupted sintetico) per rendere visibili kill SIGKILL.
 """
 import argparse
 import json
@@ -62,15 +69,45 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="Sleep tracciato per agenti del team."
     )
-    ap.add_argument("seconds", type=float, help="durata pausa in secondi")
+    ap.add_argument("seconds", type=float, nargs="?", default=None,
+                    help="durata pausa in secondi (se omesso, legge throttle-config)")
     ap.add_argument("--agent", required=True, help="nome agente (es. scout-1)")
     ap.add_argument("--reason", default=None, help="motivo opzionale")
     args = ap.parse_args()
 
-    requested = float(args.seconds)
-    if not (requested == requested):  # NaN check
-        print("error: seconds must be a number", file=sys.stderr)
-        return 1
+    # Risoluzione del valore: argomento esplicito > config > 0.
+    config_used = False
+    if args.seconds is None:
+        # Import locale: il config script vive accanto a noi, e l'import
+        # globale non ha senso se il caller passa esplicitamente seconds.
+        try:
+            sys.path.insert(0, str(Path(__file__).parent))
+            import importlib  # noqa: PLC0415
+            tcfg = importlib.import_module("throttle-config".replace("-", "_"))
+        except ImportError:
+            # Fallback: import via spec se il modulo ha trattini nel filename
+            import importlib.util  # noqa: PLC0415
+            spec = importlib.util.spec_from_file_location(
+                "throttle_config", Path(__file__).parent / "throttle-config.py"
+            )
+            if spec is None or spec.loader is None:
+                print("error: cannot load throttle-config.py", file=sys.stderr)
+                return 1
+            tcfg = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(tcfg)
+        requested = float(tcfg.get_agent(args.agent))
+        config_used = True
+    else:
+        requested = float(args.seconds)
+        if not (requested == requested):  # NaN check
+            print("error: seconds must be a number", file=sys.stderr)
+            return 1
+
+    # Fast path: no-op se 0. Niente sleep, niente log — un agente in
+    # standby non deve riempire il jsonl di eventi vuoti.
+    if requested <= 0:
+        return 0
+
     applied = max(MIN_SLEEP, min(MAX_SLEEP, requested))
 
     pause_id = uuid.uuid4().hex[:12]
@@ -86,6 +123,7 @@ def main() -> int:
         "requested_sec": round(requested, 2),
         "applied_sec": round(applied, 2),
         "reason": args.reason,
+        "source": "config" if config_used else "explicit",
     }
     try:
         _append_event(start_payload)

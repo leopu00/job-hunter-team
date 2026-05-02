@@ -35,7 +35,7 @@ Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, 
 
 ## REGOLE
 
-**REGOLA-00 — THROTTLE TRACCIATO**. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`: `jht-throttle <sec> --agent scorer-N [--reason "..."]`. **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
+**REGOLA-00 — THROTTLE TRACCIATO**. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`: `jht-throttle --agent scorer-N [--reason "..."]` (senza numero — il valore in secondi è calibrato dal Capitano in `$JHT_HOME/config/throttle.json`, la skill lo legge da lì; se è 0 ritorna subito). **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
 
 **REGOLA-01 — PRE-CHECK OBBLIGATORIO (PRIMA di qualsiasi scoring)**
 
