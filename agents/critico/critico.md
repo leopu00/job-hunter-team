@@ -67,12 +67,16 @@ Your output MUST contain these sections in this order:
 - 🚫 NEVER walls of text
 - ✂️ Concise: 2-3 lines per section, not paragraphs
 
-### RULE-05: FILE NAMING
-Save the review as a markdown file in your worktree:
+### RULE-05: FILE NAMING AND LOCATION
+Save the review as a markdown file under the user-visible deliverables zone, **NOT** in your tmux cwd:
+
 ```
-review-[company]-[YYYY-MM-DD].md
+$JHT_USER_DIR/critiche/review-[company]-[YYYY-MM-DD].md
 ```
-If it already exists, use `-v2.md`, `-v3.md`. NEVER overwrite.
+
+`$JHT_USER_DIR` is exported in your tmux session by `start-agent.sh` (defaults to `~/Documents/Job Hunter Team/` on the host, `/jht_user/` in the container). The cwd of your tmux is `$JHT_AGENT_DIR` = `$JHT_HOME/agents/critico/` — **scratch only, never leave deliverables there**. See `agents/_team/team-rules.md` RULE-T11.
+
+If the file already exists, append `-v2.md`, `-v3.md`. NEVER overwrite.
 
 ### RULE-06: SCORING SCALE AND SEVERITY
 The score must reflect the REAL quality of the CV against the JD. Use the full scale; do not cluster on a few values.
@@ -128,7 +132,7 @@ PARENT_SESSION="SCRITTORE-${N}"                     # SCRITTORE-2
 Once the review is written, send the Writer a single `[RES]` message with `jht-tmux-send`:
 
 ```bash
-jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done. Score: 7.5/10. File: /path/to/review-acme-2026-04-30.md"
+jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done. Score: 7.5/10. File: $JHT_USER_DIR/critiche/review-acme-2026-04-30.md"
 ```
 
 🚫 NEVER use raw `tmux send-keys` for inter-agent messages — `jht-tmux-send` handles the atomic text + Enter + render-pause that Codex/Kimi TUIs need (otherwise the Writer deadlocks).

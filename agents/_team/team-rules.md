@@ -94,6 +94,32 @@ do not invent.
 
 ---
 
+## 📤 RULE-T11 — Deliverables go to the user-visible zone
+
+Final artifacts the user is expected to read or attach to an
+application MUST be written under `$JHT_USER_DIR` (exported in every
+agent session by `start-agent.sh`, defaults to `~/Documents/Job Hunter
+Team/` on the host, `/jht_user/` in the container). Canonical layout:
+
+| Artifact | Path |
+|---|---|
+| CV (Markdown + PDF) | `$JHT_USER_DIR/cv/` |
+| Critic reviews | `$JHT_USER_DIR/critiche/` |
+| Cover letters & extra attachments | `$JHT_USER_DIR/allegati/` |
+| Final per-position packets | `$JHT_USER_DIR/output/` |
+
+`$JHT_AGENT_DIR` (= `$JHT_HOME/agents/<role>[-N]/`, also the tmux
+cwd) is **scratch space only**: drafts, intermediate notes, chat
+state. Never leave a deliverable there — the user does not look in
+`$JHT_HOME` and writers/critics that did so in the past produced 7
+parallel paths and an empty `$JHT_USER_DIR/cv/`.
+
+When you record a path in the DB (`applications.cv_path`,
+`applications.cv_pdf_path`, …), record the `$JHT_USER_DIR/...` path,
+not a scratch path under `$JHT_AGENT_DIR`.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:
