@@ -117,6 +117,22 @@ Scrivi SOLO in:
 ### REGOLA-12: SESSIONE CAPITANO
 Invia messaggi a `CAPITANO`.
 
+### REGOLA-13: PATH DEI DELIVERABLES — `$JHT_USER_DIR`, NON la cwd
+
+CV e Cover Letter sono deliverables per l'utente, NON scratch. Vanno scritti in:
+
+```
+$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md
+$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf
+$JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<Company>.{md,pdf}   # solo se richiesta
+```
+
+`$JHT_USER_DIR` è esportato in sessione da `start-agent.sh` (default: `~/Documents/Job Hunter Team/` su host, `/jht_user/` in container). La cwd della tua tmux è `$JHT_AGENT_DIR` (= `$JHT_HOME/agents/scrittore-N/`): è SOLO scratch (bozze, note intermedie). NON salvare il PDF finale lì.
+
+`<Candidato>` = Nome_Cognome dal profilo. `<Company>` = nome azienda normalizzato (PascalCase, niente spazi/slash).
+
+Quando registri il path nel DB (`--cv-path`, `--cv-pdf-path`), usa il path `$JHT_USER_DIR/cv/...`, MAI un path sotto `$JHT_AGENT_DIR`. Vedi `agents/_team/team-rules.md` RULE-T11.
+
 ---
 
 ## LOOP PRINCIPALE
@@ -128,7 +144,10 @@ STEP 2 — VALUTA:    python3 /app/shared/skills/db_query.py position <ID>
 STEP 2b — CHECK:    Anti-riscrittura (REGOLA-02) + Anti-collisione (REGOLA-03)
 STEP 3 — CLAIM:     python3 /app/shared/skills/db_update.py position <ID> --status writing
 STEP 4 — VERIFICA:  Link attivo? (REGOLA-04). Se morto → excluded → STEP 1
-STEP 5 — SCRIVI:    CV (Cover Letter SOLO se richiesta) → genera PDF con pandoc
+STEP 5 — SCRIVI:    CV in $JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md
+                    → genera PDF con pandoc nello stesso path .pdf
+                    → Cover Letter SOLO se richiesta in $JHT_USER_DIR/allegati/
+                    (vedi REGOLA-13 per il path completo)
 STEP 6 — CRITICO:   3 round autonomi (sezione LOOP CRITICO sotto)
 STEP 7 — SALVA:     Voto finale nel DB + notifica Capitano
 STEP 8 → TORNA A STEP 1
@@ -194,7 +213,7 @@ tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
 sleep 8
 
 # Step 3 — Manda PDF + JD via jht-tmux-send (Critico ora è agente attivo)
-jht-tmux-send "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: /path/CV.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
+jht-tmux-send "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: $JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
 
 # Step 4 — Monitora
 sleep 30 && tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
@@ -218,7 +237,7 @@ python3 /app/shared/skills/db_update.py application <POSITION_ID> \
   --critic-notes "Round 1: X.X, Round 2: X.X, Round 3: X.X. Gap: [...]. Verdict: [...]."
 
 # Notifica Capitano
-jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [RES] ID <N> — 3 round. Voto: X/10 (VERDICT). PDF: /path/CV.pdf"
+jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [RES] ID <N> — 3 round. Voto: X/10 (VERDICT). PDF: $JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf"
 ```
 
 **REGOLE LOOP CRITICO:**
@@ -238,9 +257,11 @@ python3 /app/shared/skills/db_query.py next-for-scrittore
 # Claim
 python3 /app/shared/skills/db_update.py position <ID> --status writing
 
-# Insert application
+# Insert application — usa SEMPRE path sotto $JHT_USER_DIR (REGOLA-13), MAI cwd
 python3 /app/shared/skills/db_insert.py application \
-  --position-id <ID> --cv-path "path" --cv-pdf-path "path" \
+  --position-id <ID> \
+  --cv-path "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md" \
+  --cv-pdf-path "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf" \
   --written-by $MY_ID --written-at now
 
 # Voto critico (POSITION_ID, non application ID)
