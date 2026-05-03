@@ -114,6 +114,7 @@ if [ "$ROLE" = "bridge" ]; then
     done
     sleep 1
     setsid sh -c "
+      PATH='/app/agents/_tools:\$PATH' \
       JHT_PACING_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
         python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
