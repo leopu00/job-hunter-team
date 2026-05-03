@@ -49,6 +49,9 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 LOGS_DIR = JHT_HOME / "logs"
 SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 PID_FILE = LOGS_DIR / "pacing-bridge.pid"
+# Stato pubblico letto dalla UI (/api/team/pacing-bridge). Scritto
+# atomicamente a ogni tick + al boot. Stesso pattern del sentinel-bridge.
+STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 
 # Sotto questo numero di minuti effettivi nella finestra (dopo aver
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
@@ -411,19 +414,48 @@ def format_message(d: dict) -> str:
     return " | ".join(parts)
 
 
+_JHT_TMUX_SEND_FALLBACKS = [
+    "/app/agents/_tools/jht-tmux-send",
+    str(Path(__file__).resolve().parent.parent / "agents" / "_tools" / "jht-tmux-send"),
+]
+
+
+def _resolve_tmux_send() -> str | None:
+    """Prima prova `jht-tmux-send` nel PATH, poi i path canonici. Restituisce
+    il primo eseguibile esistente, o None. Senza questo lo spawn detached
+    perdeva il PATH ereditato dal container e il send falliva silenziosamente."""
+    for cand in ["jht-tmux-send", *_JHT_TMUX_SEND_FALLBACKS]:
+        if "/" in cand:
+            if Path(cand).is_file() and os.access(cand, os.X_OK):
+                return cand
+        else:
+            # solo nome → cerca nel PATH
+            for p in os.environ.get("PATH", "").split(os.pathsep):
+                full = os.path.join(p, cand)
+                if Path(full).is_file() and os.access(full, os.X_OK):
+                    return full
+    return None
+
+
 def send_to_capitano(msg: str) -> bool:
+    cmd_path = _resolve_tmux_send()
+    if cmd_path is None:
+        print(
+            "[pacing-bridge] jht-tmux-send non trovato in PATH né nei fallback "
+            f"({_JHT_TMUX_SEND_FALLBACKS}), skip send",
+            file=sys.stderr,
+        )
+        return False
     try:
         r = subprocess.run(
-            ["jht-tmux-send", TARGET_SESSION, msg],
+            [cmd_path, TARGET_SESSION, msg],
             capture_output=True,
             text=True,
             timeout=30,
         )
     except FileNotFoundError:
-        print(
-            "[pacing-bridge] jht-tmux-send non in PATH, skip send",
-            file=sys.stderr,
-        )
+        print(f"[pacing-bridge] {cmd_path} sparito tra resolve e exec",
+              file=sys.stderr)
         return False
     except subprocess.TimeoutExpired:
         print("[pacing-bridge] jht-tmux-send timeout dopo 30s", file=sys.stderr)
@@ -446,6 +478,80 @@ def write_pid():
         print(f"[pacing-bridge] WARN write pid: {e}", file=sys.stderr)
 
 
+def _serialize_report(d: dict) -> dict | None:
+    """Trasforma il dict di compute_tick in un payload JSON-safe per la UI.
+    Drop dei datetime e arrotondamento dei numeri per leggibilità nel popover."""
+    if not d.get("ok"):
+        return {
+            "ok": False,
+            "error": d.get("error"),
+            "hint": d.get("hint"),
+            "ts": d["now"].isoformat() if isinstance(d.get("now"), datetime) else None,
+        }
+    agents = [
+        {
+            "name": a["name"],
+            "kt": round(a["kt"], 2),
+            "kt_per_h": round(a["kt_per_h"], 1),
+            "pct_per_h": round(a["pct_per_h"], 2),
+            "share": round(a["share"], 1),
+        }
+        for a in d["agents"]
+    ]
+    skipped = [s["name"] for s in d.get("skipped", [])]
+    v = d["verdict"]
+    verdict = {
+        "kind": v["kind"],
+        "delta": round(v["delta"], 2) if isinstance(v.get("delta"), (int, float)) else None,
+        "frac_pct": round(v["frac_pct"], 1) if isinstance(v.get("frac_pct"), (int, float)) else None,
+    }
+    return {
+        "ok": True,
+        "ts": d["now"].isoformat(),
+        "window_min": d["window_min"],
+        "effective_window_min": round(d["effective_window_min"], 1),
+        "n_samples": d["n_samples"],
+        "usage_now": d["usage_now"],
+        "proj": d["proj"],
+        "reset_at": d["reset_at"],
+        "h_to_reset": round(d["h_to_reset"], 2) if d["h_to_reset"] else None,
+        "delta_usage": round(d["delta_usage"], 2),
+        "team_kt": round(d["team_kt"], 2),
+        "ratio_kt_per_pct": round(d["ratio"], 1),
+        "vel_team": round(d["vel_team"], 2),
+        "vel_target": round(d["vel_target"], 2) if d["vel_target"] else None,
+        "target_band_center": d["target_band_center"],
+        "agents": agents,
+        "skipped": skipped,
+        "verdict": verdict,
+    }
+
+
+def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None):
+    """Scrive lo stato pubblico letto dall'API web. Atomico (tmp + rename)."""
+    state = {
+        "version": 1,
+        "pid": os.getpid(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "next_tick_at": next_tick_at.isoformat(),
+        "tick_interval_min": TICK_MIN,
+        "target_band_center": TARGET_BAND_CENTER,
+        "target_session": TARGET_SESSION,
+        "last_tick_at": (
+            d["now"].isoformat() if d and isinstance(d.get("now"), datetime) else None
+        ),
+        "last_report": _serialize_report(d) if d else None,
+        "last_message": last_message,
+    }
+    try:
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = STATE_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(state, default=str))
+        os.replace(tmp, STATE_FILE)
+    except OSError as e:
+        print(f"[pacing-bridge] WARN write state: {e}", file=sys.stderr)
+
+
 def loop():
     ast, tba, rb = _load_helpers()
     write_pid()
@@ -455,6 +561,9 @@ def loop():
         f"jht_home={JHT_HOME}",
         flush=True,
     )
+    # Stato iniziale al boot: la UI vede subito il countdown, anche prima
+    # del primo tick reale.
+    write_state(None, next_quarter(), None)
 
     while True:
         nxt = next_quarter()
@@ -468,10 +577,18 @@ def loop():
             msg = format_message(d)
             print(msg, flush=True)
             send_to_capitano(msg)
+            # Aggiorna lo stato DOPO il send: la UI vede il tick appena
+            # consegnato e il prossimo countdown già aggiornato.
+            write_state(d, next_quarter(now + timedelta(seconds=1)), msg)
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
                   file=sys.stderr, flush=True)
+            try:
+                write_state(None, next_quarter(now + timedelta(seconds=1)),
+                            f"errore: {e}")
+            except Exception:
+                pass
 
 
 def once(do_send: bool):
