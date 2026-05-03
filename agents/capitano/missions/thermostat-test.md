@@ -44,13 +44,26 @@ puoi calibrare un team di 5 agenti operativi.
    ```
    Se non sei sicura, chiedi al Comandante di farlo lui.
 
-3. **Spawn iniziale — UN agente per ruolo** come baseline: scout-1,
-   analista-1, scorer-1, scrittore-1, critico. Per ognuno:
-   - Se la sessione tmux **esiste già ed è viva** (capture-pane mostra
-     CLI bootato, prompt attivo): NON respawnare, lasciala lì. Il
-     reset config del passo 1 è già bastato a sbloccarla.
-   - Se non esiste o è morta: `start-agent.sh <ruolo> 1` + sleep 12 +
-     kick-off via `jht-tmux-send`.
+3. **Spawn GRADUALE al boot — UN agente alla volta, NON tutti
+   insieme** (lezione dal test 2026-05-03: spawn 5 agenti tutti
+   insieme ha fatto schizzare proj a 220% in 5 min, recupero lento).
+   Procedi in sequenza:
+
+   - **Spawn scout-1** (start-agent.sh + sleep 12 + kick-off)
+   - **Aspetta 2-3 min**, fai check rate_budget
+   - **Se proj < 60%**: spawn analista-1 → aspetta 2-3 min → check
+   - **Se proj < 75%**: spawn scorer-1 → aspetta 2-3 min → check
+   - **Se proj < 85%**: spawn scrittore-1 → aspetta 2-3 min → check
+   - **Critico**: spawnalo solo quando lo Scrittore ne ha bisogno
+     (è on-demand, non parte al boot)
+
+   Se durante lo spawn graduale proj sale > 90%, FERMA gli spawn
+   nuovi e fai loop termostato col team che hai. Aggiungi capacità
+   solo se il team esistente è sotto-saturo.
+
+   **Sessioni preesistenti**: se tmux mostra agenti già vivi e
+   freschi (capture-pane CLI bootato), NON respawnare. Il reset
+   config del passo 1 è già bastato a sbloccarli.
 
 4. **Scaling dinamico — TUO GIUDIZIO, non hardcoded** (questo è il
    punto chiave del test). La regola "1 per ruolo" è solo il
@@ -148,12 +161,16 @@ selezione per il termostato dipende da `proj` e dal tier consumer:
 | **95-100%** (warning) | L1 (30s) | L0/L1 | L0 |
 | **100-105%** (over leggero) | L3 (130s) | L1 (30s) | L0 |
 | **105-110%** (over) | L4 (210s) | L2 (70s) | L1 (30s) |
-| **110-115%** (critico) | L5 (280s, cap) | L3 (130s) | L2 (70s) |
-| **115-120%** (alto critico) | **L6** (~9min, 2×) | L4 (210s) | L3 (130s) |
-| **120-125%** (recupero) | **L7** (~14min, 3×) | L5 (280s) | L4 (210s) |
-| **> 125% & reset > 5min** | **L8** (~19min, 4×) | L6 (2×) | L5 (280s) |
-| **> 125% & reset < 5min** (deathmatch) | **L9** (kill second-tier) | L7+kill | L5 |
-| **proj > 140% / saturazione** | **L10** (freeze totale) | L10 | L10 |
+| **110-120%** (critico) | L5 (280s, cap) | L3 (130s) | L2 (70s) |
+| **120-130%** (alto critico) | **L6** (~9min, 2×) | L4 (210s) | L3 (130s) |
+| **130-150%** (deathmatch leggero) | **L7** (~14min, 3×) + **kill 1 istanza extra** | L6 (2×) | L4 (210s) |
+| **> 150% (deathmatch)** | **L9** (kill TUTTE istanze extra: scout-2/3, scrittore-2/3, analista-2, scorer-2) + L7 sui rimanenti | L9 + L6 | L5 |
+| **> 200% saturazione** | **L10** (freeze totale, kill anche ruoli unici) | L10 | L10 |
+
+**Regola CRITICA**: oltre 150% di proj, NON tentare di scalare giù
+con throttle progressivi (perdi tempo). Vai DIRETTO a kill istanze
+extra (L9). Salvi 5-10 min di recupero. La tabella dice questo
+esplicitamente nelle ultime 2 righe.
 
 **Nota L7/L8/L9/L10**: NON sono valori del config. Per L7 e L8 ordina
 via tmux agli agenti top di chiamare `jht-throttle --agent <name>`
