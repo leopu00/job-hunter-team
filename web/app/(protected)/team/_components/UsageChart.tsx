@@ -9,7 +9,7 @@
 //
 // Il grafico completo con controlli e terminale resta su /team/sentinella.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 type Entry = {
   ts: string
@@ -57,10 +57,51 @@ type RangeId = (typeof RANGES)[number]['id']
 
 type HoverState = { index: number; xPct: number; yPct: number } | null
 
+// niceStep — passo "rotondo" (1, 2, 5 × 10^k) per generare ~targetCount tick
+// equispaziati su un range numerico. Standard d3.ticks.
+function niceStep(range: number, targetCount: number): number {
+  if (range <= 0 || targetCount <= 0) return 1
+  const raw = range / targetCount
+  const exp = Math.pow(10, Math.floor(Math.log10(raw)))
+  const norm = raw / exp
+  const nice = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10
+  return nice * exp
+}
+
+// Tabella di passi temporali "umani". niceTimeStep sceglie il primo
+// >= della granularità desiderata (= span/target), così
+// il numero di tick visibili sta vicino ma non oltre target.
+const TIME_STEPS_MS = [
+  1_000, 5_000, 10_000, 15_000, 30_000,
+  60_000, 2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000, 30 * 60_000,
+  60 * 60_000, 2 * 60 * 60_000, 3 * 60 * 60_000, 6 * 60 * 60_000, 12 * 60 * 60_000,
+  24 * 60 * 60_000, 2 * 24 * 60 * 60_000, 7 * 24 * 60 * 60_000,
+]
+function niceTimeStep(spanMs: number, targetCount: number): number {
+  const desired = spanMs / Math.max(1, targetCount)
+  for (const s of TIME_STEPS_MS) if (s >= desired) return s
+  return TIME_STEPS_MS[TIME_STEPS_MS.length - 1]
+}
+function formatTickTime(ts: number, stepMs: number): string {
+  const d = new Date(ts)
+  if (stepMs >= 24 * 60 * 60_000) {
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  }
+  const opts: Intl.DateTimeFormatOptions = stepMs < 60_000
+    ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }
+    : { hour: '2-digit', minute: '2-digit' }
+  return d.toLocaleTimeString([], opts)
+}
+
 function Chart({
-  entries, tMin, tMax, onHover, onPan,
+  entries, tMin, tMax, yMax, onHover, onPan,
 }: {
-  entries: Entry[]; tMin: number; tMax: number; onHover: (h: HoverState) => void;
+  entries: Entry[]; tMin: number; tMax: number;
+  /** Limite superiore dell'asse Y, controllato dal parent tramite lo
+   *  slider verticale. Riducendolo si zoomma sui dati bassi (il frame
+   *  del SVG resta della stessa dimensione). */
+  yMax: number;
+  onHover: (h: HoverState) => void;
   /** Chiamato durante drag con il delta in millisecondi (positivo = vai avanti
    *  nel tempo, negativo = vai indietro). Il parent applica al panRightTs. */
   onPan?: (deltaMs: number) => void;
@@ -83,25 +124,20 @@ function Chart({
     [tMin, tSpan, innerW]
   )
 
-  // yMax dinamico: scala la verticale in base al valore massimo visibile
-  // (usage, projection, velocity_ideal). Minimo 100 così quando tutto è
-  // sotto quota vediamo comunque la scala 0-100%. Se invece c'è una
-  // projection a 132%, la scala cresce fino a ~150 (round-up a multiplo
-  // di 10 + 10 di margine).
-  const yMax = useMemo(() => {
-    let m = 100
-    for (const e of entries) {
-      for (const v of [e.usage, e.projection, e.velocity_ideal] as (number | undefined | null)[]) {
-        if (typeof v === 'number' && Number.isFinite(v) && v > m) m = v
-      }
-    }
-    return Math.ceil(m / 10) * 10 + 10
-  }, [entries])
-
+  // NIENTE clamp qui: i valori fuori scala devono uscire fisicamente dal
+  // frame (poi un <clipPath> li ritaglia al bordo superiore). Se invece
+  // facessimo Math.min(yMax, v), una proiezione a 200% con yMax=100 si
+  // appiattirebbe sulla linea dei 100, generando un segmento orizzontale
+  // artificiale che confonde.
   const yAt = useCallback(
-    (v: number) => PAD.top + innerH - (Math.max(0, Math.min(yMax, v)) / yMax) * innerH,
+    (v: number) => PAD.top + innerH - (v / yMax) * innerH,
     [innerH, yMax]
   )
+
+  // ID stabile per il clipPath (per evitare collisioni se più Chart
+  // coesistono nella stessa pagina con stesso id "chart-area").
+  const reactId = useId()
+  const clipId = `chart-clip-${reactId.replace(/:/g, '')}`
 
   // Soglia di gap: se due sample adiacenti distano piu' di GAP_MS nel
   // tempo reale, interrompiamo il path (usa M invece di L). Cosi' quando
@@ -134,7 +170,36 @@ function Chart({
     return parts.join(' ')
   }
 
-  const refLines = yMax > 110 ? [50, 80, 95, 100, yMax] : [50, 80, 95, 100]
+  // Tick Y dinamici: passo "rotondo" che produce ~5-6 livelli equispaziati
+  // sull'intervallo [0, yMax]. Quando lo slider Y zoomma sui valori bassi
+  // (yMax=50), ottieni 0/10/20/30/40/50; con yMax=300 ottieni 0/50/100/.../300.
+  const yTicks: number[] = (() => {
+    const step = niceStep(yMax, 5)
+    const out: number[] = []
+    for (let v = 0; v <= yMax + 1e-6; v += step) out.push(Math.round(v * 100) / 100)
+    return out
+  })()
+
+  // Tick X dinamici: scelgo step temporale "umano" (1m, 5m, 1h, ...) tale
+  // che il numero di tick ≈ innerW / 90px (per evitare sovrapposizione
+  // delle label "HH:MM"). Filtro i tick fuori dalla regione visibile.
+  const xTickCountTarget = Math.max(2, Math.floor(innerW / 90))
+  const xTickStep = niceTimeStep(tSpan, xTickCountTarget)
+  const xTicks: number[] = (() => {
+    const out: number[] = []
+    const start = Math.ceil(tMin / xTickStep) * xTickStep
+    for (let t = start; t <= tMax; t += xTickStep) {
+      const px = xAt(t)
+      if (px >= PAD.left - 0.5 && px <= W - PAD.right + 0.5) out.push(t)
+    }
+    return out
+  })()
+
+  // Quote di riferimento "speciali" (sweet spot 90-95 + linea quota 100):
+  // mostrate solo se rientrano nella scala Y corrente, così quando si zoomma
+  // sui valori bassi non si schiacciano in cima sopra altre label.
+  const showSweet = yMax >= 95
+  const showQuota = yMax >= 100
 
   // Mouse → nearest sample (by time). Inverse di xAt (time-based):
   // pxX → vbX → ts → trova il sample col ts più vicino.
@@ -224,93 +289,148 @@ function Chart({
         userSelect: 'none',
       }}
     >
-      {/* Sweet spot: banda 90%-95% dove vogliamo stare (G-spot).
-           Projection sotto 90 = sottouso (SPINGI), sopra 95 = alert RALLENTA. */}
-      <rect
-        x={PAD.left}
-        y={yAt(95)}
-        width={innerW}
-        height={yAt(90) - yAt(95)}
-        fill="#22c55e"
-        opacity={0.08}
-      />
-      <line
-        x1={PAD.left} x2={W - PAD.right}
-        y1={yAt(95)} y2={yAt(95)}
-        stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
-      />
-      <line
-        x1={PAD.left} x2={W - PAD.right}
-        y1={yAt(90)} y2={yAt(90)}
-        stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
-      />
-      <text
-        x={W - PAD.right + 5}
-        y={yAt(92.5) + 3}
-        fontSize={9}
-        fill="rgba(34,197,94,0.75)"
-        fontWeight="600"
-      >
-        target
-      </text>
+      {/* Maschera dell'area chart: tutto ciò che disegniamo dentro il
+          gruppo clippato sotto viene ritagliato a questo rettangolo. Serve
+          per le serie dati: una proiezione a 200% con yMax=100 esce dal
+          bordo superiore invece di appiattirsi. */}
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={PAD.left} y={PAD.top} width={innerW} height={innerH} />
+        </clipPath>
+      </defs>
 
-      {refLines.map(v => {
-        const isQuota = v === 100
-        const isTargetEdge = v === 95
-        const highlighted = isQuota || isTargetEdge
-        return (
-          <g key={v}>
-            <line
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={yAt(v)}
-              y2={yAt(v)}
-              stroke={isQuota ? '#f87171' : isTargetEdge ? '#facc15' : 'rgba(255,255,255,0.08)'}
-              strokeDasharray={highlighted ? '4 4' : '2 6'}
-              strokeWidth={highlighted ? 1 : 0.5}
+      {/* Sweet spot 90-95% (target dove vogliamo stare). Solo se entro yMax
+          per evitare schiacciamenti in cima quando si zoomma sui valori bassi. */}
+      {showSweet && (
+        <>
+          <rect
+            x={PAD.left}
+            y={yAt(95)}
+            width={innerW}
+            height={yAt(90) - yAt(95)}
+            fill="#22c55e"
+            opacity={0.08}
+          />
+          <line
+            x1={PAD.left} x2={W - PAD.right}
+            y1={yAt(95)} y2={yAt(95)}
+            stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
+          />
+          <line
+            x1={PAD.left} x2={W - PAD.right}
+            y1={yAt(90)} y2={yAt(90)}
+            stroke="#22c55e" strokeWidth={0.8} strokeDasharray="2 3" opacity={0.45}
+          />
+          {/* Label "target" a SINISTRA della banda, dentro l'area chart, così
+              non finisce sopra le label dei tick Y a destra. */}
+          <text
+            x={PAD.left + 4}
+            y={yAt(92.5) + 3}
+            fontSize={9}
+            fill="rgba(34,197,94,0.75)"
+            fontWeight="600"
+          >
+            target
+          </text>
+        </>
+      )}
+
+      {/* Tick Y: griglia + label percentuale a destra. Le label dei valori
+          speciali (95, 100) non vengono rese qui — è sempre il tick rotondo
+          a vincere — la natura "speciale" è data dalla linea evidenziata
+          sotto, non dalla label, così evitiamo doppioni. */}
+      {yTicks.map(v => (
+        <g key={`y-${v}`}>
+          <line
+            x1={PAD.left} x2={W - PAD.right}
+            y1={yAt(v)} y2={yAt(v)}
+            stroke="rgba(255,255,255,0.08)"
+            strokeDasharray="2 6"
+            strokeWidth={0.5}
+          />
+          <text x={W - PAD.right + 5} y={yAt(v) + 4} fontSize={10} fill="rgba(255,255,255,0.5)">
+            {v}%
+          </text>
+        </g>
+      ))}
+
+      {/* Linea quota 95% (bordo superiore sweet spot) */}
+      {showSweet && (
+        <line
+          x1={PAD.left} x2={W - PAD.right}
+          y1={yAt(95)} y2={yAt(95)}
+          stroke="#facc15" strokeDasharray="4 4" strokeWidth={1}
+        />
+      )}
+      {/* Linea quota 100% (limite hard) */}
+      {showQuota && (
+        <line
+          x1={PAD.left} x2={W - PAD.right}
+          y1={yAt(100)} y2={yAt(100)}
+          stroke="#f87171" strokeDasharray="4 4" strokeWidth={1}
+        />
+      )}
+
+      {/* Tutte le serie dati e i marker sono dentro il clip dell'area chart:
+          se un valore eccede yMax la linea esce dall'alto invece di
+          appiattirsi sul tetto (idem per i punti). */}
+      <g clipPath={`url(#${clipId})`}>
+        <path d={pathFor('projection')} stroke="#a78bfa" strokeWidth={1.3} fill="none" strokeDasharray="5 4" opacity={0.7} />
+        <path d={pathFor('velocity_ideal')} stroke="#64748b" strokeWidth={1} fill="none" opacity={0.5} />
+        <path d={pathFor('velocity_smooth')} stroke="#f472b6" strokeWidth={1.2} fill="none" opacity={0.85} />
+        <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={2} fill="none" />
+
+        {entries.map((e, i) => {
+          const ts = Date.parse(e.ts)
+          if (!Number.isFinite(ts)) return null
+          // Colore per source (chi ha fatto il check). Backward compat: i
+          // sample legacy senza source cadono su STATUS_COLOR.
+          const src = e.source || ''
+          const sourceColor = SOURCE_COLOR[src]
+          const fill = sourceColor || STATUS_COLOR[e.status] || '#22d3ee'
+          const r = (src === 'capitano' || src.startsWith('sentinella')) ? 3.5 : 2.6
+          return (
+            <circle
+              key={i}
+              cx={xAt(ts)}
+              cy={yAt(e.usage)}
+              r={r}
+              fill={fill}
+              stroke="#0f172a"
+              strokeWidth={1}
             />
-            <text x={W - PAD.right + 5} y={yAt(v) + 4} fontSize={10} fill="rgba(255,255,255,0.5)">
-              {v}%
+          )
+        })}
+      </g>
+
+      {/* Tick X: ogni tick ha una piccola tacca verticale + label HH:MM
+          (o HH:MM:SS per range < 1m, o data per range > 1d). Lo step è
+          calcolato per evitare sovrapposizioni (~90px per label). */}
+      {xTicks.map(t => {
+        const px = xAt(t)
+        // Allineamento label per non uscire dai bordi:
+        // primi tick → start, ultimi → end, in mezzo → middle.
+        const distLeft = px - PAD.left
+        const distRight = W - PAD.right - px
+        const anchor = distLeft < 30 ? 'start' : distRight < 30 ? 'end' : 'middle'
+        return (
+          <g key={`x-${t}`}>
+            <line
+              x1={px} x2={px}
+              y1={H - PAD.bottom} y2={H - PAD.bottom + 4}
+              stroke="rgba(255,255,255,0.4)" strokeWidth={0.6}
+            />
+            <text
+              x={px} y={H - 10}
+              fontSize={10} fill="rgba(255,255,255,0.55)"
+              textAnchor={anchor}
+              fontFamily="monospace"
+            >
+              {formatTickTime(t, xTickStep)}
             </text>
           </g>
         )
       })}
-
-      <path d={pathFor('projection')} stroke="#a78bfa" strokeWidth={1.3} fill="none" strokeDasharray="5 4" opacity={0.7} />
-      <path d={pathFor('velocity_ideal')} stroke="#64748b" strokeWidth={1} fill="none" opacity={0.5} />
-      <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={2} fill="none" />
-
-      {entries.map((e, i) => {
-        const ts = Date.parse(e.ts)
-        if (!Number.isFinite(ts)) return null
-        // Colore per source (chi ha fatto il check). Backward compat: i
-        // sample legacy senza source cadono su STATUS_COLOR.
-        const src = e.source || ''
-        const sourceColor = SOURCE_COLOR[src]
-        const fill = sourceColor || STATUS_COLOR[e.status] || '#22d3ee'
-        const r = (src === 'capitano' || src.startsWith('sentinella')) ? 3.5 : 2.6
-        return (
-          <circle
-            key={i}
-            cx={xAt(ts)}
-            cy={yAt(e.usage)}
-            r={r}
-            fill={fill}
-            stroke="#0f172a"
-            strokeWidth={1}
-          />
-        )
-      })}
-
-      {/* Etichette asse tempo: tMin e tMax (wall-clock), non il primo/ultimo
-          sample. Cosi' gli estremi riflettono la finestra selezionata anche
-          se non ci sono sample recenti. */}
-      <text x={PAD.left} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)">
-        {new Date(tMin).toLocaleTimeString()}
-      </text>
-      <text x={W - PAD.right} y={H - 8} fontSize={10} fill="rgba(255,255,255,0.5)" textAnchor="end">
-        {new Date(tMax).toLocaleTimeString()}
-      </text>
 
       {entries.length === 0 && (
         <text
@@ -351,6 +471,10 @@ function Legend() {
             }}
           />
           proiezione
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#f472b6' }} />
+          velocità
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#64748b' }} />
@@ -469,7 +593,18 @@ export default function UsageChart() {
   // momento, l'utente sta navigando il passato. Reset a null quando cambia
   // il range — non ha senso restare ancorati a un istante in 10m se passi a 24h.
   const [panRightTs, setPanRightTs] = useState<number | null>(null)
-  useEffect(() => { setPanRightTs(null) }, [range])
+  // Override del dominio degli assi (zoom sui dati, non sulla dimensione del SVG):
+  //  - yMaxOverride: tetto manuale dell'asse Y; null = auto-fit sui dati visibili
+  //  - xSpanOverride: ampiezza della finestra temporale in minuti; null = segue
+  //    il bottone di range. Reset entrambi quando l'utente cambia bottone di
+  //    range, così la nuova vista riparte da auto.
+  const [yMaxOverride, setYMaxOverride] = useState<number | null>(null)
+  const [xSpanOverride, setXSpanOverride] = useState<number | null>(null)
+  useEffect(() => {
+    setPanRightTs(null)
+    setYMaxOverride(null)
+    setXSpanOverride(null)
+  }, [range])
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const loadData = useCallback(async () => {
@@ -496,17 +631,21 @@ export default function UsageChart() {
   // Range temporale: tMax = now (ancorato al clock wall-clock), tMin =
   // now - rangeMinutes. Se "tutto", tMin = timestamp del primo sample.
   // Ricalcolato al tick del clock cosi' l'asse scorre nel tempo.
+  // Se xSpanOverride è settato (slider X), prende la precedenza sul bottone
+  // di range — così l'utente regola finemente l'ampiezza temporale.
   const { tMin, tMax } = useMemo(() => {
     const meta = RANGES.find(r => r.id === range) ?? RANGES[1]
-    // tMaxCalc: in live mode segue il clock, in pan mode è ancorato a panRightTs
     const tMaxCalc = panRightTs ?? nowTs
+    if (xSpanOverride !== null) {
+      return { tMin: tMaxCalc - xSpanOverride * 60_000, tMax: tMaxCalc }
+    }
     if (!Number.isFinite(meta.minutes)) {
       // "tutto": usa il primo sample come tMin, o 10 min fa se vuoto
       const firstTs = entries.length > 0 ? Date.parse(entries[0].ts) : tMaxCalc - 10 * 60_000
       return { tMin: Number.isFinite(firstTs) ? firstTs : tMaxCalc - 10 * 60_000, tMax: tMaxCalc }
     }
     return { tMin: tMaxCalc - meta.minutes * 60_000, tMax: tMaxCalc }
-  }, [range, nowTs, entries, panRightTs])
+  }, [range, nowTs, entries, panRightTs, xSpanOverride])
 
   const filtered = useMemo(() => {
     return entries.filter(e => {
@@ -515,8 +654,45 @@ export default function UsageChart() {
     })
   }, [entries, tMin, tMax])
 
+  // yMax automatico: fit sui dati visibili (era dentro Chart, ora qui
+  // perché serve come default dello slider Y e per renderlo controllato
+  // dall'override).
+  const yMaxAuto = useMemo(() => {
+    let m = 100
+    for (const e of filtered) {
+      for (const v of [e.usage, e.projection, e.velocity_ideal, e.velocity_smooth] as (number | undefined | null)[]) {
+        if (typeof v === 'number' && Number.isFinite(v) && v > m) m = v
+      }
+    }
+    return Math.ceil(m / 10) * 10 + 10
+  }, [filtered])
+
+  const yMax = yMaxOverride ?? yMaxAuto
+
+  // X span effettivo in minuti — usato come valore dello slider X.
+  const rangeMeta = RANGES.find(r => r.id === range) ?? RANGES[1]
+  const xSpanCurrent = xSpanOverride ?? (
+    Number.isFinite(rangeMeta.minutes)
+      ? (rangeMeta.minutes as number)
+      : Math.max(5, Math.round((tMax - tMin) / 60_000))
+  )
+
+  // Slider X in scala log (5min → 24h): la log-scale dà controllo fine
+  // anche sui range piccoli (con scala lineare 5 minuti = 0.3% del range
+  // ed è impossibile da centrare).
+  const X_MIN = 5
+  const X_MAX = 1440
+  const xToSlider = (m: number) =>
+    (Math.log(Math.max(X_MIN, Math.min(X_MAX, m))) - Math.log(X_MIN)) /
+    (Math.log(X_MAX) - Math.log(X_MIN))
+  const sliderToX = (s: number) =>
+    Math.round(Math.exp(Math.log(X_MIN) + s * (Math.log(X_MAX) - Math.log(X_MIN))))
+
   const last = filtered.length > 0 ? filtered[filtered.length - 1] : null
   const hovered = hover && filtered[hover.index] ? filtered[hover.index] : null
+
+  const formatSpan = (m: number) =>
+    m >= 60 ? `${(m / 60).toFixed(m % 60 === 0 ? 0 : 1)}h` : `${m}m`
 
   return (
     <div ref={containerRef}>
@@ -597,47 +773,153 @@ export default function UsageChart() {
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">Caricamento…</div>
       ) : (
         <div>
-        <div className="relative">
-          <Chart
-            entries={filtered}
-            tMin={tMin}
-            tMax={tMax}
-            onHover={setHover}
-            onPan={(deltaMs) => {
-              // "ancora" la finestra: snapshot di nowTs al primo drag così
-              // i tick del clock non spostano più la finestra durante il pan.
-              setPanRightTs((prev) => (prev ?? nowTs) + deltaMs)
-            }}
-          />
+        {/* Layout: chart al centro, slider Y verticale a destra (controlla
+            il tetto dell'asse Y), slider X orizzontale sotto (controlla
+            l'ampiezza temporale). Le dimensioni del SVG NON cambiano:
+            cambia solo il dominio mostrato. */}
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+          <div className="relative" style={{ flex: 1, minWidth: 0 }}>
+            <Chart
+              entries={filtered}
+              tMin={tMin}
+              tMax={tMax}
+              yMax={yMax}
+              onHover={setHover}
+              onPan={(deltaMs) => {
+                setPanRightTs((prev) => (prev ?? nowTs) + deltaMs)
+              }}
+            />
 
-          {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
-          {hover && hovered && (
-            <>
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute top-0 bottom-0 w-px"
-                style={{
-                  left: `${hover.xPct}%`,
-                  background: 'rgba(255,255,255,0.2)',
-                }}
-              />
-              <div
-                className="absolute z-10 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 shadow-lg"
-                style={{
-                  left: hover.xPct > 55 ? undefined : `calc(${hover.xPct}% + 12px)`,
-                  right: hover.xPct > 55 ? `calc(${100 - hover.xPct}% + 12px)` : undefined,
-                  top: hover.yPct > 50 ? '8px' : undefined,
-                  bottom: hover.yPct > 50 ? undefined : '8px',
-                  minWidth: 220,
-                }}
-              >
-                <Tooltip entry={hovered} />
-              </div>
-            </>
-          )}
+            {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
+            {hover && hovered && (
+              <>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-0 bottom-0 w-px"
+                  style={{
+                    left: `${hover.xPct}%`,
+                    background: 'rgba(255,255,255,0.2)',
+                  }}
+                />
+                <div
+                  className="absolute z-10 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 shadow-lg"
+                  style={{
+                    left: hover.xPct > 55 ? undefined : `calc(${hover.xPct}% + 12px)`,
+                    right: hover.xPct > 55 ? `calc(${100 - hover.xPct}% + 12px)` : undefined,
+                    top: hover.yPct > 50 ? '8px' : undefined,
+                    bottom: hover.yPct > 50 ? undefined : '8px',
+                    minWidth: 220,
+                  }}
+                >
+                  <Tooltip entry={hovered} />
+                </div>
+              </>
+            )}
+          </div>
+          {/* Slider verticale: controlla il tetto dell'asse Y. Trascinando
+              verso il basso → yMax si riduce → zoom sui valori bassi (es.
+              vedi 0-50% a tutto schermo). Doppio click: torna ad auto. */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <span className="text-[9px] font-mono text-[var(--color-dim)]" title="tetto asse Y">
+              {Math.round(yMax)}%
+            </span>
+            <input
+              type="range"
+              min={5}
+              max={500}
+              step={1}
+              value={Math.min(500, Math.max(5, yMax))}
+              onChange={(e) => setYMaxOverride(Number(e.target.value))}
+              onDoubleClick={() => setYMaxOverride(null)}
+              title={`asse Y: 0-${Math.round(yMax)}% ${yMaxOverride === null ? '(auto)' : ''} — doppio click: reset auto`}
+              aria-label="Tetto asse Y"
+              className="dom-slider dom-slider-v"
+              style={{
+                writingMode: 'vertical-lr' as React.CSSProperties['writingMode'],
+                direction: 'rtl',
+                WebkitAppearance: 'slider-vertical' as React.CSSProperties['WebkitAppearance'],
+                width: 14,
+                flex: 1,
+              }}
+            />
+            <span
+              className="text-[9px] font-mono"
+              style={{ color: yMaxOverride === null ? 'var(--color-dim)' : '#22d3ee' }}
+              title={yMaxOverride === null ? 'auto-fit sui dati' : 'override manuale'}
+            >
+              {yMaxOverride === null ? 'auto' : 'man'}
+            </span>
+          </div>
         </div>
-        {/* Legenda sotto il frame del chart */}
+        {/* Slider orizzontale: controlla l'ampiezza temporale (zoom X).
+            Scala log per dare controllo fine sui range brevi. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <span className="text-[9px] font-mono text-[var(--color-dim)] w-12 text-right" title="finestra temporale">
+            {formatSpan(xSpanCurrent)}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={xToSlider(xSpanCurrent)}
+            onChange={(e) => setXSpanOverride(sliderToX(Number(e.target.value)))}
+            onDoubleClick={() => setXSpanOverride(null)}
+            title={`finestra: ${formatSpan(xSpanCurrent)} ${xSpanOverride === null ? '(da bottone)' : '(slider)'} — doppio click: reset`}
+            aria-label="Ampiezza temporale"
+            className="dom-slider dom-slider-h"
+            style={{ flex: 1 }}
+          />
+          <span
+            className="text-[9px] font-mono"
+            style={{ color: xSpanOverride === null ? 'var(--color-dim)' : '#22d3ee' }}
+            title={xSpanOverride === null ? 'segue il bottone di range' : 'override manuale'}
+          >
+            {xSpanOverride === null ? 'auto' : 'man'}
+          </span>
+        </div>
+        {/* Legenda sotto */}
         <Legend />
+        <style jsx>{`
+          .dom-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+          }
+          .dom-slider-h { height: 10px; }
+          .dom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(34, 211, 238, 0.55);
+            border: 1px solid rgba(34, 211, 238, 0.8);
+            border-radius: 4px;
+            cursor: grab;
+          }
+          .dom-slider-h::-webkit-slider-thumb {
+            width: 48px;
+            height: 10px;
+          }
+          .dom-slider-v::-webkit-slider-thumb {
+            width: 14px;
+            height: 48px;
+          }
+          .dom-slider:active::-webkit-slider-thumb { cursor: grabbing; }
+          .dom-slider::-moz-range-thumb {
+            background: rgba(34, 211, 238, 0.55);
+            border: 1px solid rgba(34, 211, 238, 0.8);
+            border-radius: 4px;
+            cursor: grab;
+            width: 48px;
+            height: 10px;
+          }
+          .dom-slider::-moz-range-track {
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+          }
+        `}</style>
         </div>
       )}
 
