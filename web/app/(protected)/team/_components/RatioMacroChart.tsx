@@ -49,11 +49,17 @@ export default function RatioMacroChart() {
     } catch { /* best-effort */ }
   }, [])
 
+  // NB: il fetch dei token e' SEMPRE largo come la sessione (>=6h, copre
+  // il rolling Kimi K2 di 5h con margine), indipendentemente dal range
+  // selezionato per l'asse X. Motivo: la macroRatio si calcola dalla
+  // nascita sessione, quindi servono i kt dalla nascita anche se l'utente
+  // sta zoomando solo l'ultima ora. Il range UI controlla solo il viewport,
+  // non la finestra dei dati. Bucket fissi a 60s per non degradare la
+  // risoluzione nei range corti.
   const loadTokens = useCallback(async () => {
     const meta = RANGES.find(r => r.id === range) ?? RANGES[3]
-    const sinceMin = Number.isFinite(meta.minutes)
-      ? Math.max(10, Math.min(24 * 60, Math.round(meta.minutes)))
-      : 24 * 60
+    const wantedMin = Number.isFinite(meta.minutes) ? Math.round(meta.minutes) : 24 * 60
+    const sinceMin = Math.max(360, Math.min(24 * 60, wantedMin))
     const bucketSec = sinceMin > 6 * 60 ? 300 : 60
     try {
       const r = await fetch(
