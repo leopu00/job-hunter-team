@@ -635,7 +635,7 @@ function fmtKtCompact(v: number): string {
 }
 
 function BudgetWidgets({
-  stats, ratio, breakdown, etaResetMs, etaTo100Ms, calibration,
+  stats, ratio, breakdown, etaResetMs, etaTo100Ms,
 }: {
   stats: {
     consumedKt: number
@@ -647,7 +647,6 @@ function BudgetWidgets({
   breakdown: { in: number; out: number; cr: number; cc: number } | null
   etaResetMs: number | null
   etaTo100Ms: number | null
-  calibration: { weights: Weights; r2: number } | null
 }) {
   const startTime = new Date(stats.sessionStart.ts)
   const usedPct = stats.budgetKt && stats.budgetKt > 0
@@ -721,41 +720,6 @@ function BudgetWidgets({
         </div>
       )}
 
-      {/* Widget pesi: sempre visibile. Mostra calibrato se R²>0, altrimenti
-          fallback ai pesi Kimi documentati con badge "fallback". */}
-      <div
-        className="flex flex-col px-2 py-1 rounded text-[10px] font-mono leading-tight"
-        style={{
-          background: calibration ? 'rgba(167,139,250,0.06)' : 'rgba(148,163,184,0.06)',
-          border: `1px solid ${calibration ? 'rgba(167,139,250,0.25)' : 'var(--color-border)'}`,
-        }}
-        title={(() => {
-          const w = calibration ? calibration.weights : FALLBACK_W
-          const tag = calibration
-            ? `Pesi calibrati live (least-squares R²=${calibration.r2.toFixed(2)})`
-            : 'Pesi documentati Kimi K2 (fallback). La regressione least-squares non converge — probabilmente multicollinearità tra i 4 tipi di token (crescono insieme, non si possono separare con questi dati).'
-          return `${tag}:\n` +
-            `  input          ×${w.input.toFixed(2)}\n` +
-            `  output         ×${w.output.toFixed(2)}\n` +
-            `  cache_read     ×${w.cacheR.toFixed(2)}\n` +
-            `  cache_creation ×${w.cacheC.toFixed(2)}`
-        })()}
-      >
-        <span className="text-[var(--color-dim)] uppercase tracking-wide text-[9px]">
-          {calibration ? `pesi calibrati · R²=${calibration.r2.toFixed(2)}` : 'pesi · fallback Kimi'}
-        </span>
-        <span style={{ color: calibration ? '#a78bfa' : 'var(--color-muted)', fontWeight: 600 }}>
-          {(() => {
-            const w = calibration ? calibration.weights : FALLBACK_W
-            return (
-              <>
-                in {w.input.toFixed(2)} · out {w.output.toFixed(2)} ·
-                cR {w.cacheR.toFixed(2)}
-              </>
-            )
-          })()}
-        </span>
-      </div>
     </>
   )
 }
@@ -781,123 +745,6 @@ const FALLBACK_W: Weights = { input: 1.0, output: 1.0, cacheR: 1.0, cacheC: 1.0 
 type Weights = { input: number; output: number; cacheR: number; cacheC: number }
 type TypeBucket = { tsMs: number; in: number; out: number; cr: number; cc: number }
 
-// Inverte una matrice 4x4 con Gauss-Jordan + partial pivoting.
-// Ritorna null se la matrice è singolare (rango < 4).
-function invert4(m: number[][]): number[][] | null {
-  const n = 4
-  const a: number[][] = []
-  for (let i = 0; i < n; i++) {
-    a.push([
-      m[i][0], m[i][1], m[i][2], m[i][3],
-      i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0, i === 3 ? 1 : 0,
-    ])
-  }
-  for (let col = 0; col < n; col++) {
-    let pivot = col
-    for (let r = col + 1; r < n; r++) {
-      if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r
-    }
-    if (Math.abs(a[pivot][col]) < 1e-12) return null
-    if (pivot !== col) [a[col], a[pivot]] = [a[pivot], a[col]]
-    const pv = a[col][col]
-    for (let j = 0; j < 2 * n; j++) a[col][j] /= pv
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue
-      const f = a[r][col]
-      if (f === 0) continue
-      for (let j = 0; j < 2 * n; j++) a[r][j] -= f * a[col][j]
-    }
-  }
-  const inv: number[][] = []
-  for (let i = 0; i < n; i++) inv.push(a[i].slice(n, 2 * n))
-  return inv
-}
-
-// Least squares NORMALIZED + RIDGE.
-//
-// Setup matematico: Δusage = w_in·Δin + w_out·Δout + w_cr·Δcr + w_cc·Δcc
-// Per Kimi K2 i Δ vivono su scale diversissime (Δcr ~ 1000× Δin), quindi
-// regressione diretta è dominata dalla colonna grande. Soluzione:
-//   1. Scala ogni colonna per la sua norma L2 → tutte ~stessa magnitudine
-//   2. Risolvi su matrice normalizzata
-//   3. De-scala i pesi: w_originale = w_scaled / norm_colonna
-//
-// Ridge λ piccolo aggiunto come ulteriore stabilizzazione per colonne
-// con varianza zero (es. cache_creation sempre 0).
-//
-// Validazione finale: pesi non negativi, non astronomici, R² > 0 (modello
-// migliore della baseline costante). Altrimenti fallback ai pesi documentati.
-function calibrateWeights(samples: Array<[number, number, number, number, number]>):
-  { weights: Weights; r2: number } | null {
-  if (samples.length < 4) return null
-
-  // Scala = norma L2 di ciascuna delle 4 colonne. 0 → colonna degenere
-  // (lasciamo = 1 per non dividere per zero; la regressione produrrà
-  // peso ~0 per quella variabile, che è il comportamento corretto).
-  const scales = [0, 0, 0, 0]
-  for (const s of samples) {
-    for (let i = 0; i < 4; i++) scales[i] += s[i] * s[i]
-  }
-  for (let i = 0; i < 4; i++) {
-    scales[i] = Math.sqrt(scales[i])
-    if (scales[i] < 1e-9) scales[i] = 1  // colonna a zero → no scaling
-  }
-
-  // Costruisci ATA e ATb sulla matrice normalizzata.
-  const ATA = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
-  const ATb = [0, 0, 0, 0]
-  for (const s of samples) {
-    const x = [s[0]/scales[0], s[1]/scales[1], s[2]/scales[2], s[3]/scales[3]]
-    const y = s[4]
-    for (let i = 0; i < 4; i++) {
-      ATb[i] += x[i] * y
-      for (let j = 0; j < 4; j++) ATA[i][j] += x[i] * x[j]
-    }
-  }
-  // Ridge piccolo per stabilità (proporzionale alla scala della matrice
-  // normalizzata, che ora è ~unitaria).
-  let maxDiag = 0
-  for (let i = 0; i < 4; i++) if (ATA[i][i] > maxDiag) maxDiag = ATA[i][i]
-  const lambda = Math.max(1e-9, maxDiag * 1e-4)
-  for (let i = 0; i < 4; i++) ATA[i][i] += lambda
-
-  const inv = invert4(ATA)
-  if (!inv) return null
-  const wScaled = [0, 0, 0, 0]
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) wScaled[i] += inv[i][j] * ATb[j]
-  }
-
-  // De-scaling: il peso vero è w_scaled diviso per la norma della colonna
-  const w = wScaled.map((v, i) => v / scales[i])
-
-  // Validazione: pesi non negativi, non astronomici
-  for (const v of w) {
-    if (!Number.isFinite(v)) return null
-    if (v < -0.01) return null  // negativo significativo = fit malato
-    if (v > 1000) return null   // assurdo
-  }
-  for (let i = 0; i < 4; i++) if (w[i] < 0) w[i] = 0  // clip noise
-
-  // R² = 1 - SS_res/SS_tot
-  const yMean = samples.reduce((s, x) => s + x[4], 0) / samples.length
-  let ssRes = 0, ssTot = 0
-  for (const s of samples) {
-    const yPred = w[0] * s[0] + w[1] * s[1] + w[2] * s[2] + w[3] * s[3]
-    ssRes += (s[4] - yPred) ** 2
-    ssTot += (s[4] - yMean) ** 2
-  }
-  const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0
-
-  // Se R² è negativo (modello peggio della media costante), il fit non è
-  // affidabile — meglio fallback.
-  if (r2 < 0) return null
-
-  return {
-    weights: { input: w[0], output: w[1], cacheR: w[2], cacheC: w[3] },
-    r2,
-  }
-}
 
 export default function UsageTokensChart() {
   const [entries, setEntries] = useState<Entry[]>([])
@@ -1070,26 +917,16 @@ export default function UsageTokensChart() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, sessionStartIdx, typeBuckets])
 
-  // Calibrazione live dei 4 pesi del rate limit, via least-squares sui
-  // segmenti tra step bridge consecutivi. Per ogni segmento abbiamo un
-  // sample (Δin, Δout, Δcr, Δcc, Δusage). Con N≥4 segmenti risolviamo
-  // il sistema sovradeterminato Aw = b.
-  // Se la regressione non è disponibile o produce pesi assurdi (negativi,
-  // troppo grandi), fallback ai pesi documentati Kimi K2.
-  const calibratedWeights = useMemo(() => {
-    if (stepEventsRaw.length < 5) return null  // serve >=4 segmenti = >=5 step
-    const samples: Array<[number, number, number, number, number]> = []
-    for (let i = 1; i < stepEventsRaw.length; i++) {
-      const a = stepEventsRaw[i - 1]
-      const b = stepEventsRaw[i]
-      const dU = b.usage - a.usage
-      if (dU <= 0) continue
-      samples.push([b.in - a.in, b.out - a.out, b.cr - a.cr, b.cc - a.cc, dU])
-    }
-    return calibrateWeights(samples)
-  }, [stepEventsRaw])
-
-  const currentWeights = calibratedWeights?.weights ?? FALLBACK_W
+  // Pesi rate-limit Kimi K2 fissi a 1.0 uniformi (cfr. doc piattaforma:
+  // il TPM conta input + max_completion_tokens uniformemente, REGARDLESS
+  // del cache). La regressione least-squares che provavamo prima dava
+  // R²~0.49 con pesi assurdi (cR≈0) — multicollinearita' tra i 4 tipi:
+  // crescono insieme perche' ogni risposta del modello ha cache_read
+  // dominante (97% del totale), quindi il sistema non li puo' separare.
+  // Risultato pratico: la curva kT cumulative del chart era 1450x sotto
+  // la realta' (47 kT contro 68 MT veri). Tornando ai pesi documentati
+  // i numeri quadrano col rate budget bridge.
+  const currentWeights = FALLBACK_W
 
   // Ora derivo: tokenSeries (per il chart, weighted con currentWeights) e
   // stepEvents (vecchia struct {ts, usage, kt}, kt = weighted del bucket
@@ -1336,7 +1173,6 @@ export default function UsageTokensChart() {
               breakdown={consumedBreakdown}
               etaResetMs={etaResetMs}
               etaTo100Ms={etaTo100Ms}
-              calibration={calibratedWeights}
             />
           )}
         </div>
