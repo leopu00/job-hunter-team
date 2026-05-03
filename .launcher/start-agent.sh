@@ -100,6 +100,28 @@ if [ "$ROLE" = "bridge" ]; then
       python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
   " >/dev/null 2>&1 < /dev/null &
   echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/sentinel-bridge.log)"
+
+  # Pacing bridge — tick orario al CAPITANO sul ritmo del team. Stesso
+  # pattern del sentinel-bridge: setsid + singleton tramite kill via
+  # /proc/*/cmdline + log su /tmp. Indipendente dal sentinel-bridge:
+  # legge sentinel-data.jsonl (scritto dal sentinel-bridge) + token logs
+  # locali, calcola Δusage / vel_team / vel_target / %/h per agente, e
+  # manda un [BRIDGE PACING] al Capitano allineato a :00,:15,:30,:45 UTC.
+  PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
+  if [ -f "$PACING_SCRIPT" ]; then
+    for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill "$_pid" 2>/dev/null || true
+    done
+    sleep 1
+    setsid sh -c "
+      JHT_PACING_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ pacing-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/pacing-bridge.log)"
+  else
+    echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
+  fi
+
   exit 0
 fi
 
