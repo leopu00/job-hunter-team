@@ -66,16 +66,14 @@ type HoverState = { tsMs: number; xPct: number; yPct: number } | null
 type TokenPoint = { tsMs: number; kt: number }
 type PredictedPoint = { tsMs: number; usage: number }
 type StepEvent = { ts: number; usage: number; kt: number }
-type MacroRatioPoint = { tsMs: number; ratio: number }
 
 function Chart({
-  entries, predictedSeries, tokenSeries, stepEvents, macroRatioSeries, tMin, tMax, onHover, onPan,
+  entries, predictedSeries, tokenSeries, stepEvents, tMin, tMax, onHover, onPan,
 }: {
   entries: Entry[]
   predictedSeries: PredictedPoint[]
   tokenSeries: TokenPoint[]
   stepEvents: StepEvent[]
-  macroRatioSeries: MacroRatioPoint[]
   tMin: number
   tMax: number
   onHover: (h: HoverState) => void
@@ -158,27 +156,6 @@ function Chart({
   )
 
   const fmtKt = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}MT` : `${Math.round(v)}kT`
-
-  // Auto-zoom Y per linea ratio macro (kT/% cumulativo). Scala indipendente
-  // dalle altre serie, occupa tutta l'altezza utile.
-  const { ratioMin, ratioMax } = useMemo(() => {
-    let lo = Infinity, hi = -Infinity
-    for (const p of macroRatioSeries) {
-      if (p.tsMs < tMin || p.tsMs > tMax) continue
-      if (p.ratio < lo) lo = p.ratio
-      if (p.ratio > hi) hi = p.ratio
-    }
-    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { ratioMin: 0, ratioMax: 1 }
-    if (hi - lo < 1) return { ratioMin: Math.max(0, lo - 0.5), ratioMax: hi + 0.5 }
-    const pad = (hi - lo) * 0.15
-    return { ratioMin: Math.max(0, lo - pad), ratioMax: hi + pad }
-  }, [macroRatioSeries, tMin, tMax])
-
-  const ratioSpan = Math.max(0.001, ratioMax - ratioMin)
-  const yRatio = useCallback(
-    (r: number) => PAD.top + innerH - ((Math.max(ratioMin, Math.min(ratioMax, r)) - ratioMin) / ratioSpan) * innerH,
-    [innerH, ratioMin, ratioMax, ratioSpan]
-  )
 
   // Soglia di gap: se due sample adiacenti distano piu' di GAP_MS nel
   // tempo reale, interrompiamo il path (usa M invece di L). Cosi' quando
@@ -409,46 +386,6 @@ function Chart({
         )
       })()}
 
-      {/* Linea ratio MACRO cumulativo (kT/% cumulativi dalla nascita
-          sessione). Ad ogni step calcolato come (kt_step_i - kt_step_0) /
-          (usage_step_i - usage_step_0). Asse Y dedicato (auto-zoom),
-          label viola sui lati. */}
-      {macroRatioSeries.length > 0 && (
-        <path
-          d={(() => {
-            const parts: string[] = []
-            let prevTs: number | null = null
-            for (const p of macroRatioSeries) {
-              if (p.tsMs < tMin || p.tsMs > tMax) { prevTs = null; continue }
-              const isGap = prevTs !== null && (p.tsMs - prevTs) > GAP_MS
-              const cmd = parts.length === 0 || isGap ? 'M' : 'L'
-              parts.push(`${cmd} ${xAt(p.tsMs).toFixed(1)} ${yRatio(p.ratio).toFixed(1)}`)
-              prevTs = p.tsMs
-            }
-            return parts.join(' ')
-          })()}
-          stroke="#ec4899"
-          strokeWidth={2.5}
-          fill="none"
-          strokeDasharray="2 4"
-          opacity={0.95}
-        />
-      )}
-
-      {/* Label range ratio macro — lato sinistro, viola */}
-      {macroRatioSeries.length > 0 && (
-        <>
-          <text x={PAD.left + 4} y={PAD.top + 12} fontSize={9}
-                fill="rgba(236,72,153,0.95)" fontFamily="monospace">
-            ratio max: {ratioMax < 1000 ? `${ratioMax.toFixed(0)} kT/%` : `${(ratioMax / 1000).toFixed(2)} MT/%`}
-          </text>
-          <text x={PAD.left + 4} y={PAD.top + innerH - 4} fontSize={9}
-                fill="rgba(236,72,153,0.95)" fontFamily="monospace">
-            ratio min: {ratioMin < 1000 ? `${ratioMin.toFixed(0)} kT/%` : `${(ratioMin / 1000).toFixed(2)} MT/%`}
-          </text>
-        </>
-      )}
-
       {/* Step events (anchor di calibrazione): cerchietti arancioni sui
           punti dove usage% cambia (Δ ≥ 1). Sono i ground truth — ad ogni
           marker la predicted ricongiunge alla usage reale. */}
@@ -562,13 +499,6 @@ function Legend() {
             background: '#fb923c', border: '1px solid #0f172a',
           }} />
           step (Δusage ≥ 1, anchor di calibrazione)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" style={{
-            display: 'inline-block', width: 14, height: 2,
-            background: 'repeating-linear-gradient(90deg, #ec4899 0 4px, transparent 4px 6px)',
-          }} />
-          ratio kT/% macro cumulativo
         </span>
       </div>
     </div>
@@ -1219,37 +1149,6 @@ export default function UsageTokensChart() {
     }
   }, [stepEvents])
 
-  // Serie ratio MACRO cumulativo: ad ogni step calcola
-  //   (kt_step_i - kt_step_0) / (usage_step_i - usage_step_0)
-  // Cioè il ratio "cumulativo dalla nascita sessione fino a quel punto".
-  // Convergerà al ratio reale man mano che si accumulano step. Sostituisce
-  // la rolling che era troppo rumorosa.
-  // Ratio macro CONTINUA (un punto per ogni bucket della tokenSeries, non
-  // solo agli step bridge). Per ogni bucket t calcoliamo:
-  //   ratio_t = (kt_t - kt_first) / (usage_t - usage_first)
-  // dove usage_t e' lo usage dell'ultimo step bridge raggiunto fino a t
-  // (resta costante tra due step). Conseguenza: nei plateau di usage la
-  // ratio cresce — comportamento corretto (stiamo bruciando token senza
-  // muovere usage), il chart deve mostrarlo invece di lasciare un buco.
-  // Cosi' la linea arriva fino a 'now' senza interruzioni.
-  const macroRatioSeries = useMemo<{ tsMs: number; ratio: number }[]>(() => {
-    if (stepEvents.length < 2 || tokenSeries.length === 0) return []
-    const first = stepEvents[0]
-    const out: { tsMs: number; ratio: number }[] = []
-    let stepIdx = 0  // indice dell'ultimo step <= bucket corrente
-    for (const tok of tokenSeries) {
-      if (tok.tsMs < first.ts) continue
-      while (stepIdx + 1 < stepEvents.length && stepEvents[stepIdx + 1].ts <= tok.tsMs) {
-        stepIdx++
-      }
-      const usageNow = stepEvents[stepIdx].usage
-      const dKt = tok.kt - first.kt
-      const dU = usageNow - first.usage
-      if (dU > 0 && dKt > 0) out.push({ tsMs: tok.tsMs, ratio: dKt / dU })
-    }
-    return out
-  }, [stepEvents, tokenSeries])
-
   // Stats sessione monitorata — usate dai widget sopra il grafico.
   //   • sessionStart  = primo anchor (quando abbiamo iniziato a monitorare)
   //   • consumedKt    = token spesi dalla nascita sessione fino ad ora
@@ -1505,7 +1404,6 @@ export default function UsageTokensChart() {
             predictedSeries={predictedSeries}
             tokenSeries={tokenSeries}
             stepEvents={stepEvents}
-            macroRatioSeries={macroRatioSeries}
             tMin={tMin}
             tMax={tMax}
             onHover={setHover}
