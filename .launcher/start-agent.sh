@@ -582,7 +582,7 @@ _kickoff() {
 }
 
 if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Team avviato dal Comandante. Boot: (1) UN check iniziale con python3 /app/shared/skills/rate_budget.py live per sapere il punto di partenza — se proj>95% NON spawnare; (2) leggi $JHT_HOME/profile/candidate_profile.yml; (3) python3 /app/shared/skills/db_query.py dashboard per stato DB; (4) se budget OK spawn SCOUT-1 (UN solo agente) con /app/.launcher/start-agent.sh + kick-off via /app/agents/_tools/jht-tmux-send. REGOLA D'ORO: 1 SPAWN ALLA VOLTA, POI ASPETTA IL PROSSIMO [BRIDGE TICK] DELLA SENTINELLA (~5 min) PRIMA DI SPAWNARNE UN ALTRO. La Sentinella valuta l'effetto del tuo spawn sull'usage e ti dirà se puoi aggiungere capacità o devi fermarti. Spawnare 5 agenti dopo un singolo ACCELERARE ha causato incident +17% in 5 min e freeze d'emergenza il 2026-04-25 — non ripeterlo. POI BASTA con rate_budget live: il monitoring è della SENTINELLA, lei riceve [BRIDGE TICK] ogni 5 min e ti manda ORDINE concreto, tu esegui. Solo eccezione: ORDINE Sentinella ATTENZIONE/CRITICO/URG/EMERGENZA può richiedere una verifica indipendente prima di applicare throttle pesante (mai entro 2 min dall'ultimo sample)."
+  _msg="[@utente -> @capitano] [MSG] Avvio. Esegui il boot e parti."
   _kickoff "$SESSION" "$_msg"
 
   # Nota V5: il sentinel-bridge.py NON viene più spawnato qui. È un ruolo
@@ -594,15 +594,14 @@ if [ "$ROLE" = "capitano" ]; then
 fi
 
 if [ "$ROLE" = "assistente" ]; then
-  _msg="[@utente -> @assistente] [CHAT] (avvio) Presentati seguendo il flusso CV-first descritto nel tuo prompt: offri le due modalità (caricamento documenti con estrazione automatica, oppure domande guidate via chat/voce), NON fare domande finché l'utente non sceglie o allega qualcosa."
+  _msg="[@utente -> @assistente] [CHAT] (avvio) Presentati come da prompt."
   _kickoff "$SESSION" "$_msg"
 fi
 
 if [ "$ROLE" = "sentinella" ]; then
   # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
-  # Le diamo solo l'avvio e le ricordiamo le 2 skill, il resto sta nel
-  # suo prompt (~/agents/sentinella/AGENTS.md, copiato dal launcher).
-  _msg="[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."
+  # Tutto il protocollo sta nel suo prompt (agents/sentinella/sentinella.md).
+  _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
 
