@@ -44,26 +44,20 @@ puoi calibrare un team di 5 agenti operativi.
    ```
    Se non sei sicura, chiedi al Comandante di farlo lui.
 
-3. **Spawn GRADUALE al boot — UN agente alla volta, NON tutti
-   insieme** (lezione dal test 2026-05-03: spawn 5 agenti tutti
-   insieme ha fatto schizzare proj a 220% in 5 min, recupero lento).
-   Procedi in sequenza:
+3. **Avvia il team** rispettando l'**OBIETTIVO DI PERFORMANCE** in
+   `capitano.md`: proj nel G-spot 90-95% entro 15 min dal boot, e
+   stabile lì per almeno 10 min consecutivi. Hai libertà totale su
+   COME farlo: quanti agenti spawnare, in che ordine, con che
+   intervallo, con che throttle iniziale. Decidi tu basandoti sui
+   dati live (`rate_budget`, `token-rate-now`).
 
-   - **Spawn scout-1** (start-agent.sh + sleep 12 + kick-off)
-   - **Aspetta 2-3 min**, fai check rate_budget
-   - **Se proj < 60%**: spawn analista-1 → aspetta 2-3 min → check
-   - **Se proj < 75%**: spawn scorer-1 → aspetta 2-3 min → check
-   - **Se proj < 85%**: spawn scrittore-1 → aspetta 2-3 min → check
-   - **Critico**: spawnalo solo quando lo Scrittore ne ha bisogno
-     (è on-demand, non parte al boot)
+   Ruoli disponibili: scout, analista, scorer, scrittore, critico
+   (on-demand). Cap tecnico: max ~3 istanze per ruolo come safety
+   net (vedi `capitano.md` REGOLE).
 
-   Se durante lo spawn graduale proj sale > 90%, FERMA gli spawn
-   nuovi e fai loop termostato col team che hai. Aggiungi capacità
-   solo se il team esistente è sotto-saturo.
-
-   **Sessioni preesistenti**: se tmux mostra agenti già vivi e
-   freschi (capture-pane CLI bootato), NON respawnare. Il reset
-   config del passo 1 è già bastato a sbloccarli.
+   Sessioni preesistenti: se tmux mostra agenti già vivi e freschi
+   (capture-pane CLI bootato), NON respawnare. Il reset config del
+   passo 1 è già bastato a sbloccarli.
 
 4. **Scaling dinamico — TUO GIUDIZIO, non hardcoded** (questo è il
    punto chiave del test). La regola "1 per ruolo" è solo il
@@ -146,46 +140,36 @@ scrittore o scout — anche se storicamente erano loro a dominare.
 **Questa è la differenza chiave**: usa `token-rate-now`, non
 `token-by-agent-rate.py` (medio storico, appiattisce).
 
-## Tabella throttle differenziato
+## Throttle differenziato — il principio
 
-Applica per agente, basato su rate ATTUALE e proj corrente.
-**Non applichi più "stesso throttle a tutti"** — è il punto chiave.
+**Mai stesso throttle a tutti.** Un agente che consuma 30 kT/min e
+uno che ne consuma 5 NON devono ricevere la stessa T. Misura sempre
+con `token-rate-now <minuti>` chi sta dominando ADESSO (NON la media
+storica), poi calibra differenziato via `throttle-config.py bulk-set`
+in 1 write atomico.
 
-Riferisciti alla scala 10 livelli completa in `capitano.md`. La
-selezione per il termostato dipende da `proj` e dal tier consumer:
+La scala completa dei livelli L0-L10 (durate, multi-call, kill di
+istanze, freeze) è in `capitano.md`. Mappare proj corrente e tier
+consumer ai livelli giusti è **tuo giudizio, non una ricetta fissa**.
+Più sei lontano dal G-spot e meno tempo ti resta nella finestra,
+più devi essere aggressivo (durate alte, eventualmente kill istanze
+extra in eccesso).
 
-| Stato proj | Top consumer | Mid consumer (5-15 kT/min) | Low consumer |
-|---|---|---|---|
-| **< 85%** (sotto-utilizzo) | L0 (0s) | L0 | L0 |
-| **85-95%** (G-spot) | L0/L1 (0-30s) | L0 | L0 |
-| **95-100%** (warning) | L1 (30s) | L0/L1 | L0 |
-| **100-105%** (over leggero) | L3 (130s) | L1 (30s) | L0 |
-| **105-110%** (over) | L4 (210s) | L2 (70s) | L1 (30s) |
-| **110-120%** (critico) | L5 (280s, cap) | L3 (130s) | L2 (70s) |
-| **120-130%** (alto critico) | **L6** (~9min, 2×) | L4 (210s) | L3 (130s) |
-| **130-150%** (deathmatch leggero) | **L7** (~14min, 3×) + **kill 1 istanza extra** | L6 (2×) | L4 (210s) |
-| **> 150% (deathmatch)** | **L9** (kill TUTTE istanze extra: scout-2/3, scrittore-2/3, analista-2, scorer-2) + L7 sui rimanenti | L9 + L6 | L5 |
-| **> 200% saturazione** | **L10** (freeze totale, kill anche ruoli unici) | L10 | L10 |
+Pattern di calibrazione:
+1. **Misura**: `rate_budget live` + `token-rate-now 5`
+2. **Decidi**: chi rallentare, di quanto, eventuali kill
+3. **Applica**: `throttle-config.py bulk-set` (atomico)
+4. **Notifica** Comandante via `jht-send`
+5. **Aspetta** τ del sistema (2-3 min cruise, 30-60s endgame, vedi
+   tabella cadenza adattiva in `capitano.md`)
+6. **Rivaluta**
 
-**Regola CRITICA**: oltre 150% di proj, NON tentare di scalare giù
-con throttle progressivi (perdi tempo). Vai DIRETTO a kill istanze
-extra (L9). Salvi 5-10 min di recupero. La tabella dice questo
-esplicitamente nelle ultime 2 righe.
-
-**Nota L7/L8/L9/L10**: NON sono valori del config. Per L7 e L8 ordina
-via tmux agli agenti top di chiamare `jht-throttle --agent <name>`
-**2** o **3 volte consecutive** rispettivamente tra ogni task (config
-resta a 280s). Per L9 fai `tmux kill-session` sulle istanze second-tier
-(scout-2/3, scrittore-2/3, analista-2, scorer-2). Per L10 kill totale
-operativi, sopravvivono solo CAPITANO + ASSISTENTE.
-
-**Comando di calibrazione**:
-
-```bash
-# Esempio: proj=105%, top=analista, mid=scrittore, scout
-python3 /app/shared/skills/throttle-config.py bulk-set \
-    analista-1=120 scrittore-1=30 scout-1=30 scorer-1=0 critico=0
-```
+**Regola**: se dopo 2-3 cicli di calibrazione il proj non converge
+verso il G-spot, NON insistere col pattern: stai sbagliando l'analisi.
+Ferma, riconsidera (chi consuma davvero, quale livello applicare,
+serve kill di istanze extra). Vedi anche **OBIETTIVI DI PERFORMANCE**
+in `capitano.md`: hai 15 min per stabilizzare e 10 min di stabilità
+sostenuta. Se sei fuori target, **cambia approccio**.
 
 ## Regole TERMOSTATO
 
