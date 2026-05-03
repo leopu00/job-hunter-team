@@ -36,13 +36,28 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-# Pesi cache: stessi di token-by-agent-rate.py / token-meter.py.
-# input_other e output sono full-cost. cache_read costa il 10%
-# (read da context window prebuiltata), cache_creation 125% (registra
-# il blocco e lo scrive). Sono ipotesi di partenza Kimi K2 — vedi note
-# in docs/internal/2026-05-01-bridge-and-token-monitoring.md.
-CACHE_R_W = 0.1
-CACHE_C_W = 1.25
+# Pesi token per il RATE LIMIT Kimi K2 (NON per il pricing).
+#
+# Da platform.kimi.ai/docs/introduction:
+#   "rate limit is determined based on the number of tokens in your request
+#    plus the number of max_completion_tokens in your parameter, REGARDLESS
+#    OF THE ACTUAL number of tokens generated"
+#
+# Quindi:
+#   - Tutti gli input (input_other + cache_read + cache_creation) contano
+#     uniformemente a 1.0 per il TPM
+#   - L'output "rate-limit" è max_completion_tokens (parametro fisso del
+#     client) NON l'output reale. I nostri wire.jsonl hanno solo output
+#     reale, quindi sottostimiamo questa componente. Workaround: peso 1.0
+#     come fallback (qualunque sia l'output reale, conta come 1).
+#
+# I pesi del PRICING ($) sono diversi (cR=0.25, output=4.17) ma riguardano
+# la fattura, non il TPM. Storico: in passato avevamo confuso le due
+# cose, applicando pesi pricing al calcolo del rate.
+W_INPUT = 1.0
+W_OUTPUT = 1.0
+CACHE_R_W = 1.0
+CACHE_C_W = 1.0
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_DIR = JHT_HOME / ".kimi" / "sessions"
@@ -125,10 +140,13 @@ def session_to_agent(state_path: Path, wire_path: Path | None = None):
 
 
 def billing_weighted(token_usage: dict) -> float:
-    """Costo weighted di una singola risposta API Kimi."""
+    """Costo weighted di una singola risposta API Kimi.
+
+    Pesi derivati dal pricing ufficiale Kimi K2 standard.
+    """
     return (
-        token_usage.get("input_other", 0)
-        + token_usage.get("output", 0)
+        token_usage.get("input_other", 0) * W_INPUT
+        + token_usage.get("output", 0) * W_OUTPUT
         + token_usage.get("input_cache_read", 0) * CACHE_R_W
         + token_usage.get("input_cache_creation", 0) * CACHE_C_W
     )
@@ -137,15 +155,13 @@ def billing_weighted(token_usage: dict) -> float:
 def billing_weighted_claude(usage: dict) -> float:
     """Costo weighted di una singola risposta API Claude (Anthropic).
 
-    Stessi pesi di Kimi per coerenza nel chart unificato:
-      input_tokens                  → 1.0  (full)
-      output_tokens                 → 1.0  (full)
-      cache_read_input_tokens       → 0.1  (read sconto 90%)
-      cache_creation_input_tokens   → 1.25 (creation surcharge)
+    Riusa gli stessi pesi del calcolo Kimi per coerenza visiva nel chart
+    unificato (anche se Claude ha rapporti billing diversi). Se il team
+    gira interamente su Claude, vale la pena introdurre pesi separati.
     """
     return (
-        usage.get("input_tokens", 0)
-        + usage.get("output_tokens", 0)
+        usage.get("input_tokens", 0) * W_INPUT
+        + usage.get("output_tokens", 0) * W_OUTPUT
         + usage.get("cache_read_input_tokens", 0) * CACHE_R_W
         + usage.get("cache_creation_input_tokens", 0) * CACHE_C_W
     )
