@@ -892,12 +892,13 @@ function fmtDuration(ms: number): string {
 
 // Pesi RATE LIMIT Kimi K2 (NON pricing). Da platform.kimi.ai/docs/introduction:
 // "rate limit is determined based on the number of tokens in your request
-//  plus the number of max_completion_tokens in your parameter, REGARDLESS
-//  OF THE ACTUAL number of tokens generated".
-// Quindi tutti gli input contano 1.0 uniformemente; l'output contato è
-// max_completion_tokens (parametro fisso) → noi usiamo 1.0 come fallback
-// sull'output reale (che è una sottostima ma è quello che abbiamo).
-const FALLBACK_W: Weights = { input: 1.0, output: 1.0, cacheR: 1.0, cacheC: 1.0 }
+// Pesi rate-Kimi DERIVATI EMPIRICAMENTE (non dalla doc piattaforma).
+// Su 28 segmenti / 6h, il modello (input + output) e' nettamente piu'
+// stabile (CoV 15% a Δu>=10) di all-tokens (CoV 39%, drift 1.7x), perche'
+// cache_read non contribuisce al rate budget come la doc lascia intendere.
+// Stessa scelta in shared/skills/token-by-agent-series.py — i due punti
+// devono restare allineati altrimenti UI e tabella throttle divergono.
+const FALLBACK_W: Weights = { input: 1.0, output: 1.0, cacheR: 0.0, cacheC: 0.0 }
 
 type Weights = { input: number; output: number; cacheR: number; cacheC: number }
 type TypeBucket = { tsMs: number; in: number; out: number; cr: number; cc: number }
