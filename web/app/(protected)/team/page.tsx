@@ -8,7 +8,6 @@ import UsageChart from './_components/UsageChart'
 import UsageTokensChart from './_components/UsageTokensChart'
 import TokenBreakdown from './_components/TokenBreakdown'
 import TokenTypesChart from './_components/TokenTypesChart'
-import UsageCallsChart from './_components/UsageCallsChart'
 import AgentTokensChart from './_components/AgentTokensChart'
 import ThrottleChart from './_components/ThrottleChart'
 import AgentActivityChart from './_components/AgentActivityChart'
@@ -328,14 +327,6 @@ export default function TeamPage() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[1200px]">
           <TokenTypesChart />
-        </div>
-      </section>
-
-      {/* Rate budget vs CHIAMATE API team — modello giusto del rate Kimi
-           (300-1200 calls/5h, NON token). Predicted basata su chiamate. */}
-      <section className="py-10 border-t border-[var(--color-border)]">
-        <div className="mx-auto w-full max-w-[1200px]">
-          <UsageCallsChart />
         </div>
       </section>
 
