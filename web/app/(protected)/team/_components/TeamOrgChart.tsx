@@ -42,6 +42,20 @@ const BRIDGE_NODE = {
   desc: 'Electronic probe — every 5 min reads usage from the provider and ticks the Sentinel.',
 }
 
+// Pacing Bridge: secondo strumento elettronico, simmetrico al Bridge ma
+// dal lato del Capitano. Ogni 15 min calcola Δusage / vel team / vel
+// target / %/h per agente e manda un [BRIDGE PACING] direttamente al
+// Capitano (NON alla Sentinella). Cliccando il nodo si apre un popover
+// con l'ultimo report dettagliato (agenti, kT, ratio, verdetto).
+// Niente start/stop dalla UI: gira sempre col team (lifecycle del
+// container, vedi .launcher/start-agent.sh ramo "bridge").
+const PACING_NODE = {
+  roleId: 'pacing',
+  emoji: '⏱️',
+  name: 'Pacing',
+  desc: 'Tick every 15 min — sends pacing report to the Captain (per-agent %/h, target speed, verdict).',
+}
+
 const PIPELINE_AGENTS = [
   { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
   { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
@@ -90,6 +104,7 @@ function AgentPopover({
   onClose,
   placement,
   extraContent,
+  wide,
 }: {
   extraContent?: React.ReactNode
   roleId: string
@@ -101,6 +116,8 @@ function AgentPopover({
   onAction?: (id: string, action: 'start' | 'stop') => void
   onClose: () => void
   placement: 'above' | 'below'
+  /** Larghezza extra per popover con extraContent denso (es. Pacing report). */
+  wide?: boolean
 }) {
   const status: AgentStatus = meta?.status ?? 'stopped'
   const color = meta?.color ?? '#ffc107'
@@ -120,7 +137,7 @@ function AgentPopover({
       onClick={(e) => e.stopPropagation()}
       role="dialog"
       aria-label={`${name} details`}
-      className="absolute left-1/2 z-30 w-64 -translate-x-1/2 rounded-xl p-3.5 shadow-2xl"
+      className={`absolute left-1/2 z-30 ${wide ? 'w-80' : 'w-64'} -translate-x-1/2 rounded-xl p-3.5 shadow-2xl`}
       style={{
         ...posStyle,
         background: 'var(--color-panel)',
@@ -215,6 +232,126 @@ type Props = {
   activeRoles?: Set<string>
 }
 
+// Renderer del payload last_report del pacing-bridge dentro al popover.
+// Compatto: una macro-row (vel team / target / verdetto) e una tabellina
+// per agente con kT consumati nella finestra, ratio in kT per 1%, e %/h
+// risultante. Stesso shape dell'API /api/team/pacing-bridge.
+function PacingReport({
+  report,
+}: {
+  report: {
+    ok: boolean
+    ts: string
+    effective_window_min: number
+    n_samples: number
+    usage_now: number | null
+    proj: number | null
+    h_to_reset: number | null
+    delta_usage: number
+    team_kt: number
+    ratio_kt_per_pct: number
+    vel_team: number
+    vel_target: number | null
+    target_band_center: number
+    agents: Array<{ name: string; kt: number; pct_per_h: number; share: number }>
+    skipped: string[]
+    verdict: { kind: 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'; delta: number | null; frac_pct: number | null }
+    error?: string
+    hint?: string
+  } | null
+}) {
+  if (!report) {
+    return (
+      <div className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Nessun tick ricevuto ancora. Il bridge esegue il primo calcolo al
+        prossimo quarto d'ora pieno (:00 / :15 / :30 / :45 UTC).
+      </div>
+    )
+  }
+  if (!report.ok) {
+    return (
+      <div className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Tick saltato: <span className="font-mono">{report.error ?? 'unknown'}</span>
+        {report.hint && <div className="opacity-75 mt-1">{report.hint}</div>}
+      </div>
+    )
+  }
+  const verdictColor =
+    report.verdict.kind === 'SFORO' ? '#ef4444'
+    : report.verdict.kind === 'MARGINE' ? '#22c55e'
+    : report.verdict.kind === 'ALLINEATO' ? '#94a3b8'
+    : '#94a3b8'
+  const verdictLabel =
+    report.verdict.kind === 'SFORO'
+      ? `SFORO +${report.verdict.delta?.toFixed(2)}%/h → riduci ${report.verdict.frac_pct?.toFixed(0)}%`
+      : report.verdict.kind === 'MARGINE'
+        ? `MARGINE −${report.verdict.delta?.toFixed(2)}%/h → puoi salire ${report.verdict.frac_pct?.toFixed(0)}%`
+        : report.verdict.kind === 'ALLINEATO'
+          ? 'ALLINEATO al target'
+          : 'target N/D'
+  const tsLocal = (() => {
+    try {
+      return new Date(report.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return report.ts
+    }
+  })()
+  return (
+    <div className="text-[10px] leading-tight" style={{ color: 'var(--color-muted)' }}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono opacity-70">tick {tsLocal}</span>
+        <span className="font-mono opacity-70">{report.effective_window_min.toFixed(1)}m · {report.n_samples} samples</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-2">
+        <div>usage <span className="font-mono">{report.usage_now}%</span></div>
+        <div>proj <span className="font-mono">{report.proj}%</span></div>
+        <div>vel team <span className="font-mono">{report.vel_team.toFixed(2)}%/h</span></div>
+        <div>vel target <span className="font-mono">{report.vel_target?.toFixed(2) ?? '—'}%/h</span></div>
+        <div>Δusage <span className="font-mono">{report.delta_usage.toFixed(2)}%</span></div>
+        <div>ratio <span className="font-mono">{report.ratio_kt_per_pct.toFixed(1)} kT/%</span></div>
+      </div>
+      <div className="font-semibold uppercase tracking-wide text-[9px] mb-1" style={{ color: 'var(--color-bright)' }}>
+        per agente
+      </div>
+      {report.agents.length === 0 ? (
+        <div className="opacity-60">nessuno sopra soglia</div>
+      ) : (
+        <table className="w-full font-mono text-[9.5px]">
+          <thead>
+            <tr style={{ color: 'var(--color-dim)' }}>
+              <th className="text-left font-normal pb-0.5">agente</th>
+              <th className="text-right font-normal pb-0.5">kT/{report.effective_window_min.toFixed(0)}m</th>
+              <th className="text-right font-normal pb-0.5">%/h</th>
+              <th className="text-right font-normal pb-0.5">share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.agents.map((a) => (
+              <tr key={a.name}>
+                <td className="py-0.5" style={{ color: 'var(--color-bright)' }}>{a.name}</td>
+                <td className="text-right py-0.5">{a.kt.toFixed(1)}</td>
+                <td className="text-right py-0.5">{a.pct_per_h.toFixed(2)}</td>
+                <td className="text-right py-0.5 opacity-70">{a.share.toFixed(0)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {report.skipped.length > 0 && (
+        <div className="mt-1.5 text-[9px] opacity-60">
+          sotto soglia: {report.skipped.join(', ')}
+        </div>
+      )}
+      <div
+        className="mt-2 pt-1.5 text-[10px] font-semibold"
+        style={{ color: verdictColor, borderTop: '1px solid var(--color-border)' }}
+      >
+        {verdictLabel}
+      </div>
+    </div>
+  )
+}
+
 type ArrowPath = { id: string; d: string }
 
 // Colori per il pallino del messaggio: stesso codice usato dal parent
@@ -222,6 +359,7 @@ type ArrowPath = { id: string; d: string }
 // mittente. Bridge è grigio acciaio (strumento elettronico, non agente).
 const AGENT_COLORS: Record<string, string> = {
   bridge:     '#94a3b8',
+  pacing:     '#22d3ee',
   sentinella: '#9c27b0',
   capitano:   '#ff9100',
   scout:      '#2196f3',
@@ -242,6 +380,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null)
   const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
   const bridgeEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const pacingEmojiRef = useRef<HTMLSpanElement | null>(null)
   const sentinelEmojiRef = useRef<HTMLSpanElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -249,6 +388,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     width: number
     height: number
     bridgePath: ArrowPath | null
+    pacingPath: ArrowPath | null
     sentinelToCaptainPath: ArrowPath | null
     captainPaths: ArrowPath[]
     chainPaths: ArrowPath[]
@@ -256,6 +396,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     width: 0,
     height: 0,
     bridgePath: null,
+    pacingPath: null,
     sentinelToCaptainPath: null,
     captainPaths: [],
     chainPaths: [],
@@ -391,6 +532,61 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     }
   }
 
+  // Pacing bridge: stato + ultimo report. Polling /api/team/pacing-bridge
+  // ogni 3s come fa il sentinel-bridge. Niente start/stop dalla UI.
+  type PacingAgentRow = { name: string; kt: number; kt_per_h: number; pct_per_h: number; share: number }
+  type PacingVerdictKind = 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'
+  type PacingReport = {
+    ok: boolean
+    ts: string
+    window_min: number
+    effective_window_min: number
+    n_samples: number
+    usage_now: number | null
+    proj: number | null
+    reset_at: string | null
+    h_to_reset: number | null
+    delta_usage: number
+    team_kt: number
+    ratio_kt_per_pct: number
+    vel_team: number
+    vel_target: number | null
+    target_band_center: number
+    agents: PacingAgentRow[]
+    skipped: string[]
+    verdict: { kind: PacingVerdictKind; delta: number | null; frac_pct: number | null }
+    error?: string
+    hint?: string
+  }
+  const [pacingRunning, setPacingRunning] = useState<boolean>(false)
+  const [pacingLastTickAt, setPacingLastTickAt] = useState<string | null>(null)
+  const [pacingNextTickAt, setPacingNextTickAt] = useState<string | null>(null)
+  const [pacingCountdown, setPacingCountdown] = useState<number | null>(null)
+  const [pacingLastReport, setPacingLastReport] = useState<PacingReport | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const r = await fetch('/api/team/pacing-bridge', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as {
+          running: boolean
+          lastTickAt: string | null
+          nextTickAt: string | null
+          lastReport: PacingReport | null
+        }
+        if (cancelled) return
+        setPacingRunning(!!j.running)
+        setPacingLastTickAt(j.lastTickAt ?? null)
+        setPacingNextTickAt(j.nextTickAt ?? null)
+        setPacingLastReport(j.lastReport ?? null)
+      } catch { /* ignore */ }
+    }
+    check()
+    const interval = setInterval(check, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
   const isActive = (roleId: string) => {
     if (agents) return agents[roleId]?.status === 'running'
     return activeRoles?.has(roleId) ?? false
@@ -484,6 +680,20 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           sentinelToCaptainPath = { id: 'sentinel-to-captain', d: `M ${sX} ${y} L ${eX} ${y}` }
         }
 
+        // Pacing → Captain: il Pacing è alla destra del Captain (col 4),
+        // quindi la freccia parte dal lato sinistro del Pacing e arriva
+        // al lato destro del Captain. Direzione "verso sinistra".
+        let pacingPath: ArrowPath | null = null
+        const pacingNode = pacingEmojiRef.current
+        if (pacingNode && captainEmojiNode) {
+          const pRect = pacingNode.getBoundingClientRect()
+          const cRect = captainEmojiNode.getBoundingClientRect()
+          const sX = pRect.left - flowRect.left - 6
+          const eX = cRect.right - flowRect.left + 6
+          const y = pRect.top + pRect.height / 2 - flowRect.top
+          pacingPath = { id: 'pacing-to-captain', d: `M ${sX} ${y} L ${eX} ${y}` }
+        }
+
         setArrowOverlay((prev) => {
           const width = Math.round(flowRect.width)
           const height = Math.round(flowRect.height)
@@ -497,11 +707,12 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
             samePaths(prev.captainPaths, captainPaths) &&
             samePaths(prev.chainPaths, chainPaths) &&
             sameOpt(prev.bridgePath, bridgePath) &&
+            sameOpt(prev.pacingPath, pacingPath) &&
             sameOpt(prev.sentinelToCaptainPath, sentinelToCaptainPath)
           ) {
             return prev
           }
-          return { width, height, bridgePath, sentinelToCaptainPath, captainPaths, chainPaths }
+          return { width, height, bridgePath, pacingPath, sentinelToCaptainPath, captainPaths, chainPaths }
         })
       })
     }
@@ -512,6 +723,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     if (desktopFlowRef.current) resizeObserver.observe(desktopFlowRef.current)
     if (captainNameRef.current) resizeObserver.observe(captainNameRef.current)
     if (bridgeEmojiRef.current) resizeObserver.observe(bridgeEmojiRef.current)
+    if (pacingEmojiRef.current) resizeObserver.observe(pacingEmojiRef.current)
     if (sentinelEmojiRef.current) resizeObserver.observe(sentinelEmojiRef.current)
     if (captainEmojiRef.current) resizeObserver.observe(captainEmojiRef.current)
     agentEmojiRefs.current.forEach((node) => {
@@ -534,6 +746,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     const f = from.toLowerCase().split('-')[0]   // "scout-1" → "scout"
     const t = to.toLowerCase().split('-')[0]
     if (f === 'bridge'    && t === 'sentinella') return arrowOverlay.bridgePath ? { id: arrowOverlay.bridgePath.id } : null
+    if (f === 'pacing'    && t === 'capitano')   return arrowOverlay.pacingPath ? { id: arrowOverlay.pacingPath.id } : null
     if (f === 'sentinella'&& t === 'capitano')   return arrowOverlay.sentinelToCaptainPath ? { id: arrowOverlay.sentinelToCaptainPath.id } : null
     if (t === 'sentinella'&& f === 'capitano')   return arrowOverlay.sentinelToCaptainPath ? { id: arrowOverlay.sentinelToCaptainPath.id, reverse: true } : null
     if (f === 'capitano') {
@@ -590,7 +803,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     const interval = setInterval(poll, 1500)
     return () => { cancelled = true; clearInterval(interval) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arrowOverlay.bridgePath, arrowOverlay.sentinelToCaptainPath, arrowOverlay.captainPaths, arrowOverlay.chainPaths])
+  }, [arrowOverlay.bridgePath, arrowOverlay.pacingPath, arrowOverlay.sentinelToCaptainPath, arrowOverlay.captainPaths, arrowOverlay.chainPaths])
 
   // Polling /api/team/queue ogni 2.5s. Aggrega per role: se più istanze
   // dello stesso role sono in throttle, prendiamo throttleUntil massimo
@@ -706,6 +919,32 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     return () => clearInterval(interval)
   }, [bridgeNextTickAt, bridgeRunning])
 
+  // Pacing: pallino animato Pacing→Captain ogni volta che arriva un nuovo
+  // tick (lastTickAt cambia). Stesso pattern del Bridge→Sentinel.
+  useEffect(() => {
+    if (!pacingRunning) return
+    if (!arrowOverlay.pacingPath) return
+    if (!pacingLastTickAt) return
+    pushAnim(arrowOverlay.pacingPath.id, { color: colorFor('pacing'), destRole: 'capitano' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacingLastTickAt, pacingRunning, arrowOverlay.pacingPath])
+
+  // Pacing countdown ticker (analogo a quello del Bridge).
+  useEffect(() => {
+    if (!pacingRunning || !pacingNextTickAt) {
+      setPacingCountdown(null)
+      return
+    }
+    const targetMs = new Date(pacingNextTickAt).getTime()
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
+      setPacingCountdown(remaining)
+    }
+    tick()
+    const interval = setInterval(tick, 250)
+    return () => clearInterval(interval)
+  }, [pacingNextTickAt, pacingRunning])
+
   const toggle = (id: string) => setSelected(prev => (prev === id ? null : id))
 
   return (
@@ -769,6 +1008,19 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                 d={arrowOverlay.bridgePath.d}
                 fill="none"
                 stroke={bridgeRunning ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'}
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                markerEnd="url(#team-orgchart-arrowhead)"
+                strokeDasharray="4 8"
+              />
+            )}
+
+            {arrowOverlay.pacingPath && (
+              <path
+                id={arrowOverlay.pacingPath.id}
+                d={arrowOverlay.pacingPath.d}
+                fill="none"
+                stroke={pacingRunning ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'}
                 strokeWidth="1.75"
                 strokeLinecap="round"
                 markerEnd="url(#team-orgchart-arrowhead)"
@@ -999,6 +1251,58 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   onAction={onAction}
                   onClose={() => setSelected(null)}
                   placement="below"
+                />
+              )}
+            </div>
+
+            {/* Pacing Bridge — col 4, simmetrico al Bridge (col 1).
+                Niente start/stop: gira col team. Click → popover con
+                ultimo report dettagliato. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(PACING_NODE.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(PACING_NODE.roleId) } }}
+              aria-expanded={selected === PACING_NODE.roleId}
+              aria-label={`${PACING_NODE.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-4 cursor-pointer outline-none"
+            >
+              <span className="relative">
+                <span ref={pacingEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{PACING_NODE.emoji}</span>
+                <ActiveLed active={pacingRunning} />
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{PACING_NODE.name}</span>
+              {pacingRunning && pacingCountdown !== null && (() => {
+                const m = Math.floor(pacingCountdown / 60)
+                const s = pacingCountdown % 60
+                const label = m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
+                return (
+                  <span
+                    className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
+                    style={{ color: 'var(--color-dim)' }}
+                    aria-label={`Next pacing tick in ${pacingCountdown} seconds`}
+                  >
+                    next tick {label}
+                  </span>
+                )
+              })()}
+
+              {selected === PACING_NODE.roleId && (
+                <AgentPopover
+                  roleId={PACING_NODE.roleId}
+                  emoji={PACING_NODE.emoji}
+                  name={PACING_NODE.name}
+                  desc={PACING_NODE.desc}
+                  meta={{
+                    status: pacingRunning ? 'running' : 'stopped',
+                    color: AGENT_COLORS.pacing,
+                    role: 'Pacing Bridge',
+                  }}
+                  loading={false}
+                  onClose={() => setSelected(null)}
+                  placement="below"
+                  wide
+                  extraContent={<PacingReport report={pacingLastReport} />}
                 />
               )}
             </div>
