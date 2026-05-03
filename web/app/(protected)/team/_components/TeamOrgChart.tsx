@@ -253,7 +253,7 @@ function PacingReport({
     vel_team: number
     vel_target: number | null
     target_band_center: number
-    agents: Array<{ name: string; kt: number; pct_per_h: number; share: number }>
+    agents: Array<{ name: string; kt: number; pct_per_h: number; share: number; events?: number; cadence_per_min?: number }>
     skipped: string[]
     verdict: { kind: 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'; delta: number | null; frac_pct: number | null }
     error?: string
@@ -323,6 +323,12 @@ function PacingReport({
               <th className="text-right font-normal pb-0.5">kT/{report.effective_window_min.toFixed(0)}m</th>
               <th className="text-right font-normal pb-0.5">%/h</th>
               <th className="text-right font-normal pb-0.5">share</th>
+              <th
+                className="text-right font-normal pb-0.5"
+                title="Checkpoint per minuto (eventi loggati da jht-throttle nella finestra). Serve al Capitano per calibrare la durata in config: throttle_eff = cadenza × durata_sec / 60"
+              >
+                chk/min
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -332,6 +338,9 @@ function PacingReport({
                 <td className="text-right py-0.5">{a.kt.toFixed(1)}</td>
                 <td className="text-right py-0.5">{a.pct_per_h.toFixed(2)}</td>
                 <td className="text-right py-0.5 opacity-70">{a.share.toFixed(0)}%</td>
+                <td className="text-right py-0.5 opacity-70">
+                  {a.cadence_per_min != null ? a.cadence_per_min.toFixed(2) : '—'}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -534,7 +543,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
 
   // Pacing bridge: stato + ultimo report. Polling /api/team/pacing-bridge
   // ogni 3s come fa il sentinel-bridge. Niente start/stop dalla UI.
-  type PacingAgentRow = { name: string; kt: number; kt_per_h: number; pct_per_h: number; share: number }
+  type PacingAgentRow = { name: string; kt: number; kt_per_h: number; pct_per_h: number; share: number; events?: number; cadence_per_min?: number }
   type PacingVerdictKind = 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'
   type PacingReport = {
     ok: boolean
