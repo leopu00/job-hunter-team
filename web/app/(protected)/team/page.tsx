@@ -6,6 +6,7 @@ import { useToast } from '../../components/Toast'
 import TeamOrgChart from './_components/TeamOrgChart'
 import UsageChart from './_components/UsageChart'
 import UsageTokensChart from './_components/UsageTokensChart'
+import RatioMacroChart from './_components/RatioMacroChart'
 import TokenBreakdown from './_components/TokenBreakdown'
 import TokenTypesChart from './_components/TokenTypesChart'
 import AgentTokensChart from './_components/AgentTokensChart'
@@ -313,6 +314,14 @@ export default function TeamPage() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[1200px]">
           <UsageTokensChart />
+        </div>
+      </section>
+
+      {/* Ratio kT/% macro cumulativo — chart dedicato, asse Y per la ratio.
+           Estratto da UsageTokensChart per leggibilita'. */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <RatioMacroChart />
         </div>
       </section>
 
