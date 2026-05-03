@@ -113,8 +113,11 @@ if [ "$ROLE" = "bridge" ]; then
       kill "$_pid" 2>/dev/null || true
     done
     sleep 1
+    # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
+    # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
+    # le env vars del parent. Setting PATH a single-quoted lo aveva
+    # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
     setsid sh -c "
-      PATH='/app/agents/_tools:\$PATH' \
       JHT_PACING_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
         python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
