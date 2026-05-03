@@ -159,6 +159,49 @@ def _read_window_samples(since_ts: float, now_ts: float):
     return [s for s in samples if s[2] == last_session]
 
 
+def _read_throttle_events(since_ts: float, now_ts: float) -> dict[str, int]:
+    """Conta gli eventi `throttle-events.jsonl` per agente nella finestra.
+
+    Conta solo `event in {start, checkpoint}` perché ognuno corrisponde a
+    UN checkpoint dell'agente:
+      - `checkpoint` = arrivo a fine task con config=0 (heartbeat).
+      - `start`      = arrivo a fine task con config>0 (pausa vera che parte).
+      - `end`        = chiusura dello `start`, NON un nuovo checkpoint → escluso.
+
+    La cadenza per agente (eventi/min nella finestra effettiva) è il dato
+    che permette al Capitano di calibrare la durata in config:
+        throttle_effettivo = cadenza_per_min × durata_config_sec / 60
+    """
+    path = LOGS_DIR / "throttle-events.jsonl"
+    if not path.exists():
+        return {}
+    counts: dict[str, int] = {}
+    try:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if e.get("event") not in ("start", "checkpoint"):
+                    continue
+                ts = e.get("ts_unix")
+                if not isinstance(ts, (int, float)):
+                    continue
+                if ts < since_ts or ts > now_ts:
+                    continue
+                agent = e.get("agent")
+                if not isinstance(agent, str):
+                    continue
+                counts[agent] = counts.get(agent, 0) + 1
+    except OSError:
+        return {}
+    return counts
+
+
 def hours_to_reset(reset_hhmm: str | None, now: datetime) -> float | None:
     """Ore (float) tra `now` e il prossimo reset_hhmm UTC. None se input invalido."""
     if not reset_hhmm:
@@ -261,7 +304,10 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
     else:
         vel_target = None
 
-    # 5) Per ogni agente: kT, kT/h, %/h, share. Filtra rumore < MIN_PCT_H.
+    # 5) Per ogni agente: kT, kT/h, %/h, share, cadenza checkpoint/min.
+    #    Filtra rumore < MIN_PCT_H.
+    checkpoint_counts = _read_throttle_events(effective_since_ts, now_ts)
+    eff_min = effective_window_h * 60.0
     agents = []
     skipped = []
     for name, kt in sorted(agent_kt.items(), key=lambda kv: -kv[1]):
@@ -271,6 +317,8 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
             skipped.append({"name": name, "pct_per_h": pct_per_h})
             continue
         share = (pct_per_h / vel_team) * 100.0 if vel_team > 0 else 0.0
+        events = checkpoint_counts.get(name, 0)
+        cadence_per_min = events / eff_min if eff_min > 0 else 0.0
         agents.append(
             {
                 "name": name,
@@ -278,6 +326,8 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
                 "kt_per_h": kt_per_h,
                 "pct_per_h": pct_per_h,
                 "share": share,
+                "events": events,
+                "cadence_per_min": cadence_per_min,
             }
         )
 
@@ -373,11 +423,13 @@ def format_message(d: dict) -> str:
         eff_min_str = f"{int(round(eff))}m"
         agent_strs = []
         for a in d["agents"]:
+            cad = a.get("cadence_per_min", 0.0)
             agent_strs.append(
                 f"{a['name']}={a['pct_per_h']:.2f}%/h "
                 f"[{a['kt']:.2f}kT/{eff_min_str} → {a['kt_per_h']:.1f}kT/h "
                 f"÷ {d['ratio']:.1f}kT/% = {a['pct_per_h']:.2f}%/h, "
-                f"share {a['share']:.0f}%]"
+                f"share {a['share']:.0f}%, "
+                f"cadenza {cad:.2f}/min ({a.get('events', 0)} chk in {eff_min_str})]"
             )
         parts.append("agenti: " + " ; ".join(agent_strs))
     else:
@@ -495,6 +547,8 @@ def _serialize_report(d: dict) -> dict | None:
             "kt_per_h": round(a["kt_per_h"], 1),
             "pct_per_h": round(a["pct_per_h"], 2),
             "share": round(a["share"], 1),
+            "events": a.get("events", 0),
+            "cadence_per_min": round(a.get("cadence_per_min", 0.0), 3),
         }
         for a in d["agents"]
     ]
