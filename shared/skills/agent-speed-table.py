@@ -85,6 +85,14 @@ DEFAULT_MIN_PCT_H = 0.20
 # quella che porta team_speed sotto la sua soglia obiettivo.
 PAUSE_OPTIONS_MIN = [10, 15, 20, 30]
 
+# Watchdog: range accettabile di ratio_kt_per_pct calcolata. Se siamo
+# fuori, qualcosa e' cambiato (Kimi ha cambiato il rate model, bridge
+# sballato, composizione team estrema). NON cambiamo i pesi
+# automaticamente — emettiamo un warning per chi consuma il JSON.
+# Cfr docs/internal/2026-05-03-rate-kimi-weights.md per il razionale.
+RATIO_OK_MIN_KT_PER_PCT = 25.0
+RATIO_OK_MAX_KT_PER_PCT = 60.0
+
 
 def _load_skill_module():
     """Path-import di token-by-agent-series.py per riusarne `collect_events`
@@ -230,6 +238,22 @@ def main():
             "throttle_options": opts,
         })
 
+    # Watchdog ratio: vedi commento al top del file e doc 2026-05-03.
+    warnings = []
+    if ratio < RATIO_OK_MIN_KT_PER_PCT:
+        warnings.append(
+            f"ratio_kt_per_pct={ratio:.1f} sotto soglia "
+            f"{RATIO_OK_MIN_KT_PER_PCT} kT/%: pesi possibilmente "
+            f"fuori taratura. Vedi docs/internal/2026-05-03-rate-kimi-weights.md"
+        )
+    elif ratio > RATIO_OK_MAX_KT_PER_PCT:
+        warnings.append(
+            f"ratio_kt_per_pct={ratio:.1f} sopra soglia "
+            f"{RATIO_OK_MAX_KT_PER_PCT} kT/%: pesi possibilmente "
+            f"fuori taratura (Kimi ha cambiato modello? cache_read sta "
+            f"contando di nuovo?). Vedi docs/internal/2026-05-03-rate-kimi-weights.md"
+        )
+
     out = {
         "ok": True,
         "now": now.isoformat(),
@@ -239,11 +263,15 @@ def main():
             "kt": round(team_kt, 2),
             "delta_usage_pct": round(delta_usage, 2),
             "ratio_kt_per_pct": round(ratio, 2),
+            "ratio_in_range": (
+                RATIO_OK_MIN_KT_PER_PCT <= ratio <= RATIO_OK_MAX_KT_PER_PCT
+            ),
             "speed_pct_per_h": round(team_speed_pct_h, 2),
             "samples": n_samples,
         },
         "agents": agents_out,
         "skipped_agents": skipped,
+        "warnings": warnings,
         "caveats": [
             "speed misurata wall-clock: il throttle si somma alle pause "
             "naturali, l'effetto reale puo essere < dello stimato per "
@@ -252,6 +280,9 @@ def main():
             "utilmente (rumore)",
             "ratio_kt_per_pct e' valido per la finestra corrente; cambia "
             "se cambia la composizione degli agenti attivi",
+            f"pesi token (1, 1, 0, 0) hardcoded — range atteso ratio "
+            f"{RATIO_OK_MIN_KT_PER_PCT}-{RATIO_OK_MAX_KT_PER_PCT} kT/%, "
+            f"se fuori vedi warnings[]",
         ],
     }
     json.dump(out, sys.stdout, separators=(",", ":"))
