@@ -52,7 +52,15 @@ EVENTS_FILE = LOGS_DIR / "throttle-events.jsonl"
 # probabilmente errori di battitura — meglio rifiutare/clampare che dormire
 # arbitrariamente. Floor 1s permette comunque pause brevi inter-iter.
 MIN_SLEEP = 1
-MAX_SLEEP = 3600  # 1h hard cap
+# Il cap stretto 240s che avevamo era una difesa contro il timeout
+# shell del CLI (Kimi 60s, Codex 30s, Claude 120s sync) che ucciderebbe
+# il subprocess prima della scrittura del record `end`. Con il pattern
+# detached (vedi `agents/_tools/jht-throttle` wrapper) il subprocess
+# Python gira come figlio di init, fuori dal subprocess tree della
+# tool call → nessun timeout della CLI lo killa, può dormire fino al
+# limite `sleep` linux. Manteniamo cap 1h per sicurezza (un valore
+# di config > 1h è quasi certamente un errore).
+MAX_SLEEP = 3600
 
 
 def _append_event(payload: dict) -> None:

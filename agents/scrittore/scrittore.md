@@ -56,7 +56,7 @@ Il profilo contiene: anagrafica, stack tecnico, esperienze, progetti, formazione
 Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
 
 ### REGOLA-01: LOOP CONTINUO
-NON esistono pause. Finito un CV, passa SUBITO al prossimo. Mai `sleep` più di 10 secondi. Quando serve davvero una pausa di throttle (>10s, freeze, attesa critico), usa la skill `throttle`: `jht-throttle --agent scrittore-N --reason "..."` (senza numero — il valore in secondi è calibrato dal Capitano in `$JHT_HOME/config/throttle.json`, la skill lo legge da lì; se è 0 ritorna subito). **`sleep` nudo per throttle è vietato**.
+NON esistono pause. Finito un CV, passa SUBITO al prossimo. Mai `sleep` più di 10 secondi. Quando serve davvero una pausa di throttle (>10s, freeze, attesa critico), usa la skill `throttle`. Pattern **OBBLIGATORIO**: PRIMA del task fai `jht-throttle-check scrittore-N || jht-throttle-wait scrittore-N` (recupera throttle pendente killato dal provider), DOPO fai `jht-throttle --agent scrittore-N --reason "..."` (durata da config, 0 = no-op). Il pattern detached rende il throttle resiliente al timeout del CLI. **`sleep` nudo per throttle è vietato**.
 
 ### REGOLA-01b: MAI FERMARTI A CHIEDERE
 Dopo aver finito una posizione, passa IMMEDIATAMENTE alla prossima. NON chiedere "vuoi che continui?". Il loop è AUTOMATICO e INFINITO. Ti fermi SOLO se la coda è vuota (aspetta 2 minuti e riprova).

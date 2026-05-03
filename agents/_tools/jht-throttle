@@ -1,51 +1,153 @@
 #!/usr/bin/env bash
-# jht-throttle — pausa tracciata per agenti del team.
+# jht-throttle — pausa tracciata per agenti del team (pattern detached).
 #
-# Usalo INVECE di `sleep N` ogni volta che vuoi mettere il tuo loop in
-# pausa per regolare il ritmo (throttle del rate budget). La skill
-# logga ogni evento in $JHT_HOME/logs/throttle-events.jsonl, così il
-# capitano e la dashboard possono vedere chi si ferma e per quanto.
+# ## Pattern di esecuzione
 #
-# Uso:
-#   jht-throttle --agent <name> [--reason "..."]            # legge throttle-config
-#   jht-throttle <seconds> --agent <name> [--reason "..."]  # forza valore esplicito
+# 1. Il wrapper calcola la durata (da config o argomento esplicito).
+# 2. Scrive uno state file `$JHT_HOME/state/throttle-<agent>.json`
+#    con `until = NOW + seconds`. Serve a `jht-throttle-check` e
+#    `jht-throttle-wait` per il gating pre-task e per il recovery
+#    quando il provider killa il parent.
+# 3. Forka un child DETACHED (subshell + bg + redirect stdin/out/err)
+#    che esegue `python3 throttle.py ...` come figlio di init (PPID 1).
+#    Il child scrive `start` su `events.jsonl`, dorme N secondi,
+#    scrive `end`. NON è soggetto al timeout della tool call della
+#    CLI dell'agente (Kimi 60s, Codex 30s, Claude 120s/600s) → il
+#    record `end` viene SEMPRE scritto, niente orfani.
+# 4. Il PARENT (questo bash) blocca con un loop di micro-sleep da 15s
+#    finché `until` non è passato. Questo BLOCCA l'agente per tutta
+#    la durata della pausa (semantica corretta: niente nuovi task).
+# 5. Quando il parent esce, il state file viene rimosso.
 #
-# Modalità raccomandata: senza <seconds> — il valore viene letto da
-# $JHT_HOME/config/throttle.json, modificato dal Capitano via
-# `python3 /app/shared/skills/throttle-config.py set <agent> <sec>`.
-# Così il Capitano cambia 1 file e tutti gli agenti applicano il nuovo
-# throttle al prossimo ciclo, senza orchestrazione tmux di 5 messaggi.
-# Se l'agente non è in config (o config è 0) la skill ritorna subito
-# senza loggare — fast path per standby.
+# ## Cosa succede se la tool call viene killata dal provider
 #
-# Modalità esplicita: passa <seconds> per forzare un valore (back-compat
-# coi prompt vecchi). Il config viene ignorato.
+# - Il PARENT muore.
+# - Il CHILD detached continua a dormire indipendentemente
+#   (figlio di init, nessuno lo killa).
+# - Il record `end` viene scritto regolarmente quando il sleep finisce.
+# - L'agente, ora libero, DEVE chiamare `jht-throttle-check` PRIMA del
+#   prossimo task. Se exit 1 (STILL_THROTTLED) chiama
+#   `jht-throttle-wait` per ribloccarsi finché until passa.
 #
-# Esempi:
-#   jht-throttle --agent scout-1 --reason "post-batch cooldown"
-#   jht-throttle 120 --agent scout-1 --reason "override emergenza"
+# ## Uso
 #
-# Exit:
-#   0 → pausa eseguita e loggata (o no-op se config=0)
-#   1 → argomenti mancanti / invalidi
+#   jht-throttle --agent <name> [--reason "..."]            # legge config
+#   jht-throttle <seconds> --agent <name> [--reason "..."]  # forza valore
+#
+# ## Exit codes
+#
+# - 0 → pausa eseguita o no-op (config 0)
+# - 1 → argomenti invalidi
+#
+# ## Limiti
+#
+# - Cap config: vedi MAX_SLEEP in `throttle-config.py` (1h).
+# - Cap esplicito (override): vedi MAX_SLEEP in `throttle.py` (1h).
+# - Per pause > 1h: chiamare il wrapper più volte consecutive.
 
-set -euo pipefail
+set -eu
 
-if [ $# -lt 1 ]; then
-  cat >&2 <<EOF
+# ── Parse args ───────────────────────────────────────────────────────
+AGENT=""
+SECONDS_EXPLICIT=""
+REASON=""
+
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    --agent)  AGENT="${2:-}"; shift 2 ;;
+    --reason) REASON="${2:-}"; shift 2 ;;
+    -h|--help)
+      cat <<HLP
 Usage: jht-throttle [seconds] --agent <name> [--reason "..."]
-       jht-throttle --agent scout-1                    (legge throttle-config)
-       jht-throttle 120 --agent scout-1 --reason "..." (forza valore)
-EOF
+       jht-throttle --agent scout-1                     # legge throttle-config
+       jht-throttle 120 --agent scout-1 --reason "..."  # forza valore
+HLP
+      exit 0
+      ;;
+    *)
+      if [ -z "$SECONDS_EXPLICIT" ] && echo "$1" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+        SECONDS_EXPLICIT="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$AGENT" ]; then
+  echo "error: --agent <name> required" >&2
   exit 1
 fi
 
-# Risolvi il path dello script python: prima prova /app (container), poi
-# il percorso relativo dal location del wrapper (utile in dev fuori container).
-SCRIPT="/app/shared/skills/throttle.py"
-if [ ! -f "$SCRIPT" ]; then
-  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  SCRIPT="${SELF_DIR}/../../shared/skills/throttle.py"
+# ── Risolvi durata ───────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYSCRIPT="/app/shared/skills/throttle.py"
+[ -f "$PYSCRIPT" ] || PYSCRIPT="${SCRIPT_DIR}/../../shared/skills/throttle.py"
+
+CFGSCRIPT="/app/shared/skills/throttle-config.py"
+[ -f "$CFGSCRIPT" ] || CFGSCRIPT="${SCRIPT_DIR}/../../shared/skills/throttle-config.py"
+
+if [ -n "$SECONDS_EXPLICIT" ]; then
+  DURATION_SEC=$(printf '%.0f' "$SECONDS_EXPLICIT")
+else
+  DURATION_SEC=$(python3 "$CFGSCRIPT" get "$AGENT" 2>/dev/null || echo 0)
 fi
 
-exec python3 "$SCRIPT" "$@"
+# Fast path: 0 = no-op, niente log, niente state.
+if [ "$DURATION_SEC" -le 0 ] 2>/dev/null; then
+  exit 0
+fi
+
+# ── State file con `until` ───────────────────────────────────────────
+JHT_HOME="${JHT_HOME:-/jht_home}"
+STATE_DIR="$JHT_HOME/state"
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+STATE_FILE="$STATE_DIR/throttle-${AGENT}.json"
+
+NOW_TS=$(date '+%s')
+UNTIL=$(( NOW_TS + DURATION_SEC ))
+ID=$(date '+%s%N' | tail -c 12)
+
+# Atomic write: tmp + rename
+TMP_STATE="${STATE_FILE}.tmp.$$"
+printf '{"agent":"%s","id":"%s","until":%d,"started":%d,"applied_sec":%d}\n' \
+  "$AGENT" "$ID" "$UNTIL" "$NOW_TS" "$DURATION_SEC" > "$TMP_STATE"
+mv -f "$TMP_STATE" "$STATE_FILE"
+
+# ── Fork child detached (figlio di init) ─────────────────────────────
+# subshell + bg = detach dal subprocess tree del parent. stdin chiuso,
+# stdout/stderr a /dev/null. Il child diventa figlio di init (PPID 1)
+# e sopravvive al kill del parent.
+#
+# Se l'utente NON ha passato seconds (modalità config-driven),
+# NON li passiamo al python: lui li rilegge dal config e segna
+# `source=config` nel log. Se invece sono espliciti, li passiamo
+# (source=explicit). Mantiene la distinzione visibile nel jsonl.
+PY_ARGS=( "$PYSCRIPT" )
+if [ -n "$SECONDS_EXPLICIT" ]; then
+  PY_ARGS+=( "$DURATION_SEC" )
+fi
+PY_ARGS+=( --agent "$AGENT" )
+if [ -n "$REASON" ]; then
+  PY_ARGS+=( --reason "$REASON" )
+fi
+
+( python3 "${PY_ARGS[@]}" >/dev/null 2>&1 < /dev/null & )
+
+# ── Parent loop bloccante (chunk 15s) ────────────────────────────────
+# 15s è sotto qualsiasi default provider (Kimi 60s, Codex 30s,
+# Claude 120s) → il parent sopravvive al timeout su tool call lunghe.
+# Anche se il parent viene killato a metà, il check pre-task del
+# prossimo ciclo dell'agente lo riprende (vedi jht-throttle-wait).
+trap 'rm -f "$STATE_FILE" 2>/dev/null; exit 0' INT TERM
+while :; do
+  NOW=$(date '+%s')
+  if [ "$NOW" -ge "$UNTIL" ]; then break; fi
+  REMAINING=$(( UNTIL - NOW ))
+  CHUNK=15
+  if [ "$REMAINING" -lt "$CHUNK" ]; then CHUNK="$REMAINING"; fi
+  sleep "$CHUNK"
+done
+
+# ── Cleanup ──────────────────────────────────────────────────────────
+rm -f "$STATE_FILE" 2>/dev/null || true
+exit 0

@@ -37,7 +37,7 @@ Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, 
 
 Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` mai `sudo pip`**, ecc.). Leggile al boot. Le regole sotto sono role-specific e si aggiungono a quelle.
 
-**REGOLA-00 — THROTTLE TRACCIATO**. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`: `jht-throttle --agent scorer-N [--reason "..."]` (senza numero — il valore in secondi è calibrato dal Capitano in `$JHT_HOME/config/throttle.json`, la skill lo legge da lì; se è 0 ritorna subito). **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
+**REGOLA-00 — THROTTLE TRACCIATO**. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`. Pattern **OBBLIGATORIO** ad ogni iterazione: PRIMA del task fai `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recupera eventuale throttle pendente killato dal provider), DOPO il task fai `jht-throttle --agent scorer-N [--reason "..."]` (durata da `$JHT_HOME/config/throttle.json`, 0 = no-op). Il pattern detached rende il throttle resiliente al timeout del CLI. **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
 
 **REGOLA-01 — PRE-CHECK OBBLIGATORIO (PRIMA di qualsiasi scoring)**
 

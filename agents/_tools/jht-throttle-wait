@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# jht-throttle-wait — blocca l'agente finché un throttle pendente non
+# scade (recovery dopo kill del PARENT da timeout della tool call).
+#
+# Pattern:
+#   jht-throttle-wait <agent>
+#
+# Legge `$JHT_HOME/state/throttle-<agent>.json`, calcola `until - NOW`,
+# e dorme in chunk da 15s (sotto qualsiasi default provider). Esce
+# quando until è passato. Idempotente: se non c'è state file, exit
+# subito 0.
+#
+# Quando usarlo (vedi SKILL.md):
+#   - PRIMA di un task, dopo `jht-throttle-check` exit 1.
+#   - Quando il PARENT del precedente `jht-throttle` è stato killato
+#     dal timeout della tool call (es. Kimi 60s default) ma il throttle
+#     deve continuare per ulteriori N secondi.
+#
+# Niente side effect a parte rimuovere lo state file scaduto a fine.
+
+set -eu
+
+AGENT="${1:-}"
+if [ -z "$AGENT" ]; then
+  echo "Usage: jht-throttle-wait <agent>" >&2
+  exit 2
+fi
+
+JHT_HOME="${JHT_HOME:-/jht_home}"
+STATE_FILE="$JHT_HOME/state/throttle-${AGENT}.json"
+
+if [ ! -f "$STATE_FILE" ]; then
+  exit 0
+fi
+
+UNTIL=$(grep -o '"until":[0-9]*' "$STATE_FILE" 2>/dev/null | head -1 | cut -d: -f2)
+if [ -z "$UNTIL" ]; then
+  exit 0
+fi
+
+# Loop bloccante in chunk 15s.
+trap 'exit 0' INT TERM
+while :; do
+  NOW=$(date '+%s')
+  if [ "$NOW" -ge "$UNTIL" ]; then break; fi
+  REMAINING=$(( UNTIL - NOW ))
+  CHUNK=15
+  if [ "$REMAINING" -lt "$CHUNK" ]; then CHUNK="$REMAINING"; fi
+  sleep "$CHUNK"
+done
+
+# Cleanup: state file ormai scaduto.
+rm -f "$STATE_FILE" 2>/dev/null || true
+exit 0
