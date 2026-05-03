@@ -268,8 +268,30 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   // rimosso da questa lista. Per ora alimentato da un demo cyclic interno
   // (vedi useEffect più sotto); in futuro si collegherà ai messaggi reali
   // tra agenti.
-  const [messageAnims, setMessageAnims] = useState<{ key: number; pathId: string; reverse?: boolean; durationMs: number; color: string }[]>([])
+  // `queued` + `destRole`: se il destinatario è in throttle attivo, il
+  // pallino non arriva al nodo. Animation con keyPoints="0;0.85" + fill=
+  // "freeze" → si ferma all'85% del path. Quando il throttle scade,
+  // l'anim viene rimossa e sostituita da un'altra "completion" sul
+  // tratto 0.85→1 (vedi useEffect più sotto).
+  const [messageAnims, setMessageAnims] = useState<{
+    key: number
+    pathId: string
+    reverse?: boolean
+    durationMs: number
+    color: string
+    queued?: boolean
+    completion?: boolean
+    destRole?: string
+  }[]>([])
   const animKeyRef = useRef(0)
+
+  // Stato della coda per role (aggregato across instances). Popolato
+  // dal polling di /api/team/queue. throttleUntil = max ts attivo tra
+  // le istanze del role; queued = somma. Se nessuna istanza è in
+  // throttle, l'entry sparisce.
+  const [queueState, setQueueState] = useState<Record<string, { queued: number; throttleUntil: number }>>({})
+  const queueStateRef = useRef(queueState)
+  useEffect(() => { queueStateRef.current = queueState }, [queueState])
   // Velocità del pallino in px/sec — costante a prescindere dalla lunghezza
   // del path (così Bridge→Sentinel breve e Captain→Scout lungo hanno la
   // stessa "velocità apparente"). 200 px/s è un compromesso: il path più
@@ -281,7 +303,10 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   // Helper: aggiunge un'animazione su pathId calcolando la durata in base
   // alla lunghezza reale del path SVG (getTotalLength). Il color è quello
   // del mittente — il pallino "ha la voce" dell'agente che parla.
-  const pushAnim = (pathId: string, opts?: { reverse?: boolean; color?: string }) => {
+  // Se `destRole` è passato e quell'agente è in throttle, l'animation viene
+  // accorciata all'85% del path con fill=freeze: il pallino si ferma davanti
+  // al nodo destinatario fino a fine pausa.
+  const pushAnim = (pathId: string, opts?: { reverse?: boolean; color?: string; destRole?: string }) => {
     const pathEl = typeof document !== 'undefined'
       ? (document.getElementById(pathId) as unknown as SVGPathElement | null)
       : null
@@ -289,10 +314,17 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     const durationMs = Math.max(MIN_DURATION_MS, Math.round((length / PX_PER_SEC) * 1000))
     const key = ++animKeyRef.current
     const color = opts?.color ?? '#34d399'
-    setMessageAnims((prev) => [...prev, { key, pathId, reverse: opts?.reverse, durationMs, color }])
-    setTimeout(() => {
-      setMessageAnims((prev) => prev.filter((a) => a.key !== key))
-    }, durationMs + 800)
+    const destRole = opts?.destRole
+    const isQueued = !!destRole && !!queueStateRef.current[destRole]
+    setMessageAnims((prev) => [...prev, { key, pathId, reverse: opts?.reverse, durationMs, color, queued: isQueued, destRole }])
+    if (!isQueued) {
+      // Animation completa: rimossa dopo dur + buffer.
+      setTimeout(() => {
+        setMessageAnims((prev) => prev.filter((a) => a.key !== key))
+      }, durationMs + 800)
+    }
+    // Se `isQueued`, l'animazione resta freezata finché il watcher
+    // (useEffect su queueState) non la sblocca emettendo una completion.
   }
   // Per evitare di richiamare beginElement() su un <animateMotion> già
   // avviato (succede quando React ri-rendera il map e il ref callback
@@ -544,7 +576,8 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         for (const m of j.messages) {
           const route = messageRouteToPathId(m.from, m.to)
           if (!route) continue
-          pushAnim(route.id, { reverse: route.reverse, color: colorFor(m.from) })
+          const destRole = m.to.toLowerCase().split('-')[0]
+          pushAnim(route.id, { reverse: route.reverse, color: colorFor(m.from), destRole })
         }
       } catch { /* network blip → retry next tick */ }
     }
@@ -558,6 +591,86 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     return () => { cancelled = true; clearInterval(interval) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arrowOverlay.bridgePath, arrowOverlay.sentinelToCaptainPath, arrowOverlay.captainPaths, arrowOverlay.chainPaths])
+
+  // Polling /api/team/queue ogni 2.5s. Aggrega per role: se più istanze
+  // dello stesso role sono in throttle, prendiamo throttleUntil massimo
+  // e somma di queued (l'UI vede UN unico stato per role, e basta UNA
+  // istanza throttled per fermare i pallini diretti a quel ruolo).
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/team/queue', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as { agents: Array<{ agent: string; queued: number; throttleUntil: string | null }> }
+        if (cancelled) return
+        const next: Record<string, { queued: number; throttleUntil: number }> = {}
+        for (const a of j.agents) {
+          const role = a.agent.toLowerCase().split('-')[0]
+          const untilMs = a.throttleUntil ? Date.parse(a.throttleUntil) : 0
+          // Skippiamo agenti senza throttle attivo: niente da rappresentare.
+          if (untilMs <= Date.now()) continue
+          const cur = next[role]
+          next[role] = {
+            queued: (cur?.queued ?? 0) + a.queued,
+            throttleUntil: Math.max(cur?.throttleUntil ?? 0, untilMs),
+          }
+        }
+        setQueueState(next)
+      } catch { /* ignore */ }
+    }
+    poll()
+    const interval = setInterval(poll, 2500)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  // Watcher: quando il throttle di un role scade (l'entry esce da
+  // queueState), tutti i pallini queued con destRole = quel role
+  // devono completare il tragitto. Li rimuoviamo dallo state e
+  // aggiungiamo una "completion" sul tratto 0.85→1.
+  const prevQueueRolesRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const currRoles = new Set(Object.keys(queueState))
+    const released: string[] = []
+    for (const role of prevQueueRolesRef.current) {
+      if (!currRoles.has(role)) released.push(role)
+    }
+    prevQueueRolesRef.current = currRoles
+    if (released.length === 0) return
+
+    // Per ogni anim queued con destRole rilasciato → spawn completion.
+    setMessageAnims((prev) => {
+      const survivors: typeof prev = []
+      const toComplete: typeof prev = []
+      for (const a of prev) {
+        if (a.queued && a.destRole && released.includes(a.destRole)) {
+          toComplete.push(a)
+        } else {
+          survivors.push(a)
+        }
+      }
+      if (toComplete.length === 0) return prev
+      const completionAnims = toComplete.map((a) => {
+        const key = ++animKeyRef.current
+        // Tratto residuo 0.85→1 = 15% del path. Durata proporzionale.
+        const compDur = Math.max(300, Math.round(a.durationMs * 0.15))
+        // Cleanup pianificato: dopo compDur + buffer rimuoviamo l'anim.
+        setTimeout(() => {
+          setMessageAnims((prev) => prev.filter((x) => x.key !== key))
+        }, compDur + 600)
+        return {
+          key,
+          pathId: a.pathId,
+          reverse: a.reverse,
+          durationMs: compDur,
+          color: a.color,
+          completion: true,
+          destRole: a.destRole,
+        }
+      })
+      return [...survivors, ...completionAnims]
+    })
+  }, [queueState])
 
   // Demo Bridge → Sentinella: ogni 15s spawn un pallino sulla freccia
   // Bridge→Sentinel per simulare il [BRIDGE TICK] che il bridge Python
@@ -613,6 +726,13 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         @keyframes orgchart-pop {
           from { opacity: 0; }
           to   { opacity: 1; }
+        }
+        @keyframes team-msg-queued-pulse {
+          0%, 100% { opacity: 0.28; }
+          50%      { opacity: 0.55; }
+        }
+        .team-msg-queued-pulse {
+          animation: team-msg-queued-pulse 1.6s ease-in-out infinite;
         }
       `}</style>
 
@@ -708,39 +828,56 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                 15s fa, sei in ritardo, salta alla fine"). Soluzione: begin=
                 "indefinite" + beginElement() chiamato dal callback ref nel
                 momento in cui l'elemento entra nel DOM. */}
-            {messageAnims.map(({ key, pathId, reverse, durationMs, color }) => (
-              <g key={key}>
-                {/* Halo: stesso colore del mittente, opacità bassa per
-                    leggerlo anche su sfondo scuro. */}
-                <circle cx="0" cy="0" r="9" fill={color} opacity="0.28">
-                  <animateMotion
-                    ref={beginAnim}
-                    dur={`${durationMs}ms`}
-                    begin="indefinite"
-                    repeatCount="1"
-                    fill="freeze"
-                    calcMode="linear"
-                    {...(reverse ? { keyPoints: '1;0', keyTimes: '0;1' } : {})}
-                  >
-                    <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
-                  </animateMotion>
-                </circle>
-                {/* Pallino centrale: colore pieno del mittente. */}
-                <circle cx="0" cy="0" r="3.4" fill={color}>
-                  <animateMotion
-                    ref={beginAnim}
-                    dur={`${durationMs}ms`}
-                    begin="indefinite"
-                    repeatCount="1"
-                    fill="freeze"
-                    calcMode="linear"
-                    {...(reverse ? { keyPoints: '1;0', keyTimes: '0;1' } : {})}
-                  >
-                    <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
-                  </animateMotion>
-                </circle>
-              </g>
-            ))}
+            {messageAnims.map(({ key, pathId, reverse, durationMs, color, queued, completion }) => {
+              // keyPoints + keyTimes mappano il "frame normalizzato" (0..1
+              // del path) al "tempo normalizzato" (0..1 della durata).
+              // - normale: 0→1 (o 1→0 reverse).
+              // - queued: 0→0.85 (si ferma davanti al nodo). fill=freeze
+              //   tiene il pallino fermo all'85% finché il throttle non
+              //   scade e il watcher emette una "completion".
+              // - completion: 0.85→1 (riprende e termina) — anche per
+              //   reverse (1→0.15) per coprire il tratto "vicino al nodo".
+              const kp = completion
+                ? (reverse ? '0.15;0' : '0.85;1')
+                : queued
+                  ? (reverse ? '1;0.15' : '0;0.85')
+                  : (reverse ? '1;0' : null) // null = lascio default SMIL (0;1)
+              const motionProps = kp ? { keyPoints: kp, keyTimes: '0;1' } : {}
+              return (
+                <g key={key}>
+                  {/* Halo: stesso colore del mittente, opacità bassa per
+                      leggerlo anche su sfondo scuro. Quando in queue (freeze
+                      a 0.85), pulsa per dare il senso di "in attesa". */}
+                  <circle cx="0" cy="0" r="9" fill={color} opacity="0.28" className={queued ? 'team-msg-queued-pulse' : undefined}>
+                    <animateMotion
+                      ref={beginAnim}
+                      dur={`${durationMs}ms`}
+                      begin="indefinite"
+                      repeatCount="1"
+                      fill="freeze"
+                      calcMode="linear"
+                      {...motionProps}
+                    >
+                      <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
+                    </animateMotion>
+                  </circle>
+                  {/* Pallino centrale: colore pieno del mittente. */}
+                  <circle cx="0" cy="0" r="3.4" fill={color}>
+                    <animateMotion
+                      ref={beginAnim}
+                      dur={`${durationMs}ms`}
+                      begin="indefinite"
+                      repeatCount="1"
+                      fill="freeze"
+                      calcMode="linear"
+                      {...motionProps}
+                    >
+                      <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
+                    </animateMotion>
+                  </circle>
+                </g>
+              )
+            })}
           </svg>
         )}
 
