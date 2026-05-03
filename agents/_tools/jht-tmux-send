@@ -73,10 +73,15 @@ m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+
 if m:
     from_, to_, kind = m.group(1), m.group(2), m.group(3) or ""
 else:
-    # 2) bridge automatico: "[BRIDGE TICK|FAILURE|ALERT|INFO] ..." → la
-    #    destinazione è la session destinataria (passata come argv[1]).
-    mb = re.match(r'^\s*\[BRIDGE\s+([A-Z]+)\]', msg)
-    if mb:
+    # 2a) pacing-bridge: "[BRIDGE PACING] ..." — nodo separato dal Bridge
+    #     classico (sentinel) nel team chart. Marcato come from=pacing per
+    #     far partire il pallino dal nodo Pacing → Capitano.
+    mp = re.match(r'^\s*\[BRIDGE\s+PACING\]', msg)
+    if mp:
+        from_, to_, kind = "pacing", session.lower(), "PACING"
+    # 2b) bridge automatico: "[BRIDGE TICK|FAILURE|ALERT|INFO] ..." → la
+    #     destinazione è la session destinataria (passata come argv[1]).
+    elif (mb := re.match(r'^\s*\[BRIDGE\s+([A-Z]+)\]', msg)):
         from_, to_, kind = "bridge", session.lower(), mb.group(1)
     else:
         # 3) sentinella autonoma: "[SENTINELLA] ..." o "[SENTINELLA] [TYPE] ..."
