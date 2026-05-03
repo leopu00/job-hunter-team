@@ -489,7 +489,10 @@ function Chart({
       {/* Step events (anchor di calibrazione): cerchietti arancioni sui
           punti dove usage% cambia (Δ ≥ 1). Sono i ground truth — ad ogni
           marker la predicted ricongiunge alla usage reale. */}
-      {stepEvents.map((s, i) => {
+      {/* Step markers: ancorati alla curva usage (sono % bridge), li
+          mostriamo solo quando usage e' visibile. Idem se l'utente ha
+          esplicitamente tolto il toggle "step", oggi accoppiato a usage. */}
+      {visible.usage && stepEvents.map((s, i) => {
         if (s.ts < tMin || s.ts > tMax) return null
         return (
           <circle
@@ -523,7 +526,9 @@ function Chart({
         )
       })}
 
-      {entries.map((e, i) => {
+      {/* Sample dots dei check bridge — colorati per source. Vivono sulla
+          curva usage, quindi li mostriamo solo se usage e' visibile. */}
+      {visible.usage && entries.map((e, i) => {
         const ts = Date.parse(e.ts)
         if (!Number.isFinite(ts)) return null
         // Colore per source (chi ha fatto il check). Backward compat: i
@@ -618,13 +623,17 @@ function LegendToggle({
             </button>
           )
         })}
-        <span className="inline-flex items-center gap-1.5 text-[var(--color-dim)]">
-          <span aria-hidden="true" style={{
-            display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
-            background: '#fb923c', border: '1px solid #0f172a',
-          }} />
-          step (Δusage ≥ 1)
-        </span>
+        {/* Step marker e' ancorato a usage: lo mostriamo nella legenda
+            solo se usage e' visibile, sennò lo nascondiamo come i puntini. */}
+        {visible.usage && (
+          <span className="inline-flex items-center gap-1.5 text-[var(--color-dim)]">
+            <span aria-hidden="true" style={{
+              display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+              background: '#fb923c', border: '1px solid #0f172a',
+            }} />
+            step (Δusage ≥ 1)
+          </span>
+        )}
       </div>
     </div>
   )
