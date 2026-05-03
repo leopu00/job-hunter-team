@@ -171,6 +171,50 @@ Arrivano quando il monitoring va in failure totale (L1+L2+L3 ko). Rari ma critic
 
 - `[BRIDGE ALERT] sorgente degraded da N tick` → opera prudente.
 - `[BRIDGE INFO]` → recovery, nessuna azione.
+- `[BRIDGE PACING]` → tick 15-min con misura del ritmo del team (vedi sotto).
+
+### `[BRIDGE PACING]` — calibrazione throttle data-driven
+
+Arriva ogni 15 min (allineato a :00/:15/:30/:45 UTC). Ha sempre questa forma:
+
+```
+[BRIDGE PACING] HH:MM UTC window=15m (effettivi Xm) samples=N | usage=U% proj=P% reset_in=Rh reset_at=THH:MM UTC | vel_team=V%/h | vel_target=T%/h (per chiudere a 92% al reset) | ratio=K kT/% (team Σ kT / Δusage) | agenti: name=p%/h [kT/Xm → kT/h ÷ K = p%/h, share s%, cadenza c/min (n chk in Xm)] ; ... | VERDETTO: SFORO|MARGINE|ALLINEATO ...
+```
+
+Legenda dei campi che usi per decidere:
+
+- **`vel_team`** = ritmo misurato del team in punti % di budget all'ora.
+- **`vel_target`** = ritmo che porterebbe a ~92% al reset (centro band 90-95).
+- **`share s%`** per agente = quanto pesa quell'agente sul rate totale (Σ shares ≈ 100%). Indica **CHI rallentare**.
+- **`cadenza c/min`** per agente = quanti `jht-throttle` (start + checkpoint) ha eseguito al minuto nella finestra. Indica **QUANTO mettere in config** (vedi formula sotto).
+- **VERDETTO** ti dà già la sintesi attuabile: SFORO → rallenta, MARGINE → puoi accelerare, ALLINEATO → mantieni.
+
+Tabella verdetto → azione:
+
+| Verdetto | Significato | Azione |
+|---|---|---|
+| `SFORO +X%/h → riduci Y%` | vel_team supera target di X punti %/h. Bisogna tagliare Y% del rate. | Aumenta `throttle-config` degli agenti con **share alto**. |
+| `MARGINE −X%/h → puoi salire Y%` | vel_team sotto target. Hai margine. | Azzera o riduci config su agenti throttled (priorità: ruolo bottleneck). |
+| `ALLINEATO Δ ±0.2%/h` | dentro tolleranza. | Non toccare niente, aspetta il prossimo tick. |
+
+**Differenza X%/h vs Y%**: `X` è in punti % assoluti (di quanto sforiamo l'ora), `Y` è la frazione del rate da tagliare. Sono la stessa cosa in due unità: `Y = X / vel_team × 100`.
+
+**Formula calibrazione** (la cosa veramente nuova): per ottenere una riduzione del `f%` su un agente con cadenza `c` checkpoint/min, la durata da mettere in `throttle-config` è:
+
+```
+durata_sec = (f / 100) × 60 / c
+```
+
+Esempio: SFORO `+4.35%/h → riduci 19%`. analista-1 ha share 47% e cadenza 0.6/min. Per scaricare quasi tutto il taglio su lui:
+- frazione_su_analista = 19% / 47% ≈ 40%
+- durata_sec = 0.40 × 60 / 0.6 = **40s** → `throttle-config.py set analista-1 40`
+
+Stessa logica spalmata: se vuoi distribuire su analista (47%) + scout (26%) = 73% del peso:
+- frazione_per_ciascuno = 19% / 73% ≈ 26%
+- analista-1: 0.26 × 60 / 0.6 = **26s**
+- scout-1: 0.26 × 60 / cadenza_scout
+
+Aspetta sempre **2-3 tick** dopo un cambio config prima di intervenire ancora. Il pacing è già la tua sintesi — non sommarla a ricontrolli `rate_budget live` ravvicinati (gonfiano la velocity_smooth della Sentinella).
 
 ---
 
