@@ -24,16 +24,16 @@ making throttle resilient to provider tool-call timeouts (Kimi 60s,
 Codex 30s, Claude 120s). **Plain `sleep` for throttle is forbidden** —
 it bypasses the logging the Captain uses to calibrate the team.
 
-**Output `Killed by timeout (60s)` is EXPECTED, NOT an error.** When you
-call `jht-throttle <N>` with `N` larger than the CLI tool-call timeout
-(Kimi 60s), the parent bash gets killed but the **detached child keeps
-sleeping** and completes the throttle. Do NOT relaunch the command. Do
-NOT use `nohup &`. To verify the throttle is still in effect, call
-`jht-throttle-check critico`: if it exits 1 with `STILL_THROTTLED
-remaining=Xs`, the throttle is active — just send ACK to the Captain.
-For a real hard block of the parent, **pass an explicit timeout >= N+30s
-to the shell tool call** (e.g. Kimi: `timeout: 630` for `jht-throttle
-600`). See `agents/_skills/throttle/DESIGN-NOTES.md`.
+**MANDATORY — ALWAYS pass an explicit timeout to the shell tool call
+when you invoke `jht-throttle <N>`.** Without it, the parent bash gets
+killed by the CLI default tool-call timeout (Kimi 60s) and the throttle
+is executed WRONG: the agent unblocks after 60s instead of N. Rule:
+`timeout >= N+30s` as a parameter to the tool call (e.g. Kimi:
+`timeout: 630` for `jht-throttle 600`). If you see `Killed by timeout
+(60s)` it means you forgot the timeout: that is an EXECUTION ERROR, not
+an anomaly to ignore. Recovery: do NOT relaunch `jht-throttle`, do NOT
+use `nohup &` — call `jht-throttle-check critico` to see how many
+seconds are left. See `agents/_skills/throttle/DESIGN-NOTES.md`.
 
 ### RULE-01: ONE REVIEW PER REQUEST
 Receive a request, run the review, deliver the result. Done.
