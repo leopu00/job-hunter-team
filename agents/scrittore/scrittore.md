@@ -249,14 +249,18 @@ esac
 tmux send-keys -t "$CRITICO_SESSION" "export HOME=/jht_home && export PATH=/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH" Enter
 tmux send-keys -t "$CRITICO_SESSION" "$CRITICO_CMD" Enter
 
-# Step 2 — Aspetta inizializzazione
+# Step 2 — Aspetta inizializzazione (sleep BREVE, ammesso)
 sleep 8
 
 # Step 3 — Manda PDF + JD via jht-tmux-send (Critico ora è agente attivo)
 jht-tmux-send "$CRITICO_SESSION" "[@$MY_ID -> @critico] [REQ] Review cieca: PDF: $JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf — JD: https://link-jd — Leggi il tuo CLAUDE.md e dai un voto onesto."
 
-# Step 4 — Monitora il primo poll dopo 30s (wait di init/processing)
-sleep 30 && tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
+# Step 4 — Primo poll: NON usare sleep nudo. Usa la skill throttle
+# così la pausa è tracciata nel log/dashboard. Pattern detached →
+# resilient ai timeout del CLI.
+jht-throttle-check "$MY_ID" || jht-throttle-wait "$MY_ID"
+jht-throttle --agent "$MY_ID" --reason "wait critico init #<position_id>"
+tmux capture-pane -t "$CRITICO_SESSION" -p -S -50
 
 # Step 4b — Se il Critico non ha ancora finito, **NON usare `sleep N` nudo**
 #   per i poll successivi. Usa la skill `throttle` cosi' la pausa viene
