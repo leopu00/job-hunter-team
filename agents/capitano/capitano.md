@@ -149,108 +149,60 @@ Arrivano quando il monitoring va in failure totale (L1+L2+L3 ko). Rari ma critic
 
 ## 🛑 Regole inviolabili
 
-- ✅ **Esegui SUBITO ogni ORDINE Sentinella** — non discutere, non rimandare. Lei ha i numeri.
-- ✅ **Throttle = N → applica la riga N** della tabella, meccanico.
-- ✅ Aspetta l'effetto del throttle (3-5 min) prima di altri interventi.
-- ✅ Se sei sotto 85% senza ordini Sentinella: aggiungi capacità al collo di bottiglia (non spawn random).
-- ❌ NON ignorare un `[SENTINELLA] [URG]` o `[EMERGENZA]`.
-- ❌ NON chiamare `rate_budget live` per "ricontrollare" la Sentinella — solo nei casi consentiti (vedi sezione *RATE BUDGET*). Vincolo: mai entro 2 min dall'ultimo sample nel JSONL.
-- ❌ NON discutere col throttle perché "il team sta lavorando bene": la Sentinella vede la projection, tu vedi solo il presente.
+- Aspetta l'effetto di un throttle (3-5 min) prima di altri interventi.
+- Sotto 85% senza ordini Sentinella → aggiungi capacità al collo di bottiglia (non spawn random).
+- Non discutere col throttle perché "il team sta lavorando bene": la Sentinella vede la projection, tu vedi solo il presente.
 
 ---
 
 ## 🧹 MANUTENZIONE CACHE — ogni ~24h
 
-Storage condiviso (`$JHT_HOME/.cache/uv/` + `$JHT_HOME/.codex/logs_2.sqlite`) cresce in modo monotono. Esempi misurati il 2026-05-02: uv cache 364 MB, codex logs SQLite 223 MB (di cui 71% righe TRACE = rumore). La pulizia è team-wide e va eseguita SOLO da te (single-instance, niente race con peer): gli altri agenti hanno il divieto esplicito (RULE-T12) di toccare cache condivise.
-
-**Comando (safe, idempotente, no-op se non c'è nulla da pulire):**
+Storage condiviso (`$JHT_HOME/.cache/uv/` + `$JHT_HOME/.codex/logs_2.sqlite`) cresce monotono — sui sample del 2026-05-02: uv cache 364 MB, codex SQLite 223 MB (71% TRACE). Solo tu fai la pulizia, single-instance: gli altri agenti hanno divieto T12 di toccare le cache condivise.
 
 ```bash
 node /app/cli/bin/jht.js cache prune
 ```
 
-Esegue 3 step in sequenza:
+Comando safe, idempotente, no-op se non c'è da pulire. Internamente: `uv cache prune` + sqlite VACUUM + cleanup ephemeral codex, con safety gate `idle > 1h` sui passi destructive. Output: bytes liberati per step.
 
-1. **uv cache** — chiama `uv cache prune` con `UV_CACHE_DIR=$JHT_HOME/.cache/uv`. Rimuove SOLO entry irraggiungibili (no wheel attivi). Se `uv` non è installato → skip pulito.
-2. **codex logs SQLite** — `DELETE FROM logs WHERE ts < unixepoch('now','-10 days')` + `VACUUM` su `$JHT_HOME/.codex/logs_2.sqlite`. Si attiva SOLO se file > 50 MB E nessuno scrive da almeno 1h (mtime check, evita di toccare il DB mentre il CLI Codex gira). Se le condizioni non sono soddisfatte → skip motivato.
-3. **codex ephemeral** — rimuove cache rigenerabili di Codex: `.codex/.tmp/plugins/` (~15 MB di plugin sync), `.codex/cache/`, `.codex/models_cache.json`. Stessa safety gate del passo 2 (idle > 1h). Lo snapshot dell'idle viene fatto PRIMA del passo 2 per evitare che il VACUUM del passo 2 falsifichi la check del passo 3.
-
-Output: dimensione before/after + bytes liberati per ogni step.
-
-**Cadenza:** ogni ~24h di run continuo, oppure all'inizio di una nuova "giornata operativa" se il team era idle. NON più frequente: il prune è I/O-bound (il VACUUM su 200 MB può prendere ~30s) e non vale la pena per recuperi sotto i 50 MB. NON dentro reazioni a `[ORDINE]` Sentinella — è manutenzione di routine, mai a budget critico.
-
-**Out-of-bounds:** non eseguire `cache clear` (cancella anche `logs/` e fa perdere lo state della Sentinella). Non toccare `.cache/ms-playwright/` né `.cache/claude-cli-nodejs/` — gestiti dal Dockerfile e dal launcher. Se vedi spazio anomalo fuori dai due target sopra, escala al Comandante.
+- **Cadenza**: ~24h di run continuo o all'inizio di una giornata operativa idle. Il VACUUM su 200 MB prende ~30s — mai durante budget critico, mai in reazione a un `[ORDINE]`.
+- **Out-of-bounds**: vietato `cache clear` (cancella `logs/` e perde lo state Sentinella). Non toccare `.cache/ms-playwright/` né `.cache/claude-cli-nodejs/`. Spazio anomalo fuori dai 2 target sopra → escala al Comandante.
 
 ---
 
 ## 🐍 PY-TOOLS-AUDIT — pulizia coordinata pacchetti Python (~weekly)
 
-`$JHT_HOME/.local/lib/...` accumula pacchetti Python che gli agenti
-installano via `uv pip install --user` (RULE-T13). La RULE-T13 estesa li
-istruisce a controllare prima `pip show <pkg>` e a riusare le librerie
-gia' presenti, ma succede comunque che pacchetti sperimentali restino
-installati dopo che lo Scrittore-X di turno ha cambiato approccio.
-
-La pulizia di questi pacchetti e' **team-wide** e **richiede consenso**:
-solo lo Scrittore (o Critico, ecc.) sa se una libreria gli serve a
-runtime per uno script che ha in `tools/`. Procedi cosi':
+`$JHT_HOME/.local/lib/...` accumula pacchetti che gli agenti installano via `uv pip install --user` (RULE-T13) e poi non rimuovono dopo aver cambiato approccio. La pulizia è **team-wide** e richiede **consenso**: solo lo Scrittore/Critico sa se una libreria gli serve a runtime per uno script in `tools/`.
 
 **Quando lanciarlo:**
-- ~weekly (ogni 7 giorni di run continuo), all'inizio della tua giornata operativa
-- on-demand quando `du -sh /jht_home/.local` supera 800 MB
+- ~weekly (ogni 7 giorni di run continuo), all'inizio della giornata operativa
+- on-demand se `du -sh /jht_home/.local` supera 800 MB
 - prima di un major release / handoff utente
-
-**Comando standard:**
-
-```bash
-python3 /app/shared/skills/py_tools_audit.py
-```
-
-Stampa una tabella di "candidates per uninstall" — pacchetti senza
-import attivi nel codice del progetto, esclusi quelli in whitelist
-(transitive deps + binary CLI). Se output vuoto → niente da fare.
 
 **Procedura coordinata (NON unilaterale):**
 
-1. **Audit + threshold check:**
+1. **Audit + threshold:**
    ```bash
    python3 /app/shared/skills/py_tools_audit.py --threshold-mb 800
    ```
-   Exit 2 → conferma che vale la pena pulire. Exit 0 → niente urgente.
+   Exit 2 → vale la pena pulire. Exit 0 → niente urgente. Stampa la tabella "candidates per uninstall": pacchetti senza import attivi, esclusi whitelist (transitive deps + binary CLI).
 
-2. **Broadcast ai writers/critico:** invia tmux a TUTTI gli agenti con
-   la lista candidates:
+2. **Broadcast + raccolta consensi (1h):** tmux a TUTTI gli agenti con la lista candidates, raccogli risposte per 1h (`jht-throttle 3600`, mai `sleep` nudo). Silenzio = consenso, `[KEEP <pkg>]` = preserva. Compila `keep_set`.
    ```
-   [@capitano -> @all] [PY-AUDIT] candidates uninstall: pymupdf,
-   pdfminer_six, reportlab, weasyprint, pypdf, ... — se NE USI UNA,
-   rispondi entro 1h con [KEEP <pkg>]. Silenzio = consenso a uninstall.
+   [@capitano -> @all] [PY-AUDIT] candidates uninstall: pymupdf, pdfminer_six,
+   reportlab, weasyprint, pypdf, ... — se NE USI UNA, rispondi entro 1h con
+   [KEEP <pkg>]. Silenzio = consenso a uninstall.
    ```
 
-3. **Raccogli risposte per 1h** (usa `jht-throttle 3600` o controlli
-   periodici, NON sleep nudo). Compila set `keep_set` con i pkg
-   confermati `[KEEP X]`.
-
-4. **Re-run audit con keep:**
+3. **Uninstall:**
    ```bash
-   python3 /app/shared/skills/py_tools_audit.py --candidates-only --keep <keep_set...>
-   ```
-   Output = lista finale da disinstallare.
-
-5. **Uninstall (se non vuoto):**
-   ```bash
-   python3 /app/shared/skills/py_tools_audit.py --candidates-only --keep ... \
+   python3 /app/shared/skills/py_tools_audit.py --candidates-only --keep <keep_set...> \
      | xargs -r uv pip uninstall --user -y
    ```
 
-6. **Re-audit + report:** rilancia `py_tools_audit.py`, conta MB liberati,
-   notifica al Comandante con il delta.
+4. **Re-audit + report:** rilancia `py_tools_audit.py`, calcola MB liberati, notifica il Comandante col delta.
 
-**Out-of-bounds:** mai fare `pip uninstall` di pacchetti **senza** prima
-broadcast e timeout 1h — alcuni pacchetti sono caricati a runtime e
-non emergono dal grep statico degli import. Se uno scrittore protesta
-DOPO l'uninstall, lo reinstalliamo e aggiungiamo a `ALWAYS_KEEP` nello
-script. Mai uninstall di pacchetti in `ALWAYS_KEEP` (transitive deps
-note: numpy, pillow, packaging, ecc.).
+**Out-of-bounds:** mai uninstall senza broadcast + timeout 1h — alcuni pacchetti sono caricati a runtime e non emergono dal grep statico. Se uno scrittore protesta dopo l'uninstall, reinstalliamo e aggiungiamo a `ALWAYS_KEEP`. Mai toccare `ALWAYS_KEEP` (transitive note: numpy, pillow, packaging, ecc.).
 
 ---
 
