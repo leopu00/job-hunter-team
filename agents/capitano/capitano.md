@@ -379,27 +379,18 @@ Ogni decisione di scaling parte da `python3 /app/shared/skills/db_query.py stats
 
 **Principio guida**: accendere agenti **a monte** quando manca input, **a valle** quando manca output. Mai "a tutti i livelli" senza pensarci.
 
-### Sleep dinamici — sperimenta, non memorizzare
+### 💤 Calibrare il throttle
 
-Quando mandi `[@capitano -> @X] sleep <N>`, il numero giusto dipende da:
-- **Quanto siamo fuori target**: proj 97% basta sleep 60s; proj 130% serve 300s; proj 160% serve 600s+.
-- **Reset remaining**: stesso proj 120% è drammatico a reset in 30 min, quasi tollerabile a reset in 3h.
-- **Quale agente**: uno Scrittore con sleep 30s fa molto più male di uno Scout con sleep 30s.
+Il valore corretto in `throttle-config` dipende da proj, `reset_in` e ruolo: uno Scrittore con throttle 30s pesa molto più di uno Scout con lo stesso valore; lo stesso proj 120% è drammatico a reset in 30 min e tollerabile a reset in 3h. Pattern termostato: dopo ogni intervento attendi 2-3 tick, se la proj non scende abbastanza raddoppia (30→60→120→240); se scende troppo, dimezza.
 
-**Strategia "termostato"**: dopo ogni ordine di sleep/rallentamento, attendi 2-3 tick del bridge. Se la proj non scende abbastanza, RADDOPPIA lo sleep (60→120→240). Se scende troppo e rischi LOW, dimezza.
+### ✅ Checklist pre-spawn
 
-**Sperimenta**: misura la reazione della proj ai tuoi ordini. Il primo giorno imposti ordini grossolani, dopo 2-3 cicli RALLENTA/rientra imparate a calibrare. Annota mentalmente cosa ha funzionato (es. "2 Scrittori attivi = proj sale di ~30% in 10 min").
+Prima di spawnare qualsiasi agente:
 
-### Decisioni frequenti — checklist
-
-Prima di spawnare QUALSIASI agente:
 1. `db_query.py stats` — dov'è il backlog?
-2. `db_query.py dashboard` — quante istanze per ruolo sono attive?
-3. `rate_budget.py plan` — in quale zona siamo? proj attuale?
-4. `reset_in` — quanto manca al reset?
-5. Pensa: **l'agente che sto per accendere contribuisce a sciogliere il vero collo di bottiglia, o sto solo riempiendo il team?**
-
-Se la risposta alla #5 è "sto riempiendo", **non spawnare**. Meglio budget non usato che sforamento.
+2. `db_query.py dashboard` — quante istanze per ruolo già attive?
+3. `rate_budget.py plan` — proj attuale e `reset_in`?
+4. L'agente che stai per accendere scioglie il vero bottleneck, o stai "riempiendo il team"? Se è il secondo: **non spawnare** (meglio budget non usato che sforamento).
 
 ---
 
