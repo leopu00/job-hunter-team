@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# jht-throttle-check — pre-task gate per il pattern detached.
+#
+# Exit code:
+#   0 → l'agente NON è in throttle, può procedere col task.
+#   1 → l'agente È ancora in throttle (state.until > NOW). Stampa
+#       "STILL_THROTTLED remaining=Xs" su stderr. L'agente DEVE
+#       chiamare `jht-throttle-wait` per ribloccarsi finché il
+#       throttle non scade.
+#
+# Quando esiste un check positivo: il subprocess Python detached del
+# precedente `jht-throttle` sta ancora dormendo, oppure il PARENT
+# bash è stato killato dal timeout della tool call e l'agente è ora
+# libero per errore. In entrambi i casi il prossimo task non deve
+# partire finché until non è passato.
+#
+# Uso:
+#   jht-throttle-check <agent>
+#
+# Nessun side effect, solo lettura. Sicuro chiamare ad alta frequenza.
+
+set -eu
+
+AGENT="${1:-}"
+if [ -z "$AGENT" ]; then
+  echo "Usage: jht-throttle-check <agent>" >&2
+  exit 2
+fi
+
+JHT_HOME="${JHT_HOME:-/jht_home}"
+STATE_FILE="$JHT_HOME/state/throttle-${AGENT}.json"
+
+if [ ! -f "$STATE_FILE" ]; then
+  exit 0
+fi
+
+UNTIL=$(grep -o '"until":[0-9]*' "$STATE_FILE" 2>/dev/null | head -1 | cut -d: -f2)
+if [ -z "$UNTIL" ]; then
+  exit 0
+fi
+
+NOW=$(date '+%s')
+if [ "$NOW" -lt "$UNTIL" ]; then
+  REMAINING=$(( UNTIL - NOW ))
+  echo "STILL_THROTTLED agent=$AGENT remaining=${REMAINING}s" >&2
+  exit 1
+fi
+
+# until già passato: state file rimasto stale (parent killato senza
+# cleanup). Lo rimuoviamo qui per pulizia.
+rm -f "$STATE_FILE" 2>/dev/null || true
+exit 0

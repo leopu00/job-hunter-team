@@ -82,8 +82,32 @@ puoi calibrare un team di 5 agenti operativi.
 4. RIVALUTA  → torna al passo 1
 ```
 
-**Cadenza `rate_budget live`**: ogni 2-3 minuti. NON entro 2 minuti
-dall'ultimo sample (rumore EMA).
+**Cadenza adattiva `rate_budget live`**:
+
+| Stato | reset_in | proj | Cadenza check | Aggressività throttle |
+|---|---|---|---|---|
+| **Cruise** | > 30 min | < 95% | ogni 2-3 min | step-by-step (T1→T2→T3) |
+| **Approach** | 10-30 min | qualunque | ogni 2 min | step-by-step ma anticipa di 1 livello |
+| **Endgame** | **< 10 min** | qualunque | ogni 30-60 sec | direct jump a T3/T4 se proj > 100%, no step |
+| **Critical** | < 5 min | > 100% | ogni 30 sec | T4 (280s, cap tecnico) o kill istanze extra |
+
+Vicino al reset il "tau del sistema" (~2-3 min) è quasi tutta la
+finestra residua: un throttle leggero applicato a 5 min dal reset
+finisce DOPO il reset, inutile. Devi:
+
+- **Accorciare il loop osserva→agisci** (no più sleep 180s in
+  endgame, scendi a 30-60s). Vedi REGOLA #2 in capitano.md: MAI
+  `sleep > 30s`, mai. Fare micro-cicli da 30s con check intermedio.
+- **Saltare gli step intermedi**: a 5 min dal reset con proj 102%,
+  applica direttamente T4 (280s, cap tecnico) sui top, non perdere
+  tempo a provare T2 e aspettare.
+- **Considerare kill di istanze extra**: scout-3, scrittore-3,
+  analista-2, scorer-2 sono "second tier" — se sei in critical e
+  reset < 3 min, killali (NON i ruoli unici scout-1/analista-1/ecc).
+
+NON entro 2 minuti dall'ultimo sample (rumore EMA), ma in endgame
+critical si può accettare un sample extra ogni 60s, l'EMA si
+stabilizza nel breve termine.
 
 ```bash
 python3 /app/shared/skills/rate_budget.py live
@@ -114,14 +138,29 @@ scrittore o scout — anche se storicamente erano loro a dominare.
 Applica per agente, basato su rate ATTUALE e proj corrente.
 **Non applichi più "stesso throttle a tutti"** — è il punto chiave.
 
+Riferisciti alla scala 10 livelli completa in `capitano.md`. La
+selezione per il termostato dipende da `proj` e dal tier consumer:
+
 | Stato proj | Top consumer | Mid consumer (5-15 kT/min) | Low consumer |
 |---|---|---|---|
-| **< 85%** (sotto-utilizzo) | 0s | 0s | 0s |
-| **85-95%** (G-spot) | 0/30s | 0s | 0s |
-| **95-100%** (warning) | 30s | 0/30s | 0s |
-| **100-110%** (over) | 120s | 30s | 0s |
-| **110-120%** (critico) | 300s | 120s | 30s |
-| **> 120%** (recupero) | 600s | 300s | 120s |
+| **< 85%** (sotto-utilizzo) | L0 (0s) | L0 | L0 |
+| **85-95%** (G-spot) | L0/L1 (0-30s) | L0 | L0 |
+| **95-100%** (warning) | L1 (30s) | L0/L1 | L0 |
+| **100-105%** (over leggero) | L3 (130s) | L1 (30s) | L0 |
+| **105-110%** (over) | L4 (210s) | L2 (70s) | L1 (30s) |
+| **110-115%** (critico) | L5 (280s, cap) | L3 (130s) | L2 (70s) |
+| **115-120%** (alto critico) | **L6** (~9min, 2×) | L4 (210s) | L3 (130s) |
+| **120-125%** (recupero) | **L7** (~14min, 3×) | L5 (280s) | L4 (210s) |
+| **> 125% & reset > 5min** | **L8** (~19min, 4×) | L6 (2×) | L5 (280s) |
+| **> 125% & reset < 5min** (deathmatch) | **L9** (kill second-tier) | L7+kill | L5 |
+| **proj > 140% / saturazione** | **L10** (freeze totale) | L10 | L10 |
+
+**Nota L7/L8/L9/L10**: NON sono valori del config. Per L7 e L8 ordina
+via tmux agli agenti top di chiamare `jht-throttle --agent <name>`
+**2** o **3 volte consecutive** rispettivamente tra ogni task (config
+resta a 280s). Per L9 fai `tmux kill-session` sulle istanze second-tier
+(scout-2/3, scrittore-2/3, analista-2, scorer-2). Per L10 kill totale
+operativi, sopravvivono solo CAPITANO + ASSISTENTE.
 
 **Comando di calibrazione**:
 
