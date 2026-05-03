@@ -66,14 +66,33 @@ type HoverState = { tsMs: number; xPct: number; yPct: number } | null
 type TokenPoint = { tsMs: number; kt: number }
 type PredictedPoint = { tsMs: number; usage: number }
 type StepEvent = { ts: number; usage: number; kt: number }
+type RatioPoint = { tsMs: number; ratio: number }
+
+// Toggle per le 5 linee disegnate dal chart. Ogni voce di legenda e'
+// cliccabile e flippa la corrispondente.
+type SeriesVisibility = {
+  usage: boolean
+  predicted: boolean
+  ktCum: boolean
+  ratio: boolean
+  ratioAvg: boolean
+}
+const DEFAULT_VISIBLE: SeriesVisibility = {
+  usage: true, predicted: true, ktCum: true, ratio: false, ratioAvg: true,
+}
 
 function Chart({
-  entries, predictedSeries, tokenSeries, stepEvents, tMin, tMax, onHover, onPan,
+  entries, predictedSeries, tokenSeries, stepEvents,
+  ratioSeries, ratioAvgSeries, visible,
+  tMin, tMax, onHover, onPan,
 }: {
   entries: Entry[]
   predictedSeries: PredictedPoint[]
   tokenSeries: TokenPoint[]
   stepEvents: StepEvent[]
+  ratioSeries: RatioPoint[]
+  ratioAvgSeries: RatioPoint[]
+  visible: SeriesVisibility
   tMin: number
   tMax: number
   onHover: (h: HoverState) => void
@@ -156,6 +175,33 @@ function Chart({
   )
 
   const fmtKt = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}MT` : `${Math.round(v)}kT`
+  const fmtRatio = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)} MT/%` : `${v.toFixed(1)} kT/%`
+
+  // Asse Y "interno" per la ratio: scala indipendente da usage e da kT,
+  // auto-zoom sul range visibile considerando entrambe le serie ratio
+  // (istantanea + media mobile). La linea ratio non condivide l'altezza
+  // utile col cumulativo perche' parlerebbero di unita' diverse — usa
+  // tutto il box del grafico per leggere bene i valori.
+  const { rMin, rMax } = useMemo(() => {
+    let lo = Infinity, hi = -Infinity
+    for (const series of [ratioSeries, ratioAvgSeries]) {
+      for (const p of series) {
+        if (p.tsMs < tMin || p.tsMs > tMax) continue
+        if (p.ratio < lo) lo = p.ratio
+        if (p.ratio > hi) hi = p.ratio
+      }
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { rMin: 0, rMax: 1 }
+    if (hi - lo < 1) return { rMin: Math.max(0, lo - 0.5), rMax: hi + 0.5 }
+    const pad = (hi - lo) * 0.15
+    return { rMin: Math.max(0, lo - pad), rMax: hi + pad }
+  }, [ratioSeries, ratioAvgSeries, tMin, tMax])
+
+  const rSpan = Math.max(0.001, rMax - rMin)
+  const yRatio = useCallback(
+    (r: number) => PAD.top + innerH - ((Math.max(rMin, Math.min(rMax, r)) - rMin) / rSpan) * innerH,
+    [innerH, rMin, rMax, rSpan]
+  )
 
   // Soglia di gap: se due sample adiacenti distano piu' di GAP_MS nel
   // tempo reale, interrompiamo il path (usa M invece di L). Cosi' quando
@@ -330,7 +376,9 @@ function Chart({
         </g>
       ))}
 
-      <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={3.5} fill="none" />
+      {visible.usage && (
+        <path d={pathFor('usage')} stroke="#22d3ee" strokeWidth={3.5} fill="none" />
+      )}
 
       {/* Usage stimato dai token (predicted PIECEWISE):
             usage_pred(t) = anchor.usage + (kt(t) - anchor.kt) / ratio_locale
@@ -338,7 +386,7 @@ function Chart({
           (cambio di percentuale). Tra gli step usa il ratio del segmento
           se conosciamo l'arrivo, altrimenti il ratio EMA come stima.
           Asse Y sinistro (stessa scala di usage). */}
-      {(() => {
+      {visible.predicted && (() => {
         const parts: string[] = []
         let prevTs: number | null = null
         for (const p of predictedSeries) {
@@ -364,7 +412,7 @@ function Chart({
           Cresce continuamente, riempie l'altezza utile grazie all'auto-zoom
           dx. Permette di vedere a colpo d'occhio quanti kT abbiamo speso e
           a che velocità. */}
-      {(() => {
+      {visible.ktCum && (() => {
         const parts: string[] = []
         let prevTs: number | null = null
         for (const p of tokenSeries) {
@@ -385,6 +433,58 @@ function Chart({
           />
         )
       })()}
+
+      {/* Linea ratio kT/% istantanea — rosa, opacita' bassa per non
+          competere con la media mobile. Asse Y dedicato (yRatio).
+          E' la stessa serie del vecchio RatioMacroChart. */}
+      {visible.ratio && ratioSeries.length > 0 && (
+        <path
+          d={(() => {
+            const parts: string[] = []
+            for (const p of ratioSeries) {
+              if (p.tsMs < tMin || p.tsMs > tMax) continue
+              parts.push(`${parts.length === 0 ? 'M' : 'L'} ${xAt(p.tsMs).toFixed(1)} ${yRatio(p.ratio).toFixed(1)}`)
+            }
+            return parts.join(' ')
+          })()}
+          stroke="#ec4899"
+          strokeWidth={2}
+          fill="none"
+          opacity={0.55}
+        />
+      )}
+
+      {/* Linea media mobile 30 min della ratio — rosa scuro, spessa. */}
+      {visible.ratioAvg && ratioAvgSeries.length > 0 && (
+        <path
+          d={(() => {
+            const parts: string[] = []
+            for (const p of ratioAvgSeries) {
+              if (p.tsMs < tMin || p.tsMs > tMax) continue
+              parts.push(`${parts.length === 0 ? 'M' : 'L'} ${xAt(p.tsMs).toFixed(1)} ${yRatio(p.ratio).toFixed(1)}`)
+            }
+            return parts.join(' ')
+          })()}
+          stroke="#be185d"
+          strokeWidth={2.5}
+          fill="none"
+        />
+      )}
+
+      {/* Label range ratio (lato sinistro, in alto + in basso) quando una
+          delle due serie ratio e' visibile. */}
+      {(visible.ratio || visible.ratioAvg) && ratioSeries.length > 0 && (
+        <>
+          <text x={PAD.left + 4} y={PAD.top + 12} fontSize={9}
+                fill="rgba(236,72,153,0.85)" fontFamily="monospace">
+            ratio max: {fmtRatio(rMax)}
+          </text>
+          <text x={PAD.left + 4} y={PAD.top + innerH - 4} fontSize={9}
+                fill="rgba(236,72,153,0.85)" fontFamily="monospace">
+            ratio min: {fmtRatio(rMin)}
+          </text>
+        </>
+      )}
 
       {/* Step events (anchor di calibrazione): cerchietti arancioni sui
           punti dove usage% cambia (Δ ≥ 1). Sono i ground truth — ad ogni
@@ -471,34 +571,59 @@ function Chart({
   )
 }
 
-function Legend() {
+function LegendToggle({
+  visible, onToggle,
+}: {
+  visible: SeriesVisibility
+  onToggle: (k: keyof SeriesVisibility) => void
+}) {
+  // Ogni voce e' un pulsante: click → toggle. Quando OFF la voce e' opaca
+  // e barrata. Lo step events marker non e' togglabile (visivo del bridge,
+  // sempre rilevante quando vedi usage o predicted).
+  type Item = { k: keyof SeriesVisibility; label: string; swatch: React.ReactNode }
+  const items: Item[] = [
+    { k: 'usage', label: 'usage',
+      swatch: <span style={{ display: 'inline-block', width: 14, height: 2, background: '#22d3ee' }} /> },
+    { k: 'predicted', label: 'usage stimato dai token (piecewise)',
+      swatch: <span style={{ display: 'inline-block', width: 14, height: 2, background: '#fb923c' }} /> },
+    { k: 'ktCum', label: 'token kT cumulativo (asse dx)',
+      swatch: <span style={{
+        display: 'inline-block', width: 14, height: 2,
+        background: 'repeating-linear-gradient(90deg, #4ade80 0 5px, transparent 5px 8px)',
+      }} /> },
+    { k: 'ratioAvg', label: 'ratio kT/% media 30m',
+      swatch: <span style={{ display: 'inline-block', width: 14, height: 2, background: '#be185d' }} /> },
+    { k: 'ratio', label: 'ratio kT/% istantanea',
+      swatch: <span style={{ display: 'inline-block', width: 14, height: 2, background: '#ec4899', opacity: 0.55 }} /> },
+  ]
   return (
     <div className="px-1 mt-2 text-[10px] text-[var(--color-muted)] space-y-1">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#22d3ee' }} />
-          usage
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" style={{ display: 'inline-block', width: 14, height: 2, background: '#fb923c' }} />
-          usage stimato dai token (piecewise)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            style={{
-              display: 'inline-block', width: 14, height: 2,
-              background: 'repeating-linear-gradient(90deg, #4ade80 0 5px, transparent 5px 8px)',
-            }}
-          />
-          token kT cumulativo (asse dx)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {items.map(it => {
+          const on = visible[it.k]
+          return (
+            <button
+              key={it.k}
+              type="button"
+              onClick={() => onToggle(it.k)}
+              className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded border transition-opacity ${
+                on
+                  ? 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-fg)]'
+                  : 'border-transparent opacity-40 line-through hover:opacity-70'
+              }`}
+              title={on ? `Click per nascondere: ${it.label}` : `Click per mostrare: ${it.label}`}
+            >
+              <span aria-hidden="true">{it.swatch}</span>
+              {it.label}
+            </button>
+          )
+        })}
+        <span className="inline-flex items-center gap-1.5 text-[var(--color-dim)]">
           <span aria-hidden="true" style={{
             display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
             background: '#fb923c', border: '1px solid #0f172a',
           }} />
-          step (Δusage ≥ 1, anchor di calibrazione)
+          step (Δusage ≥ 1)
         </span>
       </div>
     </div>
@@ -538,12 +663,13 @@ function nearestByTs<T extends { tsMs: number }>(arr: T[], tsMs: number): T | nu
 }
 
 function Tooltip({
-  tsMs, entries, predictedSeries, tokenSeries, sessionStart,
+  tsMs, entries, predictedSeries, tokenSeries, ratioAvgSeries, sessionStart,
 }: {
   tsMs: number
   entries: Entry[]
   predictedSeries: PredictedPoint[]
   tokenSeries: TokenPoint[]
+  ratioAvgSeries: RatioPoint[]
   sessionStart: { usage: number; kt: number } | null
 }) {
   const ts = new Date(tsMs)
@@ -606,7 +732,7 @@ function Tooltip({
         )}
 
         {/* Ratio macro: calcolo diretto = consumati cumulativi / Δusage
-            cumulativo dalla nascita sessione monitorata. */}
+            cumulativo dalla nascita sessione monitorata. Rosa pallido. */}
         {tok && nearestEntry && sessionStart && (() => {
           const dKt = tok.kt - sessionStart.kt
           const dU = nearestEntry.usage - sessionStart.usage
@@ -615,11 +741,33 @@ function Tooltip({
           return (
             <>
               <div>
-                <span className="text-[var(--color-dim)]" style={{ marginLeft: 16 }}>ratio macro:</span>
+                <span aria-hidden="true" style={{
+                  display: 'inline-block', width: 10, height: 2, background: '#ec4899',
+                  opacity: 0.55, verticalAlign: 'middle', marginRight: 6,
+                }} />
+                <span className="text-[var(--color-dim)]">ratio:</span>
               </div>
-              <div style={{ color: 'var(--color-muted)' }} title={`${fmtKt(dKt)} ÷ ${dU}% = ${fmtRatio(macroRatio)}`}>
+              <div style={{ color: '#ec4899' }} title={`${fmtKt(dKt)} ÷ ${dU}% = ${fmtRatio(macroRatio)}`}>
                 {fmtRatio(macroRatio)}
               </div>
+            </>
+          )
+        })()}
+
+        {/* Media mobile 30m della ratio (rosa scuro). */}
+        {(() => {
+          const avg = nearestByTs(ratioAvgSeries, tsMs)
+          if (!avg) return null
+          return (
+            <>
+              <div>
+                <span aria-hidden="true" style={{
+                  display: 'inline-block', width: 10, height: 2, background: '#be185d',
+                  verticalAlign: 'middle', marginRight: 6,
+                }} />
+                <span className="text-[var(--color-dim)]">media 30m:</span>
+              </div>
+              <div style={{ color: '#be185d' }}>{fmtRatio(avg.ratio)}</div>
             </>
           )
         })()}
@@ -986,6 +1134,66 @@ export default function UsageTokensChart() {
     }
   }, [stepEvents])
 
+  // Ratio kT/% macro CONTINUA — un punto per ogni bucket di tokenSeries,
+  // con usage_t = ultimo step bridge raggiunto. Cosi' la curva e' continua,
+  // arriva fino a 'now' e nei plateau di usage sale (corretto: stiamo
+  // bruciando token senza muovere usage). Stessa formula del vecchio
+  // RatioMacroChart, qui inglobata insieme a usage / predicted / kt.
+  const macroRatioSeries = useMemo<RatioPoint[]>(() => {
+    if (stepEvents.length < 2 || tokenSeries.length === 0) return []
+    const first = stepEvents[0]
+    const out: RatioPoint[] = []
+    let stepIdx = 0
+    for (const tok of tokenSeries) {
+      if (tok.tsMs < first.ts) continue
+      while (stepIdx + 1 < stepEvents.length && stepEvents[stepIdx + 1].ts <= tok.tsMs) {
+        stepIdx++
+      }
+      const usageNow = stepEvents[stepIdx].usage
+      const dKt = tok.kt - first.kt
+      const dU = usageNow - first.usage
+      if (dU > 0 && dKt > 0) out.push({ tsMs: tok.tsMs, ratio: dKt / dU })
+    }
+    return out
+  }, [stepEvents, tokenSeries])
+
+  // Media mobile 30 min sulla ratio — smussa il rumore dei primi sample
+  // e dei plateau brevi. Sliding window O(n).
+  const ratioAvgSeries = useMemo<RatioPoint[]>(() => {
+    if (macroRatioSeries.length === 0) return []
+    const MA_WIN_MS = 30 * 60_000
+    const out: RatioPoint[] = []
+    let lo = 0
+    let sum = 0
+    for (let hi = 0; hi < macroRatioSeries.length; hi++) {
+      sum += macroRatioSeries[hi].ratio
+      while (macroRatioSeries[hi].tsMs - macroRatioSeries[lo].tsMs > MA_WIN_MS) {
+        sum -= macroRatioSeries[lo].ratio
+        lo++
+      }
+      out.push({ tsMs: macroRatioSeries[hi].tsMs, ratio: sum / (hi - lo + 1) })
+    }
+    return out
+  }, [macroRatioSeries])
+
+  // Toggle visibilita' delle 5 linee. Persistenza in localStorage cosi' al
+  // refresh ritroviamo lo stesso layout. Se vuoi reset: clear UTC.
+  const [visibleSeries, setVisibleSeries] = useState<SeriesVisibility>(() => {
+    if (typeof window === 'undefined') return DEFAULT_VISIBLE
+    try {
+      const raw = window.localStorage.getItem('UsageTokensChart.visible')
+      if (raw) return { ...DEFAULT_VISIBLE, ...JSON.parse(raw) }
+    } catch { /* ignore */ }
+    return DEFAULT_VISIBLE
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('UsageTokensChart.visible', JSON.stringify(visibleSeries)) }
+    catch { /* ignore */ }
+  }, [visibleSeries])
+  const toggle = useCallback((k: keyof SeriesVisibility) => {
+    setVisibleSeries(v => ({ ...v, [k]: !v[k] }))
+  }, [])
+
   // Stats sessione monitorata — usate dai widget sopra il grafico.
   //   • sessionStart  = primo anchor (quando abbiamo iniziato a monitorare)
   //   • consumedKt    = token spesi dalla nascita sessione fino ad ora
@@ -1240,6 +1448,9 @@ export default function UsageTokensChart() {
             predictedSeries={predictedSeries}
             tokenSeries={tokenSeries}
             stepEvents={stepEvents}
+            ratioSeries={macroRatioSeries}
+            ratioAvgSeries={ratioAvgSeries}
+            visible={visibleSeries}
             tMin={tMin}
             tMax={tMax}
             onHover={setHover}
@@ -1276,6 +1487,7 @@ export default function UsageTokensChart() {
                   entries={entries}
                   predictedSeries={predictedSeries}
                   tokenSeries={tokenSeries}
+                  ratioAvgSeries={ratioAvgSeries}
                   sessionStart={budgetStats?.sessionStart ?? null}
                 />
               </div>
@@ -1283,7 +1495,7 @@ export default function UsageTokensChart() {
           )}
         </div>
         {/* Legenda sotto il frame del chart */}
-        <Legend />
+        <LegendToggle visible={visibleSeries} onToggle={toggle} />
         </div>
       )}
 
