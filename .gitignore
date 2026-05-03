@@ -119,3 +119,7 @@ e2e-runs/
 # ── DEV LAUNCHER LOGS ────────────────────────────────────────────────────────
 # Log generati da scripts/dev-up.sh (host Next su :3001)
 .dev-logs/
+
+# ── THROTTLE SANDBOX ─────────────────────────────────────────────────────────
+# Micro-ambiente per testare jht-throttle con kimi reale (repo separata dentro)
+seriea-sandbox/
