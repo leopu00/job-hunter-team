@@ -731,13 +731,25 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     })
 
     window.addEventListener('resize', measure)
+    measureRef.current = measure
 
     return () => {
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
       window.removeEventListener('resize', measure)
+      measureRef.current = null
     }
   }, [])
+
+  // Re-measure forzato quando lo stato del Pacing arriva (polling async).
+  // Senza questo, dopo un HMR di Next o un mount con polling lento, la
+  // measure mount-time poteva girare con pacingEmojiRef ancora null, e il
+  // path pacing-to-captain restava null finché qualcuno non ridimensionava
+  // la finestra. Ora basta che pacingRunning passi true e re-misuriamo.
+  const measureRef = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    measureRef.current?.()
+  }, [pacingRunning])
 
   // Mapping convenzionale (from/to nel formato `[@X -> @Y]` di jht-tmux-send)
   // → id del path SVG renderizzato. "scrittore"/"critico" sono i nomi italiani
