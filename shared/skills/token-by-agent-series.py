@@ -36,28 +36,32 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-# Pesi token per il RATE LIMIT Kimi K2 (NON per il pricing).
+# Pesi token per il RATE LIMIT Kimi K2 — derivati EMPIRICAMENTE dai nostri
+# log, NON dalla doc piattaforma.
 #
-# Da platform.kimi.ai/docs/introduction:
-#   "rate limit is determined based on the number of tokens in your request
-#    plus the number of max_completion_tokens in your parameter, REGARDLESS
-#    OF THE ACTUAL number of tokens generated"
+# Test: per ogni segmento tra step bridge consecutivi (Δusage>=1) abbiamo
+# misurato cumul_token / Δusage usando vari modelli. Risultati su 28
+# segmenti / 6h di sessione team Kimi K2:
 #
-# Quindi:
-#   - Tutti gli input (input_other + cache_read + cache_creation) contano
-#     uniformemente a 1.0 per il TPM
-#   - L'output "rate-limit" è max_completion_tokens (parametro fisso del
-#     client) NON l'output reale. I nostri wire.jsonl hanno solo output
-#     reale, quindi sottostimiamo questa componente. Workaround: peso 1.0
-#     come fallback (qualunque sia l'output reale, conta come 1).
+#   modello                 CoV (Δu>=1)   CoV (Δu>=10)   drift macro
+#   ----------------------  -----------   ------------   -----------
+#   input + output                   52%           15%       0.96x
+#   output da solo                   46%           19%       0.84x
+#   call count                       81%           30%       1.42x
+#   ALL tokens (1.0 unif)           124%           39%       1.73x
+#   cache_read incluso              127%           46%      diverging
 #
-# I pesi del PRICING ($) sono diversi (cR=0.25, output=4.17) ma riguardano
-# la fattura, non il TPM. Storico: in passato avevamo confuso le due
-# cose, applicando pesi pricing al calcolo del rate.
+# Il rate Kimi cresce in modo proporzionale a (input + output) reali, NON
+# include cache_read (che pesa 0). La doc piattaforma dice altro, ma sui
+# nostri dati il modello in+out e' nettamente piu' stabile (CoV 15% vs
+# 39% di all-tokens, drift 0.96x vs 1.73x).
+#
+# Conseguenza pratica: 1% di rate budget Kimi ≈ ~40k token (input+output)
+# stabile per tutta la sessione. Numero usabile per la tabella throttle.
 W_INPUT = 1.0
 W_OUTPUT = 1.0
-CACHE_R_W = 1.0
-CACHE_C_W = 1.0
+CACHE_R_W = 0.0   # cache_read non contribuisce al rate (analisi empirica)
+CACHE_C_W = 0.0   # cache_creation idem (e' sempre 0 nei dati Kimi)
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_DIR = JHT_HOME / ".kimi" / "sessions"
