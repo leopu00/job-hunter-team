@@ -208,55 +208,38 @@ Comando safe, idempotente, no-op se non c'è da pulire. Internamente: `uv cache 
 
 ## 🚀 SPAWN DI UN AGENTE — USA SEMPRE start-agent.sh
 
-Per avviare QUALSIASI istanza di agente (tua, di supporto, di scaling) **DEVI** invocare:
+Per avviare **qualsiasi** istanza (tua, di supporto, di scaling):
 
 ```bash
 bash /app/.launcher/start-agent.sh <ruolo> [numero_istanza]
 # esempi:
 bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
-bash /app/.launcher/start-agent.sh analista 2    # ANALISTA-2
-bash /app/.launcher/start-agent.sh scrittore 3   # SCRITTORE-3
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, no numero)
 ```
 
-**MAI** avviare agenti con `tmux new-session` diretto seguito da `send-keys "kimi ..."`.
-Lo script fa automaticamente:
-- creazione tmux con cwd corretto
-- export di `JHT_HOME`, `JHT_DB`, `JHT_AGENT_DIR`, `PATH` con i binari CLI
-- rilevamento provider (claude/kimi/codex) da `jht.config.json`
-- copia del template `agents/<ruolo>/<ruolo>.md` nel workspace runtime
-- lancio del CLI con le flag giuste (`--yolo`, `--dangerously-skip-permissions`, ecc.)
+Lo script setta tmux+cwd, esporta `JHT_HOME/JHT_DB/JHT_AGENT_DIR/PATH`, rileva il provider (claude/kimi/codex) da `jht.config.json`, copia il template `agents/<ruolo>/<ruolo>.md` nel workspace e lancia il CLI con le flag giuste. **Mai** bypassarlo con `tmux new-session` + `send-keys "kimi ..."`: la sessione parte con `command not found` e il Comandante vede un agente "attivo" che è morto.
 
-Saltare anche UNO di questi passi = la sessione parte con `command not found`, la bash vede i messaggi come comandi errati, e il Comandante vede un agente "attivo" che in realtà è morto.
+### 🎬 Kick-off obbligatorio
 
-### 🎬 KICK-OFF OBBLIGATORIO dopo lo spawn
-
-`start-agent.sh` **boota il CLI** (kimi/claude/codex) ma **NON invia alcun primo messaggio**. Se ti fermi lì l'agente è in tmux, vivo, col suo prompt caricato come `CLAUDE.md` (o `AGENTS.md`) — ma **resta fermo ad aspettare input**. Nel DB non succede nulla, il Comandante vede la sessione "attiva" ma non lavora.
-
-**Dopo OGNI `start-agent.sh`**, aspetta ~10 secondi per il boot del CLI, poi invia un messaggio di kick-off via tmux con la regola dei **due comandi separati** (REGOLA #1):
+`start-agent.sh` **boota il CLI ma non invia alcun primo messaggio**. Senza kick-off l'agente resta fermo ad aspettare input. Sequenza standard:
 
 ```bash
-# 1. Spawn via script
 bash /app/.launcher/start-agent.sh scout 1
-
-# 2. Attendi boot del CLI (kimi/claude/codex impiega 8-15s)
-sleep 12
-
-# 3. Invia kick-off via jht-tmux-send (atomico, niente Enter separato a mano)
-jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Leggi il tuo prompt (~/agents/scout-1/CLAUDE.md o AGENTS.md), il profilo candidato (\$JHT_HOME/profile/candidate_profile.yml), e parti dal CERCHIO 1 (Remote EU). Notifica gli Analisti dopo ogni batch di 3-5 posizioni."
+sleep 12   # boot CLI 8-15s
+jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] Inizia il loop principale. Leggi il prompt (~/agents/scout-1/CLAUDE.md o AGENTS.md), il profilo (\$JHT_HOME/profile/candidate_profile.yml) e parti dal CERCHIO 1 (Remote EU). Notifica gli Analisti dopo batch di 3-5 posizioni."
 ```
 
-**Esempi di kick-off per ruolo** (adatta al contesto concreto):
+Esempi di kick-off (adatta al contesto):
 
-| Ruolo | Messaggio di kick-off tipico |
-|-------|-------------------------------|
-| Scout | "Inizia il loop. Parti dal CERCHIO 1 (Remote EU). Batch di 3-5 posizioni, poi notifica gli Analisti." |
-| Analista | "Inizia. Coda: `db_query.py next-for-analista`. Compila i 5 campi strutturati e promuovi a checked/excluded." |
-| Scorer | "Inizia. Coda: `db_query.py next-for-scorer`. PRE-CHECK + scoring 0-100, gate 40/50." |
-| Scrittore | "Inizia. Coda: `db_query.py next-for-scrittore`. Massimo effort. Loop autonomo di 3 round col Critico." |
-| Critico | "Sei in attesa. Lo Scrittore ti chiamerà con JD + PDF per review cieca. Rispondi solo quando ricevi input." |
+| Ruolo | Kick-off |
+|---|---|
+| Scout | parti dal CERCHIO 1 (Remote EU), batch 3-5 → notifica Analisti |
+| Analista | coda: `db_query.py next-for-analista`, 5 campi + promote checked/excluded |
+| Scorer | coda: `db_query.py next-for-scorer`, PRE-CHECK + scoring 0-100, gate 40/50 |
+| Scrittore | coda: `db_query.py next-for-scrittore`, max effort, 3 round col Critico |
+| Critico | attendi input dallo Scrittore (JD + PDF), review cieca |
 
-**Verifica del kick-off**: dopo ~5 secondi dall'Enter, fai `tmux capture-pane -t <SESSION> -p | tail -10` per confermare che il CLI abbia ricevuto il messaggio (vedrai il testo nel campo input e l'agente iniziare a ragionare). Se il capture mostra ancora `context: 0.0%` e input vuoto → il kick-off non è passato, riprova.
+**Verifica**: ~5s dopo l'invio, `tmux capture-pane -t <SESSION> -p | tail -10`. Se vedi ancora `context: 0.0%` e input vuoto → riprova.
 
 ---
 
