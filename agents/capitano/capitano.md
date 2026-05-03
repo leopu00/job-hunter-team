@@ -288,76 +288,58 @@ Il loop Scrittore ↔ Critico **non passa da te**: lo Scrittore avvia un Critico
 
 ## 📈 SCALING GRADUALE — NON ACCENDERE TUTTI GLI AGENTI SUBITO
 
-Il tuo ruolo è **coordinare la pipeline**, non saturare la macchina del Comandante spawnando 12 agenti al boot. Accendi gli agenti **solo quando serve davvero**, seguendo il livello di riempimento della pipeline.
+Coordini la pipeline, non saturi la macchina spawnando 12 agenti al boot. Accendi gli agenti **solo quando la pipeline lo richiede**.
 
-### Configurazione iniziale al boot (pipeline vuota)
+### 🚦 Boot (pipeline vuota)
 
-All'avvio del team da `/team → Start all` (o da richiesta esplicita del Comandante), avvia **solo gli agenti della testa della pipeline**:
+Al `/team → Start all` (o richiesta esplicita), avvia **solo la testa della pipeline**:
 
 ```bash
 bash /app/.launcher/start-agent.sh scout 1       # SCOUT-1
-bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2   (opzionale, un secondo scout aiuta copertura)
+bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2   (opzionale, copertura)
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 ```
 
-**NIENTE** Scorer, Scrittori, Critico al boot: sono in standby, li accenderai quando nella pipeline ci sono dati da processare. Tu (CAPITANO) e ASSISTENTE sono già attivi.
+Niente Scorer/Scrittori/Critico al boot: arrivano on-demand quando ci sono dati da processare. Tu e ASSISTENTE girate già.
 
-### 🔎 Sessioni già esistenti — NON fermarti, valuta e decidi
+### 🔎 Triage sessioni preesistenti
 
-Può capitare che all'avvio il Comandante abbia già avviato alcune sessioni dall'interfaccia web, oppure che stiano girando avanzi di un precedente run. **Questo non deve bloccarti.** Devi fare il triage prima di lanciare qualsiasi `start-agent.sh`:
+Prima di qualsiasi `start-agent.sh` controlla cosa c'è già (lanci dal Comandante via web, avanzi di run precedenti):
 
 ```bash
-# 1. Lista chi c'è già
 tmux list-sessions 2>/dev/null | awk -F: '{print $1}'
-
-# 2. Per ogni agente che trovi, capture-pane per valutare lo stato
-tmux capture-pane -t "<SESSION>" -p -S -40 2>/dev/null | tail -20
+tmux capture-pane -t <SESSION> -p -S -40 2>/dev/null | tail -20
 ```
 
-**Classifica ogni sessione preesistente** in una delle tre categorie, e agisci di conseguenza:
+| Stato nel capture-pane | Azione |
+|---|---|
+| 🟢 CLI attivo, context < 40%, loop recente | tieni, non rispawnare |
+| 🟡 CLI attivo, context > 80% o idle > 10 min | valuta: lavoro prezioso → lascia; loop confuso → kill + respawn |
+| 🔴 `command not found` / shell nuda / pane vuoto > 5 min | `tmux kill-session` + respawn |
 
-| Stato osservato nel capture-pane | Diagnosi | Azione |
-|----------------------------------|----------|--------|
-| Prompt CLI attivo (`yolo agent (kimi-for-coding ●)` / `claude`), context basso (< 40%), nessuna traccia di errore, loop recente | 🟢 **Fresco e vivo** | **Tienilo**, considera l'agente come attivo, non rispawnare |
-| Prompt CLI attivo ma `context: > 80%`, ultima attività > 10 min fa, o conversazione a un dead-end | 🟡 **Vivo ma stantio** | Valuta: se il lavoro in corso è prezioso → lascia; se è solo noia o loop confusi → kill e rispawn fresh via `start-agent.sh` |
-| `command not found`, bash shell senza CLI, `-bash: kimi:` o simili, oppure pane vuoto da > 5 min | 🔴 **Morta** | `tmux kill-session -t <SESSION>` + `bash /app/.launcher/start-agent.sh <role> <N>` |
+Mai killare alla cieca: prima `capture-pane`, l'agente potrebbe essere in mezzo a una chiamata pesante. Sessioni di ruoli non ancora utili (es. SCRITTORE-1 con pipeline senza score ≥ 50) → se idle, lascia; se brucia token a vuoto, kill.
 
-**Regole d'oro del triage:**
+### ⚡ Trigger per scalare
 
-1. **Mai killare alla cieca** — prima capture-pane e capisci cosa sta facendo l'agente. Può essere in mezzo a una chiamata importante.
-2. **Mai ignorare sessioni morte** — se il CLI non gira dentro quella tmux, quell'agente è inutile e confonde solo le API di stato. Kill e respawn.
-3. **Mai assumere che "già attivo = fresco"** — una sessione può essere up da ore con un CLI bloccato. Verifica con capture-pane.
-4. **Se trovi una sessione di un ruolo che al tuo piano di scaling NON serve ora** (es. SCRITTORE-1 avviato dall'interfaccia ma la pipeline non ha ancora posizioni `score >= 50`) → valuta: se è idle e fresco, lascialo lì (occupa pochi token, niente richieste); se sta macinando token a vuoto, kill + rispawn quando serve davvero.
-5. **Dopo il triage**, procedi col tuo scaling graduale normale — avvia solo ciò che manca rispetto alla tua configurazione target.
+Ogni 30-60s consulta `python3 /app/shared/skills/db_query.py dashboard`:
 
-### Trigger per accendere i successivi
+| Condizione | Azione |
+|---|---|
+| Positions `new` ≥ 5, 1 solo Analista | spawn `analista 2` |
+| Positions `checked` ≥ 3 | spawn `scorer 1` se mancante |
+| Positions `scored` con score ≥ 50 ≥ 1 | spawn `scrittore 1` |
+| Scrittore-1 saturo (`writing` > 10 min) e coda ≥ 50 con ≥ 2 | spawn `scrittore 2` |
+| Backlog ≥ 50 anche con S1+S2 | spawn `scrittore 3` (MAX) |
+| Critico | parte on-demand dallo Scrittore, tu non lo tocchi |
+| Brainstorm con il Comandante | spawn `capitano 2` (raro) |
 
-Ogni 30-60 secondi controlla il DB con `python3 /app/shared/skills/db_query.py dashboard` e scala così:
+### 📏 Regole
 
-| Condizione osservata | Azione |
-|----------------------|--------|
-| Positions `new` ≥ 5 e 1 solo Analista attivo | Spawn `analista 2` |
-| Positions `checked` ≥ 3 (coda per Scorer) | Spawn `scorer 1` se non attivo |
-| Positions `scored` con score ≥ 50 ≥ 1 | Spawn `scrittore 1` |
-| Scrittore-1 saturo (posizione `writing` da > 10 min) e coda score ≥ 50 ≥ 2 | Spawn `scrittore 2` |
-| Ancora backlog su score ≥ 50 dopo S1+S2 attivi | Spawn `scrittore 3` (MAX) |
-| Scrittore apre primo CRITICO-S1 | parte on-demand dallo Scrittore stesso — tu non lo tocchi |
-| Vuoi brainstormare un fix/regola col Comandante | Spawn `capitano 2` (raro) |
-
-### Regole di scaling
-
-1. **Mai più di 1 spawn per tick Sentinella** (~5 min). Spawn UN agente → kick-off → aspetta `[BRIDGE TICK]` successivo → la Sentinella valuta l'effetto sull'usage → ordine successivo. Spawn multipli nella stessa finestra ti hanno fatto sforare in passato (incident 2026-04-25: +17% in 5 min, freeze).
-2. **Max 2 Scout, 2 Analisti, 1 Scorer, 3 Scrittori, 1 Critico** (per ruolo). Non ci sono scenari in cui serve di più.
-3. **Se la pipeline si svuota** (es. Scrittori senza coda per > 5 min), **non fermare** gli agenti — rimangono idle, la CPU è quasi zero. Solo se il Comandante chiede "fermiamo il team" fai `tmux kill-session`.
-4. **Prima di spawnare**, verifica sempre che l'agente non sia già attivo: `tmux has-session -t "<SESSION>" 2>/dev/null && echo ATTIVO`. Se attivo, non ri-spawnare.
-5. **Ordine obbligatorio al boot**: Scout+Analista PRIMA, Scorer+Scrittori DOPO. Mai in parallelo (regola #17 del blocco regole).
-
-### Cosa NON devi fare
-
-- ❌ Avviare tutti gli agenti con un ciclo `for role in scout scrittore critico ...` al boot
-- ❌ Creare istanze extra "di riserva" perché "così sono pronti". Sono solo token sprecati in attesa.
-- ❌ Mandare messaggi tmux a sessioni che hai appena creato senza verificare che il CLI sia bootato (usa `tmux capture-pane -t <SESSION> -p | grep -q "agent"` o simile)
-- ❌ Usare `tmux new-session` diretto — solo via `start-agent.sh`
+1. **1 solo spawn per tick Sentinella** (~5 min). Spawn → kick-off → attendi il prossimo `[BRIDGE TICK]` → ordine successivo. Mai 5 di colpo.
+2. **Max per ruolo**: 2 Scout, 2 Analisti, 1 Scorer, 3 Scrittori, 1 Critico.
+3. **Pipeline che si svuota** ≠ kill: idle costa quasi zero. Kill solo su richiesta del Comandante.
+4. **Prima di spawnare** verifica: `tmux has-session -t <SESSION> 2>/dev/null && echo ATTIVO`.
+5. **Ordine al boot**: Scout+Analista *prima*, Scorer+Scrittori *dopo*. Mai in parallelo.
 
 ---
 
