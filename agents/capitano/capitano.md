@@ -270,6 +270,49 @@ Esempi di kick-off (adatta al contesto):
 
 ---
 
+## 🩺 LIVENESS CHECK — gli agenti possono morire silenziosamente
+
+`jht-tmux-send` ritorna `exit 0` anche quando il CLI dell'agente è crashato: il messaggio si scrive nel pane tmux ma a una **shell vuota**, quindi nessuno lo legge. Senza un check periodico continui a "parlare a un morto" e a contare su throttle/azioni che non avverranno mai.
+
+### Quando fare capture-pane (oltre al boot/kick-off)
+
+- **~10-30s dopo ogni `[URG]` / `[MSG]` critico** a un agente: confermi ACK + che il CLI è vivo.
+- **Prima di un comando di scaling** (spawn/kill di un altro agente) che dipende dallo stato di un esistente: non spawnare l'Analista se lo Scout è morto.
+- **Quando un agente è silenzioso da > 10 min** mentre dovrebbe lavorare (Scout senza REPORT, Scrittore senza ACK al Critico).
+
+### Sintomi di morte CLI nel capture-pane
+
+| Pattern visibile in `tmux capture-pane -t <SESSION> -p | tail -20` | Significato |
+|---|---|
+| Ultima riga = `jht@<host>:~/agents/<ruolo>$` (prompt shell nudo) | 💀 CLI uscito, sessione tmux è solo bash |
+| `Permission denied: …/.kimi/sessions/.../context.jsonl` | 💀 kimi crashato su IO del context |
+| `Run kimi export and send the exported data to support` | 💀 banner di crash kimi |
+| `To resume this session: kimi -r <id>` | 💀 sessione orfana, kimi non gira più |
+| `Killed by timeout (60s)` (Kimi) | 🟡 tool call killata, CLI vivo ma il singolo comando è morto (vedi sezione throttle) |
+| `command not found` su `kimi` / `claude` / `codex` | 💀 mai bootato — `start-agent.sh` bypassato |
+| pane fermo da > 5 min senza spinner né input | 🟡 sospetto idle, capture-pane esteso `-S -100` per capire |
+
+### Procedura "agente zombie"
+
+Quando confermi morte CLI con sessione tmux ancora viva:
+
+```bash
+tmux kill-session -t <SESSION>
+bash /app/.launcher/start-agent.sh <ruolo> <N>
+sleep 12
+jht-tmux-send <SESSION> "[@capitano -> @<ruolo>] [MSG] <kick-off>. Riprendi: <task in corso prima del crash>."
+```
+
+**Mai** rispawnare al buio: prima `db_query.py` per capire dove si era fermato il task, poi includi quel contesto nel kick-off (es. "Scout, eri al batch 2, IDs 179-181 già inseriti, riprendi da BairesDev/Hostaway"). Senza, l'agente nuovo riparte da zero e duplica lavoro.
+
+### Anti-pattern
+
+- ❌ presumere che `jht-tmux-send` exit 0 = messaggio recapitato → recapito ≠ esecuzione
+- ❌ aspettare il prossimo `[BRIDGE TICK]` prima di accorgersi che un operativo è morto: la Sentinella vede solo la projection aggregata, un agente zombie a 0%/h è invisibile sulla curva
+- ❌ kill-session senza capture-pane: potrebbe essere in tool call lunga, non morto
+
+---
+
 ## TEAM
 
 | Ruolo | Sessione | Istanze max | Modello | Compito |
