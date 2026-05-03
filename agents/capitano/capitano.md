@@ -129,6 +129,10 @@ Per cambiare **ogni quanto** un agente chiama `jht-throttle` nel suo loop, usa t
 jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [INFO] Cadenza: chiama jht-throttle dopo OGNI round del Critico, non solo a fine 3°."
 ```
 
+### ⚠️ Quando ordini un throttle/freeze esplicito agli agenti
+
+Se mandi un `[URG]` con un valore esplicito tipo `jht-throttle 600 --agent ...`, l'output che vedrai nel `tmux capture-pane` dell'agente bersaglio sarà `Killed by timeout (60s)`. **È atteso, non significa fallimento**: il parent bash viene killato dal timeout della tool call shell del CLI, ma il child detached continua a dormire fino al termine. L'agente disciplinato risponderà con un ACK + verifica via `jht-throttle-check`. Se vedi un agente che invece RIPETE il `jht-throttle` o lo lancia con `nohup &` interpretandolo come errore, è bug interpretativo del prompt — vedi `agents/_skills/throttle/DESIGN-NOTES.md` per il design completo. Per evitare il kill del parent quando vuoi blocco hard reale, istruisci l'agente nel messaggio a passare `timeout: N+30` alla sua tool call shell (es. `timeout: 630` per `jht-throttle 600`).
+
 ### Tipi di ORDINE
 
 - **`[URG] RALLENTARE` `Throttle: N`** → applica throttle N immediatamente.
