@@ -1224,17 +1224,31 @@ export default function UsageTokensChart() {
   // Cioè il ratio "cumulativo dalla nascita sessione fino a quel punto".
   // Convergerà al ratio reale man mano che si accumulano step. Sostituisce
   // la rolling che era troppo rumorosa.
+  // Ratio macro CONTINUA (un punto per ogni bucket della tokenSeries, non
+  // solo agli step bridge). Per ogni bucket t calcoliamo:
+  //   ratio_t = (kt_t - kt_first) / (usage_t - usage_first)
+  // dove usage_t e' lo usage dell'ultimo step bridge raggiunto fino a t
+  // (resta costante tra due step). Conseguenza: nei plateau di usage la
+  // ratio cresce — comportamento corretto (stiamo bruciando token senza
+  // muovere usage), il chart deve mostrarlo invece di lasciare un buco.
+  // Cosi' la linea arriva fino a 'now' senza interruzioni.
   const macroRatioSeries = useMemo<{ tsMs: number; ratio: number }[]>(() => {
-    if (stepEvents.length < 2) return []
+    if (stepEvents.length < 2 || tokenSeries.length === 0) return []
     const first = stepEvents[0]
     const out: { tsMs: number; ratio: number }[] = []
-    for (let i = 1; i < stepEvents.length; i++) {
-      const dKt = stepEvents[i].kt - first.kt
-      const dU = stepEvents[i].usage - first.usage
-      if (dU > 0 && dKt > 0) out.push({ tsMs: stepEvents[i].ts, ratio: dKt / dU })
+    let stepIdx = 0  // indice dell'ultimo step <= bucket corrente
+    for (const tok of tokenSeries) {
+      if (tok.tsMs < first.ts) continue
+      while (stepIdx + 1 < stepEvents.length && stepEvents[stepIdx + 1].ts <= tok.tsMs) {
+        stepIdx++
+      }
+      const usageNow = stepEvents[stepIdx].usage
+      const dKt = tok.kt - first.kt
+      const dU = usageNow - first.usage
+      if (dU > 0 && dKt > 0) out.push({ tsMs: tok.tsMs, ratio: dKt / dU })
     }
     return out
-  }, [stepEvents])
+  }, [stepEvents, tokenSeries])
 
   // Stats sessione monitorata — usate dai widget sopra il grafico.
   //   • sessionStart  = primo anchor (quando abbiamo iniziato a monitorare)
