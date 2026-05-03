@@ -5,6 +5,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '../../components/Toast'
 import TeamOrgChart from './_components/TeamOrgChart'
 import UsageChart from './_components/UsageChart'
+import UsageTokensChart from './_components/UsageTokensChart'
+import TokenBreakdown from './_components/TokenBreakdown'
+import TokenTypesChart from './_components/TokenTypesChart'
 import AgentTokensChart from './_components/AgentTokensChart'
 import ThrottleChart from './_components/ThrottleChart'
 import AgentActivityChart from './_components/AgentActivityChart'
@@ -71,7 +74,17 @@ export default function TeamPage() {
     try {
       const res = await fetch('/api/agents')
       const data = await res.json()
-      const agentList: { id: string; status: string }[] = data.agents ?? []
+
+      // Se la response NON è ok (rate-limit 429, 500 server error, auth
+      // 401), `data.agents` è undefined e il fallback `?? 'stopped'`
+      // farebbe diventare TUTTI gli agenti "stopped" → toast falsi
+      // "Agent stopped" anche se gli agenti girano benissimo. Non
+      // toccare lo stato in questo caso: la prossima chiamata che
+      // riesce ricostruisce verità.
+      if (!res.ok || !Array.isArray(data?.agents)) {
+        return
+      }
+      const agentList: { id: string; status: string }[] = data.agents
 
       // Compute next fuori dall'updater: chiamare `toast()` dentro
       // un updater di setState triggera React warning "Cannot update
@@ -291,6 +304,29 @@ export default function TeamPage() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <AgentActivityChart />
+        </div>
+      </section>
+
+      {/* Rate budget + cumulativo token (gemello del primo grafico, con
+           sovrapposizione dei kT del team sull'asse Y destro per validare
+           la correlazione visivamente). Max-width più ampio per dare aria. */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <UsageTokensChart />
+        </div>
+      </section>
+
+      {/* Distribuzione consumo token per agente — pie + widget media. */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <TokenBreakdown />
+        </div>
+      </section>
+
+      {/* Composizione consumo per tipo di token (input/output/cache). */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <TokenTypesChart />
         </div>
       </section>
 

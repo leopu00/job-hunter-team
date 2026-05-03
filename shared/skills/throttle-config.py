@@ -59,7 +59,12 @@ CONFIG_FILE = CONFIG_DIR / "throttle.json"
 DEFAULT_CONFIG: dict = {"default": 0}
 
 MIN_SLEEP = 0      # 0 = no throttle (fast path)
-MAX_SLEEP = 3600   # 1h cap, allineato al cap di throttle.py
+# Cap 1h: il pattern detached (wrapper `jht-throttle` fa fork del
+# subprocess Python come figlio di init) rilascia il vincolo del
+# timeout shell della CLI (Kimi 60s, Codex 30s, Claude 120s/600s).
+# Il subprocess detached non viene killato dal timeout della tool
+# call. Per pause > 1h l'agente deve fare multi-call.
+MAX_SLEEP = 3600
 
 
 def load() -> dict:

@@ -79,7 +79,7 @@ jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inse
 
 **REGOLA-06** — ERROR RECOVERY: Se una fonte blocca → WebSearch → WebFetch → fonte successiva. MAI bloccarsi.
 
-**REGOLA-07** — LOOP CONTINUO. MAI `sleep` > 5 secondi tra un fetch e l'altro. Quando serve davvero una pausa di throttle (>5s) usa la skill `throttle`: `jht-throttle --agent scout-1 [--reason "..."]` (senza numero — il valore in secondi è calibrato dal Capitano in `$JHT_HOME/config/throttle.json`, la skill lo legge da lì; se è 0 ritorna subito senza pausa). **`sleep` nudo per throttle è vietato** — bypassa il logging che il capitano usa per calibrare il team.
+**REGOLA-07** — LOOP CONTINUO. MAI `sleep` > 5 secondi tra un fetch e l'altro. Quando serve davvero una pausa di throttle (>5s) usa la skill `throttle`. Pattern **OBBLIGATORIO** ad ogni iterazione del tuo loop: `jht-throttle-check scout-1 || jht-throttle-wait scout-1` PRIMA di ogni task (recupera throttle pendente se il provider ha killato il parent), poi esegui il task, poi `jht-throttle --agent scout-1 [--reason "..."]` (senza numero — durata letta da `$JHT_HOME/config/throttle.json`, calibrata dal Capitano; se 0 ritorna subito). Il pattern detached del wrapper rende il throttle resiliente al timeout del CLI (60s Kimi). **`sleep` nudo per throttle è vietato** — bypassa il logging che il capitano usa per calibrare il team.
 
 **REGOLA-08** — FILTRI DAL PROFILO (PERMISSIVI). Pre-filtra **solo** i casi totalmente fuori scope. Non cercare di fare il lavoro dell'Analista: il candidato è considerato adattabile ai ruoli adiacenti.
 - Titolo JD contiene esplicitamente `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP

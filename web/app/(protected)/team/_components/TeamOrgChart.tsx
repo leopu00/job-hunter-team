@@ -549,7 +549,12 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
       } catch { /* network blip → retry next tick */ }
     }
     poll()
-    const interval = setInterval(poll, 800)
+    // 1500ms (era 800): l'animazione delle frecce non risente
+    // visivamente del raddoppio (un messaggio passa in ~2s sulla
+    // freccia comunque). Riduce req/min su /api/team/messages da
+    // ~75 a ~40, dando margine al rate limit per gli altri poll
+    // della pagina /team (chart, status, sentinella, ecc.).
+    const interval = setInterval(poll, 1500)
     return () => { cancelled = true; clearInterval(interval) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arrowOverlay.bridgePath, arrowOverlay.sentinelToCaptainPath, arrowOverlay.captainPaths, arrowOverlay.chainPaths])

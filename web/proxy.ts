@@ -49,9 +49,19 @@ const CORS_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 const CORS_HEADERS = 'Content-Type, Authorization, X-Requested-With'
 
 // --- Rate limit (in-memory) ---
+//
+// Tier: utente locale (browser sul Mac dell'utente) vs richiesta remota
+// (deploy esposto in rete). Una dashboard real-time come /team
+// legittimamente fa ~140 req/min per polling concorrente di chart +
+// status + animazioni; il limit globale 120 era anti-abuse di un
+// servizio esposto, troppo stretto per uso locale. Manteniamo il limit
+// stretto per remote (anti-DDoS/scraping su deploy pubblico) e ne
+// usiamo uno più permissivo per le request che arrivano direttamente
+// al socket localhost (vedi `isLocalRequestFromHeaders`).
 
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX = 120
+const RATE_LIMIT_LOCAL_MAX = 600   // ~10 req/sec per utente sul proprio Mac
+const RATE_LIMIT_PUBLIC_MAX = 120  // limit anti-abuse per deploy esposti
 const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60_000
 
 type RateLimitEntry = { count: number; windowStart: number }
@@ -64,8 +74,9 @@ function getRateLimitKey(req: NextRequest): string {
   return `rl:${ip}`
 }
 
-function checkRateLimit(key: string): { allowed: boolean; remaining: number; resetAt: number } {
+function checkRateLimit(key: string, isLocal: boolean): { allowed: boolean; remaining: number; resetAt: number; max: number } {
   const now = Date.now()
+  const max = isLocal ? RATE_LIMIT_LOCAL_MAX : RATE_LIMIT_PUBLIC_MAX
 
   if (now - lastCleanup > RATE_LIMIT_CLEANUP_INTERVAL) {
     lastCleanup = now
@@ -78,14 +89,14 @@ function checkRateLimit(key: string): { allowed: boolean; remaining: number; res
 
   if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
     rateLimitStore.set(key, { count: 1, windowStart: now })
-    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt: now + RATE_LIMIT_WINDOW_MS }
+    return { allowed: true, remaining: max - 1, resetAt: now + RATE_LIMIT_WINDOW_MS, max }
   }
 
   entry.count++
-  const remaining = Math.max(0, RATE_LIMIT_MAX - entry.count)
+  const remaining = Math.max(0, max - entry.count)
   const resetAt = entry.windowStart + RATE_LIMIT_WINDOW_MS
 
-  return { allowed: entry.count <= RATE_LIMIT_MAX, remaining, resetAt }
+  return { allowed: entry.count <= max, remaining, resetAt, max }
 }
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -163,10 +174,13 @@ export async function proxy(request: NextRequest) {
 
   // --- API: Rate limiting ---
   let rlRemaining: number | null = null
+  let rlMax: number = RATE_LIMIT_PUBLIC_MAX
   if (isApi) {
+    const isLocal = isLocalRequestFromHeaders(request.headers)
     const rlKey = getRateLimitKey(request)
-    const { allowed, remaining, resetAt } = checkRateLimit(rlKey)
+    const { allowed, remaining, resetAt, max } = checkRateLimit(rlKey, isLocal)
     rlRemaining = remaining
+    rlMax = max
 
     if (!allowed) {
       const origin = request.headers.get('origin')
@@ -175,7 +189,7 @@ export async function proxy(request: NextRequest) {
         { status: 429 },
       )
       res.headers.set('Retry-After', String(Math.ceil((resetAt - Date.now()) / 1000)))
-      res.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
+      res.headers.set('X-RateLimit-Limit', String(max))
       res.headers.set('X-RateLimit-Remaining', '0')
       for (const [k, v] of Object.entries(getCorsHeaders(origin))) res.headers.set(k, v)
       logRequest(request, 429, Date.now() - start)
@@ -270,8 +284,8 @@ export async function proxy(request: NextRequest) {
   if (isApi) {
     const origin = request.headers.get('origin')
     for (const [k, v] of Object.entries(getCorsHeaders(origin))) supabaseResponse.headers.set(k, v)
-    supabaseResponse.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX))
-    supabaseResponse.headers.set('X-RateLimit-Remaining', String(rlRemaining ?? RATE_LIMIT_MAX))
+    supabaseResponse.headers.set('X-RateLimit-Limit', String(rlMax))
+    supabaseResponse.headers.set('X-RateLimit-Remaining', String(rlRemaining ?? rlMax))
     logRequest(request, 200, Date.now() - start)
   } else {
     // CSP applies to HTML responses (everything that isn't /api/*).
