@@ -36,13 +36,32 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-# Pesi cache: stessi di token-by-agent-rate.py / token-meter.py.
-# input_other e output sono full-cost. cache_read costa il 10%
-# (read da context window prebuiltata), cache_creation 125% (registra
-# il blocco e lo scrive). Sono ipotesi di partenza Kimi K2 — vedi note
-# in docs/internal/2026-05-01-bridge-and-token-monitoring.md.
-CACHE_R_W = 0.1
-CACHE_C_W = 1.25
+# Pesi token per il RATE LIMIT Kimi K2 — derivati EMPIRICAMENTE dai nostri
+# log, NON dalla doc piattaforma.
+#
+# Test: per ogni segmento tra step bridge consecutivi (Δusage>=1) abbiamo
+# misurato cumul_token / Δusage usando vari modelli. Risultati su 28
+# segmenti / 6h di sessione team Kimi K2:
+#
+#   modello                 CoV (Δu>=1)   CoV (Δu>=10)   drift macro
+#   ----------------------  -----------   ------------   -----------
+#   input + output                   52%           15%       0.96x
+#   output da solo                   46%           19%       0.84x
+#   call count                       81%           30%       1.42x
+#   ALL tokens (1.0 unif)           124%           39%       1.73x
+#   cache_read incluso              127%           46%      diverging
+#
+# Il rate Kimi cresce in modo proporzionale a (input + output) reali, NON
+# include cache_read (che pesa 0). La doc piattaforma dice altro, ma sui
+# nostri dati il modello in+out e' nettamente piu' stabile (CoV 15% vs
+# 39% di all-tokens, drift 0.96x vs 1.73x).
+#
+# Conseguenza pratica: 1% di rate budget Kimi ≈ ~40k token (input+output)
+# stabile per tutta la sessione. Numero usabile per la tabella throttle.
+W_INPUT = 1.0
+W_OUTPUT = 1.0
+CACHE_R_W = 0.0   # cache_read non contribuisce al rate (analisi empirica)
+CACHE_C_W = 0.0   # cache_creation idem (e' sempre 0 nei dati Kimi)
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_DIR = JHT_HOME / ".kimi" / "sessions"
@@ -125,10 +144,13 @@ def session_to_agent(state_path: Path, wire_path: Path | None = None):
 
 
 def billing_weighted(token_usage: dict) -> float:
-    """Costo weighted di una singola risposta API Kimi."""
+    """Costo weighted di una singola risposta API Kimi.
+
+    Pesi derivati dal pricing ufficiale Kimi K2 standard.
+    """
     return (
-        token_usage.get("input_other", 0)
-        + token_usage.get("output", 0)
+        token_usage.get("input_other", 0) * W_INPUT
+        + token_usage.get("output", 0) * W_OUTPUT
         + token_usage.get("input_cache_read", 0) * CACHE_R_W
         + token_usage.get("input_cache_creation", 0) * CACHE_C_W
     )
@@ -137,15 +159,13 @@ def billing_weighted(token_usage: dict) -> float:
 def billing_weighted_claude(usage: dict) -> float:
     """Costo weighted di una singola risposta API Claude (Anthropic).
 
-    Stessi pesi di Kimi per coerenza nel chart unificato:
-      input_tokens                  → 1.0  (full)
-      output_tokens                 → 1.0  (full)
-      cache_read_input_tokens       → 0.1  (read sconto 90%)
-      cache_creation_input_tokens   → 1.25 (creation surcharge)
+    Riusa gli stessi pesi del calcolo Kimi per coerenza visiva nel chart
+    unificato (anche se Claude ha rapporti billing diversi). Se il team
+    gira interamente su Claude, vale la pena introdurre pesi separati.
     """
     return (
-        usage.get("input_tokens", 0)
-        + usage.get("output_tokens", 0)
+        usage.get("input_tokens", 0) * W_INPUT
+        + usage.get("output_tokens", 0) * W_OUTPUT
         + usage.get("cache_read_input_tokens", 0) * CACHE_R_W
         + usage.get("cache_creation_input_tokens", 0) * CACHE_C_W
     )
