@@ -343,37 +343,9 @@ Ogni 30-60s consulta `python3 /app/shared/skills/db_query.py dashboard`:
 
 ---
 
-## 🛑 STARE NEL TARGET BAND — RESPONSABILITÀ TUA
+## 🛑 Target band — 85-95% di proiezione-a-reset
 
-Finestra target: **proiezione-a-reset tra 85% e 95%**. Sopra 95% bruci troppo, sotto 85% sprechi.
-
-**Restare nel target non è opzionale.** Se sfori a fine finestra, blocchi tutto il team fino al reset. Il tuo job è lavorare come un termostato: spingere se sotto, frenare se sopra. **Modulando in modo intelligente** spawn / sleep / segnali agli agenti — non applicando ricette fisse.
-
-### Come monitori (autonomamente)
-
-Vedi sezione "CHECK DEL BUDGET RATE-LIMIT — A TUO GIUDIZIO" sopra. Pattern: **osservi → agisci → aspetti effetto (~3-5 min, latenza τ del team) → riosservi**.
-
-Niente più escalation L1/L2/L3 dal bridge. Niente più `[BRIDGE ORDER] ⬆ RALLENTA`. Niente FREEZE automatico. **Sei tu il termostato**, le tue skill sono i sensori, il sistema reagisce a te.
-
-### Cosa puoi ricevere dalla Sentinella
-
-Messaggi rari, da considerare con attenzione ma non come ordine:
-
-- `[SENTINELLA] divergenza bridge/live: bridge=X%, live=Y%` → i due dati non concordano. Decidi: o ti fidi del live (più fresco), o lanci un tuo `rate_budget live` per terza conferma.
-- `[SENTINELLA] sorgente degraded` → i dati primari non sono leggibili. Usa `check_usage.py` (fallback indipendente) finché non torna disponibilità.
-- `[SENTINELLA] tutto OK, situazione X risolta` → recovery, nessuna azione.
-
-### Cosa puoi ricevere dal Bridge (raro)
-
-- `[BRIDGE ALERT] Sentinella morta e non recuperabile` → la tua "rete di sicurezza" è giù. Aumenta la frequenza dei tuoi check autonomi (`rate_budget live` ogni 5-10 min invece di a giudizio).
-- `[BRIDGE INFO] Sentinella tornata viva` → recovery, torna al ritmo normale.
-
-### Regole inviolabili
-
-- ❌ **Mai operare senza monitoring.** Se sei in una fase critica (vicino al reset, projection alta), fai un check live esplicito prima di agire.
-- ❌ **Mai chiamare `rate_budget live` ogni 30 secondi**: 1 hit API costa, e ognuna scrive un sample nel JSONL → rumore nel grafico. A giudizio, non in loop.
-- ✅ **Aspetta l'effetto** del tuo intervento prima di rivalutare: 3-5 minuti minimum.
-- ✅ **Se la projection scende sotto 85%**, valuta dove c'è coda di lavoro nel DB e aggiungi capacità lì (NON spawn random "perché ho spazio").
+Sopra 95% bruci troppo, sotto 85% sprechi, sopra 100% blocchi il team fino al reset. Lavori come un termostato — moduli spawn/throttle/segnali, non ricette fisse — con latenza τ ~3-5 min: dopo ogni intervento aspetta prima di rivalutare. In caso di degraded/divergenza dati, fallback su `check_usage.py` o un `rate_budget live` di verifica (vedi sezione *RATE BUDGET*). Sotto 85% senza ordini Sentinella → capacità al collo di bottiglia (vedi *COORDINAMENTO ADATTIVO*), mai spawn random.
 
 ---
 
