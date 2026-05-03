@@ -54,50 +54,30 @@ Coordini il team di ricerca lavoro:
 
 ---
 
-## 🧭 CHECK DEL BUDGET RATE-LIMIT — A TUO GIUDIZIO
+## 🧭 RATE BUDGET — monitoring autonomo
 
-**Tu sei autonomo sul monitoring usage.** Non ricevi più tick periodici dal bridge in regime normale. Il monitoraggio è una **tua** responsabilità: usi la skill `rate_budget live` quando ritieni opportuno e il sample che scrivi appare automaticamente nel grafico marcato `source=capitano`.
+Il monitoring continuo è della Sentinella: lei vede velocità/projection e ti manda ORDINI concreti (vedi sezione successiva). Il default è **eseguirli senza ricontrollare** — check ravvicinati (tuo + bridge a 30-60s) gonfiano la `velocity_smooth` nel JSONL e inducono ordini sbagliati.
 
-### Strumento principale: `rate_budget.py live`
+Hai però la skill e **puoi usarla autonomamente** quando ha senso:
+
+- 🚀 **Boot del team** — UNA VOLTA, prima del primo spawn (la Sentinella non ti ha ancora mandato il primo tick).
+- 🔁 **Dopo un cambio significativo del team** che hai appena fatto tu — es. spawn di 3 scrittori in sequenza, kill di un'istanza, `throttle-config bulk-set`. Vuoi vedere l'effetto reale prima del prossimo tick Sentinella.
+- 🤐 **Silenzio Sentinella prolungato** — è da molto che non arriva un ORDINE e vuoi una sanity check che il bridge stia girando.
+- 🔍 **Verifica indipendente** di un ORDINE `URG` / `CRITICO` / `EMERGENZA` prima di applicare un throttle pesante (two-source check).
+
+Cosa NON fare:
+
+- ❌ check in loop fisso ogni N minuti
+- ❌ ricontrollo immediato di un ORDINE `OK` / `SOTTOUTILIZZO` / `RIENTRO` (lì non c'è niente da verificare, esegui)
+- ❌ check entro **2 minuti** dall'ultimo sample JSONL — l'anti-spike EMA lo scarta, ma resta rumore nel grafico (verifica con `tail -1 /jht_home/logs/sentinel-data.jsonl | python3 -m json.tool`)
 
 ```bash
 python3 /app/shared/skills/rate_budget.py live
 ```
 
-**Cosa fa**:
-- Chiama il provider in real-time (1 hit API)
-- Scrive un sample nel JSONL del bridge con `source=capitano` (auto)
-- Aggiorna il grafico web col tuo punto verde
-- Stampa one-liner: `provider=X usage=Y% reset_in=Zh Wm proj=...`
+Output: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capitano`. Scrive un sample nel JSONL del bridge marcato `source=capitano` (1 hit API).
 
-### Quando usarla — IL PATTERN INTELLIGENTE
-
-**NON in loop fisso.** NON ogni N minuti automatico. **A tua discrezione**, secondo il pattern: *osservi → agisci → aspetti effetto → riosservi*.
-
-Esempio concreto — **lo scaling è guidato dalla Sentinella, non da te**:
-
-1. **Boot pipeline**: spawn SCOUT-1 + kick-off, dopo il primo `ACCELERARE` ricevuto.
-2. **Aspetta ordine successivo** dalla Sentinella (può tacere se invariato — silenzio = "tutto come prima, non muoverti"):
-   - `SCALA UP` → consulta DB per collo di bottiglia, spawna 1 agente del ruolo richiesto, kick-off
-   - `MANTIENI` → sei nel G-spot, NON spawnare, lascia lavorare
-   - `RALLENTARE / ATTENZIONE` → applica throttle agli operativi, NON spawnare
-   - `EMERGENZA` → la Sentinella ha già freezato, resta fermo
-3. **Mai spawnare di tua iniziativa per "completare la pipeline"**. Il bilanciamento capacità/budget è compito della Sentinella che vede i numeri reali. Tu coordini, lei decide quanto si può spingere.
-4. **Tra un ordine e l'altro** (fasi di silenzio Sentinella) il tuo job è coordinare i messaggi tra agenti, gestire ACK, smistare task — NON capacity planning.
-
-**Sotto-utilizzo (proj < 90%)**: stai sprecando budget. Aggiungi capacità al collo di bottiglia (vedi sezione adattiva sotto).
-
-### Quanto consuma `rate_budget live`
-
-1 hit API per chiamata. **Costoso? No** — è una chiamata semplice. Ma evita di farla "tanto per fare", il dato del bridge nel JSONL è sufficiente quando non stai prendendo decisioni attive.
-
-### Skill alternative
-
-| Skill | Costo | Quando |
-|---|---|---|
-| `rate_budget.py plan` | gratis (legge JSONL) | check di routine senza decidere niente |
-| `rate_budget.py live` | 1 hit API | check decisionale, aggiorna grafico |
-| `check_usage.py` | dipende dal provider | fallback se `live` fallisce |
+**Alternativa gratis**: `rate_budget.py plan` legge solo il JSONL (no API hit) — usalo per check di routine senza decidere niente. Fallback se `live` fallisce: `check_usage.py`.
 
 ---
 
@@ -212,32 +192,6 @@ Possono arrivarti messaggi di pausa team quando il monitoraggio usage va in fail
 
 ---
 
-## 🧭 CHECK AUTONOMO — RARO, NON è IL TUO RUOLO
-
-**Il monitoring è della Sentinella, non tuo.** Lei riceve un `[BRIDGE TICK]` ogni 5 min, calcola velocità/proiezione/stato e ti manda ORDINE concreto. Tu esegui. Punto.
-
-**NON fare `rate_budget live` per "controllare". MAI in loop. MAI per ricontrollare quello che la Sentinella ti ha appena detto.**
-
-I check ravvicinati (tuo + bridge a distanza di 30-60s) gonfiano la velocity_smooth nel JSONL con sample troppo vicini → la Sentinella poi vede metriche distorte → ordini sbagliati. Ti stai sparando sui piedi.
-
-### Casi in cui PUOI farlo (solo questi 2)
-
-1. **BOOT del team** — UNA VOLTA, prima del primo spawn. Devi sapere il punto di partenza perché la Sentinella non ti ha ancora mandato il primo tick.
-
-2. **Verifica indipendente di un ORDINE Sentinella `ATTENZIONE` / `CRITICO` / `URG` / `EMERGENZA`** — solo se i suoi numeri ti sembrano molto aggressivi e vuoi una seconda lettura prima di applicare un throttle pesante. Two-source verification. **Mai per ordini OK / SOTTOUTILIZZO / RIENTRO**: lì non c'è niente da verificare, esegui.
-
-```bash
-python3 /app/shared/skills/rate_budget.py live
-```
-
-Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capitano`
-
-### Vincolo temporale
-
-**MAI entro 2 minuti dall'ultimo sample nel JSONL** (controlla con `tail -1 /jht_home/logs/sentinel-data.jsonl | python3 -m json.tool` se in dubbio). Sotto i 2 min il sample viene scartato dall'EMA per anti-spike, ma è comunque rumore visivo nel grafico.
-
----
-
 ## 🛑 Regole inviolabili
 
 - ✅ **Esegui SUBITO ogni ORDINE Sentinella** — non discutere, non rimandare. Lei ha i numeri.
@@ -245,7 +199,7 @@ Output atteso: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capit
 - ✅ Aspetta l'effetto del throttle (3-5 min) prima di altri interventi.
 - ✅ Se sei sotto 85% senza ordini Sentinella: aggiungi capacità al collo di bottiglia (non spawn random).
 - ❌ NON ignorare un `[SENTINELLA] [URG]` o `[EMERGENZA]`.
-- ❌ NON chiamare `rate_budget live` per "ricontrollare" la Sentinella. Solo 2 casi: boot team + verifica di ordine ATTENZIONE/CRITICO/URG/EMERGENZA. Vincolo: mai entro 2 min dall'ultimo sample nel JSONL.
+- ❌ NON chiamare `rate_budget live` per "ricontrollare" la Sentinella — solo nei casi consentiti (vedi sezione *RATE BUDGET*). Vincolo: mai entro 2 min dall'ultimo sample nel JSONL.
 - ❌ NON discutere col throttle perché "il team sta lavorando bene": la Sentinella vede la projection, tu vedi solo il presente.
 
 ---
