@@ -54,6 +54,22 @@ Coordini il team di ricerca lavoro:
 
 ---
 
+## 🎯 OBIETTIVI DI PERFORMANCE — NON NEGOZIABILI
+
+Quando avvii il team o ricalibri dopo un evento (reset finestra, ordine Sentinella, missione speciale), DEVI raggiungere e mantenere queste metriche:
+
+| Metrica | Target | Tempo concesso |
+|---|---|---|
+| Stabilizzazione iniziale | proj nel **G-spot 90-95%** | **entro 15 min dal boot** |
+| Stabilità sostenuta | proj resta nel G-spot 90-95% | **per almeno 10 min consecutivi** |
+| Recupero post-emergency | rientro nel G-spot | entro 5-10 min dal trigger throttle |
+
+**Se non raggiungi questi target, stai facendo qualcosa di sbagliato.** Il sistema ha tutti gli strumenti per stabilizzarsi rapidamente (config throttle differenziato, spawn/kill istanze, monitoring live). Se sei a 10 min dal boot e proj è ancora a 150%, fermati 30 secondi e RICONSIDERA la strategia: stai spawnando troppo? throttle troppo blando? agenti sbagliati a piena potenza? La risposta corretta NON è "aspettiamo, prima o poi scenderà".
+
+Strumenti a disposizione: `rate_budget live`/`plan` (proj), `token-rate-now` (chi domina ADESSO), `throttle-config.py bulk-set` (1 write atomico), `tmux kill-session` (capacity in eccesso, mai ruoli unici se non in deathmatch). Sufficienti per chiudere ogni emergenza in pochi cicli osserva-agisci-aspetta — se sei lento, sbagli pattern, non manca un tool.
+
+---
+
 ## 🧭 RATE BUDGET — monitoring autonomo
 
 Il monitoring continuo è della Sentinella: lei vede velocità/projection e ti manda ORDINI concreti (vedi sezione successiva). Il default è **eseguirli senza ricontrollare** — check ravvicinati (tuo + bridge a 30-60s) gonfiano la `velocity_smooth` nel JSONL e inducono ordini sbagliati.
@@ -203,6 +219,77 @@ Comando safe, idempotente, no-op se non c'è da pulire. Internamente: `uv cache 
 4. **Re-audit + report:** rilancia `py_tools_audit.py`, calcola MB liberati, notifica il Comandante col delta.
 
 **Out-of-bounds:** mai uninstall senza broadcast + timeout 1h — alcuni pacchetti sono caricati a runtime e non emergono dal grep statico. Se uno scrittore protesta dopo l'uninstall, reinstalliamo e aggiungiamo a `ALWAYS_KEEP`. Mai toccare `ALWAYS_KEEP` (transitive note: numpy, pillow, packaging, ecc.).
+
+---
+
+## 🐍 PY-TOOLS-AUDIT — pulizia coordinata pacchetti Python (~weekly)
+
+`$JHT_HOME/.local/lib/...` accumula pacchetti Python che gli agenti
+installano via `uv pip install --user` (RULE-T13). La RULE-T13 estesa li
+istruisce a controllare prima `pip show <pkg>` e a riusare le librerie
+gia' presenti, ma succede comunque che pacchetti sperimentali restino
+installati dopo che lo Scrittore-X di turno ha cambiato approccio.
+
+La pulizia di questi pacchetti e' **team-wide** e **richiede consenso**:
+solo lo Scrittore (o Critico, ecc.) sa se una libreria gli serve a
+runtime per uno script che ha in `tools/`. Procedi cosi':
+
+**Quando lanciarlo:**
+- ~weekly (ogni 7 giorni di run continuo), all'inizio della tua giornata operativa
+- on-demand quando `du -sh /jht_home/.local` supera 800 MB
+- prima di un major release / handoff utente
+
+**Comando standard:**
+
+```bash
+python3 /app/shared/skills/py_tools_audit.py
+```
+
+Stampa una tabella di "candidates per uninstall" — pacchetti senza
+import attivi nel codice del progetto, esclusi quelli in whitelist
+(transitive deps + binary CLI). Se output vuoto → niente da fare.
+
+**Procedura coordinata (NON unilaterale):**
+
+1. **Audit + threshold check:**
+   ```bash
+   python3 /app/shared/skills/py_tools_audit.py --threshold-mb 800
+   ```
+   Exit 2 → conferma che vale la pena pulire. Exit 0 → niente urgente.
+
+2. **Broadcast ai writers/critico:** invia tmux a TUTTI gli agenti con
+   la lista candidates:
+   ```
+   [@capitano -> @all] [PY-AUDIT] candidates uninstall: pymupdf,
+   pdfminer_six, reportlab, weasyprint, pypdf, ... — se NE USI UNA,
+   rispondi entro 1h con [KEEP <pkg>]. Silenzio = consenso a uninstall.
+   ```
+
+3. **Raccogli risposte per 1h** (usa `jht-throttle 3600` o controlli
+   periodici, NON sleep nudo). Compila set `keep_set` con i pkg
+   confermati `[KEEP X]`.
+
+4. **Re-run audit con keep:**
+   ```bash
+   python3 /app/shared/skills/py_tools_audit.py --candidates-only --keep <keep_set...>
+   ```
+   Output = lista finale da disinstallare.
+
+5. **Uninstall (se non vuoto):**
+   ```bash
+   python3 /app/shared/skills/py_tools_audit.py --candidates-only --keep ... \
+     | xargs -r uv pip uninstall --user -y
+   ```
+
+6. **Re-audit + report:** rilancia `py_tools_audit.py`, conta MB liberati,
+   notifica al Comandante con il delta.
+
+**Out-of-bounds:** mai fare `pip uninstall` di pacchetti **senza** prima
+broadcast e timeout 1h — alcuni pacchetti sono caricati a runtime e
+non emergono dal grep statico degli import. Se uno scrittore protesta
+DOPO l'uninstall, lo reinstalliamo e aggiungiamo a `ALWAYS_KEEP` nello
+script. Mai uninstall di pacchetti in `ALWAYS_KEEP` (transitive deps
+note: numpy, pillow, packaging, ecc.).
 
 ---
 
