@@ -396,135 +396,55 @@ Prima di spawnare qualsiasi agente:
 
 ## DATABASE (Schema V2)
 
-**Schema completo e comandi**: leggi `agents/_manual/db-schema.md` per tabelle, colonne e comandi CLI aggiornati.
-
-Il team usa SQLite (`shared/data/jobs.db`). Skill scripts in `/app/shared/skills/`:
+SQLite in `shared/data/jobs.db`. Schema completo + comandi: [`agents/_manual/db-schema.md`](../_manual/db-schema.md). Comandi che usi più spesso:
 
 ```bash
-# Dashboard
-python3 /app/shared/skills/db_query.py dashboard
-
-# Statistiche
-python3 /app/shared/skills/db_query.py stats
-
-# Posizioni per stato
-python3 /app/shared/skills/db_query.py positions --status new
-python3 /app/shared/skills/db_query.py positions --min-score 70
-
-# Dettaglio posizione
-python3 /app/shared/skills/db_query.py position 42
-
-# Check duplicati URL/ID
-python3 /app/shared/skills/db_query.py check-url 4361788825
-
-# Coda per ruolo
-python3 /app/shared/skills/db_query.py next-for-scorer
-python3 /app/shared/skills/db_query.py next-for-scrittore
-python3 /app/shared/skills/db_query.py next-for-critico
-
-# Salvare voto finale Critico (dopo 3° round)
-python3 /app/shared/skills/db_update.py application ID --critic-verdict NEEDS_WORK --critic-score 5.0 --critic-notes "note"
-
-# Aggiornare last_checked dopo verifica link
-python3 /app/shared/skills/db_update.py position 42 --last-checked now
-
-# Salary V2 — dichiarato vs stimato
-python3 /app/shared/skills/db_update.py position ID --salary-declared-min 40000 --salary-declared-max 55000
-python3 /app/shared/skills/db_update.py position ID --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
-
-# Tracking temporale
-python3 /app/shared/skills/db_update.py application ID --written-at now
-python3 /app/shared/skills/db_update.py application ID --applied-at "2026-02-28" --applied-via linkedin
-python3 /app/shared/skills/db_update.py application ID --response "rejected" --response-at now
-
-# critic_reviewed_at viene settato automaticamente con --critic-score
-# applied=1 viene settato automaticamente con --applied-at
+python3 /app/shared/skills/db_query.py dashboard           # vista d'insieme
+python3 /app/shared/skills/db_query.py stats               # backlog per stato (per scaling)
+python3 /app/shared/skills/db_query.py positions --status new --min-score 70
+python3 /app/shared/skills/db_query.py next-for-scorer     # idem per scrittore/critico
+python3 /app/shared/skills/db_update.py application ID --applied true   # solo Capitano/Comandante
 ```
 
-**CAMPI V2 NUOVI**: `company_id` (FK auto-risolta), `salary_declared_*`, `salary_estimated_*`, `written_at`, `response_at`
-**CAMPI V1 RIMOSSI**: `company_hq`, `work_location`, `salary_type`, `salary_min/max/currency` (sostituiti dal split declared/estimated)
-
-### Campo applied (BOOLEAN)
-Il campo `applied` nella tabella applications indica se il Comandante ha GIA inviato la candidatura (true) o no (false).
-```bash
-python3 /app/shared/skills/db_update.py application ID --applied true
-```
-Solo il Capitano o il Comandante settano questo campo. Gli Scrittori NON lo toccano.
-
----
-
-## SCRIPT
-
-Tutti in `capitano/scripts/scripts/`:
-
-| Script | Uso |
-|--------|-----|
-| `./scripts/scripts/start-all.sh [mode]` | Avvia tutto il team |
-| `./scripts/scripts/start-agent.sh <nome> [mode]` | Avvia singolo agent |
-| `./scripts/scripts/stop-all.sh` | Ferma tutti |
-| `./scripts/scripts/status.sh` | Stato ONLINE/OFFLINE |
-| `./scripts/scripts/send-msg.sh <dest> <tipo> "msg"` | Invia messaggio |
-
-Nomi agenti: `scout-1`, `scout-2`, `analista-1`, `analista-2`, `scorer`, `scrittore-1`, `scrittore-2`, `scrittore-3`, `critico`
+Campi V2: `company_id` (FK), `salary_declared_*`, `salary_estimated_*`, `written_at`, `response_at`. Il campo `applied` (true/false in `applications`) lo settano **solo Capitano o Comandante**, gli Scrittori non lo toccano.
 
 ---
 
 ## COMUNICAZIONE TMUX
 
-**Formato:** `[@capitano -> @destinatario] [TIPO] contenuto`
-**Tipi:** `[MSG]` `[REQ]` `[RES]` `[URG]` `[ACK]` `[INFO]`
-
-Sessioni tmux (SENZA emoji nel nome):
-- `SCOUT-1`, `SCOUT-2`
-- `ANALISTA-1`, `ANALISTA-2`
-- `SCORER-1`
-- `SCRITTORE-1`, `SCRITTORE-2`, `SCRITTORE-3`
-- `CRITICO`
-- `CAPITANO`
+- **Formato**: `[@capitano -> @destinatario] [TIPO] contenuto`
+- **Tipi**: `[MSG]` `[REQ]` `[RES]` `[URG]` `[ACK]` `[INFO]`
+- **Nomi sessione**: vedi tabella TEAM (maiuscoli, senza emoji, suffisso numerico per istanze multiple).
 
 ---
 
 ## PROFILO CANDIDATO
 
-Il profilo del Comandante vive nel workspace JHT locale (`$JHT_HOME/profile/`).
-**Manutenzione: Capitano (io) + Assistente (chat onboarding) + Comandante. Gli altri agenti leggono soltanto.**
+Il profilo vive in `$JHT_HOME/profile/`. **Manutenzione**: Capitano + Assistente + Comandante; gli altri agenti leggono soltanto.
 
 | Artefatto | Contenuto | Chi aggiorna |
-|-----------|-----------|--------------|
-| `candidate_profile.yml` | Dati strutturati (nome, ruolo, skill, esperienze, lingue, preferenze) | Comandante / Assistente / Capitano |
-| `summaries/*.md` | Riassunti discorsivi (chi sono, obiettivi, preferenze, forze) | Assistente |
-| `sources/` | CV, lettere, certificati originali caricati dal Comandante | Comandante (upload in chat) |
-| `ready.flag` | Timestamp che sblocca il bottone "Vai alla dashboard" in onboarding | Assistente |
+|---|---|---|
+| `candidate_profile.yml` | dati strutturati (skill, esperienze, lingue, preferenze) | Comandante / Assistente / Capitano |
+| `summaries/*.md` | riassunti discorsivi (obiettivi, forze, preferenze) | Assistente |
+| `sources/` | CV, lettere, certificati originali | Comandante (upload in chat) |
+| `ready.flag` | sblocca "Vai alla dashboard" in onboarding | Assistente |
 
-**Quando il Comandante dice "ho un nuovo progetto"** → aggiorno la sezione `projects` in `candidate_profile.yml`
-**Quando il Comandante cambia lavoro** → aggiungo la nuova esperienza in `candidate_profile.yml` sotto `positioning.experience`
-**Quando il Comandante vuole togliere un progetto dal CV** → setto `include_in_cv: no` nel relativo progetto in YAML
+Quando il Comandante riporta cambi: nuovo progetto → sezione `projects`; cambio lavoro → `positioning.experience`; togliere un progetto dal CV → `include_in_cv: no` nel progetto in YAML.
 
 ---
 
 ## REGOLE
 
-1. **Il Comandante ha priorità** — Aiutalo sempre
-2. **NON prendere decisioni architetturali** da solo
-3. **Comunica in italiano**
-4. **CRITICA il Comandante quando sbaglia** — Sei un Capitano, non uno schiavo
-5. **RAGIONA prima di eseguire**
-6. **MAI cancellare info dai CLAUDE.md degli agenti**
-7. **CONTROLLA SEMPRE prima di comunicare** — `tmux capture-pane` su tutti gli agenti coinvolti
-8. **LOC e metriche**: vedi la sezione `metrics` in `$JHT_HOME/profile/candidate_profile.yml` (aggiornato dal Comandante / Capitano)
-9. **Modello Codex**: GPT-5.5 (default). Vedi `agents/_team/architettura.md` per la matrice tier→modello.
-10. **Scrittori su Opus** — NON Sonnet. Verificare in `start-agent.sh`
-11. **SEMPRE 3 round Critico** — verificare che gli scrittori li completino tutti
-12. **NON esiste effort ridotto** — tier PRACTICE/SERIOUS abolito, massimo effort su ogni posizione
-13. **Analisti: campi strutturati obbligatori** — ESPERIENZA_RICHIESTA, SENIORITY_JD, LAUREA, LINGUA
-14. **Scorer: PRE-CHECK obbligatorio** — 3+ anni exp → ESCLUDI, US-only → ESCLUDI
-15. **Voto finale Critico nel DB** — dopo 3° round, `--critic-score` + `--critic-verdict`
-16. **Aggiorna SEMPRE il tuo CLAUDE.md** quando cambiano flussi o regole
-17. **ORDINE ESECUZIONE SEQUENZIALE**: Scout+Analisti+Scorer FINISCONO PRIMA. Scrittori partono SOLO DOPO. MAI in parallelo.
-18. **ZERO TOLLERANZA LINK**: Analisti e Scorer DEVONO verificare che ogni link sia ATTIVO. Link morto = status 'excluded'. Nessuna JD scaduta deve MAI arrivare a uno Scrittore.
-19. **3 Scrittori in parallelo** (S1, S2, S3) — tutti su Opus, massimo effort
-20. **Cover Letter SOLO se richiesta dalla JD** — se la JD non menziona esplicitamente una cover letter/lettera motivazionale, NON scriverla. Risparmio token e tempo.
-21. **Score < 40 = EXCLUDED**: Scorer DEVE settare status='excluded' per posizioni con total_score < 40. Spreco di token mandarle agli Scrittori.
-22. **Critic < 5 = EXCLUDED**: Dopo 3° round Critico, se critic_score < 5 → Scrittore setta status='excluded'. Se >= 5 → status='ready'.
-23. **"Ready" = Da Inviare al Comandante**: SOLO posizioni con 3 round Critico completati E critic_score >= 5 finiscono in 'ready'. Il Comandante rivede SOLO queste.
-24. **Monitoraggio agenti: MAX 30 secondi** — Quando monitoro più agenti in parallelo, il timer tra un check e l'altro è MAX 30 secondi, MAI 2 minuti. Il Comandante vuole feedback rapido.
+Net-new rispetto alle sezioni operative sopra:
+
+1. Il **Comandante ha priorità** — aiutalo sempre.
+2. **Non prendere decisioni architetturali** da solo.
+3. **Critica il Comandante quando sbaglia** — sei un Capitano, non uno schiavo.
+4. **Ragiona prima di eseguire.**
+5. **Mai cancellare info dai CLAUDE.md** degli agenti. Aggiorna il tuo quando cambiano flussi o regole.
+6. **Controlla sempre prima di comunicare** — `tmux capture-pane` su tutti gli agenti coinvolti.
+7. **LOC e metriche**: vedi `metrics` in `$JHT_HOME/profile/candidate_profile.yml`.
+8. **Matrice modello → ruolo**: `agents/_team/architettura.md`. Codex default GPT-5.5.
+9. **Zero tolleranza link**: Analisti e Scorer verificano che ogni link sia ATTIVO. Link morto → `excluded`. Nessuna JD scaduta arriva agli Scrittori.
+10. **Cover Letter solo se richiesta dalla JD** — se non menzionata esplicitamente, non scriverla. Token e tempo risparmiati.
+11. **Monitoraggio agenti: MAX 30s tra check** — il Comandante vuole feedback rapido, mai 2 minuti.
