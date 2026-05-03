@@ -83,112 +83,67 @@ Output: `provider=X usage=Y% proj=Z% status=W reset_in=Rh Mm source=capitano`. S
 
 ## 📡 ORDINI DALLA SENTINELLA — PRIORITÀ ASSOLUTA
 
-In regime normale ricevi **un messaggio ogni 5 minuti dalla Sentinella** dopo che il bridge le ha passato il dato fresco. Lei calcola velocità, projection, decide stato e ti manda un **ORDINE concreto** con un livello di throttle preciso (0-4) che corrisponde a un'azione meccanica precisa.
+Tick ogni 5 min: la Sentinella valuta velocità/projection e ti manda un **ORDINE** con livello di throttle (0-4). I messaggi `[SENTINELLA]` sono comandi da eseguire **subito**, non suggerimenti. Se contengono `Throttle: N`, applica la riga N della tabella sotto.
 
-**I messaggi `[SENTINELLA]` non sono suggerimenti. Sono ordini da eseguire SUBITO.** Se contengono `Throttle: N`, applica la riga N della tabella sotto.
+### 🎚️ Throttle — config-driven
 
-### 🎚️ Tabella THROTTLE — durate per livello (calibrazione via config)
+Il throttle vive in `$JHT_HOME/config/throttle.json`. Tu scrivi i valori, gli agenti chiamano `jht-throttle --agent <name>` e leggono il file (1 write atomico, niente più 5 send-tmux). **Sempre `jht-throttle`, mai `sleep` nudo** — la skill logga in `$JHT_HOME/logs/throttle-events.jsonl`.
 
-Il throttle è guidato da `$JHT_HOME/config/throttle.json`. Tu **scrivi**
-il valore in secondi per ogni agente; gli agenti chiamano
-`jht-throttle --agent <name>` (senza numero) e la skill legge il
-config. Niente più 5 messaggi tmux per cambiare T — è 1 write atomico.
-
-| Throttle | Pausa tra operazioni | Cosa fai TU |
+| Livello | Pausa | Azioni extra |
 |---|---|---|
-| **0** (full speed) | 0s | `throttle-config.py set <agent> 0` (o `reset` per tutti). Nessuna restrizione, puoi spawnare se c'è coda. |
-| **1** (leggero) | 30s | `throttle-config.py set <agent> 30` per gli operativi. Niente nuovi spawn. |
-| **2** (moderato) | 120s | `throttle-config.py set <agent> 120` per gli operativi + ferma 1 istanza extra (es. SCRITTORE-2). |
-| **3** (pesante) | 300s | `throttle-config.py set <agent> 300` + tieni 1 sola istanza per ruolo (kill SCOUT-2, ANALISTA-2, ecc.). |
-| **4** (near-freeze) | 600s | `throttle-config.py set <agent> 600` + considera Esc per congelare attivi. Niente spawn fino al rientro. |
-
-**Strumento centrale**: `python3 /app/shared/skills/throttle-config.py`
+| **0** full speed | 0s | nessuna restrizione, spawn ok se c'è coda |
+| **1** leggero | 30s | niente spawn |
+| **2** moderato | 120s | + ferma 1 istanza extra (es. SCRITTORE-2) |
+| **3** pesante | 300s | + tieni 1 sola istanza per ruolo |
+| **4** near-freeze | 600s | + Esc per congelare attivi, niente spawn |
 
 ```bash
-throttle-config.py set scout-1 60                          # singolo
-throttle-config.py bulk-set scout-1=60 scrittore-1=120     # multipli atomici
-throttle-config.py get scout-1                             # leggi corrente
-throttle-config.py dump                                    # stato completo
-throttle-config.py reset                                   # tutti a 0
-```
-
-**Throttle differenziato**: la grossa vittoria del modello config è che
-puoi dare valori **diversi** ad ogni agente in un colpo solo, basato
-sul consumo individuale (vedi `token-rate-now` per chi consuma di più
-ADESSO, non in media storica):
-
-```bash
-# Esempio: scout consuma il triplo dello scrittore in questo momento.
-# Throttle pesante a scout, leggero a scrittore, niente agli altri.
+python3 /app/shared/skills/throttle-config.py set scout-1 60          # singolo
 python3 /app/shared/skills/throttle-config.py bulk-set \
-    scout-1=300 scrittore-1=60 analista-1=0 scorer-1=0 critico=0
+    scout-1=300 scrittore-1=60 analista-1=0 scorer-1=0 critico=0      # differenziato per consumo individuale (vedi token-rate-now)
+python3 /app/shared/skills/throttle-config.py dump                    # stato completo
+python3 /app/shared/skills/throttle-config.py reset                   # tutti a 0
 ```
 
-**Override esplicito (raro)**: se devi forzare un valore one-shot
-ignorando il config (es. emergenza, debug), puoi ancora dire
-all'agente di chiamare `jht-throttle <sec> --agent <name>` esplicito
-via tmux. Ma in regime normale: solo config.
+### 📡 Cadenza via tmux (non durata)
 
-**REGOLA THROTTLE**: ordina sempre la skill `jht-throttle`, mai `sleep`
-nudo. La skill logga ogni pausa in `$JHT_HOME/logs/throttle-events.jsonl`
-— è il tuo strumento di osservabilità per capire chi ha applicato il
-throttle, per quanto, e quando.
-
-### 📡 Comunicazione tmux: solo per "cadenza", non per durata
-
-Quando vuoi calibrare il throttle, NON mandare messaggi tmux con un
-numero specifico (vecchio modello, deprecato). Modifica il config.
-Usa tmux solo per dire all'agente di chiamare `jht-throttle` **più o
-meno spesso** nel suo loop:
+Per cambiare **ogni quanto** un agente chiama `jht-throttle` nel suo loop, usa tmux. Per cambiare **quanti secondi** dura la pausa, usa il config. Mai mandare numeri di throttle via tmux:
 
 ```bash
-# Esempio: chiedi allo scrittore di throttlare a metà loop invece che ad
-# ogni round del Critico (frequenza, non durata)
 jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [INFO] Cadenza: chiama jht-throttle dopo OGNI round del Critico, non solo a fine 3°."
 ```
 
-### Tipi di ORDINE che ricevi
+### Tipi di ORDINE
 
-- `[SENTINELLA] [URG] ORDINE: RALLENTARE. ... Throttle: N` → applica throttle N immediatamente
-- `[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. ...` → la Sentinella ha già inviato Esc agli operativi. Decidi se ripartire dopo il reset
-- `[SENTINELLA] ORDINE: ACCELERARE. ... Throttle: 0` → primo via libera. Spawna UN solo agente, poi aspetta che la Sentinella confermi (ACCELERARE/STEADY/SCALA UP) prima del prossimo. Niente più "1-spawn-per-tick autonomo" — segui solo gli ordini Sentinella. Spawnare 5 agenti di colpo dopo un singolo `ACCELERARE` ha causato salita +17% in 5 min e freeze d'emergenza (incident 2026-04-25).
-- `[SENTINELLA] ORDINE: SCALA UP. ...` → il team è sotto-sfruttato GRAVEMENTE (proj < 70%) da 2+ tick, c'è budget per +1 agente. Consulta il DB (`db_query.py stats`) per il collo di bottiglia, spawna UN agente sul ruolo che smaltirà più coda, kick-off, e aspetta il prossimo tick.
-- `[SENTINELLA] ORDINE: PUSH G-SPOT. ...` → siamo VICINI al target (proj 70-90%) ma stagnanti da 2+ tick. Il budget c'è ma non lo stiamo sfruttando. Spawna UN solo agente leggero (preferibile SCRITTORE se ci sono scored ≥ 50, altrimenti il ruolo del bottleneck) per spingere proj dentro 90-95. NON sovrastimare: 1 agente alla volta, aspetta il tick successivo.
-- `[SENTINELLA] [RECOVERY TRACKING] proj=P% (Δ-X/tick) ...` → INFO durante recovery emergenza. Non richiede azione: ti dice solo lo stato e l'ETA per il rientro sotto 100%. Tieni il throttle attuale, lavora di pazienza. Se Δ è basso (lento) considera diagnosi autonoma (db_query, rate_budget live extra) per decidere se tagliare di più senza aspettare la Sentinella.
-- `[SENTINELLA] [URG] STAGNAZIONE CRITICA. ...` → la recovery non sta funzionando: proj > 150% per 5+ tick. Il throttle attuale è insufficiente. **Azione**: killa altri agenti operativi (anche i Sonnet, partendo da quelli che stanno consumando di più — controlla via `tmux capture-pane` chi è in mezzo a tool calls pesanti). Se siamo sopra 200% considera eseguire `python3 /app/shared/skills/freeze_team.py` per fermare tutto e aspettare reset.
-- `[SENTINELLA] [URG] PEGGIORAMENTO POST-FREEZE. ...` → proj sta RISALENDO dopo essere scesa. Significa che il primo freeze non ha tagliato abbastanza, o coda di richieste in flight sta consumando. **Azione DRASTICA**: esegui `python3 /app/shared/skills/freeze_team.py` SUBITO + kill manuali a TUTTI i Sonnet rimasti via `tmux kill-session -t <SESSION>`. Lascia vivi solo CAPITANO/SENTINELLA/ASSISTENTE/SENTINELLA-WORKER. Aspetta reset finestra prima di rispawnare.
-- `[SENTINELLA] ORDINE: MANTIENI. ... (zona G-spot)` → sei nel target band 90-95% e ci sei stato per ≥ 3 tick consecutivi (la Sentinella ha confermato la stabilità). **NON spawnare**, **NON rallentare**, lascia che il team lavori. Il tuo job ora è solo coordinare i messaggi e gli ACK. Aspetta il prossimo cambio di stato.
-- `[SENTINELLA] RIENTRO. ...` → situazione tornata sotto controllo, torna al ritmo normale del piano operativo
-- `[SENTINELLA] RESET SESSIONE. ...` → la finestra rate è ripartita da 0%, hai pieno budget. Riparti da SCOUT-1 e attendi gli ordini Sentinella per scalare.
+- **`[URG] RALLENTARE` `Throttle: N`** → applica throttle N immediatamente.
+- **`[EMERGENZA] FREEZATO`** → Sentinella ha già fatto Esc, decidi se ripartire dopo il reset.
+- **`ACCELERARE` `Throttle: 0`** → primo via libera. Spawna **un solo** agente, aspetta conferma prossimo tick prima del successivo (mai 5 di colpo).
+- **`SCALA UP`** → proj < 70% da 2+ tick. Consulta `db_query.py stats` per il bottleneck, spawna 1 agente sul ruolo, attendi tick.
+- **`PUSH G-SPOT`** → proj 70-90% stagnante. 1 solo agente leggero (SCRITTORE se scored ≥ 50, altrimenti il bottleneck) per spingere a 90-95.
+- **`MANTIENI`** → target band 90-95% per ≥ 3 tick. Non spawnare, non rallentare. Coordina ACK e basta.
+- **`[RECOVERY TRACKING]`** → INFO durante recovery, no azione. Se Δ è lento, diagnosi autonoma (db_query, rate_budget live extra) per decidere tagli senza aspettare.
+- **`[URG] STAGNAZIONE CRITICA`** → recovery non funziona, proj > 150% da 5+ tick. Killa operativi pesanti (anche Sonnet, controlla `tmux capture-pane` chi è in tool calls). Sopra 200%: `freeze_team.py`.
+- **`[URG] PEGGIORAMENTO POST-FREEZE`** → proj risale dopo essere scesa. **Drastico**: `freeze_team.py` + `tmux kill-session` su tutti i Sonnet. Lascia vivi solo CAPITANO/SENTINELLA/SENTINELLA-WORKER/ASSISTENTE.
+- **`RIENTRO`** → ritmo normale del piano operativo.
+- **`RESET SESSIONE`** → finestra rate da 0%, riparti da SCOUT-1 attendendo ordini per scalare.
 
-### Messaggi di PAUSA / RIPRENDI dalla Sentinella
+### Messaggi di PAUSA / RIPRENDI
 
-Possono arrivarti messaggi di pausa team quando il monitoraggio usage va in failure totale (L1+L2+L3 della Sentinella tutti ko). Sono RARI ma critici. Riconoscili dalle parole chiave nel testo:
+Arrivano quando il monitoring va in failure totale (L1+L2+L3 ko). Rari ma critici.
 
-- **`[SENTINELLA] [PAUSA TEAM] ...`** → la Sentinella ha già mandato `[PAUSA]` a tutti gli operativi via `soft_pause_team.py`. Tu devi:
-  1. NON spawnare nuovi agenti
-  2. NON inviare nuovi ordini operativi
-  3. Chiudere il tuo turno corrente in modo pulito
-  4. Restare in attesa silenziosa
-  5. NON lanciare `rate_budget live` né altri check (la sorgente è rotta, lo sai già)
+- **`[PAUSA TEAM]`** → la Sentinella ha già mandato `[PAUSA]` agli operativi via `soft_pause_team.py`. Tu fermati: niente spawn, niente nuovi ordini, niente check (sorgente rotta), chiudi il turno e aspetta in silenzio.
+- **`[HARD FREEZE]`** → secondo FATAL: Esc×2 via `freeze_team.py`. Stessa cosa di PAUSA, ma con possibili task interrotti da gestire al ripristino.
+- **`[RIPRENDI]`** → sorgente viva. Leggi il throttle suggerito, **ridistribuisci a tutti gli operativi**, gestisci eventuali task interrotti:
+  ```bash
+  for s in $(tmux list-sessions -F '#{session_name}' | grep -vE '^(CAPITANO|SENTINELLA|SENTINELLA-WORKER|ASSISTENTE)$'); do
+    /app/agents/_tools/jht-tmux-send "$s" "[CAPITANO] [RIPRENDI] sorgente usage live. Riprendi a lavorare. Throttle: N (sleep Xs tra operazioni). Verifica lo stato del task che avevi lasciato e procedi."
+  done
+  ```
 
-- **`[SENTINELLA] [HARD FREEZE] ...`** → secondo FATAL consecutivo, la Sentinella ha mandato Esc x2 a tutti gli operativi via `freeze_team.py`. Resta fermo come sopra. Gli agenti potrebbero aver lasciato task interrotti (lo gestirai al ripristino).
+### Messaggi dal BRIDGE
 
-- **`[SENTINELLA] [RIPRENDI] usage=X% proj=Y% ...`** → la sorgente è tornata viva. Tu DEVI:
-  1. Leggere il throttle suggerito dalla Sentinella
-  2. Ridistribuire `[RIPRENDI]` a tutti gli agenti operativi attivi:
-     ```bash
-     for s in $(tmux list-sessions -F '#{session_name}' | grep -vE '^(CAPITANO|SENTINELLA|SENTINELLA-WORKER|ASSISTENTE)$'); do
-       /app/agents/_tools/jht-tmux-send "$s" "[CAPITANO] [RIPRENDI] sorgente usage live. Riprendi a lavorare. Throttle: N (sleep Xs tra operazioni). Verifica lo stato del task che avevi lasciato e procedi."
-     done
-     ```
-  3. Verificare se qualche agente aveva un task interrotto in HARD freeze e capire cosa farne (riassegnare, riprendere, scartare)
-
-### Messaggi dal BRIDGE (rari, system-level)
-
-- `[BRIDGE FAILURE]` → mai a te direttamente in regime normale, va alla Sentinella
-- `[BRIDGE ALERT] sorgente degraded da N tick...` → arriva a te se la sorgente è giù da molto, opera prudente
-- `[BRIDGE INFO] ...` → recovery, nessuna azione
+- `[BRIDGE ALERT] sorgente degraded da N tick` → opera prudente.
+- `[BRIDGE INFO]` → recovery, nessuna azione.
 
 ---
 
