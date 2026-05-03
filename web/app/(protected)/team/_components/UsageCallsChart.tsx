@@ -525,18 +525,27 @@ export default function UsageCallsChart() {
     return out
   }, [stepEvents, callsSeries, calibration])
 
-  // Serie ratio MACRO cumulativo (chiamate/% dalla nascita sessione)
+  // Ratio macro CONTINUA — campionata su ogni bucket di callsSeries (non
+  // solo agli step bridge), usando come usage_t l'ultimo step raggiunto.
+  // Cosi' la linea arriva fino a 'now' e mostra la salita reale nei
+  // plateau di usage (call che si accumulano senza muovere usage).
   const macroRatioSeries = useMemo<MacroRatioPoint[]>(() => {
-    if (stepEvents.length < 2) return []
+    if (stepEvents.length < 2 || callsSeries.length === 0) return []
     const first = stepEvents[0]
     const out: MacroRatioPoint[] = []
-    for (let i = 1; i < stepEvents.length; i++) {
-      const dC = stepEvents[i].calls - first.calls
-      const dU = stepEvents[i].usage - first.usage
-      if (dU > 0 && dC > 0) out.push({ tsMs: stepEvents[i].ts, ratio: dC / dU })
+    let stepIdx = 0
+    for (const c of callsSeries) {
+      if (c.tsMs < first.ts) continue
+      while (stepIdx + 1 < stepEvents.length && stepEvents[stepIdx + 1].ts <= c.tsMs) {
+        stepIdx++
+      }
+      const usageNow = stepEvents[stepIdx].usage
+      const dC = c.calls - first.calls
+      const dU = usageNow - first.usage
+      if (dU > 0 && dC > 0) out.push({ tsMs: c.tsMs, ratio: dC / dU })
     }
     return out
-  }, [stepEvents])
+  }, [stepEvents, callsSeries])
 
   const budgetStats = useMemo(() => {
     if (stepEvents.length === 0 || callsSeries.length === 0) return null
