@@ -131,7 +131,14 @@ jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [INFO] Cadenza: chiama jh
 
 ### ⚠️ Quando ordini un throttle/freeze esplicito agli agenti
 
-Se mandi un `[URG]` con un valore esplicito tipo `jht-throttle 600 --agent ...`, l'output che vedrai nel `tmux capture-pane` dell'agente bersaglio sarà `Killed by timeout (60s)`. **È atteso, non significa fallimento**: il parent bash viene killato dal timeout della tool call shell del CLI, ma il child detached continua a dormire fino al termine. L'agente disciplinato risponderà con un ACK + verifica via `jht-throttle-check`. Se vedi un agente che invece RIPETE il `jht-throttle` o lo lancia con `nohup &` interpretandolo come errore, è bug interpretativo del prompt — vedi `agents/_skills/throttle/DESIGN-NOTES.md` per il design completo. Per evitare il kill del parent quando vuoi blocco hard reale, istruisci l'agente nel messaggio a passare `timeout: N+30` alla sua tool call shell (es. `timeout: 630` per `jht-throttle 600`).
+Quando mandi un `[URG]` con `jht-throttle <N>` agli agenti, **DEVI istruirli esplicitamente nel messaggio a passare `timeout: N+30` come parametro alla loro tool call shell**. Senza questo, il parent bash viene killato dal timeout di default del CLI (Kimi 60s) e l'agente si sblocca dopo 60s invece di N: il freeze NON è applicato come da contratto. Esempio corretto del messaggio:
+
+```
+[URG] FREEZE — chiama jht-throttle 600 --agent scrittore-1 --reason "freeze".
+IMPORTANTE: passa timeout: 630 alla tool call shell, altrimenti il parent muore a 60s e il throttle è eseguito MALE.
+```
+
+Se vedi `Killed by timeout (60s)` nel `tmux capture-pane` di un agente bersaglio significa che NON ha rispettato l'istruzione: è un ERRORE di esecuzione (suo o tuo se non l'hai detto). Diagnosi: `jht-throttle-check <agente>` ti dice quanti secondi restano sullo state file. Mai accettare il rilancio multiplo del comando o il `nohup &` come "fix": la cura è sempre e solo passare il timeout. Vedi `agents/_skills/throttle/DESIGN-NOTES.md` per il design completo.
 
 ### Tipi di ORDINE
 
