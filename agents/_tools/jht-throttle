@@ -92,8 +92,23 @@ else
   DURATION_SEC=$(python3 "$CFGSCRIPT" get "$AGENT" 2>/dev/null || echo 0)
 fi
 
-# Fast path: 0 = no-op, niente log, niente state.
+# Fast path: 0 = "checkpoint" heartbeat. Niente pausa reale, niente
+# state, ma logghiamo un evento `checkpoint` sincrono via throttle.py
+# così il pacing-bridge può calcolare la cadenza per agente — il dato
+# chiave per calibrare la durata in config (cadenza × durata = throttle
+# effettivo). Costo: una invocazione python sub-50ms, no fork detached.
 if [ "$DURATION_SEC" -le 0 ] 2>/dev/null; then
+  CP_ARGS=( "$PYSCRIPT" )
+  # Se la 0 è venuta da config (utente non ha passato seconds), rilascia
+  # al python che la rilegga → source="config". Se è esplicita CLI, passa.
+  if [ -n "$SECONDS_EXPLICIT" ]; then
+    CP_ARGS+=( "$DURATION_SEC" )
+  fi
+  CP_ARGS+=( --agent "$AGENT" )
+  if [ -n "$REASON" ]; then
+    CP_ARGS+=( --reason "$REASON" )
+  fi
+  python3 "${CP_ARGS[@]}" >/dev/null 2>&1 || true
   exit 0
 fi
 
