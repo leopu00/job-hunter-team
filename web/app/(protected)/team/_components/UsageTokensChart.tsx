@@ -898,7 +898,14 @@ function fmtDuration(ms: number): string {
 // cache_read non contribuisce al rate budget come la doc lascia intendere.
 // Stessa scelta in shared/skills/token-by-agent-series.py — i due punti
 // devono restare allineati altrimenti UI e tabella throttle divergono.
+// Razionale completo: docs/internal/2026-05-03-rate-kimi-weights.md
 const FALLBACK_W: Weights = { input: 1.0, output: 1.0, cacheR: 0.0, cacheC: 0.0 }
+
+// Watchdog: range atteso della ratio macro con i pesi di sopra. Se siamo
+// fuori, mostriamo un badge giallo nell'header per ricordare di rifare
+// l'analisi (i pesi sono hardcoded e non si auto-aggiustano).
+const RATIO_OK_MIN_KT_PER_PCT = 25.0
+const RATIO_OK_MAX_KT_PER_PCT = 60.0
 
 type Weights = { input: number; output: number; cacheR: number; cacheC: number }
 type TypeBucket = { tsMs: number; in: number; out: number; cr: number; cc: number }
@@ -1352,23 +1359,33 @@ export default function UsageTokensChart() {
             </>
           )}
           {calibration ? (
-            <span
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded"
-              style={{
-                background: 'rgba(251,146,60,0.10)',
-                color: '#fb923c',
-                border: '1px solid rgba(251,146,60,0.3)',
-              }}
-              title={`Ratio macro cumulativo dalla nascita sessione (${calibration.samples} step). EMA segmenti: ${calibration.emaRatio.toFixed(1)} kT/%. Ultimo segmento: ${calibration.lastRatio.toFixed(1)} kT/%`}
-            >
-              ratio {calibration.ratio < 1
-                ? `${calibration.ratio.toFixed(2)} kT/%`
-                : calibration.ratio < 1000
-                  ? `${calibration.ratio.toFixed(1)} kT/%`
-                  : `${(calibration.ratio / 1000).toFixed(2)} MT/%`}
-              {' · '}
-              <span style={{ color: 'rgba(251,146,60,0.7)' }}>{calibration.samples} step</span>
-            </span>
+            ((): React.ReactNode => {
+              const r = calibration.ratio
+              const outOfRange = r < RATIO_OK_MIN_KT_PER_PCT || r > RATIO_OK_MAX_KT_PER_PCT
+              const bg = outOfRange ? 'rgba(250,204,21,0.10)' : 'rgba(251,146,60,0.10)'
+              const fg = outOfRange ? '#facc15' : '#fb923c'
+              const border = outOfRange ? 'rgba(250,204,21,0.45)' : 'rgba(251,146,60,0.3)'
+              const tt = outOfRange
+                ? `⚠ ratio ${r.toFixed(1)} kT/% FUORI RANGE atteso ${RATIO_OK_MIN_KT_PER_PCT}-${RATIO_OK_MAX_KT_PER_PCT}.\nI pesi token (1, 1, 0, 0) sono hardcoded — possibilmente Kimi ha cambiato il rate model, o cambia la composizione del team.\nNON cambiare i pesi automaticamente: rifai l'analisi su una sessione fresca.\nVedi docs/internal/2026-05-03-rate-kimi-weights.md`
+                : `Ratio macro cumulativo dalla nascita sessione (${calibration.samples} step). EMA segmenti: ${calibration.emaRatio.toFixed(1)} kT/%. Ultimo segmento: ${calibration.lastRatio.toFixed(1)} kT/%. In range atteso ${RATIO_OK_MIN_KT_PER_PCT}-${RATIO_OK_MAX_KT_PER_PCT} kT/%.`
+              return (
+                <span
+                  className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                  style={{ background: bg, color: fg, border: `1px solid ${border}` }}
+                  title={tt}
+                >
+                  {outOfRange && '⚠ '}ratio {r < 1
+                    ? `${r.toFixed(2)} kT/%`
+                    : r < 1000
+                      ? `${r.toFixed(1)} kT/%`
+                      : `${(r / 1000).toFixed(2)} MT/%`}
+                  {' · '}
+                  <span style={{ color: outOfRange ? 'rgba(250,204,21,0.7)' : 'rgba(251,146,60,0.7)' }}>
+                    {calibration.samples} step
+                  </span>
+                </span>
+              )
+            })()
           ) : (
             <span
               className="text-[10px] font-mono px-1.5 py-0.5 rounded"
