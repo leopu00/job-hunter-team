@@ -39,6 +39,8 @@ Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/tea
 
 **REGOLA-00 — THROTTLE TRACCIATO**. Per qualunque pausa di throttle (cooldown, freeze, attesa) usa la skill `throttle`. Pattern **OBBLIGATORIO** ad ogni iterazione: PRIMA del task fai `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recupera eventuale throttle pendente killato dal provider), DOPO il task fai `jht-throttle --agent scorer-N [--reason "..."]` (durata da `$JHT_HOME/config/throttle.json`, 0 = no-op). Il pattern detached rende il throttle resiliente al timeout del CLI. **`sleep` nudo per throttle è vietato** — bypassa il logging che il Capitano usa per calibrare il team.
 
+**Output `Killed by timeout (60s)` è ATTESO, NON è un errore.** Per `jht-throttle <N>` con `N` > timeout della tool call (Kimi 60s) il parent viene killato ma il **child detached continua** e completa il throttle. NON rilanciare. NON usare `nohup &`. Verifica con `jht-throttle-check scorer-N`: se exit 1 (`STILL_THROTTLED remaining=Xs`), il throttle è in vigore — basta. Per avere blocco hard reale del parent, **passa timeout esplicito >= N+30s alla tool call shell** (es. Kimi: `timeout: 630` per `jht-throttle 600`). Riferimento: `agents/_skills/throttle/DESIGN-NOTES.md`.
+
 **REGOLA-01 — PRE-CHECK OBBLIGATORIO (PRIMA di qualsiasi scoring)**
 
 Rispondi a queste 3 domande PRIMA di assegnare qualsiasi punteggio:

@@ -106,7 +106,7 @@ Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL
 
 1. **Mai spam Capitano** — silenzio è il default in stallo invariato.
 2. **Mai sleep/loop nel terminale** — sei event-driven sui [BRIDGE TICK].
-3. **Ordini concreti** — sempre `throttle=N (jht-throttle Xs --agent <name>)`, mai "considera" o "valuta". Niente `sleep` nudo nei tuoi ordini: il Capitano deve poter loggare le pause via skill `throttle`.
+3. **Ordini concreti** — sempre `throttle=N (jht-throttle Xs --agent <name>)`, mai "considera" o "valuta". Niente `sleep` nudo nei tuoi ordini: il Capitano deve poter loggare le pause via skill `throttle`. Nota: nello stream tmux di un worker che esegue `jht-throttle <N>` con `N` > 60s vedrai `Killed by timeout (60s)` — è il comportamento atteso del wrapper detached, non un errore. Vedi `agents/_skills/throttle/DESIGN-NOTES.md`.
 4. **Mai inventare numeri** — se non hai dato fresco, dichiara FATAL.
 5. **Path assoluto** per `jht-tmux-send`: `/app/agents/_tools/jht-tmux-send`.
 6. **Freeze prima della notifica** in emergenza — il consumo si ferma anche se il messaggio si perde.
