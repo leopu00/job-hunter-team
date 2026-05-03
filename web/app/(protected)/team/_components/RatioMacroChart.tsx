@@ -6,7 +6,7 @@
 // l'andamento. Stesso fetch (sentinella + by-type), stesso calcolo
 // continuo (un punto per ogni bucket di tokenSeries).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Entry = { ts: string; usage: number }
 type TypeBucket = { tsMs: number; in: number; out: number; cr: number; cc: number }
@@ -195,6 +195,31 @@ export default function RatioMacroChart() {
   const fmtRatio = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)} MT/%` : `${v.toFixed(1)} kT/%`
   const lastPoint = macroRatioSeries.length > 0 ? macroRatioSeries[macroRatioSeries.length - 1] : null
 
+  // Hover: traccia il cursor sull'SVG, mostra linea verticale + tooltip
+  // col valore della ratio nel punto piu' vicino. Lavora in coordinate
+  // dell'SVG (W/H), non del DOM, cosi' restano consistenti col viewBox.
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const [hover, setHover] = useState<{ tsMs: number; ratio: number; xPct: number } | null>(null)
+  const onMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current
+    if (!svg || macroRatioSeries.length === 0) { setHover(null); return }
+    const rect = svg.getBoundingClientRect()
+    const xRel = (e.clientX - rect.left) / rect.width  // 0..1 nel viewBox
+    const xSvg = xRel * W
+    if (xSvg < PAD.left || xSvg > PAD.left + innerW) { setHover(null); return }
+    const tsAtCursor = tMin + ((xSvg - PAD.left) / innerW) * (tMax - tMin)
+    let best = macroRatioSeries[0]
+    let bestDist = Math.abs(best.tsMs - tsAtCursor)
+    for (const p of macroRatioSeries) {
+      const d = Math.abs(p.tsMs - tsAtCursor)
+      if (d < bestDist) { best = p; bestDist = d }
+    }
+    if (best.tsMs < tMin || best.tsMs > tMax) { setHover(null); return }
+    const xPct = ((xAt(best.tsMs) - PAD.left) / innerW) * 100
+    setHover({ tsMs: best.tsMs, ratio: best.ratio, xPct })
+  }, [macroRatioSeries, tMin, tMax, xAt])
+  const onLeave = useCallback(() => setHover(null), [])
+
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -235,8 +260,14 @@ export default function RatioMacroChart() {
         ))}
       </div>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+      <div className="relative rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-auto"
+          onMouseMove={onMove}
+          onMouseLeave={onLeave}
+        >
           {/* griglia orizzontale a 5 tick */}
           {Array.from({ length: 5 }).map((_, i) => {
             const y = PAD.top + (innerH * i) / 4
@@ -286,7 +317,43 @@ export default function RatioMacroChart() {
               servono ≥2 step bridge per calcolare la ratio
             </text>
           )}
+
+          {/* Hover crosshair + dot sul punto piu' vicino */}
+          {hover && (
+            <>
+              <line
+                x1={xAt(hover.tsMs)} x2={xAt(hover.tsMs)}
+                y1={PAD.top} y2={PAD.top + innerH}
+                stroke="rgba(236,72,153,0.4)" strokeWidth={1}
+                strokeDasharray="2 3" pointerEvents="none"
+              />
+              <circle
+                cx={xAt(hover.tsMs)} cy={yRatio(hover.ratio)}
+                r={4} fill="#ec4899" stroke="#0f172a" strokeWidth={1}
+                pointerEvents="none"
+              />
+            </>
+          )}
         </svg>
+
+        {/* Tooltip esterno (HTML) — posizionato in % rispetto al container */}
+        {hover && (
+          <div
+            className="absolute pointer-events-none rounded border border-[var(--color-border)] bg-[var(--color-bg)]/95 px-2 py-1 text-[11px] font-mono shadow-lg"
+            style={{
+              left: hover.xPct > 60 ? undefined : `calc(${hover.xPct}% + 16px)`,
+              right: hover.xPct > 60 ? `calc(${100 - hover.xPct}% + 16px)` : undefined,
+              top: 12,
+            }}
+          >
+            <div className="text-[var(--color-dim)]">
+              {new Date(hover.tsMs).toLocaleTimeString('it-IT', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+              })}
+            </div>
+            <div className="text-[#ec4899]">{fmtRatio(hover.ratio)}</div>
+          </div>
+        )}
       </div>
     </div>
   )
