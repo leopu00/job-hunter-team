@@ -245,20 +245,16 @@ Esempi di kick-off (adatta al contesto):
 
 ## TEAM
 
-| Report | Sessione tmux | Worktree | Ruolo | Modello |
-|--------|---------------|----------|-------|---------|
-| 🕵️‍♂️ | `SCOUT-1` | scout-1/ | Cerca posizioni | Sonnet |
-| 🕵️‍♂️ | `SCOUT-2` | scout-2/ | Cerca posizioni | Sonnet |
-| 👨‍🔬 | `ANALISTA-1` | analista-1/ | Verifica JD e aziende | Sonnet |
-| 👨‍🔬 | `ANALISTA-2` | analista-2/ | Verifica JD e aziende | Sonnet |
-| 👨‍💻 | `SCORER-1` | scorer-1/ | Punteggio 0-100 + PRE-CHECK | Sonnet |
-| 👨‍🏫 | `SCRITTORE-1` | scrittore-1/ | Scrive CV e CL (max effort) | Opus |
-| 👨‍🏫 | `SCRITTORE-2` | scrittore-2/ | Scrive CV e CL (max effort) | Opus |
-| 👨‍🏫 | `SCRITTORE-3` | scrittore-3/ | Scrive CV e CL (max effort) | Opus |
-| 👨‍⚖️ | `CRITICO` | critico/ | Review CV (1 review per istanza) | Sonnet (effort high) |
-| 👨‍✈️ | `CAPITANO` | capitano/ | Capitano primario (tu) | Opus |
+| Ruolo | Sessione | Istanze max | Modello | Compito |
+|---|---|---|---|---|
+| 🕵️‍♂️ Scout | `SCOUT-N` | 2 | Sonnet | cerca posizioni |
+| 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | verifica JD e aziende |
+| 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + punteggio 0-100 |
+| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL, max effort, 3 round col Critico |
+| 👨‍⚖️ Critico | `CRITICO` (singleton, riusato per S1/S2/S3) | 1 | Sonnet (high) | review cieca CV (1 per istanza) |
+| 👨‍✈️ Capitano | `CAPITANO` | 1 (tu) | Opus | coordinamento |
 
-> 🧙‍♂️ **Maestro (planned)**: spec in [`agents/maestro/maestro.md`](../maestro/maestro.md), non ancora implementato. Quando arriverà girerà nella sessione `MAESTRO`.
+> 🧙‍♂️ **Maestro (planned)**: spec in [`agents/maestro/maestro.md`](../maestro/maestro.md), non ancora implementato.
 
 ---
 
@@ -284,24 +280,9 @@ FASE 6: 👨‍✈️ CAPITANO TRIAGE → quando pipeline scored>=50 e' vuota, c
 FASE 7: 🎖️ COMANDANTE → click finale SOLO su posizioni status 'ready' (3 round + critic >= 5)
 ```
 
-### Dettaglio FASE 5 — Loop Scrittore ↔ Critico (AUTONOMO)
+### FASE 5 in dettaglio — è autonoma
 
-Gli Scrittori gestiscono i Critici **in autonomia**, senza il Capitano:
-1. Scrittore scrive CV+CL, genera PDF
-2. Scrittore avvia Critico fresco con nome UNICO (`CRITICO-S1` o `CRITICO-S2`)
-3. Critico fa review cieca (solo PDF + JD, NO profilo candidato)
-4. Scrittore legge critica, killa il Critico
-5. Scrittore corregge CV, rigenera PDF
-6. Scrittore avvia NUOVO Critico fresco (MAI riusare stessa istanza — bias di ancoraggio)
-7. Ripete fino a 3 round totali
-8. Dopo 3° round: salva voto finale nel DB, notifica Capitano
-9. **GATE POST-CRITICO**: critic_score >= 5 → `--status ready` (da inviare al Comandante). critic_score < 5 → `--status excluded` (non vale la pena inviarla).
-
-**REGOLE CRITICHE:**
-- **3 round OBBLIGATORI** — non 1, non 2
-- **1 review per istanza Critico** — dopo la review è "bruciato" per quella JD
-- **NON spaventarsi se il voto scende** tra round — il Critico fresco è più severo, è un BENE
-- **Sessioni univoche**: SCRITTORE-1 usa `CRITICO-S1`, SCRITTORE-2 usa `CRITICO-S2`, SCRITTORE-3 usa `CRITICO-S3`
+Il loop Scrittore ↔ Critico **non passa da te**: lo Scrittore avvia un Critico fresco con sessione univoca (`CRITICO-S1/S2/S3`), legge la review cieca, corregge, killa, ripete per 3 round con istanze nuove (no bias di ancoraggio), poi salva `critic_score` + `critic_verdict` e notifica te. Tu intervieni solo al gate finale: `critic_score >= 5 → ready`, `< 5 → excluded`. Il dettaglio operativo vive nel prompt dello Scrittore.
 
 ---
 
