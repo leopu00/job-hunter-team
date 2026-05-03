@@ -169,19 +169,45 @@ export default function RatioMacroChart() {
     return out
   }, [stepEvents, tokenSeries])
 
-  // Auto-zoom Y nel range visibile.
+  // Media mobile a finestra 30 min: smussa il rumore (la macroRatio
+  // oscilla fortemente nei primi minuti per pochi sample) ma preserva
+  // i trend reali (cambia composizione del team / spike di un agente).
+  // Per ogni punto guardiamo i punti negli ultimi MA_WIN_MS e ne facciamo
+  // la media aritmetica. Sliding window O(n) con due indici.
+  const MA_WIN_MS = 30 * 60_000
+  const ratioAvgSeries = useMemo<RatioPoint[]>(() => {
+    if (macroRatioSeries.length === 0) return []
+    const out: RatioPoint[] = []
+    let lo = 0
+    let sum = 0
+    for (let hi = 0; hi < macroRatioSeries.length; hi++) {
+      sum += macroRatioSeries[hi].ratio
+      while (macroRatioSeries[hi].tsMs - macroRatioSeries[lo].tsMs > MA_WIN_MS) {
+        sum -= macroRatioSeries[lo].ratio
+        lo++
+      }
+      const n = hi - lo + 1
+      out.push({ tsMs: macroRatioSeries[hi].tsMs, ratio: sum / n })
+    }
+    return out
+  }, [macroRatioSeries])
+
+  // Auto-zoom Y nel range visibile (considera entrambe le serie:
+  // istantanea + media mobile, cosi' nessuna delle due viene clippata).
   const { rMin, rMax } = useMemo(() => {
     let lo = Infinity, hi = -Infinity
-    for (const p of macroRatioSeries) {
-      if (p.tsMs < tMin || p.tsMs > tMax) continue
-      if (p.ratio < lo) lo = p.ratio
-      if (p.ratio > hi) hi = p.ratio
+    for (const series of [macroRatioSeries, ratioAvgSeries]) {
+      for (const p of series) {
+        if (p.tsMs < tMin || p.tsMs > tMax) continue
+        if (p.ratio < lo) lo = p.ratio
+        if (p.ratio > hi) hi = p.ratio
+      }
     }
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { rMin: 0, rMax: 1 }
     if (hi - lo < 1) return { rMin: Math.max(0, lo - 0.5), rMax: hi + 0.5 }
     const pad = (hi - lo) * 0.15
     return { rMin: Math.max(0, lo - pad), rMax: hi + pad }
-  }, [macroRatioSeries, tMin, tMax])
+  }, [macroRatioSeries, ratioAvgSeries, tMin, tMax])
 
   const xAt = useCallback(
     (ts: number) => PAD.left + ((ts - tMin) / Math.max(1, tMax - tMin)) * innerW,
@@ -194,17 +220,26 @@ export default function RatioMacroChart() {
 
   const fmtRatio = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(2)} MT/%` : `${v.toFixed(1)} kT/%`
   const lastPoint = macroRatioSeries.length > 0 ? macroRatioSeries[macroRatioSeries.length - 1] : null
+  const lastAvg = ratioAvgSeries.length > 0 ? ratioAvgSeries[ratioAvgSeries.length - 1] : null
 
   // Hover: traccia il cursor sull'SVG, mostra linea verticale + tooltip
   // col valore della ratio nel punto piu' vicino. Lavora in coordinate
   // dell'SVG (W/H), non del DOM, cosi' restano consistenti col viewBox.
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const [hover, setHover] = useState<{ tsMs: number; ratio: number; xPct: number } | null>(null)
+  // Tooltip: oltre a ratio e media, espone kt cumulativi del team e usage%
+  // al momento del hover, cosi' chi legge puo' verificare a mano che
+  // ratio == kt / (usage - usage_first). Sono gli ingredienti del calcolo.
+  const [hover, setHover] = useState<{
+    tsMs: number; ratio: number; avg: number | null; xPct: number;
+    kt: number; usage: number; ktDelta: number; usageDelta: number;
+  } | null>(null)
   const onMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
-    if (!svg || macroRatioSeries.length === 0) { setHover(null); return }
+    if (!svg || macroRatioSeries.length === 0 || stepEvents.length === 0) {
+      setHover(null); return
+    }
     const rect = svg.getBoundingClientRect()
-    const xRel = (e.clientX - rect.left) / rect.width  // 0..1 nel viewBox
+    const xRel = (e.clientX - rect.left) / rect.width
     const xSvg = xRel * W
     if (xSvg < PAD.left || xSvg > PAD.left + innerW) { setHover(null); return }
     const tsAtCursor = tMin + ((xSvg - PAD.left) / innerW) * (tMax - tMin)
@@ -215,9 +250,38 @@ export default function RatioMacroChart() {
       if (d < bestDist) { best = p; bestDist = d }
     }
     if (best.tsMs < tMin || best.tsMs > tMax) { setHover(null); return }
+
+    // Media nel punto (le 2 serie hanno gli stessi ts).
+    let avg: number | null = null
+    let avgDist = Infinity
+    for (const p of ratioAvgSeries) {
+      const d = Math.abs(p.tsMs - best.tsMs)
+      if (d < avgDist) { avg = p.ratio; avgDist = d }
+    }
+
+    // kt cumulativo team al ts (bucket piu' vicino della tokenSeries).
+    let kt = 0
+    let ktDist = Infinity
+    for (const t of tokenSeries) {
+      const d = Math.abs(t.tsMs - best.tsMs)
+      if (d < ktDist) { kt = t.kt; ktDist = d }
+    }
+
+    // usage% al ts: ultimo step bridge <= best.tsMs. E' lo stesso valore
+    // usato nel calcolo della macroRatio, quindi il quoziente quadra.
+    const first = stepEvents[0]
+    let usage = first.usage
+    for (const s of stepEvents) {
+      if (s.ts <= best.tsMs) usage = s.usage
+      else break
+    }
+
     const xPct = ((xAt(best.tsMs) - PAD.left) / innerW) * 100
-    setHover({ tsMs: best.tsMs, ratio: best.ratio, xPct })
-  }, [macroRatioSeries, tMin, tMax, xAt])
+    setHover({
+      tsMs: best.tsMs, ratio: best.ratio, avg, xPct,
+      kt, usage, ktDelta: kt - first.kt, usageDelta: usage - first.usage,
+    })
+  }, [macroRatioSeries, ratioAvgSeries, tokenSeries, stepEvents, tMin, tMax, xAt])
   const onLeave = useCallback(() => setHover(null), [])
 
   return (
@@ -234,9 +298,17 @@ export default function RatioMacroChart() {
           </p>
         </div>
         {lastPoint && (
-          <div className="text-right">
-            <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">corrente</div>
-            <div className="text-lg font-mono text-[#ec4899]">{fmtRatio(lastPoint.ratio)}</div>
+          <div className="text-right space-y-2">
+            <div>
+              <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">corrente</div>
+              <div className="text-lg font-mono text-[#ec4899]">{fmtRatio(lastPoint.ratio)}</div>
+            </div>
+            {lastAvg && (
+              <div>
+                <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">media 30m</div>
+                <div className="text-lg font-mono text-[#22d3ee]">{fmtRatio(lastAvg.ratio)}</div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -294,7 +366,7 @@ export default function RatioMacroChart() {
             {new Date(tMax).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
           </text>
 
-          {/* linea ratio macro continua */}
+          {/* linea ratio macro continua (istantanea, rosa) */}
           {macroRatioSeries.length > 0 && (
             <path
               d={(() => {
@@ -306,6 +378,24 @@ export default function RatioMacroChart() {
                 return parts.join(' ')
               })()}
               stroke="#ec4899"
+              strokeWidth={2}
+              fill="none"
+              opacity={0.55}
+            />
+          )}
+
+          {/* media mobile 30 min (ciano), spessa, sopra l'istantanea */}
+          {ratioAvgSeries.length > 0 && (
+            <path
+              d={(() => {
+                const parts: string[] = []
+                for (const p of ratioAvgSeries) {
+                  if (p.tsMs < tMin || p.tsMs > tMax) continue
+                  parts.push(`${parts.length === 0 ? 'M' : 'L'} ${xAt(p.tsMs).toFixed(1)} ${yRatio(p.ratio).toFixed(1)}`)
+                }
+                return parts.join(' ')
+              })()}
+              stroke="#22d3ee"
               strokeWidth={2.5}
               fill="none"
             />
@@ -318,13 +408,13 @@ export default function RatioMacroChart() {
             </text>
           )}
 
-          {/* Hover crosshair + dot sul punto piu' vicino */}
+          {/* Hover crosshair + dot sui punti piu' vicini (istantanea + media) */}
           {hover && (
             <>
               <line
                 x1={xAt(hover.tsMs)} x2={xAt(hover.tsMs)}
                 y1={PAD.top} y2={PAD.top + innerH}
-                stroke="rgba(236,72,153,0.4)" strokeWidth={1}
+                stroke="rgba(255,255,255,0.25)" strokeWidth={1}
                 strokeDasharray="2 3" pointerEvents="none"
               />
               <circle
@@ -332,6 +422,13 @@ export default function RatioMacroChart() {
                 r={4} fill="#ec4899" stroke="#0f172a" strokeWidth={1}
                 pointerEvents="none"
               />
+              {hover.avg !== null && (
+                <circle
+                  cx={xAt(hover.tsMs)} cy={yRatio(hover.avg)}
+                  r={4} fill="#22d3ee" stroke="#0f172a" strokeWidth={1}
+                  pointerEvents="none"
+                />
+              )}
             </>
           )}
         </svg>
@@ -346,14 +443,41 @@ export default function RatioMacroChart() {
               top: 12,
             }}
           >
-            <div className="text-[var(--color-dim)]">
+            <div className="text-[var(--color-dim)] mb-1">
               {new Date(hover.tsMs).toLocaleTimeString('it-IT', {
                 hour: '2-digit', minute: '2-digit', second: '2-digit',
               })}
             </div>
             <div className="text-[#ec4899]">{fmtRatio(hover.ratio)}</div>
+            {hover.avg !== null && (
+              <div className="text-[#22d3ee]">media 30m: {fmtRatio(hover.avg)}</div>
+            )}
+            {/* Ingredienti del calcolo, per verifica visiva */}
+            <div className="border-t border-[var(--color-border)] mt-1 pt-1 text-[var(--color-muted)] text-[10px] leading-snug">
+              <div>kt cum: <span className="text-[var(--color-fg)]">{fmtRatio(hover.kt).replace('/%', '')}</span></div>
+              <div>usage: <span className="text-[var(--color-fg)]">{hover.usage}%</span></div>
+              <div className="text-[var(--color-dim)] mt-0.5">
+                Δkt: {fmtRatio(hover.ktDelta).replace('/%', '')} ÷ Δu: {hover.usageDelta}%
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Legenda compatta sotto il chart */}
+        <div className="flex flex-wrap gap-4 mt-2 text-[10px] text-[var(--color-dim)] font-mono">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" style={{
+              display: 'inline-block', width: 14, height: 2, background: '#ec4899', opacity: 0.55,
+            }} />
+            ratio istantanea
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" style={{
+              display: 'inline-block', width: 14, height: 2, background: '#22d3ee',
+            }} />
+            media mobile 30 min
+          </span>
+        </div>
       </div>
     </div>
   )
