@@ -111,9 +111,28 @@ def main() -> int:
             print("error: seconds must be a number", file=sys.stderr)
             return 1
 
-    # Fast path: no-op se 0. Niente sleep, niente log — un agente in
-    # standby non deve riempire il jsonl di eventi vuoti.
+    # Fast path: 0 = "checkpoint" heartbeat. Niente sleep, MA logghiamo
+    # un evento singolo (event="checkpoint") così il pacing-bridge può
+    # calcolare la cadenza per agente (eventi/min) — ingrediente chiave
+    # per calibrare la durata in config: throttle_effettivo = cadenza ×
+    # durata / 60. Senza questo log non sapremmo quante volte/h l'agente
+    # arriva al checkpoint quando il config dice "non rallentare".
     if requested <= 0:
+        cp_unix = time.time()
+        cp_iso = datetime.fromtimestamp(cp_unix, tz=timezone.utc).isoformat()
+        try:
+            _append_event({
+                "event": "checkpoint",
+                "ts": cp_iso,
+                "ts_unix": cp_unix,
+                "agent": args.agent,
+                "requested_sec": 0,
+                "reason": args.reason,
+                "source": "config" if config_used else "explicit",
+            })
+        except OSError as e:
+            print(f"warn: failed to log checkpoint event: {e}",
+                  file=sys.stderr)
         return 0
 
     applied = max(MIN_SLEEP, min(MAX_SLEEP, requested))
