@@ -410,8 +410,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Container runtime used to isolate the agents.',
     'home.docker.state': 'State',
     'home.docker.image': 'JHT image',
+    'home.docker.runtimeTitle': '🐳 Docker runtime',
+    'home.docker.imageTitle': '📦 JHT container',
     'home.docker.imagePresent': 'Present locally',
     'home.docker.imageMissing': 'Missing',
+    'home.docker.imageName': 'Name',
+    'home.docker.imageVersion': 'Version',
+    'home.docker.imageCreated': 'Built on',
+    'home.docker.imageSize': 'Size',
+    'home.docker.imageReleases': 'View all releases →',
     'home.docker.refresh': 'Re-check',
     'home.docker.openDesktop': 'Open Docker Desktop',
     'home.language.title': 'Language',
@@ -682,8 +689,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Runtime container usato per isolare gli agenti.',
     'home.docker.state': 'Stato',
     'home.docker.image': 'Immagine JHT',
+    'home.docker.runtimeTitle': '🐳 Runtime Docker',
+    'home.docker.imageTitle': '📦 Container JHT',
     'home.docker.imagePresent': 'Presente in locale',
     'home.docker.imageMissing': 'Assente',
+    'home.docker.imageName': 'Nome',
+    'home.docker.imageVersion': 'Versione',
+    'home.docker.imageCreated': 'Build',
+    'home.docker.imageSize': 'Dimensione',
+    'home.docker.imageReleases': 'Vedi tutte le release →',
     'home.docker.refresh': 'Ricontrolla',
     'home.docker.openDesktop': 'Apri Docker Desktop',
     'home.language.title': 'Lingua',
@@ -954,8 +968,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Az ügynökök izolálásához használt konténer futtatókörnyezet.',
     'home.docker.state': 'Állapot',
     'home.docker.image': 'JHT image',
+    'home.docker.runtimeTitle': '🐳 Docker futtatókörnyezet',
+    'home.docker.imageTitle': '📦 JHT konténer',
     'home.docker.imagePresent': 'Helyben elérhető',
     'home.docker.imageMissing': 'Hiányzik',
+    'home.docker.imageName': 'Név',
+    'home.docker.imageVersion': 'Verzió',
+    'home.docker.imageCreated': 'Build dátuma',
+    'home.docker.imageSize': 'Méret',
+    'home.docker.imageReleases': 'Összes kiadás →',
     'home.docker.refresh': 'Újraellenőrzés',
     'home.docker.openDesktop': 'Docker Desktop megnyitása',
     'home.language.title': 'Nyelv',
@@ -3038,6 +3059,15 @@ const homeDom = {
   btnProviderChange: document.getElementById('home-btn-provider-change'),
   dockerState: document.getElementById('home-docker-state'),
   dockerImage: document.getElementById('home-docker-image'),
+  dockerImageNameRow: document.getElementById('home-docker-image-name-row'),
+  dockerImageName: document.getElementById('home-docker-image-name'),
+  dockerImageVersionRow: document.getElementById('home-docker-image-version-row'),
+  dockerImageVersion: document.getElementById('home-docker-image-version'),
+  dockerImageCreatedRow: document.getElementById('home-docker-image-created-row'),
+  dockerImageCreated: document.getElementById('home-docker-image-created'),
+  dockerImageSizeRow: document.getElementById('home-docker-image-size-row'),
+  dockerImageSize: document.getElementById('home-docker-image-size'),
+  dockerImageReleases: document.getElementById('home-docker-image-releases'),
   btnDockerRefresh: document.getElementById('home-btn-docker-refresh'),
   btnDockerOpen: document.getElementById('home-btn-docker-open'),
   btnReopenWizard: document.getElementById('home-btn-reopen-wizard'),
@@ -3378,6 +3408,70 @@ async function refreshHomeProvider() {
   }
 }
 
+function formatImageSize(bytes) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) return null
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1 }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function formatImageDate(iso) {
+  if (typeof iso !== 'string' || !iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  // Locale-aware short date + HH:MM. Falls back gracefully if Intl is
+  // unavailable (older Electron / stripped builds).
+  try {
+    return d.toLocaleString(currentLang || undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    })
+  } catch {
+    return d.toISOString().slice(0, 16).replace('T', ' ')
+  }
+}
+
+function formatImageVersion(image) {
+  // Prefer the registry digest (the immutable identifier behind ":latest"
+  // — what actually changes when a new image is published). Fall back to
+  // the local image id if the image was built locally and has no digest.
+  const digest = Array.isArray(image?.digests) && image.digests.length
+    ? image.digests[0]
+    : null
+  const sha = digest && digest.includes('@')
+    ? digest.split('@').pop()
+    : (typeof image?.id === 'string' ? image.id : null)
+  if (typeof sha === 'string' && sha.startsWith('sha256:')) {
+    return sha.slice(7, 19) // short 12-char SHA
+  }
+  return null
+}
+
+function renderDockerImageMetadata(image) {
+  const setRow = (rowEl, valueEl, value) => {
+    if (value) {
+      valueEl.textContent = value
+      rowEl.hidden = false
+    } else {
+      rowEl.hidden = true
+    }
+  }
+  if (!image || !image.present) {
+    homeDom.dockerImageNameRow.hidden = true
+    homeDom.dockerImageVersionRow.hidden = true
+    homeDom.dockerImageCreatedRow.hidden = true
+    homeDom.dockerImageSizeRow.hidden = true
+    return
+  }
+  const name = (Array.isArray(image.tags) && image.tags[0]) || image.image || null
+  setRow(homeDom.dockerImageNameRow, homeDom.dockerImageName, name)
+  setRow(homeDom.dockerImageVersionRow, homeDom.dockerImageVersion, formatImageVersion(image))
+  setRow(homeDom.dockerImageCreatedRow, homeDom.dockerImageCreated, formatImageDate(image.created))
+  setRow(homeDom.dockerImageSizeRow, homeDom.dockerImageSize, formatImageSize(image.size))
+}
+
 async function refreshHomeDocker() {
   try {
     const dockerStatus = await window.setupApi.getDockerStatus()
@@ -3395,6 +3489,7 @@ async function refreshHomeDocker() {
     const imgOk = full?.image?.present === true
     homeDom.dockerImage.textContent = imgOk ? t('home.docker.imagePresent') : t('home.docker.imageMissing')
     homeDom.dockerImage.style.color = imgOk ? 'var(--success)' : 'var(--warn)'
+    renderDockerImageMetadata(imgOk ? full?.image : null)
     // Bottone "accendi runtime": label e azione cambiano per OS.
     // Linux: nessun bottone (il daemon parte da systemctl). Mac: "Avvia
     // Colima" → fa partire il VM Colima. Win: "Apri Docker Desktop".
@@ -3458,6 +3553,13 @@ homeDom.btnProviderChange.addEventListener('click', () => {
   showWizard(STEP_PROVIDER_CHOOSE)
 })
 homeDom.btnDockerRefresh.addEventListener('click', () => refreshHomeDocker())
+homeDom.dockerImageReleases.addEventListener('click', (event) => {
+  event.preventDefault()
+  // GHCR packages page for the JHT image — shows tags, digests, and
+  // publish dates for every release. The URL is derived from the image
+  // ref (`ghcr.io/<owner>/<name>`) we ship in container-prep.js.
+  window.launcherApi.openExternal('https://github.com/leopu00/job-hunter-team/pkgs/container/jht')
+})
 homeDom.btnDockerOpen.addEventListener('click', async () => {
   const platform = window.platformInfo?.platform
   if (platform === 'darwin') {

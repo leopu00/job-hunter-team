@@ -121,16 +121,34 @@ async function ensureContainerImage({
 
 function inspectImage(imageName = 'ghcr.io/leopu00/jht:latest') {
   // Synchronous probe: is the image already on the local Docker?
-  // Used by the setup wizard to skip the pull step on re-launch.
+  // Used by the setup wizard to skip the pull step on re-launch, and
+  // by the home Docker panel to show id/created/size to the user.
+  // We capture stdout (vs stdio:ignore) so we can parse the JSON
+  // metadata; failures fall back to the bare {present:false} shape.
   const { execFileSync } = require('node:child_process')
   try {
-    execFileSync('docker', ['image', 'inspect', imageName], {
-      stdio: 'ignore',
-      timeout: 5000,
-      windowsHide: true,
-      env: dockerEnv(),
-    })
-    return { present: true, image: imageName }
+    const stdout = execFileSync(
+      'docker',
+      ['image', 'inspect', '--format', '{{json .}}', imageName],
+      {
+        timeout: 5000,
+        windowsHide: true,
+        env: dockerEnv(),
+      },
+    )
+    let parsed = null
+    try { parsed = JSON.parse(stdout.toString()) } catch { /* best effort */ }
+    if (!parsed) return { present: true, image: imageName }
+    return {
+      present: true,
+      image: imageName,
+      id: typeof parsed.Id === 'string' ? parsed.Id : null,
+      tags: Array.isArray(parsed.RepoTags) ? parsed.RepoTags : [],
+      digests: Array.isArray(parsed.RepoDigests) ? parsed.RepoDigests : [],
+      created: typeof parsed.Created === 'string' ? parsed.Created : null,
+      size: typeof parsed.Size === 'number' ? parsed.Size : null,
+      architecture: typeof parsed.Architecture === 'string' ? parsed.Architecture : null,
+    }
   } catch {
     return { present: false, image: imageName }
   }
