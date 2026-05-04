@@ -76,7 +76,7 @@
       <div class="narrative">
         <p>Quando la curva verde sta sotto quella viola, il team sta lasciando token sul tavolo (non sfruttiamo abbastanza la finestra). Quando la sorpassa, il termostato deve attivarsi: throttle e checkpoint forzati per rallentare gli agenti e portare la velocity in zona ideale.</p>
         <p>Si vede chiaramente che <strong>la velocity reale oscilla intorno alla ideale</strong> per quasi tutta la sessione — è esattamente il comportamento desiderato di un termostato funzionante. Le escursioni sopra-soglia sono brevi e seguite da rientri rapidi.</p>
-        <p>I valori negativi a inizio finestra non sono bug: sono i reset (usage che riparte da 0 dopo essere stato a 90+), per cui il delta calcolato risulta negativo per un singolo tick. Vanno letti come segnale di confine, non di velocità reale.</p>
+        <p>I gap nella linea verde sono i reset di finestra: la velocity calcolata sul primo tick di una nuova finestra è uno spike negativo (usage da 90 a 0) e va letto come confine, non come velocità reale. La separa dal resto per non sporcare l'analisi.</p>
       </div>
     </div>
 
@@ -101,6 +101,22 @@
           <p>RESET sono i confini fra finestre Claude: pochi tick, ma fondamentali perché segnano la transizione. La loro presenza in numero coerente con le finestre conferma che la sentinella non ha avuto buchi di copertura.</p>
           <p>Il fatto che ATTENZIONE e SOTTOUTILIZZO siano <strong>quasi pari</strong> dice che il termostato sta in equilibrio: tira via gas quando serve e lo restituisce subito dopo. È il regime "in banda".</p>
         </div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <h3>5 · Riepilogo per finestra Claude</h3>
+      <p class="caption">Per ognuna delle finestre Claude attraversate dalla sessione: durata di copertura, picco di usage raggiunto, e proiezione massima vista. Una finestra "sana" chiude vicino al 100% senza picchi di projection sopra 110%.</p>
+      <div class="legend-pills">
+        <span><i class="dot" style="background:#56ccf2"></i>picco usage %</span>
+        <span><i class="dot" style="background:#f2c94c"></i>picco projection %</span>
+        <span><i class="dot" style="background:#9bd9c5"></i>durata visibile (min)</span>
+      </div>
+      <canvas id="chart-windows"></canvas>
+      <div class="narrative">
+        <p>Le finestre più lunghe sono quelle dove il team ha lavorato in modo continuativo; quelle brevi sono i "ponti" — frammenti di finestra catturati dalla sentinella all'estremità del range. Il picco di usage racconta quanto il team ha sfruttato ciascuna finestra, mentre la projection (gialla) racconta quanto vicino siamo andati allo sforamento.</p>
+        <p>Idealmente la barra blu (usage) sale fino vicino a 100% e la barra gialla (projection) le sta sopra solo di poco. Quando la projection sfora il 120% senza che l'usage la segua, vuol dire che il termostato ha frenato in tempo — è il caso che cerchiamo.</p>
+        <p>La metrica da osservare per la prossima sessione è quella delle finestre con projection &gt;130%: sono i momenti in cui abbiamo davvero rischiato. Se il pacing-bridge sapesse "ricordare" pattern di queste finestre potrebbe pre-frenare con più anticipo.</p>
       </div>
     </div>
   </section>
@@ -161,9 +177,25 @@
     document.getElementById("nb-weekly-eta").textContent = etaH > 0 ? etaH.toFixed(1) : "—";
   }
 
+  // ---------- Boundary detection: dove cambia session_id ----------
+  const sessionBoundaries = [];
+  for (let i = 1; i < sentinel.length; i++) {
+    if (sentinel[i].session_id && sentinel[i].session_id !== sentinel[i - 1].session_id) {
+      sessionBoundaries.push({
+        ts: Date.parse(sentinel[i].ts),
+        session_id: sentinel[i].session_id,
+      });
+    }
+  }
+
   // ---------- Chart 1: Usage vs Projection ----------
   const usagePts = sentinel.map((r) => ({ x: Date.parse(r.ts), y: r.usage ?? 0 }));
-  const projPts = sentinel.map((r) => ({ x: Date.parse(r.ts), y: Math.min(r.projection ?? 0, 200) }));
+  // Conservo il valore reale della projection per il tooltip; clip solo per la geometria.
+  const projPts = sentinel.map((r) => ({
+    x: Date.parse(r.ts),
+    y: Math.min(r.projection ?? 0, 160),
+    yReal: r.projection ?? 0,
+  }));
 
   new Chart(document.getElementById("chart-usage"), {
     type: "line",
@@ -201,7 +233,15 @@
         tooltip: {
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
-            label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`,
+            label: (ctx) => {
+              const raw = ctx.raw;
+              if (ctx.dataset.label === "projection") {
+                const real = raw.yReal ?? ctx.parsed.y;
+                const suffix = real > 160 ? " (clip a 160 nel grafico)" : "";
+                return `projection: ${Math.round(real)}%${suffix}`;
+              }
+              return `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`;
+            },
           },
         },
       },
@@ -209,10 +249,9 @@
         x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
         y: {
           min: 0,
-          max: 150,
+          max: 160,
           ticks: { callback: (v) => v + "%" },
           grid: { color: "rgba(255,255,255,0.06)" },
-          afterDraw: undefined,
         },
       },
     },
@@ -230,6 +269,28 @@
           ctx.moveTo(chartArea.left, y);
           ctx.lineTo(chartArea.right, y);
           ctx.stroke();
+          ctx.fillStyle = "rgba(235,87,87,0.85)";
+          ctx.font = "11px -apple-system, sans-serif";
+          ctx.fillText("100%", chartArea.right - 38, y - 4);
+          ctx.restore();
+        },
+      },
+      {
+        id: "sessionBoundaries",
+        afterDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          ctx.save();
+          ctx.strokeStyle = "rgba(155,217,197,0.35)";
+          ctx.setLineDash([2, 4]);
+          ctx.lineWidth = 1;
+          for (const b of sessionBoundaries) {
+            const x = scales.x.getPixelForValue(b.ts);
+            if (x < chartArea.left || x > chartArea.right) continue;
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+          }
           ctx.restore();
         },
       },
@@ -237,9 +298,25 @@
   });
 
   // ---------- Chart 2: Velocity vs Ideal ----------
-  // Filtro fuori i tick di reset (velocity grandemente negativa) per non rovinare la scala
-  const velReal = sentinel.map((r) => ({ x: Date.parse(r.ts), y: Math.max(-50, Math.min(150, r.velocity_smooth ?? 0)) }));
-  const velIdeal = sentinel.map((r) => ({ x: Date.parse(r.ts), y: r.velocity_ideal ?? 0 }));
+  // Spezzo le serie sui confini di session_id inserendo {x, y: null}: così Chart.js
+  // non ricongiunge la linea attraverso i reset (e i delta negativi giganti della
+  // velocity al cambio di finestra non distorcono il grafico).
+  const velReal = [];
+  const velIdeal = [];
+  let prevSession = null;
+  for (const r of sentinel) {
+    if (prevSession && r.session_id !== prevSession) {
+      const tBreak = Date.parse(r.ts) - 1;
+      velReal.push({ x: tBreak, y: null });
+      velIdeal.push({ x: tBreak, y: null });
+    }
+    // Sul primo tick della nuova finestra la velocity_smooth è ancora reset-spike → la
+    // tratto come gap invece che come dato reale.
+    const isResetSpike = r.status === "RESET" || (r.velocity_smooth ?? 0) < -10;
+    velReal.push({ x: Date.parse(r.ts), y: isResetSpike ? null : (r.velocity_smooth ?? 0) });
+    velIdeal.push({ x: Date.parse(r.ts), y: r.velocity_ideal ?? 0 });
+    prevSession = r.session_id || prevSession;
+  }
 
   new Chart(document.getElementById("chart-velocity"), {
     type: "line",
@@ -254,6 +331,7 @@
           tension: 0.3,
           pointRadius: 0,
           borderWidth: 2,
+          spanGaps: false,
         },
         {
           label: "velocity_ideal",
@@ -265,6 +343,7 @@
           tension: 0.2,
           pointRadius: 0,
           borderWidth: 1.5,
+          spanGaps: false,
         },
       ],
     },
@@ -277,13 +356,15 @@
         tooltip: {
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
-            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %/h`,
+            label: (ctx) => ctx.parsed.y == null ? null : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %/h`,
           },
         },
       },
       scales: {
         x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
         y: {
+          suggestedMin: 0,
+          suggestedMax: 60,
           ticks: { callback: (v) => v + " %/h" },
           grid: { color: "rgba(255,255,255,0.06)" },
         },
@@ -376,6 +457,113 @@
               return `${ctx.label}: ${ctx.parsed} tick (${pct}%)`;
             },
           },
+        },
+      },
+    },
+  });
+
+  // ---------- Chart 5: Riepilogo per finestra Claude ----------
+  // Aggrego per session_id: peak usage, peak projection, durata visibile in minuti.
+  const windowMap = new Map();
+  for (const r of sentinel) {
+    const sid = r.session_id;
+    if (!sid) continue;
+    let w = windowMap.get(sid);
+    if (!w) {
+      w = { sid, tStart: Date.parse(r.ts), tEnd: Date.parse(r.ts), peakUsage: 0, peakProj: 0 };
+      windowMap.set(sid, w);
+    }
+    const t = Date.parse(r.ts);
+    w.tStart = Math.min(w.tStart, t);
+    w.tEnd = Math.max(w.tEnd, t);
+    w.peakUsage = Math.max(w.peakUsage, r.usage ?? 0);
+    w.peakProj = Math.max(w.peakProj, r.projection ?? 0);
+  }
+  // Ordino per inizio cronologico così le barre raccontano la sequenza temporale.
+  const windows = Array.from(windowMap.values()).sort((a, b) => a.tStart - b.tStart);
+  const winLabels = windows.map((w) => {
+    const d = new Date(w.tStart);
+    // session_id formato 20260504T101330Z → estraggo HH:MM dalla parte ora
+    const hh = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    return `${hh}`;
+  });
+  const winDurMin = windows.map((w) => Math.round((w.tEnd - w.tStart) / 60000));
+  const winPeakU = windows.map((w) => w.peakUsage);
+  const winPeakP = windows.map((w) => Math.min(w.peakProj, 200));
+
+  new Chart(document.getElementById("chart-windows"), {
+    type: "bar",
+    data: {
+      labels: winLabels,
+      datasets: [
+        {
+          label: "picco usage %",
+          data: winPeakU,
+          backgroundColor: "#56ccf2",
+          borderRadius: 4,
+          yAxisID: "y",
+        },
+        {
+          label: "picco projection %",
+          data: winPeakP,
+          backgroundColor: "#f2c94c",
+          borderRadius: 4,
+          yAxisID: "y",
+        },
+        {
+          label: "durata visibile (min)",
+          data: winDurMin,
+          type: "line",
+          borderColor: "#9bd9c5",
+          backgroundColor: "rgba(155,217,197,0.15)",
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: "#9bd9c5",
+          borderWidth: 2,
+          yAxisID: "yDur",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const w = windows[items[0].dataIndex];
+              return `Finestra ${winLabels[items[0].dataIndex]} (${w.sid})`;
+            },
+            label: (ctx) => {
+              if (ctx.dataset.label === "picco projection %") {
+                const real = windows[ctx.dataIndex].peakProj;
+                const suffix = real > 200 ? " (clip a 200)" : "";
+                return `picco projection: ${Math.round(real)}%${suffix}`;
+              }
+              if (ctx.dataset.label === "durata visibile (min)") {
+                return `durata visibile: ${ctx.parsed.y} min`;
+              }
+              return `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { color: "rgba(255,255,255,0.04)" }, title: { display: true, text: "inizio finestra (ora locale)", color: "#8a93a4" } },
+        y: {
+          beginAtZero: true,
+          ticks: { callback: (v) => v + "%" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          title: { display: true, text: "%", color: "#8a93a4" },
+        },
+        yDur: {
+          beginAtZero: true,
+          position: "right",
+          grid: { drawOnChartArea: false },
+          ticks: { callback: (v) => v + "m" },
+          title: { display: true, text: "minuti", color: "#8a93a4" },
         },
       },
     },
