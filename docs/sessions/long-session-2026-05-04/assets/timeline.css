@@ -1,9 +1,30 @@
 /* Timeline-specific styles. La pagina è compatibile con styles.css base. */
 
+/* Container ECharts: dimensioni esplicite e position:relative.
+   Niente width/height su <canvas> interni — ECharts gestisce dpr e dimensioni.
+   min-height:0 evita che un eventuale parent flex/grid lo collassi. */
 .echart-tall {
+  position: relative;
+  display: block;
   width: 100% !important;
   height: 540px !important;
   min-height: 540px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Lasciamo che ECharts gestisca canvas/wrapper interni: niente override
+   sul <canvas> via CSS, altrimenti il dpr di ECharts si confonde e il
+   risultato risulta sgranato/distorto. Il container .echart-tall ha già
+   width/height fissi → ECharts ricalcola il canvas correttamente. */
+
+/* Defensive: se mai una sezione finisce in flex, non far collassare il chart. */
+section, .chart-wrap {
+  min-height: 0;
+}
+
+.chart-wrap {
+  position: relative;
 }
 
 .info-box {
