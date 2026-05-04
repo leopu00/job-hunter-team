@@ -53,6 +53,36 @@
   .filter-bar.agent-pills button:not(.active):hover {
     opacity: 0.75;
   }
+  /* Header del chart: titolo a sinistra, toolbar zoom a destra */
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .chart-header h3 { margin: 0; flex: 1; }
+  .chart-toolbar {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .chart-toolbar button {
+    background: var(--card);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    min-width: 32px;
+  }
+  .chart-toolbar button:hover { background: #1f2532; }
+  .chart-toolbar button:active { background: #2a3144; }
+  /* Assicura che la canvas-host non tagli il tooltip o overflow di Chart.js */
+  .chart-wrap { overflow: visible !important; }
+  .canvas-host { overflow: visible !important; }
   .narrative h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
   .narrative p { margin: 0 0 8px; }
   .narrative p:last-child { margin-bottom: 0; }
@@ -500,11 +530,38 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="assets/data-loader.js"></script>
 <script>
 // Default Chart.js: tooltip più leggibili e sempre attivati.
 // padding+font più grande, displayColors per le serie.
+// chartjs-plugin-zoom v2 si auto-registra via il bundle UMD: Chart.register
+// non serve esplicitamente. Configurazione condivisa: zoom xy via wheel/pinch
+// + pan xy via drag (modificatore tasto invece di pan diretto per non rompere
+// il tooltip su hover).
+const ZOOM_OPTIONS = {
+  zoom: {
+    wheel: { enabled: true },
+    pinch: { enabled: true },
+    drag: { enabled: false },
+    mode: "xy",
+  },
+  pan: {
+    enabled: true,
+    mode: "xy",
+    threshold: 5,
+  },
+  limits: {
+    x: { minRange: 60_000 },
+    y: { minRange: 0.5 },
+  },
+};
 if (window.Chart) {
+  // Zoom xy: configurato come DEFAULT prima di creare i chart, così ogni
+  // istanza eredita la stessa policy. Applicarlo dopo la creazione causa
+  // Maximum call stack a causa dei proxy reattivi su options.plugins.
+  Chart.defaults.plugins.zoom = ZOOM_OPTIONS;
   Chart.defaults.plugins.tooltip.padding = 10;
   Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
   Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
@@ -891,9 +948,13 @@ if (window.Chart) {
           callbacks: {
             title: (items) => {
               const d = items[0]?.raw;
-              if (!d) return "";
-              const ts = new Date(d.x).toISOString();
-              return ts.slice(0, 10) + " " + ts.slice(11, 19) + "Z";
+              if (!d || !isFinite(d.x)) return "";
+              try {
+                const ts = new Date(d.x).toISOString();
+                return ts.slice(0, 10) + " " + ts.slice(11, 19) + "Z";
+              } catch {
+                return "";
+              }
             },
             label: (ctx) => {
               const d = ctx.raw;
@@ -1700,6 +1761,65 @@ if (window.Chart) {
       windowsGrid.appendChild(card);
     });
   }
+
+  // ----- Zoom toolbar: ➕ ➖ ⟲ allineati a destra del titolo di ogni chart -----
+  // Applico opzioni zoom xy + creo 3 bottoni accanto all'h3 di ogni chart-wrap.
+  function attachZoomToolbar(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const chart = Chart.getChart(canvas);
+    if (!chart) return;
+    // zoom config già applicato come Chart.defaults: niente da settare qui.
+    const wrap = canvas.closest(".chart-wrap");
+    const h3 = wrap?.querySelector("h3");
+    // Per i chart-wrap senza h3 (es. chat-scatter) inseriamo la toolbar in cima.
+    if (wrap && !wrap.querySelector(".chart-toolbar") && !h3) {
+      const tb0 = document.createElement("div");
+      tb0.className = "chart-toolbar";
+      tb0.style.cssText = "position:absolute; top:14px; right:18px; z-index:5;";
+      tb0.innerHTML = `
+        <button type="button" title="Zoom in" data-act="in">➕</button>
+        <button type="button" title="Zoom out" data-act="out">➖</button>
+        <button type="button" title="Reset zoom" data-act="reset">⟲</button>
+      `;
+      wrap.appendChild(tb0);
+      tb0.addEventListener("click", (e) => {
+        const a = e.target.closest("button")?.dataset.act;
+        if (a === "in") chart.zoom(1.2);
+        else if (a === "out") chart.zoom(0.8);
+        else if (a === "reset") chart.resetZoom();
+      });
+      return;
+    }
+    if (!h3 || wrap.querySelector(".chart-toolbar")) return;
+    // Wrappa h3 in .chart-header se non c'è già
+    let header = h3.parentElement.classList.contains("chart-header")
+      ? h3.parentElement
+      : null;
+    if (!header) {
+      header = document.createElement("div");
+      header.className = "chart-header";
+      h3.parentNode.insertBefore(header, h3);
+      header.appendChild(h3);
+    }
+    const tb = document.createElement("div");
+    tb.className = "chart-toolbar";
+    tb.innerHTML = `
+      <button type="button" title="Zoom in" data-act="in">➕</button>
+      <button type="button" title="Zoom out" data-act="out">➖</button>
+      <button type="button" title="Reset zoom" data-act="reset">⟲</button>
+    `;
+    header.appendChild(tb);
+    tb.addEventListener("click", (e) => {
+      const a = e.target.closest("button")?.dataset.act;
+      if (!a) return;
+      if (a === "in") chart.zoom(1.2);
+      else if (a === "out") chart.zoom(0.8);
+      else if (a === "reset") chart.resetZoom();
+    });
+  }
+  ["lane", "byagent", "bycategory", "cumulative", "durations",
+   "concurrency", "hourly", "chat-scatter"].forEach(attachZoomToolbar);
 
 })().catch((err) => {
   document.querySelector("main").insertAdjacentHTML(
