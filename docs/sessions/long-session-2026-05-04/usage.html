@@ -85,6 +85,33 @@
     transition: background 120ms, color 120ms;
   }
   .chart-info:hover { background: #2a3142; color: var(--fg); }
+  /* Toolbar 3-pack zoom (➕/➖/⟲) in alto a destra di ogni .chart-wrap, a
+     sinistra del badge ℹ. Stile sobrio coerente. */
+  .chart-toolbar {
+    position: absolute;
+    top: 16px;
+    right: 56px;
+    display: flex;
+    gap: 4px;
+    z-index: 5;
+  }
+  .chart-toolbar button {
+    width: 28px;
+    height: 24px;
+    background: #1f2532;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 100ms, color 100ms;
+    font-family: inherit;
+    padding: 0;
+  }
+  .chart-toolbar button:hover { background: #2a3142; color: var(--fg); }
+  .chart-toolbar button:active { background: #1a1f2c; }
   /* Tooltip CSS istantaneo (zero delay nativo) per .chart-info[data-tip]. */
   .chart-info[data-tip] { position: absolute; }
   .chart-info[data-tip]:hover::after {
@@ -124,6 +151,65 @@
     line-height: 1.5;
   }
   .chart-summary .icon { font-size: 14px; flex-shrink: 0; }
+  /* Toggle row sopra ai chart multi-serie: pill cliccabili per
+     attivare/disattivare ciascuna serie + scorciatoie Tutti/Nessuno/Inverti. */
+  .series-toggle {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 6px 0 14px;
+    padding: 8px 12px;
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .series-toggle .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .series-toggle .quick {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .series-toggle button {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 100ms, color 100ms, border-color 100ms;
+    font-family: inherit;
+  }
+  .series-toggle button:hover { background: #1f2532; }
+  .series-toggle button.pill[data-active="false"] {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+  .series-toggle button.pill .swatch {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+  .series-toggle .quick button { color: var(--muted); }
+  .series-toggle .quick button:hover { color: var(--fg); }
+  /* Data quality strip: piccolo footer di sezione che mostra contatori cleaning. */
+  .data-quality {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #11151e;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+  }
+  .data-quality code { color: #c8cedb; }
   /* TOC sticky a destra — solo su viewport ampi. */
   .with-toc {
     display: grid;
@@ -175,7 +261,7 @@
 <body>
 <header class="hero">
   <h1>📈 Usage &amp; Token Consumption</h1>
-  <p class="subtitle">Cosa ha mangiato il team nella long session 03→04 maggio — finestre Claude, proiezione, velocity, weekly.</p>
+  <p class="subtitle">Cosa ha mangiato il team nella long session 03→04 maggio — finestre Kimi K2, proiezione, velocity, weekly. Tip: zoom su time-series con drag/wheel+ctrl, pan con shift+drag; pill in alto per nascondere serie.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -191,7 +277,7 @@
     <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card"><div class="label">⏱ Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
-      <div class="kpi-card"><div class="label">🪟 Finestre Claude</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
+      <div class="kpi-card"><div class="label">🪟 Finestre Kimi K2</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
       <div class="kpi-card"><div class="label">🔥 Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
       <div class="kpi-card"><div class="label">📈 Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
       <div class="kpi-card"><div class="label">📅 Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
@@ -207,19 +293,24 @@
   </section>
 
   <section>
-    <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Claude (#N).">
-      <span class="chart-info" data-tip="Andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Claude consecutive. Soglia 100% = limite finestra.">ℹ</span>
+    <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Kimi K2 (#N).">
+      <span class="chart-info" data-tip="Andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Kimi K2 consecutive. Soglia 100% = limite finestra.">ℹ</span>
       <h3>1 · 📈 Usage % vs Projection nel tempo</h3>
-      <div class="chart-summary"><span class="icon">📍</span><span>Time series ogni ~3 min: <b>usage%</b> (linea blu piena) e <b>projection%</b> a fine finestra (gialla tratteggiata). Bande rosse = throttle attivo. Marker <code>#N</code> = cambio finestra Claude. Hover per dettagli sul tick.</span></div>
-      <div class="legend-pills">
-        <span><i class="dot" style="background:#56ccf2"></i>usage %</span>
-        <span><i class="dot" style="background:#f2c94c"></i>projection (fine finestra)</span>
-        <span><i class="dot" style="background:rgba(235,87,87,0.18); border:1px solid rgba(235,87,87,0.5)"></i>throttle attivo</span>
-        <span><i class="dot" style="background:#eb5757"></i>soglia 100%</span>
+      <div class="chart-summary"><span class="icon">📍</span><span>Time series ogni ~3 min: <b>usage%</b> (linea blu piena) e <b>projection%</b> a fine finestra (gialla tratteggiata). Bande rosse = throttle attivo. Marker <code>#N</code> = cambio finestra Kimi K2. Hover per dettagli sul tick.</span></div>
+      <div class="series-toggle" data-chart="chart-usage">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>usage %</button>
+        <button class="pill" data-series="1" data-active="true"><span class="swatch" style="background:#f2c94c"></span>projection</button>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+          <button data-action="reset-zoom" title="Reset zoom">⤺ zoom</button>
+        </span>
       </div>
       <div class="chart-canvas tall-520"><canvas id="chart-usage"></canvas></div>
       <div class="narrative">
-        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Claude consecutive (marker <code>#2..#N</code> in alto al cambio di session_id) — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
+        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Kimi K2 consecutive (marker <code>#2..#N</code> in alto al cambio di session_id) — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
         <p>Le bande rosse traslucide sono i tratti in cui <strong>il termostato era attivo</strong> (throttle=1 nei tick sentinella). Nota come le bande appaiano <em>quando la projection corre via</em>: è esattamente la dinamica voluta — il bridge frena prima che usage tocchi 100, così la curva blu resta sotto la soglia rossa.</p>
         <p>I picchi di projection più cattivi sono concentrati nelle finestre dove il team ha sgomitato di più; altrove la curva gialla resta sotto la diagonale ideale. Il fatto che usage reale (linea piena) chiuda quasi sempre sotto il 100% mentre la projection ha ondeggiato sopra significa che il sistema ha frenato in tempo.</p>
       </div>
@@ -229,11 +320,17 @@
       <span class="chart-info" data-tip="Ritmo di consumo in punti%/h. Verde = velocity reale smussata, viola = ritmo ideale per chiudere a 100% al reset. I gap verdi sono i reset di finestra (delta negativo, escluso). Pallini gialli = velocity_decreasing flag bridge.">ℹ</span>
       <h3>2 · 🌡 Velocity reale vs Velocity ideale</h3>
       <div class="chart-summary"><span class="icon">📍</span><span>Velocity = <b>punti%/h</b>. Sotto la viola = sottoutilizzo, sopra = rischio sforamento. Pallini gialli = tick con flag <code>velocity_decreasing</code> (bridge ha rilevato un calo).</span></div>
-      <div class="legend-pills">
-        <span><i class="dot" style="background:#6fcf97"></i>velocity_smooth (reale, EMA)</span>
-        <span><i class="dot" style="background:#bb6bd9"></i>velocity_ideal (target)</span>
-        <span><i class="dot" style="background:#f2c94c"></i>velocity_decreasing (flag bridge)</span>
-        <span><i class="dot" style="background:rgba(235,87,87,0.35)"></i>area sopra ideale (rischio)</span>
+      <div class="series-toggle" data-chart="chart-velocity">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#6fcf97"></span>velocity_smooth</button>
+        <button class="pill" data-series="1" data-active="true"><span class="swatch" style="background:#bb6bd9"></span>velocity_ideal</button>
+        <button class="pill" data-series="2" data-active="true"><span class="swatch" style="background:#f2c94c"></span>velocity_decreasing</button>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+          <button data-action="reset-zoom" title="Reset zoom">⤺ zoom</button>
+        </span>
       </div>
       <div class="chart-canvas tall-460"><canvas id="chart-velocity"></canvas></div>
       <div class="narrative">
@@ -245,14 +342,14 @@
     </div>
 
     <div class="grid-2">
-      <div class="chart-wrap" id="chart3" title="Curva accumulativa weekly_usage (% del budget settimanale Claude consumata).">
+      <div class="chart-wrap" id="chart3" title="Curva accumulativa weekly_usage (% del budget settimanale Kimi K2 consumata).">
         <span class="chart-info" data-tip="Budget settimanale residuo. Curva monotona crescente, una volta a 100% il piano si esaurisce. Pendenza ripida = team che spinge, piatta = checkpoint/attesa.">ℹ</span>
         <h3>3 · 📅 Weekly Usage — la curva accumulativa</h3>
-        <div class="chart-summary"><span class="icon">📍</span><span>% del <b>budget settimanale Claude</b> consumata. Linea step monotona: una volta a 100% il piano si esaurisce. Hover per il valore puntuale al tick.</span></div>
+        <div class="chart-summary"><span class="icon">📍</span><span>% del <b>budget settimanale Kimi K2</b> consumata. Linea step monotona: una volta a 100% il piano si esaurisce. Hover per il valore puntuale al tick.</span></div>
         <div class="chart-canvas tall-400"><canvas id="chart-weekly"></canvas></div>
         <div class="narrative">
           <p>Il weekly è una curva monotona crescente — non si torna indietro. La long session ha consumato circa <strong id="nb-weekly-delta">N</strong> punti percentuali del budget settimanale in <strong id="nb-weekly-hours">N</strong> ore di lavoro reale.</p>
-          <p>La pendenza è il segnale: tratti ripidi = team che spinge, tratti piatti = team in attesa o in checkpoint. Le inflessioni più nette coincidono con l'inizio delle finestre Claude più produttive.</p>
+          <p>La pendenza è il segnale: tratti ripidi = team che spinge, tratti piatti = team in attesa o in checkpoint. Le inflessioni più nette coincidono con l'inizio delle finestre Kimi K2 più produttive.</p>
           <p>Se questo rate proseguisse linearmente, il weekly si esaurirebbe in <strong id="nb-weekly-eta">N</strong> ore di lavoro residue. Buon margine, ma non infinito — è il numero che dà senso al pacing.</p>
         </div>
       </div>
@@ -264,20 +361,26 @@
         <div class="chart-canvas tall-400"><canvas id="chart-status"></canvas></div>
         <div class="narrative">
           <p>Un team sano alterna SOTTOUTILIZZO (siamo in pista, possiamo accelerare) e ATTENZIONE (stiamo tirando, il bridge sorveglia). STEADY è la zona ideale — vorremmo che fosse più grande nelle prossime sessioni.</p>
-          <p>RESET sono i confini fra finestre Claude: pochi tick, ma fondamentali perché segnano la transizione. La loro presenza in numero coerente con le finestre conferma che la sentinella non ha avuto buchi di copertura.</p>
+          <p>RESET sono i confini fra finestre Kimi K2: pochi tick, ma fondamentali perché segnano la transizione. La loro presenza in numero coerente con le finestre conferma che la sentinella non ha avuto buchi di copertura.</p>
           <p>Il fatto che ATTENZIONE e SOTTOUTILIZZO siano <strong>quasi pari</strong> dice che il termostato sta in equilibrio: tira via gas quando serve e lo restituisce subito dopo. È il regime "in banda".</p>
         </div>
       </div>
     </div>
 
-    <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle finestre Claude attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
-      <span class="chart-info" data-tip="Visione one-look di tutte le finestre Claude della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio, bordo rosso = peggior finestra). Linea verde = tempo coperto in min (asse a destra).">ℹ</span>
-      <h3>5 · 🪟 Riepilogo per finestra Claude</h3>
+    <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle finestre Kimi K2 attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
+      <span class="chart-info" data-tip="Visione one-look di tutte le finestre Kimi K2 della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio, bordo rosso = peggior finestra). Linea verde = tempo coperto in min (asse a destra).">ℹ</span>
+      <h3>5 · 🪟 Riepilogo per finestra Kimi K2</h3>
       <div class="chart-summary"><span class="icon">📍</span><span>Bar+line dual-axis. <b>Blu</b>: picco usage% per finestra. <b>Gialla</b>: picco projection% (bordo rosso = peggiore). <b>Verde</b>: durata visibile in min (asse destro). Hover sulla barra per stat completa della finestra.</span></div>
-      <div class="legend-pills">
-        <span><i class="dot" style="background:#56ccf2"></i>picco usage %</span>
-        <span><i class="dot" style="background:#f2c94c"></i>picco projection %</span>
-        <span><i class="dot" style="background:#9bd9c5"></i>durata visibile (min)</span>
+      <div class="series-toggle" data-chart="chart-windows">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>picco usage</button>
+        <button class="pill" data-series="1" data-active="true"><span class="swatch" style="background:#f2c94c"></span>picco projection</button>
+        <button class="pill" data-series="2" data-active="true"><span class="swatch" style="background:#9bd9c5"></span>durata (min)</button>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+        </span>
       </div>
       <div class="chart-canvas tall-480"><canvas id="chart-windows"></canvas></div>
       <table class="windows" id="windows-table">
@@ -307,15 +410,41 @@
       <span class="chart-info" data-tip="Quanto il pacing-bridge sta correggendo la proiezione naive. Verde (>0) = naive esagerava, smoother calma. Rosso (<0) = naive era ottimista, smoother frena. Vicino a zero = nessuna correzione necessaria.">ℹ</span>
       <h3>6 · 🪄 Effetto smoothing del bridge — projection_naive vs projection</h3>
       <div class="chart-summary"><span class="icon">📍</span><span>Delta <code>projection_naive − projection</code> in punti percentuali. <b>Verde</b> (>0) = smoother riduce allarme. <b>Rosso</b> (&lt;0) = smoother aggiunge cautela. Hover per i valori raw naive vs smooth al tick.</span></div>
-      <div class="legend-pills">
-        <span><i class="dot" style="background:#6fcf97"></i>delta &gt; 0 (smoother riduce allarme)</span>
-        <span><i class="dot" style="background:#eb5757"></i>delta &lt; 0 (smoother aumenta cautela)</span>
+      <div class="series-toggle" data-chart="chart-smoothing">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#6fcf97"></span>naive − smooth (verde &gt;0, rosso &lt;0)</button>
+        <span class="quick">
+          <button data-action="reset-zoom" title="Reset zoom">⤺ zoom</button>
+        </span>
       </div>
       <div class="chart-canvas tall-440"><canvas id="chart-smoothing"></canvas></div>
       <div class="narrative">
         <p>Quando la curva è verde (delta positivo) il bridge sta dicendo "calma, la naive sta esagerando" e tiene il team in pista. Quando è rossa (delta negativo) il bridge sta aggiungendo cautela: la velocity istantanea sembra ok ma il pattern recente suggerisce di frenare comunque.</p>
         <p>Una correzione media bassa (vicino a zero) significa che la naive è già una buona proiezione e il bridge non sta forzando. Le escursioni più ampie corrispondono ai burst (smoother salva da false alarm) e ai momenti di accumulo silenzioso (smoother anticipa il problema).</p>
         <p>È la metrica che giustifica l'esistenza del pacing-bridge: senza la correzione, il termostato accenderebbe e spegnerebbe il throttle a ogni tick di velocity, generando un gait innaturale per gli agenti. Con la correzione, il throttle resta acceso quanto serve e si spegne solo quando il segnale si stabilizza.</p>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="chart7" title="Volume di output (chat) per agente: numero messaggi, caratteri totali, breakdown per type. Proxy token = chars / 4.">
+      <span class="chart-info" data-tip="Chi ha parlato di più nel team? Bar dual-axis: count messaggi (sx) + token approssimati char/4 (dx). Sopra il chart un breakdown per type (REQ/MSG/REPORT/ACK/RES…).">ℹ</span>
+      <h3>7 · 🗨 Volume output per agente — chat history</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span>Aggregazione dei <b>1035 messaggi</b> della session chat parsati da <code>data/chat/</code> (schema <code>[@from -&gt; @to] [TYPE] body</code>). Bar blu = numero messaggi inviati. Bar viola = token approssimati (<code>chars/4</code>). Hover per breakdown completo.</span></div>
+      <div class="series-toggle" data-chart="chart-agent-volume">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>messaggi inviati</button>
+        <button class="pill" data-series="1" data-active="true"><span class="swatch" style="background:#bb6bd9"></span>token (chars/4)</button>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+        </span>
+      </div>
+      <div class="chart-canvas tall-440"><canvas id="chart-agent-volume"></canvas></div>
+      <div class="data-quality" id="chat-quality">caricamento dati chat…</div>
+      <div class="narrative">
+        <p>Il chart mostra chi ha "parlato" di più nel team durante la sessione. <strong>Scrittore-1</strong> domina il volume — il ruolo di scrittura CV+CL produce molti messaggi REQ/REPORT al critico e al capitano. <strong>Capitano</strong> è il secondo, com'è atteso: orchestra il team con MSG diretti e ACK. Gli agenti più silenziosi (sentinella, redattori) appaiono come barre piccole o assenti.</p>
+        <p>I token sono una stima grossolana — <code>chars/4</code> è la conversione standard usata dai provider per stimare il costo. La differenza fra "messaggi inviati" e "token" è informativa: un agente con pochi messaggi ma molti token (es. <strong>analista</strong>) produce risposte lunghe e dense; uno con molti messaggi corti (es. <strong>capitano</strong> coi suoi ACK) ha alto count ma pochi token.</p>
+        <p>Cross-page con <a href="agents.html">agents.html</a> (dev3): qui il volume aggregato per agente, lì la dinamica nel tempo per ciascuno. Insieme rispondono a "chi ha sgomitato di più" e "quando ha sgomitato".</p>
       </div>
     </div>
   </section>
@@ -330,15 +459,18 @@
   <a href="#chart4" data-toc>📊 4 · Status</a>
   <a href="#chart5" data-toc>🪟 5 · Per finestra</a>
   <a href="#chart6" data-toc>🪄 6 · Smoothing</a>
+  <a href="#chart7" data-toc>🗨 7 · Volume agenti</a>
 </aside>
 </main>
 
 <footer>
-  Generato da <code>usage.html</code> · dati da <code>data/sentinel-data.jsonl.txt</code> · range filtrato 2026-05-03 18:00 UTC → 2026-05-04 12:00 UTC.
+  Generato da <code>usage.html</code> · dati da <code>data/sentinel-data.jsonl.txt</code> + <code>data/chat/*.jsonl.txt</code> · provider <strong>Kimi K2</strong> · range UTC 2026-05-03 18:00 → 2026-05-04 12:00. <span id="cleaning-stats"></span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="assets/data-loader.js"></script>
 <script>
 (async function () {
@@ -363,9 +495,107 @@
   Chart.defaults.plugins.tooltip.caretSize = 6;
   Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
   Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
+  // Plugin zoom: con UMD si auto-registra. Aggiungo guard per essere safe se
+  // il CDN non risponde (graceful degradation: niente zoom ma il resto OK).
+  const HAS_ZOOM = typeof window !== "undefined"
+    && (window.ChartZoom || (Chart.registry && Chart.registry.plugins.get("zoom")));
 
+  // Helper: opzioni zoom XY + pan XY (richiesta master). wheel + pinch zoom,
+  // pan via drag click (pulsante sinistro). Mode "xy" su tutti i chart eccetto
+  // doughnut (chart 4) che non supporta zoom utile.
+  function zoomOpts() {
+    return {
+      pan: { enabled: true, mode: "xy" },
+      zoom: {
+        wheel: { enabled: true },
+        pinch: { enabled: true },
+        mode: "xy",
+      },
+    };
+  }
+
+  // ============== HELPER toggle row + reset zoom ==============
+  // Mappa canvas-id → Chart instance, popolata man mano che i chart vengono creati.
+  const chartRegistry = new Map();
+  function injectZoomToolbar(canvasId, chartInstance) {
+    // Inietta toolbar 3-pack ➕/➖/⟲ in alto a destra di .chart-wrap che contiene canvasId.
+    if (!chartInstance.zoom || !chartInstance.resetZoom) return; // plugin zoom non attivo
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const wrap = canvas.closest(".chart-wrap");
+    if (!wrap || wrap.querySelector(".chart-toolbar")) return;
+    const tb = document.createElement("div");
+    tb.className = "chart-toolbar";
+    tb.innerHTML = `
+      <button data-zoom="in" title="Zoom in">➕</button>
+      <button data-zoom="out" title="Zoom out">➖</button>
+      <button data-zoom="reset" title="Reset zoom">⟲</button>
+    `;
+    wrap.appendChild(tb);
+    tb.querySelector('[data-zoom="in"]').addEventListener("click", () => chartInstance.zoom(1.2));
+    tb.querySelector('[data-zoom="out"]').addEventListener("click", () => chartInstance.zoom(0.8));
+    tb.querySelector('[data-zoom="reset"]').addEventListener("click", () => chartInstance.resetZoom());
+  }
+  function registerToggle(canvasId, chartInstance) {
+    chartRegistry.set(canvasId, chartInstance);
+    injectZoomToolbar(canvasId, chartInstance);
+    const row = document.querySelector('.series-toggle[data-chart="' + canvasId + '"]');
+    if (!row) return;
+    const pills = row.querySelectorAll("button.pill[data-series]");
+    function syncPillsFromChart() {
+      pills.forEach((p) => {
+        const idx = +p.getAttribute("data-series");
+        const visible = chartInstance.isDatasetVisible(idx);
+        p.setAttribute("data-active", visible ? "true" : "false");
+      });
+    }
+    pills.forEach((p) => {
+      p.addEventListener("click", () => {
+        const idx = +p.getAttribute("data-series");
+        const visible = chartInstance.isDatasetVisible(idx);
+        chartInstance.setDatasetVisibility(idx, !visible);
+        chartInstance.update();
+        syncPillsFromChart();
+      });
+    });
+    row.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = btn.getAttribute("data-action");
+        const total = chartInstance.data.datasets.length;
+        if (action === "all") {
+          for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, true);
+        } else if (action === "none") {
+          for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, false);
+        } else if (action === "invert") {
+          for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, !chartInstance.isDatasetVisible(i));
+        } else if (action === "reset-zoom" && chartInstance.resetZoom) {
+          chartInstance.resetZoom();
+          return;
+        }
+        chartInstance.update();
+        syncPillsFromChart();
+      });
+    });
+    syncPillsFromChart();
+  }
+
+  // ============== DATA CLEANING (sentinel) ==============
+  // Carico raw, poi filtro:
+  // 1. ts non parsabile → drop (record corrotto, raro su sentinel)
+  // 2. fuori range sessione (2026-05-03T18:00Z → 2026-05-04T12:00Z) → drop
+  // 3. usage non numerico → drop
+  // Dedup non necessario (sentinel ha ts univoci per definizione).
   const all = await ReportData.loadAll();
-  const sentinel = all.sentinel.filter(ReportData.inSession);
+  const cleanStats = { sentinelTotal: all.sentinel.length, sentinelKept: 0, sentinelBadTs: 0, sentinelOutOfRange: 0, sentinelBadUsage: 0 };
+  const sentinel = [];
+  for (const r of all.sentinel) {
+    const t = Date.parse(r.ts);
+    if (!Number.isFinite(t)) { cleanStats.sentinelBadTs++; continue; }
+    if (t < ReportData.SESSION_START || t > ReportData.SESSION_END) { cleanStats.sentinelOutOfRange++; continue; }
+    if (typeof r.usage !== "number" || !Number.isFinite(r.usage)) { cleanStats.sentinelBadUsage++; continue; }
+    sentinel.push(r);
+  }
+  cleanStats.sentinelKept = sentinel.length;
 
   // ---------- KPI ----------
   const tsValues = sentinel.map((r) => Date.parse(r.ts));
@@ -441,7 +671,7 @@
     yReal: r.projection ?? 0,
   }));
 
-  new Chart(document.getElementById("chart-usage"), {
+  const chart1Inst = new Chart(document.getElementById("chart-usage"), {
     type: "line",
     data: {
       datasets: [
@@ -474,6 +704,7 @@
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
           borderColor: "var(--border)",
@@ -613,6 +844,7 @@
       },
     ],
   });
+  registerToggle("chart-usage", chart1Inst);
 
   // ---------- Chart 2: Velocity vs Ideal ----------
   // Spezzo le serie sui confini di session_id inserendo {x, y: null}: così Chart.js
@@ -640,7 +872,7 @@
     prevSession = r.session_id || prevSession;
   }
 
-  new Chart(document.getElementById("chart-velocity"), {
+  const chart2Inst = new Chart(document.getElementById("chart-velocity"), {
     type: "line",
     data: {
       datasets: [
@@ -685,6 +917,7 @@
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
           borderColor: "var(--border)",
@@ -726,13 +959,14 @@
       },
     },
   });
+  registerToggle("chart-velocity", chart2Inst);
 
   // ---------- Chart 3: Weekly cumulative ----------
   const weeklyPts = sentinel
     .filter((r) => r.weekly_usage != null)
     .map((r) => ({ x: Date.parse(r.ts), y: r.weekly_usage }));
 
-  new Chart(document.getElementById("chart-weekly"), {
+  const chart3Inst = new Chart(document.getElementById("chart-weekly"), {
     type: "line",
     data: {
       datasets: [
@@ -754,6 +988,7 @@
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
           borderColor: "#232836",
@@ -775,6 +1010,7 @@
       },
     },
   });
+  registerToggle("chart-weekly", chart3Inst); // niente series-row, solo toolbar zoom
 
   // ---------- Chart 4: Status doughnut ----------
   const statusCounts = sentinel.reduce((acc, r) => {
@@ -834,7 +1070,7 @@
                 STEADY: "zona ideale, pacing in regime",
                 OVER: "sforamento — finestra in pericolo",
                 "G-SPOT": "punto dolce, sfruttamento ottimale",
-                RESET: "confine fra finestre Claude",
+                RESET: "confine fra finestre Kimi K2",
               }[ctx.label] || "";
               return [`${ctx.parsed} tick · ${pct}% del tempo`, meaning ? `(${meaning})` : ""];
             },
@@ -864,7 +1100,7 @@
     ],
   });
 
-  // ---------- Chart 5: Riepilogo per finestra Claude ----------
+  // ---------- Chart 5: Riepilogo per finestra Kimi K2 ----------
   // Aggrego per session_id: peak usage, peak projection, durata visibile in minuti.
   const windowMap = new Map();
   for (const r of sentinel) {
@@ -901,7 +1137,7 @@
   const winPeakPBorderColor = winPeakP.map((_, i) => i === worstIdx ? "#eb5757" : "transparent");
   const winPeakPBorderWidth = winPeakP.map((_, i) => i === worstIdx ? 2 : 0);
 
-  new Chart(document.getElementById("chart-windows"), {
+  const chart5Inst = new Chart(document.getElementById("chart-windows"), {
     type: "bar",
     data: {
       labels: winLabels,
@@ -942,6 +1178,7 @@
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
           borderColor: "var(--border)",
@@ -998,6 +1235,7 @@
       },
     },
   });
+  registerToggle("chart-windows", chart5Inst);
 
   // ---------- Tabella dettagli per finestra ----------
   const tbody = document.querySelector("#windows-table tbody");
@@ -1052,7 +1290,7 @@
   // Quante finestre con projection >120%?
   const windowsHot = windows.filter((w) => w.peakProj >= 120).length;
   const windowsOk = windows.length - windowsHot;
-  ins.push(`Su <strong>${windows.length}</strong> finestre Claude attraversate, <strong>${windowsHot}</strong> hanno toccato proiezioni &gt;120% (vere zone di rischio) e <strong>${windowsOk}</strong> sono rimaste sotto controllo.`);
+  ins.push(`Su <strong>${windows.length}</strong> finestre Kimi K2 attraversate, <strong>${windowsHot}</strong> hanno toccato proiezioni &gt;120% (vere zone di rischio) e <strong>${windowsOk}</strong> sono rimaste sotto controllo.`);
   // Finestra più "tirata" = max peakProj
   const hottest = windows.reduce((m, w) => (w.peakProj > (m?.peakProj ?? 0) ? w : m), null);
   if (hottest) {
@@ -1108,7 +1346,7 @@
     prevSession2 = r.session_id || prevSession2;
   }
 
-  new Chart(document.getElementById("chart-smoothing"), {
+  const chart6Inst = new Chart(document.getElementById("chart-smoothing"), {
     type: "line",
     data: {
       datasets: [
@@ -1147,6 +1385,7 @@
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
           borderColor: "var(--border)",
@@ -1198,6 +1437,165 @@
       },
     ],
   });
+  registerToggle("chart-smoothing", chart6Inst);
+
+  // ============== CHART 7: Volume output per agente (chat data) ==============
+  // Cleaning chat: schema {content: '[@from -> @to] [TYPE] body'}.
+  //   - skip empty content (0 osservati ma defensive)
+  //   - skip record senza prefisso valido (non riconducibili a un agente)
+  //   - dedup su md5 del content (i 6 file overlappano, ed84/705d sono i più
+  //     popolati e contengono spesso lo stesso messaggio in due history).
+  const RE_CHAT = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]\s*(?:\[([\w-]+)\])?\s*(.*)/s;
+  function md5short(s) {
+    // Simple hash: somma char code mod 1e15 — sufficiente per dedup chat content
+    // dentro la stessa sessione (collision improbabile su ~1k record).
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return h.toString(36);
+  }
+  let chatRaw = [];
+  try {
+    chatRaw = await ReportData.loadChat();
+  } catch (e) {
+    chatRaw = [];
+  }
+  const chatStats = { chatTotal: chatRaw.length, chatKept: 0, chatEmpty: 0, chatNoPrefix: 0, chatDup: 0 };
+  const chatSeen = new Set();
+  const chatByAgent = new Map(); // agente → { count, chars, types: Map, partners: Map }
+  for (const r of chatRaw) {
+    const content = (r && typeof r.content === "string") ? r.content.trim() : "";
+    if (!content) { chatStats.chatEmpty++; continue; }
+    const m = RE_CHAT.exec(content);
+    if (!m) { chatStats.chatNoPrefix++; continue; }
+    const h = md5short(content);
+    if (chatSeen.has(h)) { chatStats.chatDup++; continue; }
+    chatSeen.add(h);
+    const from = m[1].toLowerCase();
+    const to = m[2].toLowerCase();
+    const type = (m[3] || "NONE").toUpperCase();
+    const body = m[4] || "";
+    let a = chatByAgent.get(from);
+    if (!a) {
+      a = { count: 0, chars: 0, types: new Map(), partners: new Map() };
+      chatByAgent.set(from, a);
+    }
+    a.count += 1;
+    a.chars += body.length;
+    a.types.set(type, (a.types.get(type) || 0) + 1);
+    a.partners.set(to, (a.partners.get(to) || 0) + 1);
+    chatStats.chatKept += 1;
+  }
+  // Aggrega "scrittore-1, scrittore-2, scrittore-3" su un'unica famiglia "scrittore"
+  // per leggibilità. Tengo separato solo se il prefisso non è agent-base.
+  function agentFamily(name) {
+    return String(name).split("-")[0];
+  }
+  const famAggregate = new Map();
+  for (const [name, stats] of chatByAgent) {
+    const fam = agentFamily(name);
+    let f = famAggregate.get(fam);
+    if (!f) {
+      f = { fam, members: new Set(), count: 0, chars: 0, types: new Map() };
+      famAggregate.set(fam, f);
+    }
+    f.members.add(name);
+    f.count += stats.count;
+    f.chars += stats.chars;
+    for (const [t, c] of stats.types) f.types.set(t, (f.types.get(t) || 0) + c);
+  }
+  const agents = Array.from(famAggregate.values()).sort((a, b) => b.count - a.count);
+  const aLabels = agents.map((a) => {
+    const emoji = ReportData.agentEmoji(a.fam);
+    return `${emoji} ${a.fam}` + (a.members.size > 1 ? ` (×${a.members.size})` : "");
+  });
+  const aCounts = agents.map((a) => a.count);
+  const aTokens = agents.map((a) => Math.round(a.chars / 4));
+  const aColors = agents.map((a) => ReportData.agentColor(a.fam));
+
+  // Aggiorno data-quality strip e footer
+  const totalSkipped = chatStats.chatEmpty + chatStats.chatNoPrefix + chatStats.chatDup;
+  document.getElementById("chat-quality").innerHTML =
+    `<strong>Cleaning chat</strong>: ${chatStats.chatTotal} righe → <code>${chatStats.chatKept}</code> tenute · ` +
+    `scartate <code>${totalSkipped}</code> (empty: ${chatStats.chatEmpty}, no-prefix: ${chatStats.chatNoPrefix}, dup-hash: ${chatStats.chatDup}).`;
+  document.getElementById("cleaning-stats").innerHTML =
+    `Sentinel: ${cleanStats.sentinelTotal} → ${cleanStats.sentinelKept} tenuti (` +
+    `out-of-range: ${cleanStats.sentinelOutOfRange}, bad-ts: ${cleanStats.sentinelBadTs}, bad-usage: ${cleanStats.sentinelBadUsage}).`;
+
+  const chart7Inst = new Chart(document.getElementById("chart-agent-volume"), {
+    type: "bar",
+    data: {
+      labels: aLabels,
+      datasets: [
+        {
+          label: "messaggi inviati",
+          data: aCounts,
+          backgroundColor: aColors,
+          borderColor: "#0d0f14",
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: "y",
+        },
+        {
+          label: "token (chars/4)",
+          data: aTokens,
+          backgroundColor: aColors.map((c) => c + "80"),
+          borderColor: aColors,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          yAxisID: "yTok",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => `${aLabels[items[0].dataIndex]}`,
+            label: (ctx) => {
+              if (ctx.dataset.label === "messaggi inviati") {
+                return `🔵 messaggi inviati: ${ctx.parsed.y}`;
+              }
+              return `🟣 token (~chars/4): ${ctx.parsed.y.toLocaleString("it-IT")}`;
+            },
+            afterBody: (items) => {
+              const a = agents[items[0].dataIndex];
+              const types = Array.from(a.types.entries())
+                .sort((x, y) => y[1] - x[1])
+                .slice(0, 5)
+                .map(([t, c]) => `${t}=${c}`)
+                .join(" · ");
+              return ["", `chars totali: ${a.chars.toLocaleString("it-IT")}`,
+                       `tipi msg (top 5): ${types}`,
+                       `membri: ${Array.from(a.members).sort().join(", ")}`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { color: "rgba(255,255,255,0.04)" } },
+        y: {
+          beginAtZero: true,
+          position: "left",
+          ticks: { color: "#56ccf2" },
+          title: { display: true, text: "messaggi", color: "#56ccf2" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+        yTok: {
+          beginAtZero: true,
+          position: "right",
+          ticks: { color: "#bb6bd9", callback: (v) => v.toLocaleString("it-IT") },
+          title: { display: true, text: "token (~chars/4)", color: "#bb6bd9" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+  registerToggle("chart-agent-volume", chart7Inst);
 
   // ---------- Scroll-spy TOC ----------
   // IntersectionObserver evidenzia la voce TOC corrispondente alla sezione

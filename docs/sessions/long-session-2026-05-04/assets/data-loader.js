@@ -29,6 +29,24 @@
     return { sentinel, throttle, messages };
   }
 
+  // Carica i 6 file chat in data/chat/ — user-history kimi per agente.
+  // Schema: {content: '[@from -> @to] [TYPE] body'}. Niente timestamp nel
+  // record (il file in sé è ordinato cronologicamente).
+  const CHAT_FILES = [
+    "21768540336d770a63202e62a69ff597",
+    "3936717a8b038a2a6744da2d7b6a22b3",
+    "404b813f0e1dd211abe1b60cf9f59dc4",
+    "5559e893db692744042bcac086a97df8",
+    "705d7742d1d9dfc3708adc78207c7907",
+    "ed84b19113f9ed310f2a23c1674e144a",
+  ];
+  async function loadChat() {
+    const chunks = await Promise.all(
+      CHAT_FILES.map((id) => fetchJsonl(`data/chat/${id}.jsonl.txt`))
+    );
+    return chunks.flat();
+  }
+
   // Filtro alla finestra "long session 2026-05-03 sera → 2026-05-04 mattino".
   // Tagliamo dal 2026-05-03T18:00:00Z (~ ieri sera) al 2026-05-04T12:00:00Z.
   // I dev possono raffinare gli estremi guardando i dati.
@@ -80,6 +98,7 @@
   g.ReportData = {
     fetchJsonl,
     loadAll,
+    loadChat,
     inSession,
     SESSION_START,
     SESSION_END,
