@@ -5,6 +5,33 @@
 <title>Long Session 2026-05-04 — Report</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  .section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+    margin-top: 8px;
+  }
+  .section-card {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    text-decoration: none;
+    color: var(--fg);
+    transition: transform 120ms, border-color 120ms, background 120ms;
+  }
+  .section-card:hover {
+    transform: translateY(-2px);
+    border-color: #3a5077;
+    background: #1a2030;
+  }
+  .section-card .icon { font-size: 32px; line-height: 1; margin-bottom: 10px; }
+  .section-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+  .section-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .section-card .arrow { color: var(--accent); font-size: 12px; margin-top: 12px; display: inline-block; }
+</style>
 </head>
 <body>
 <header class="hero">
@@ -30,9 +57,36 @@
       più finestre Claude consecutive. L'analisi copre usage, throttling,
       consumo token, attività per agente, pause, timeline eventi.
     </p>
-    <p class="note">
-      ⚠️ Sezioni in costruzione — vedi <code>README.md</code> per stato e ruoli.
-    </p>
+  </section>
+
+  <section>
+    <h2>Naviga il report</h2>
+    <div class="section-grid">
+      <a class="section-card" href="usage.html">
+        <div class="icon">📈</div>
+        <h3>Usage &amp; Token Consumption</h3>
+        <p>Linea usage% e projection nel tempo, velocity reale vs ideale, weekly cumulativo, distribuzione status, riepilogo per finestra Claude.</p>
+        <span class="arrow">apri →</span>
+      </a>
+      <a class="section-card" href="throttle.html">
+        <div class="icon">⏸</div>
+        <h3>Throttling Analysis</h3>
+        <p>Lane chart pause per agente, durata cumulata stacked, distribuzione per categoria, istogramma durate, ondate orarie, top reason.</p>
+        <span class="arrow">apri →</span>
+      </a>
+      <a class="section-card" href="agents.html">
+        <div class="icon">👥</div>
+        <h3>Per agente</h3>
+        <p>Un grafico per ciascun agente che ha lavorato (capitano, scout, scrittore, scorer, critico, analista, assistente, sentinella, maestro).</p>
+        <span class="arrow">apri →</span>
+      </a>
+      <a class="section-card" href="timeline.html">
+        <div class="icon">📅</div>
+        <h3>Timeline + narrativa</h3>
+        <p>Cronologia eventi chiave (kickoff, throttle, transizioni di finestra, ordini Capitano) con commenti narrativi inline.</p>
+        <span class="arrow">apri →</span>
+      </a>
+    </div>
   </section>
 
   <section>
