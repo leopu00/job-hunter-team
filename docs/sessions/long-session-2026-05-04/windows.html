@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>🪟 Finestre top — Long Session 2026-05-04</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="assets/styles.css">
+<style>
+  /* Pattern coerente con throttle.html / database.html */
+  .chart-wrap { position: relative; overflow: visible !important; }
+  .chart-wrap .canvas-host {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    min-height: 380px;
+    overflow: visible !important;
+  }
+  .chart-wrap.tall .canvas-host { height: 480px; min-height: 480px; }
+  .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+  .narrative h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
+  .narrative p { margin: 0 0 8px; }
+  .narrative p:last-child { margin-bottom: 0; }
+
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; margin-bottom: 4px;
+  }
+  .chart-header h3 { margin: 0; flex: 1; }
+  .chart-toolbar {
+    display: inline-flex; gap: 4px; flex-shrink: 0;
+  }
+  .chart-toolbar button {
+    background: var(--card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 9px; font-size: 13px; line-height: 1; cursor: pointer; min-width: 32px;
+  }
+  .chart-toolbar button:hover { background: #1f2532; }
+
+  /* Indice sticky per saltare fra le 2 sezioni gemelle */
+  .windows-toc {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(13, 15, 20, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 48px;
+    display: flex; gap: 16px;
+    font-size: 13px;
+  }
+  .windows-toc a {
+    color: var(--muted); text-decoration: none;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .windows-toc a:hover { background: var(--card); color: var(--fg); }
+  .windows-toc strong { color: var(--fg); }
+
+  /* Banner identificativo della finestra */
+  .window-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    background: linear-gradient(135deg, #1a2638 0%, #161a23 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 16px 22px;
+    margin-bottom: 18px;
+  }
+  .window-banner.peak94 { border-left-color: #f2c94c; }
+  .window-banner.peak96 { border-left-color: #6fcf97; }
+  .window-banner h2 { margin: 0 0 2px; font-size: 22px; }
+  .window-banner .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .window-banner code {
+    background: #11151e; padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; color: var(--fg);
+  }
+  .window-banner .peak-pill {
+    text-align: right;
+    background: #11151e;
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .window-banner .peak-pill .peak-val {
+    font-size: 32px; font-weight: 700; line-height: 1;
+    color: #f2c94c;
+  }
+  .window-banner.peak96 .peak-pill .peak-val { color: #6fcf97; }
+  .window-banner .peak-pill .peak-lbl {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+
+  /* Lista messaggi Capitano: compact card per ognuno */
+  .cap-messages {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 460px; overflow-y: auto;
+    padding: 6px 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #11151e;
+  }
+  .cap-msg {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #1a1f2c;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .cap-msg:last-child { border-bottom: 0; }
+  .cap-msg .ts {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .cap-msg .body { color: #d6dde9; }
+  .cap-msg .body code {
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .cap-msg.bridge { border-left: 2px solid #56ccf2; padding-left: 10px; }
+  .cap-msg.dispatch { border-left: 2px solid #f2c94c; padding-left: 10px; }
+  .cap-msg.response { border-left: 2px solid #6fcf97; padding-left: 10px; }
+
+  .pill-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    font-size: 12px; color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .pill-row .pill {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 3px 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill-row .pill strong { color: var(--fg); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>🪟 Le due finestre top — 94% & 96%</h1>
+  <p class="subtitle">
+    Due finestre Kimi K2 back-to-back, picco a 10 minuti l'una dall'altra.
+    La 94% è la <em>tensione</em> (il termostato spinto al massimo), la 96%
+    è la <em>finestra perfetta</em> (durata piena, mission-log compatto).
+  </p>
+  <nav class="tabs">
+    <a href="index.html">🏠 Home</a>
+    <a href="usage.html">📈 Usage</a>
+    <a href="throttle.html">⏸ Throttling</a>
+    <a href="agents.html">👥 Per agente</a>
+    <a href="timeline.html">📅 Timeline</a>
+    <a href="tokens.html">🔢 Tokens</a>
+    <a href="database.html">📊 Database</a>
+    <a href="windows.html">🪟 Finestre</a>
+    <a href="crashes.html">💥 Crash</a>
+  </nav>
+</header>
+
+<div class="windows-toc">
+  <strong>Salta a:</strong>
+  <a href="#win-94">🟡 Finestra 94% (tensione)</a>
+  <a href="#win-96">🟢 Finestra 96% (perfetta)</a>
+</div>
+
+<main>
+  <!-- ============================== SEZIONE 94% ============================== -->
+  <section id="win-94">
+    <div class="window-banner peak94">
+      <div>
+        <h2>🟡 Finestra 94% — la tensione del termostato</h2>
+        <div class="subtitle">
+          <code>session_id=20260503T230751Z</code> ·
+          inizio <strong>23:07:51 UTC</strong> ·
+          picco <strong>94%</strong> alle <strong>00:08:58 UTC</strong> ·
+          durata ~1h
+        </div>
+      </div>
+      <div class="peak-pill">
+        <div class="peak-val">94%</div>
+        <div class="peak-lbl">peak usage</div>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpi-94"></div>
+
+    <div class="narrative" style="margin-top: 18px;">
+      <h4>Perché questa finestra è "la tensione"</h4>
+      <p>
+        Questa finestra inizia con un <strong>bridge failure</strong> appena
+        risolto (lo si vede nel primo messaggio della sentinella alle 23:07,
+        "sorgente usage tornata responsiva"). In pochi tick l'usage sale
+        rapidamente perché il team è già caldo dalla finestra precedente: tre
+        scrittori chiudono i loro 3 round col critico, lo scorer macina
+        in coda, l'analista lavora in parallelo. Il termostato non chiude
+        anticipatamente la finestra ma <em>tiene</em>: rallenta gli agenti
+        senza bloccarli.
+      </p>
+      <p>
+        Il picco arriva alla fine della finestra, esattamente alle
+        <strong>00:08:58 UTC</strong> con <strong>usage=94% e
+        projection=94.86%</strong>: il termostato ha calcolato che la
+        finestra finirà esattamente entro budget. Status sentinella
+        <code>STEADY</code> — non OVER, non SOTTOUTILIZZO. È il sintomo del
+        pacing-bridge che lavora bene: spinge fino al limite ma non oltre.
+      </p>
+      <p>
+        I throttle in questa finestra sono <em>pacing</em>, non standby: il
+        termostato non sta aspettando lavoro, sta tagliando consumo quando
+        rileva che la proiezione si avvicina al 100%. La distribuzione
+        per-agente lo conferma: chi è più attivo (scorer-1) riceve più pause,
+        non perché ha la coda vuota ma perché il termostato lo trattiene per
+        far stare il totale entro il budget.
+      </p>
+    </div>
+
+    <div class="chart-wrap" title="Curva usage% nella finestra 94%, dal primo tick sentinella all'ultimo. Ogni punto è un sample del termostato (~3 min). Il punto rosso annotato è il peak.">
+      <h3>📈 Curva usage % — escalation al peak</h3>
+      <p class="caption">
+        Asse Y = percentuale di consumo della finestra. La linea sale in
+        modo coerente fino al peak (94%): nessun gradino brusco, nessun
+        crollo intermedio. Il termostato sta gestendo l'escalation in modo
+        graduale.
+      </p>
+      <div class="canvas-host"><canvas id="usage94"></canvas></div>
+    </div>
+
+    <div class="chart-wrap" title="Throttle reali per agente nella finestra 94%: # pause iniziate da ogni agente, codificate per categoria di motivazione. Indica chi ha pagato il prezzo della tensione.">
+      <h3>⏸ Throttle per agente — chi ha pagato il pacing</h3>
+      <p class="caption">
+        Bar stacked: # pause reali per agente, suddivise per categoria di
+        motivazione (PACING / WAIT_CRITIC / STANDBY / FREEZE / ALTRO).
+        Più la barra è alta, più quell'agente è stato trattenuto dal
+        termostato durante la finestra.
+      </p>
+      <div class="canvas-host"><canvas id="throttle94"></canvas></div>
+    </div>
+
+    <div class="chart-wrap" style="padding: 14px 20px;" title="Tutti i messaggi inviati o ricevuti dal Capitano nella finestra 94%, in ordine cronologico. Mostra i comandi di gestione del team durante la tensione.">
+      <h3>💬 Mission log — Capitano nella finestra 94%</h3>
+      <p class="caption">
+        I messaggi del Capitano (ordini, pacing, ricezione round) raccontano
+        come la finestra è stata <em>guidata</em>: meno parole, più diretti,
+        cadenza serrata sul pacing-bridge.
+      </p>
+      <div class="pill-row" id="cap-pills-94"></div>
+      <div class="cap-messages" id="cap-msgs-94"></div>
+    </div>
+
+    <div class="narrative">
+      <h4>La firma del termostato che funziona</h4>
+      <p>
+        Una finestra "tesa" non è un fallimento: è il risultato sano del
+        pacing-bridge che spinge fino al 94% senza superare il budget. La
+        firma è triplice: <strong>(1)</strong> proiezione che converge sul
+        peak senza sforare, <strong>(2)</strong> throttle distribuiti con
+        cadenza regolare (no clusters di pause lunghe), <strong>(3)</strong>
+        messaggi del Capitano coerenti con il ritmo della sentinella.
+      </p>
+      <p>
+        Il difetto di questa finestra, se proprio se ne vuole trovare uno, è
+        <em>quanto sia stata corta</em>: ~1h dal session_id. È stata in
+        realtà una finestra di transizione fra il warmup serale e la finestra
+        notturna che le succede (la 96%). I bridge failure nella prima
+        manciata di minuti erano residui del giorno prima.
+      </p>
+      <p>
+        L'insegnamento principale: il termostato non deve chiudere anticipatamente
+        quando la proiezione è alta ma sotto soglia. Questa finestra dimostra
+        che <strong>STEADY a 94%</strong> è la zona migliore — più alti si
+        rischia OVER, più bassi si lascia capacità inutilizzata.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================== SEZIONE 96% ============================== -->
+  <!-- Sezione assegnata a dev4 — append in commit successivo. -->
+  <section id="win-96">
+    <div class="window-banner peak96">
+      <div>
+        <h2>🟢 Finestra 96% — la finestra perfetta</h2>
+        <div class="subtitle">
+          <code>session_id=20260504T001858Z</code> ·
+          inizio <strong>00:18:58 UTC</strong> ·
+          picco <strong>96%</strong> alle <strong>05:06:37 UTC</strong> ·
+          durata ~5h
+        </div>
+      </div>
+      <div class="peak-pill">
+        <div class="peak-val">96%</div>
+        <div class="peak-lbl">peak usage</div>
+      </div>
+    </div>
+    <p class="note" style="padding: 14px 16px; background: var(--card); border-radius: 8px; border: 1px solid var(--border);">
+      🚧 Sezione assegnata a <strong>dev4</strong> (mission-log della finestra
+      perfetta). Append in commit successivo, dev4 farà <code>git pull
+      origin master</code> dopo il push di questa shell e aggiungerà i suoi
+      contenuti sotto questo banner senza toccare la sezione 94%.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <small>
+    Sezione Finestre — Long Session 2026-05-04 ·
+    🟡 94% di dev2 · 🟢 96% di dev4 ·
+    cross-review dev3↔dev2, dev1↔dev4.
+  </small>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="assets/data-loader.js"></script>
+<script>
+// Zoom solo via bottoni: wheel/pinch/drag tutti disabilitati come da policy
+// del team (no cattura scroll trackpad).
+const ZOOM_OPTIONS = {
+  zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false }, mode: "xy" },
+  pan: { enabled: false, mode: "xy" },
+  limits: { x: { minRange: 30_000 }, y: { minRange: 1 } },
+};
+const ZOOM_IN_FACTOR = 1.15;
+const ZOOM_OUT_FACTOR = 0.87;
+const PAN_FRACTION = 0.10;
+if (window.Chart) {
+  Chart.defaults.plugins.zoom = ZOOM_OPTIONS;
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+  Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
+  Chart.defaults.plugins.tooltip.displayColors = true;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.backgroundColor = "rgba(22, 26, 35, 0.96)";
+  Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
+  Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
+  Chart.defaults.plugins.tooltip.borderColor = "rgba(140, 148, 160, 0.4)";
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+}
+
+// Range temporali delle 2 finestre: gli end vengono dal cambio di session_id
+// nel sentinel (verificato in fase di profilazione dati).
+const WIN_94 = {
+  sid: "20260503T230751Z",
+  startMs: Date.parse("2026-05-03T23:07:51Z"),
+  endMs:   Date.parse("2026-05-04T00:18:58Z"),
+  peakMs:  Date.parse("2026-05-04T00:08:58Z"),
+};
+
+(async function () {
+  const { sentinel, throttle, messages } = await ReportData.loadAll();
+
+  // ----- Filtro records 94% -----
+  const sent94 = sentinel
+    .filter((r) => r && r.session_id === WIN_94.sid)
+    .filter((r) => {
+      const t = Date.parse(r.ts);
+      return t >= WIN_94.startMs && t <= WIN_94.endMs;
+    })
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+
+  const thr94 = throttle.filter((r) => {
+    const t = (r.ts_unix || 0) * 1000;
+    return t >= WIN_94.startMs && t <= WIN_94.endMs;
+  });
+  const real94 = thr94.filter((r) => r.event === "start" || r.event == null);
+
+  const msgs94 = messages.filter((r) => {
+    const t = Date.parse(r.ts || "");
+    return t >= WIN_94.startMs && t <= WIN_94.endMs;
+  });
+  const cap94 = msgs94.filter(
+    (r) => r.session === "CAPITANO" || (r.preview || "").includes("@capitano")
+  );
+
+  // ----- KPI banner 94% -----
+  const peak94 = sent94.reduce(
+    (best, r) => (r.usage > best.usage ? r : best),
+    sent94[0] || { usage: 0 }
+  );
+  const totalThrSec = real94.reduce((s, r) => s + (r.applied_sec || 0), 0);
+  const fmtMin = (s) => {
+    const m = Math.round(s / 60);
+    return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+  const distinctAgents = new Set(real94.map((r) => r.agent)).size;
+  const durMs = WIN_94.endMs - WIN_94.startMs;
+  const durLabel = `${Math.floor(durMs / 60000)} min`;
+  const kpis94 = [
+    { label: "⏱ Durata finestra", value: durLabel },
+    { label: "📈 Peak usage", value: `${peak94.usage}%` },
+    { label: "🎯 Projection al peak", value: `${(peak94.projection ?? 0).toFixed(1)}%` },
+    { label: "⏸ Throttle reali", value: real94.length },
+    { label: "👥 Agenti coinvolti", value: distinctAgents },
+    { label: "⏳ Tempo totale fermo", value: fmtMin(totalThrSec) },
+    { label: "💬 Messaggi Capitano", value: cap94.length },
+    { label: "🛰 Tick sentinella", value: sent94.length },
+  ];
+  const kpiGrid = document.getElementById("kpi-94");
+  for (const k of kpis94) {
+    const div = document.createElement("div");
+    div.className = "kpi-card";
+    div.innerHTML = `<div class="label">${k.label}</div><div class="value">${k.value}</div>`;
+    kpiGrid.appendChild(div);
+  }
+
+  // ----- Curva usage 94% -----
+  const usagePoints = sent94.map((r) => ({ x: Date.parse(r.ts), y: r.usage }));
+  const projPoints = sent94.map((r) => ({ x: Date.parse(r.ts), y: r.projection ?? null }));
+  // Plugin custom: disegna un cerchio rosso annotato sul peak.
+  const peakAnnotation = {
+    id: "peakAnnot94",
+    afterDatasetsDraw(chart) {
+      const xS = chart.scales.x;
+      const yS = chart.scales.y;
+      if (!xS || !yS) return;
+      const px = xS.getPixelForValue(WIN_94.peakMs);
+      const py = yS.getPixelForValue(peak94.usage);
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(px, py, 7, 0, Math.PI * 2);
+      ctx.strokeStyle = "#eb5757";
+      ctx.lineWidth = 2;
+      ctx.fillStyle = "rgba(235, 87, 87, 0.18)";
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#eb5757";
+      ctx.font = "bold 12px -apple-system, system-ui";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`peak ${peak94.usage}% · 00:08:58`, px + 12, py - 14);
+      ctx.restore();
+    },
+  };
+  new Chart(document.getElementById("usage94").getContext("2d"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "Usage %",
+          data: usagePoints,
+          borderColor: "#f2c94c",
+          backgroundColor: "rgba(242, 201, 76, 0.18)",
+          borderWidth: 2.5,
+          pointRadius: 3,
+          pointBackgroundColor: "#f2c94c",
+          fill: true,
+          tension: 0.15,
+        },
+        {
+          label: "Projection %",
+          data: projPoints,
+          borderColor: "#56ccf2",
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.15,
+        },
+      ],
+    },
+    plugins: [peakAnnotation],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          type: "linear",
+          min: WIN_94.startMs,
+          max: WIN_94.endMs,
+          ticks: {
+            color: "#8a93a4",
+            callback: (v) => new Date(v).toISOString().slice(11, 16) + "Z",
+            maxTicksLimit: 10,
+          },
+          grid: { color: "#1f2532" },
+        },
+        y: {
+          beginAtZero: false,
+          min: 0,
+          max: 100,
+          ticks: {
+            color: "#8a93a4",
+            callback: (v) => v + "%",
+          },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "% finestra", color: "#8a93a4" },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const x = items[0]?.parsed?.x;
+              return x ? new Date(x).toISOString().slice(11, 19) + "Z" : "";
+            },
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(1) + "%"}`,
+          },
+        },
+      },
+    },
+  });
+
+  // ----- Throttle per agente 94% -----
+  function classifyReason(reasonRaw) {
+    const r = String(reasonRaw || "").toLowerCase();
+    if (!r) return "ALTRO";
+    if (/(rallentare urg|throttle\s*t2|proj\s*=|diff consumo)/.test(r)) return "PACING";
+    if (/freeze/.test(r)) return "FREEZE";
+    if (/(wait critico|finalize\s+#|wait\s+for\s+critic)/.test(r)) return "WAIT_CRITIC";
+    if (/(coda vuota|polling|post-batch|standby|cooldown|batch\s*complete|batch completato|attesa|review\s+complete|review completed|round\s*\d+ review|cv review|completed|capitano t[12])/.test(r)) return "STANDBY";
+    return "ALTRO";
+  }
+  const CATEGORY_COLORS = {
+    PACING: "#eb5757",
+    WAIT_CRITIC: "#bb6bd9",
+    STANDBY: "#56ccf2",
+    FREEZE: "#f2c94c",
+    ALTRO: "#828282",
+  };
+  const categoriesOrder = ["PACING", "WAIT_CRITIC", "STANDBY", "FREEZE", "ALTRO"];
+  // Aggrega per agente x categoria
+  const agentSet = new Set(real94.map((r) => r.agent).filter(Boolean));
+  const agentsList = [...agentSet].sort((a, b) => {
+    const ca = real94.filter((r) => r.agent === a).length;
+    const cb = real94.filter((r) => r.agent === b).length;
+    return cb - ca;
+  });
+  const matrix = {};
+  for (const a of agentsList) matrix[a] = {};
+  for (const ev of real94) {
+    const c = classifyReason(ev.reason);
+    matrix[ev.agent][c] = (matrix[ev.agent][c] || 0) + 1;
+  }
+  const datasets = categoriesOrder.map((cat) => ({
+    label: cat,
+    data: agentsList.map((a) => matrix[a][cat] || 0),
+    backgroundColor: CATEGORY_COLORS[cat],
+    stack: "throttle",
+  }));
+  new Chart(document.getElementById("throttle94").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: agentsList.map((a) => `${ReportData.agentEmoji(a)} ${a}`),
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      indexAxis: "y",
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: "#8a93a4", precision: 0 },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# pause reali", color: "#8a93a4" },
+        },
+        y: {
+          stacked: true,
+          ticks: { color: "#e8ecf3" },
+          grid: { color: "#1f2532" },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            title: (items) => items[0]?.label || "",
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x} pause`,
+            footer: (items) => {
+              const tot = items.reduce((s, it) => s + (it.parsed.x || 0), 0);
+              return `Totale agente: ${tot} pause`;
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // ----- Mission log Capitano 94% -----
+  const escapeHtml = (s) =>
+    String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  const capList = document.getElementById("cap-msgs-94");
+  // Categorizza visivamente i messaggi del capitano
+  function classifyCap(preview) {
+    const p = preview || "";
+    if (/^\[BRIDGE/i.test(p)) return "bridge";
+    if (/^\[@.*->.*\]\s*\[(MSG|ORDINE|ACK|REQ)/i.test(p)) return "dispatch";
+    if (/\[(RES|INFO|RESULT)/i.test(p)) return "response";
+    return "";
+  }
+  const capCounts = { bridge: 0, dispatch: 0, response: 0, other: 0 };
+  for (const r of cap94) {
+    const c = classifyCap(r.preview);
+    capCounts[c || "other"] = (capCounts[c || "other"] || 0) + 1;
+  }
+  const pillEl = document.getElementById("cap-pills-94");
+  pillEl.innerHTML = `
+    <span class="pill"><strong>${cap94.length}</strong> totali</span>
+    <span class="pill" style="border-left: 3px solid #56ccf2;"><strong>${capCounts.bridge}</strong> bridge</span>
+    <span class="pill" style="border-left: 3px solid #f2c94c;"><strong>${capCounts.dispatch}</strong> dispatch</span>
+    <span class="pill" style="border-left: 3px solid #6fcf97;"><strong>${capCounts.response}</strong> response</span>
+  `;
+  for (const r of cap94) {
+    const cls = classifyCap(r.preview);
+    const div = document.createElement("div");
+    div.className = "cap-msg" + (cls ? " " + cls : "");
+    const ts = (r.ts || "").slice(11, 19);
+    div.innerHTML = `
+      <div class="ts">${ts}Z</div>
+      <div class="body">${escapeHtml(r.preview || "(nessun preview)")}</div>
+    `;
+    capList.appendChild(div);
+  }
+  if (!cap94.length) {
+    capList.innerHTML =
+      `<div class="cap-msg"><div class="ts">—</div><div class="body" style="color: var(--muted);">Nessun messaggio del Capitano in finestra (verifica filtro).</div></div>`;
+  }
+
+  // ----- Toolbar zoom 94% -----
+  function attachZoomToolbar(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const chart = Chart.getChart(canvas);
+    if (!chart) return;
+    const wrap = canvas.closest(".chart-wrap");
+    const h3 = wrap?.querySelector("h3");
+    let header = h3?.parentElement?.classList?.contains("chart-header") ? h3.parentElement : null;
+    if (h3 && !header) {
+      header = document.createElement("div");
+      header.className = "chart-header";
+      h3.parentNode.insertBefore(header, h3);
+      header.appendChild(h3);
+    }
+    if (wrap?.querySelector(".chart-toolbar")) return;
+    const tb = document.createElement("div");
+    tb.className = "chart-toolbar";
+    tb.innerHTML = `
+      <button type="button" title="Pan sinistra" data-act="left">⬅</button>
+      <button type="button" title="Pan giù" data-act="down">⬇</button>
+      <button type="button" title="Pan su" data-act="up">⬆</button>
+      <button type="button" title="Pan destra" data-act="right">➡</button>
+      <button type="button" title="Zoom out" data-act="out">➖</button>
+      <button type="button" title="Zoom in" data-act="in">➕</button>
+      <button type="button" title="Reset zoom" data-act="reset">⟲</button>
+    `;
+    if (header) header.appendChild(tb);
+    else {
+      tb.style.cssText = "position:absolute; top:14px; right:18px; z-index:5;";
+      wrap?.appendChild(tb);
+    }
+    tb.addEventListener("click", (e) => {
+      const a = e.target.closest("button")?.dataset.act;
+      if (!a) return;
+      const w = chart.chartArea?.width || 1;
+      const h = chart.chartArea?.height || 1;
+      try {
+        if (a === "in") chart.zoom(ZOOM_IN_FACTOR);
+        else if (a === "out") chart.zoom(ZOOM_OUT_FACTOR);
+        else if (a === "reset") chart.resetZoom();
+        else if (a === "left") chart.pan({ x: w * PAN_FRACTION });
+        else if (a === "right") chart.pan({ x: -w * PAN_FRACTION });
+        else if (a === "up") chart.pan({ y: h * PAN_FRACTION });
+        else if (a === "down") chart.pan({ y: -h * PAN_FRACTION });
+      } catch {}
+    });
+  }
+  ["usage94", "throttle94"].forEach(attachZoomToolbar);
+
+  // dev4 aggiungerà i suoi attachZoomToolbar(["usage96", "throttle96"]) in
+  // appendice quando completerà la sezione 96%.
+})().catch((err) => {
+  document.querySelector("main").insertAdjacentHTML(
+    "afterbegin",
+    `<section><p class="note">Errore caricamento dati: ${err.message}</p></section>`
+  );
+  console.error(err);
+});
+</script>
+</body>
+</html>
