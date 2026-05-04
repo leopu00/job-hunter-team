@@ -40,21 +40,25 @@
       <div class="chart-header">
         <h3>🛤️ Timeline multi-corsia</h3>
         <div class="chart-zoom-controls" id="zoom-controls" role="group" aria-label="Zoom timeline">
-          <button class="zoom-btn" data-zoom="in" title="Zoom in (X+Y)">➕</button>
-          <button class="zoom-btn" data-zoom="out" title="Zoom out (X+Y)">➖</button>
+          <button class="zoom-btn" data-zoom="in" title="Zoom in X+Y (~13%)">➕</button>
+          <button class="zoom-btn" data-zoom="out" title="Zoom out X+Y (~13%)">➖</button>
           <button class="zoom-btn" data-zoom="reset" title="Reset zoom">⟲</button>
+          <span class="zoom-divider" aria-hidden="true"></span>
+          <button class="zoom-btn" data-zoom="pan-left" title="Pan ←  (X, ~10%)">⬅</button>
+          <button class="zoom-btn" data-zoom="pan-down" title="Pan ↓ (Y, ~10%)">⬇</button>
+          <button class="zoom-btn" data-zoom="pan-up" title="Pan ↑ (Y, ~10%)">⬆</button>
+          <button class="zoom-btn" data-zoom="pan-right" title="Pan → (X, ~10%)">➡</button>
         </div>
       </div>
       <p class="caption">
         Hover su un evento per il dettaglio (timestamp completo + agente +
-        finestra Kimi K2 + chat full content quando disponibile). Zoom: usa
-        i bottoni <kbd>➕</kbd> <kbd>➖</kbd> <kbd>⟲</kbd> in alto a destra
-        (step dolce ~13% per click), oppure trascina gli slider sotto/sinistra,
-        oppure <kbd>Ctrl</kbd>+scroll dentro il riquadro per zoom controllato
-        (scroll normale = scorrimento pagina, niente zoom accidentale da
-        trackpad). Pan: <kbd>Ctrl</kbd>+drag dentro il riquadro o usa gli
-        slider. Box-zoom rettangolare via 🔍 toolbox. Click legenda o checkbox
-        per toggle, oppure "Tutti / Nessuno / Inverti".
+        finestra Kimi K2 + chat full content quando disponibile). Zoom e pan:
+        SOLO bottoni — <kbd>➕</kbd> <kbd>➖</kbd> step ~13%, <kbd>⟲</kbd>
+        reset, <kbd>⬅</kbd> <kbd>➡</kbd> pan asse X ~10%, <kbd>⬆</kbd>
+        <kbd>⬇</kbd> pan asse Y ~10%. In alternativa trascina gli slider
+        sotto (X) e a sinistra (Y). Scroll/pinch dentro al riquadro è
+        disabilitato: niente zoom accidentale da trackpad. Click legenda o
+        checkbox per toggle serie, oppure "Tutti / Nessuno / Inverti".
       </p>
       <div class="filter-toolbar" id="timeline-filter-toolbar">
         <div class="filter-group">
