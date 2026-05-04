@@ -184,7 +184,14 @@
       peak: 64,
       label: "W3 · 64%",
     },
-  ].map((w) => ({ ...w, startMs: Date.parse(w.start), endMs: Date.parse(w.end) }));
+  ].map((w) => ({
+    ...w,
+    startMs: Date.parse(w.start),
+    // +999ms: includere l'intero secondo del boundary (es. record con
+    // ts 05:06:37.885 deve cadere DENTRO la finestra che chiude a 05:06:37,
+    // altrimenti il peak 96% del sentinel viene escluso al millisecondo).
+    endMs: Date.parse(w.end) + 999,
+  }));
 
   // Estremi globali del perimetro (per axis range, non per filtro!).
   const SESSION_START = SESSION_WINDOWS[0].startMs;
