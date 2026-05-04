@@ -6,9 +6,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
 <style>
-  /* override locale: i grafici di questa pagina rendono meglio con altezze diverse */
-  .chart-wrap canvas { height: 380px !important; }
-  .chart-wrap.tall canvas { height: 520px !important; }
+  /* override locale: i grafici di questa pagina rendono meglio con altezze diverse.
+     Usiamo min-height + height con !important per battere il global styles.css
+     (height: 360px) e impedire a Chart.js di comprimere il canvas. */
+  .chart-wrap canvas {
+    min-height: 380px !important;
+    height: 380px !important;
+  }
+  .chart-wrap.tall canvas {
+    min-height: 520px !important;
+    height: 520px !important;
+  }
+  .chart-wrap.dense canvas {
+    min-height: 420px !important;
+    height: 420px !important;
+  }
   .legend-inline {
     display: flex; flex-wrap: wrap; gap: 12px 18px;
     margin: 4px 0 14px; font-size: 12px; color: var(--muted);
@@ -79,7 +91,7 @@
 
   <section>
     <h2>⏰ Timeline pause per agente</h2>
-    <div class="chart-wrap tall">
+    <div class="chart-wrap tall" title="Bubble chart: ogni bolla è una pausa di un agente. X = tempo, Y = corsia agente, dimensione = durata. Il colore distingue la categoria di motivazione.">
       <h3>🛣 Lane chart — quando ogni agente si è fermato</h3>
       <p class="caption">
         Asse X: tempo della sessione. Una "corsia" per agente; ogni bolla è
@@ -122,7 +134,7 @@
 
   <section>
     <h2>⏳ Tempo totale fermo per agente</h2>
-    <div class="chart-wrap">
+    <div class="chart-wrap" title="Bar chart orizzontale stacked: somma in minuti delle pause reali per agente, segmentata nelle 5 categorie di motivazione (PACING / WAIT_CRITIC / STANDBY / FREEZE / ALTRO).">
       <h3>📊 Durata cumulata pause per agente (stacked per categoria)</h3>
       <p class="caption">
         Somma in minuti di <code>applied_sec</code> per ogni agente, divisa
@@ -159,7 +171,7 @@
 
   <section>
     <h2>❓ Perché si sono fermati</h2>
-    <div class="chart-wrap">
+    <div class="chart-wrap" title="Bar combo dual-axis: per ogni categoria, # pause (asse sinistro, barra piena) e somma minuti totali (asse destro, barra trasparente). Permette di vedere se una categoria è frequente o dominante in tempo.">
       <h3>🧷 Distribuzione per categoria di motivazione</h3>
       <p class="caption">
         Ogni pausa reale è classificata in una categoria a partire dal campo
@@ -168,7 +180,7 @@
       </p>
       <canvas id="bycategory"></canvas>
     </div>
-    <div class="chart-wrap">
+    <div class="chart-wrap dense" title="Line chart stepped per i top-3 agenti per durata totale: minuti cumulati in pausa istante per istante. Salita ripida = pausa lunga in corso, plateau = lavoro pieno.">
       <h3>📈 Tempo cumulato fermo nel corso della sessione</h3>
       <p class="caption">
         Per i top-3 agenti per durata totale: minuti cumulati in pausa istante
@@ -198,7 +210,7 @@
         non necessariamente al più produttivo.
       </p>
     </div>
-    <div class="chart-wrap">
+    <div class="chart-wrap" title="Histogram: # pause per bucket di durata (≤30s, 30-60s, 1-2m, 2-5m, 5-10m, &gt;10m). Aiuta a distinguere micro-pause da pause strategiche.">
       <h3>⏱ Distribuzione delle durate</h3>
       <p class="caption">
         Quanto durano le pause? Bucket fissi: ≤30s, 30-60s, 1-2min, 2-5min, 5-10min, &gt;10min.
@@ -233,7 +245,7 @@
 
   <section>
     <h2>🚦 Quanti agenti fermi insieme</h2>
-    <div class="chart-wrap">
+    <div class="chart-wrap dense" title="Line chart stepped: # agenti distinti contemporaneamente fermi per ogni minuto della sessione. Picchi alti = team bloccato in massa.">
       <h3>👥 Concorrenza pause — # agenti distinti contemporaneamente fermi</h3>
       <p class="caption">
         Per ogni minuto della sessione: quanti agenti distinti erano in pausa
@@ -268,7 +280,7 @@
 
   <section>
     <h2>🕘 Quando si sono fermati</h2>
-    <div class="chart-wrap">
+    <div class="chart-wrap" title="Bar chart stacked per ora UTC: quante pause sono iniziate in quell'ora, divise per categoria. Identifica le ondate del termostato.">
       <h3>🌊 Ondate orarie — # pause per ora di sessione, stacked per categoria</h3>
       <p class="caption">
         Un bin per ora UTC: quante pause sono iniziate in quell'ora, divise per
@@ -710,7 +722,12 @@
         legend: { labels: { color: "#e8ecf3" } },
         tooltip: {
           callbacks: {
+            title: (items) => `${items[0]?.label || ""} — minuti cumulati`,
             label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x} min`,
+            footer: (items) => {
+              const tot = items.reduce((s, it) => s + (it.parsed.x || 0), 0);
+              return `Totale agente: ${tot.toFixed(1)} min`;
+            },
           },
         },
       },
@@ -768,7 +785,29 @@
           title: { display: true, text: "minuti totali", color: "#8a93a4" },
         },
       },
-      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const cat = items[0]?.label || "";
+              return `Categoria: ${cat}`;
+            },
+            label: (ctx) => {
+              const isCount = ctx.dataset.yAxisID === "y";
+              return isCount
+                ? `${ctx.parsed.y} pause`
+                : `${ctx.parsed.y} minuti totali`;
+            },
+            afterBody: (items) => {
+              const cat = items[0]?.label;
+              if (!cat || !catTotals[cat]) return "";
+              const avg = catTotals[cat].sec / 60 / catTotals[cat].count;
+              return `Pausa media in categoria: ${avg.toFixed(1)} min`;
+            },
+          },
+        },
+      },
     },
   });
 
@@ -828,7 +867,21 @@
           title: { display: true, text: "minuti fermo cumulati", color: "#8a93a4" },
         },
       },
-      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          mode: "nearest",
+          intersect: false,
+          callbacks: {
+            title: (items) => {
+              const t = items[0]?.parsed?.x;
+              return t ? new Date(t).toISOString().slice(11, 19) + "Z" : "";
+            },
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} min cumulati`,
+          },
+        },
+      },
     },
   });
 
@@ -878,7 +931,19 @@
           title: { display: true, text: "# pause reali", color: "#8a93a4" },
         },
       },
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Pause da ${items[0]?.label || ""}`,
+            label: (ctx) => {
+              const totalReal = realPauses.length || 1;
+              const pct = ((ctx.parsed.y / totalReal) * 100).toFixed(1);
+              return `${ctx.parsed.y} pause (${pct}% del totale)`;
+            },
+          },
+        },
+      },
     },
   });
   // ----- Concorrenza pause: # agenti distinti fermi insieme nel tempo -----
@@ -946,7 +1011,25 @@
           title: { display: true, text: "agenti distinti fermi", color: "#8a93a4" },
         },
       },
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: "nearest",
+          intersect: false,
+          callbacks: {
+            title: (items) => {
+              const t = items[0]?.parsed?.x;
+              return t ? new Date(t).toISOString().slice(11, 16) + "Z" : "";
+            },
+            label: (ctx) => {
+              const n = ctx.parsed.y;
+              if (n === 0) return "Nessun agente fermo (team in pieno lavoro)";
+              if (n === 1) return "1 agente fermo";
+              return `${n} agenti fermi insieme`;
+            },
+          },
+        },
+      },
     },
   });
 
@@ -998,7 +1081,22 @@
           title: { display: true, text: "# pause iniziate", color: "#8a93a4" },
         },
       },
-      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const slot = items[0]?.label || "";
+              return `Bin orario inizio: ${slot}`;
+            },
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} pause iniziate`,
+            footer: (items) => {
+              const tot = items.reduce((s, it) => s + (it.parsed.y || 0), 0);
+              return `Totale ora: ${tot} pause`;
+            },
+          },
+        },
+      },
     },
   });
 
