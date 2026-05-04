@@ -185,14 +185,19 @@
     <h2>👥 Attività per agente — Kimi K2</h2>
     <div class="narrative">
       Ogni agente del team gira su un'istanza Kimi K2 con proprio transcript
-      (<code>data/chat/&lt;hash&gt;.jsonl.txt</code>, 6 sessioni). Per ogni messaggio
-      del transcript ricostruiamo: <strong>chi parla con chi</strong>
-      (regex <code>[@from -&gt; @to] [TYPE] body</code>), <strong>lunghezza
-      del messaggio</strong> (proxy del lavoro prodotto, char/4 ≈ token),
-      <strong>tipo</strong> (MSG, ACK, REQ, RES, REPORT, INFO, …) e
-      <strong>timestamp reale</strong> via cross-reference con
-      <code>messages.jsonl</code> (match prefisso 60 char). I record senza match
-      restano nella sessione ma non finiscono nella line temporale.
+      (<code>data/chat/&lt;hash&gt;.jsonl.txt</code>, 6 sessioni). Il
+      <strong>perimetro</strong> di analisi è <strong>10h 43m</strong> attive
+      su 3 finestre Kimi K2: <strong>W1 · 94%</strong> (23:07→00:09, 1h1m),
+      <strong>W2 · 96% perfetta</strong> (00:18→05:06, 4h48m),
+      <strong>W3 · 64%</strong> (05:16→10:10, 4h54m). I record fra le
+      finestre (gap di transizione) sono esclusi automaticamente
+      (<code>RD.inWindows</code>). Per ogni messaggio del transcript
+      ricostruiamo: <strong>chi parla con chi</strong>
+      (regex <code>[@from -&gt; @to] [TYPE] body</code>), <strong>lunghezza</strong>
+      (proxy del lavoro prodotto, char/4 ≈ token), <strong>tipo</strong>
+      (MSG, ACK, REQ, RES, REPORT, INFO, …) e <strong>timestamp reale</strong>
+      via cross-reference con <code>messages.jsonl</code>. I record senza
+      match temporale restano nella sessione ma non finiscono nei bin.
     </div>
 
     <div id="cleaning-info" class="info-box">
@@ -238,12 +243,12 @@
 
     <h2>🧩 Mini-card per ruolo — type breakdown e KPI</h2>
     <div class="narrative">
-      Una card per ciascun ruolo del team. Le 6 sessioni Kimi K2 esportate
-      coprono <strong>capitano, scrittore, scorer, critico, analista,
-      sentinella</strong>. <strong>Scout, assistente, maestro</strong>
-      non hanno transcript Kimi K2 in questa export — placeholder grigi,
-      attesi nei prossimi run. Ogni card mostra il <em>type breakdown</em>
-      dei messaggi (MSG/ACK/REQ/…) come barra orizzontale stacked.
+      Una card per ogni ruolo che ha prodotto messaggi nella long-session: le
+      6 sessioni Kimi K2 esportate coprono <strong>capitano, scrittore, scorer,
+      critico, analista, sentinella</strong>. Scout, assistente e maestro non
+      hanno transcript in questa export — non li mostriamo, evitiamo card mute.
+      Ogni card mostra il <em>type breakdown</em> dei messaggi (MSG/ACK/REQ/…)
+      come barra orizzontale stacked.
     </div>
 
     <div class="agents-grid" id="agents-grid"></div>
@@ -271,17 +276,12 @@
     "705d7742d1d9dfc3708adc78207c7907",
     "ed84b19113f9ed310f2a23c1674e144a",
   ];
-  // Finestre Kimi K2 (5h ciascuna, allineate a SESSION_START 18:00Z)
-  const KIMI_WINDOWS = [
-    { id: "K1", from: startMs,                  to: startMs + 5*HOUR_MS,  label: "K1 18:00→23:00 UTC" },
-    { id: "K2", from: startMs + 5*HOUR_MS,      to: startMs + 10*HOUR_MS, label: "K2 23:00→04:00 UTC" },
-    { id: "K3", from: startMs + 10*HOUR_MS,     to: startMs + 15*HOUR_MS, label: "K3 04:00→09:00 UTC" },
-    { id: "K4", from: startMs + 15*HOUR_MS,     to: endMs,                label: "K4 09:00→12:00 UTC" },
-  ];
+  // Finestre Kimi K2 dal data-loader (PERIMETRO 3 finestre: W1 94% / W2 96% / W3 64%,
+  // 10h 43m attive). I gap fra finestre vengono esclusi automaticamente.
   function kimiOf(ts) {
     if (ts == null) return "—";
-    for (const w of KIMI_WINDOWS) if (ts >= w.from && ts < w.to) return w.label;
-    return "—";
+    const w = RD.windowOf(ts);
+    return w ? w.label : "— (fuori finestre attive)";
   }
 
   function fetchJsonl(url) {
@@ -325,7 +325,7 @@
   const previewToTs = new Map();
   for (const [p, arr] of previewBuckets) {
     arr.sort((a, b) => a - b);
-    const inWin = arr.find(t => t >= startMs && t <= endMs);
+    const inWin = arr.find(t => RD.inWindows(t));
     previewToTs.set(p, inWin != null ? inWin : arr[arr.length - 1]);
   }
 
@@ -402,7 +402,7 @@
       totalLen += r.len;
       types[r.type] = (types[r.type] || 0) + 1;
       // Bin / firstTs / lastTs solo se il ts cade nella finestra long-session.
-      if (r.ts != null && r.ts >= startMs && r.ts <= endMs) {
+      if (r.ts != null && RD.inWindows(r.ts)) {
         if (firstTs == null || r.ts < firstTs) firstTs = r.ts;
         if (lastTs == null || r.ts > lastTs) lastTs = r.ts;
         const idx = Math.floor((r.ts - startMs) / HOUR_MS);
@@ -435,8 +435,8 @@
   `;
 
   // ---------- big chart ----------
-  const activeRoles = new Set(ROLES.filter(r => aggr[r].total > 0));
-  const datasets = ROLES.map(role => {
+  // Solo serie con dati: niente line piatte a 0 nella legend.
+  const datasets = ROLES.filter(r => aggr[r].total > 0).map(role => {
     const color = RD.AGENT_COLORS[role] || "#888";
     return {
       label: `${RD.AGENT_EMOJI[role] || "🤖"} ${role}`,
@@ -449,7 +449,6 @@
       pointRadius: 0,
       pointHoverRadius: 4,
       fill: false,
-      hidden: !activeRoles.has(role),
     };
   });
 
@@ -545,18 +544,17 @@
   })();
 
   // ---------- toolbar checkboxes ----------
+  // Mostriamo solo agenti con dati: niente toggle disabili "muti".
+  const ACTIVE_ROLES = ROLES.filter(r => aggr[r].total > 0);
   const togglesEl = document.getElementById("agent-toggles");
-  for (const role of ROLES) {
-    const has = aggr[role].total > 0;
+  for (const role of ACTIVE_ROLES) {
     const color = RD.AGENT_COLORS[role] || "#888";
     const em = RD.AGENT_EMOJI[role] || "🤖";
     const lbl = document.createElement("label");
-    lbl.className = "agent-toggle" + (has ? "" : " disabled");
-    lbl.title = has
-      ? `${role}: ${aggr[role].total} messaggi · len̄ ${aggr[role].avgLen} ch · clicca per togglare`
-      : `${role}: nessun transcript Kimi K2 in questa export`;
+    lbl.className = "agent-toggle";
+    lbl.title = `${role}: ${aggr[role].total} messaggi · len̄ ${aggr[role].avgLen} ch · clicca per togglare`;
     lbl.innerHTML = `
-      <input type="checkbox" id="tg-${role}" ${has ? "checked" : ""} ${has ? "" : "disabled"}>
+      <input type="checkbox" id="tg-${role}" checked>
       <span class="swatch" style="background:${color}"></span>
       <span class="em">${em}</span>
       <span class="nm">${role}</span>
@@ -573,32 +571,32 @@
     syncCardDim();
   }
   function syncCardDim() {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
       const card = document.getElementById(`card-${role}`);
       if (!card) continue;
-      if (cb && !cb.disabled && !cb.checked) card.classList.add("dim");
+      if (cb && !cb.checked) card.classList.add("dim");
       else card.classList.remove("dim");
     }
   }
   document.getElementById("btn-all").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = true;
+      if (cb) cb.checked = true;
     }
     applyToggles();
   });
   document.getElementById("btn-none").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = false;
+      if (cb) cb.checked = false;
     }
     applyToggles();
   });
   document.getElementById("btn-invert").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = !cb.checked;
+      if (cb) cb.checked = !cb.checked;
     }
     applyToggles();
   });
@@ -614,7 +612,8 @@
   };
 
   const grid = document.getElementById("agents-grid");
-  for (const role of ROLES) {
+  // Mostriamo card solo per agenti con dati — niente placeholder muti.
+  for (const role of ACTIVE_ROLES) {
     const card = document.createElement("div");
     card.className = "agent-card";
     card.id = `card-${role}`;
@@ -627,8 +626,8 @@
       <span class="emoji">${em}</span>
       <span class="name">${role}</span>
       <span class="zoom-btns" id="zb-${role}">
-        <button type="button" data-act="in"  title="Zoom in (×1.2)">➕</button>
-        <button type="button" data-act="out" title="Zoom out (×0.8)">➖</button>
+        <button type="button" data-act="in"  title="Zoom in (×1.15)">➕</button>
+        <button type="button" data-act="out" title="Zoom out (×0.87)">➖</button>
         <button type="button" data-act="rst" title="Reset zoom">⟲</button>
       </span>
       <span class="role-color" style="background:${color}" title="${color}"></span>
