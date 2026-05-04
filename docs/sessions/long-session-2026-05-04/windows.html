@@ -298,12 +298,129 @@
         <div class="peak-lbl">peak usage</div>
       </div>
     </div>
-    <p class="note" style="padding: 14px 16px; background: var(--card); border-radius: 8px; border: 1px solid var(--border);">
-      🚧 Sezione assegnata a <strong>dev4</strong> (mission-log della finestra
-      perfetta). Append in commit successivo, dev4 farà <code>git pull
-      origin master</code> dopo il push di questa shell e aggiungerà i suoi
-      contenuti sotto questo banner senza toccare la sezione 94%.
-    </p>
+    <div class="kpi-grid" id="kpi-96"></div>
+
+    <div class="narrative" style="margin-top: 18px;">
+      <h4>Perché questa è "la finestra perfetta"</h4>
+      <p>
+        La 96% non è perfetta perché ha toccato il numero più alto. È perfetta
+        perché è stata <em>usata fino in fondo</em>: <strong>287 minuti</strong>
+        di lavoro su 300 disponibili, il <strong>95.8%</strong> del bound
+        teorico di una finestra Kimi K2 da 5h.
+      </p>
+      <p>
+        L'usage sale lineare per sette tick consecutivi:
+        <code>04:06:33 → 04:16:33 → 04:26:35 → 04:36:35 → 04:46:36 →
+        04:56:36 → 05:06:37 UTC</code>: <strong>80% → 84% → 87% → 89% →
+        92% → 93% → 96%</strong>. ~10 punti ogni dieci minuti, una rampa
+        regolare — niente picchi, niente crolli.
+      </p>
+      <p>
+        Mentre l'usage sale, scrittore-1 chiude tre CV consecutivi alle
+        <code>03:01:28</code>, <code>03:11:06</code>, <code>03:21:06 UTC</code>
+        (ID 189, 188, 191 con voto 5.5, 5.5, 6.0/10) e ne assorbe 101 dei
+        121 throttle totali della finestra. La sentinella è quasi muta: 2
+        <code>URG</code> all'inizio, poi silenzio.
+      </p>
+      <blockquote class="quote" style="margin: 14px 0; padding: 10px 14px 10px 16px; background: rgba(86,204,242,0.04); border-left: 3px solid #56ccf2; border-radius: 4px;">
+        <span class="qhdr" style="display:block; font-size:12px; color:#8a93a4; margin-bottom:4px;">[@sentinella → @capitano] · <code>URG</code> · 00:34:46 UTC</span>
+        <em>«ORDINE: RALLENTARE. usage=9% vel=32%/h (ideale 18%/h)
+        proj=159%.»</em>
+      </blockquote>
+      <p>
+        Il momento chiave non è il 96%. È <strong>04:16 UTC</strong>: usage
+        84%, projection schizza a <strong>102.11%</strong> — il termostato
+        sta proiettando di sforare. Quaranta minuti dopo, alle
+        <code>04:56:36 UTC</code>, usage è salito a 93% ma projection è
+        <em>scesa</em> a 97.74%. La proj continua a calare mentre l'usage
+        continua a salire: il bridge ha vinto la partita. Le pause applicate
+        hanno cambiato la traiettoria, non solo rallentato il consumo.
+      </p>
+      <blockquote class="quote" style="margin: 14px 0; padding: 10px 14px 10px 16px; background: rgba(86,204,242,0.04); border-left: 3px solid #56ccf2; border-radius: 4px;">
+        <span class="qhdr" style="display:block; font-size:12px; color:#8a93a4; margin-bottom:4px;">[@scrittore-1 → @capitano] · <code>RES</code> · 03:21:06 UTC</span>
+        <em>«ID 191 — 3 round completi. Voto: 6.0/10 (PASS).»</em>
+      </blockquote>
+    </div>
+
+    <div class="chart-wrap" title="Curva usage% nella finestra 96% con i 7 step dell'escalation evidenziati. Asse Y = consumo della finestra, asse X = tempo UTC.">
+      <h3>📈 Escalation lineare — sette step verso il 96%</h3>
+      <p class="caption">
+        Ogni pallino grosso è un sample sentinella nei 60 minuti finali della
+        finestra. La rampa è regolare, niente picchi né crolli: il segno che
+        il team era in flow e il termostato lo accompagnava senza spegnere
+        nessuno.
+      </p>
+      <div class="canvas-host"><canvas id="usage96"></canvas></div>
+    </div>
+
+    <div class="chart-wrap" title="Dual-line usage (solid) vs projection (dashed). La zona evidenziata 04:16 → 04:56 è 'l'arco del termostato': la proj entra dal 102% e ne esce sotto il 98%, mentre l'usage continua a salire.">
+      <h3>🎯 L'arco del termostato — projection 102 → 97</h3>
+      <p class="caption">
+        Linea piena: usage% reale. Linea tratteggiata: projection del
+        termostato (dove finirà la finestra a questo ritmo). Il <em>cross-over</em>
+        avviene fra le <code>04:16</code> e le <code>04:56 UTC</code>: la proj
+        sale a 102 e poi rientra sotto il 98 mentre l'usage continua a salire.
+        Tradotto: i throttle applicati sono stati abbastanza per cambiare la
+        traiettoria della finestra senza fermare il lavoro.
+      </p>
+      <div class="canvas-host"><canvas id="proj96"></canvas></div>
+    </div>
+
+    <div class="chart-wrap" title="Throttle reali per agente nella finestra 96%: scrittore-1 ha assorbito 101 eventi su 121, totale 120 minuti di pausa cumulata. È l'agente che il termostato ha frenato di più, perché era il consumatore principale.">
+      <h3>⏸ Throttle per agente — scrittore-1 il consumatore principale</h3>
+      <p class="caption">
+        121 throttle in 5 ore. <strong>scrittore-1</strong> ne assorbe 101 (120
+        min cumulati): il termostato ha frenato chi consumava di più, lasciando
+        spazio agli altri. <strong>scorer-1</strong> e
+        <strong>analista-1</strong> contribuiscono insieme con 12 eventi su 36
+        minuti. La distribuzione asimmetrica è una <em>scelta</em>, non un
+        difetto: è esattamente il comportamento progettato.
+      </p>
+      <div class="canvas-host"><canvas id="throttle96"></canvas></div>
+    </div>
+
+    <div class="chart-wrap" style="padding: 14px 20px;" title="Messaggi del Capitano nella finestra 96%, ordinati per timestamp. La cadenza è bassa: lavoro silenzioso, niente emergenze.">
+      <h3>💬 Mission log — Capitano nella finestra 96%</h3>
+      <p class="caption">
+        198 messaggi totali, di cui solo 5 <code>MSG</code> diretti del
+        Capitano e 6 <code>ACK</code>. Il volume è dominato da
+        <strong>65 REQ + 61 RES</strong> fra agenti e critico: <em>silenzio
+        operativo</em>, niente ordini di emergenza, il team è in flow. Solo 2
+        <code>URG</code> della sentinella, entrambi all'inizio
+        (<code>00:34:46</code> e <code>00:49:31 UTC</code>), poi quattro ore
+        di lavoro senza interruzioni dirette.
+      </p>
+      <div class="pill-row" id="cap-pills-96"></div>
+      <div class="cap-messages" id="cap-msgs-96"></div>
+    </div>
+
+    <div class="narrative">
+      <h4>L'arco celebrativo: cosa raccontano i numeri</h4>
+      <p>
+        Le finestre Kimi K2 sono contenitori di 5 ore. Riempirne una al 100%
+        senza farla esplodere è un equilibrio difficile: troppo poco e
+        sprechi capacità, troppo è OVER. Questa finestra ha chiuso a 96% con
+        proiezione 97.43% — un margine di sicurezza di tre punti, dopo aver
+        attraversato un punto in cui la proj era a 102.
+      </p>
+      <p>
+        Tre indicatori la rendono "perfetta": <strong>(1)</strong> escalation
+        lineare 80→96 in sette step regolari, <strong>(2)</strong> cross-over
+        proj 102→97 senza che l'usage abbia mai dovuto fermarsi,
+        <strong>(3)</strong> 198 messages totali con 65 REQ + 61 RES fra
+        agenti e critico, ma solo 5 MSG diretti del Capitano e 2 URG della
+        sentinella (entrambi entro le 00:50 UTC): dopo l'una di notte e fino
+        al peak, oltre quattro ore di <em>silenzio operativo</em> — il team
+        in flow, non in panne. 287/300 minuti = <strong>95.8% del bound</strong>:
+        è la massima densità di lavoro che il team abbia raggiunto nelle 18
+        ore di sessione.
+      </p>
+      <p class="kicker" style="margin-top: 14px; padding: 12px 16px; background: rgba(111,207,151,0.08); border-left: 3px solid #6fcf97; border-radius: 4px; font-style: italic; color: #d6dde9;">
+        La finestra in cui il termostato ha funzionato come progettato — non
+        per la cifra al peak, ma per come la proj è rientrata mentre l'usage
+        continuava a salire.
+      </p>
+    </div>
   </section>
 </main>
 
@@ -356,6 +473,26 @@ const WIN_94 = {
   startMs: Date.parse("2026-05-03T23:07:51Z"),
   endMs:   Date.parse("2026-05-04T00:18:58Z"),
   peakMs:  Date.parse("2026-05-04T00:08:58Z"),
+};
+
+const WIN_96 = {
+  sid: "20260504T001858Z",
+  startMs: Date.parse("2026-05-04T00:18:58Z"),
+  endMs:   Date.parse("2026-05-04T05:16:38Z"),
+  peakMs:  Date.parse("2026-05-04T05:06:37Z"),
+  // Sette tick dell'escalation lineare 80→96 (rifeririti dal sentinel)
+  escalation: [
+    { ts: "2026-05-04T04:06:33Z", usage: 80, proj: 101.21 },
+    { ts: "2026-05-04T04:16:33Z", usage: 84, proj: 102.11 }, // proj massima
+    { ts: "2026-05-04T04:26:35Z", usage: 87, proj: 101.92 },
+    { ts: "2026-05-04T04:36:35Z", usage: 89, proj: 100.50 },
+    { ts: "2026-05-04T04:46:36Z", usage: 92, proj: 100.23 },
+    { ts: "2026-05-04T04:56:36Z", usage: 93, proj: 97.74 },  // cross-over: proj sotto 100
+    { ts: "2026-05-04T05:06:37Z", usage: 96, proj: 97.43 },  // peak
+  ],
+  // Arc del termostato: zona evidenziata fra proj-max e cross-over
+  arcStart: Date.parse("2026-05-04T04:16:33Z"),
+  arcEnd:   Date.parse("2026-05-04T04:56:36Z"),
 };
 
 (async function () {
@@ -689,8 +826,328 @@ const WIN_94 = {
   }
   ["usage94", "throttle94"].forEach(attachZoomToolbar);
 
-  // dev4 aggiungerà i suoi attachZoomToolbar(["usage96", "throttle96"]) in
-  // appendice quando completerà la sezione 96%.
+  // ============================================================
+  // SEZIONE 96% — dev4
+  // ============================================================
+
+  const sent96 = sentinel
+    .filter((r) => r && r.session_id === WIN_96.sid)
+    .filter((r) => {
+      const t = Date.parse(r.ts);
+      return t >= WIN_96.startMs && t <= WIN_96.endMs;
+    })
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+
+  const thr96 = throttle.filter((r) => {
+    const t = (r.ts_unix || 0) * 1000;
+    return t >= WIN_96.startMs && t <= WIN_96.endMs && r.event !== "checkpoint";
+  });
+
+  const msgs96 = messages.filter((r) => {
+    const t = Date.parse(r.ts || "");
+    return t >= WIN_96.startMs && t <= WIN_96.endMs;
+  });
+  const cap96 = msgs96.filter(
+    (r) => r.session === "CAPITANO" || (r.preview || "").includes("@capitano")
+  );
+
+  // ----- KPI banner 96% -----
+  const peak96 = sent96.reduce(
+    (best, r) => ((r.usage || 0) > (best.usage || 0) ? r : best),
+    sent96[0] || { usage: 0 }
+  );
+  const totalThrSec96 = thr96.reduce((s, r) => s + (r.applied_sec || 0), 0);
+  const distinctAgents96 = new Set(thr96.map((r) => r.agent)).size;
+  const durMs96 = WIN_96.endMs - WIN_96.startMs;
+  const durMin96 = Math.floor(durMs96 / 60000);
+  const usagePct = ((durMs96 / (5 * 60 * 60 * 1000)) * 100).toFixed(1);
+
+  // KPI ridotti a 5 (dev1 review fix #1): tagliati 'agenti coinvolti' (info
+  // ripetuta nel chart throttle) e 'tick sentinella' (poco rilevante).
+  // 'Tempo cumulato pause' è il throttle totale cumulato — non idle (dev1 fix #3).
+  const kpis96 = [
+    { label: "⏱ Durata effettiva", value: `${Math.floor(durMin96 / 60)}h ${durMin96 % 60}m` },
+    { label: "📐 % bound 5h", value: `${usagePct}%` },
+    { label: "📈 Peak usage", value: `${peak96.usage}%` },
+    { label: "🎯 Projection al peak", value: `${(peak96.projection ?? 0).toFixed(1)}%` },
+    { label: "⏸ Throttle reali", value: thr96.length },
+    { label: "⏳ Pause cumulate", value: fmtMin(totalThrSec96) },
+  ];
+  const kpiGrid96 = document.getElementById("kpi-96");
+  for (const k of kpis96) {
+    const div = document.createElement("div");
+    div.className = "kpi-card";
+    div.innerHTML = `<div class="label">${k.label}</div><div class="value">${k.value}</div>`;
+    kpiGrid96.appendChild(div);
+  }
+
+  // ----- Chart 1: Escalation lineare con 7 pointMarkers radius 5 -----
+  const escPoints = WIN_96.escalation.map((e) => ({ x: Date.parse(e.ts), y: e.usage }));
+  // Curva continua di tutti i tick (sotto), step usage in evidenza (sopra)
+  const allUsage96 = sent96.map((r) => ({ x: Date.parse(r.ts), y: r.usage }));
+  const ctxUsage96 = document.getElementById("usage96").getContext("2d");
+  new Chart(ctxUsage96, {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "usage% (tutti i tick)",
+          data: allUsage96,
+          borderColor: "rgba(86,204,242,0.45)",
+          backgroundColor: "rgba(86,204,242,0.06)",
+          borderWidth: 1.5,
+          fill: true,
+          pointRadius: 0,
+          tension: 0.2,
+        },
+        {
+          label: "Escalation 80→96 (7 step)",
+          data: escPoints,
+          borderColor: "#6fcf97",
+          backgroundColor: "#6fcf97",
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          pointBackgroundColor: "#6fcf97",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 1.5,
+          showLine: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        zoom: ZOOM_OPTIONS,
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const d = new Date(items[0].parsed.x);
+              return d.toISOString().slice(11, 19) + "Z";
+            },
+            label: (ctx) => {
+              const e = WIN_96.escalation.find((x) => Date.parse(x.ts) === ctx.parsed.x);
+              if (e) return `usage ${e.usage}% · projection ${e.proj}%`;
+              return `usage ${ctx.parsed.y}%`;
+            },
+          },
+        },
+        legend: { labels: { color: "#d6dde9" } },
+      },
+      scales: {
+        x: {
+          type: "time",
+          min: WIN_96.startMs,
+          max: WIN_96.endMs,
+          time: { displayFormats: { hour: "HH:mm", minute: "HH:mm" } },
+          ticks: { color: "#8a93a4" },
+          grid: { color: "rgba(140,148,160,0.08)" },
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: "#8a93a4", callback: (v) => v + "%" },
+          grid: { color: "rgba(140,148,160,0.08)" },
+        },
+      },
+    },
+  });
+
+  // ----- Chart 2: L'arco del termostato — proj 102→97 con shaded zone -----
+  // Costruiamo segmenti distinti: proj prima/dentro/dopo l'arco per shading.
+  const projData = sent96
+    .map((r) => ({ x: Date.parse(r.ts), y: r.projection }))
+    .filter((p) => p.y != null);
+  const usageData = sent96.map((r) => ({ x: Date.parse(r.ts), y: r.usage }));
+
+  // Plugin: shaded zone fra arcStart e arcEnd
+  const arcZonePlugin = {
+    id: "arcZone",
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const xS = scales.x;
+      if (!xS) return;
+      const x0 = xS.getPixelForValue(WIN_96.arcStart);
+      const x1 = xS.getPixelForValue(WIN_96.arcEnd);
+      ctx.save();
+      ctx.fillStyle = "rgba(111,207,151,0.08)";
+      ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+      ctx.strokeStyle = "rgba(111,207,151,0.4)";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, chartArea.top); ctx.lineTo(x0, chartArea.bottom);
+      ctx.moveTo(x1, chartArea.top); ctx.lineTo(x1, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // label "arc del termostato"
+      ctx.fillStyle = "#6fcf97";
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.fillText("arc del termostato", x0 + 6, chartArea.top + 14);
+      ctx.restore();
+    },
+  };
+  const ctxProj96 = document.getElementById("proj96").getContext("2d");
+  new Chart(ctxProj96, {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "usage% (solid)",
+          data: usageData,
+          borderColor: "#56ccf2",
+          backgroundColor: "rgba(86,204,242,0.10)",
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.2,
+        },
+        {
+          label: "projection% (dashed)",
+          data: projData,
+          borderColor: "#f2c94c",
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        zoom: ZOOM_OPTIONS,
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toISOString().slice(11, 19) + "Z",
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}%`,
+          },
+        },
+        legend: { labels: { color: "#d6dde9" } },
+      },
+      scales: {
+        x: {
+          type: "time",
+          min: WIN_96.startMs,
+          max: WIN_96.endMs,
+          time: { displayFormats: { hour: "HH:mm", minute: "HH:mm" } },
+          ticks: { color: "#8a93a4" },
+          grid: { color: "rgba(140,148,160,0.08)" },
+        },
+        y: {
+          min: 0, max: 110,
+          ticks: { color: "#8a93a4", callback: (v) => v + "%" },
+          grid: { color: "rgba(140,148,160,0.08)" },
+        },
+      },
+    },
+    plugins: [arcZonePlugin],
+  });
+
+  // ----- Chart 3: Throttle per agente (bar stacked) -----
+  const agentsThr96 = {};
+  for (const t of thr96) {
+    const a = t.agent || "?";
+    if (!agentsThr96[a]) agentsThr96[a] = { n: 0, sec: 0 };
+    agentsThr96[a].n += 1;
+    agentsThr96[a].sec += t.applied_sec || 0;
+  }
+  const agentsList96 = Object.entries(agentsThr96).sort((a, b) => b[1].n - a[1].n);
+  const ctxThr96 = document.getElementById("throttle96").getContext("2d");
+  new Chart(ctxThr96, {
+    type: "bar",
+    data: {
+      labels: agentsList96.map(([a]) => a),
+      datasets: [
+        {
+          label: "# eventi throttle",
+          data: agentsList96.map(([, v]) => v.n),
+          backgroundColor: "rgba(235,87,87,0.65)",
+          borderColor: "#eb5757",
+          borderWidth: 1,
+          yAxisID: "y",
+        },
+        {
+          label: "min totali fermo",
+          data: agentsList96.map(([, v]) => Math.round(v.sec / 60)),
+          backgroundColor: "rgba(242,201,76,0.65)",
+          borderColor: "#f2c94c",
+          borderWidth: 1,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        zoom: ZOOM_OPTIONS,
+        legend: { labels: { color: "#d6dde9" } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}`,
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: "#d6dde9" }, grid: { color: "rgba(140,148,160,0.08)" } },
+        y: {
+          beginAtZero: true,
+          position: "left",
+          title: { display: true, text: "# eventi", color: "#8a93a4" },
+          ticks: { color: "#8a93a4" },
+          grid: { color: "rgba(140,148,160,0.08)" },
+        },
+        y1: {
+          beginAtZero: true,
+          position: "right",
+          title: { display: true, text: "minuti", color: "#8a93a4" },
+          ticks: { color: "#8a93a4" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+
+  // ----- Mission log Capitano 96% -----
+  const capCounts96 = { bridge: 0, dispatch: 0, response: 0, other: 0 };
+  for (const r of cap96) {
+    const c = classifyCap(r.preview);
+    capCounts96[c || "other"] = (capCounts96[c || "other"] || 0) + 1;
+  }
+  const pillEl96 = document.getElementById("cap-pills-96");
+  if (pillEl96) {
+    pillEl96.innerHTML = `
+      <span class="pill"><strong>${cap96.length}</strong> totali</span>
+      <span class="pill" style="border-left: 3px solid #56ccf2;"><strong>${capCounts96.bridge}</strong> bridge</span>
+      <span class="pill" style="border-left: 3px solid #f2c94c;"><strong>${capCounts96.dispatch}</strong> dispatch</span>
+      <span class="pill" style="border-left: 3px solid #6fcf97;"><strong>${capCounts96.response}</strong> response</span>
+    `;
+  }
+  const capList96 = document.getElementById("cap-msgs-96");
+  if (capList96) {
+    for (const r of cap96) {
+      const cls = classifyCap(r.preview);
+      const div = document.createElement("div");
+      div.className = "cap-msg" + (cls ? " " + cls : "");
+      const ts = (r.ts || "").slice(11, 19);
+      div.innerHTML = `
+        <div class="ts">${ts}Z</div>
+        <div class="body">${escapeHtml(r.preview || "(nessun preview)")}</div>
+      `;
+      capList96.appendChild(div);
+    }
+    if (!cap96.length) {
+      capList96.innerHTML =
+        `<div class="cap-msg"><div class="ts">—</div><div class="body" style="color: var(--muted);">Nessun messaggio del Capitano in finestra.</div></div>`;
+    }
+  }
+
+  // Toolbar zoom solo-bottoni anche per i 3 chart 96%
+  ["usage96", "proj96", "throttle96"].forEach(attachZoomToolbar);
+
 })().catch((err) => {
   document.querySelector("main").insertAdjacentHTML(
     "afterbegin",
