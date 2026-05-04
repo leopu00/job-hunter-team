@@ -1,0 +1,244 @@
+/* Timeline-specific styles. La pagina è compatibile con styles.css base. */
+
+/* Container ECharts: dimensioni esplicite e position:relative.
+   Niente width/height su <canvas> interni — ECharts gestisce dpr e dimensioni.
+   min-height:0 evita che un eventuale parent flex/grid lo collassi. */
+.echart-tall {
+  position: relative;
+  display: block;
+  width: 100% !important;
+  height: 540px !important;
+  min-height: 540px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Lasciamo che ECharts gestisca canvas/wrapper interni: niente override
+   sul <canvas> via CSS, altrimenti il dpr di ECharts si confonde e il
+   risultato risulta sgranato/distorto. Il container .echart-tall ha già
+   width/height fissi → ECharts ricalcola il canvas correttamente. */
+
+/* Defensive: se mai una sezione finisce in flex, non far collassare il chart. */
+section, .chart-wrap {
+  min-height: 0;
+}
+
+.chart-wrap {
+  position: relative;
+}
+
+.info-box {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid #2a3550;
+  border-radius: 8px;
+  background: rgba(86, 204, 242, 0.05);
+  color: #b9c4d4;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.info-box strong, .info-box b {
+  color: var(--fg);
+}
+
+.info-box-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 18px;
+}
+
+.info-box-axis {
+  font-size: 12px;
+  color: #94a0b4;
+}
+
+.info-box-tip {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #1f2738;
+  font-size: 12.5px;
+  color: #b9c4d4;
+}
+
+.legend-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend-pill {
+  background: #11151e;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* Tabella finestre */
+#windows-table {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.4fr auto auto;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+#windows-table .row {
+  display: contents;
+}
+
+#windows-table .cell {
+  background: var(--card);
+  padding: 8px 12px;
+}
+
+#windows-table .row.header .cell {
+  background: #1a1f2c;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+
+#windows-table .row.long .cell {
+  background: #182332;
+}
+
+#windows-table .cell.right {
+  text-align: right;
+}
+
+/* Phases */
+.phase {
+  margin-bottom: 32px;
+  border-left: 2px solid var(--border);
+  padding-left: 18px;
+}
+
+.phase h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  color: var(--accent);
+}
+
+.phase-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  max-height: 240px;
+  overflow: auto;
+  background: #0b0e15;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.phase-events .ev {
+  display: grid;
+  grid-template-columns: 70px 110px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.phase-events .ev .t {
+  color: #5d6c84;
+}
+
+.phase-events .ev .k {
+  font-weight: 600;
+}
+
+.phase-events .ev.k-window .k { color: #56ccf2; }
+.phase-events .ev.k-capitano .k { color: #f2994a; }
+.phase-events .ev.k-kickoff .k { color: #6fcf97; }
+.phase-events .ev.k-throttle .k { color: #eb5757; }
+.phase-events .ev.k-peak .k { color: #f2c94c; }
+
+/* Filter / event-log */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px;
+}
+
+.filter-pill {
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+
+.filter-pill.is-on {
+  background: #1f2532;
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.filter-stats {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.event-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 560px;
+  overflow: auto;
+  background: #0b0e15;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.event-log li {
+  display: grid;
+  grid-template-columns: 80px 110px 1fr;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #141923;
+  font-size: 13px;
+}
+
+.event-log li:last-child {
+  border-bottom: none;
+}
+
+.event-log li .t {
+  color: #5d6c84;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+.event-log li .k {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.event-log li .body {
+  color: #d6dde9;
+}
+
+.event-log li.k-window .k { color: #56ccf2; }
+.event-log li.k-capitano .k { color: #f2994a; }
+.event-log li.k-kickoff .k { color: #6fcf97; }
+.event-log li.k-throttle .k { color: #eb5757; }
+.event-log li.k-peak .k { color: #f2c94c; }
