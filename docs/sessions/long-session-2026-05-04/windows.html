@@ -141,6 +141,39 @@
     font-variant-numeric: tabular-nums;
   }
   .pill-row .pill strong { color: var(--fg); }
+
+  /* Kicker celebrativo (sez 96%): refactor da inline-style a class
+     riusabile, allineato alla .kicker di timeline.css mission-log. */
+  .kicker-celebrative {
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(111, 207, 151, 0.08);
+    border-left: 3px solid #6fcf97;
+    border-radius: 4px;
+    font-style: italic;
+    color: #d6dde9;
+    line-height: 1.55;
+  }
+
+  /* Quote inline nella narrativa sez 96% (riusato da timeline.css ma con
+     fallback locale per resistenza all'ordine di import CSS). */
+  .narrative .quote {
+    margin: 14px 0;
+    padding: 10px 14px 10px 16px;
+    background: rgba(86, 204, 242, 0.04);
+    border-left: 3px solid #56ccf2;
+    border-radius: 4px;
+    color: #d6dde9;
+  }
+  .narrative .quote em { color: #e8ecf3; }
+  .narrative .quote .qhdr {
+    display: block;
+    font-style: normal;
+    font-size: 12px;
+    color: #8a93a4;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
@@ -308,43 +341,18 @@
     <div class="narrative" style="margin-top: 18px;">
       <h4>Perché questa è "la finestra perfetta"</h4>
       <p>
-        La 96% non è perfetta perché ha toccato il numero più alto. È perfetta
-        perché è stata <em>usata fino in fondo</em>: <strong>287 minuti</strong>
-        di lavoro su 300 disponibili, il <strong>95.8%</strong> del bound
-        teorico di una finestra Kimi K2 da 5h.
+        La 96% non è perfetta per il numero al peak. È perfetta perché
+        <em>usata fino in fondo</em>: <strong>287/300 minuti</strong> = il
+        <strong>95.8% del bound</strong> di una finestra Kimi K2. Il
+        termostato non ha mai chiuso anticipatamente né sforato.
       </p>
       <p>
-        L'usage sale lineare per sette tick consecutivi:
-        <code>04:06:33 → 04:16:33 → 04:26:35 → 04:36:35 → 04:46:36 →
-        04:56:36 → 05:06:37 UTC</code>: <strong>80% → 84% → 87% → 89% →
-        92% → 93% → 96%</strong>. ~10 punti ogni dieci minuti, una rampa
-        regolare — niente picchi, niente crolli.
+        Il momento chiave è <strong>04:16:33 UTC</strong>: usage 84%,
+        projection schizza a <strong>102.11%</strong>. Quaranta minuti dopo
+        (<code>04:56:36 UTC</code>) usage è salito a 93% ma projection è
+        <em>scesa</em> a 97.74% — il bridge ha cambiato la traiettoria, non
+        solo rallentato il consumo.
       </p>
-      <p>
-        Mentre l'usage sale, scrittore-1 chiude tre CV consecutivi alle
-        <code>03:01:28</code>, <code>03:11:06</code>, <code>03:21:06 UTC</code>
-        (ID 189, 188, 191 con voto 5.5, 5.5, 6.0/10) e ne assorbe 101 dei
-        121 throttle totali della finestra. La sentinella è quasi muta: 2
-        <code>URG</code> all'inizio, poi silenzio.
-      </p>
-      <blockquote class="quote" style="margin: 14px 0; padding: 10px 14px 10px 16px; background: rgba(86,204,242,0.04); border-left: 3px solid #56ccf2; border-radius: 4px;">
-        <span class="qhdr" style="display:block; font-size:12px; color:#8a93a4; margin-bottom:4px;">[@sentinella → @capitano] · <code>URG</code> · 00:34:46 UTC</span>
-        <em>«ORDINE: RALLENTARE. usage=9% vel=32%/h (ideale 18%/h)
-        proj=159%.»</em>
-      </blockquote>
-      <p>
-        Il momento chiave non è il 96%. È <strong>04:16 UTC</strong>: usage
-        84%, projection schizza a <strong>102.11%</strong> — il termostato
-        sta proiettando di sforare. Quaranta minuti dopo, alle
-        <code>04:56:36 UTC</code>, usage è salito a 93% ma projection è
-        <em>scesa</em> a 97.74%. La proj continua a calare mentre l'usage
-        continua a salire: il bridge ha vinto la partita. Le pause applicate
-        hanno cambiato la traiettoria, non solo rallentato il consumo.
-      </p>
-      <blockquote class="quote" style="margin: 14px 0; padding: 10px 14px 10px 16px; background: rgba(86,204,242,0.04); border-left: 3px solid #56ccf2; border-radius: 4px;">
-        <span class="qhdr" style="display:block; font-size:12px; color:#8a93a4; margin-bottom:4px;">[@scrittore-1 → @capitano] · <code>RES</code> · 03:21:06 UTC</span>
-        <em>«ID 191 — 3 round completi. Voto: 6.0/10 (PASS).»</em>
-      </blockquote>
     </div>
 
     <div class="chart-wrap" title="Curva usage% nella finestra 96% con i 7 step dell'escalation evidenziati. Asse Y = consumo della finestra, asse X = tempo UTC.">
@@ -378,8 +386,8 @@
         min cumulati): il termostato ha frenato chi consumava di più, lasciando
         spazio agli altri. <strong>scorer-1</strong> e
         <strong>analista-1</strong> contribuiscono insieme con 12 eventi su 36
-        minuti. La distribuzione asimmetrica è una <em>scelta</em>, non un
-        difetto: è esattamente il comportamento progettato.
+        minuti. Bar singola sul numero di eventi (asse principale): minuti
+        cumulati per agente nel tooltip on-hover.
       </p>
       <div class="canvas-host"><canvas id="throttle96"></canvas></div>
     </div>
@@ -402,25 +410,13 @@
     <div class="narrative">
       <h4>L'arco celebrativo: cosa raccontano i numeri</h4>
       <p>
-        Le finestre Kimi K2 sono contenitori di 5 ore. Riempirne una al 100%
-        senza farla esplodere è un equilibrio difficile: troppo poco e
-        sprechi capacità, troppo è OVER. Questa finestra ha chiuso a 96% con
-        proiezione 97.43% — un margine di sicurezza di tre punti, dopo aver
-        attraversato un punto in cui la proj era a 102.
+        Tre firme la rendono perfetta: escalation lineare 80→96 in 7 step,
+        cross-over proj 102→97 senza fermare il lavoro, 198 messages con 65
+        REQ + 61 RES = <em>silenzio operativo</em> di oltre 4h dopo i 2 URG
+        iniziali. Densità di lavoro 287/300 = 95.8% del bound — la massima
+        della sessione.
       </p>
-      <p>
-        Tre indicatori la rendono "perfetta": <strong>(1)</strong> escalation
-        lineare 80→96 in sette step regolari, <strong>(2)</strong> cross-over
-        proj 102→97 senza che l'usage abbia mai dovuto fermarsi,
-        <strong>(3)</strong> 198 messages totali con 65 REQ + 61 RES fra
-        agenti e critico, ma solo 5 MSG diretti del Capitano e 2 URG della
-        sentinella (entrambi entro le 00:50 UTC): dopo l'una di notte e fino
-        al peak, oltre quattro ore di <em>silenzio operativo</em> — il team
-        in flow, non in panne. 287/300 minuti = <strong>95.8% del bound</strong>:
-        è la massima densità di lavoro che il team abbia raggiunto nelle 18
-        ore di sessione.
-      </p>
-      <p class="kicker" style="margin-top: 14px; padding: 12px 16px; background: rgba(111,207,151,0.08); border-left: 3px solid #6fcf97; border-radius: 4px; font-style: italic; color: #d6dde9;">
+      <p class="kicker-celebrative">
         La finestra in cui il termostato ha funzionato come progettato — non
         per la cifra al peak, ma per come la proj è rientrata mentre l'usage
         continuava a salire.
@@ -892,10 +888,33 @@ const WIN_96 = {
     kpiGrid96.appendChild(div);
   }
 
-  // ----- Chart 1: Escalation lineare con 7 pointMarkers radius 5 -----
+  // ----- Chart 1: Escalation lineare con 7 pointMarkers radius 5 + data labels permanenti -----
+  // dev1 review W96-3: senza data labels permanenti il pattern lineare 80→96
+  // non si legge a colpo d'occhio. Plugin custom disegna il valore sopra
+  // ogni marker della serie escalation.
   const escPoints = WIN_96.escalation.map((e) => ({ x: Date.parse(e.ts), y: e.usage }));
   // Curva continua di tutti i tick (sotto), step usage in evidenza (sopra)
   const allUsage96 = sent96.map((r) => ({ x: Date.parse(r.ts), y: r.usage }));
+  const escalationLabelsPlugin = {
+    id: "escalationLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(1); // dataset 1 = escalation
+      if (!meta || meta.hidden) return;
+      ctx.save();
+      ctx.font = "bold 11px ui-monospace, 'SF Mono', Menlo, monospace";
+      ctx.fillStyle = "#6fcf97";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      meta.data.forEach((point, i) => {
+        if (!point) return;
+        const v = WIN_96.escalation[i];
+        if (!v) return;
+        ctx.fillText(`${v.usage}%`, point.x, point.y - 8);
+      });
+      ctx.restore();
+    },
+  };
   const ctxUsage96 = document.getElementById("usage96").getContext("2d");
   new Chart(ctxUsage96, {
     type: "line",
@@ -962,6 +981,7 @@ const WIN_96 = {
         },
       },
     },
+    plugins: [escalationLabelsPlugin],
   });
 
   // ----- Chart 2: L'arco del termostato — proj 102→97 con shaded zone -----
@@ -971,7 +991,9 @@ const WIN_96 = {
     .filter((p) => p.y != null);
   const usageData = sent96.map((r) => ({ x: Date.parse(r.ts), y: r.usage }));
 
-  // Plugin: shaded zone fra arcStart e arcEnd
+  // Plugin custom (Chart.js 4.4.1, version-locked al CDN del file): shaded
+  // zone fra arcStart e arcEnd. dev1 review W96-4: rgba 0.08→0.22 + label
+  // più grossa con freccia per essere visibile a 30s.
   const arcZonePlugin = {
     id: "arcZone",
     beforeDatasetsDraw(chart) {
@@ -981,20 +1003,30 @@ const WIN_96 = {
       const x0 = xS.getPixelForValue(WIN_96.arcStart);
       const x1 = xS.getPixelForValue(WIN_96.arcEnd);
       ctx.save();
-      ctx.fillStyle = "rgba(111,207,151,0.08)";
+      // Banda evidenziata più visibile (rgba 0.22 invece di 0.08)
+      ctx.fillStyle = "rgba(111,207,151,0.22)";
       ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
-      ctx.strokeStyle = "rgba(111,207,151,0.4)";
+      // Linee verticali ai bordi della banda
+      ctx.strokeStyle = "rgba(111,207,151,0.7)";
       ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(x0, chartArea.top); ctx.lineTo(x0, chartArea.bottom);
       ctx.moveTo(x1, chartArea.top); ctx.lineTo(x1, chartArea.bottom);
       ctx.stroke();
       ctx.setLineDash([]);
-      // label "arc del termostato"
+      // Label centrata sopra la banda con sfondo per leggibilità
+      const cx = (x0 + x1) / 2;
+      const labelY = chartArea.top + 18;
+      const text = "🎯 arc del termostato (proj 102 → 97)";
+      ctx.font = "bold 12px system-ui, sans-serif";
+      const tw = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(11,14,21,0.85)";
+      ctx.fillRect(cx - tw / 2 - 6, labelY - 12, tw + 12, 18);
       ctx.fillStyle = "#6fcf97";
-      ctx.font = "11px system-ui, sans-serif";
-      ctx.fillText("arc del termostato", x0 + 6, chartArea.top + 14);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, cx, labelY - 3);
       ctx.restore();
     },
   };
@@ -1067,26 +1099,20 @@ const WIN_96 = {
   }
   const agentsList96 = Object.entries(agentsThr96).sort((a, b) => b[1].n - a[1].n);
   const ctxThr96 = document.getElementById("throttle96").getContext("2d");
+  // dev1 review W96-5: dual-axis confondeva la lettura veloce. Single-axis su
+  // # eventi (asse principale univoco), minuti cumulati nel tooltip + come
+  // label sopra la barra. Più chiaro a colpo d'occhio.
   new Chart(ctxThr96, {
     type: "bar",
     data: {
       labels: agentsList96.map(([a]) => a),
       datasets: [
         {
-          label: "# eventi throttle",
+          label: "# eventi throttle (W2)",
           data: agentsList96.map(([, v]) => v.n),
           backgroundColor: "rgba(235,87,87,0.65)",
           borderColor: "#eb5757",
           borderWidth: 1,
-          yAxisID: "y",
-        },
-        {
-          label: "min totali fermo",
-          data: agentsList96.map(([, v]) => Math.round(v.sec / 60)),
-          backgroundColor: "rgba(242,201,76,0.65)",
-          borderColor: "#f2c94c",
-          borderWidth: 1,
-          yAxisID: "y1",
         },
       ],
     },
@@ -1098,7 +1124,14 @@ const WIN_96 = {
         legend: { labels: { color: "#d6dde9" } },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}`,
+            label: (ctx) => {
+              const i = ctx.dataIndex;
+              const [, v] = agentsList96[i];
+              return [
+                `eventi: ${v.n}`,
+                `minuti cumulati: ${Math.round(v.sec / 60)} min`,
+              ];
+            },
           },
         },
       },
@@ -1106,25 +1139,44 @@ const WIN_96 = {
         x: { ticks: { color: "#d6dde9" }, grid: { color: "rgba(140,148,160,0.08)" } },
         y: {
           beginAtZero: true,
-          position: "left",
-          title: { display: true, text: "# eventi", color: "#8a93a4" },
+          title: { display: true, text: "# eventi throttle in W2", color: "#8a93a4" },
           ticks: { color: "#8a93a4" },
           grid: { color: "rgba(140,148,160,0.08)" },
         },
-        y1: {
-          beginAtZero: true,
-          position: "right",
-          title: { display: true, text: "minuti", color: "#8a93a4" },
-          ticks: { color: "#8a93a4" },
-          grid: { drawOnChartArea: false },
-        },
       },
     },
+    plugins: [{
+      // Plugin custom (Chart.js 4.4.1): label "Xmin" sopra ogni barra per
+      // rendere visibili i minuti cumulati senza dual-axis.
+      id: "minutesAboveBar",
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta) return;
+        ctx.save();
+        ctx.font = "bold 11px ui-monospace, 'SF Mono', Menlo, monospace";
+        ctx.fillStyle = "#f2c94c";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        meta.data.forEach((bar, i) => {
+          if (!bar) return;
+          const [, v] = agentsList96[i];
+          ctx.fillText(`${Math.round(v.sec / 60)} min`, bar.x, bar.y - 4);
+        });
+        ctx.restore();
+      },
+    }],
   });
 
   // ----- Mission log Capitano 96% -----
-  const capCounts96 = { bridge: 0, dispatch: 0, response: 0, other: 0 };
+  // dev1 review W96-6: aggiunta pill URG (sentinella+capitano) come 5° categoria
+  // — è la categoria che racconta il momento del cross-over (04:30 URG capitano).
+  const capCounts96 = { bridge: 0, dispatch: 0, response: 0, urg: 0, other: 0 };
   for (const r of cap96) {
+    if ((r.type || "").toUpperCase() === "URG") {
+      capCounts96.urg += 1;
+      continue;
+    }
     const c = classifyCap(r.preview);
     capCounts96[c || "other"] = (capCounts96[c || "other"] || 0) + 1;
   }
@@ -1132,6 +1184,7 @@ const WIN_96 = {
   if (pillEl96) {
     pillEl96.innerHTML = `
       <span class="pill"><strong>${cap96.length}</strong> totali</span>
+      <span class="pill" style="border-left: 3px solid #eb5757;"><strong>${capCounts96.urg}</strong> URG</span>
       <span class="pill" style="border-left: 3px solid #56ccf2;"><strong>${capCounts96.bridge}</strong> bridge</span>
       <span class="pill" style="border-left: 3px solid #f2c94c;"><strong>${capCounts96.dispatch}</strong> dispatch</span>
       <span class="pill" style="border-left: 3px solid #6fcf97;"><strong>${capCounts96.response}</strong> response</span>
