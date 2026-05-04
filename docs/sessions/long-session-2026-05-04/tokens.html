@@ -5,11 +5,161 @@
 <title>🔢 Tokens — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  .kpi-card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .narrative p { margin: 0 0 8px; }
+  .narrative p:last-child { margin-bottom: 0; }
+  .narrative strong { color: var(--accent); }
+  .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .caveat {
+    background: rgba(242,201,76,0.08);
+    border: 1px solid rgba(242,201,76,0.4);
+    border-left: 4px solid #f2c94c;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 0 0 24px;
+    color: #e8ecf3;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .caveat strong { color: #f2c94c; }
+  .caveat code { background: #11151e; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  .chart-canvas { position: relative; width: 100%; }
+  .chart-canvas.tall-520 { height: 520px; }
+  .chart-canvas.tall-480 { height: 480px; }
+  .chart-canvas.tall-440 { height: 440px; }
+  .chart-canvas.tall-400 { height: 400px; }
+  .chart-wrap .chart-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
+  .main-col { min-width: 0; }
+  .grid-2 > * { min-width: 0; }
+
+  .chart-summary {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0 14px;
+    font-size: 13px; color: #d6dde9; line-height: 1.5;
+  }
+  .chart-summary .icon { font-size: 14px; flex-shrink: 0; }
+
+  .chart-wrap { position: relative; }
+  .chart-info {
+    position: absolute; top: 18px; right: 22px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #1f2532; border: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: help; user-select: none;
+  }
+  .chart-info[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; top: 28px; right: 0; width: 280px;
+    background: rgba(13,15,20,0.97); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 12px; line-height: 1.5;
+    z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none; text-align: left; font-weight: 400;
+  }
+
+  .chart-toolbar {
+    position: absolute; top: 16px; right: 56px;
+    display: flex; gap: 4px; z-index: 5;
+  }
+  .chart-toolbar button {
+    width: 28px; height: 24px; background: #1f2532;
+    border: 1px solid var(--border); color: var(--muted);
+    font-size: 13px; line-height: 1; border-radius: 6px;
+    cursor: pointer; padding: 0;
+  }
+  .chart-toolbar button:hover { background: #2a3142; color: var(--fg); }
+
+  .series-toggle {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin: 6px 0 14px; padding: 8px 12px;
+    background: #11151e; border: 1px solid var(--border); border-radius: 8px;
+  }
+  .series-toggle .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin-right: 4px;
+  }
+  .series-toggle .quick { display: flex; gap: 6px; margin-left: auto; }
+  .series-toggle button {
+    background: var(--card); border: 1px solid var(--border); color: var(--fg);
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .series-toggle button:hover { background: #1f2532; }
+  .series-toggle button.pill[data-active="false"] {
+    opacity: 0.45; text-decoration: line-through;
+  }
+  .series-toggle button.pill .swatch {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+
+  .data-quality {
+    font-size: 11px; color: var(--muted);
+    margin-top: 12px; padding: 8px 12px;
+    background: #11151e; border: 1px dashed var(--border); border-radius: 6px;
+  }
+  .data-quality code { color: #c8cedb; }
+
+  .with-toc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 32px; align-items: start;
+  }
+  .toc {
+    position: sticky; top: 24px; align-self: start;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; font-size: 13px;
+  }
+  .toc h4 {
+    margin: 0 0 10px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .toc a {
+    display: block; padding: 5px 8px; margin: 1px -8px;
+    border-radius: 6px; color: var(--fg); text-decoration: none;
+  }
+  .toc a:hover { background: #1f2532; }
+  .toc a.active { background: #1f2532; color: var(--accent); font-weight: 600; }
+  @media (max-width: 1180px) {
+    .with-toc { grid-template-columns: 1fr; }
+    .toc { position: relative; top: 0; }
+  }
+
+  table.peaks {
+    width: 100%; border-collapse: collapse; margin-top: 18px;
+    font-size: 13px; background: #11151e; border-radius: 8px; overflow: hidden;
+  }
+  table.peaks th, table.peaks td {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums; text-align: left;
+  }
+  table.peaks th {
+    background:#161a23; color: var(--muted); font-weight: 600;
+    font-size:12px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  table.peaks td.num { text-align: right; }
+  table.peaks tr:last-child td { border-bottom: none; }
+  table.peaks .preview {
+    color: #d6dde9; font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 480px;
+  }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>🔢 Tokens — consumo dettagliato</h1>
-  <p class="subtitle">Token consumati nella long session (Kimi K2): totale, andamento, per-agente, picchi, correlazione throttle.</p>
+  <p class="subtitle">Token consumati nella long session — totale, andamento, per-agente, picchi, correlazione throttle. Tip: zoom+pan XY su chart, pill per nascondere serie.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -19,17 +169,642 @@
     <a href="tokens.html">🔢 Tokens</a>
   </nav>
 </header>
-<main>
-  <section>
-    <p class="note">
-      ⚠️ Sezione in costruzione — aggiunta da Leone 2026-05-04. Assegnata: vedi briefing master.
-      <br>
-      Requisiti: (1) totale input/output, (2) andamento temporale aggregato con marker finestre Kimi,
-      (3) per-agente stacked/doughnut, (4) top-N picchi con chat context da <code>data/chat/</code>,
-      (5) correlazione token vs throttle.
-    </p>
+
+<main class="with-toc">
+<div class="main-col">
+  <div class="caveat">
+    <strong>⚠ Caveat metodologico.</strong> I token in questa pagina sono <strong>PROXY <code>chars/4</code></strong> calcolati sul body dei messaggi chat — <strong>non</strong> sono i veri token contati dall'API Kimi K2 (che non sono disponibili nei dati esportati). La stima è coerente con le convenzioni dei provider e adeguata per confronti relativi (chi ha consumato di più, dove sono i picchi, correlazione con throttle), <em>non</em> per fatturazione o capacity planning preciso. Tutti i numeri vanno letti come <code>~tokens</code>.
+  </div>
+
+  <section id="kpi">
+    <h2>🌙 Numeri chiave</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">🔢 Token totali</div><div class="value" id="kpi-total">…</div><div class="sub">~ chars/4 sui body chat puliti</div></div>
+      <div class="kpi-card"><div class="label">📥 Input (utente→team)</div><div class="value" id="kpi-input">…</div><div class="sub" id="kpi-input-sub">prompt utente di sessione</div></div>
+      <div class="kpi-card"><div class="label">📤 Output (team→…)</div><div class="value" id="kpi-output">…</div><div class="sub" id="kpi-output-sub">risposte agenti tra di loro / utente</div></div>
+      <div class="kpi-card"><div class="label">🪟 Avg per finestra Kimi K2</div><div class="value" id="kpi-avg-window">…</div><div class="sub" id="kpi-avg-window-sub">token medi a finestra</div></div>
+      <div class="kpi-card"><div class="label">🔥 Picco bucket 5-min</div><div class="value" id="kpi-peak-bucket">…</div><div class="sub" id="kpi-peak-bucket-sub"></div></div>
+      <div class="kpi-card"><div class="label">🗨 Messaggi team</div><div class="value" id="kpi-msg">…</div><div class="sub">in-session, da messages.jsonl</div></div>
+    </div>
   </section>
+
+  <section>
+    <div class="chart-wrap" id="chart1">
+      <span class="chart-info" data-tip="Token aggregati team in bucket 5-min, con linee verticali ai cambi di finestra Kimi K2 (session_id da sentinel).">ℹ</span>
+      <h3>1 · 📈 Andamento token nel tempo (aggregato team)</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> <code>messages.jsonl</code> per timestamp/sender, <code>preview</code> troncato (~80 char) per la lunghezza body quando il match con chat content fallisce. Bucket <b>5 minuti</b>. Marker <code>#N</code> = inizio nuova finestra Kimi K2 (da sentinel.session_id). Stima conservativa: i token reali sono più alti del valore mostrato qui.</span></div>
+      <div class="series-toggle" data-chart="chart-tokens-time">
+        <span class="label">serie</span>
+        <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>token / 5-min</button>
+        <span class="quick">
+          <button data-action="reset-zoom" title="Reset zoom">⤺ zoom</button>
+        </span>
+      </div>
+      <div class="chart-canvas tall-440"><canvas id="chart-tokens-time"></canvas></div>
+      <div class="narrative">
+        <p>Il consumo di token non è uniforme nel tempo. I picchi si concentrano dove il team produce in burst (scrittore-1 invia un CV+CL pieno al critico, il critico restituisce, l'analista lavora un report). Le valli sono pause di pacing o checkpoint forzati dal bridge.</p>
+        <p>Le linee verticali segnano l'inizio di una nuova finestra Kimi K2: ogni finestra ha un suo budget e il termostato lavora dentro quella finestra. Idealmente i picchi sono distribuiti, non addossati a una sola finestra — qui il pacing-bridge ha aiutato a spalmare il consumo.</p>
+        <p>Cross-ref con <a href="usage.html">usage.html</a> chart 1 (usage% nel tempo): la curva di consumo token deve correlare con la velocity reale; quando i token salgono ma usage non sale, il bridge sta proprio facendo il lavoro suo (smussa il picco).</p>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="chart2">
+      <span class="chart-info" data-tip="Stacked area: stessi bucket 5-min, ma divisi per agente. Mostra chi ha contribuito ai picchi.">ℹ</span>
+      <h3>2 · 📊 Token per-agente — stacked nel tempo</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> stessi bucket 5-min del chart 1 (preview-based), ma stack per agente (famiglia es. <code>scrittore</code>=tutti gli scrittore-N) con colori canonici. Stesse limitazioni di precisione del chart 1. Hover per breakdown sul bucket.</span></div>
+      <div id="series-toggle-stacked" class="series-toggle" data-chart="chart-tokens-stacked">
+        <span class="label">serie</span>
+        <span id="stacked-pills"></span>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+          <button data-action="reset-zoom" title="Reset zoom">⤺ zoom</button>
+        </span>
+      </div>
+      <div class="chart-canvas tall-480"><canvas id="chart-tokens-stacked"></canvas></div>
+      <div class="narrative">
+        <p>Lo stack permette di vedere chi ha contribuito a ciascun picco. <strong>Scrittore</strong> domina quasi sempre — è il ruolo che produce gli output più lunghi (CV+CL). <strong>Critico</strong> appare in risposta, di solito subito dopo. Pillole grandi colorate viola (analista) coincidono con report più corposi.</p>
+        <p>Valli con un solo colore = un agente sta lavorando da solo (pensa, non parla). Valli vuote = team in checkpoint coordinato dal bridge. Le pile più alte raccontano i momenti in cui il team era a tutta velocità.</p>
+        <p>Per la dinamica fine-grain di ciascun agente vedi <a href="agents.html">agents.html</a>: lì le finestre temporali per agente con i gap di silenzio. Qui la sovrapposizione del team.</p>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="chart3">
+      <span class="chart-info" data-tip="Top-10 messaggi per lunghezza body (token stimati). Tooltip mostra preview + agente + ts.">ℹ</span>
+      <h3>3 · 🔥 Top-10 picchi singoli — i messaggi più corposi</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> <code>data/chat/*.jsonl.txt</code> body intero (non il preview troncato delle chart 1/2). Stima più realistica: questi sono i 10 messaggi singoli più corposi della sessione. Tabella sotto con preview leggibile.</span></div>
+      <div class="chart-canvas tall-440"><canvas id="chart-tokens-top"></canvas></div>
+      <table class="peaks" id="peaks-table">
+        <thead><tr><th>#</th><th>agente</th><th>type</th><th class="num">~tokens</th><th>preview</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="narrative">
+        <p>I picchi singoli sono i messaggi-bomba: response lunghe, report dettagliati, analisi corpose. Quasi sempre li manda <strong>scrittore-1</strong> al critico (il CV+CL completo, già con sezioni e prompt arricchiti) o l'analista al capitano (deep-dive su un candidato).</p>
+        <p>Da osservare: un singolo messaggio molto grosso può vale un intero bucket 5-min "normale". È informativo per il pacing-bridge: la velocity può schizzare per <em>un</em> messaggio più che per l'attività ordinaria. Senza throttling ammettono picchi singoli, con throttling il bridge li spalma.</p>
+        <p>La tabella sotto il chart consente di leggere il preview e il <code>session_id</code> (finestra Kimi K2) di ciascuno.</p>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="chart4">
+      <span class="chart-info" data-tip="Scatter: ogni punto è un bucket 5-min. X = token rate (token/min). Y = % tick con throttle ON nel bucket. Punto colorato per status sentinella prevalente.">ℹ</span>
+      <h3>4 · 🌡 Correlazione token-rate vs throttle</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span>Scatter: <b>X = token/min</b> nel bucket, <b>Y = %tick throttle ON</b> nello stesso bucket. Punti colorati per status sentinella prevalente. Una correlazione positiva conferma che il bridge accende il freno proprio dove i token salgono.</span></div>
+      <div class="chart-canvas tall-440"><canvas id="chart-tokens-throttle"></canvas></div>
+      <div class="narrative">
+        <p>Se la nuvola di punti pende verso l'alto-destra, allora <strong>il bridge sta facendo il suo lavoro</strong>: dove i token salgono, il throttle ratio cresce. Se invece punti rossi (status ATTENZIONE/OVER) cadono in basso-sinistra, c'è un mismatch: il bridge ha frenato mentre i token erano bassi (falsa allerta).</p>
+        <p>I punti in alto-destra (token alti, throttle alto) sono il regime "sano sotto pressione": c'è molta attività e il bridge tiene il termometro. I punti in basso-destra (token alti, throttle basso) sono i momenti che vanno studiati: il team ha consumato molto senza che il bridge intervenisse — sintomo di latenza o segnale mancato.</p>
+        <p>Il grafico è una sintesi cross-page: usage.html (throttle) + chat (token). È la prova che pacing-bridge e consumo non sono universi separati ma una stessa metrica vista da angoli diversi.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<aside class="toc" aria-label="Indice pagina">
+  <h4>Indice</h4>
+  <a href="#kpi" data-toc>🌙 Numeri chiave</a>
+  <a href="#chart1" data-toc>📈 1 · Andamento</a>
+  <a href="#chart2" data-toc>📊 2 · Per agente</a>
+  <a href="#chart3" data-toc>🔥 3 · Top picchi</a>
+  <a href="#chart4" data-toc>🌡 4 · Throttle×token</a>
+</aside>
 </main>
+
+<footer>
+  Generato da <code>tokens.html</code> · provider <strong>Kimi K2</strong> · dati da <code>data/messages.jsonl.txt</code> + <code>data/chat/*.jsonl.txt</code> + <code>data/sentinel-data.jsonl.txt</code>. <span id="cleaning-stats"></span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+(async function () {
+  Chart.defaults.color = "#c8cedb";
+  Chart.defaults.borderColor = "#232836";
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif";
+  Chart.defaults.plugins.tooltip.backgroundColor = "rgba(13,15,20,0.96)";
+  Chart.defaults.plugins.tooltip.borderColor = "#2a3142";
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.padding = 12;
+  Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+  Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.usePointStyle = true;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
+  Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
+  const HAS_ZOOM = typeof window !== "undefined" && (window.ChartZoom || (Chart.registry && Chart.registry.plugins.get("zoom")));
+
+  // Zoom: SOLO via bottoni (no wheel/pinch/drag — trackpad scroll resta libero
+  // di scrollare la pagina). Plugin caricato per esporre chart.zoom()/pan()/
+  // resetZoom() come API JS. Mode "xy" così i bottoni pan funzionano su
+  // entrambi gli assi.
+  function zoomOpts() {
+    return {
+      pan: { enabled: false, mode: "xy" },
+      zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false }, mode: "xy" },
+    };
+  }
+  // Calcolo step di pan = 10% del range visibile dell'asse (pixel).
+  function panStep(chart, axis) {
+    try {
+      const sc = chart.scales[axis];
+      if (!sc) return 50;
+      const px = Math.abs(sc.right - sc.left || sc.bottom - sc.top);
+      return Math.max(20, Math.round(px * 0.1));
+    } catch (e) { return 50; }
+  }
+
+  // ============== HELPER toggle row + zoom toolbar ==============
+  function injectZoomToolbar(canvasId, chartInstance) {
+    if (!chartInstance.zoom || !chartInstance.resetZoom) return;
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const wrap = canvas.closest(".chart-wrap");
+    if (!wrap || wrap.querySelector(".chart-toolbar")) return;
+    const tb = document.createElement("div");
+    tb.className = "chart-toolbar";
+    // 7 bottoni in 3 gruppi: zoom (in/out/reset) · pan-X (← →) · pan-Y (↑ ↓).
+    // Step di pan = 10% del range visibile dell'asse, calcolato al click.
+    tb.innerHTML = `
+      <button data-zoom="in" title="Zoom in (1.15×)">➕</button>
+      <button data-zoom="out" title="Zoom out (0.87×)">➖</button>
+      <button data-zoom="reset" title="Reset zoom">⟲</button>
+      <button data-pan="left" title="Pan ← (10% range X)">⬅</button>
+      <button data-pan="right" title="Pan → (10% range X)">➡</button>
+      <button data-pan="up" title="Pan ↑ (10% range Y)">⬆</button>
+      <button data-pan="down" title="Pan ↓ (10% range Y)">⬇</button>
+    `;
+    wrap.appendChild(tb);
+    const $ = (sel) => tb.querySelector(sel);
+    $('[data-zoom="in"]').addEventListener("click", () => chartInstance.zoom(1.15));
+    $('[data-zoom="out"]').addEventListener("click", () => chartInstance.zoom(0.87));
+    $('[data-zoom="reset"]').addEventListener("click", () => chartInstance.resetZoom());
+    $('[data-pan="left"]').addEventListener("click", () => chartInstance.pan({ x: panStep(chartInstance, "x") }));
+    $('[data-pan="right"]').addEventListener("click", () => chartInstance.pan({ x: -panStep(chartInstance, "x") }));
+    $('[data-pan="up"]').addEventListener("click", () => chartInstance.pan({ y: panStep(chartInstance, "y") }));
+    $('[data-pan="down"]').addEventListener("click", () => chartInstance.pan({ y: -panStep(chartInstance, "y") }));
+  }
+  function registerToggle(canvasId, chartInstance) {
+    injectZoomToolbar(canvasId, chartInstance);
+    const row = document.querySelector('.series-toggle[data-chart="' + canvasId + '"]');
+    if (!row) return;
+    const pills = row.querySelectorAll("button.pill[data-series]");
+    function syncPills() {
+      pills.forEach((p) => {
+        const idx = +p.getAttribute("data-series");
+        p.setAttribute("data-active", chartInstance.isDatasetVisible(idx) ? "true" : "false");
+      });
+    }
+    pills.forEach((p) => p.addEventListener("click", () => {
+      const idx = +p.getAttribute("data-series");
+      chartInstance.setDatasetVisibility(idx, !chartInstance.isDatasetVisible(idx));
+      chartInstance.update();
+      syncPills();
+    }));
+    row.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = btn.getAttribute("data-action");
+        const total = chartInstance.data.datasets.length;
+        if (action === "all") for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, true);
+        else if (action === "none") for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, false);
+        else if (action === "invert") for (let i = 0; i < total; i++) chartInstance.setDatasetVisibility(i, !chartInstance.isDatasetVisible(i));
+        else if (action === "reset-zoom" && chartInstance.resetZoom) { chartInstance.resetZoom(); return; }
+        chartInstance.update();
+        syncPills();
+      });
+    });
+    syncPills();
+  }
+
+  // ============== DATA LOADING + CLEANING ==============
+  // Cleaning rules:
+  // - messages: drop ts non parsabile, fuori range sessione, type telemetria
+  //   (PACING/TICK/INFO sentinel/BRIDGE — non sono "team" output).
+  // - chat: skip empty content, no-prefix, dup hash (vedi Round 2 usage.html).
+  // - sentinel: già filtrato da inSession + drop bad ts/usage.
+  const all = await ReportData.loadAll();
+  const stats = {
+    sentinel: { total: all.sentinel.length, kept: 0, badTs: 0, outOfRange: 0 },
+    messages: { total: all.messages.length, kept: 0, badTs: 0, outOfRange: 0, telemetry: 0 },
+    chat: { total: 0, kept: 0, empty: 0, noPrefix: 0, dup: 0 },
+  };
+
+  const sentinel = [];
+  for (const r of all.sentinel) {
+    const t = Date.parse(r.ts);
+    if (!Number.isFinite(t)) { stats.sentinel.badTs++; continue; }
+    if (t < ReportData.SESSION_START || t > ReportData.SESSION_END) { stats.sentinel.outOfRange++; continue; }
+    sentinel.push(r);
+  }
+  stats.sentinel.kept = sentinel.length;
+
+  // Messages: tengo solo i record con ts in-session e from team-recognized.
+  const TELEMETRY_FROM = new Set(["pacing", "bridge", "sentinella"]);
+  const messages = [];
+  for (const r of all.messages) {
+    if (!r.ts) { stats.messages.badTs++; continue; }
+    const t = Date.parse(r.ts);
+    if (!Number.isFinite(t)) { stats.messages.badTs++; continue; }
+    if (t < ReportData.SESSION_START || t > ReportData.SESSION_END) { stats.messages.outOfRange++; continue; }
+    const fromLow = String(r.from || "").toLowerCase();
+    if (!fromLow || TELEMETRY_FROM.has(fromLow)) { stats.messages.telemetry++; continue; }
+    messages.push({ ...r, _t: t, _fromLow: fromLow });
+  }
+  stats.messages.kept = messages.length;
+
+  // Chat: come Round 2 usage.html
+  const RE_CHAT = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]\s*(?:\[([\w-]+)\])?\s*([\s\S]*)/;
+  function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h.toString(36); }
+  let chatRaw = [];
+  try { chatRaw = await ReportData.loadChat(); } catch (e) { chatRaw = []; }
+  stats.chat.total = chatRaw.length;
+  const chatRecords = []; // {from, to, type, body, body_len, content}
+  const seen = new Set();
+  for (const r of chatRaw) {
+    const c = (r && typeof r.content === "string") ? r.content.trim() : "";
+    if (!c) { stats.chat.empty++; continue; }
+    const m = RE_CHAT.exec(c);
+    if (!m) { stats.chat.noPrefix++; continue; }
+    const h = hashCode(c);
+    if (seen.has(h)) { stats.chat.dup++; continue; }
+    seen.add(h);
+    chatRecords.push({
+      from: m[1].toLowerCase(),
+      to: m[2].toLowerCase(),
+      type: (m[3] || "NONE").toUpperCase(),
+      body: m[4] || "",
+      body_len: (m[4] || "").length,
+      preview: (m[4] || "").slice(0, 140).replace(/\s+/g, " "),
+    });
+    stats.chat.kept++;
+  }
+
+  // Cross-ref messages ↔ chat: per ogni messaggio in messages cerco match
+  // su (from, to, prefisso preview) in chat. Match approssimato: from+to
+  // identici, body inizia con preview troncato (preview ~80 char).
+  // Salvo body_len trovato; se nessun match, fallback a len(preview).
+  const chatByFromTo = new Map();
+  for (const c of chatRecords) {
+    const key = c.from + "|" + c.to;
+    if (!chatByFromTo.has(key)) chatByFromTo.set(key, []);
+    chatByFromTo.get(key).push(c);
+  }
+  for (const m of messages) {
+    const key = (m._fromLow) + "|" + (String(m.to || "").toLowerCase());
+    const candidates = chatByFromTo.get(key) || [];
+    const previewClean = (m.preview || "").trim();
+    let matched = null;
+    for (const c of candidates) {
+      // Body inizia con i primi N caratteri del preview (il preview è il prefisso)
+      if (previewClean && c.body.startsWith(previewClean.slice(0, 60))) { matched = c; break; }
+    }
+    m._tokens = matched ? Math.round(matched.body_len / 4) : Math.round((previewClean.length || 0) / 4);
+    m._matchedBody = matched ? matched.body : null;
+  }
+
+  // ============== KPI ==============
+  // Total = sum tokens su messages (output team + input utente).
+  // Input = utente → *  (from=utente). Output = altro.
+  const totalTok = messages.reduce((a, m) => a + (m._tokens || 0), 0);
+  const inputTok = messages.filter((m) => m._fromLow === "utente").reduce((a, m) => a + (m._tokens || 0), 0);
+  const outputTok = totalTok - inputTok;
+  const sessionIds = new Set(sentinel.map((r) => r.session_id).filter(Boolean));
+  const avgPerWindow = sessionIds.size ? Math.round(totalTok / sessionIds.size) : 0;
+
+  // Bucket 5-min
+  const BUCKET_MS = 5 * 60 * 1000;
+  const bucketKey = (t) => Math.floor(t / BUCKET_MS) * BUCKET_MS;
+  const bucketTokens = new Map(); // tBucket -> total tokens
+  const bucketMsg = new Map();    // tBucket -> count messaggi
+  const bucketByAgent = new Map(); // tBucket -> Map(agentFamily -> tokens)
+  function fam(name) { return String(name).split("-")[0]; }
+  for (const m of messages) {
+    const k = bucketKey(m._t);
+    bucketTokens.set(k, (bucketTokens.get(k) || 0) + (m._tokens || 0));
+    bucketMsg.set(k, (bucketMsg.get(k) || 0) + 1);
+    const f = fam(m._fromLow);
+    if (!bucketByAgent.has(k)) bucketByAgent.set(k, new Map());
+    const am = bucketByAgent.get(k);
+    am.set(f, (am.get(f) || 0) + (m._tokens || 0));
+  }
+  const peakBucket = Array.from(bucketTokens.entries()).reduce((m, e) => e[1] > (m?.[1] ?? 0) ? e : m, null);
+
+  const fmtNum = (n) => Number(n).toLocaleString("it-IT");
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  document.getElementById("kpi-total").textContent = "~" + fmtNum(totalTok);
+  document.getElementById("kpi-input").textContent = "~" + fmtNum(inputTok);
+  document.getElementById("kpi-input-sub").textContent = `${((inputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale`;
+  document.getElementById("kpi-output").textContent = "~" + fmtNum(outputTok);
+  document.getElementById("kpi-output-sub").textContent = `${((outputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale`;
+  document.getElementById("kpi-avg-window").textContent = "~" + fmtNum(avgPerWindow);
+  document.getElementById("kpi-avg-window-sub").textContent = `su ${sessionIds.size} finestre Kimi K2`;
+  document.getElementById("kpi-peak-bucket").textContent = peakBucket ? "~" + fmtNum(peakBucket[1]) : "—";
+  document.getElementById("kpi-peak-bucket-sub").textContent = peakBucket ? `alle ${fmtTime(peakBucket[0])} (5-min)` : "";
+  document.getElementById("kpi-msg").textContent = fmtNum(messages.length);
+
+  // Cleaning stats footer
+  document.getElementById("cleaning-stats").innerHTML =
+    `Cleaning: messages ${stats.messages.total}→<code>${stats.messages.kept}</code> ` +
+    `(out-of-range:${stats.messages.outOfRange}, telemetria:${stats.messages.telemetry}, bad-ts:${stats.messages.badTs}); ` +
+    `chat ${stats.chat.total}→<code>${stats.chat.kept}</code> ` +
+    `(empty:${stats.chat.empty}, no-prefix:${stats.chat.noPrefix}, dup:${stats.chat.dup}); ` +
+    `sentinel ${stats.sentinel.total}→<code>${stats.sentinel.kept}</code>.`;
+
+  // Session boundaries (per chart 1 marker)
+  const sessionBoundaries = [];
+  for (let i = 1; i < sentinel.length; i++) {
+    if (sentinel[i].session_id && sentinel[i].session_id !== sentinel[i - 1].session_id) {
+      sessionBoundaries.push({ ts: Date.parse(sentinel[i].ts) });
+    }
+  }
+  const sessionBoundaryPlugin = {
+    id: "sessionBoundaries",
+    afterDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      ctx.save();
+      ctx.strokeStyle = "rgba(155,217,197,0.35)";
+      ctx.setLineDash([2, 4]);
+      ctx.lineWidth = 1;
+      ctx.font = "10px -apple-system, sans-serif";
+      ctx.fillStyle = "rgba(155,217,197,0.85)";
+      let idx = 1;
+      for (const b of sessionBoundaries) {
+        idx += 1;
+        const x = scales.x.getPixelForValue(b.ts);
+        if (x < chartArea.left || x > chartArea.right) continue;
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.fillText("#" + idx, x + 3, chartArea.top + 11);
+      }
+      ctx.restore();
+    },
+  };
+
+  // ============== CHART 1: token aggregati 5-min nel tempo ==============
+  const sortedBuckets = Array.from(bucketTokens.entries()).sort((a, b) => a[0] - b[0]);
+  const tokTimePts = sortedBuckets.map(([t, v]) => ({ x: t, y: v }));
+
+  const chart1Inst = new Chart(document.getElementById("chart-tokens-time"), {
+    type: "line",
+    data: {
+      datasets: [{
+        label: "token / 5-min",
+        data: tokTimePts,
+        borderColor: "#56ccf2",
+        backgroundColor: "rgba(86,204,242,0.18)",
+        fill: true,
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => `🔢 ~${fmtNum(ctx.parsed.y)} token nel bucket di 5-min`,
+            afterBody: (items) => {
+              const k = items[0].parsed.x;
+              return ["", `messaggi nel bucket: ${bucketMsg.get(k) || 0}`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: { beginAtZero: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" }, title: { display: true, text: "~tokens", color: "#8a93a4" } },
+      },
+    },
+    plugins: [sessionBoundaryPlugin],
+  });
+  registerToggle("chart-tokens-time", chart1Inst);
+
+  // ============== CHART 2: stacked area per agente ==============
+  // Tutti gli agenti famiglia distinti
+  const allFams = new Set();
+  for (const am of bucketByAgent.values()) for (const f of am.keys()) allFams.add(f);
+  // Ordina per token totali decrescenti
+  const famTotals = new Map();
+  for (const am of bucketByAgent.values()) for (const [f, v] of am) famTotals.set(f, (famTotals.get(f) || 0) + v);
+  const famsOrdered = Array.from(allFams).sort((a, b) => (famTotals.get(b) || 0) - (famTotals.get(a) || 0));
+
+  // Costruisco asse X comune
+  const allKeys = sortedBuckets.map(([k]) => k);
+  const stackedDatasets = famsOrdered.map((f) => ({
+    label: f,
+    data: allKeys.map((k) => ({ x: k, y: (bucketByAgent.get(k)?.get(f) || 0) })),
+    backgroundColor: ReportData.agentColor(f),
+    borderColor: ReportData.agentColor(f),
+    borderWidth: 1,
+    fill: true,
+    pointRadius: 0,
+    tension: 0.15,
+  }));
+
+  // Pills HTML per stacked
+  const pillsHost = document.getElementById("stacked-pills");
+  famsOrdered.forEach((f, i) => {
+    const b = document.createElement("button");
+    b.className = "pill";
+    b.setAttribute("data-series", String(i));
+    b.setAttribute("data-active", "true");
+    b.innerHTML = `<span class="swatch" style="background:${ReportData.agentColor(f)}"></span>${ReportData.agentEmoji(f)} ${f}`;
+    pillsHost.appendChild(b);
+  });
+
+  const chart2Inst = new Chart(document.getElementById("chart-tokens-stacked"), {
+    type: "line",
+    data: { datasets: stackedDatasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => {
+              if (ctx.parsed.y === 0) return null;
+              return `${ReportData.agentEmoji(ctx.dataset.label)} ${ctx.dataset.label}: ~${fmtNum(ctx.parsed.y)} token`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" }, stacked: true },
+        y: { beginAtZero: true, stacked: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" }, title: { display: true, text: "~tokens (stack)", color: "#8a93a4" } },
+      },
+    },
+    plugins: [sessionBoundaryPlugin],
+  });
+  registerToggle("chart-tokens-stacked", chart2Inst);
+
+  // ============== CHART 3: top-10 picchi (chat content) ==============
+  const top10 = chatRecords
+    .slice()
+    .sort((a, b) => b.body_len - a.body_len)
+    .slice(0, 10);
+  const top10Labels = top10.map((c, i) => `#${i + 1} ${ReportData.agentEmoji(c.from)} ${fam(c.from)}`);
+  const top10Tokens = top10.map((c) => Math.round(c.body_len / 4));
+  const top10Colors = top10.map((c) => ReportData.agentColor(c.from));
+
+  const chart3Inst = new Chart(document.getElementById("chart-tokens-top"), {
+    type: "bar",
+    data: {
+      labels: top10Labels,
+      datasets: [{
+        label: "~tokens",
+        data: top10Tokens,
+        backgroundColor: top10Colors,
+        borderColor: "#0d0f14",
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => `${top10Labels[items[0].dataIndex]}`,
+            label: (ctx) => {
+              const c = top10[ctx.dataIndex];
+              return [`🔢 ~${fmtNum(ctx.parsed.x)} token (${fmtNum(c.body_len)} char)`, `type: ${c.type}`, `→ @${c.to}`];
+            },
+            afterBody: (items) => ["", "preview:", top10[items[0].dataIndex].preview],
+          },
+        },
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" }, title: { display: true, text: "~tokens", color: "#8a93a4" } },
+        y: { grid: { color: "rgba(255,255,255,0.04)" } },
+      },
+    },
+  });
+  registerToggle("chart-tokens-top", chart3Inst);
+
+  // Tabella picchi
+  const peaksTbody = document.querySelector("#peaks-table tbody");
+  top10.forEach((c, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>#${i + 1}</td><td>${ReportData.agentEmoji(c.from)} ${c.from}</td><td>${c.type}</td><td class="num">~${fmtNum(Math.round(c.body_len / 4))}</td><td class="preview" title="${c.preview.replace(/"/g, "&quot;")}">${c.preview}</td>`;
+    peaksTbody.appendChild(tr);
+  });
+
+  // ============== CHART 4: scatter token-rate vs throttle ==============
+  // Per ogni bucket 5-min calcolo: tokenRate = totTok / 5 (token/min),
+  // throttleRatio = % tick sentinel con throttle=1 nel bucket,
+  // status prevalente = mode di sentinel.status nel bucket.
+  function bucketSentinel() {
+    const out = new Map();
+    for (const r of sentinel) {
+      const k = bucketKey(Date.parse(r.ts));
+      if (!out.has(k)) out.set(k, { total: 0, throttleOn: 0, statuses: new Map() });
+      const o = out.get(k);
+      o.total += 1;
+      if (r.throttle) o.throttleOn += 1;
+      const s = r.status || "?";
+      o.statuses.set(s, (o.statuses.get(s) || 0) + 1);
+    }
+    return out;
+  }
+  const sBuckets = bucketSentinel();
+  const STATUS_COLOR = { SOTTOUTILIZZO: "#56ccf2", STEADY: "#6fcf97", ATTENZIONE: "#f2c94c", OVER: "#eb5757", "G-SPOT": "#9b51e0", RESET: "#828282" };
+  const scatterPts = [];
+  const scatterColors = [];
+  const scatterMeta = [];
+  for (const [k, tok] of bucketTokens) {
+    const s = sBuckets.get(k);
+    if (!s) continue; // bucket senza sentinel coverage
+    const rate = tok / 5; // token / min
+    const throttlePct = (s.throttleOn / s.total) * 100;
+    let prevStatus = "?", best = 0;
+    for (const [st, c] of s.statuses) if (c > best) { best = c; prevStatus = st; }
+    scatterPts.push({ x: rate, y: throttlePct });
+    scatterColors.push(STATUS_COLOR[prevStatus] || "#888");
+    scatterMeta.push({ ts: k, tok, rate, throttlePct, status: prevStatus, sTicks: s.total, throttleOn: s.throttleOn });
+  }
+  const chart4Inst = new Chart(document.getElementById("chart-tokens-throttle"), {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: "bucket 5-min",
+        data: scatterPts,
+        backgroundColor: scatterColors,
+        borderColor: scatterColors.map((c) => c + "cc"),
+        borderWidth: 1,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const m = scatterMeta[items[0].dataIndex];
+              return `🕒 ${new Date(m.ts).toLocaleString("it-IT")} (5-min)`;
+            },
+            label: (ctx) => {
+              const m = scatterMeta[ctx.dataIndex];
+              return [
+                `🔢 token: ~${fmtNum(m.tok)} (${m.rate.toFixed(0)} /min)`,
+                `🔥 throttle: ${m.throttlePct.toFixed(0)}% (${m.throttleOn}/${m.sTicks} tick)`,
+                `📊 status prevalente: ${m.status}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { beginAtZero: true, title: { display: true, text: "token rate (~tokens/min)", color: "#8a93a4" }, grid: { color: "rgba(255,255,255,0.06)" } },
+        y: { beginAtZero: true, max: 100, ticks: { callback: (v) => v + "%" }, title: { display: true, text: "throttle ratio (%tick ON)", color: "#8a93a4" }, grid: { color: "rgba(255,255,255,0.06)" } },
+      },
+    },
+  });
+  registerToggle("chart-tokens-throttle", chart4Inst);
+
+  // ============== Scroll-spy TOC ==============
+  const tocLinks = Array.from(document.querySelectorAll(".toc a[data-toc]"));
+  const tocTargets = tocLinks
+    .map((a) => ({ a, el: document.querySelector(a.getAttribute("href")) }))
+    .filter((t) => t.el);
+  const setActive = (id) => tocLinks.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + id));
+  if ("IntersectionObserver" in window && tocTargets.length) {
+    const visible = new Map();
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) visible.set(e.target.id, e.intersectionRatio);
+        else visible.delete(e.target.id);
+      }
+      let bestId = null, bestR = 0;
+      for (const [id, r] of visible) if (r > bestR) { bestR = r; bestId = id; }
+      if (bestId) setActive(bestId);
+    }, { threshold: [0.3, 0.6] });
+    tocTargets.forEach((t) => obs.observe(t.el));
+  }
+})();
+</script>
 </body>
 </html>
