@@ -42,12 +42,20 @@
         Scroll orizzontale dentro al riquadro: ECharts dataZoom in basso per
         navigare. Hover su un evento per dettagli.
       </p>
-      <div id="timeline-chart" class="echart-tall"></div>
+      <div id="timeline-chart" class="echart-tall" title="Timeline multi-corsia: ogni puntino è un evento, posizionato sull'asse X per timestamp UTC. Le 4 corsie Y separano tipi di evento. Hover su un puntino → tooltip dettagliato; trascina lo slider in basso per zoomare."></div>
       <div class="legend-row">
-        <span class="legend-pill" data-lane="window">🪟 Finestra</span>
-        <span class="legend-pill" data-lane="capitano">🧭 Capitano</span>
-        <span class="legend-pill" data-lane="throttle">⏸ Throttle</span>
-        <span class="legend-pill" data-lane="peak">🔥 Peak ≥90%</span>
+        <span class="legend-pill" data-lane="window" title="Cambio di session_id: nuovo reset finestra Claude/Kimi. Punto grande perché segna inizio fase.">🪟 Finestra</span>
+        <span class="legend-pill" data-lane="capitano" title="Messaggi del capitano di tipo URG / FEEDBACK / FAILURE / ALERT / WARN / REPORT / DONE.">🧭 Capitano</span>
+        <span class="legend-pill" data-lane="throttle" title="Pausa applicata dal pacing-bridge a un agente. Raggio del puntino ∝ √(secondi applicati): più grande = pausa più lunga.">⏸ Throttle</span>
+        <span class="legend-pill" data-lane="peak" title="Primo tick in cui l'usage di una finestra supera 90%. Soglia di guardia: il termostato comincia a stringere.">🔥 Peak ≥90%</span>
+      </div>
+      <div class="info-box">
+        <strong>Come leggere il grafico:</strong>
+        l'asse <em>X</em> è il tempo UTC; l'asse <em>Y</em> separa i tipi di
+        evento in 4 corsie. La curva tratteggiata di sfondo è l'<em>usage%</em>
+        del provider (scalata 0–85% del riquadro). I throttle sono il tipo più
+        denso: la <em>dimensione</em> del puntino è proporzionale ai secondi di
+        pausa, così a colpo d'occhio si vede dove il termostato ha frenato di più.
       </div>
     </div>
   </section>
