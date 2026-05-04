@@ -164,15 +164,19 @@
   <section>
     <h2>💥 Cosa si è rotto e cosa abbiamo imparato</h2>
     <div class="narrative">
-      Il team Kimi K2 ha attraversato 18 ore di long-session con
-      <strong>zero crash hard</strong> nel senso classico (no FAILURE/ALERT/
-      CRASH/ERR registrati dal bridge). Ma "zero crash hard" non significa
-      "tutto perfetto". Tre <em>incidenti veri</em> hanno avuto conseguenze
-      misurabili sul team: una sessione kimi morta in silenzio (scout-1),
-      un buco di 1 minuto sul pacing-bridge (sentinella), e un coordinatore
-      che è scivolato <em>sotto soglia</em> per 15 tick consecutivi (capitano).
-      Più un episodio storico di rate-limit Kimi K2 (claude-429 cooldown del
-      26 aprile) come contesto del meccanismo. Ogni sezione qui sotto
+      Il <strong>perimetro</strong> di analisi è <strong>10h 43m</strong>
+      attive su 3 finestre Kimi K2: <strong>W1 · 94%</strong> (23:07→00:09),
+      <strong>W2 · 96% perfetta</strong> (00:18→05:06),
+      <strong>W3 · 64%</strong> (05:16→10:10). In quel perimetro registriamo
+      <strong>zero crash hard</strong> classici (no FAILURE/ALERT/CRASH/ERR
+      dal bridge). Ma "zero crash hard" non significa "tutto perfetto". Un
+      incidente <strong>pre-W1</strong> (scout-1 zombie 3h30m prima
+      dell'inizio di W1) e uno <strong>sul boundary di W1</strong>
+      (bridge failure risolto entro 60s dall'avvio della finestra) hanno
+      avuto conseguenze misurabili sul team. Dentro le finestre attive,
+      il coordinatore capitano è scivolato <em>sotto soglia</em> in 13 tick.
+      Più un episodio storico di rate-limit Kimi K2 (claude-429 cooldown
+      del 26 aprile) come contesto del meccanismo. Ogni sezione qui sotto
       ricostruisce <strong>chi · quando · cosa · perché · cosa è successo
       a cascata</strong>.
     </div>
@@ -208,8 +212,8 @@
   <!-- ========================== SCOUT-1 ZOMBIE ========================== -->
   <section>
     <div class="crash-case" id="case-scout1">
-      <h3>🔎 Scout-1 — kimi zombie su <code>Permission denied</code></h3>
-      <div class="when">Crash: <strong>2026-05-03 19:34 UTC</strong> · Recovery: <strong>19:46:13 UTC</strong> · Silenzio team ~9 min</div>
+      <h3>🔎 Scout-1 — kimi zombie su <code>Permission denied</code> <span style="color:var(--muted); font-size:13px; font-weight:400;">· prologue pre-W1</span></h3>
+      <div class="when">Crash: <strong>2026-05-03 19:34 UTC</strong> · Recovery: <strong>19:46:13 UTC</strong> · Silenzio team ~9 min · <strong>~3h30m prima dell'inizio di W1</strong></div>
 
       <div class="field"><div class="lbl">Chi</div>
         <div class="val">Istanza <code>scout-1</code>, agente di scouting posizioni JD, in pieno
@@ -264,8 +268,8 @@
   <!-- ========================== BRIDGE FAILURE 23:08 ========================== -->
   <section>
     <div class="crash-case info" id="case-bridge2308">
-      <h3>🌉 Sentinella — bridge failure recovery in 1 minuto</h3>
-      <div class="when">Bridge giù: <strong>2026-05-03 ~23:07 UTC</strong> · Recovery: <strong>23:08:52 UTC</strong> · Durata ~60s</div>
+      <h3>🌉 Sentinella — bridge failure recovery in 1 minuto <span style="color:var(--muted); font-size:13px; font-weight:400;">· boundary di W1</span></h3>
+      <div class="when">Bridge giù: <strong>2026-05-03 ~23:07 UTC</strong> · Bridge INFO recovery: <strong>23:07:52 UTC</strong> (1s dopo l'inizio di W1) · Sentinella RIPRENDI: <strong>23:08:52 UTC</strong> (60s dentro W1) · Durata ~60s</div>
 
       <div class="field"><div class="lbl">Chi</div>
         <div class="val">Istanza <code>sentinella</code>, l'agente di monitoraggio
@@ -291,11 +295,14 @@
         <div class="val">
           <ul class="consequences">
             <li>1 tick di pacing-bridge mancato — finestra di vulnerabilità di 60s.</li>
-            <li>La finestra Kimi K2 successiva (94% peak) inizia esattamente
-              dopo questo evento (alle 23:07:51 UTC <code>session_id=20260503T230751Z</code>):
-              correlazione possibile, non causale (rate-limit non confermato in finestra).</li>
+            <li><strong>W1 inizia esattamente alle 23:07:51 UTC</strong>
+              (<code>session_id=20260503T230751Z</code>): l'ingresso in W1
+              avviene dopo ~60s di degrado. Correlazione possibile (sorgente
+              instabile riallinea su un nuovo session_id), non causale
+              (rate-limit non confermato).</li>
             <li>Self-healing: la sentinella ha emesso RIPRENDI al capitano da
-              sola, recovery completo in &lt;1 minuto.</li>
+              sola, recovery completo in &lt;1 minuto. Il pacing-bridge ha
+              ripreso il monitor pochi secondi prima dell'inizio di W1.</li>
           </ul>
         </div>
       </div>
@@ -310,8 +317,8 @@
   <!-- ========================== CAPITANO SOTTO_SOGLIA ========================== -->
   <section>
     <div class="crash-case warn" id="case-capitano-soglia">
-      <h3>🧭 Capitano — sotto soglia per 15 tick</h3>
-      <div class="when">Prima caduta: <strong>22:29 UTC</strong> · Ultima: <strong>10:30 UTC</strong> · Span ~12 ore</div>
+      <h3>🧭 Capitano — sotto soglia per 13 tick dentro le 3 finestre</h3>
+      <div class="when">Prima caduta IN finestra: <strong>23:29 UTC (W1)</strong> · Ultima: <strong>08:15 UTC (W3)</strong> · 13 tick IN finestre + 2 nei gap (22:29 pre-W1, 10:30 post-W3)</div>
 
       <div class="field"><div class="lbl">Chi</div>
         <div class="val">Istanza <code>capitano</code>, coordinatore del team. È l'agente
@@ -320,10 +327,12 @@
 
       <div class="field"><div class="lbl">Cosa</div>
         <div class="val">Il pacing-bridge ha emesso il flag <code>sotto_soglia: capitano</code>
-        in <strong>15 tick</strong> sui 19 del log esportato (~80%). Significa
-        che lo share di token consumati dal capitano in quella finestra di
-        15 minuti era inferiore alla soglia minima (<code>min_pct_h=0.2</code>)
-        — il coordinatore "respira poco" rispetto al resto del team.</div></div>
+        in <strong>15 tick complessivi</strong> sui 19 del log esportato (~80%),
+        di cui <strong>13 cadono dentro le 3 finestre</strong> e 2 nei gap
+        (22:29 pre-W1, 10:30 post-W3). Significa che lo share di token
+        consumati dal capitano in quella finestra di 15 minuti era inferiore
+        alla soglia minima (<code>min_pct_h=0.2</code>) — il coordinatore
+        "respira poco" rispetto al resto del team.</div></div>
 
       <div class="field"><div class="lbl">Tick</div>
         <div class="val">
@@ -422,8 +431,10 @@
 <script>
 (async function () {
   const RD = window.ReportData;
-  const SESSION_FROM = Date.parse("2026-05-03T18:00:00Z");
-  const SESSION_TO   = Date.parse("2026-05-04T12:30:00Z");
+  // Perimetro 3 finestre Kimi K2 dal data-loader.
+  const WINDOWS = RD.SESSION_WINDOWS;
+  const SESSION_FROM = WINDOWS[0].startMs;
+  const SESSION_TO   = WINDOWS[WINDOWS.length - 1].endMs;
 
   function panChartBy(chart, axis, frac) {
     const sc = chart.scales[axis];
@@ -459,18 +470,32 @@
   }
 
   // ---------- KPI banner sintetico ----------
-  // Tick capitano sotto_soglia (estratti offline da pacing-bridge.log.txt)
+  // Tick capitano sotto_soglia (estratti offline da pacing-bridge.log.txt).
+  // Marcatura: "win" = dentro W1/W2/W3, "gap" = nei gap fra finestre.
   const CAPITANO_TICKS = [
-    "22:29","23:29","23:30","23:44","23:59",
-    "02:00","02:15","03:00","03:30","04:00",
-    "05:00","06:00","07:45","08:15","10:30",
+    { t: "22:29", where: "gap (pre-W1)" },
+    { t: "23:29", where: "W1" },
+    { t: "23:30", where: "W1" },
+    { t: "23:44", where: "W1" },
+    { t: "23:59", where: "W1" },
+    { t: "02:00", where: "W2" },
+    { t: "02:15", where: "W2" },
+    { t: "03:00", where: "W2" },
+    { t: "03:30", where: "W2" },
+    { t: "04:00", where: "W2" },
+    { t: "05:00", where: "W2" },
+    { t: "06:00", where: "W3" },
+    { t: "07:45", where: "W3" },
+    { t: "08:15", where: "W3" },
+    { t: "10:30", where: "gap (post-W3)" },
   ];
   const ticksHost = document.getElementById("capitano-ticks");
-  for (const t of CAPITANO_TICKS) {
+  for (const r of CAPITANO_TICKS) {
     const div = document.createElement("div");
     div.className = "tick";
-    div.textContent = t;
-    div.title = `Capitano sotto_soglia alle ${t} UTC`;
+    if (r.where.startsWith("gap")) div.style.opacity = "0.45";
+    div.textContent = r.t;
+    div.title = `Capitano sotto_soglia alle ${r.t} UTC · ${r.where}`;
     ticksHost.appendChild(div);
   }
 
@@ -488,25 +513,26 @@
   }
 
   // KPI banner: 4 numeri sintetici della pagina
+  const ticksInWindow = CAPITANO_TICKS.filter(r => !r.where.startsWith("gap")).length;
   const banner = document.getElementById("kpi-banner");
   banner.innerHTML = `
     <div class="kpi-card good">
-      <div class="label">Crash hard IN finestra</div>
+      <div class="label">Crash hard IN finestre W1/W2/W3</div>
       <div class="value">0</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">✅ FAILURE/ALERT/CRASH/ERR=0 in 18.5h</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">✅ FAILURE/ALERT/CRASH/ERR=0 in 10h 43m attive</div>
     </div>
     <div class="kpi-card warn">
       <div class="label">Episodi narrati qui</div>
       <div class="value">4</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">scout-1 zombie · bridge fail · capitano sotto_soglia · cooldown</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">2 prologue pre-W1 + capitano sotto_soglia + cooldown storico</div>
     </div>
     <div class="kpi-card warn">
-      <div class="label">Tick capitano sotto_soglia</div>
-      <div class="value">15</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">su 19 tick log (~80%) — coordinatore in standby</div>
+      <div class="label">Tick capitano sotto_soglia in finestra</div>
+      <div class="value">${ticksInWindow}</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">su 15 totali (2 nei gap pre-W1 / post-W3) — coordinatore in standby</div>
     </div>
     <div class="kpi-card">
-      <div class="label">Silenzio team scout-1</div>
+      <div class="label">Silenzio team scout-1 (pre-W1)</div>
       <div class="value">~9 min</div>
       <div class="label" style="margin-top:4px; text-transform:none;">recovery manuale via tmux dal capitano</div>
     </div>
@@ -561,30 +587,37 @@
   }
   usagePts.sort((a, b) => a.x - b.x);
 
-  // overlay banda session-window
+  // overlay: una banda per ogni delle 3 finestre Kimi K2 (W1/W2/W3) +
+  // label flottante con id finestra in alto.
   const overlayPlugin = {
     id: "overlay",
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea, scales } = chart;
       if (!scales.x) return;
-      const xs = scales.x.getPixelForValue(SESSION_FROM);
-      const xe = scales.x.getPixelForValue(SESSION_TO);
-      if (Number.isFinite(xs) && Number.isFinite(xe)) {
+      ctx.save();
+      for (const w of WINDOWS) {
+        const xs = scales.x.getPixelForValue(w.startMs);
+        const xe = scales.x.getPixelForValue(w.endMs);
+        if (!Number.isFinite(xs) || !Number.isFinite(xe)) continue;
         const a = Math.max(chartArea.left, Math.min(xs, xe));
         const b = Math.min(chartArea.right, Math.max(xs, xe));
-        if (b > a) {
-          ctx.save();
-          ctx.fillStyle = "rgba(86,204,242,0.07)";
-          ctx.fillRect(a, chartArea.top, b - a, chartArea.bottom - chartArea.top);
-          ctx.strokeStyle = "rgba(86,204,242,0.45)";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(a, chartArea.top); ctx.lineTo(a, chartArea.bottom);
-          ctx.moveTo(b, chartArea.top); ctx.lineTo(b, chartArea.bottom);
-          ctx.stroke();
-          ctx.restore();
-        }
+        if (b <= a) continue;
+        ctx.fillStyle = "rgba(86,204,242,0.07)";
+        ctx.fillRect(a, chartArea.top, b - a, chartArea.bottom - chartArea.top);
+        ctx.strokeStyle = "rgba(86,204,242,0.45)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(a, chartArea.top); ctx.lineTo(a, chartArea.bottom);
+        ctx.moveTo(b, chartArea.top); ctx.lineTo(b, chartArea.bottom);
+        ctx.stroke();
+        // label
+        ctx.fillStyle = "rgba(86,204,242,0.85)";
+        ctx.font = "11px -apple-system, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        const labelX = (a + b) / 2;
+        ctx.fillText(w.label, labelX, chartArea.top + 12);
       }
+      ctx.restore();
     },
   };
 
