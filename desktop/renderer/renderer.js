@@ -378,6 +378,25 @@ const TRANSLATIONS = {
     'home.team.openDashboard': 'Open dashboard',
     'home.team.stop': 'Stop team',
     'home.team.advanced': 'Technical details',
+    'home.team.dockerWarning.title': 'Docker is not running',
+    'home.team.dockerWarning.bodyNotRunning.win32':
+      'Docker Desktop is installed but not running. Open it before starting the team.',
+    'home.team.dockerWarning.bodyNotRunning.darwin':
+      'Colima is installed but the daemon is stopped. Start it before launching the team.',
+    'home.team.dockerWarning.bodyNotRunning.linux':
+      'The Docker daemon is not running. Start it (e.g. `sudo systemctl start docker`) before launching the team.',
+    'home.team.dockerWarning.bodyMissing':
+      'Docker is not installed. Reopen the setup wizard to install it.',
+    'home.team.dockerWarning.bodyStarting':
+      'Docker is starting. Wait a few seconds and re-check.',
+    'home.team.dockerWarning.bodyNeedsReboot':
+      'Docker is installed but requires a reboot to activate.',
+    'home.team.dockerWarning.bodyGeneric':
+      'The Docker runtime is not ready. Start it before launching the team.',
+    'home.team.dockerWarning.recheck': 'Re-check',
+    'home.team.dockerWarning.starting': 'Starting Docker…',
+    'home.team.dockerWarning.bodyAutoCheck':
+      'Waiting for Docker to come up. This usually takes 20–60 seconds.',
     'home.provider.title': 'AI provider',
     'home.provider.subtitle': 'Selected CLI, subscription plan and login status.',
     'home.provider.current': 'Current provider',
@@ -391,8 +410,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Container runtime used to isolate the agents.',
     'home.docker.state': 'State',
     'home.docker.image': 'JHT image',
+    'home.docker.runtimeTitle': '🐳 Docker runtime',
+    'home.docker.imageTitle': '📦 JHT container',
     'home.docker.imagePresent': 'Present locally',
     'home.docker.imageMissing': 'Missing',
+    'home.docker.imageName': 'Name',
+    'home.docker.imageVersion': 'Version',
+    'home.docker.imageCreated': 'Built on',
+    'home.docker.imageSize': 'Size',
+    'home.docker.imageReleases': 'View all releases →',
     'home.docker.refresh': 'Re-check',
     'home.docker.openDesktop': 'Open Docker Desktop',
     'home.language.title': 'Language',
@@ -631,6 +657,25 @@ const TRANSLATIONS = {
     'home.team.openDashboard': 'Apri dashboard',
     'home.team.stop': 'Ferma team',
     'home.team.advanced': 'Dettagli tecnici',
+    'home.team.dockerWarning.title': 'Docker non è in esecuzione',
+    'home.team.dockerWarning.bodyNotRunning.win32':
+      'Docker Desktop è installato ma non è in esecuzione. Aprilo prima di avviare il team.',
+    'home.team.dockerWarning.bodyNotRunning.darwin':
+      'Colima è installato ma il daemon è fermo. Avvialo prima di lanciare il team.',
+    'home.team.dockerWarning.bodyNotRunning.linux':
+      'Il daemon Docker non è attivo. Avvialo (es. `sudo systemctl start docker`) prima di lanciare il team.',
+    'home.team.dockerWarning.bodyMissing':
+      'Docker non è installato. Riapri il wizard di setup per installarlo.',
+    'home.team.dockerWarning.bodyStarting':
+      'Docker è in avvio. Attendi qualche secondo e ricontrolla.',
+    'home.team.dockerWarning.bodyNeedsReboot':
+      'Docker è installato ma richiede un riavvio per attivarsi.',
+    'home.team.dockerWarning.bodyGeneric':
+      'Il runtime Docker non è pronto. Avvialo prima di lanciare il team.',
+    'home.team.dockerWarning.recheck': 'Ricontrolla',
+    'home.team.dockerWarning.starting': 'Avvio Docker…',
+    'home.team.dockerWarning.bodyAutoCheck':
+      'Attendo che Docker sia pronto. In genere richiede 20–60 secondi.',
     'home.provider.title': 'Provider AI',
     'home.provider.subtitle': 'CLI selezionato, piano di sottoscrizione e stato del login.',
     'home.provider.current': 'Provider attuale',
@@ -644,8 +689,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Runtime container usato per isolare gli agenti.',
     'home.docker.state': 'Stato',
     'home.docker.image': 'Immagine JHT',
+    'home.docker.runtimeTitle': '🐳 Runtime Docker',
+    'home.docker.imageTitle': '📦 Container JHT',
     'home.docker.imagePresent': 'Presente in locale',
     'home.docker.imageMissing': 'Assente',
+    'home.docker.imageName': 'Nome',
+    'home.docker.imageVersion': 'Versione',
+    'home.docker.imageCreated': 'Build',
+    'home.docker.imageSize': 'Dimensione',
+    'home.docker.imageReleases': 'Vedi tutte le release →',
     'home.docker.refresh': 'Ricontrolla',
     'home.docker.openDesktop': 'Apri Docker Desktop',
     'home.language.title': 'Lingua',
@@ -881,6 +933,25 @@ const TRANSLATIONS = {
     'home.team.statusStarting': 'Indul',
     'home.team.statusError': 'Hiba',
     'home.team.start': 'Csapat indítása',
+    'home.team.dockerWarning.title': 'A Docker nem fut',
+    'home.team.dockerWarning.bodyNotRunning.win32':
+      'A Docker Desktop telepítve van, de nem fut. Nyisd meg a csapat indítása előtt.',
+    'home.team.dockerWarning.bodyNotRunning.darwin':
+      'A Colima telepítve van, de a démon leállt. Indítsd el a csapat indítása előtt.',
+    'home.team.dockerWarning.bodyNotRunning.linux':
+      'A Docker démon nem fut. Indítsd el (pl. `sudo systemctl start docker`) a csapat indítása előtt.',
+    'home.team.dockerWarning.bodyMissing':
+      'A Docker nincs telepítve. Nyisd meg újra a beállítási varázslót a telepítéshez.',
+    'home.team.dockerWarning.bodyStarting':
+      'A Docker indul. Várj néhány másodpercet, majd ellenőrizd újra.',
+    'home.team.dockerWarning.bodyNeedsReboot':
+      'A Docker telepítve van, de újraindítás szükséges az aktiváláshoz.',
+    'home.team.dockerWarning.bodyGeneric':
+      'A Docker futtatókörnyezet nem áll készen. Indítsd el a csapat indítása előtt.',
+    'home.team.dockerWarning.recheck': 'Újraellenőrzés',
+    'home.team.dockerWarning.starting': 'Docker indítása…',
+    'home.team.dockerWarning.bodyAutoCheck':
+      'Várom, hogy a Docker elinduljon. Ez általában 20–60 másodpercet vesz igénybe.',
     'home.team.openDashboard': 'Vezérlőpult megnyitása',
     'home.team.stop': 'Csapat leállítása',
     'home.team.advanced': 'Technikai részletek',
@@ -897,8 +968,15 @@ const TRANSLATIONS = {
     'home.docker.subtitle': 'Az ügynökök izolálásához használt konténer futtatókörnyezet.',
     'home.docker.state': 'Állapot',
     'home.docker.image': 'JHT image',
+    'home.docker.runtimeTitle': '🐳 Docker futtatókörnyezet',
+    'home.docker.imageTitle': '📦 JHT konténer',
     'home.docker.imagePresent': 'Helyben elérhető',
     'home.docker.imageMissing': 'Hiányzik',
+    'home.docker.imageName': 'Név',
+    'home.docker.imageVersion': 'Verzió',
+    'home.docker.imageCreated': 'Build dátuma',
+    'home.docker.imageSize': 'Méret',
+    'home.docker.imageReleases': 'Összes kiadás →',
     'home.docker.refresh': 'Újraellenőrzés',
     'home.docker.openDesktop': 'Docker Desktop megnyitása',
     'home.language.title': 'Nyelv',
@@ -2968,6 +3046,9 @@ const homeDom = {
   teamInfo: document.getElementById('home-team-info'),
   teamAdvanced: document.getElementById('home-team-advanced'),
   teamLog: document.getElementById('home-team-log'),
+  teamDockerWarning: document.getElementById('home-team-docker-warning'),
+  teamDockerWarningText: document.getElementById('home-team-docker-warning-text'),
+  btnTeamDockerAction: document.getElementById('home-team-docker-action'),
   btnStart: document.getElementById('home-btn-start'),
   btnOpen: document.getElementById('home-btn-open'),
   btnStop: document.getElementById('home-btn-stop'),
@@ -2978,6 +3059,15 @@ const homeDom = {
   btnProviderChange: document.getElementById('home-btn-provider-change'),
   dockerState: document.getElementById('home-docker-state'),
   dockerImage: document.getElementById('home-docker-image'),
+  dockerImageNameRow: document.getElementById('home-docker-image-name-row'),
+  dockerImageName: document.getElementById('home-docker-image-name'),
+  dockerImageVersionRow: document.getElementById('home-docker-image-version-row'),
+  dockerImageVersion: document.getElementById('home-docker-image-version'),
+  dockerImageCreatedRow: document.getElementById('home-docker-image-created-row'),
+  dockerImageCreated: document.getElementById('home-docker-image-created'),
+  dockerImageSizeRow: document.getElementById('home-docker-image-size-row'),
+  dockerImageSize: document.getElementById('home-docker-image-size'),
+  dockerImageReleases: document.getElementById('home-docker-image-releases'),
   btnDockerRefresh: document.getElementById('home-btn-docker-refresh'),
   btnDockerOpen: document.getElementById('home-btn-docker-open'),
   btnReopenWizard: document.getElementById('home-btn-reopen-wizard'),
@@ -3008,6 +3098,7 @@ function showWizard(step = STEP_WELCOME) {
   homeDom.root.hidden = true
   homeDom.wizardRoot.hidden = false
   state.view = 'wizard'
+  stopTeamPanelPoll()
   showStep(step)
 }
 
@@ -3017,6 +3108,28 @@ async function showHome(section = 'team') {
   state.view = 'home'
   setHomeSection(section)
   await refreshHomeAll()
+}
+
+// Background poll for the team panel: while the user is looking at it
+// we re-check team + docker state every 5s so the warning appears as
+// soon as Docker is closed externally and clears as soon as it comes
+// back. The post-click polling (3s, capped at 90s) is layered on top
+// for the spinner UX — see startTeamDockerPolling.
+let teamPanelTimer = null
+const TEAM_PANEL_POLL_MS = 5000
+
+function startTeamPanelPoll() {
+  if (teamPanelTimer) return
+  teamPanelTimer = setInterval(() => {
+    refreshHomeTeam().catch(() => {})
+  }, TEAM_PANEL_POLL_MS)
+}
+
+function stopTeamPanelPoll() {
+  if (teamPanelTimer) {
+    clearInterval(teamPanelTimer)
+    teamPanelTimer = null
+  }
 }
 
 function setHomeSection(name) {
@@ -3030,9 +3143,14 @@ function setHomeSection(name) {
   for (const panel of homeDom.panels) {
     panel.hidden = panel.dataset.section !== name
   }
-  if (name === 'team') refreshHomeTeam()
-  else if (name === 'provider') refreshHomeProvider()
-  else if (name === 'docker') refreshHomeDocker()
+  if (name === 'team') {
+    refreshHomeTeam()
+    startTeamPanelPoll()
+  } else {
+    stopTeamPanelPoll()
+    if (name === 'provider') refreshHomeProvider()
+    else if (name === 'docker') refreshHomeDocker()
+  }
 }
 
 async function refreshHomeAll() {
@@ -3097,10 +3215,116 @@ function renderHomeTeamStatus(status) {
   }
 }
 
+// Polls docker status every 3s after the user clicked the warning's
+// action button (Open Docker Desktop / Start Colima). Stops as soon as
+// the gate clears (state=ok), or after 90s. While polling, the button
+// shows a spinner and the body text switches to "waiting for Docker".
+let teamDockerPollTimer = null
+const TEAM_DOCKER_POLL_MS = 3000
+const TEAM_DOCKER_POLL_MAX = 30
+
+function stopTeamDockerPolling() {
+  if (teamDockerPollTimer) {
+    clearInterval(teamDockerPollTimer)
+    teamDockerPollTimer = null
+  }
+  state.teamDockerPolling = false
+}
+
+function startTeamDockerPolling() {
+  if (state.teamDockerPolling) return
+  state.teamDockerPolling = true
+  let tries = 0
+  // Render the busy state immediately (don't wait for the first tick).
+  refreshHomeTeam().catch(() => {})
+  teamDockerPollTimer = setInterval(async () => {
+    tries += 1
+    try {
+      await refreshHomeTeam()
+    } catch (_) { /* keep polling */ }
+    if (homeDom.btnStart.dataset.dockerBlocked !== '1') {
+      stopTeamDockerPolling()
+      return
+    }
+    if (tries >= TEAM_DOCKER_POLL_MAX) {
+      stopTeamDockerPolling()
+      refreshHomeTeam().catch(() => {})
+    }
+  }, TEAM_DOCKER_POLL_MS)
+}
+
+function setActionButtonBusy(label) {
+  homeDom.btnTeamDockerAction.hidden = false
+  homeDom.btnTeamDockerAction.disabled = true
+  homeDom.btnTeamDockerAction.innerHTML = ''
+  const spinner = document.createElement('span')
+  spinner.className = 'status-icon'
+  spinner.dataset.state = 'busy'
+  const text = document.createElement('span')
+  text.textContent = label
+  homeDom.btnTeamDockerAction.append(spinner, ' ', text)
+}
+
+function setActionButtonIdle(label, action) {
+  homeDom.btnTeamDockerAction.hidden = false
+  homeDom.btnTeamDockerAction.disabled = false
+  homeDom.btnTeamDockerAction.textContent = label
+  homeDom.btnTeamDockerAction.dataset.action = action
+}
+
+async function refreshHomeTeamDockerGate(teamStatus) {
+  // Always evaluate Docker independently of team state: a "running"
+  // team without a healthy Docker daemon is a misleading state — the
+  // dashboard might still respond but the agents aren't working. The
+  // warning is informative, not just a Start-button gate.
+  let dockerStatus = null
+  try {
+    dockerStatus = await window.setupApi.getDockerStatus()
+  } catch (error) {
+    appendLog(`refreshHomeTeamDockerGate: ${error.message || error}`)
+    return
+  }
+  const s = dockerStatus?.check?.state
+  if (s === 'ok') {
+    homeDom.teamDockerWarning.hidden = true
+    homeDom.btnStart.disabled = false
+    delete homeDom.btnStart.dataset.dockerBlocked
+    stopTeamDockerPolling()
+    return
+  }
+  const platform = dockerStatus?.platform || window.platformInfo?.platform || 'linux'
+  // Polling overrides the body+button: unified "starting" UX regardless
+  // of the current sub-state (Desktop process up but daemon not, etc).
+  if (state.teamDockerPolling) {
+    homeDom.teamDockerWarningText.textContent = t('home.team.dockerWarning.bodyAutoCheck')
+    setActionButtonBusy(t('home.team.dockerWarning.starting'))
+  } else {
+    let bodyKey = 'home.team.dockerWarning.bodyGeneric'
+    if (s === 'not-running') bodyKey = `home.team.dockerWarning.bodyNotRunning.${platform}`
+    else if (s === 'missing') bodyKey = 'home.team.dockerWarning.bodyMissing'
+    else if (s === 'starting') bodyKey = 'home.team.dockerWarning.bodyStarting'
+    else if (s === 'needs-reboot') bodyKey = 'home.team.dockerWarning.bodyNeedsReboot'
+    let body = t(bodyKey)
+    if (body === bodyKey) body = t('home.team.dockerWarning.bodyGeneric')
+    homeDom.teamDockerWarningText.textContent = body
+    if (platform === 'win32' && (s === 'not-running' || s === 'starting')) {
+      setActionButtonIdle(t('home.docker.openDesktop'), 'openDesktop')
+    } else if (platform === 'darwin' && (s === 'not-running' || s === 'needs-reboot')) {
+      setActionButtonIdle(t('docker.action.startColima'), 'startColima')
+    } else {
+      setActionButtonIdle(t('home.team.dockerWarning.recheck'), 'recheck')
+    }
+  }
+  homeDom.teamDockerWarning.hidden = false
+  homeDom.btnStart.disabled = true
+  homeDom.btnStart.dataset.dockerBlocked = '1'
+}
+
 async function refreshHomeTeam() {
   try {
     const status = await window.launcherApi.getStatus()
     renderHomeTeamStatus(status)
+    await refreshHomeTeamDockerGate(status)
   } catch (error) {
     appendLog(`refreshHomeTeam: ${error.message || error}`)
   }
@@ -3108,6 +3332,22 @@ async function refreshHomeTeam() {
 
 async function startTeamFromHome() {
   if (state.starting) return
+  // Always re-probe Docker right before starting: the dockerBlocked
+  // flag is only as fresh as the last gate run, and Docker may have
+  // died between refreshes (the panel poll runs every 5s, leaving a
+  // window where Start would slip through). If the daemon is not ok,
+  // refresh the gate (which surfaces the warning) and bail.
+  try {
+    const dockerStatus = await window.setupApi.getDockerStatus()
+    if (dockerStatus?.check?.state !== 'ok') {
+      await refreshHomeTeam()
+      return
+    }
+  } catch (error) {
+    appendLog(`startTeamFromHome docker probe: ${error.message || error}`)
+    await refreshHomeTeam()
+    return
+  }
   state.starting = true
   homeDom.btnStart.disabled = true
   const original = homeDom.btnStart.textContent
@@ -3168,6 +3408,70 @@ async function refreshHomeProvider() {
   }
 }
 
+function formatImageSize(bytes) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) return null
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1 }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function formatImageDate(iso) {
+  if (typeof iso !== 'string' || !iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  // Locale-aware short date + HH:MM. Falls back gracefully if Intl is
+  // unavailable (older Electron / stripped builds).
+  try {
+    return d.toLocaleString(currentLang || undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    })
+  } catch {
+    return d.toISOString().slice(0, 16).replace('T', ' ')
+  }
+}
+
+function formatImageVersion(image) {
+  // Prefer the registry digest (the immutable identifier behind ":latest"
+  // — what actually changes when a new image is published). Fall back to
+  // the local image id if the image was built locally and has no digest.
+  const digest = Array.isArray(image?.digests) && image.digests.length
+    ? image.digests[0]
+    : null
+  const sha = digest && digest.includes('@')
+    ? digest.split('@').pop()
+    : (typeof image?.id === 'string' ? image.id : null)
+  if (typeof sha === 'string' && sha.startsWith('sha256:')) {
+    return sha.slice(7, 19) // short 12-char SHA
+  }
+  return null
+}
+
+function renderDockerImageMetadata(image) {
+  const setRow = (rowEl, valueEl, value) => {
+    if (value) {
+      valueEl.textContent = value
+      rowEl.hidden = false
+    } else {
+      rowEl.hidden = true
+    }
+  }
+  if (!image || !image.present) {
+    homeDom.dockerImageNameRow.hidden = true
+    homeDom.dockerImageVersionRow.hidden = true
+    homeDom.dockerImageCreatedRow.hidden = true
+    homeDom.dockerImageSizeRow.hidden = true
+    return
+  }
+  const name = (Array.isArray(image.tags) && image.tags[0]) || image.image || null
+  setRow(homeDom.dockerImageNameRow, homeDom.dockerImageName, name)
+  setRow(homeDom.dockerImageVersionRow, homeDom.dockerImageVersion, formatImageVersion(image))
+  setRow(homeDom.dockerImageCreatedRow, homeDom.dockerImageCreated, formatImageDate(image.created))
+  setRow(homeDom.dockerImageSizeRow, homeDom.dockerImageSize, formatImageSize(image.size))
+}
+
 async function refreshHomeDocker() {
   try {
     const dockerStatus = await window.setupApi.getDockerStatus()
@@ -3185,6 +3489,7 @@ async function refreshHomeDocker() {
     const imgOk = full?.image?.present === true
     homeDom.dockerImage.textContent = imgOk ? t('home.docker.imagePresent') : t('home.docker.imageMissing')
     homeDom.dockerImage.style.color = imgOk ? 'var(--success)' : 'var(--warn)'
+    renderDockerImageMetadata(imgOk ? full?.image : null)
     // Bottone "accendi runtime": label e azione cambiano per OS.
     // Linux: nessun bottone (il daemon parte da systemctl). Mac: "Avvia
     // Colima" → fa partire il VM Colima. Win: "Apri Docker Desktop".
@@ -3211,6 +3516,30 @@ for (const btn of homeDom.navItems) {
 homeDom.btnStart.addEventListener('click', startTeamFromHome)
 homeDom.btnStop.addEventListener('click', stopTeamFromHome)
 homeDom.btnOpen.addEventListener('click', () => window.launcherApi.openBrowser())
+homeDom.btnTeamDockerAction.addEventListener('click', async () => {
+  if (state.teamDockerPolling) return
+  const action = homeDom.btnTeamDockerAction.dataset.action
+  if (action === 'recheck') {
+    await refreshHomeTeam()
+    return
+  }
+  // Flip to busy + start the poll BEFORE the IPC: openDockerDesktop on
+  // win32 launches the GUI and returns instantly, but the daemon takes
+  // 20-60s to come up. Polling drives the warning to "ok" automatically.
+  startTeamDockerPolling()
+  try {
+    if (action === 'openDesktop') {
+      await window.setupApi.openDockerDesktop()
+    } else if (action === 'startColima') {
+      const r = await window.setupApi.startColima()
+      if (!r?.ok) appendLog(`startColima: ${r?.error || 'failed'}`)
+    }
+  } catch (error) {
+    appendLog(`teamDockerAction: ${error.message || error}`)
+    stopTeamDockerPolling()
+    await refreshHomeTeam()
+  }
+})
 // Origin marker: il listener btnLoginBack/btnLoginContinue lo legge per
 // riportare alla home invece che a STEP_READY (che farebbe partire il
 // runtime del wizard di primo setup — non e' quello che vuole un utente
@@ -3224,6 +3553,13 @@ homeDom.btnProviderChange.addEventListener('click', () => {
   showWizard(STEP_PROVIDER_CHOOSE)
 })
 homeDom.btnDockerRefresh.addEventListener('click', () => refreshHomeDocker())
+homeDom.dockerImageReleases.addEventListener('click', (event) => {
+  event.preventDefault()
+  // GHCR packages page for the JHT image — shows tags, digests, and
+  // publish dates for every release. The URL is derived from the image
+  // ref (`ghcr.io/<owner>/<name>`) we ship in container-prep.js.
+  window.launcherApi.openExternal('https://github.com/leopu00/job-hunter-team/pkgs/container/jht')
+})
 homeDom.btnDockerOpen.addEventListener('click', async () => {
   const platform = window.platformInfo?.platform
   if (platform === 'darwin') {
