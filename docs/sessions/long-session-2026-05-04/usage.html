@@ -1473,9 +1473,14 @@
     for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
     return h.toString(36);
   }
+  // dev4 ha rinominato loadChat() → loadChats() in data-loader.js (Round 2 ext);
+  // il return è {records, stats}. Mantengo la struttura {content:...} per la
+  // mia regex inline (parsing autonomo del header per non dipendere dalla
+  // estrazione already-done del loader).
   let chatRaw = [];
   try {
-    chatRaw = await ReportData.loadChat();
+    const cr = await ReportData.loadChats();
+    chatRaw = (cr.records || []).map((r) => ({ content: r.content }));
   } catch (e) {
     chatRaw = [];
   }

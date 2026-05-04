@@ -183,8 +183,8 @@
     <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">🔢 Token totali</div><div class="value" id="kpi-total">…</div><div class="sub">~ chars/4 sui body chat puliti</div></div>
-      <div class="kpi-card"><div class="label">📥 Input (utente→team)</div><div class="value" id="kpi-input">…</div><div class="sub" id="kpi-input-sub">prompt utente di sessione</div></div>
-      <div class="kpi-card"><div class="label">📤 Output (team→…)</div><div class="value" id="kpi-output">…</div><div class="sub" id="kpi-output-sub">risposte agenti tra di loro / utente</div></div>
+      <div class="kpi-card"><div class="label">📤 Output team</div><div class="value" id="kpi-output">…</div><div class="sub" id="kpi-output-sub">risposte agenti tra loro / verso utente</div></div>
+      <div class="kpi-card"><div class="label">⚖ Output/Input ratio</div><div class="value" id="kpi-ratio">…</div><div class="sub" id="kpi-ratio-sub">rendimento del prompt utente</div></div>
       <div class="kpi-card"><div class="label">🪟 Avg per finestra Kimi K2</div><div class="value" id="kpi-avg-window">…</div><div class="sub" id="kpi-avg-window-sub">token medi a finestra</div></div>
       <div class="kpi-card"><div class="label">🔥 Picco bucket 5-min</div><div class="value" id="kpi-peak-bucket">…</div><div class="sub" id="kpi-peak-bucket-sub"></div></div>
       <div class="kpi-card"><div class="label">🗨 Messaggi team</div><div class="value" id="kpi-msg">…</div><div class="sub">in-session, da messages.jsonl</div></div>
@@ -421,8 +421,14 @@
   // Chat: come Round 2 usage.html
   const RE_CHAT = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]\s*(?:\[([\w-]+)\])?\s*([\s\S]*)/;
   function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h.toString(36); }
+  // dev4 ha rinominato loadChat() → loadChats() in data-loader.js (Round 2 ext);
+  // ora ritorna {records, stats}. Adatto preservando la struttura {content}
+  // per la mia regex inline.
   let chatRaw = [];
-  try { chatRaw = await ReportData.loadChat(); } catch (e) { chatRaw = []; }
+  try {
+    const cr = await ReportData.loadChats();
+    chatRaw = (cr.records || []).map((r) => ({ content: r.content }));
+  } catch (e) { chatRaw = []; }
   stats.chat.total = chatRaw.length;
   const chatRecords = []; // {from, to, type, body, body_len, content}
   const seen = new Set();
@@ -498,10 +504,14 @@
   const fmtNum = (n) => Number(n).toLocaleString("it-IT");
   const fmtTime = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
   document.getElementById("kpi-total").textContent = "~" + fmtNum(totalTok);
-  document.getElementById("kpi-input").textContent = "~" + fmtNum(inputTok);
-  document.getElementById("kpi-input-sub").textContent = `${((inputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale`;
   document.getElementById("kpi-output").textContent = "~" + fmtNum(outputTok);
   document.getElementById("kpi-output-sub").textContent = `${((outputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale`;
+  // Output/Input ratio: quanti token di output ha generato ogni token di prompt
+  // utente. Indicatore di "rendimento del prompt": team che lavora 100x oltre
+  // il prompt iniziale è in pieno orchestration mode.
+  const ratio = inputTok > 0 ? outputTok / inputTok : 0;
+  document.getElementById("kpi-ratio").textContent = ratio > 0 ? `×${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}` : "n/d";
+  document.getElementById("kpi-ratio-sub").textContent = inputTok > 0 ? `~${fmtNum(inputTok)} token in entrata, ~${fmtNum(outputTok)} fuori` : "input ≈ 0";
   document.getElementById("kpi-avg-window").textContent = "~" + fmtNum(avgPerWindow);
   document.getElementById("kpi-avg-window-sub").textContent = `su ${sessionIds.size} finestre Kimi K2`;
   document.getElementById("kpi-peak-bucket").textContent = peakBucket ? "~" + fmtNum(peakBucket[1]) : "—";
@@ -585,7 +595,15 @@
         },
       },
       scales: {
-        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        // Callback esplicito sul tick: il displayFormat HH:mm di date-fns ogni
+        // tanto perdeva lo zero leading sulle ore (es. "1.000Z"). Usiamo
+        // toISOString().slice(11,16)+"Z" come fallback robusto.
+        x: {
+          type: "time",
+          time: { tooltipFormat: "HH:mm" },
+          ticks: { callback: (v) => new Date(v).toISOString().slice(11, 16) + "Z" },
+          grid: { color: "rgba(255,255,255,0.04)" },
+        },
         y: { beginAtZero: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" }, title: { display: true, text: "~tokens", color: "#8a93a4" } },
       },
     },
@@ -647,7 +665,13 @@
         },
       },
       scales: {
-        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" }, stacked: true },
+        x: {
+          type: "time",
+          time: { tooltipFormat: "HH:mm" },
+          ticks: { callback: (v) => new Date(v).toISOString().slice(11, 16) + "Z" },
+          grid: { color: "rgba(255,255,255,0.04)" },
+          stacked: true,
+        },
         y: { beginAtZero: true, stacked: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" }, title: { display: true, text: "~tokens (stack)", color: "#8a93a4" } },
       },
     },
@@ -730,6 +754,10 @@
   }
   const sBuckets = bucketSentinel();
   const STATUS_COLOR = { SOTTOUTILIZZO: "#56ccf2", STEADY: "#6fcf97", ATTENZIONE: "#f2c94c", OVER: "#eb5757", "G-SPOT": "#9b51e0", RESET: "#828282" };
+  // Calcolo asse X auto-fittato: P95 dei rates per ignorare outlier estremi
+  // (un singolo bucket con 1 messaggio enorme dilatava il range e accumulava
+  // tutti gli altri punti a sinistra). Padding +5%.
+  const allRates = [];
   const scatterPts = [];
   const scatterColors = [];
   const scatterMeta = [];
@@ -740,6 +768,7 @@
     const throttlePct = (s.throttleOn / s.total) * 100;
     let prevStatus = "?", best = 0;
     for (const [st, c] of s.statuses) if (c > best) { best = c; prevStatus = st; }
+    allRates.push(rate);
     scatterPts.push({ x: rate, y: throttlePct });
     scatterColors.push(STATUS_COLOR[prevStatus] || "#888");
     scatterMeta.push({ ts: k, tok, rate, throttlePct, status: prevStatus, sTicks: s.total, throttleOn: s.throttleOn });
@@ -781,7 +810,20 @@
         },
       },
       scales: {
-        x: { beginAtZero: true, title: { display: true, text: "token rate (~tokens/min)", color: "#8a93a4" }, grid: { color: "rgba(255,255,255,0.06)" } },
+        x: {
+          beginAtZero: true,
+          // Auto-fit con percentile 95° + padding 5% per ignorare outlier estremi.
+          // Outlier visibili nel tooltip (i punti reali ci sono, solo il display
+          // del chart ha range stretto). Math.ceil(p95*1.05).
+          max: (() => {
+            if (!allRates.length) return undefined;
+            const sorted = allRates.slice().sort((a, b) => a - b);
+            const p95 = sorted[Math.floor(sorted.length * 0.95)] || sorted[sorted.length - 1];
+            return Math.max(1, Math.ceil(p95 * 1.05));
+          })(),
+          title: { display: true, text: "token rate (~tokens/min) — asse X tagliato a P95", color: "#8a93a4" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
         y: { beginAtZero: true, max: 100, ticks: { callback: (v) => v + "%" }, title: { display: true, text: "throttle ratio (%tick ON)", color: "#8a93a4" }, grid: { color: "rgba(255,255,255,0.06)" } },
       },
     },
