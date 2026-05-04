@@ -133,6 +133,14 @@
   }
   .agent-card .zoom-btns button:hover { background: #1c2230; border-color: #38415a; }
   .agent-card .zoom-btns button:active { background: #232a3b; }
+  .big-chart .zoom-btns button {
+    background: #11151e; color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 7px; font-size: 11px; line-height: 1.2;
+    cursor: pointer; transition: background 100ms, border-color 100ms;
+  }
+  .big-chart .zoom-btns button:hover { background: #1c2230; border-color: #38415a; }
+  .big-chart .zoom-btns button:active { background: #232a3b; }
   .agent-card .kpis {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px;
   }
@@ -197,11 +205,29 @@
     </div>
 
     <div class="big-chart">
-      <h3>📈 Volume messaggi per agente, per ora UTC</h3>
-      <p class="caption">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <h3 style="margin:0;">📈 Volume messaggi per agente, per ora UTC</h3>
+        <span class="zoom-btns" id="zb-big" style="margin-left:auto; display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+          <span style="display:flex; gap:2px;">
+            <button type="button" data-act="left"  title="Pan ←">⬅</button>
+            <button type="button" data-act="right" title="Pan →">➡</button>
+          </span>
+          <span style="display:flex; gap:2px;">
+            <button type="button" data-act="up"    title="Pan ↑">⬆</button>
+            <button type="button" data-act="down"  title="Pan ↓">⬇</button>
+          </span>
+          <span style="display:flex; gap:2px;">
+            <button type="button" data-act="in"    title="Zoom in (×1.15)">➕</button>
+            <button type="button" data-act="out"   title="Zoom out (×0.87)">➖</button>
+            <button type="button" data-act="rst"   title="Reset zoom">⟲</button>
+          </span>
+        </span>
+      </div>
+      <p class="caption" style="margin-top:4px;">
         Attivazione selettiva via toolbar o legend (cliccabile). Hover per
         timestamp esatto, conteggio messaggi, lunghezza media nell'ora,
-        finestra Kimi K2 attiva. Drag per fare pan, scroll/pinch per zoomare.
+        finestra Kimi K2 attiva. Zoom/pan: <strong>solo bottoni</strong>
+        (scroll/pinch dentro il chart non hanno effetto).
       </p>
       <div class="chart-box"><canvas id="big-chart"></canvas></div>
     </div>
@@ -470,15 +496,6 @@
             },
           },
         },
-        zoom: {
-          pan: { enabled: true, mode: "x", modifierKey: null },
-          zoom: {
-            wheel: { enabled: true },
-            pinch: { enabled: true },
-            mode: "x",
-          },
-          limits: { x: { min: "original", max: "original" } },
-        },
       },
       scales: {
         x: {
@@ -494,6 +511,34 @@
       },
     },
   });
+
+  // Bottoni zoom big-chart (solo bottoni — wheel/pinch/drag disabilitati)
+  function panChartBy(chart, axis, frac) {
+    const sc = chart.scales[axis];
+    if (!sc) return;
+    const range = Math.abs((sc.right - sc.left) || (sc.bottom - sc.top) || 100);
+    const dx = axis === "x" ? Math.round(range * frac) : 0;
+    const dy = axis === "y" ? Math.round(range * frac) : 0;
+    if (typeof chart.pan === "function") chart.pan({ x: dx, y: dy }, undefined, "default");
+  }
+  (function bindBigZoom() {
+    const el = document.getElementById("zb-big");
+    if (!el) return;
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const a = b.dataset.act;
+      switch (a) {
+        case "in":    bigChart.zoom(1.15); break;
+        case "out":   bigChart.zoom(0.87); break;
+        case "rst":   bigChart.resetZoom(); break;
+        case "left":  panChartBy(bigChart, "x",  0.10); break;
+        case "right": panChartBy(bigChart, "x", -0.10); break;
+        case "up":    panChartBy(bigChart, "y",  0.10); break;
+        case "down":  panChartBy(bigChart, "y", -0.10); break;
+      }
+    });
+  })();
 
   // ---------- toolbar checkboxes ----------
   const togglesEl = document.getElementById("agent-toggles");
@@ -661,18 +706,6 @@
               afterBody: () => `Totale messaggi: ${a.total} · finestra Kimi K2 attiva: ${kimiOf(a.firstTs)}`,
             },
           },
-          zoom: {
-            pan: { enabled: true, mode: "xy", modifierKey: null },
-            zoom: {
-              wheel: { enabled: true },
-              pinch: { enabled: true },
-              mode: "xy",
-            },
-            limits: {
-              x: { min: "original", max: "original", minRange: 5 },
-              y: { min: "original", max: "original" },
-            },
-          },
         },
         scales: {
           x: {
@@ -697,8 +730,8 @@
         const btn = ev.target.closest("button");
         if (!btn) return;
         const act = btn.dataset.act;
-        if (act === "in")  miniChart.zoom(1.2);
-        else if (act === "out") miniChart.zoom(0.8);
+        if (act === "in")  miniChart.zoom(1.15);
+        else if (act === "out") miniChart.zoom(0.87);
         else if (act === "rst") miniChart.resetZoom();
       });
     }

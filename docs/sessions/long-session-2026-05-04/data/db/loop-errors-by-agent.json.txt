@@ -1,0 +1,1 @@
+{"agent": "scorer-1", "role": "scorer", "ts": "2026-05-02T16:53:43Z", "level": "ERROR", "line": "ERRORE insert score: "}
