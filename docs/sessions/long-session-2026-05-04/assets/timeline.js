@@ -130,7 +130,12 @@
   function renderOverviewChart(events, sentinel) {
     const el = document.getElementById("timeline-chart");
     if (!el || !window.echarts) return;
-    const chart = echarts.init(el, "dark");
+    // Aspetta che il container abbia dimensioni reali (evita init 0×0).
+    if (!el.clientWidth || !el.clientHeight) {
+      requestAnimationFrame(() => renderOverviewChart(events, sentinel));
+      return;
+    }
+    const chart = echarts.init(el, "dark", { renderer: "canvas" });
 
     // Lane Y per categoria
     const LANES = {
@@ -171,7 +176,7 @@
 
     chart.setOption({
       backgroundColor: "transparent",
-      grid: { left: 70, right: 30, top: 30, bottom: 60 },
+      grid: { left: 110, right: 30, top: 30, bottom: 70, containLabel: false },
       tooltip: {
         trigger: "item",
         triggerOn: "mousemove|click",
@@ -280,7 +285,12 @@
       ],
     });
 
-    new ResizeObserver(() => chart.resize()).observe(el);
+    // Resize: reagisci a container, finestra, e una resize esplicita post-paint
+    // per il caso in cui il layout non era ancora stabile in init.
+    requestAnimationFrame(() => chart.resize());
+    const ro = new ResizeObserver(() => chart.resize());
+    ro.observe(el);
+    window.addEventListener("resize", () => chart.resize());
   }
 
   function renderWindowsTable(windows) {
