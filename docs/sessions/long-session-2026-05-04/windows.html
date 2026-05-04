@@ -545,6 +545,9 @@ const WIN_96 = {
   const distinctAgents = new Set(real94.map((r) => r.agent)).size;
   const durMs = WIN_94.endMs - WIN_94.startMs;
   const durLabel = `${Math.floor(durMs / 60000)} min`;
+  // Simmetria dittico (review dev1+dev4): sez 94% e 96% tutte e due a 6 KPI.
+  // Tagliati "Messaggi Capitano" e "Tick sentinella" — restano comunque
+  // visibili nel mission log e nella curva usage sotto.
   const kpis94 = [
     { label: "⏱ Durata finestra", value: durLabel },
     { label: "📈 Peak usage", value: `${peak94.usage}%` },
@@ -552,8 +555,6 @@ const WIN_96 = {
     { label: "⏸ Throttle reali", value: real94.length },
     { label: "👥 Agenti coinvolti", value: distinctAgents },
     { label: "⏳ Tempo totale fermo", value: fmtMin(totalThrSec) },
-    { label: "💬 Messaggi Capitano", value: cap94.length },
-    { label: "🛰 Tick sentinella", value: sent94.length },
   ];
   const kpiGrid = document.getElementById("kpi-94");
   for (const k of kpis94) {
