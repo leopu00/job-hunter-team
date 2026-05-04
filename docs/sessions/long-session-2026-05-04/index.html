@@ -205,8 +205,14 @@
     // Finestre Kimi K2 = SESSION_WINDOWS (perimetro definitivo, sempre 3)
     const windowsCount = (window.ReportData.SESSION_WINDOWS || []).length;
 
-    // Throttle reali: escludi event=checkpoint
-    const throttleReal = throttle.filter((r) => r.event !== "checkpoint");
+    // Throttle reali (formula canonica allineata a throttle.html dev2):
+    // event=start o event=null (legacy senza event field) — NON event=end
+    // (chiusura della pausa, non evento aggiuntivo) e NON event=checkpoint
+    // (heartbeat zero-duration). Filtri inclusivi davano DOPPIO CONTEGGIO
+    // (start+end per ogni pausa = 232×2=464, sbagliato).
+    const throttleReal = throttle.filter(
+      (r) => r.event === "start" || r.event == null,
+    );
 
     // Agenti attivi: unione di chi ha messaggi e chi ha throttle (lowercase)
     const norm = (s) => String(s || "").toLowerCase();
@@ -227,7 +233,7 @@
     const cards = [
       { label: "⏱ Durata", value: durMs ? `${hours}h ${mins}m` : "—", href: null },
       { label: "🪟 Finestre Kimi K2", value: windowsCount, href: "windows.html" },
-      { label: "⏸ Pause throttle", value: throttleReal.length, href: "throttle.html" },
+      { label: "⏸ Throttle reali", value: throttleReal.length, href: "throttle.html" },
       { label: "💬 Messaggi team", value: messages.length, href: "timeline.html" },
       { label: "👥 Ruoli con attività", value: agents.size, href: "agents.html" },
       { label: "🔥 Picco usage", value: `${peak}%`, href: "windows.html" },
