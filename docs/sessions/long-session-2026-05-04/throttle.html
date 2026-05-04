@@ -540,23 +540,20 @@
 // non serve esplicitamente. Configurazione condivisa: zoom xy via wheel/pinch
 // + pan xy via drag (modificatore tasto invece di pan diretto per non rompere
 // il tooltip su hover).
+// Zoom SOLO via bottoni (decisione team): wheel/pinch/drag completamente
+// disabilitati per non rubare lo scroll della pagina sul trackpad.
+// Step dolce 1.15/0.87, pan ~10% dell'area chart in pixel.
 const ZOOM_OPTIONS = {
-  zoom: {
-    wheel: { enabled: true },
-    pinch: { enabled: true },
-    drag: { enabled: false },
-    mode: "xy",
-  },
-  pan: {
-    enabled: true,
-    mode: "xy",
-    threshold: 5,
-  },
+  zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false }, mode: "xy" },
+  pan: { enabled: false, mode: "xy" },
   limits: {
     x: { minRange: 60_000 },
     y: { minRange: 0.5 },
   },
 };
+const ZOOM_IN_FACTOR = 1.15;
+const ZOOM_OUT_FACTOR = 0.87;
+const PAN_FRACTION = 0.10;
 if (window.Chart) {
   // Zoom xy: configurato come DEFAULT prima di creare i chart, così ogni
   // istanza eredita la stessa policy. Applicarlo dopo la creazione causa
@@ -1778,16 +1775,29 @@ if (window.Chart) {
       tb0.className = "chart-toolbar";
       tb0.style.cssText = "position:absolute; top:14px; right:18px; z-index:5;";
       tb0.innerHTML = `
-        <button type="button" title="Zoom in" data-act="in">➕</button>
+        <button type="button" title="Pan sinistra" data-act="left">⬅</button>
+        <button type="button" title="Pan giù" data-act="down">⬇</button>
+        <button type="button" title="Pan su" data-act="up">⬆</button>
+        <button type="button" title="Pan destra" data-act="right">➡</button>
         <button type="button" title="Zoom out" data-act="out">➖</button>
+        <button type="button" title="Zoom in" data-act="in">➕</button>
         <button type="button" title="Reset zoom" data-act="reset">⟲</button>
       `;
       wrap.appendChild(tb0);
       tb0.addEventListener("click", (e) => {
         const a = e.target.closest("button")?.dataset.act;
-        if (a === "in") chart.zoom(1.2);
-        else if (a === "out") chart.zoom(0.8);
-        else if (a === "reset") chart.resetZoom();
+        if (!a) return;
+        const w = chart.chartArea?.width || 1;
+        const h = chart.chartArea?.height || 1;
+        try {
+          if (a === "in") chart.zoom(ZOOM_IN_FACTOR);
+          else if (a === "out") chart.zoom(ZOOM_OUT_FACTOR);
+          else if (a === "reset") chart.resetZoom();
+          else if (a === "left") chart.pan({ x: w * PAN_FRACTION });
+          else if (a === "right") chart.pan({ x: -w * PAN_FRACTION });
+          else if (a === "up") chart.pan({ y: h * PAN_FRACTION });
+          else if (a === "down") chart.pan({ y: -h * PAN_FRACTION });
+        } catch (err) { /* ignore */ }
       });
       return;
     }
@@ -1805,17 +1815,31 @@ if (window.Chart) {
     const tb = document.createElement("div");
     tb.className = "chart-toolbar";
     tb.innerHTML = `
-      <button type="button" title="Zoom in" data-act="in">➕</button>
-      <button type="button" title="Zoom out" data-act="out">➖</button>
+      <button type="button" title="Pan sinistra" data-act="left">⬅</button>
+      <button type="button" title="Pan giù" data-act="down">⬇</button>
+      <button type="button" title="Pan su" data-act="up">⬆</button>
+      <button type="button" title="Pan destra" data-act="right">➡</button>
+      <button type="button" title="Zoom out (step ${ZOOM_OUT_FACTOR.toFixed(2)})" data-act="out">➖</button>
+      <button type="button" title="Zoom in (step ${ZOOM_IN_FACTOR.toFixed(2)})" data-act="in">➕</button>
       <button type="button" title="Reset zoom" data-act="reset">⟲</button>
     `;
     header.appendChild(tb);
     tb.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.act;
       if (!a) return;
-      if (a === "in") chart.zoom(1.2);
-      else if (a === "out") chart.zoom(0.8);
-      else if (a === "reset") chart.resetZoom();
+      const w = chart.chartArea?.width || 1;
+      const h = chart.chartArea?.height || 1;
+      try {
+        if (a === "in") chart.zoom(ZOOM_IN_FACTOR);
+        else if (a === "out") chart.zoom(ZOOM_OUT_FACTOR);
+        else if (a === "reset") chart.resetZoom();
+        else if (a === "left") chart.pan({ x: w * PAN_FRACTION });
+        else if (a === "right") chart.pan({ x: -w * PAN_FRACTION });
+        else if (a === "up") chart.pan({ y: h * PAN_FRACTION });
+        else if (a === "down") chart.pan({ y: -h * PAN_FRACTION });
+      } catch (err) {
+        // chart che non supportano zoom/pan: ignora silenzioso.
+      }
     });
   }
   ["lane", "byagent", "bycategory", "cumulative", "durations",
