@@ -362,12 +362,14 @@
         splitLine: { lineStyle: { color: "#1a1f2c" } },
       },
       dataZoom: [
-        // X: slider sotto + inside (rotella+pan trascinando)
+        // X: slider sotto sempre disponibile + inside con modifier Ctrl
         { type: "slider", xAxisIndex: 0, height: 22, bottom: 26, backgroundColor: "rgba(0,0,0,0.2)" },
-        { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseMove: false, moveOnMouseWheel: false },
-        // Y: slider a sinistra + inside (su Y serve Shift+rotella di default)
+        // Inside richiede Ctrl per zoom rotella E per pan trascinato →
+        // scroll normale del trackpad scorre la pagina, Ctrl+scroll = zoom
+        { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: "ctrl", moveOnMouseMove: "ctrl", moveOnMouseWheel: false },
+        // Y: slider a sinistra sempre disponibile + inside con modifier Ctrl
         { type: "slider", yAxisIndex: 0, width: 16, left: 86, top: 50, bottom: 80, backgroundColor: "rgba(0,0,0,0.2)" },
-        { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: "shift", moveOnMouseMove: true, moveOnMouseWheel: false },
+        { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: "ctrl", moveOnMouseMove: "ctrl", moveOnMouseWheel: false },
       ],
       series,
     });
@@ -400,12 +402,16 @@
         chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: nxs, end: nxe });
         chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: nys, end: nye });
       }
+      // Step dolce: ogni click ➕/➖ stringe/allarga la finestra del ~13%
+      // (factor 1.15) anziché 50%. Così l'utente può iterare gradualmente
+      // senza saltare a un livello di zoom troppo aggressivo.
+      const STEP = 1.15;
       zoomCtl.addEventListener("click", (ev) => {
         const btn = ev.target.closest("button.zoom-btn[data-zoom]");
         if (!btn) return;
         const action = btn.dataset.zoom;
-        if (action === "in") applyZoom(1.5);
-        else if (action === "out") applyZoom(1 / 1.5);
+        if (action === "in") applyZoom(STEP);
+        else if (action === "out") applyZoom(1 / STEP);
         else if (action === "reset") {
           chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: 0, end: 100 });
           chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: 0, end: 100 });
