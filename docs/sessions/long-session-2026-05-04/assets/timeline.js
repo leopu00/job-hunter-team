@@ -609,11 +609,17 @@
   function renderInlineCharts(sentinel, events) {
     if (!window.echarts) return;
 
+    // Range allineati al perimetro 3 finestre Kimi K2 (master 2026-05-04):
+    // Atto 1 = W1 (23:07→00:08, peak 94%)
+    // Atto 2 = W2 inizio regime (00:18→04:30)
+    // Atto 3 = W2 climax (04:00→05:10, escalation 80→96)
+    // Atto 4 = W3 decompressione (05:16→08:00)
+    // Atto 5 = epilogo (no inline-chart)
     const ranges = {
-      "1": { from: "2026-05-03T18:00:00Z", to: "2026-05-03T19:30:00Z", title: "usage% — Atto 1 (18:00 → 19:30)" },
-      "2": { from: "2026-05-03T19:30:00Z", to: "2026-05-03T23:00:00Z", title: "usage% & projection — Atto 2 (19:30 → 23:00)" },
-      "3": { from: "2026-05-03T22:00:00Z", to: "2026-05-04T01:00:00Z", title: "Climax — transizione finestra (22:00 → 01:00)" },
-      "4": { from: "2026-05-04T00:18:00Z", to: "2026-05-04T05:16:00Z", title: "Notte profonda — usage e throttle (00:18 → 05:16)" },
+      "1": { from: "2026-05-03T23:00:00Z", to: "2026-05-04T00:30:00Z", title: "usage% — W1 climax mini (23:07 → 00:08, peak 94%)" },
+      "2": { from: "2026-05-04T00:18:00Z", to: "2026-05-04T04:30:00Z", title: "usage% & projection — W2 inizio regime (00:18 → 04:30)" },
+      "3": { from: "2026-05-04T04:00:00Z", to: "2026-05-04T05:10:00Z", title: "W2 climax — escalation 80→96 e cross-over proj (04:00 → 05:10)" },
+      "4": { from: "2026-05-04T05:16:00Z", to: "2026-05-04T08:00:00Z", title: "W3 decompressione — peak 64%, throttle che si rarefanno (05:16 → 08:00)" },
     };
 
     for (const act of Object.keys(ranges)) {
