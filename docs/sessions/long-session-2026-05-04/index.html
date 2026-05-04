@@ -214,16 +214,24 @@
       (r) => r.event === "start" || r.event == null,
     );
 
-    // Agenti attivi: unione di chi ha messaggi e chi ha throttle (lowercase)
+    // Agenti attivi: unione di chi ha messaggi e chi ha throttle, escludendo
+    // ruoli infrastrutturali (bridge/sentinella/pacing/utente) e ruoli
+    // fittizi/diagnostici (test/smoke/diag) che entrano da throttle-events
+    // come nomi agente non canonici. Allineato a agents.html dev3.
+    const EXCLUDE = new Set([
+      "bridge", "sentinella", "pacing", "utente",
+      "test", "smoke", "diag", "",
+    ]);
     const norm = (s) => String(s || "").toLowerCase();
     const agents = new Set();
-    throttleReal.forEach((r) => r.agent && agents.add(norm(r.agent).split("-")[0]));
+    throttleReal.forEach((r) => {
+      const v = norm(r.agent).split("-")[0];
+      if (v && !EXCLUDE.has(v)) agents.add(v);
+    });
     messages.forEach((m) => {
       ["session", "from", "to"].forEach((k) => {
-        const v = norm(m[k]);
-        if (v && !["bridge", "sentinella", "pacing", "utente", ""].includes(v)) {
-          agents.add(v.split("-")[0]);
-        }
+        const v = norm(m[k]).split("-")[0];
+        if (v && !EXCLUDE.has(v)) agents.add(v);
       });
     });
 
