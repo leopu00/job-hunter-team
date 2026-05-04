@@ -168,22 +168,24 @@
       <h4>Output sostantivo della long session</h4>
       <p>
         Questa pagina ricostruisce <strong>cosa è arrivato in DB</strong> durante
-        la sessione: posizioni trovate dagli scout, score assegnati dallo scorer,
-        applications scritte dagli scrittori e verdetti del critico. È la
-        controparte sostantiva del lavoro misurato altrove (usage, throttle,
-        timeline). Tutti i conteggi sono sull'esportato in
-        <code>data/db/*.json.txt</code>.
+        le 3 finestre Kimi K2 della long session (W1 · 94%, W2 · 96% perfetta,
+        W3 · 64% — totale ~10h 43m attivi). Il KPI principale è il
+        <strong>"lavoro effettivo"</strong>: l'unione di tutti i
+        <code>position_id</code> toccati nelle finestre, qualunque sia l'asse
+        temporale (<code>found_at</code>, <code>scored_at</code>,
+        <code>written_at</code>). Una posizione trovata <em>fuori</em> finestra
+        ma scored o re-applicata dentro conta come "aggiornata", non si perde.
       </p>
       <p>
         ⚠️ <strong>Caveat dati vuoti.</strong>
-        <code>companies.json.txt</code> e <code>highlights.json.txt</code> sono
-        vuoti perché in questa finestra non ci sono record con
-        <code>analyzed_at</code> o <code>created_at</code> dentro il range
-        di sessione: le company deep-dive e gli highlights vengono fatti nel
-        pre-warmup, fuori finestra. Per la sessione i numeri "companies"
-        riportati nei KPI sono il <em>distinct count</em> sulle posizioni
-        (ogni posizione cita una company, ma non c'è un'analisi profonda
-        archiviata in tabella).
+        <code>companies.json.txt</code> e <code>highlights.json.txt</code> non
+        hanno record con <code>analyzed_at</code> o <code>created_at</code>
+        dentro le finestre di sessione: le company deep-dive e gli highlights
+        sono nel pre-warmup serale, fuori da W1/W2/W3. Per le company viene
+        riportato sia il KPI "Companies analyzed_at in win" (esplicito,
+        zero in questa sessione) sia "Companies toccate" (distinct count
+        sulle positions del lavoro effettivo, valore positivo perché ogni
+        posizione cita una company).
       </p>
       <p>
         Le analisi sono lette così: <strong>Funnel</strong> per il colpo d'occhio
@@ -488,29 +490,73 @@ if (window.Chart) {
   const sco = dedup(scores);
   const app = dedup(applications);
 
+  // ----- Filtro session window: include record con timestamp diversi -----
+  // Una posizione può essere stata trovata FUORI sessione e poi scored o
+  // re-applicata DENTRO. Dobbiamo riconoscere ogni asse temporale:
+  //   - positions.found_at  → "nuova in sessione"
+  //   - scores.scored_at    → "scored in sessione"
+  //   - applications.written_at → "written in sessione"
+  // Lavoro effettivo = UNION dei position_id toccati su uno qualsiasi di
+  // questi assi. Le positions con found_at fuori sessione ma scored/applied
+  // dentro = "aggiornate" (re-toccate).
+  const SESSION_START = ReportData.SESSION_START;
+  const SESSION_END = ReportData.SESSION_END;
+  function inWin(tsRaw) {
+    if (!tsRaw) return false;
+    let s = String(tsRaw).replace("Z", "+00:00");
+    if (!s.includes("T") && s.includes(" ")) s = s.replace(" ", "T");
+    if (!s.includes("+")) s = s + "+00:00";
+    const t = Date.parse(s);
+    return Number.isFinite(t) && t >= SESSION_START && t <= SESSION_END;
+  }
+  const posFoundIn = pos.filter((p) => inWin(p.found_at));
+  const scoresIn = sco.filter((s) => inWin(s.scored_at));
+  const appsIn = app.filter((a) => inWin(a.written_at));
+
+  const newPosIds = new Set(posFoundIn.map((p) => p.id));
+  const scoredPosIds = new Set(scoresIn.map((s) => s.position_id));
+  const writtenPosIds = new Set(appsIn.map((a) => a.position_id).filter((x) => x != null));
+  const unionPosIds = new Set([...newPosIds, ...scoredPosIds, ...writtenPosIds]);
+  // Aggiornate: scored o written in win MA found_at FUORI win
+  const updatedPosIds = new Set(
+    [...scoredPosIds, ...writtenPosIds].filter((id) => !newPosIds.has(id))
+  );
+  const excludedPosIds = new Set(
+    pos.filter((p) => p.status === "excluded" && unionPosIds.has(p.id)).map((p) => p.id)
+  );
+
   // ----- KPI strip -----
-  const distinctCompanies = new Set(pos.map((p) => p.company).filter(Boolean));
-  const ready = pos.filter((p) => p.status === "ready");
-  const excluded = pos.filter((p) => p.status === "excluded");
-  const scoredSet = new Set(sco.map((s) => s.position_id));
-  const passApps = app.filter((a) => a.critic_verdict === "PASS");
-  const totalDecidedApps = app.filter((a) => a.critic_verdict).length;
+  // distinctCompanies ora include anche le companies degli "aggiornate",
+  // non solo delle "trovate-in-win".
+  const distinctCompaniesSet = new Set(
+    pos
+      .filter((p) => unionPosIds.has(p.id))
+      .map((p) => p.company)
+      .filter(Boolean)
+  );
+  const ready = pos.filter((p) => p.status === "ready" && unionPosIds.has(p.id));
+  const passApps = appsIn.filter((a) => a.critic_verdict === "PASS");
+  const totalDecidedApps = appsIn.filter((a) => a.critic_verdict).length;
   const passRate = totalDecidedApps
     ? Math.round((passApps.length / totalDecidedApps) * 100)
     : 0;
-  const avgScore = sco.length
-    ? (sco.reduce((s, r) => s + (r.total_score || 0), 0) / sco.length).toFixed(1)
+  const avgScore = scoresIn.length
+    ? (scoresIn.reduce((s, r) => s + (r.total_score || 0), 0) / scoresIn.length).toFixed(1)
     : "—";
 
   const kpis = [
-    { label: "🔎 Positions trovate", value: pos.length },
-    { label: "🏢 Companies (distinct)", value: distinctCompanies.size },
-    { label: "🎯 Posizioni scored", value: sco.length },
-    { label: "✅ Ready", value: ready.length },
-    { label: "✍️ Applications scritte", value: app.length },
+    { label: "💼 Lavoro effettivo (UNION)", value: unionPosIds.size },
+    { label: "🆕 Nuove in sessione", value: newPosIds.size },
+    { label: "♻️ Aggiornate (scored/written)", value: updatedPosIds.size },
+    { label: "🎯 Scored in sessione", value: scoredPosIds.size },
+    { label: "✍️ Written in sessione", value: writtenPosIds.size },
+    { label: "🚫 Scartate (excluded)", value: excludedPosIds.size },
     { label: "👍 Verdict PASS", value: passApps.length },
     { label: "📈 Pass rate", value: `${passRate}%` },
     { label: "📐 Score medio", value: avgScore },
+    { label: "🏢 Companies toccate", value: distinctCompaniesSet.size },
+    { label: "🏢 Companies analyzed_at in win", value: companies.length },
+    { label: "💡 Highlights in win", value: highlights.length },
   ];
   const kpiGrid = document.getElementById("kpi-grid");
   for (const k of kpis) {
@@ -521,24 +567,21 @@ if (window.Chart) {
   }
 
   // ----- FUNNEL -----
-  // Ogni stage è il Set dei position_id che hanno raggiunto quello stage.
-  const stageTrovate = new Set(pos.map((p) => p.id));
-  const stageScored = new Set(
-    sco.map((s) => s.position_id).filter((pid) => stageTrovate.has(pid))
-  );
-  const stageReady = new Set(ready.map((p) => p.id));
-  // written: applications con position_id valido
-  const stageWritten = new Set(
-    app.map((a) => a.position_id).filter((pid) => stageTrovate.has(pid))
-  );
+  // Stage = position_id che hanno raggiunto quel passaggio nella SESSIONE.
+  // Lavoro effettivo (UNION) è il primo stage: include sia "trovate" sia
+  // "aggiornate" (toccate in qualunque modo durante la sessione).
+  const stageTrovate = unionPosIds; // tutto ciò che è stato toccato in win
+  const stageScored = scoredPosIds; // scored DENTRO sessione
+  const stageReady = new Set([...ready.map((p) => p.id)]);
+  const stageWritten = writtenPosIds; // written DENTRO sessione
   const stagePass = new Set(
-    passApps.map((a) => a.position_id).filter((pid) => stageTrovate.has(pid))
+    passApps.map((a) => a.position_id).filter((pid) => unionPosIds.has(pid))
   );
   const stages = [
-    { label: "🔎 Trovate (positions)", count: stageTrovate.size, klass: "" },
-    { label: "🎯 Scored", count: stageScored.size, klass: "" },
+    { label: "💼 Lavoro effettivo (UNION)", count: stageTrovate.size, klass: "" },
+    { label: "🎯 Scored in win", count: stageScored.size, klass: "" },
     { label: "✅ Ready", count: stageReady.size, klass: "lost" },
-    { label: "✍️ Written (apps)", count: stageWritten.size, klass: "tail" },
+    { label: "✍️ Written in win", count: stageWritten.size, klass: "tail" },
     { label: "👍 PASS", count: stagePass.size, klass: "tail" },
   ];
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
@@ -561,7 +604,7 @@ if (window.Chart) {
 
   // ----- BAR critic_verdict -----
   const verdictCounts = { PASS: 0, NEEDS_WORK: 0, REJECT: 0, "(null)": 0 };
-  for (const a of app) {
+  for (const a of appsIn) {
     const v = a.critic_verdict || "(null)";
     if (v in verdictCounts) verdictCounts[v] += 1;
     else verdictCounts[v] = (verdictCounts[v] || 0) + 1;
@@ -605,14 +648,14 @@ if (window.Chart) {
           callbacks: {
             title: (items) => `Verdict: ${items[0]?.label || ""}`,
             label: (ctx) => {
-              const tot = app.length || 1;
+              const tot = appsIn.length || 1;
               const pct = ((ctx.parsed.y / tot) * 100).toFixed(1);
               return `${ctx.parsed.y} app (${pct}% del totale)`;
             },
             afterBody: (items) => {
               const v = items[0]?.label;
               if (!v || v === "(null)") return "";
-              const scs = app
+              const scs = appsIn
                 .filter((a) => a.critic_verdict === v)
                 .map((a) => a.critic_score)
                 .filter((s) => typeof s === "number");
@@ -636,7 +679,7 @@ if (window.Chart) {
   ];
   const bucketColors = ["#828282", "#bb6bd9", "#56ccf2", "#6fcf97", "#f2c94c"];
   const bucketCounts = buckets.map((b) =>
-    sco.filter((s) => s.total_score >= b.min && s.total_score <= b.max).length
+    scoresIn.filter((s) => s.total_score >= b.min && s.total_score <= b.max).length
   );
   new Chart(document.getElementById("score-hist").getContext("2d"), {
     type: "bar",
@@ -674,7 +717,7 @@ if (window.Chart) {
           callbacks: {
             title: (items) => `Bucket ${items[0]?.label || ""}`,
             label: (ctx) => {
-              const tot = sco.length || 1;
+              const tot = scoresIn.length || 1;
               const pct = ((ctx.parsed.y / tot) * 100).toFixed(1);
               return `${ctx.parsed.y} positions (${pct}% degli scored)`;
             },
@@ -682,7 +725,7 @@ if (window.Chart) {
               const idx = items[0]?.dataIndex;
               if (idx == null) return "";
               const b = buckets[idx];
-              const ss = sco
+              const ss = scoresIn
                 .filter((s) => s.total_score >= b.min && s.total_score <= b.max)
                 .map((s) => s.total_score);
               if (!ss.length) return "";
@@ -700,16 +743,15 @@ if (window.Chart) {
   const subKeys = ["stack_match", "remote_fit", "salary_fit", "experience_fit", "strategic_fit"];
   const subLabels = ["Stack", "Remote", "Salary", "Experience", "Strategic"];
   const avgSubs = subKeys.map((k) => {
-    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    const vals = scoresIn.map((s) => s[k]).filter((v) => typeof v === "number");
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
   });
-  // Min e max per contesto
   const minSubs = subKeys.map((k) => {
-    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    const vals = scoresIn.map((s) => s[k]).filter((v) => typeof v === "number");
     return vals.length ? Math.min(...vals) : 0;
   });
   const maxSubs = subKeys.map((k) => {
-    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    const vals = scoresIn.map((s) => s[k]).filter((v) => typeof v === "number");
     return vals.length ? Math.max(...vals) : 0;
   });
   new Chart(document.getElementById("radar").getContext("2d"), {
@@ -785,21 +827,26 @@ if (window.Chart) {
   });
 
   // ----- TABELLA top positions per total_score -----
-  const scoreByPos = new Map(sco.map((s) => [s.position_id, s]));
+  // Mostra le positions in UNION (lavoro effettivo): include sia trovate
+  // dentro la sessione sia "aggiornate" (scored/written in win con
+  // found_at fuori). Sono il vero output del team.
+  const scoreByPos = new Map(scoresIn.map((s) => [s.position_id, s]));
   const verdictByPos = new Map();
   const critScoreByPos = new Map();
-  for (const a of app) {
+  for (const a of appsIn) {
     if (a.position_id != null) {
       verdictByPos.set(a.position_id, a.critic_verdict);
       critScoreByPos.set(a.position_id, a.critic_score);
     }
   }
-  const top = [...pos]
+  const top = pos
+    .filter((p) => unionPosIds.has(p.id))
     .map((p) => ({
       ...p,
       _score: scoreByPos.get(p.id)?.total_score ?? -1,
       _verdict: verdictByPos.get(p.id) ?? null,
       _critic: critScoreByPos.get(p.id) ?? null,
+      _isNew: newPosIds.has(p.id),
     }))
     .sort((a, b) => b._score - a._score)
     .slice(0, 10);
@@ -855,7 +902,9 @@ if (window.Chart) {
     { re: /education|laurea|degree/i, label: "education weak" },
     { re: /AI dev|copilot|claude\b/i, label: "AI dev tools" },
   ];
-  const notesAll = app
+  // Gap pattern: usa solo le applications written DENTRO la sessione
+  // (appsIn), non tutte (alcune erano in DB da pre-warmup).
+  const notesAll = appsIn
     .map((a) => a.critic_notes || "")
     .filter((n) => n.length > 5);
   const gapHits = gapPatterns.map((p) => ({
