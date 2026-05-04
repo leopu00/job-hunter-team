@@ -9,16 +9,35 @@
 .info-box {
   margin-top: 14px;
   padding: 12px 16px;
-  border: 1px dashed var(--border);
+  border: 1px solid #2a3550;
   border-radius: 8px;
-  background: rgba(86, 204, 242, 0.04);
+  background: rgba(86, 204, 242, 0.05);
   color: #b9c4d4;
   font-size: 13px;
   line-height: 1.55;
 }
 
-.info-box strong {
+.info-box strong, .info-box b {
   color: var(--fg);
+}
+
+.info-box-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 18px;
+}
+
+.info-box-axis {
+  font-size: 12px;
+  color: #94a0b4;
+}
+
+.info-box-tip {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #1f2738;
+  font-size: 12.5px;
+  color: #b9c4d4;
 }
 
 .legend-row {
