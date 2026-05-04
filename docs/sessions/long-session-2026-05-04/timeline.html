@@ -31,6 +31,29 @@
 
 <main>
 
+  <section class="retro-tldr" style="margin-bottom: 28px;">
+    <h3 style="margin:0 0 6px; font-size:17px;">📜 In tre frasi</h3>
+    <p style="margin:0 0 6px; line-height:1.6;">
+      Cronaca della long session 03→04 maggio in <strong>10h 43m</strong>
+      attive: <strong>3 finestre Kimi K2</strong> consecutive (W1 94%, W2 96%
+      perfetta, W3 64%) attraversate dal team senza che nessun agente perdesse
+      contesto.
+    </p>
+    <p style="margin:0 0 6px; line-height:1.6;">
+      <strong>5 atti</strong> in voce attiva con timestamp UTC al secondo:
+      W1 climax mini (peak 94% alle 00:08:58) → W2 inizio regime → W2 climax
+      perfetta (escalation 80→96 in 7 step, cross-over proj 102→97) → W3
+      decompressione → W3 epilogo.
+    </p>
+    <p style="margin:0; line-height:1.6;">
+      <small style="color:var(--muted);">Glossario sigle:
+      <code>REQ</code>=richiesta · <code>RES</code>=risposta ·
+      <code>ACK</code>=conferma · <code>URG</code>=ordine urgente ·
+      <code>MSG</code>=messaggio diretto · <code>BUS</code>=broadcast
+      sentinella/bridge.</small>
+    </p>
+  </section>
+
   <section id="overview-chart">
     <h2>🔭 Vista d'insieme</h2>
     <p class="caption-muted">
@@ -96,8 +119,10 @@
         </div>
         <div class="info-box-tip">
           💡 <em>Hover su un puntino</em> per timestamp + tipo evento + agente +
-          dettagli. <em>Trascina lo slider</em> in basso per zoomare un intervallo,
-          oppure usa la rotellina dentro il riquadro.
+          dettagli. Zoom e pan: SOLO bottoni
+          (<kbd>➕</kbd> <kbd>➖</kbd> <kbd>⟲</kbd> <kbd>⬅</kbd> <kbd>⬇</kbd>
+          <kbd>⬆</kbd> <kbd>➡</kbd>) o slider X/Y. Scroll/pinch dentro al
+          riquadro è disabilitato.
         </div>
       </div>
     </div>
@@ -118,7 +143,7 @@
       warm-up con reset manuali per allineare il termostato. Da lì in poi la
       sessione si stabilizza in due finestre lunghe back-to-back (23:07→00:08
       e 00:18→05:06), e una terza notturna leggera (05:16→10:10). È <em>questa</em>
-      la "doppia finestra Kimi K2" promessa nel briefing: non ci sono buchi in
+      la "tripla finestra Kimi K2" del perimetro: non ci sono buchi in
       mezzo, la transizione è invisibile dal punto di vista del team.
     </div>
   </section>
@@ -289,11 +314,13 @@
       <div class="inline-chart" id="mini-chart-act4" data-act="4"
            title="Atto 4 · W3 decompressione 05:16→08:00 UTC: usage piatto sotto 50%, throttle che si rarefanno, motivazioni che cambiano da proj-driven a queue-driven"></div>
       <p>
-        Throttle totali della notte (W1+W2+W3 cumulato): scrittore-1
-        <strong>385 / 685 min</strong>, scorer-1 <strong>144 / 366 min</strong>,
-        analista-1 <strong>94 / 264 min</strong>. 17h e mezza di pausa
-        cumulata su due agenti — il prezzo che il bridge ha pagato per
-        non far morire nessuna delle tre finestre.
+        Throttle totali della sessione (cumulato W1+W2+W3): scrittore-1
+        <strong>385 ev / 685 min</strong>, scorer-1
+        <strong>144 ev / 366 min</strong>, analista-1
+        <strong>94 ev / 264 min</strong>. I due dominanti — scrittore-1 +
+        scorer-1 — cumulano <strong>1051 min ≈ 17h 31m</strong> di pausa,
+        oltre 17× la durata della sola W1: il prezzo che il bridge ha
+        pagato per non far morire nessuna delle tre finestre.
       </p>
       <p class="kicker">
         Quando la pressione si scarica, cambia anche il vocabolario delle
@@ -312,7 +339,7 @@
       <p>
         Numeri di chiusura: <strong>3 finestre</strong> (W1 94%, W2 96%
         perfetta, W3 64%), <strong>22 positions</strong> trovate e
-        <strong>18 applications</strong> chiuse (conversion 82%),
+        <strong>17 applications</strong> chiuse (conversion 17/22 = 77%),
         <strong>13/17 pass-rate</strong> al critico (76%), critic_score
         mediano 5.5/10. Zero crash hard, due eventi minori ricoverati in
         meno di tre minuti.
@@ -356,7 +383,7 @@
     Eventi estratti da <code>data/sentinel-data.jsonl.txt</code>,
     <code>data/throttle-events.jsonl.txt</code>,
     <code>data/messages.jsonl.txt</code>. Finestra:
-    <code>2026-05-03T18:00Z → 2026-05-04T12:00Z</code>.
+    <strong>perimetro</strong>: W1 <code>23:07Z → 00:09Z</code> + W2 <code>00:18Z → 05:06Z</code> + W3 <code>05:16Z → 10:10Z</code> UTC, <strong>10h 43m</strong> totali.
   </small>
 </footer>
 
