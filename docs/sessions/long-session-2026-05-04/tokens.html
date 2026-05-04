@@ -170,26 +170,28 @@
     <a href="database.html">📊 Database</a>
     <a href="crashes.html">💥 Crash</a>
     <a href="windows.html">🪟 Finestre</a>
+    <a href="retro.html">🔍 Retro</a>
   </nav>
 </header>
 
 <main class="with-toc">
 <div class="main-col">
+
+  <section id="kpi">
+    <h2>🌙 Numeri chiave <span style="font-size:13px;font-weight:400;color:var(--muted);">(token ≈ chars/4, vedi caveat sotto)</span></h2>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">📤 Token output team</div><div class="value" id="kpi-output">…</div><div class="sub" id="kpi-output-sub">~ chars/4 sui body chat puliti — il team produce, l'utente quasi non parla</div></div>
+      <div class="kpi-card"><div class="label">⚖ Output/Input ratio</div><div class="value" id="kpi-ratio">…</div><div class="sub" id="kpi-ratio-sub">rendimento del prompt utente</div></div>
+      <div class="kpi-card"><div class="label">📩 Token input utente</div><div class="value" id="kpi-input">…</div><div class="sub" id="kpi-input-sub">prompt ricevuti dal team in finestra</div></div>
+      <div class="kpi-card"><div class="label">🪟 Avg per finestra (W1·W2·W3)</div><div class="value" id="kpi-avg-window">…</div><div class="sub" id="kpi-avg-window-sub">token medi nelle 3 finestre del perimetro</div></div>
+      <div class="kpi-card"><div class="label">🔥 Picco bucket 5-min</div><div class="value" id="kpi-peak-bucket">…</div><div class="sub" id="kpi-peak-bucket-sub"></div></div>
+<div class="kpi-card"><div class="label">🗨 Messaggi team</div><div class="value" id="kpi-msg">…</div><div class="sub">in-session, da messages.jsonl</div></div>
+    </div>
+  </section>
+
   <div class="caveat">
     <strong>⚠ Caveat metodologico.</strong> I token in questa pagina sono <strong>PROXY <code>chars/4</code></strong> calcolati sul body dei messaggi chat — <strong>non</strong> sono i veri token contati dall'API Kimi K2 (che non sono disponibili nei dati esportati). La stima è coerente con le convenzioni dei provider e adeguata per confronti relativi (chi ha consumato di più, dove sono i picchi, correlazione con throttle), <em>non</em> per fatturazione o capacity planning preciso. Tutti i numeri vanno letti come <code>~tokens</code>.
   </div>
-
-  <section id="kpi">
-    <h2>🌙 Numeri chiave</h2>
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">🔢 Token totali</div><div class="value" id="kpi-total">…</div><div class="sub">~ chars/4 sui body chat puliti</div></div>
-      <div class="kpi-card"><div class="label">📤 Output team</div><div class="value" id="kpi-output">…</div><div class="sub" id="kpi-output-sub">risposte agenti tra loro / verso utente</div></div>
-      <div class="kpi-card"><div class="label">⚖ Output/Input ratio</div><div class="value" id="kpi-ratio">…</div><div class="sub" id="kpi-ratio-sub">rendimento del prompt utente</div></div>
-      <div class="kpi-card"><div class="label">🪟 Avg per finestra (W1·W2·W3)</div><div class="value" id="kpi-avg-window">…</div><div class="sub" id="kpi-avg-window-sub">token medi nelle 3 finestre del perimetro</div></div>
-      <div class="kpi-card"><div class="label">🔥 Picco bucket 5-min</div><div class="value" id="kpi-peak-bucket">…</div><div class="sub" id="kpi-peak-bucket-sub"></div></div>
-      <div class="kpi-card"><div class="label">🗨 Messaggi team</div><div class="value" id="kpi-msg">…</div><div class="sub">in-session, da messages.jsonl</div></div>
-    </div>
-  </section>
 
   <section>
     <div class="chart-wrap" id="chart1">
@@ -264,7 +266,8 @@
     <div class="chart-wrap" id="chart5">
       <span class="chart-info" data-tip="Token output team divisi per categoria di uso (coordinamento, scarto, retry, scraping a vuoto, escalation, output utile). Il residuo verde è ciò che è arrivato fino al DB.">ℹ</span>
       <h3>5 · 🪣 Dove sono finiti i token — categorizzazione e waterfall</h3>
-      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> chat content (~31k token output team), classificato euristicamente per pattern <code>from/to/TYPE/body</code>. <b>Caveat:</b> la categorizzazione è basata su regex e firma temporale (retry post-429), <em>non</em> su tracciamento token reale del provider — è una stima per individuare lo spreco. La barra in basso mostra il <b>lavoro effettivo</b> registrato nel DB (positions/scores/applications/excluded) — confronta col <a href="database.html">database.html</a> di dev2 per i count separati. Il delta fra "output utile" stimato e "lavoro effettivo" DB è il dubbio analitico Leone: solo <strong>22 position UNION</strong> in <strong>10h 43m</strong> (3 finestre W1/W2/W3) non quadrano col consumo. Insight cross-page: solo 6 positions sono state <em>scored dentro</em> le finestre — le altre 16 erano backlog scored prima del perimetro, le finestre hanno processato lavoro pre-esistente.</span></div>
+      <div class="chart-summary" style="border-left-color:#bb6bd9;"><span class="icon">🔗</span><span><b>Cross-page con database.html (dev2):</b> <strong>22 UNION position_id</strong> = <code>lavoro_effettivo_union</code> di <a href="database.html#funnel">database.html funnel</a>. <strong>Solo 6 scored dentro le 3 finestre del perimetro</strong>, le altre 16 erano backlog scored prima — le finestre hanno processato lavoro pre-esistente. Questo è il numero che spiega il dubbio analitico Leone "tanti token, poche positions".</span></div>
+      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> chat content (~31k token output team), classificato euristicamente per pattern <code>from/to/TYPE/body</code>. <b>Caveat:</b> la categorizzazione è basata su regex e firma temporale (retry post-429), <em>non</em> su tracciamento token reale del provider — è una stima per individuare lo spreco. La barra in basso mostra il <b>lavoro effettivo</b> registrato nel DB (positions/scores/applications/excluded) — confronta col <a href="database.html">database.html</a> di dev2 per i count separati.</span></div>
       <div class="series-toggle" data-chart="chart-categories">
         <span class="label">categorie</span>
         <span id="cat-pills"></span>
@@ -526,15 +529,24 @@
 
   const fmtNum = (n) => Number(n).toLocaleString("it-IT");
   const fmtTime = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  document.getElementById("kpi-total").textContent = "~" + fmtNum(totalTok);
   document.getElementById("kpi-output").textContent = "~" + fmtNum(outputTok);
-  document.getElementById("kpi-output-sub").textContent = `${((outputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale`;
+  document.getElementById("kpi-output-sub").textContent = `~${fmtNum(totalTok)} token totali · ${((outputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% prodotto dal team`;
+  document.getElementById("kpi-input").textContent = "~" + fmtNum(inputTok);
+  document.getElementById("kpi-input-sub").textContent = inputTok > 0 ? `${((inputTok / Math.max(totalTok, 1)) * 100).toFixed(0)}% del totale` : "input ≈ 0 (team-only)";
   // Output/Input ratio: quanti token di output ha generato ogni token di prompt
-  // utente. Indicatore di "rendimento del prompt": team che lavora 100x oltre
-  // il prompt iniziale è in pieno orchestration mode.
-  const ratio = inputTok > 0 ? outputTok / inputTok : 0;
-  document.getElementById("kpi-ratio").textContent = ratio > 0 ? `×${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}` : "n/d";
-  document.getElementById("kpi-ratio-sub").textContent = inputTok > 0 ? `~${fmtNum(inputTok)} token in entrata, ~${fmtNum(outputTok)} fuori` : "input ≈ 0";
+  // utente. Se input=0, ratio matematicamente è ∞ (team-only).
+  const ratio = inputTok > 0 ? outputTok / inputTok : Infinity;
+  const ratioEl = document.getElementById("kpi-ratio");
+  if (ratio === Infinity) {
+    ratioEl.textContent = "∞";
+    document.getElementById("kpi-ratio-sub").textContent = "team-only (Input ≈ 0): nessun prompt utente in finestra";
+  } else if (ratio > 0) {
+    ratioEl.textContent = `×${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}`;
+    document.getElementById("kpi-ratio-sub").textContent = `~${fmtNum(inputTok)} token in entrata, ~${fmtNum(outputTok)} fuori`;
+  } else {
+    ratioEl.textContent = "—";
+    document.getElementById("kpi-ratio-sub").textContent = "ratio non calcolabile";
+  }
   document.getElementById("kpi-avg-window").textContent = "~" + fmtNum(avgPerWindow);
   document.getElementById("kpi-avg-window-sub").textContent = `perimetro: ${(ReportData.SESSION_WINDOWS || []).map((w) => w.label).join(" · ")}`;
   document.getElementById("kpi-peak-bucket").textContent = peakBucket ? "~" + fmtNum(peakBucket[1]) : "—";
