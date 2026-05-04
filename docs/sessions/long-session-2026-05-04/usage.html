@@ -30,6 +30,37 @@
   table.windows th { background:#161a23; color: var(--muted); font-weight: 600; font-size:12px; text-transform: uppercase; letter-spacing: .04em; }
   table.windows td:first-child, table.windows th:first-child { text-align: left; }
   table.windows tr:last-child td { border-bottom: none; }
+  .insights-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 22px;
+  }
+  .insights-card ul { margin: 0; padding-left: 22px; }
+  .insights-card li { margin: 6px 0; line-height: 1.5; }
+  .insights-card li strong { color: var(--accent); }
+  .insights-card li code {
+    background: #11151e; padding: 1px 6px; border-radius: 4px;
+    font-size: 12px; color: #c8cedb;
+  }
+  /* Override altezze canvas: lo shared styles.css forza 360px !important.
+     Qui rispecifico per ciascun grafico con priorità più alta (id selector + !important). */
+  .chart-wrap canvas#chart-usage { height: 520px !important; min-height: 520px; }
+  .chart-wrap canvas#chart-velocity { height: 460px !important; min-height: 460px; }
+  .chart-wrap canvas#chart-weekly { height: 400px !important; min-height: 400px; }
+  .chart-wrap canvas#chart-status { height: 400px !important; min-height: 400px; }
+  .chart-wrap canvas#chart-windows { height: 480px !important; min-height: 480px; }
+  .chart-wrap canvas#chart-smoothing { height: 440px !important; min-height: 440px; }
+  /* Info badge nel header del chart-wrap. */
+  .chart-wrap { position: relative; }
+  .chart-info {
+    position: absolute; top: 18px; right: 22px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #1f2532; border: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: help; user-select: none;
+    transition: background 120ms, color 120ms;
+  }
+  .chart-info:hover { background: #2a3142; color: var(--fg); }
   table.windows .bad { color: #eb5757; }
   table.windows .ok  { color: #6fcf97; }
   table.windows .warn { color: #f2c94c; }
@@ -50,20 +81,28 @@
 
 <main>
   <section id="kpi">
-    <h2>Numeri chiave</h2>
+    <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid" id="kpi-grid">
-      <div class="kpi-card"><div class="label">Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
-      <div class="kpi-card"><div class="label">Finestre Claude</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
-      <div class="kpi-card"><div class="label">Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
-      <div class="kpi-card"><div class="label">Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
-      <div class="kpi-card"><div class="label">Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
-      <div class="kpi-card"><div class="label">Tick sentinella</div><div class="value" id="kpi-ticks">…</div><div class="sub">campioni ~ ogni 3 min</div></div>
+      <div class="kpi-card"><div class="label">⏱ Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
+      <div class="kpi-card"><div class="label">🪟 Finestre Claude</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
+      <div class="kpi-card"><div class="label">🔥 Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
+      <div class="kpi-card"><div class="label">📈 Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
+      <div class="kpi-card"><div class="label">📅 Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
+      <div class="kpi-card"><div class="label">👁 Tick sentinella</div><div class="value" id="kpi-ticks">…</div><div class="sub">campioni ~ ogni 3 min</div></div>
+    </div>
+  </section>
+
+  <section id="insights">
+    <h2>🧠 In sintesi</h2>
+    <div class="insights-card" id="insights-card">
+      <ul id="insights-list"><li>caricamento…</li></ul>
     </div>
   </section>
 
   <section>
-    <div class="chart-wrap">
-      <h3>1 · Usage % vs Projection nel tempo</h3>
+    <div class="chart-wrap" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Claude (#N).">
+      <span class="chart-info" title="Cosa indica questo grafico: andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Claude consecutive. Soglia 100% = limite finestra; sopra 100% saremmo in over.">ℹ</span>
+      <h3>1 · 📈 Usage % vs Projection nel tempo</h3>
       <p class="caption">La sentinella misura ogni ~3 min la percentuale consumata della finestra corrente (linea piena) e proietta il consumo a fine finestra (linea tratteggiata). Quando la projection si stacca verso l'alto è il termostato a mettere freno.</p>
       <div class="legend-pills">
         <span><i class="dot" style="background:#56ccf2"></i>usage %</span>
@@ -79,8 +118,9 @@
       </div>
     </div>
 
-    <div class="chart-wrap">
-      <h3>2 · Velocity reale vs Velocity ideale</h3>
+    <div class="chart-wrap" title="Time series: velocity_smooth (EMA del consumo, area verde) e velocity_ideal (target per chiudere a 100% al reset, viola tratteggiata).">
+      <span class="chart-info" title="Cosa indica: ritmo di consumo punti%/h. Verde = velocity reale smussata, viola = ritmo ideale per terminare la finestra a 100% senza sforare. I gap nella verde sono i reset di finestra (delta negativo artificiale, escluso). Sopra il viola = throttle deve attivarsi.">ℹ</span>
+      <h3>2 · 🌡 Velocity reale vs Velocity ideale</h3>
       <p class="caption">Velocity = punti % / ora. La velocity_ideal è il ritmo che, mantenuto, chiude la finestra esattamente al 100% al reset. Sotto questa soglia siamo in sottoutilizzo, sopra si rischia di sforare.</p>
       <div class="legend-pills">
         <span><i class="dot" style="background:#6fcf97"></i>velocity_smooth (reale, EMA)</span>
@@ -96,8 +136,9 @@
     </div>
 
     <div class="grid-2">
-      <div class="chart-wrap">
-        <h3>3 · Weekly Usage — la curva accumulativa</h3>
+      <div class="chart-wrap" title="Curva accumulativa weekly_usage (% del budget settimanale Claude consumata).">
+        <span class="chart-info" title="Cosa indica: budget settimanale residuo. Curva monotona crescente, una volta a 100% il piano si esaurisce. Pendenza ripida = team che spinge, piatta = checkpoint/attesa.">ℹ</span>
+        <h3>3 · 📅 Weekly Usage — la curva accumulativa</h3>
         <p class="caption">Percentuale del budget settimanale Claude consumata nel tempo. È il vero limite di lungo periodo: una volta a 100% il piano si esaurisce.</p>
         <canvas id="chart-weekly"></canvas>
         <div class="narrative">
@@ -107,8 +148,9 @@
         </div>
       </div>
 
-      <div class="chart-wrap">
-        <h3>4 · Status sentinella — distribuzione tempo</h3>
+      <div class="chart-wrap" title="Doughnut: percentuale di tick in ciascuno status sentinella (SOTTOUTILIZZO, ATTENZIONE, STEADY, RESET).">
+        <span class="chart-info" title="Cosa indica: quanto tempo è passato in ciascuno status. SOTTOUTILIZZO = c'è margine, ATTENZIONE = il bridge sorveglia, STEADY = zona ideale, RESET = confini finestra. Bilanciamento ATTENZIONE/SOTTOUTILIZZO ≈ 50/50 = pacing in regime.">ℹ</span>
+        <h3>4 · 📊 Status sentinella — distribuzione tempo</h3>
         <p class="caption">Percentuale di tick passati in ciascuno status: <em>SOTTOUTILIZZO</em>, <em>ATTENZIONE</em>, <em>STEADY</em>, <em>RESET</em>. È la radiografia di quanto è stato in zona di comfort il team.</p>
         <canvas id="chart-status"></canvas>
         <div class="narrative">
@@ -119,8 +161,9 @@
       </div>
     </div>
 
-    <div class="chart-wrap">
-      <h3>5 · Riepilogo per finestra Claude</h3>
+    <div class="chart-wrap" title="Bar+line dual-axis: per ognuna delle finestre Claude attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
+      <span class="chart-info" title="Cosa indica: visione one-look di tutte le finestre Claude della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio). Linea verde = tempo coperto dalla sentinella in quella finestra (asse minuti a destra).">ℹ</span>
+      <h3>5 · 🪟 Riepilogo per finestra Claude</h3>
       <p class="caption">Per ognuna delle finestre Claude attraversate dalla sessione: durata di copertura, picco di usage raggiunto, e proiezione massima vista. Una finestra "sana" chiude vicino al 100% senza picchi di projection sopra 110%.</p>
       <div class="legend-pills">
         <span><i class="dot" style="background:#56ccf2"></i>picco usage %</span>
@@ -135,6 +178,7 @@
             <th>start</th>
             <th>end</th>
             <th>durata</th>
+            <th>reset</th>
             <th>tick</th>
             <th>picco usage</th>
             <th>picco proj</th>
@@ -150,8 +194,9 @@
       </div>
     </div>
 
-    <div class="chart-wrap">
-      <h3>6 · Effetto smoothing del bridge — projection_naive vs projection</h3>
+    <div class="chart-wrap" title="Time series: delta projection_naive − projection (effetto dello smoother del pacing-bridge). Verde quando riduce allarme, rosso quando aggiunge cautela.">
+      <span class="chart-info" title="Cosa indica: quanto il pacing-bridge sta correggendo la proiezione naive. Verde (>0) = naive esagerava, smoother calma. Rosso (<0) = naive era ottimista, smoother frena. Vicino a zero = nessuna correzione necessaria.">ℹ</span>
+      <h3>6 · 🪄 Effetto smoothing del bridge — projection_naive vs projection</h3>
       <p class="caption">La sentinella calcola due proiezioni: <em>projection_naive</em> (estrapolazione lineare del consumo corrente) e <em>projection</em> (corretta dallo smoother del pacing-bridge). La differenza <code>naive − smooth</code> dice quanto il bridge sta "addolcendo" il segnale.</p>
       <div class="legend-pills">
         <span><i class="dot" style="background:#6fcf97"></i>delta &gt; 0 (smoother riduce allarme)</span>
@@ -292,16 +337,31 @@
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
             label: (ctx) => {
               const raw = ctx.raw;
               if (ctx.dataset.label === "projection") {
                 const real = raw.yReal ?? ctx.parsed.y;
-                const suffix = real > 160 ? " (clip a 160 nel grafico)" : "";
-                return `projection: ${Math.round(real)}%${suffix}`;
+                const suffix = real > 160 ? " ⚠ (clip a 160 nel grafico)" : "";
+                return `📈 projection (stima fine finestra): ${Math.round(real)}%${suffix}`;
               }
-              return `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`;
+              return `🔵 usage (consumo finestra corrente): ${Math.round(ctx.parsed.y)}%`;
+            },
+            afterBody: (items) => {
+              const idx = items[0].dataIndex;
+              const r = sentinel[idx];
+              if (!r) return [];
+              return [
+                "",
+                `status: ${r.status || "?"}`,
+                `throttle: ${r.throttle ? "ON 🔥" : "off"}`,
+                `finestra: ${r.session_id || "?"}`,
+              ];
             },
           },
         },
@@ -438,9 +498,29 @@
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
-            label: (ctx) => ctx.parsed.y == null ? null : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %/h`,
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => {
+              if (ctx.parsed.y == null) return null;
+              if (ctx.dataset.label === "velocity_smooth") {
+                return `🟢 velocity reale (EMA): ${ctx.parsed.y.toFixed(1)} %/h`;
+              }
+              return `🟣 velocity ideale (target): ${ctx.parsed.y.toFixed(1)} %/h`;
+            },
+            afterBody: (items) => {
+              const idx = items[0].dataIndex;
+              const r = sentinel[idx];
+              if (!r) return [];
+              const diff = (r.velocity_smooth ?? 0) - (r.velocity_ideal ?? 0);
+              const verdict = diff > 5 ? "sopra target — termostato deve frenare"
+                            : diff < -5 ? "sotto target — sottoutilizzo, c'è margine"
+                            : "in banda — pacing in regime";
+              return ["", `⚖ ${verdict}`, `Δ = ${diff.toFixed(1)} %/h`];
+            },
           },
         },
       },
@@ -483,9 +563,13 @@
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
-            label: (ctx) => `weekly: ${ctx.parsed.y}%`,
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => `📅 budget weekly consumato: ${ctx.parsed.y}% (residuo ${100 - ctx.parsed.y}%)`,
           },
         },
       },
@@ -534,11 +618,24 @@
       plugins: {
         legend: { position: "right", labels: { boxWidth: 12, padding: 10 } },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
+            title: (items) => `📊 status: ${items[0].label}`,
             label: (ctx) => {
               const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
               const pct = ((ctx.parsed / total) * 100).toFixed(1);
-              return `${ctx.label}: ${ctx.parsed} tick (${pct}%)`;
+              const meaning = {
+                SOTTOUTILIZZO: "c'è margine, possiamo accelerare",
+                ATTENZIONE: "il bridge sorveglia, throttle vicino",
+                STEADY: "zona ideale, pacing in regime",
+                OVER: "sforamento — finestra in pericolo",
+                "G-SPOT": "punto dolce, sfruttamento ottimale",
+                RESET: "confine fra finestre Claude",
+              }[ctx.label] || "";
+              return [`${ctx.parsed} tick · ${pct}% del tempo`, meaning ? `(${meaning})` : ""];
             },
           },
         },
@@ -554,7 +651,7 @@
     if (!sid) continue;
     let w = windowMap.get(sid);
     if (!w) {
-      w = { sid, tStart: Date.parse(r.ts), tEnd: Date.parse(r.ts), peakUsage: 0, peakProj: 0, ticks: 0, throttleTicks: 0 };
+      w = { sid, tStart: Date.parse(r.ts), tEnd: Date.parse(r.ts), peakUsage: 0, peakProj: 0, ticks: 0, throttleTicks: 0, resetAt: r.reset_at || null };
       windowMap.set(sid, w);
     }
     const t = Date.parse(r.ts);
@@ -564,6 +661,7 @@
     w.peakProj = Math.max(w.peakProj, r.projection ?? 0);
     w.ticks += 1;
     if (r.throttle) w.throttleTicks += 1;
+    if (r.reset_at && !w.resetAt) w.resetAt = r.reset_at;
   }
   // Ordino per inizio cronologico così le barre raccontano la sequenza temporale.
   const windows = Array.from(windowMap.values()).sort((a, b) => a.tStart - b.tStart);
@@ -618,21 +716,39 @@
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
             title: (items) => {
               const w = windows[items[0].dataIndex];
-              return `Finestra ${winLabels[items[0].dataIndex]} (${w.sid})`;
+              return `🪟 Finestra ${winLabels[items[0].dataIndex]} · ${w.sid}`;
             },
             label: (ctx) => {
               if (ctx.dataset.label === "picco projection %") {
                 const real = windows[ctx.dataIndex].peakProj;
-                const suffix = real > 200 ? " (clip a 200)" : "";
-                return `picco projection: ${Math.round(real)}%${suffix}`;
+                const verdict = real >= 130 ? "🚨 zona di rischio"
+                              : real >= 110 ? "⚠ vicino soglia"
+                              : "✅ controllato";
+                const suffix = real > 200 ? " (clip a 200 nel grafico)" : "";
+                return `🟡 picco projection: ${Math.round(real)}%${suffix} — ${verdict}`;
               }
               if (ctx.dataset.label === "durata visibile (min)") {
-                return `durata visibile: ${ctx.parsed.y} min`;
+                const m = ctx.parsed.y;
+                const human = m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+                return `🟢 durata visibile: ${human} (${m} min totali)`;
               }
-              return `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`;
+              const u = Math.round(ctx.parsed.y);
+              const verdict = u >= 95 ? "🔥 finestra sfruttata al massimo"
+                            : u >= 70 ? "✅ buon utilizzo"
+                            : "⚠ sottoutilizzo";
+              return `🔵 picco usage: ${u}% — ${verdict}`;
+            },
+            afterBody: (items) => {
+              const w = windows[items[0].dataIndex];
+              const ratio = w.ticks ? Math.round((w.throttleTicks / w.ticks) * 100) : 0;
+              return ["", `tick sentinella: ${w.ticks}`, `throttle attivo: ${ratio}% (${w.throttleTicks}/${w.ticks})`];
             },
           },
         },
@@ -676,6 +792,7 @@
       <td>${fmtHM(w.tStart)}</td>
       <td>${fmtHM(w.tEnd)}</td>
       <td>${fmtDur(w.tEnd - w.tStart)}</td>
+      <td>${w.resetAt || "—"}</td>
       <td>${w.ticks}</td>
       <td class="${usageClass(w.peakUsage)}">${w.peakUsage}%</td>
       <td class="${projClass(w.peakProj)}">${Math.round(w.peakProj)}%</td>
@@ -683,6 +800,49 @@
     `;
     tbody.appendChild(tr);
   });
+
+  // ---------- Insights "In sintesi" ----------
+  const insightsList = document.getElementById("insights-list");
+  insightsList.innerHTML = "";
+  const ins = [];
+  // Quante finestre con projection >120%?
+  const windowsHot = windows.filter((w) => w.peakProj >= 120).length;
+  const windowsOk = windows.length - windowsHot;
+  ins.push(`Su <strong>${windows.length}</strong> finestre Claude attraversate, <strong>${windowsHot}</strong> hanno toccato proiezioni &gt;120% (vere zone di rischio) e <strong>${windowsOk}</strong> sono rimaste sotto controllo.`);
+  // Finestra più "tirata" = max peakProj
+  const hottest = windows.reduce((m, w) => (w.peakProj > (m?.peakProj ?? 0) ? w : m), null);
+  if (hottest) {
+    ins.push(`La finestra più tirata ha picco projection <strong>${Math.round(hottest.peakProj)}%</strong> con peak usage <strong>${hottest.peakUsage}%</strong> — <code>${hottest.sid}</code> (${fmtTime(hottest.tStart)} → ${fmtTime(hottest.tEnd)}).`);
+  }
+  // Throttle ratio totale
+  const throttleOn = sentinel.filter((r) => r.throttle).length;
+  const throttleRatio = ((throttleOn / sentinel.length) * 100).toFixed(0);
+  ins.push(`Il termostato è stato attivo per <strong>${throttleRatio}%</strong> dei tick (${throttleOn}/${sentinel.length}). Equilibrio &asymp; 50/50 = pacing in regime, sopra il 70% = il team avrebbe sforato senza freno.`);
+  // Tempo dal picco più alto
+  const peakRec = sentinel.reduce((m, r) => ((r.usage ?? 0) > (m?.usage ?? 0) ? r : m), null);
+  if (peakRec) {
+    ins.push(`Picco assoluto di usage <strong>${peakRec.usage}%</strong> registrato alle <strong>${fmtTime(Date.parse(peakRec.ts))}</strong> (status <code>${peakRec.status}</code>) — la finestra ha tenuto.`);
+  }
+  // Smoothing usefulness
+  const smoothEffective = sentinel.filter((r) => r.projection != null && r.projection_naive != null && Math.abs(r.projection_naive - r.projection) >= 5).length;
+  if (smoothEffective > 0) {
+    const pct = ((smoothEffective / sentinel.length) * 100).toFixed(0);
+    ins.push(`Lo smoother del bridge ha corretto la proiezione di &ge;5pp in <strong>${pct}%</strong> dei tick (${smoothEffective} su ${sentinel.length}) — è la differenza che giustifica il pacing-bridge come componente.`);
+  }
+  // Weekly forecast
+  if (weeklyDelta != null && weeklyEnd != null && durationH > 0) {
+    const ratePerHour = weeklyDelta / durationH;
+    const remaining = Math.max(100 - weeklyEnd, 0);
+    const etaH = ratePerHour > 0 ? remaining / ratePerHour : 0;
+    if (etaH > 0) {
+      ins.push(`Al ritmo di consumo settimanale visto in sessione (<strong>${ratePerHour.toFixed(1)} pp/h</strong>), il budget weekly residuo (<strong>${remaining}%</strong>) basta per circa <strong>${etaH.toFixed(0)} ore</strong> di lavoro analogo.`);
+    }
+  }
+  for (const html of ins) {
+    const li = document.createElement("li");
+    li.innerHTML = html;
+    insightsList.appendChild(li);
+  }
 
   // ---------- Chart 6: smoothing delta = projection_naive - projection ----------
   // La serie va spezzata sui reset come la velocity, perché projection_naive
@@ -744,12 +904,26 @@
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: "rgba(13,15,20,0.95)",
+          borderColor: "var(--border)",
+          borderWidth: 1,
+          padding: 10,
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
             label: (ctx) => {
               if (ctx.parsed.y == null) return null;
-              const sign = ctx.parsed.y >= 0 ? "+" : "";
-              return `naive − smooth: ${sign}${ctx.parsed.y.toFixed(1)} pp`;
+              const v = ctx.parsed.y;
+              const sign = v >= 0 ? "+" : "";
+              const verdict = v > 5 ? "🟢 smoother riduce allarme (naive esagerava)"
+                            : v < -5 ? "🔴 smoother aggiunge cautela (naive ottimista)"
+                            : "🪞 naive ≈ smooth (nessuna correzione)";
+              return [`Δ = ${sign}${v.toFixed(1)} pp`, verdict];
+            },
+            afterBody: (items) => {
+              const idx = items[0].dataIndex;
+              const r = sentinel[idx];
+              if (!r || r.projection == null || r.projection_naive == null) return [];
+              return ["", `naive: ${r.projection_naive.toFixed(1)}%`, `smooth: ${r.projection.toFixed(1)}%`];
             },
           },
         },
