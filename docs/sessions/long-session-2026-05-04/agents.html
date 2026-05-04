@@ -11,6 +11,10 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
   }
+  .agents-grid > * {
+    min-width: 0;
+    min-height: 0;
+  }
   @media (max-width: 1100px) {
     .agents-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -74,10 +78,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .agent-card canvas {
+  .agent-card .chart-box {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    min-height: 0;
+  }
+  .agent-card .chart-box canvas {
     width: 100% !important;
-    min-height: 360px !important;
-    height: 360px !important;
+    height: 100% !important;
+    display: block;
   }
   .info-box {
     background: #11151e;
@@ -311,8 +321,11 @@
     `;
     card.appendChild(kpis);
 
+    const chartBox = document.createElement("div");
+    chartBox.className = "chart-box";
     const canvas = document.createElement("canvas");
-    card.appendChild(canvas);
+    chartBox.appendChild(canvas);
+    card.appendChild(chartBox);
     grid.appendChild(card);
 
     new Chart(canvas.getContext("2d"), {
@@ -406,9 +419,11 @@
           y2: {
             position: "right",
             beginAtZero: true,
+            suggestedMax: Math.max(60, ...thrBins[role]) || 60,
             ticks: {
               color: "#8a93a4",
               font: { size: 10 },
+              maxTicksLimit: 5,
               callback: (v) => fmtSec(v),
             },
             grid: { drawOnChartArea: false },
