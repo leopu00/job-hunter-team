@@ -5,11 +5,147 @@
 <title>📊 Database — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  /* Stile coerente con throttle.html: canvas-host con altezza fissa per
+     impedire distorsioni Chart.js, overflow visibile per non troncare
+     tooltip. */
+  .chart-wrap { position: relative; overflow: visible !important; }
+  .chart-wrap .canvas-host {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    min-height: 380px;
+    overflow: visible !important;
+  }
+  .chart-wrap.tall .canvas-host { height: 480px; min-height: 480px; }
+  .chart-wrap.compact .canvas-host { height: 320px; min-height: 320px; }
+  .chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .narrative h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
+  .narrative p { margin: 0 0 8px; }
+  .narrative p:last-child { margin-bottom: 0; }
+
+  /* Funnel: 5 stage in barre orizzontali decrescenti, costruito in CSS
+     puro per controllo visivo (Chart.js bar dual-axis sarebbe overkill). */
+  .funnel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 4px;
+  }
+  .funnel-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 90px;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+  }
+  .funnel-label {
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .funnel-bar {
+    height: 32px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #56ccf2 0%, #6fcf97 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .funnel-bar.lost {
+    background: linear-gradient(90deg, #56ccf2 0%, #f2c94c 100%);
+  }
+  .funnel-bar.tail {
+    background: linear-gradient(90deg, #6fcf97 0%, #bb6bd9 100%);
+  }
+  .funnel-count {
+    text-align: right;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .funnel-count strong { color: var(--fg); font-size: 16px; }
+  .funnel-pct {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #0d0f14;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  /* Tabella top positions: stretta e scrollabile in orizzontale su narrow. */
+  .top-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .top-table th, .top-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .top-table th {
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .top-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+  .verdict-PASS { background: #1f3a2a; color: #6fcf97; border-color: #2a4d3a; }
+  .verdict-NEEDS_WORK { background: #3a3322; color: #f2c94c; border-color: #4d4528; }
+  .verdict-REJECT { background: #3a2222; color: #eb5757; border-color: #4d2828; }
+  .status-ready { color: #6fcf97; }
+  .status-excluded { color: #828282; text-decoration: line-through; }
+  .status-scored { color: #f2c94c; }
+
+  /* Header del chart con toolbar a destra */
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .chart-header h3 { margin: 0; flex: 1; }
+  .chart-toolbar {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .chart-toolbar button {
+    background: var(--card);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    min-width: 32px;
+  }
+  .chart-toolbar button:hover { background: #1f2532; }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>📊 Database — cosa ha prodotto il team</h1>
-  <p class="subtitle">Positions trovate, companies analizzate, scores, applications — l'output reale della long session estratto da <code>jobs.db</code>.</p>
+  <p class="subtitle">
+    Positions trovate, scores, applications scritte, verdetti del Critico —
+    l'output reale della long session estratto da <code>jobs.db</code>.
+  </p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -21,18 +157,808 @@
     <a href="crashes.html">💥 Crash</a>
   </nav>
 </header>
+
 <main>
+  <section class="kpi-grid" id="kpi-grid"></section>
+
   <section>
-    <p class="note">
-      ⚠️ Sezione in costruzione — assegnata a dev2 dopo chiusura zoom Round.
-      <br>
-      Dati esportati pronti in <code>data/db/</code> (positions.json.txt, scores.json.txt,
-      applications.json.txt, companies.json.txt, highlights.json.txt). Conteggi
-      preliminari finestra session: 22 positions, 22 scores, 18 applications,
-      0 companies analizzate, 0 highlights.
-    </p>
+    <h2>🔭 Cosa stiamo guardando</h2>
+    <div class="narrative">
+      <h4>Output sostantivo della long session</h4>
+      <p>
+        Questa pagina ricostruisce <strong>cosa è arrivato in DB</strong> durante
+        la sessione: posizioni trovate dagli scout, score assegnati dallo scorer,
+        applications scritte dagli scrittori e verdetti del critico. È la
+        controparte sostantiva del lavoro misurato altrove (usage, throttle,
+        timeline). Tutti i conteggi sono sull'esportato in
+        <code>data/db/*.json.txt</code>.
+      </p>
+      <p>
+        ⚠️ <strong>Caveat dati vuoti.</strong>
+        <code>companies.json.txt</code> e <code>highlights.json.txt</code> sono
+        vuoti perché in questa finestra non ci sono record con
+        <code>analyzed_at</code> o <code>created_at</code> dentro il range
+        di sessione: le company deep-dive e gli highlights vengono fatti nel
+        pre-warmup, fuori finestra. Per la sessione i numeri "companies"
+        riportati nei KPI sono il <em>distinct count</em> sulle posizioni
+        (ogni posizione cita una company, ma non c'è un'analisi profonda
+        archiviata in tabella).
+      </p>
+      <p>
+        Le analisi sono lette così: <strong>Funnel</strong> per il colpo d'occhio
+        sul tasso di conversione fra fasi; <strong>Verdetti del critico</strong>
+        per la qualità delle CV scritte; <strong>Histogram score</strong> per
+        sapere su quale fascia di posizioni il team ha lavorato;
+        <strong>Radar sub-score</strong> per capire quali dimensioni sono i
+        punti di forza vs i colli di bottiglia; <strong>Tabella top</strong>
+        per i casi specifici da verificare a mano; <strong>Narrativa gap</strong>
+        per i pattern ricorrenti nei <code>critic_notes</code>.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>📉 Funnel — trovate → scored → ready → written → PASS</h2>
+    <div class="chart-wrap" style="padding: 16px 22px;" title="Funnel a 5 stage delle posizioni nella long session: dalla scoperta dello scout fino al verdetto PASS del critico. Lunghezza barra proporzionale al count, percentuale rispetto al primo stage.">
+      <p class="caption">
+        Cinque stage di vita di una posizione. Il drop fra uno stage e il
+        successivo racconta dove il team ha filtrato: gli excluded escono dopo
+        lo scoring (qualità del match insufficiente), i non-written sono ready
+        in attesa di scrittore libero, i non-PASS hanno avuto un verdetto
+        diverso dal critico.
+      </p>
+      <div class="funnel" id="funnel"></div>
+    </div>
+    <div class="narrative">
+      <h4>Lettura del funnel</h4>
+      <p>
+        La perdita fra <strong>trovate</strong> e <strong>scored</strong>
+        misura quanto lo scorer è arrivato a coprire le posizioni in coda;
+        idealmente è 0% (tutte scoredb), un drop indica che lo scorer è
+        stato fermato (throttle/freeze) o non ha avuto tempo. Da
+        <strong>scored</strong> a <strong>ready</strong> è invece una
+        scelta del team: vengono scartate le posizioni con score basso o
+        che non passano il pre-check (≥3 anni exp, US-only, eccetera).
+      </p>
+      <p>
+        Da <strong>ready</strong> a <strong>written</strong> dipende dalla
+        capacità degli scrittori di consumare la coda; il drop qui è il
+        segnale più chiaro che lo scrittore è stato il <em>collo di bottiglia</em>
+        della pipeline. Da <strong>written</strong> a <strong>PASS</strong>
+        è la qualità: il critico boccia o richiede ulteriori giri quando le
+        CV non centrano la JD.
+      </p>
+      <p>
+        Una sessione "sana" ha drop monotonamente decrescenti:
+        ogni stage scarta meno del precedente. Drop bruschi a metà del
+        funnel sono il segnale più importante per il prossimo round di
+        miglioramento.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>🧐 Verdetti del Critico</h2>
+    <div class="chart-wrap" title="Bar chart: # applications per ogni verdict del critico (PASS / NEEDS_WORK / REJECT / null). Indica la qualità complessiva del lavoro degli scrittori.">
+      <p class="caption">
+        Distribuzione dei verdetti del critico sulle applications scritte.
+        Il rapporto PASS/(PASS+NEEDS_WORK+REJECT) è il <strong>pass rate</strong>
+        del team — un singolo numero che riassume la qualità della pipeline
+        di scrittura.
+      </p>
+      <div class="canvas-host"><canvas id="verdict"></canvas></div>
+    </div>
+    <div class="narrative">
+      <h4>Cosa ci dice il pass rate</h4>
+      <p>
+        Un alto numero di PASS significa che gli scrittori stanno producendo
+        CV sufficientemente vicine alla JD da convincere il critico al primo
+        o secondo round. NEEDS_WORK sono le CV potenzialmente recuperabili con
+        un round in più; REJECT sono quelle con gap strutturali (es. lingua,
+        seniority, stack obbligatorio mancante).
+      </p>
+      <p>
+        Il critico opera in <em>review cieca</em> con un sistema di round
+        (3 round per default, soglia ≥5/10 per PASS). Per questo lo stesso
+        critic_score può evolvere fra round (ad esempio passare da 6.0 a 5.5
+        in round successivi quando vengono notate gap nuove). Lo
+        <strong>score finale</strong> nel DB è quello del round chiusura.
+      </p>
+      <p>
+        I record con <code>critic_verdict</code> a NULL sono application
+        scritte ma non ancora finalizzate dal critico: tipicamente il
+        critico è ancora in loop o è stato interrotto da un freeze.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>🎯 Distribuzione total_score</h2>
+    <div class="chart-wrap" title="Histogram dei total_score assegnati dallo scorer alle 22 posizioni della sessione. I bucket scelti riflettono la soglia di pre-check (60) e le fasce strategiche (70/80).">
+      <p class="caption">
+        Bucket fissi sui total_score. Le soglie sono allineate alla policy:
+        &lt;50 = scartato per default, 50-59 = borderline, 60-69 = candidato
+        legittimo, 70-79 = match forte, ≥80 = match top.
+      </p>
+      <div class="canvas-host compact"><canvas id="score-hist"></canvas></div>
+    </div>
+    <div class="narrative">
+      <h4>Su che fascia ha lavorato il team</h4>
+      <p>
+        La forma della distribuzione racconta su quali posizioni lo scout ha
+        portato a casa risultati: una concentrazione sui bucket alti
+        (70+) significa coda di posizioni di qualità; una distribuzione
+        appiattita o spostata in basso indica che lo scout sta raccogliendo
+        anche posizioni borderline che poi lo scorer scarta.
+      </p>
+      <p>
+        Il <strong>match strategico</strong> non è solo &gt;= 80: anche un 65
+        legittimo può portare a un'application di qualità se il candidato
+        è motivato. Il vero filtro lo applica il critico, non lo scorer.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>🕸 Radar dei sub-score (medie sessione)</h2>
+    <div class="chart-wrap" title="Radar chart con i 5 sub-score medi della sessione: stack_match, remote_fit, salary_fit, experience_fit, strategic_fit. Mostra a colpo d'occhio i punti di forza e i colli di bottiglia.">
+      <p class="caption">
+        Media dei 5 sub-score sulle 22 posizioni scored. Dimensione "piena"
+        del radar = team vicino al massimo; dimensione "schiacciata" = collo
+        di bottiglia strutturale (es. salary_fit basso = stipendi spesso
+        sotto le aspettative).
+      </p>
+      <div class="canvas-host"><canvas id="radar"></canvas></div>
+    </div>
+    <div class="narrative">
+      <h4>Dove le posizioni sono forti, dove sono deboli</h4>
+      <p>
+        I sub-score sono una scomposizione lineare del total_score (somma
+        approssimativamente, con peso interno). Permettono di capire
+        <em>perché</em> un total_score è 70 e non 90: spesso è la singola
+        dimensione bassa (salary, esperienza richiesta troppo alta) che
+        tira giù la media.
+      </p>
+      <p>
+        Un radar visibilmente "tirato" su <strong>stack_match</strong> e
+        <strong>experience_fit</strong> e schiacciato su
+        <strong>salary_fit</strong> è il pattern atteso del mercato remote
+        EU per profili junior: lo stack è centrato (Python/JS),
+        l'esperienza richiesta combacia (1-2 anni), ma le salary range sono
+        sotto la mediana del candidato.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>🏆 Top positions per total_score</h2>
+    <div class="chart-wrap" style="padding: 14px 20px;" title="Top 10 posizioni della sessione ordinate per total_score, con verdict del critico (se applicato), status finale, scoperta da, e link alla JD.">
+      <p class="caption">
+        Le 10 posizioni con il punteggio più alto. Includono lo status
+        della pipeline (ready / scored / excluded), il verdetto del critico
+        sulla CV (se scritta), e il link alla JD per ispezione manuale.
+      </p>
+      <div style="overflow-x: auto;">
+        <table class="top-table" id="top-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Posizione</th>
+              <th>Company</th>
+              <th class="num">Score</th>
+              <th>Verdict</th>
+              <th class="num">Critic</th>
+              <th>Status</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>🧐 Gap ricorrenti nei verdetti del Critico</h2>
+    <div class="narrative" id="gaps-narrative">
+      <h4>Pattern emersi dai critic_notes</h4>
+      <p>Calcolo in corso…</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>⚙️ Note tecniche</h2>
+    <div class="narrative">
+      <h4>Come sono stati calcolati i numeri</h4>
+      <p>
+        Ogni file in <code>data/db/</code> è un export JSON array delle
+        rispettive tabelle SQLite filtrate alla finestra di sessione
+        (2026-05-03 18:00Z → 2026-05-04 12:00Z). Per <strong>positions</strong>
+        il filtro è su <code>found_at</code>; per <strong>scores</strong> su
+        <code>scored_at</code>; per <strong>applications</strong> su
+        <code>written_at</code>. Conteggio companies: distinct sui
+        <code>company</code> di positions (la tabella companies è vuota
+        in finestra).
+      </p>
+      <p>
+        Il funnel è ricostruito in JS: ogni stage è un Set di
+        <code>position_id</code>. Il radar usa la media aritmetica dei
+        sub-score; il pass rate è
+        <code>PASS / (PASS + NEEDS_WORK + REJECT)</code> escludendo i null.
+        I gap pattern sono estratti via regex su <code>critic_notes</code>
+        (case-insensitive, dedup per pattern canonico).
+      </p>
+      <p>
+        Tutti i grafici condividono il color mapping di
+        <code>ReportData.AGENT_COLORS</code> dove pertinente, e usano
+        <code>chartjs-plugin-zoom</code> per zoom xy + pan via wheel/pinch
+        (sintonizzato come negli altri report di questa sessione).
+      </p>
+    </div>
   </section>
 </main>
+
+<footer>
+  <small>
+    Sezione Database — Long Session 2026-05-04 · dev2.
+    Sorgenti: <code>data/db/positions|scores|applications|companies|highlights.json.txt</code>.
+  </small>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+// Zoom SOLO via bottoni (decisione team): wheel/pinch/drag completamente
+// disabilitati per non confondere lo scroll della pagina sul trackpad.
+// Step dolce 1.15/0.87, pan ~10% dell'area chart in pixel.
+const ZOOM_OPTIONS = {
+  zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false }, mode: "xy" },
+  pan: { enabled: false, mode: "xy" },
+  limits: { x: { minRange: 0.5 }, y: { minRange: 0.5 } },
+};
+const ZOOM_IN_FACTOR = 1.15;
+const ZOOM_OUT_FACTOR = 0.87;
+const PAN_FRACTION = 0.10;
+if (window.Chart) {
+  Chart.defaults.plugins.zoom = ZOOM_OPTIONS;
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+  Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
+  Chart.defaults.plugins.tooltip.footerFont = { size: 12, weight: "400" };
+  Chart.defaults.plugins.tooltip.displayColors = true;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.backgroundColor = "rgba(22, 26, 35, 0.96)";
+  Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
+  Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
+  Chart.defaults.plugins.tooltip.footerColor = "#8a93a4";
+  Chart.defaults.plugins.tooltip.borderColor = "rgba(140, 148, 160, 0.4)";
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+}
+
+(async function () {
+  // Helper fetch JSON difensivo: skip se file vuoto, parse fallito → [].
+  async function loadJsonDb(name) {
+    try {
+      const txt = await fetch(`data/db/${name}.json.txt`).then((r) => r.text());
+      const trimmed = txt.trim();
+      if (!trimmed) return [];
+      // Alcuni file sono JSON array, altri sono jsonl (crash-events). Tentiamo
+      // prima JSON array, fallback a JSONL.
+      if (trimmed.startsWith("[")) {
+        try { return JSON.parse(trimmed); } catch {}
+      }
+      return trimmed
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => {
+          try { return JSON.parse(l); } catch { return null; }
+        })
+        .filter(Boolean);
+    } catch (e) {
+      console.warn("loadJsonDb failed", name, e);
+      return [];
+    }
+  }
+
+  const [positions, scores, applications, companies, highlights] = await Promise.all([
+    loadJsonDb("positions"),
+    loadJsonDb("scores"),
+    loadJsonDb("applications"),
+    loadJsonDb("companies"),
+    loadJsonDb("highlights"),
+  ]);
+
+  // ----- Cleaning / dedup difensivo -----
+  // - skip record senza id (impossibile correlare al funnel)
+  // - dedup per id (caso esportazione doppia)
+  const dedup = (arr, key = "id") => {
+    const seen = new Set();
+    return arr.filter((r) => {
+      const k = r && r[key];
+      if (k == null || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
+  const pos = dedup(positions);
+  const sco = dedup(scores);
+  const app = dedup(applications);
+
+  // ----- KPI strip -----
+  const distinctCompanies = new Set(pos.map((p) => p.company).filter(Boolean));
+  const ready = pos.filter((p) => p.status === "ready");
+  const excluded = pos.filter((p) => p.status === "excluded");
+  const scoredSet = new Set(sco.map((s) => s.position_id));
+  const passApps = app.filter((a) => a.critic_verdict === "PASS");
+  const totalDecidedApps = app.filter((a) => a.critic_verdict).length;
+  const passRate = totalDecidedApps
+    ? Math.round((passApps.length / totalDecidedApps) * 100)
+    : 0;
+  const avgScore = sco.length
+    ? (sco.reduce((s, r) => s + (r.total_score || 0), 0) / sco.length).toFixed(1)
+    : "—";
+
+  const kpis = [
+    { label: "🔎 Positions trovate", value: pos.length },
+    { label: "🏢 Companies (distinct)", value: distinctCompanies.size },
+    { label: "🎯 Posizioni scored", value: sco.length },
+    { label: "✅ Ready", value: ready.length },
+    { label: "✍️ Applications scritte", value: app.length },
+    { label: "👍 Verdict PASS", value: passApps.length },
+    { label: "📈 Pass rate", value: `${passRate}%` },
+    { label: "📐 Score medio", value: avgScore },
+  ];
+  const kpiGrid = document.getElementById("kpi-grid");
+  for (const k of kpis) {
+    const div = document.createElement("div");
+    div.className = "kpi-card";
+    div.innerHTML = `<div class="label">${k.label}</div><div class="value">${k.value}</div>`;
+    kpiGrid.appendChild(div);
+  }
+
+  // ----- FUNNEL -----
+  // Ogni stage è il Set dei position_id che hanno raggiunto quello stage.
+  const stageTrovate = new Set(pos.map((p) => p.id));
+  const stageScored = new Set(
+    sco.map((s) => s.position_id).filter((pid) => stageTrovate.has(pid))
+  );
+  const stageReady = new Set(ready.map((p) => p.id));
+  // written: applications con position_id valido
+  const stageWritten = new Set(
+    app.map((a) => a.position_id).filter((pid) => stageTrovate.has(pid))
+  );
+  const stagePass = new Set(
+    passApps.map((a) => a.position_id).filter((pid) => stageTrovate.has(pid))
+  );
+  const stages = [
+    { label: "🔎 Trovate (positions)", count: stageTrovate.size, klass: "" },
+    { label: "🎯 Scored", count: stageScored.size, klass: "" },
+    { label: "✅ Ready", count: stageReady.size, klass: "lost" },
+    { label: "✍️ Written (apps)", count: stageWritten.size, klass: "tail" },
+    { label: "👍 PASS", count: stagePass.size, klass: "tail" },
+  ];
+  const maxCount = Math.max(1, ...stages.map((s) => s.count));
+  const funnelEl = document.getElementById("funnel");
+  for (const st of stages) {
+    const widthPct = (st.count / maxCount) * 100;
+    const ofTotal = ((st.count / stageTrovate.size) * 100).toFixed(0);
+    const row = document.createElement("div");
+    row.className = "funnel-row";
+    row.title = `${st.label}: ${st.count} (${ofTotal}% del totale trovate)`;
+    row.innerHTML = `
+      <div class="funnel-label">${st.label}</div>
+      <div class="funnel-bar ${st.klass}" style="width: ${widthPct}%; min-width: 60px;">
+        <div class="funnel-pct">${ofTotal}%</div>
+      </div>
+      <div class="funnel-count"><strong>${st.count}</strong> / ${stageTrovate.size}</div>
+    `;
+    funnelEl.appendChild(row);
+  }
+
+  // ----- BAR critic_verdict -----
+  const verdictCounts = { PASS: 0, NEEDS_WORK: 0, REJECT: 0, "(null)": 0 };
+  for (const a of app) {
+    const v = a.critic_verdict || "(null)";
+    if (v in verdictCounts) verdictCounts[v] += 1;
+    else verdictCounts[v] = (verdictCounts[v] || 0) + 1;
+  }
+  const verdictColors = {
+    PASS: "#6fcf97",
+    NEEDS_WORK: "#f2c94c",
+    REJECT: "#eb5757",
+    "(null)": "#828282",
+  };
+  const vLabels = Object.keys(verdictCounts);
+  new Chart(document.getElementById("verdict").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: vLabels,
+      datasets: [
+        {
+          label: "# applications",
+          data: vLabels.map((v) => verdictCounts[v]),
+          backgroundColor: vLabels.map((v) => verdictColors[v] || "#888"),
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { ticks: { color: "#e8ecf3" }, grid: { color: "#1f2532" } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#8a93a4", precision: 0 },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# applications", color: "#8a93a4" },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Verdict: ${items[0]?.label || ""}`,
+            label: (ctx) => {
+              const tot = app.length || 1;
+              const pct = ((ctx.parsed.y / tot) * 100).toFixed(1);
+              return `${ctx.parsed.y} app (${pct}% del totale)`;
+            },
+            afterBody: (items) => {
+              const v = items[0]?.label;
+              if (!v || v === "(null)") return "";
+              const scs = app
+                .filter((a) => a.critic_verdict === v)
+                .map((a) => a.critic_score)
+                .filter((s) => typeof s === "number");
+              if (!scs.length) return "";
+              const avg = scs.reduce((s, x) => s + x, 0) / scs.length;
+              return `Critic_score medio: ${avg.toFixed(1)}`;
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // ----- HISTOGRAM total_score -----
+  const buckets = [
+    { label: "<50", min: 0, max: 49 },
+    { label: "50-59", min: 50, max: 59 },
+    { label: "60-69", min: 60, max: 69 },
+    { label: "70-79", min: 70, max: 79 },
+    { label: "≥80", min: 80, max: Infinity },
+  ];
+  const bucketColors = ["#828282", "#bb6bd9", "#56ccf2", "#6fcf97", "#f2c94c"];
+  const bucketCounts = buckets.map((b) =>
+    sco.filter((s) => s.total_score >= b.min && s.total_score <= b.max).length
+  );
+  new Chart(document.getElementById("score-hist").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: buckets.map((b) => b.label),
+      datasets: [
+        {
+          label: "# positions",
+          data: bucketCounts,
+          backgroundColor: bucketColors,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: { color: "#e8ecf3" },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "bucket total_score", color: "#8a93a4" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#8a93a4", precision: 0 },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# positions", color: "#8a93a4" },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Bucket ${items[0]?.label || ""}`,
+            label: (ctx) => {
+              const tot = sco.length || 1;
+              const pct = ((ctx.parsed.y / tot) * 100).toFixed(1);
+              return `${ctx.parsed.y} positions (${pct}% degli scored)`;
+            },
+            afterBody: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx == null) return "";
+              const b = buckets[idx];
+              const ss = sco
+                .filter((s) => s.total_score >= b.min && s.total_score <= b.max)
+                .map((s) => s.total_score);
+              if (!ss.length) return "";
+              const min = Math.min(...ss);
+              const max = Math.max(...ss);
+              return `Range nel bucket: ${min}–${max}`;
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // ----- RADAR sub-score medi -----
+  const subKeys = ["stack_match", "remote_fit", "salary_fit", "experience_fit", "strategic_fit"];
+  const subLabels = ["Stack", "Remote", "Salary", "Experience", "Strategic"];
+  const avgSubs = subKeys.map((k) => {
+    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  });
+  // Min e max per contesto
+  const minSubs = subKeys.map((k) => {
+    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    return vals.length ? Math.min(...vals) : 0;
+  });
+  const maxSubs = subKeys.map((k) => {
+    const vals = sco.map((s) => s[k]).filter((v) => typeof v === "number");
+    return vals.length ? Math.max(...vals) : 0;
+  });
+  new Chart(document.getElementById("radar").getContext("2d"), {
+    type: "radar",
+    data: {
+      labels: subLabels,
+      datasets: [
+        {
+          label: "Media",
+          data: avgSubs,
+          backgroundColor: "rgba(86, 204, 242, 0.25)",
+          borderColor: "#56ccf2",
+          borderWidth: 2,
+          pointBackgroundColor: "#56ccf2",
+          pointRadius: 4,
+        },
+        {
+          label: "Max",
+          data: maxSubs,
+          backgroundColor: "rgba(111, 207, 151, 0.10)",
+          borderColor: "#6fcf97",
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 2,
+          pointBackgroundColor: "#6fcf97",
+        },
+        {
+          label: "Min",
+          data: minSubs,
+          backgroundColor: "rgba(235, 87, 87, 0.10)",
+          borderColor: "#eb5757",
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 2,
+          pointBackgroundColor: "#eb5757",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      // Radar non supporta zoom xy in modo utile: lo disabilito qui.
+      plugins: {
+        zoom: {
+          zoom: { wheel: { enabled: false }, pinch: { enabled: false } },
+          pan: { enabled: false },
+        },
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Sub-score: ${items[0]?.label || ""}`,
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.r.toFixed(1)} / 10`,
+          },
+        },
+      },
+      scales: {
+        r: {
+          beginAtZero: true,
+          min: 0,
+          max: 10,
+          ticks: {
+            color: "#8a93a4",
+            backdropColor: "rgba(0,0,0,0)",
+            stepSize: 2,
+          },
+          grid: { color: "#2a3144" },
+          angleLines: { color: "#2a3144" },
+          pointLabels: { color: "#e8ecf3", font: { size: 13 } },
+        },
+      },
+    },
+  });
+
+  // ----- TABELLA top positions per total_score -----
+  const scoreByPos = new Map(sco.map((s) => [s.position_id, s]));
+  const verdictByPos = new Map();
+  const critScoreByPos = new Map();
+  for (const a of app) {
+    if (a.position_id != null) {
+      verdictByPos.set(a.position_id, a.critic_verdict);
+      critScoreByPos.set(a.position_id, a.critic_score);
+    }
+  }
+  const top = [...pos]
+    .map((p) => ({
+      ...p,
+      _score: scoreByPos.get(p.id)?.total_score ?? -1,
+      _verdict: verdictByPos.get(p.id) ?? null,
+      _critic: critScoreByPos.get(p.id) ?? null,
+    }))
+    .sort((a, b) => b._score - a._score)
+    .slice(0, 10);
+  const tbody = document.querySelector("#top-table tbody");
+  const escapeHtml = (s) =>
+    String(s ?? "").replace(/[<>&"']/g, (c) =>
+      ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c])
+    );
+  top.forEach((p, i) => {
+    const tr = document.createElement("tr");
+    const verdictHtml = p._verdict
+      ? `<span class="verdict-badge verdict-${p._verdict}">${p._verdict}</span>`
+      : `<span style="color:var(--muted);">—</span>`;
+    const titleHtml = p.url
+      ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:#56ccf2;text-decoration:none;">${escapeHtml(p.title)}</a>`
+      : escapeHtml(p.title);
+    tr.innerHTML = `
+      <td style="color:var(--muted);">${i + 1}</td>
+      <td>${titleHtml}</td>
+      <td>${escapeHtml(p.company || "—")}</td>
+      <td class="num"><strong>${p._score >= 0 ? p._score : "—"}</strong></td>
+      <td>${verdictHtml}</td>
+      <td class="num">${p._critic != null ? p._critic : "—"}</td>
+      <td><span class="status-${p.status}">${escapeHtml(p.status || "—")}</span></td>
+      <td style="color:var(--muted); font-size:12px;">${escapeHtml(p.source || "—")}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // ----- NARRATIVA gaps ricorrenti -----
+  // Estrazione pattern dai critic_notes via regex case-insensitive.
+  const gapPatterns = [
+    { re: /mongodb|mongo\b/i, label: "MongoDB" },
+    { re: /rabbitmq|rabbit\b/i, label: "RabbitMQ" },
+    { re: /\bjava\b/i, label: "Java" },
+    { re: /\bgcp|google cloud/i, label: "GCP" },
+    { re: /\baws\b|amazon web/i, label: "AWS" },
+    { re: /\bazure\b/i, label: "Azure" },
+    { re: /\bdocker\b/i, label: "Docker" },
+    { re: /kubernetes|\bk8s\b/i, label: "Kubernetes" },
+    { re: /\btypescript|\bts\b/i, label: "TypeScript" },
+    { re: /\bgraphql\b/i, label: "GraphQL" },
+    { re: /\breact\b/i, label: "React" },
+    { re: /\bgolang|\bgo\b/i, label: "Go" },
+    { re: /\brust\b/i, label: "Rust" },
+    { re: /\bsql\b|postgres|mysql/i, label: "SQL/DB" },
+    { re: /\bredis\b/i, label: "Redis" },
+    { re: /\bkafka\b/i, label: "Kafka" },
+    { re: /async|asyncio/i, label: "async/asyncio" },
+    { re: /typed python|type hint|mypy/i, label: "typed Python" },
+    { re: /(\d+\+?\s*ann?i)|(\d+\+?\s*years?)/i, label: "seniority gap" },
+    { re: /salary|stipendio|RAL/i, label: "salary gap" },
+    { re: /education|laurea|degree/i, label: "education weak" },
+    { re: /AI dev|copilot|claude\b/i, label: "AI dev tools" },
+  ];
+  const notesAll = app
+    .map((a) => a.critic_notes || "")
+    .filter((n) => n.length > 5);
+  const gapHits = gapPatterns.map((p) => ({
+    label: p.label,
+    n: notesAll.filter((n) => p.re.test(n)).length,
+  }));
+  gapHits.sort((a, b) => b.n - a.n);
+  const topGaps = gapHits.filter((g) => g.n > 0).slice(0, 8);
+  const gapsEl = document.getElementById("gaps-narrative");
+  if (gapsEl) {
+    if (!topGaps.length) {
+      gapsEl.innerHTML = `
+        <h4>Pattern emersi dai critic_notes</h4>
+        <p>Nessun pattern ricorrente rilevato nei <code>critic_notes</code> della
+        sessione: o le notes sono molto specifiche (varianza alta) o il numero
+        di applications con verdict (${totalDecidedApps}) è troppo basso per
+        far emergere ricorrenze.</p>
+      `;
+    } else {
+      const totalNotes = notesAll.length;
+      const list = topGaps
+        .map(
+          (g) =>
+            `<li><strong>${g.label}</strong> — citato in ${g.n} review` +
+            ` (${((g.n / totalNotes) * 100).toFixed(0)}%)</li>`
+        )
+        .join("");
+      gapsEl.innerHTML = `
+        <h4>Pattern emersi dai critic_notes</h4>
+        <p>Su <strong>${totalNotes} review</strong> con note del critico, le
+        gap più frequentemente citate sono:</p>
+        <ul style="margin:0 0 10px 18px; padding:0;">${list}</ul>
+        <p>I primi due-tre pattern sono il segnale più forte di
+        <em>cosa il candidato non ha</em> rispetto al mercato a cui sta
+        applicando. Da incrociare con la roadmap di apprendimento del candidato
+        per capire dove il pre-check del scout potrebbe essere più severo
+        (es. escludere automaticamente posizioni che richiedono uno
+        skill ricorrente nei top-3).</p>
+        <p>Conteggio fatto via regex case-insensitive su <code>critic_notes</code>;
+        un singolo passaggio della stessa parola conta come 1 (no doppi).</p>
+      `;
+    }
+  }
+
+  // ----- Toolbar zoom su ogni canvas -----
+  function attachZoomToolbar(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const chart = Chart.getChart(canvas);
+    if (!chart) return;
+    const wrap = canvas.closest(".chart-wrap");
+    const h3 = wrap?.querySelector("h3");
+    let header = h3?.parentElement?.classList?.contains("chart-header")
+      ? h3.parentElement
+      : null;
+    if (h3 && !header) {
+      header = document.createElement("div");
+      header.className = "chart-header";
+      h3.parentNode.insertBefore(header, h3);
+      header.appendChild(h3);
+    }
+    if (wrap?.querySelector(".chart-toolbar")) return;
+    const tb = document.createElement("div");
+    tb.className = "chart-toolbar";
+    tb.innerHTML = `
+      <button type="button" title="Pan sinistra" data-act="left">⬅</button>
+      <button type="button" title="Pan giù" data-act="down">⬇</button>
+      <button type="button" title="Pan su" data-act="up">⬆</button>
+      <button type="button" title="Pan destra" data-act="right">➡</button>
+      <button type="button" title="Zoom out (step ${ZOOM_OUT_FACTOR.toFixed(2)})" data-act="out">➖</button>
+      <button type="button" title="Zoom in (step ${ZOOM_IN_FACTOR.toFixed(2)})" data-act="in">➕</button>
+      <button type="button" title="Reset zoom" data-act="reset">⟲</button>
+    `;
+    if (header) header.appendChild(tb);
+    else {
+      tb.style.cssText = "position:absolute; top:14px; right:18px; z-index:5;";
+      wrap?.appendChild(tb);
+    }
+    tb.addEventListener("click", (e) => {
+      const a = e.target.closest("button")?.dataset.act;
+      if (!a) return;
+      const w = chart.chartArea?.width || 1;
+      const h = chart.chartArea?.height || 1;
+      try {
+        if (a === "in") chart.zoom(ZOOM_IN_FACTOR);
+        else if (a === "out") chart.zoom(ZOOM_OUT_FACTOR);
+        else if (a === "reset") chart.resetZoom();
+        else if (a === "left") chart.pan({ x: w * PAN_FRACTION });
+        else if (a === "right") chart.pan({ x: -w * PAN_FRACTION });
+        else if (a === "up") chart.pan({ y: h * PAN_FRACTION });
+        else if (a === "down") chart.pan({ y: -h * PAN_FRACTION });
+      } catch (err) {
+        // radar non supporta zoom/pan: ignora silenzioso.
+      }
+    });
+  }
+  ["verdict", "score-hist", "radar"].forEach(attachZoomToolbar);
+})().catch((err) => {
+  document.querySelector("main").insertAdjacentHTML(
+    "afterbegin",
+    `<section><p class="note">Errore caricamento dati: ${err.message}</p></section>`
+  );
+  console.error(err);
+});
+</script>
 </body>
 </html>
