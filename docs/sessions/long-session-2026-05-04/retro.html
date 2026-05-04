@@ -135,9 +135,9 @@
 <header class="hero">
   <h1>🪞 Retrospettiva — Long Session 2026-05-04</h1>
   <p class="subtitle">
-    Cosa abbiamo imparato in 18 ore consecutive di team multi-finestra
-    Kimi K2. Sei cose che hanno funzionato, sei che non hanno funzionato,
-    quattro raccomandazioni operative.
+    Cosa abbiamo imparato in <strong>10h 43m attive su 3 finestre Kimi K2</strong>
+    (W1 · 94%, W2 · 96% perfetta, W3 · 64%). Sei cose che hanno funzionato,
+    sei che non hanno funzionato, cinque raccomandazioni operative.
   </p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
@@ -182,7 +182,7 @@
   <div class="toc-row">
     <a href="#bene">✅ Bene (6)</a>
     <a href="#male">❌ Male (6)</a>
-    <a href="#fix">🔧 Aggiustare (4 + 1)</a>
+    <a href="#fix">🔧 Aggiustare (5)</a>
   </div>
 
   <!-- ====================== BENE ====================== -->
@@ -246,13 +246,16 @@
     </div>
 
     <div class="retro-item bene">
-      <h3><span class="tag">A5</span>Zero crash hard in 18.5h</h3>
+      <h3><span class="tag">A5</span>Zero crash hard nelle 3 finestre attive</h3>
       <p>
-        Nella long session: due eventi minori e ricoverati. <strong>Scout-1
-        zombie</strong> ricoverato in &lt;3 min dal momento in cui l'utente ha
-        forzato la diagnosi. <strong>Bridge failure</strong> alle 23:07
-        ricoverato dalla sentinella stessa. Nessun process crash, nessuna
-        perdita di stato persistente.
+        Nelle <strong>10h 43m attive</strong> di W1+W2+W3: zero
+        <code>FAILURE</code>, zero <code>ALERT</code>, zero <code>CRASH</code>,
+        zero <code>ERR</code> dentro il perimetro. Due eventi minori
+        ricoverati: <strong>scout-1 zombie</strong> ricoverato in &lt;3 min
+        dal momento in cui l'utente ha forzato la diagnosi (pre-W1, fuori
+        perimetro), e <strong>bridge failure</strong> sul boundary
+        <code>23:07 UTC</code> ricoverato dalla sentinella stessa. Nessun
+        process crash, nessuna perdita di stato persistente.
       </p>
     </div>
 
@@ -352,10 +355,10 @@
 
   <!-- ====================== FIX ====================== -->
   <section class="retro-section" id="fix">
-    <h2>🔧 Cosa aggiustare (4 + 1)</h2>
+    <h2>🔧 Cosa aggiustare (5)</h2>
     <p class="section-intro">
-      Quattro raccomandazioni operative concrete e una nota extra sul
-      perimetro temporale dei prossimi report.
+      Cinque raccomandazioni operative concrete: quattro interventi sul
+      sistema, uno strutturale sul perimetro dei prossimi report.
     </p>
 
     <div class="retro-item fix">
@@ -400,7 +403,7 @@
     </div>
 
     <div class="retro-item fix">
-      <h3><span class="tag">R5 · extra</span>Range temporale del prossimo report</h3>
+      <h3><span class="tag">R5</span>Range temporale del prossimo report (perimetro strutturale)</h3>
       <p>
         Il taglio attuale <code>2026-05-03T18:00Z → 2026-05-04T12:00Z</code>
         spezza a metà la prima e l'ultima finestra Kimi K2. Allineare i
