@@ -346,6 +346,40 @@
   </section>
 
   <section>
+    <h2>🪟 Per finestra Claude/Kimi</h2>
+    <p class="caption">
+      La long session ha attraversato più finestre da ~5h: per ognuna mostriamo
+      quante pause sono iniziate, quanti minuti totali di throttle, e quale
+      categoria ha dominato. Permette di confrontare come il termostato si è
+      comportato finestra per finestra.
+    </p>
+    <div id="windows-grid" class="kpi-grid"></div>
+    <div class="narrative">
+      <h4>Cosa raccontano le finestre</h4>
+      <p>
+        Le finestre Claude/Kimi sono il vero "orologio" del consumo: ogni
+        nuova finestra resetta il budget, e il pacing-bridge ricalibra. Una
+        finestra con tante pause e categoria dominante <strong>PACING</strong>
+        è una finestra in cui il termostato ha lavorato sodo per restare in
+        traiettoria; una con dominante <strong>STANDBY</strong> è una in cui
+        gli agenti aspettavano upstream (scout, capitano).
+      </p>
+      <p>
+        Confrontare le finestre fra loro è il modo migliore per capire se
+        il termostato sta mantenendo coerenza nel tempo o sta correggendo
+        di volta in volta. Una progressione lineare di "minuti fermo" attraverso
+        le 5 finestre è sano; un picco isolato di una sola finestra suggerisce
+        un evento puntuale (ordine del Capitano, errore, freeze esplicito).
+      </p>
+      <p>
+        La prima finestra è quella iniziata <em>prima</em> dell'inizio della
+        sessione tracciata: i suoi dati sono parziali, perché il primo evento
+        che vediamo è già a metà della finestra. Le successive sono complete.
+      </p>
+    </div>
+  </section>
+
+  <section>
     <h2>🚨 Le 5 pause più lunghe</h2>
     <div class="chart-wrap" style="padding: 14px 20px;" title="Tabella delle 5 pause con applied_sec massimo: gli incidenti singoli più costosi della sessione, da incrociare con la timeline Capitano per capire la causa.">
       <p class="caption">
@@ -1253,6 +1287,56 @@
         <td style="padding:8px 6px;"><code style="font-size:12px;">${escapeHtml(ev.reason || "(vuota)")}</code></td>
       `;
       longestBody.appendChild(tr);
+    });
+  }
+
+  // ----- Card per finestra Claude/Kimi -----
+  const windowsGrid = document.getElementById("windows-grid");
+  if (windowsGrid && windowBoundaries.length) {
+    // Costruisci i range [start, end) per ogni finestra. L'ultima va fino a SESSION_END.
+    const ranges = windowBoundaries.map((b, i) => ({
+      reset_at: b.reset_at,
+      start: b.ts_unix,
+      end: i + 1 < windowBoundaries.length
+        ? windowBoundaries[i + 1].ts_unix
+        : ReportData.SESSION_END,
+    }));
+    ranges.forEach((win, i) => {
+      const evs = realPauses.filter((e) => {
+        const t = e.ts_unix * 1000;
+        return t >= win.start && t < win.end;
+      });
+      const winSec = evs.reduce((s, e) => s + (e.applied_sec || 0), 0);
+      // Categoria dominante per minuti
+      const catSec = {};
+      for (const e of evs) {
+        const c = classifyReason(e.reason);
+        catSec[c] = (catSec[c] || 0) + (e.applied_sec || 0);
+      }
+      let domCat = "—", domCatSec = 0;
+      for (const c in catSec) {
+        if (catSec[c] > domCatSec) { domCatSec = catSec[c]; domCat = c; }
+      }
+      const winLenH = ((win.end - win.start) / 3600 / 1000).toFixed(1);
+      const fromHHMM = new Date(win.start).toISOString().slice(11, 16) + "Z";
+      const toHHMM = new Date(win.end).toISOString().slice(11, 16) + "Z";
+      const card = document.createElement("div");
+      card.className = "kpi-card";
+      card.title = `Finestra dal cambio reset_at della sentinella. Range ${fromHHMM} → ${toHHMM} (~${winLenH}h).`;
+      const swatch = `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;
+        background:${CATEGORY_COLORS[domCat] || "#888"};margin-right:6px;vertical-align:middle;"></span>`;
+      card.innerHTML = `
+        <div class="label">🪟 Finestra ${i + 1} · reset ${win.reset_at}</div>
+        <div class="value" style="font-size:18px; line-height:1.3;">
+          ${evs.length} pause<br>
+          <span style="font-size:14px; color: var(--muted);">${fmtMin(winSec)} fermo</span>
+        </div>
+        <div style="margin-top:8px; font-size:12px; color: var(--muted);">
+          ${fromHHMM} → ${toHHMM}<br>
+          ${swatch}dominante: <strong style="color: var(--fg);">${domCat}</strong>
+        </div>
+      `;
+      windowsGrid.appendChild(card);
     });
   }
 
