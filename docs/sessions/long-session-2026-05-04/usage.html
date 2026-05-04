@@ -19,6 +19,20 @@
   .narrative p { margin: 0 0 8px; }
   .narrative p:last-child { margin-bottom: 0; }
   .narrative strong { color: var(--accent); }
+  table.windows {
+    width: 100%; border-collapse: collapse; margin-top: 18px;
+    font-size: 13px; background: #11151e; border-radius: 8px; overflow: hidden;
+  }
+  table.windows th, table.windows td {
+    padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  table.windows th { background:#161a23; color: var(--muted); font-weight: 600; font-size:12px; text-transform: uppercase; letter-spacing: .04em; }
+  table.windows td:first-child, table.windows th:first-child { text-align: left; }
+  table.windows tr:last-child td { border-bottom: none; }
+  table.windows .bad { color: #eb5757; }
+  table.windows .ok  { color: #6fcf97; }
+  table.windows .warn { color: #f2c94c; }
 </style>
 </head>
 <body>
@@ -114,6 +128,21 @@
         <span><i class="dot" style="background:#9bd9c5"></i>durata visibile (min)</span>
       </div>
       <canvas id="chart-windows"></canvas>
+      <table class="windows" id="windows-table">
+        <thead>
+          <tr>
+            <th>finestra</th>
+            <th>start</th>
+            <th>end</th>
+            <th>durata</th>
+            <th>tick</th>
+            <th>picco usage</th>
+            <th>picco proj</th>
+            <th>throttle %</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
       <div class="narrative">
         <p>Le finestre più lunghe sono quelle dove il team ha lavorato in modo continuativo; quelle brevi sono i "ponti" — frammenti di finestra catturati dalla sentinella all'estremità del range. Il picco di usage racconta quanto il team ha sfruttato ciascuna finestra, mentre la projection (gialla) racconta quanto vicino siamo andati allo sforamento.</p>
         <p>Idealmente la barra blu (usage) sale fino vicino a 100% e la barra gialla (projection) le sta sopra solo di poco. Quando la projection sfora il 120% senza che l'usage la segua, vuol dire che il termostato ha frenato in tempo — è il caso che cerchiamo.</p>
@@ -525,7 +554,7 @@
     if (!sid) continue;
     let w = windowMap.get(sid);
     if (!w) {
-      w = { sid, tStart: Date.parse(r.ts), tEnd: Date.parse(r.ts), peakUsage: 0, peakProj: 0 };
+      w = { sid, tStart: Date.parse(r.ts), tEnd: Date.parse(r.ts), peakUsage: 0, peakProj: 0, ticks: 0, throttleTicks: 0 };
       windowMap.set(sid, w);
     }
     const t = Date.parse(r.ts);
@@ -533,6 +562,8 @@
     w.tEnd = Math.max(w.tEnd, t);
     w.peakUsage = Math.max(w.peakUsage, r.usage ?? 0);
     w.peakProj = Math.max(w.peakProj, r.projection ?? 0);
+    w.ticks += 1;
+    if (r.throttle) w.throttleTicks += 1;
   }
   // Ordino per inizio cronologico così le barre raccontano la sequenza temporale.
   const windows = Array.from(windowMap.values()).sort((a, b) => a.tStart - b.tStart);
@@ -623,6 +654,34 @@
         },
       },
     },
+  });
+
+  // ---------- Tabella dettagli per finestra ----------
+  const tbody = document.querySelector("#windows-table tbody");
+  const fmtHM = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const fmtDur = (ms) => {
+    const m = Math.round(ms / 60000);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  };
+  const usageClass = (v) => v >= 95 ? "bad" : v >= 70 ? "warn" : v >= 30 ? "ok" : "";
+  const projClass = (v) => v >= 130 ? "bad" : v >= 110 ? "warn" : "ok";
+  const throttleClass = (v) => v >= 70 ? "bad" : v >= 40 ? "warn" : "ok";
+  windows.forEach((w, i) => {
+    const tr = document.createElement("tr");
+    const dd = String(new Date(w.tStart).getDate()).padStart(2, "0");
+    const throttlePct = w.ticks ? Math.round((w.throttleTicks / w.ticks) * 100) : 0;
+    tr.innerHTML = `
+      <td><strong>#${i + 1}</strong> · ${dd}/${fmtHM(w.tStart)}</td>
+      <td>${fmtHM(w.tStart)}</td>
+      <td>${fmtHM(w.tEnd)}</td>
+      <td>${fmtDur(w.tEnd - w.tStart)}</td>
+      <td>${w.ticks}</td>
+      <td class="${usageClass(w.peakUsage)}">${w.peakUsage}%</td>
+      <td class="${projClass(w.peakProj)}">${Math.round(w.peakProj)}%</td>
+      <td class="${throttleClass(throttlePct)}">${throttlePct}% (${w.throttleTicks}/${w.ticks})</td>
+    `;
+    tbody.appendChild(tr);
   });
 
   // ---------- Chart 6: smoothing delta = projection_naive - projection ----------
