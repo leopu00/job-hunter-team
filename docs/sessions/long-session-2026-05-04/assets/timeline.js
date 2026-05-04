@@ -1,37 +1,79 @@
 // Timeline page — costruisce ECharts overview, tabella finestre,
 // liste per fase ("atti") e log eventi filtrabile.
 //
-// Tutti gli eventi sono normalizzati nello stesso shape:
-//   { ts: number(ms), kind: "window"|"capitano"|"kickoff"|"throttle"|"peak",
-//     label: string, body: string, agent?: string, payload?: object }
+// Round 2:
+// - Multi-series ECharts (una serie per kind) → legend nativa cliccabile
+// - Toolbar Tutti / Nessuno / Inverti + checkbox per categoria
+// - Tooltip arricchito con content full preso da data/chat/ via prefisso
+// - dataZoom: slider + inside + toolbox box-zoom + restore
+// - Window-id (Kimi K2 session_id) calcolato per ogni evento e mostrato in tooltip
 
 (async function () {
   if (!window.ReportData) return;
-  const { loadAll, inSession, agentEmoji, agentColor, SESSION_START, SESSION_END } = window.ReportData;
+  const RD = window.ReportData;
 
-  let data;
+  // ----- caricamento + pulizia (parse difensivo, dedup, in-window) -----
+  let raw, chats;
   try {
-    data = await loadAll();
+    [raw, chats] = await Promise.all([RD.loadAll(), RD.loadChats()]);
   } catch (err) {
-    console.error("timeline loadAll failed", err);
+    console.error("timeline load failed", err);
     return;
   }
 
-  const sentinel = data.sentinel.filter(inSession).sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
-  const throttle = data.throttle
-    .filter(inSession)
-    .filter((r) => r.event !== "checkpoint")
-    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
-  const messages = data.messages
-    .filter(inSession)
+  const sentinel = raw.sentinel
+    .filter((r) => r && Number.isFinite(Date.parse(r.ts)))
+    .filter(RD.inSession)
     .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
 
-  // ---------- estrazione eventi ----------
+  const throttleClean = RD.cleanInWindow(
+    raw.throttle.filter((r) => r && r.event !== "checkpoint"),
+    (r) => `${r.ts}|${r.agent || ""}|${r.applied_sec || 0}|${(r.reason || "").slice(0, 30)}`
+  );
+  const throttle = throttleClean.records;
+
+  const messagesClean = RD.cleanInWindow(
+    raw.messages,
+    (m) => `${m.ts}|${m.from || ""}|${m.to || ""}|${m.type || ""}|${(m.preview || "").slice(0, 60)}`
+  );
+  const messages = messagesClean.records;
+
+  // Pulizia report (per commit message + console)
+  console.log("[timeline] cleaning:", {
+    sentinel_in_window: sentinel.length,
+    throttle: throttleClean.stats,
+    messages: messagesClean.stats,
+    chat: chats.stats,
+  });
+
+  // Indice prefisso content full → preview
+  const chatIdx = RD.buildChatIndex(chats.records);
+
+  // ----- mappa session_id (finestra Kimi K2) per ogni timestamp -----
+  // Sliding cursor: per ogni ts trova l'ultima session_id ≤ ts.
+  const windowAnchors = []; // { ts: ms, sid }
+  let prevSid = null;
+  for (const r of sentinel) {
+    if (r.session_id && r.session_id !== prevSid) {
+      windowAnchors.push({ ts: Date.parse(r.ts), sid: r.session_id });
+      prevSid = r.session_id;
+    }
+  }
+  function windowAtTs(tsMs) {
+    let chosen = null;
+    for (const a of windowAnchors) {
+      if (a.ts <= tsMs) chosen = a.sid;
+      else break;
+    }
+    return chosen;
+  }
+
+  // ----- estrazione eventi -----
   const events = [];
 
-  // 1. Transizioni di finestra (cambio session_id) — "vista bridge"
-  let prevSid = null;
-  const windows = []; // anche per la tabella sotto
+  // 1. Transizioni di finestra
+  prevSid = null;
+  const windowsList = [];
   let curWin = null;
   for (const r of sentinel) {
     const sid = r.session_id;
@@ -40,12 +82,14 @@
       events.push({
         ts,
         kind: "window",
-        label: "Nuova finestra",
-        body: `session_id=${sid} provider=${r.provider} usage iniziale ${r.usage}% reset@${r.reset_at}`,
+        label: "Nuova finestra Kimi K2",
+        body: `session_id=${sid} · usage iniziale ${r.usage}% · reset@${r.reset_at}`,
+        agent: null,
+        windowSid: sid,
         payload: { sid, provider: r.provider, reset: r.reset_at },
       });
       curWin = { sid, provider: r.provider, first: ts, last: ts, peak: r.usage || 0, reset: r.reset_at };
-      windows.push(curWin);
+      windowsList.push(curWin);
       prevSid = sid;
     } else if (curWin) {
       curWin.last = Date.parse(r.ts);
@@ -53,22 +97,25 @@
     }
   }
 
-  // 2. Picchi usage ≥90%, dedotti UNA volta per finestra (primo tick che supera)
+  // 2. Picchi usage ≥ 90% — uno per finestra
   const peakSeen = new Set();
   for (const r of sentinel) {
     const u = Number(r.usage) || 0;
     if (u >= 90 && r.session_id && !peakSeen.has(r.session_id)) {
       peakSeen.add(r.session_id);
+      const ts = Date.parse(r.ts);
       events.push({
-        ts: Date.parse(r.ts),
+        ts,
         kind: "peak",
         label: `Peak ${u}%`,
-        body: `Finestra ${r.session_id} tocca ${u}% (proj=${r.projection}% vel=${r.velocity_smooth}%/h)`,
+        body: `Finestra ${r.session_id} tocca ${u}% · proj=${r.projection}% · vel_smooth=${r.velocity_smooth}%/h`,
+        agent: null,
+        windowSid: r.session_id,
       });
     }
   }
 
-  // 3. Kickoff agenti: primo MSG di capitano verso ciascun agente con keyword
+  // 3. Kickoff agenti
   const kickoffSeen = new Set();
   for (const m of messages) {
     if (m.from !== "capitano" || m.type !== "MSG") continue;
@@ -77,220 +124,349 @@
     const p = m.preview || "";
     if (!/Avvia|Inizia|loop/i.test(p)) continue;
     kickoffSeen.add(target);
+    const ts = Date.parse(m.ts);
+    const enriched = RD.enrichPreview(p, chatIdx);
     events.push({
-      ts: Date.parse(m.ts),
+      ts,
       kind: "kickoff",
-      label: `Kickoff ${target}`,
-      body: p.slice(0, 140),
+      label: `Kickoff → ${target}`,
+      body: p.slice(0, 200),
       agent: target,
+      windowSid: windowAtTs(ts),
+      fullContent: enriched ? enriched.content : null,
     });
   }
 
-  // 4. Messaggi capitano (filtriamo a tipi "interessanti": MSG, ACK su kickoff,
-  //    URG, FEEDBACK, FAILURE). Limitiamo per non sommergere l'event log.
+  // 4. Ordini capitano (URG / WARN / FEEDBACK / FAILURE / ALERT / REPORT / DONE)
+  const ORDER_TYPES = new Set(["URG", "FEEDBACK", "FAILURE", "ALERT", "WARN", "REPORT", "DONE"]);
   for (const m of messages) {
     if (m.from !== "capitano") continue;
-    if (!["URG", "FEEDBACK", "FAILURE", "ALERT", "WARN", "REPORT", "DONE"].includes(m.type)) continue;
+    if (!ORDER_TYPES.has(m.type)) continue;
+    const ts = Date.parse(m.ts);
+    const enriched = RD.enrichPreview(m.preview || "", chatIdx);
     events.push({
-      ts: Date.parse(m.ts),
+      ts,
       kind: "capitano",
       label: `${m.type} → ${m.to || "?"}`,
-      body: (m.preview || "").slice(0, 160),
+      body: (m.preview || "").slice(0, 200),
+      agent: m.to,
+      msgType: m.type,
+      windowSid: windowAtTs(ts),
+      fullContent: enriched ? enriched.content : null,
     });
   }
 
-  // 5. Throttle events. Tutti in event-log; nel chart aggreghiamo a "applied_sec".
+  // 5. Throttle events (anche enriched dal sentinel-log se applicabile, ma il
+  //    throttle file è già autosufficiente per ts/agent/applied_sec/reason).
   for (const t of throttle) {
+    const ts = Date.parse(t.ts);
     events.push({
-      ts: Date.parse(t.ts),
+      ts,
       kind: "throttle",
       label: `Throttle ${t.agent} ${Math.round(t.applied_sec || 0)}s`,
       body: t.reason || "",
       agent: t.agent,
-      payload: { applied_sec: t.applied_sec, requested_sec: t.requested_sec },
+      windowSid: windowAtTs(ts),
+      payload: { applied_sec: t.applied_sec, requested_sec: t.requested_sec, reason: t.reason },
     });
   }
 
   events.sort((a, b) => a.ts - b.ts);
 
-  // ---------- grafico overview ----------
+  // ----- render -----
   renderOverviewChart(events, sentinel);
-
-  // ---------- tabella finestre ----------
-  renderWindowsTable(windows);
-
-  // ---------- atti / phasi ----------
+  renderWindowsTable(windowsList);
   renderPhases(events);
-
-  // ---------- log filtrabile ----------
   renderEventLog(events);
+  renderInlineCharts(sentinel, events);
 
   // ===================================================================
 
   function renderOverviewChart(events, sentinel) {
     const el = document.getElementById("timeline-chart");
     if (!el || !window.echarts) return;
-    // Aspetta che il container abbia dimensioni reali (evita init 0×0).
     if (!el.clientWidth || !el.clientHeight) {
       requestAnimationFrame(() => renderOverviewChart(events, sentinel));
       return;
     }
     const chart = echarts.init(el, "dark", { renderer: "canvas" });
 
-    // Lane Y per categoria
     const LANES = {
-      window: { y: 4, color: "#56ccf2", emoji: "🪟" },
-      capitano: { y: 3, color: "#f2994a", emoji: "🧭" },
-      throttle: { y: 2, color: "#eb5757", emoji: "⏸" },
-      peak: { y: 1, color: "#f2c94c", emoji: "🔥" },
+      window: { y: 5, color: "#56ccf2", emoji: "🪟", legend: "🪟 Finestra" },
+      kickoff: { y: 4, color: "#6fcf97", emoji: "🚀", legend: "🚀 Kickoff" },
+      capitano: { y: 3, color: "#f2994a", emoji: "🧭", legend: "🧭 Ordini Capitano" },
+      throttle: { y: 2, color: "#eb5757", emoji: "⏸", legend: "⏸ Throttle" },
+      peak: { y: 1, color: "#f2c94c", emoji: "🔥", legend: "🔥 Peak ≥90%" },
     };
 
-    const seriesData = events
-      .filter((e) => LANES[e.kind])
-      .map((e) => {
-        const lane = LANES[e.kind];
-        let symbolSize = 10;
-        if (e.kind === "throttle") {
-          const s = (e.payload && e.payload.applied_sec) || 60;
-          symbolSize = Math.max(8, Math.min(22, 6 + Math.sqrt(s)));
-        } else if (e.kind === "window") {
-          symbolSize = 16;
-        } else if (e.kind === "peak") {
-          symbolSize = 18;
-        }
-        return {
-          value: [e.ts, lane.y],
-          itemStyle: { color: lane.color, opacity: e.kind === "throttle" ? 0.7 : 0.95, borderColor: "rgba(255,255,255,0.2)", borderWidth: 1 },
-          symbolSize,
-          name: e.label,
-          label: e.label,
-          body: e.body,
-          kind: e.kind,
-          agent: e.agent || null,
-          payload: e.payload || null,
-        };
-      });
-
-    // Linea usage di sfondo (lane 0, scalata 0→0.9 → height piena)
+    // Una serie per kind → legend cliccabile nativa
+    const series = [];
+    // Linea usage di sfondo per prima
     const usagePoints = sentinel.map((r) => [Date.parse(r.ts), (Number(r.usage) || 0) / 100 * 0.85 + 0.05]);
+    series.push({
+      name: "Usage finestra (sfondo)",
+      type: "line",
+      data: usagePoints,
+      showSymbol: false,
+      lineStyle: { color: "#3a4a64", width: 1.4, type: "dashed" },
+      areaStyle: { color: "rgba(86,204,242,0.06)" },
+      z: 1,
+      tooltip: { show: true },
+      yAxisIndex: 0,
+    });
+
+    for (const kind of Object.keys(LANES)) {
+      const lane = LANES[kind];
+      const data = events
+        .filter((e) => e.kind === kind)
+        .map((e) => {
+          let symbolSize = 10;
+          if (kind === "throttle") {
+            const s = (e.payload && e.payload.applied_sec) || 60;
+            symbolSize = Math.max(8, Math.min(22, 6 + Math.sqrt(s)));
+          } else if (kind === "window") symbolSize = 16;
+          else if (kind === "peak") symbolSize = 18;
+          else if (kind === "kickoff") symbolSize = 14;
+          else if (kind === "capitano") symbolSize = 11;
+          return {
+            value: [e.ts, lane.y],
+            itemStyle: {
+              color: lane.color,
+              opacity: kind === "throttle" ? 0.7 : 0.95,
+              borderColor: "rgba(255,255,255,0.2)",
+              borderWidth: 1,
+            },
+            symbolSize,
+            kind: e.kind,
+            label: e.label,
+            body: e.body,
+            agent: e.agent,
+            windowSid: e.windowSid,
+            payload: e.payload || null,
+            msgType: e.msgType,
+            fullContent: e.fullContent,
+          };
+        });
+      series.push({
+        name: lane.legend,
+        type: "scatter",
+        data,
+        z: 5,
+        emphasis: {
+          scale: 1.6,
+          itemStyle: { borderColor: "#fff", borderWidth: 2, shadowBlur: 10, shadowColor: "rgba(255,255,255,0.4)" },
+        },
+      });
+    }
 
     chart.setOption({
       backgroundColor: "transparent",
-      grid: { left: 110, right: 30, top: 30, bottom: 70, containLabel: false },
+      grid: { left: 110, right: 30, top: 50, bottom: 80, containLabel: false },
+      legend: {
+        type: "scroll",
+        top: 8,
+        right: 70,
+        textStyle: { color: "#b9c4d4", fontSize: 12 },
+        inactiveColor: "#3a4a64",
+        selectedMode: true,
+      },
+      toolbox: {
+        right: 10,
+        top: 8,
+        iconStyle: { borderColor: "#8a93a4" },
+        feature: {
+          dataZoom: { yAxisIndex: "none", title: { zoom: "Box-zoom", back: "Reset zoom" } },
+          restore: { title: "Reset" },
+          saveAsImage: { title: "Salva PNG", backgroundColor: "#0d0f14" },
+        },
+      },
       tooltip: {
         trigger: "item",
         triggerOn: "mousemove|click",
         confine: true,
         appendToBody: true,
-        enterable: false,
         backgroundColor: "rgba(17,21,30,0.97)",
         borderColor: "#3a5077",
         borderWidth: 1,
         padding: [10, 12],
         textStyle: { color: "#e8ecf3", fontSize: 13, lineHeight: 18 },
-        extraCssText: "max-width: 420px; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.45); z-index: 9999;",
-        axisPointer: { type: "cross", crossStyle: { color: "#3a5077" } },
+        extraCssText: "max-width: 480px; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.45); z-index: 9999;",
         formatter: (p) => {
           if (!p.data) return "";
-          // Linea usage di sfondo
-          if (p.seriesName === "usage") {
+          if (p.seriesName === "Usage finestra (sfondo)") {
             const u = Math.round(((p.data[1] - 0.05) / 0.85) * 100);
-            return `<div style="font-size:13px"><b>${new Date(p.data[0]).toISOString().slice(11, 19)}Z</b> &nbsp;<span style="color:#5d6c84">UTC</span></div>` +
+            return `<div style="font-size:13px"><b>${fmtTs(p.data[0])}</b> <span style="color:#5d6c84">UTC</span></div>` +
                    `<div style="margin-top:4px"><span style="color:#8a93a4">Asse Y · Usage finestra:</span> <b style="color:#56ccf2">${u}%</b></div>` +
-                   `<div style="color:#5d6c84;font-size:11px;margin-top:6px">Linea di sfondo (sentinella, ~3 min/sample). Scala interna 5%–90% del riquadro.</div>`;
+                   `<div style="color:#5d6c84;font-size:11px;margin-top:6px">Linea sentinella ~3 min/sample. Scala interna 5%–90% del riquadro.</div>`;
           }
           const d = p.data;
-          const ts = new Date(d.value[0]).toISOString().slice(11, 19) + "Z";
-          const date = new Date(d.value[0]).toISOString().slice(0, 10);
-          // Spiegazione semantica per tipo di evento
+          const ts = fmtTs(d.value[0]);
           const head = {
-            window: "🪟 <b>Transizione finestra Claude/Kimi</b>",
-            capitano: "🧭 <b>Messaggio capitano</b>",
+            window: "🪟 <b>Transizione finestra Kimi K2</b>",
+            kickoff: "🚀 <b>Kickoff agente</b>",
+            capitano: "🧭 <b>Ordine capitano</b>",
             throttle: "⏸ <b>Throttle event</b>",
             peak: "🔥 <b>Picco usage ≥ 90%</b>",
           };
           const explain = {
-            window: "Il bridge ha visto un nuovo <code>session_id</code>: la finestra è stata resettata.",
-            capitano: "Comunicazione di tipo URG / WARN / REPORT / DONE / ALERT verso un agente.",
-            throttle: "Pausa applicata dal pacing-bridge per evitare che la proiezione sfori la finestra.",
-            peak: "Primo tick in cui la finestra raggiunge soglia di guardia. Il termostato stringe.",
+            window: "Nuovo session_id: la finestra Kimi K2 è stata resettata.",
+            kickoff: "Primo MSG capitano→agente: apertura del loop di lavoro.",
+            capitano: "Comunicazione di tipo URG / WARN / REPORT / DONE / ALERT.",
+            throttle: "Pausa applicata dal pacing-bridge per non sforare la finestra.",
+            peak: "Primo tick in cui la finestra raggiunge soglia di guardia.",
           };
-          let extras = "";
-          if (d.agent) extras += `<div><span style="color:#8a93a4">Agente:</span> <b style="color:${LANES[d.kind].color}">${escapeHtml(d.agent)}</b></div>`;
+          let lines = [`<div style="font-size:13px"><b>${ts}</b> <span style="color:#5d6c84">UTC</span></div>`];
+          lines.push(`<div style="margin-top:4px">${head[d.kind] || ""}</div>`);
+          lines.push(`<div style="color:#8a93a4;font-size:12px;margin-top:2px">${explain[d.kind] || ""}</div>`);
+          lines.push(`<div style="margin-top:6px;color:#d6dde9"><b>${escapeHtml(d.label)}</b></div>`);
+          if (d.agent) lines.push(`<div><span style="color:#8a93a4">Agente:</span> <b style="color:${LANES[d.kind].color}">${escapeHtml(d.agent)}</b></div>`);
+          if (d.windowSid) lines.push(`<div><span style="color:#8a93a4">Finestra Kimi K2:</span> <code style="color:#56ccf2">${escapeHtml(d.windowSid)}</code></div>`);
           if (d.kind === "throttle" && d.payload) {
-            extras += `<div><span style="color:#8a93a4">Pausa applicata:</span> <b>${Math.round(d.payload.applied_sec)} s</b>` +
-                      (d.payload.requested_sec && d.payload.requested_sec !== d.payload.applied_sec
-                        ? ` <span style="color:#5d6c84">(richiesti ${Math.round(d.payload.requested_sec)} s)</span>`
-                        : "") + "</div>";
+            lines.push(`<div><span style="color:#8a93a4">Pausa applicata:</span> <b>${Math.round(d.payload.applied_sec)} s</b>` +
+                       (d.payload.requested_sec && d.payload.requested_sec !== d.payload.applied_sec
+                         ? ` <span style="color:#5d6c84">(richiesti ${Math.round(d.payload.requested_sec)} s)</span>`
+                         : "") + "</div>");
           }
           if (d.kind === "window" && d.payload) {
-            extras += `<div><span style="color:#8a93a4">Provider:</span> <b>${escapeHtml(d.payload.provider || "?")}</b> &nbsp; <span style="color:#8a93a4">reset@</span>${escapeHtml(d.payload.reset || "?")}</div>` +
-                      `<div><span style="color:#8a93a4">session_id:</span> <code style="color:#56ccf2">${escapeHtml(d.payload.sid || "")}</code></div>`;
+            lines.push(`<div><span style="color:#8a93a4">Provider:</span> <b>${escapeHtml(d.payload.provider || "?")}</b> · <span style="color:#8a93a4">reset@</span>${escapeHtml(d.payload.reset || "?")}</div>`);
           }
-          return `<div style="font-size:13px"><b>${date} ${ts}</b> &nbsp;<span style="color:#5d6c84">UTC</span></div>` +
-                 `<div style="margin-top:4px">${head[d.kind] || ""}</div>` +
-                 `<div style="color:#8a93a4;font-size:12px;margin-top:2px">${explain[d.kind] || ""}</div>` +
-                 `<div style="margin-top:6px;color:#d6dde9"><b>${escapeHtml(d.label)}</b></div>` +
-                 extras +
-                 (d.body ? `<div style="color:#94a0b4;font-size:12px;margin-top:4px">${escapeHtml(d.body)}</div>` : "");
+          if (d.body) lines.push(`<div style="color:#94a0b4;font-size:12px;margin-top:6px">${escapeHtml(d.body)}</div>`);
+          if (d.fullContent && d.fullContent.length > (d.body || "").length + 5) {
+            const extra = d.fullContent.slice((d.body || "").length).slice(0, 600);
+            if (extra.trim()) {
+              lines.push(`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3550;color:#94a0b4;font-size:12px"><b style="color:#b9c4d4">📨 chat full:</b> <span style="color:#8a93a4">${escapeHtml(extra)}…</span></div>`);
+            }
+          }
+          return lines.join("");
         },
       },
       xAxis: {
         type: "time",
-        min: SESSION_START,
-        max: SESSION_END,
+        min: RD.SESSION_START,
+        max: RD.SESSION_END,
         axisLabel: { color: "#8a93a4" },
         splitLine: { lineStyle: { color: "#1a1f2c" } },
       },
       yAxis: {
         type: "value",
         min: 0,
-        max: 5,
+        max: 6,
         interval: 1,
         axisLabel: {
           color: "#8a93a4",
           formatter: (v) => {
-            const map = { 1: "🔥 Peak", 2: "⏸ Throttle", 3: "🧭 Capitano", 4: "🪟 Finestra" };
+            const map = { 1: "🔥 Peak", 2: "⏸ Throttle", 3: "🧭 Capitano", 4: "🚀 Kickoff", 5: "🪟 Finestra" };
             return map[v] || "";
           },
         },
         splitLine: { lineStyle: { color: "#1a1f2c" } },
       },
       dataZoom: [
-        { type: "slider", height: 22, bottom: 18 },
-        { type: "inside" },
+        // X: slider sotto + inside (rotella+pan trascinando)
+        { type: "slider", xAxisIndex: 0, height: 22, bottom: 26, backgroundColor: "rgba(0,0,0,0.2)" },
+        { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseMove: false, moveOnMouseWheel: false },
+        // Y: slider a sinistra + inside (su Y serve Shift+rotella di default)
+        { type: "slider", yAxisIndex: 0, width: 16, left: 86, top: 50, bottom: 80, backgroundColor: "rgba(0,0,0,0.2)" },
+        { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: "shift", moveOnMouseMove: true, moveOnMouseWheel: false },
       ],
-      series: [
-        {
-          name: "usage",
-          type: "line",
-          data: usagePoints,
-          showSymbol: false,
-          lineStyle: { color: "#3a4a64", width: 1.4, type: "dashed" },
-          areaStyle: { color: "rgba(86,204,242,0.06)" },
-          z: 1,
-          emphasis: { lineStyle: { color: "#56ccf2", width: 1.8 } },
-          tooltip: { show: true },
-        },
-        {
-          name: "events",
-          type: "scatter",
-          data: seriesData,
-          z: 5,
-          emphasis: {
-            scale: 1.6,
-            itemStyle: { borderColor: "#fff", borderWidth: 2, shadowBlur: 10, shadowColor: "rgba(255,255,255,0.4)" },
-          },
-        },
-      ],
+      series,
     });
 
-    // Resize: reagisci a container, finestra, e una resize esplicita post-paint
-    // per il caso in cui il layout non era ancora stabile in init.
     requestAnimationFrame(() => chart.resize());
-    const ro = new ResizeObserver(() => chart.resize());
-    ro.observe(el);
+    new ResizeObserver(() => chart.resize()).observe(el);
     window.addEventListener("resize", () => chart.resize());
+
+    // -------- bottoni zoom in / out / reset (X + Y) --------
+    const zoomCtl = document.getElementById("zoom-controls");
+    if (zoomCtl) {
+      // Restringe/dilata la finestra start..end mantenendo il centro.
+      // start/end sono percentuali 0..100.
+      function shrink(start, end, factor) {
+        const center = (start + end) / 2;
+        const half = (end - start) / 2 / factor;
+        return [Math.max(0, center - half), Math.min(100, center + half)];
+      }
+      function getDz(axis) {
+        const opt = chart.getOption().dataZoom || [];
+        const i = opt.findIndex((d) => d && d.type === "inside" && (axis === "x" ? d.xAxisIndex === 0 : d.yAxisIndex === 0));
+        if (i < 0) return [0, 100];
+        return [opt[i].start ?? 0, opt[i].end ?? 100];
+      }
+      function applyZoom(factor) {
+        const [xs, xe] = getDz("x");
+        const [ys, ye] = getDz("y");
+        const [nxs, nxe] = shrink(xs, xe, factor);
+        const [nys, nye] = shrink(ys, ye, factor);
+        chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: nxs, end: nxe });
+        chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: nys, end: nye });
+      }
+      zoomCtl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("button.zoom-btn[data-zoom]");
+        if (!btn) return;
+        const action = btn.dataset.zoom;
+        if (action === "in") applyZoom(1.5);
+        else if (action === "out") applyZoom(1 / 1.5);
+        else if (action === "reset") {
+          chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: 0, end: 100 });
+          chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: 0, end: 100 });
+        }
+      });
+    }
+
+    // -------- toolbar Tutti / Nessuno / Inverti + checkbox --------
+    const toolbar = document.getElementById("timeline-filter-toolbar");
+    if (toolbar) {
+      const allKinds = ["window", "kickoff", "capitano", "throttle", "peak"];
+      const kindToLegendName = (k) => LANES[k].legend;
+
+      function applyState(state) {
+        // state: object kind → bool
+        for (const k of allKinds) {
+          const cb = toolbar.querySelector(`input[type=checkbox][data-kind="${k}"]`);
+          if (cb) cb.checked = !!state[k];
+          chart.dispatchAction({
+            type: state[k] ? "legendSelect" : "legendUnSelect",
+            name: kindToLegendName(k),
+          });
+        }
+      }
+
+      toolbar.addEventListener("change", (ev) => {
+        const cb = ev.target.closest("input[type=checkbox][data-kind]");
+        if (!cb) return;
+        chart.dispatchAction({
+          type: cb.checked ? "legendSelect" : "legendUnSelect",
+          name: kindToLegendName(cb.dataset.kind),
+        });
+      });
+
+      toolbar.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("button.filter-btn[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const cur = {};
+        for (const k of allKinds) {
+          const cb = toolbar.querySelector(`input[type=checkbox][data-kind="${k}"]`);
+          cur[k] = cb ? cb.checked : true;
+        }
+        let next = {};
+        if (action === "all") allKinds.forEach((k) => (next[k] = true));
+        else if (action === "none") allKinds.forEach((k) => (next[k] = false));
+        else if (action === "invert") allKinds.forEach((k) => (next[k] = !cur[k]));
+        else return;
+        applyState(next);
+      });
+
+      // Mantieni le checkbox sincrone se l'utente clicca direttamente la legenda
+      // ECharts (utile quando legend abilitata).
+      chart.on("legendselectchanged", (params) => {
+        const sel = params.selected || {};
+        for (const k of allKinds) {
+          const cb = toolbar.querySelector(`input[type=checkbox][data-kind="${k}"]`);
+          if (cb) cb.checked = sel[kindToLegendName(k)] !== false;
+        }
+      });
+    }
   }
 
   function renderWindowsTable(windows) {
@@ -313,7 +489,7 @@
       const h = Math.floor(dur / 3600e3);
       const m = Math.round((dur % 3600e3) / 60e3);
       rows.push(`<div class="row ${long ? "long" : ""}">
-        <div class="cell"><code>${w.sid}</code></div>
+        <div class="cell"><code>${escapeHtml(w.sid)}</code></div>
         <div class="cell">${fmtDate(w.first)} ${fmt(w.first)}</div>
         <div class="cell">${fmtDate(w.last)} ${fmt(w.last)}</div>
         <div class="cell right">${h > 0 ? h + "h " : ""}${m}m</div>
@@ -324,7 +500,6 @@
   }
 
   function renderPhases(events) {
-    // Phase boundaries (UTC):
     const PHASES = [
       { id: "phase-1-events", from: "2026-05-03T18:00:00Z", to: "2026-05-03T19:30:00Z" },
       { id: "phase-2-events", from: "2026-05-03T19:30:00Z", to: "2026-05-03T23:00:00Z" },
@@ -337,9 +512,7 @@
       if (!el) continue;
       const from = Date.parse(ph.from);
       const to = Date.parse(ph.to);
-      // Highlight: window/capitano/kickoff/peak — escludo throttle nella sintesi per non sommergere
       const sub = events.filter((e) => e.ts >= from && e.ts <= to && e.kind !== "throttle");
-      // Aggiungi un "summary throttle" come prima riga
       const thr = events.filter((e) => e.ts >= from && e.ts <= to && e.kind === "throttle");
       const summary = thr.length
         ? `<div class="ev k-throttle"><span class="t">—</span><span class="k">SUMMARY</span><span>⏸ ${thr.length} throttle in fase (${Math.round(thr.reduce((a, b) => a + (b.payload?.applied_sec || 0), 0) / 60)} min totali)</span></div>`
@@ -391,6 +564,134 @@
     });
 
     paint();
+  }
+
+  // ----- mini-chart inline (uno per atto rilevante) -----
+  // Ogni mini-chart è una piccola line/scatter che racconta il momento. Non è
+  // protagonista: contesto visivo per la prosa, h~220px.
+  function renderInlineCharts(sentinel, events) {
+    if (!window.echarts) return;
+
+    const ranges = {
+      "1": { from: "2026-05-03T18:00:00Z", to: "2026-05-03T19:30:00Z", title: "usage% — Atto 1 (18:00 → 19:30)" },
+      "2": { from: "2026-05-03T19:30:00Z", to: "2026-05-03T23:00:00Z", title: "usage% & projection — Atto 2 (19:30 → 23:00)" },
+      "3": { from: "2026-05-03T22:00:00Z", to: "2026-05-04T01:00:00Z", title: "Climax — transizione finestra (22:00 → 01:00)" },
+      "4": { from: "2026-05-04T00:18:00Z", to: "2026-05-04T05:16:00Z", title: "Notte profonda — usage e throttle (00:18 → 05:16)" },
+    };
+
+    for (const act of Object.keys(ranges)) {
+      const el = document.getElementById(`mini-chart-act${act}`);
+      if (!el) continue;
+      if (!el.clientWidth) {
+        // Containers in details-collapsed o nascosti partono a 0 width: rinvio.
+        requestAnimationFrame(() => renderInlineCharts(sentinel, events));
+        return;
+      }
+      const r = ranges[act];
+      const from = Date.parse(r.from);
+      const to = Date.parse(r.to);
+      const subSent = sentinel.filter((s) => {
+        const t = Date.parse(s.ts);
+        return t >= from && t <= to;
+      });
+      const subThr = events.filter((e) => e.kind === "throttle" && e.ts >= from && e.ts <= to);
+      const subWin = events.filter((e) => e.kind === "window" && e.ts >= from && e.ts <= to);
+
+      const usagePts = subSent.map((s) => [Date.parse(s.ts), Number(s.usage) || 0]);
+      const projPts = subSent.map((s) => [Date.parse(s.ts), Math.min(150, Number(s.projection) || 0)]);
+      const thrPts = subThr.map((e) => [
+        e.ts,
+        // posizioniamo i puntini throttle a y = -5 (sotto la linea usage), così
+        // non occludono la curva e si leggono come "tappeto" sotto l'asse 0
+        -5,
+      ]);
+
+      const winMarks = subWin.map((w) => ({
+        xAxis: w.ts,
+        label: { show: true, formatter: "🪟", position: "insideEndTop", color: "#56ccf2" },
+        lineStyle: { color: "#56ccf2", width: 1.5, type: "solid" },
+      }));
+
+      const chart = echarts.init(el, "dark", { renderer: "canvas" });
+      const series = [
+        {
+          name: "usage%",
+          type: "line",
+          data: usagePts,
+          showSymbol: false,
+          lineStyle: { color: "#56ccf2", width: 2 },
+          areaStyle: { color: "rgba(86,204,242,0.12)" },
+          markLine: winMarks.length ? { silent: true, symbol: "none", data: winMarks } : undefined,
+        },
+      ];
+      if (act === "2" || act === "3" || act === "4") {
+        series.push({
+          name: "projection%",
+          type: "line",
+          data: projPts,
+          showSymbol: false,
+          lineStyle: { color: "#f2c94c", width: 1.5, type: "dashed" },
+        });
+      }
+      if (subThr.length) {
+        series.push({
+          name: "throttle",
+          type: "scatter",
+          data: thrPts,
+          symbol: "rect",
+          symbolSize: [3, 8],
+          itemStyle: { color: "rgba(235,87,87,0.55)" },
+          tooltip: { show: false },
+        });
+      }
+
+      chart.setOption({
+        title: { text: r.title, left: 12, top: 6, textStyle: { color: "#b9c4d4", fontSize: 12, fontWeight: "normal" } },
+        backgroundColor: "transparent",
+        grid: { left: 50, right: 16, top: 30, bottom: 28 },
+        legend: {
+          right: 14,
+          top: 4,
+          textStyle: { color: "#8a93a4", fontSize: 11 },
+          itemWidth: 14,
+          itemHeight: 8,
+        },
+        tooltip: {
+          trigger: "axis",
+          confine: true,
+          backgroundColor: "rgba(17,21,30,0.97)",
+          borderColor: "#3a5077",
+          textStyle: { color: "#e8ecf3", fontSize: 12 },
+          formatter: (params) => {
+            const ts = new Date(params[0].value[0]).toISOString().slice(11, 19) + "Z";
+            return [`<b>${ts}</b>`]
+              .concat(params.map((p) => `${p.marker} ${p.seriesName}: <b>${Math.round(p.value[1])}%</b>`))
+              .join("<br/>");
+          },
+        },
+        xAxis: {
+          type: "time",
+          min: from,
+          max: to,
+          axisLabel: { color: "#8a93a4", fontSize: 10 },
+          splitLine: { lineStyle: { color: "#1a1f2c" } },
+        },
+        yAxis: {
+          type: "value",
+          min: -10,
+          max: 110,
+          axisLabel: { color: "#8a93a4", fontSize: 10, formatter: (v) => (v < 0 ? "" : v + "%") },
+          splitLine: { lineStyle: { color: "#1a1f2c" } },
+        },
+        series,
+      });
+      new ResizeObserver(() => chart.resize()).observe(el);
+    }
+  }
+
+  function fmtTs(ms) {
+    const d = new Date(ms);
+    return d.toISOString().slice(0, 10) + " " + d.toISOString().slice(11, 19) + "Z";
   }
 
   function escapeHtml(s) {
