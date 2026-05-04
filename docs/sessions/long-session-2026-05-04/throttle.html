@@ -51,7 +51,7 @@
   <section class="kpi-grid" id="kpi-grid"></section>
 
   <section>
-    <h2>Cosa stiamo guardando</h2>
+    <h2>🔭 Cosa stiamo guardando</h2>
     <div class="narrative">
       <h4>Throttle reali vs checkpoint heartbeat</h4>
       <p>
@@ -78,7 +78,7 @@
   </section>
 
   <section>
-    <h2>Timeline pause per agente</h2>
+    <h2>⏰ Timeline pause per agente</h2>
     <div class="chart-wrap tall">
       <h3>🛣 Lane chart — quando ogni agente si è fermato</h3>
       <p class="caption">
@@ -90,9 +90,9 @@
       </p>
       <div class="filter-bar">
         <span>Mostra:</span>
-        <button data-filter="real" class="active" id="btn-real">Pause reali</button>
-        <button data-filter="checkpoint" id="btn-cp">+ Checkpoint</button>
-        <button data-filter="all" id="btn-all">Tutto</button>
+        <button data-filter="real" class="active" id="btn-real">⏸ Pause reali</button>
+        <button data-filter="checkpoint" id="btn-cp">💓 + Checkpoint</button>
+        <button data-filter="all" id="btn-all">🌐 Tutto</button>
       </div>
       <canvas id="lane"></canvas>
     </div>
@@ -121,7 +121,7 @@
   </section>
 
   <section>
-    <h2>Tempo totale fermo per agente</h2>
+    <h2>⏳ Tempo totale fermo per agente</h2>
     <div class="chart-wrap">
       <h3>📊 Durata cumulata pause per agente (stacked per categoria)</h3>
       <p class="caption">
@@ -158,7 +158,7 @@
   </section>
 
   <section>
-    <h2>Perché si sono fermati</h2>
+    <h2>❓ Perché si sono fermati</h2>
     <div class="chart-wrap">
       <h3>🧷 Distribuzione per categoria di motivazione</h3>
       <p class="caption">
@@ -232,7 +232,7 @@
   </section>
 
   <section>
-    <h2>Quanti agenti fermi insieme</h2>
+    <h2>🚦 Quanti agenti fermi insieme</h2>
     <div class="chart-wrap">
       <h3>👥 Concorrenza pause — # agenti distinti contemporaneamente fermi</h3>
       <p class="caption">
@@ -267,7 +267,7 @@
   </section>
 
   <section>
-    <h2>Quando si sono fermati</h2>
+    <h2>🕘 Quando si sono fermati</h2>
     <div class="chart-wrap">
       <h3>🌊 Ondate orarie — # pause per ora di sessione, stacked per categoria</h3>
       <p class="caption">
@@ -302,7 +302,7 @@
   </section>
 
   <section>
-    <h2>Top reason esatte</h2>
+    <h2>🏷 Top reason esatte</h2>
     <div class="chart-wrap" style="padding: 14px 20px;">
       <h3>🔍 Le 12 motivazioni più frequenti</h3>
       <p class="caption">
@@ -326,7 +326,7 @@
   </section>
 
   <section>
-    <h2>Note tecniche</h2>
+    <h2>⚙️ Note tecniche</h2>
     <div class="narrative">
       <h4>Come è stato classificato il <code>reason</code></h4>
       <p>
@@ -514,14 +514,14 @@
 
   const kpiGrid = document.getElementById("kpi-grid");
   const kpis = [
-    { label: "Pause reali", value: realPauses.length },
-    { label: "Checkpoint heartbeat", value: checkpoints.length },
-    { label: "Tempo totale fermo", value: fmtMin(totalSec) },
-    { label: "Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
-    { label: "Pausa mediana", value: fmtSec(median) },
-    { label: "Pausa media", value: fmtSec(meanSec) },
-    { label: "Pausa più lunga", value: fmtSec(maxSec) },
-    { label: "% sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
+    { label: "⏸ Pause reali", value: realPauses.length },
+    { label: "💓 Checkpoint heartbeat", value: checkpoints.length },
+    { label: "⏳ Tempo totale fermo", value: fmtMin(totalSec) },
+    { label: "🏆 Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
+    { label: "➗ Pausa mediana", value: fmtSec(median) },
+    { label: "📐 Pausa media", value: fmtSec(meanSec) },
+    { label: "📏 Pausa più lunga", value: fmtSec(maxSec) },
+    { label: "📊 % sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
   ];
   for (const k of kpis) {
     const div = document.createElement("div");
