@@ -230,8 +230,9 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Problem:** dashboard queries Supabase ✅ (in production), but some widgets may still use mock data.
 - **Task:** audit `web/app/(protected)/dashboard/` component by component, identify and wire residual mocks.
 
-##### 🚀 [JHT-VPS-VALIDATE] Validate end-to-end setup on a real VPS ⬜ pre-launch
+##### 🚀 [JHT-VPS-VALIDATE] Validate end-to-end setup on a real VPS ⬜ pre-launch — **tech-only / manual path**
 
+- **Scope:** this task validates the **manual SSH + one-liner** path only (tier 🥉 tech-user). The friendly UX for non-tech users is a separate task: see [JHT-VPS-FRIENDLY] in PHASE 3.
 - **Problem:** the VPS / cloud rental mode is our ⭐ target setup (see Vision), but we've never actually deployed JHT on a real VPS end-to-end. Today the recommended setup is unvalidated.
 - **Task:**
   1. Pick one provider (Hetzner CX22 €4.5/mo is the easiest start)
@@ -242,6 +243,17 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Why:** until we've actually run this end-to-end, recommending VPS as the target setup is theoretical. Also: this validates that the install script + container + provider auth all work outside the maintainer's local PC.
 - **Output:** working VPS deploy + `docs/VPS-SETUP.md` with step-by-step guide
 - **Bonus:** adds 1 cell to the test campaign matrix (provider × tier × persona, but on VPS instead of local)
+- **Design rationale:** see [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md) — explains why the manual path stays as fallback for tech users while the desktop wizard becomes the default for non-tech.
+
+##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
+
+- **Problem:** today the user has no clear way to choose between the 3 execution modes. README hints but doesn't decide for them.
+- **Task:** create `docs/guides/VPS-COMPARISON.md` with a decision tree:
+  - "Hai un PC vecchio in casa?" → Mode 2 (PC dedicato)
+  - "Vuoi pagare €5/mese e dimenticartene?" → Mode 3 (VPS), 30min setup guidato (Phase 3) o SSH manuale (oggi)
+  - "Vuoi zero pensieri / setup?" → Mode 1 (PC locale, ma deve restare on)
+- **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
+- **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
 
 #### 🟡 MEDIUM PRIORITY
 
@@ -371,6 +383,82 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - Dashboard shows remote team in real time
 - **Why this matters:** many users have a second PC sitting unused (old laptop, mini-PC, spare desktop) — JHT doesn't need a powerful machine, just one that stays plugged in. Cheaper than VPS for users who already own the hardware.
 
+#### 🚨 Launcher as primary tool — Phase 2 expansion (NEW 2026-05-04)
+
+> Driven by VPS deployment design ([`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
+
+##### 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher
+
+- **Why:** today the launcher is anonymous (no identity). VPS mode requires identity for cross-device recovery. Without login, user changing PC loses access to their VPS.
+- **Task:**
+  1. Login button in launcher → opens system browser to Supabase OAuth (Google/GitHub)
+  2. Callback to `http://localhost:<random-port>/auth/callback` with PKCE flow
+  3. Session token stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+  4. Two modes coexist: 🔓 **Guest** (today's behavior, local PC only) + 🔐 **Signed-in** (unlocks VPS, sync, multi-device)
+- **Acceptance:** user clicks "Sign in", completes OAuth, session persists across launcher restarts, "Sign out" cleanly revokes.
+- **Dependency:** must land before [JHT-VPS-FRIENDLY].
+
+##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata
+
+- **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
+- **Sync to cloud (Supabase, encrypted user-side with passphrase):**
+  - Profile + preferences
+  - VPS metadata: provider, IP, region, snapshot ID, tailnet name
+  - Tailscale auth-key (encrypted blob)
+- **NEVER sync to cloud (stays in OS keychain):**
+  - Hetzner API token (master key — would let attacker spawn billed servers)
+  - SSH keys (ephemeral anyway)
+- **Encryption:** AES-256-GCM with key derived from user passphrase via Argon2id. Server stores ciphertext only — `jobhunterteam.ai` ops cannot decrypt.
+- **Acceptance:** modify config on laptop A, install launcher + login on laptop B, config restored after passphrase entry. Server admin (us) cannot read VPS IP from raw DB.
+- **Dependency:** [JHT-DESKTOP-LOGIN].
+
+##### 🔑 [JHT-DESKTOP-RECOVERY] Recovery passphrase generation + decrypt flow
+
+- **Why:** the encrypted cloud sync needs a passphrase that's NOT the OAuth password (which we don't have). This is the user's "vault key".
+- **Task:**
+  1. At first signed-in setup: launcher generates a 6-word recovery passphrase (BIP39 wordlist), shows it once with strong "save this in your password manager NOW" UX
+  2. Passphrase derives encryption key via Argon2id (memory-hard, slow), key kept in memory only
+  3. On new PC: prompt "Enter your recovery passphrase" after OAuth
+  4. Wrong passphrase → no data leak, just retry
+  5. "Lost passphrase" path: full reset (create new VPS, lose existing data) with explicit warning
+- **Acceptance:** passphrase shown once at setup, encryption verified by round-trip test, recovery on new PC works in <60s end-to-end.
+- **Dependency:** [JHT-DESKTOP-SYNC].
+
+##### 🔄 [JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me" entry point
+
+- **Why:** the recovery flow needs an entry point in the UI. Without it, user on new PC sees only "Create new VPS" and panics.
+- **Task:**
+  1. Launcher start screen on new PC: "🆕 Setup new team" / "🔄 Reconnect existing team" buttons
+  2. "Reconnect" → OAuth → enter passphrase → restore config from cloud
+  3. Detect mismatched state: cloud says VPS exists at IP X, but Hetzner API (with re-pasted token) says no such server → offer "Restore from snapshot" or "Create new"
+  4. Detect orphan VPS: VPS exists on Hetzner but no cloud config → "Adopt existing server" flow
+- **Acceptance:** all 3 scenarios (clean restore, missing VPS, orphan VPS) handled with clear UX.
+- **Dependency:** [JHT-DESKTOP-RECOVERY].
+
+##### 🩹 [JHT-DESKTOP-ERRORS] Friendly error handling (no stack traces)
+
+- **Why:** today the launcher surfaces raw Node.js errors and stack traces to the user. Acceptable for tech users, fatal for non-tech (target audience for VPS mode).
+- **Task:**
+  1. Error boundary at top level: catch all uncaught exceptions, show user-friendly card
+  2. Translate common failures to actionable messages:
+     - `ECONNREFUSED` on Hetzner API → "Hetzner is unreachable. Check your internet connection."
+     - 401 on Hetzner → "Your Hetzner API token is invalid. [Update token]"
+     - Tailscale auth fail → "VPN connection failed. [Retry] [Help]"
+  3. "Show technical details" expandable for those who want it
+  4. Logs always written to `~/.jht/launcher.log` for support
+- **Acceptance:** induce 5 common errors (network down, wrong token, VPS deleted manually, Tailscale down, disk full), all show friendly card + actionable button.
+
+##### 📚 [JHT-DESKTOP-HELP] Embedded help/FAQ (no web round-trip for basic stuff)
+
+- **Why:** non-tech user with broken VPS has no patience to open browser, find docs, scroll. Inline help is faster + works offline.
+- **Task:**
+  1. "?" button in each launcher screen → context-sensitive help panel
+  2. FAQ embedded as markdown in app: "How do I get a Hetzner token?", "What does 'Pause team' do?", "I forgot my passphrase, what now?"
+  3. Annotated screenshots of Hetzner panel + Tailscale (same images as [JHT-VPS-FRIENDLY] tutorial)
+  4. Search bar across FAQ
+  5. "Open full docs" link → goes to `jobhunterteam.ai/docs` for deeper stuff
+- **Acceptance:** new user can complete VPS setup without ever opening external docs.
+
 ---
 
 ### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning (future, post-1.0)
@@ -393,6 +481,28 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 - **Depends on**: at least 1 adapter (CLOUD-04)
 - "Choose where the team runs", cloud credentials input, real-time cost estimate, one-click deploy/teardown, billing alerts
+
+#### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy
+
+- **Depends on:** [JHT-CLOUD-04] Hetzner adapter + [JHT-CLOUD-05] Cloud UI
+- **Goal:** non-tech user provisions a VPS in <5 minutes without ever touching SSH or terminal.
+- **UX:**
+  1. Launcher: "Dove vuoi che giri il team? [Questo PC] [PC dedicato] [VPS cloud]"
+  2. User picks VPS → wizard with inline tutorial (annotated screenshots of Hetzner panel: where to click, where to copy API token from, where to paste it)
+  3. User pastes Hetzner API token → stored in OS keychain (NEVER in our cloud)
+  4. Launcher provisions: ephemeral SSH key in-memory → server creation via Hetzner API → cloud-init runs `install.sh` → Tailscale tailnet established
+  5. Ephemeral SSH key discarded; metadata saved in `~/.jht/vps.json`
+  6. Dashboard subsequently talks to VPS via Tailscale mesh (no public ports)
+- **Why this matters:** without this, the cheapest mode (€5/mo VPS) stays inaccessible to the actual target audience (non-tech users). With it, JHT becomes a 1-click deploy that respects local-first principles.
+- **Security wins vs web-pairing alternative:**
+  - Hetzner API token never leaves user's PC
+  - SSH keys ephemeral (provision phase only)
+  - No `jobhunterteam.ai` middleman — if our web infra is compromised, user VPSes are unaffected
+- **Open design questions:**
+  - Tailscale (zero-config, US company) vs WireGuard self-hosted (more aligned with local-first, more code)
+  - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
+  - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
+- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
 #### 🔒 [JHT-CLOUD-06] Secure app ↔ cloud tunnel
 
