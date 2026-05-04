@@ -37,8 +37,9 @@
 <header class="hero">
   <h1>🌙 Long Session 2026-05-04</h1>
   <p class="subtitle">
-    Team multi-finestra, &gt;10h consecutive — primo run con termostato pacing-bridge
-    che attraversa due finestre Kimi K2 da 5h.
+    Team multi-finestra, 10h 43m attive — primo run con termostato pacing-bridge
+    che tiene la rotta su tre finestre Kimi K2 consecutive: W1 · 94%,
+    W2 · 96% perfetta, W3 · 64%.
   </p>
   <nav class="tabs">
     <a href="usage.html">📈 Usage</a>
@@ -49,6 +50,7 @@
     <a href="database.html">📊 Database</a>
     <a href="windows.html">🪟 Finestre</a>
     <a href="crashes.html">💥 Crash</a>
+    <a href="retro.html">🔍 Retro</a>
   </nav>
 </header>
 
@@ -58,16 +60,23 @@
     <p>
       Questo report ricostruisce la prima sessione lunga del team in cui il
       <em>termostato</em> (pacing-bridge) ha permesso di lavorare attraverso
-      più finestre Kimi K2 consecutive. L'analisi copre usage, throttling,
-      consumo token, attività per agente, pause, timeline eventi.
+      <strong>tre finestre Kimi K2 consecutive</strong> — W1 (1h 1m, peak
+      94%), W2 (4h 48m, peak 96% — la finestra perfetta), W3 (4h 54m, peak
+      64%). Totale attivo <strong>10h 43m</strong> su 3 reset di
+      <code>session_id</code> senza interventi manuali. L'analisi copre
+      usage, throttling, consumo token, attività per agente, pause,
+      timeline eventi.
     </p>
   </section>
 
   <section>
     <h2>Numeri della sessione</h2>
     <p class="caption-muted">
-      Estratti live dai dati nella finestra <code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>
-      (≈18h). Ogni card linka la sezione di dettaglio.
+      Estratti live dai dati su <strong>3 finestre Kimi K2</strong>: W1
+      <code>23:07:51Z → 00:08:58Z</code>, W2 <code>00:18:58Z → 05:06:37Z</code>,
+      W3 <code>05:16:38Z → 10:10:29Z</code> — totale <strong>10h 43m</strong>
+      attivi (gap di transizione esclusi). Ogni card linka la sezione di
+      dettaglio.
     </p>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card kpi-skeleton"><div class="label">⏱ Durata</div><div class="value">—</div></div>
@@ -115,13 +124,25 @@
       <a class="section-card" href="database.html">
         <div class="icon">📊</div>
         <h3>Database — output reale</h3>
-        <p>Cosa ha prodotto il team: 22 positions, 22 scores, 18 applications. Distribuzione score, feedback critici, pipeline completato vs fermato.</p>
+        <p>Cosa ha prodotto il team: lavoro_effettivo_union 22 positions toccate dentro le 3 finestre, 6 scored in-window + 16 backlog aggiornato, 17 applications scritte, pass-rate 76%. Funnel + verdetti critico + radar sub-score + gap ricorrenti.</p>
         <span class="arrow">apri →</span>
       </a>
       <a class="section-card" href="crashes.html">
         <div class="icon">💥</div>
         <h3>Crash &amp; Failures</h3>
-        <p>Eventi ALERT/FAILURE/CRASH del team, cooldown rate-limit, log loop per agente — cosa si è rotto e quando, in finestra e storico.</p>
+        <p>Cosa si è rotto agente per agente con causa→effetto: scout-1 zombie pre-W1, bridge failure sul boundary di W1, capitano sotto-soglia in 13 tick. Zero crash hard nel perimetro.</p>
+        <span class="arrow">apri →</span>
+      </a>
+      <a class="section-card" href="windows.html">
+        <div class="icon">🪟</div>
+        <h3>Finestre Kimi K2</h3>
+        <p>Le 3 finestre attive, una per una: W1 · 94% (tensione termostato), W2 · 96% perfetta (escalation 89→92→93→96), W3 · 64% (decompressione). Curve, throttle per agente, mission-log capitano.</p>
+        <span class="arrow">apri →</span>
+      </a>
+      <a class="section-card" href="retro.html">
+        <div class="icon">🔍</div>
+        <h3>Retro — bilancio onesto</h3>
+        <p>Cosa è andato bene (6), cosa è andato male (6), cosa aggiustare per la prossima long session (4+1). Numeri verificabili e citazioni dei messaggi reali.</p>
         <span class="arrow">apri →</span>
       </a>
     </div>
@@ -129,13 +150,16 @@
 
   <section class="narrative">
     <strong>Cosa raccontano questi numeri.</strong>
-    Il team ha lavorato per quasi un giorno intero, attraversando più reset
-    della finestra Kimi K2 senza interventi manuali. Il pacing-bridge ha
-    accumulato centinaia di pause throttle distribuite su pochi agenti dominanti
-    (scrittore-1, scorer-1) — segnale che il termostato ha protetto le finestre
-    a costo di qualche pausa lunga, non di un crash. Il picco usage rimane
-    sotto il 100% perché la sentinella ha imposto rallentamenti prima della
-    saturazione.
+    In 10h 43m attive su 3 finestre Kimi K2, il pacing-bridge ha tenuto
+    il team sotto il limite della finestra in tutti e 3 i reset di
+    <code>session_id</code> — peak 96% nella finestra W2 ("perfetta")
+    senza saturare. Le pause throttle si concentrano su pochi agenti
+    dominanti (scrittore-1, scorer-1, analista-1), segnale di un team
+    asimmetrico: il termostato li trattiene per proteggere la finestra,
+    a costo di qualche pausa lunga. Output: 22 positions toccate, 17
+    applications scritte (76% PASS) — i dettagli stanno in
+    <a href="database.html">📊 Database</a>; il bilancio onesto in
+    <a href="retro.html">🔍 Retro</a>.
   </section>
 </main>
 
@@ -166,14 +190,20 @@
     const throttle = data.throttle.filter(inSess);
     const messages = data.messages.filter(inSess);
 
-    // Durata: primo → ultimo tick sentinel
-    const tsList = sentinel.map((r) => Date.parse(r.ts)).filter(Number.isFinite).sort((a, b) => a - b);
-    const durMs = tsList.length ? tsList[tsList.length - 1] - tsList[0] : 0;
-    const hours = Math.floor(durMs / 3600e3);
-    const mins = Math.round((durMs % 3600e3) / 60e3);
+    // Durata: somma delle 3 finestre Kimi K2 attive (W1+W2+W3), non
+    // first→last tick (che includerebbe i gap di transizione).
+    const winMs = (window.ReportData.SESSION_WINDOWS || []).reduce(
+      (acc, w) => acc + (w.endMs - w.startMs),
+      0,
+    );
+    const durMs = winMs;
+    let hours = Math.floor(durMs / 3600e3);
+    let mins = Math.round((durMs % 3600e3) / 60e3);
+    // Rollover: Math.round può portare mins a 60 (es. 10h59m45s → 60m), fix
+    if (mins === 60) { hours += 1; mins = 0; }
 
-    // Finestre Kimi K2 = session_id distinti (il bridge le tratta come finestre del provider attivo)
-    const sessions = new Set(sentinel.map((r) => r.session_id).filter(Boolean));
+    // Finestre Kimi K2 = SESSION_WINDOWS (perimetro definitivo, sempre 3)
+    const windowsCount = (window.ReportData.SESSION_WINDOWS || []).length;
 
     // Throttle reali: escludi event=checkpoint
     const throttleReal = throttle.filter((r) => r.event !== "checkpoint");
@@ -196,11 +226,11 @@
 
     const cards = [
       { label: "⏱ Durata", value: durMs ? `${hours}h ${mins}m` : "—", href: null },
-      { label: "🪟 Finestre Kimi K2", value: sessions.size, href: "timeline.html#finestre" },
+      { label: "🪟 Finestre Kimi K2", value: windowsCount, href: "windows.html" },
       { label: "⏸ Pause throttle", value: throttleReal.length, href: "throttle.html" },
-      { label: "💬 Messaggi team", value: messages.length, href: "timeline.html#messaggi" },
-      { label: "👥 Agenti attivi", value: agents.size, href: "agents.html" },
-      { label: "🔥 Picco usage", value: `${peak}%`, href: "usage.html" },
+      { label: "💬 Messaggi team", value: messages.length, href: "timeline.html" },
+      { label: "👥 Ruoli con attività", value: agents.size, href: "agents.html" },
+      { label: "🔥 Picco usage", value: `${peak}%`, href: "windows.html" },
     ];
 
     grid.innerHTML = cards
