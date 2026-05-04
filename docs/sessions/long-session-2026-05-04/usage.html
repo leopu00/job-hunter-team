@@ -5,11 +5,26 @@
 <title>Usage — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  .kpi-card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .legend-pills { display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 14px; }
+  .legend-pills span {
+    display:inline-flex; align-items:center; gap:6px;
+    background:#11151e; border:1px solid var(--border);
+    padding:4px 10px; border-radius:999px; font-size:12px; color:var(--muted);
+  }
+  .legend-pills .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+  .narrative p { margin: 0 0 8px; }
+  .narrative p:last-child { margin-bottom: 0; }
+  .narrative strong { color: var(--accent); }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>📈 Usage &amp; Token Consumption</h1>
-  <p class="subtitle">Sezione assegnata a dev1 — placeholder, da popolare.</p>
+  <p class="subtitle">Cosa ha mangiato il team nella long session 03→04 maggio — finestre Claude, proiezione, velocity, weekly.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -18,11 +33,354 @@
     <a href="timeline.html">📅 Timeline</a>
   </nav>
 </header>
+
 <main>
+  <section id="kpi">
+    <h2>Numeri chiave</h2>
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card"><div class="label">Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
+      <div class="kpi-card"><div class="label">Finestre Claude</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
+      <div class="kpi-card"><div class="label">Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
+      <div class="kpi-card"><div class="label">Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
+      <div class="kpi-card"><div class="label">Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
+      <div class="kpi-card"><div class="label">Tick sentinella</div><div class="value" id="kpi-ticks">…</div><div class="sub">campioni ~ ogni 3 min</div></div>
+    </div>
+  </section>
+
   <section>
-    <p class="note">⚠️ Sezione vuota — vedi README.md per assegnazione iniziale.</p>
+    <div class="chart-wrap">
+      <h3>1 · Usage % vs Projection nel tempo</h3>
+      <p class="caption">La sentinella misura ogni ~3 min la percentuale consumata della finestra corrente (linea piena) e proietta il consumo a fine finestra (linea tratteggiata). Quando la projection si stacca verso l'alto è il termostato a mettere freno.</p>
+      <div class="legend-pills">
+        <span><i class="dot" style="background:#56ccf2"></i>usage %</span>
+        <span><i class="dot" style="background:#f2c94c"></i>projection (fine finestra)</span>
+        <span><i class="dot" style="background:#eb5757"></i>soglia 100%</span>
+      </div>
+      <canvas id="chart-usage"></canvas>
+      <div class="narrative">
+        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Claude consecutive — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
+        <p>La projection è il segnale più interessante: nelle prime ore tende a sparare alta (oltre 100%) perché il team consuma in burst, ma il pacing-bridge la riporta dentro il riquadro entro pochi tick. I picchi più cattivi sono concentrati nella prima finestra serale e in quella centrale notturna — altrove la curva resta sotto la diagonale ideale.</p>
+        <p>Il fatto che la <em>usage</em> reale (linea piena) chiuda quasi sempre sotto il 100% mentre la projection ha ondeggiato sopra significa che il sistema ha frenato in tempo. Senza throttling avremmo bruciato due o tre finestre.</p>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <h3>2 · Velocity reale vs Velocity ideale</h3>
+      <p class="caption">Velocity = punti % / ora. La velocity_ideal è il ritmo che, mantenuto, chiude la finestra esattamente al 100% al reset. Sotto questa soglia siamo in sottoutilizzo, sopra si rischia di sforare.</p>
+      <div class="legend-pills">
+        <span><i class="dot" style="background:#6fcf97"></i>velocity_smooth (reale, EMA)</span>
+        <span><i class="dot" style="background:#bb6bd9"></i>velocity_ideal (target)</span>
+        <span><i class="dot" style="background:rgba(235,87,87,0.35)"></i>area sopra ideale (rischio)</span>
+      </div>
+      <canvas id="chart-velocity"></canvas>
+      <div class="narrative">
+        <p>Quando la curva verde sta sotto quella viola, il team sta lasciando token sul tavolo (non sfruttiamo abbastanza la finestra). Quando la sorpassa, il termostato deve attivarsi: throttle e checkpoint forzati per rallentare gli agenti e portare la velocity in zona ideale.</p>
+        <p>Si vede chiaramente che <strong>la velocity reale oscilla intorno alla ideale</strong> per quasi tutta la sessione — è esattamente il comportamento desiderato di un termostato funzionante. Le escursioni sopra-soglia sono brevi e seguite da rientri rapidi.</p>
+        <p>I valori negativi a inizio finestra non sono bug: sono i reset (usage che riparte da 0 dopo essere stato a 90+), per cui il delta calcolato risulta negativo per un singolo tick. Vanno letti come segnale di confine, non di velocità reale.</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="chart-wrap">
+        <h3>3 · Weekly Usage — la curva accumulativa</h3>
+        <p class="caption">Percentuale del budget settimanale Claude consumata nel tempo. È il vero limite di lungo periodo: una volta a 100% il piano si esaurisce.</p>
+        <canvas id="chart-weekly"></canvas>
+        <div class="narrative">
+          <p>Il weekly è una curva monotona crescente — non si torna indietro. La long session ha consumato circa <strong id="nb-weekly-delta">N</strong> punti percentuali del budget settimanale in <strong id="nb-weekly-hours">N</strong> ore di lavoro reale.</p>
+          <p>La pendenza è il segnale: tratti ripidi = team che spinge, tratti piatti = team in attesa o in checkpoint. Le inflessioni più nette coincidono con l'inizio delle finestre Claude più produttive.</p>
+          <p>Se questo rate proseguisse linearmente, il weekly si esaurirebbe in <strong id="nb-weekly-eta">N</strong> ore di lavoro residue. Buon margine, ma non infinito — è il numero che dà senso al pacing.</p>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <h3>4 · Status sentinella — distribuzione tempo</h3>
+        <p class="caption">Percentuale di tick passati in ciascuno status: <em>SOTTOUTILIZZO</em>, <em>ATTENZIONE</em>, <em>STEADY</em>, <em>RESET</em>. È la radiografia di quanto è stato in zona di comfort il team.</p>
+        <canvas id="chart-status"></canvas>
+        <div class="narrative">
+          <p>Un team sano alterna SOTTOUTILIZZO (siamo in pista, possiamo accelerare) e ATTENZIONE (stiamo tirando, il bridge sorveglia). STEADY è la zona ideale — vorremmo che fosse più grande nelle prossime sessioni.</p>
+          <p>RESET sono i confini fra finestre Claude: pochi tick, ma fondamentali perché segnano la transizione. La loro presenza in numero coerente con le finestre conferma che la sentinella non ha avuto buchi di copertura.</p>
+          <p>Il fatto che ATTENZIONE e SOTTOUTILIZZO siano <strong>quasi pari</strong> dice che il termostato sta in equilibrio: tira via gas quando serve e lo restituisce subito dopo. È il regime "in banda".</p>
+        </div>
+      </div>
+    </div>
   </section>
 </main>
+
+<footer>
+  Generato da <code>usage.html</code> · dati da <code>data/sentinel-data.jsonl.txt</code> · range filtrato 2026-05-03 18:00 UTC → 2026-05-04 12:00 UTC.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+(async function () {
+  // Defaults Chart.js per dark theme
+  Chart.defaults.color = "#c8cedb";
+  Chart.defaults.borderColor = "#232836";
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif";
+
+  const all = await ReportData.loadAll();
+  const sentinel = all.sentinel.filter(ReportData.inSession);
+
+  // ---------- KPI ----------
+  const tsValues = sentinel.map((r) => Date.parse(r.ts));
+  const tStart = Math.min(...tsValues);
+  const tEnd = Math.max(...tsValues);
+  const durationMs = tEnd - tStart;
+  const durationH = durationMs / 3_600_000;
+  const sessionIds = new Set(sentinel.map((r) => r.session_id).filter(Boolean));
+  const peakUsage = sentinel.reduce((m, r) => Math.max(m, r.usage ?? 0), 0);
+  const peakUsageRec = sentinel.find((r) => r.usage === peakUsage);
+  const peakProj = sentinel.reduce((m, r) => Math.max(m, r.projection ?? 0), 0);
+  const weeklyVals = sentinel.map((r) => r.weekly_usage).filter((v) => v != null);
+  const weeklyStart = weeklyVals[0] ?? null;
+  const weeklyEnd = weeklyVals[weeklyVals.length - 1] ?? null;
+  const weeklyDelta = (weeklyEnd != null && weeklyStart != null) ? weeklyEnd - weeklyStart : null;
+
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const fmtPctH = (h) => `${h.toFixed(1)} h`;
+  document.getElementById("kpi-duration").textContent = fmtPctH(durationH);
+  document.getElementById("kpi-duration-sub").textContent = `${fmtTime(tStart)} → ${fmtTime(tEnd)} (locale)`;
+  document.getElementById("kpi-windows").textContent = String(sessionIds.size);
+  document.getElementById("kpi-peak").textContent = `${peakUsage}%`;
+  document.getElementById("kpi-peak-sub").textContent = peakUsageRec ? `alle ${fmtTime(Date.parse(peakUsageRec.ts))}` : "";
+  document.getElementById("kpi-proj").textContent = `${Math.round(peakProj)}%`;
+  document.getElementById("kpi-weekly").textContent = weeklyDelta != null ? `+${weeklyDelta} pp` : "n/d";
+  document.getElementById("kpi-weekly-sub").textContent = weeklyDelta != null ? `da ${weeklyStart}% a ${weeklyEnd}%` : "";
+  document.getElementById("kpi-ticks").textContent = String(sentinel.length);
+
+  // Riempio narrative dinamiche
+  document.getElementById("nb-windows-count").textContent = String(sessionIds.size);
+  if (weeklyDelta != null) {
+    document.getElementById("nb-weekly-delta").textContent = `${weeklyDelta}`;
+    document.getElementById("nb-weekly-hours").textContent = durationH.toFixed(1);
+    const ratePerHour = weeklyDelta / Math.max(durationH, 0.1);
+    const remaining = Math.max(100 - weeklyEnd, 0);
+    const etaH = ratePerHour > 0 ? (remaining / ratePerHour) : 0;
+    document.getElementById("nb-weekly-eta").textContent = etaH > 0 ? etaH.toFixed(1) : "—";
+  }
+
+  // ---------- Chart 1: Usage vs Projection ----------
+  const usagePts = sentinel.map((r) => ({ x: Date.parse(r.ts), y: r.usage ?? 0 }));
+  const projPts = sentinel.map((r) => ({ x: Date.parse(r.ts), y: Math.min(r.projection ?? 0, 200) }));
+
+  new Chart(document.getElementById("chart-usage"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "usage %",
+          data: usagePts,
+          borderColor: "#56ccf2",
+          backgroundColor: "rgba(86,204,242,0.15)",
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: "projection",
+          data: projPts,
+          borderColor: "#f2c94c",
+          backgroundColor: "rgba(242,201,76,0.0)",
+          borderDash: [6, 4],
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 1.5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)}%`,
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: {
+          min: 0,
+          max: 150,
+          ticks: { callback: (v) => v + "%" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          afterDraw: undefined,
+        },
+      },
+    },
+    plugins: [
+      {
+        id: "threshold100",
+        afterDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          const y = scales.y.getPixelForValue(100);
+          ctx.save();
+          ctx.strokeStyle = "rgba(235,87,87,0.6)";
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.restore();
+        },
+      },
+    ],
+  });
+
+  // ---------- Chart 2: Velocity vs Ideal ----------
+  // Filtro fuori i tick di reset (velocity grandemente negativa) per non rovinare la scala
+  const velReal = sentinel.map((r) => ({ x: Date.parse(r.ts), y: Math.max(-50, Math.min(150, r.velocity_smooth ?? 0)) }));
+  const velIdeal = sentinel.map((r) => ({ x: Date.parse(r.ts), y: r.velocity_ideal ?? 0 }));
+
+  new Chart(document.getElementById("chart-velocity"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "velocity_smooth",
+          data: velReal,
+          borderColor: "#6fcf97",
+          backgroundColor: "rgba(111,207,151,0.18)",
+          fill: { target: { value: 0 } },
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: "velocity_ideal",
+          data: velIdeal,
+          borderColor: "#bb6bd9",
+          backgroundColor: "rgba(187,107,217,0.0)",
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 1.5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} %/h`,
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: {
+          ticks: { callback: (v) => v + " %/h" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+      },
+    },
+  });
+
+  // ---------- Chart 3: Weekly cumulative ----------
+  const weeklyPts = sentinel
+    .filter((r) => r.weekly_usage != null)
+    .map((r) => ({ x: Date.parse(r.ts), y: r.weekly_usage }));
+
+  new Chart(document.getElementById("chart-weekly"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "weekly_usage %",
+          data: weeklyPts,
+          borderColor: "#9b51e0",
+          backgroundColor: "rgba(155,81,224,0.22)",
+          fill: true,
+          stepped: "before",
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => `weekly: ${ctx.parsed.y}%`,
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: { min: 0, max: 100, ticks: { callback: (v) => v + "%" }, grid: { color: "rgba(255,255,255,0.06)" } },
+      },
+    },
+  });
+
+  // ---------- Chart 4: Status doughnut ----------
+  const statusCounts = sentinel.reduce((acc, r) => {
+    const k = r.status || "?";
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+  const statusOrder = ["SOTTOUTILIZZO", "STEADY", "ATTENZIONE", "OVER", "G-SPOT", "RESET"].filter((k) => statusCounts[k]);
+  // Aggiungo eventuali altri status non previsti
+  Object.keys(statusCounts).forEach((k) => { if (!statusOrder.includes(k)) statusOrder.push(k); });
+  const statusColor = {
+    SOTTOUTILIZZO: "#56ccf2",
+    STEADY: "#6fcf97",
+    ATTENZIONE: "#f2c94c",
+    OVER: "#eb5757",
+    "G-SPOT": "#9b51e0",
+    RESET: "#828282",
+  };
+
+  new Chart(document.getElementById("chart-status"), {
+    type: "doughnut",
+    data: {
+      labels: statusOrder,
+      datasets: [
+        {
+          data: statusOrder.map((k) => statusCounts[k]),
+          backgroundColor: statusOrder.map((k) => statusColor[k] || "#888"),
+          borderColor: "#0d0f14",
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%",
+      plugins: {
+        legend: { position: "right", labels: { boxWidth: 12, padding: 10 } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((ctx.parsed / total) * 100).toFixed(1);
+              return `${ctx.label}: ${ctx.parsed} tick (${pct}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+})();
+</script>
 </body>
 </html>
