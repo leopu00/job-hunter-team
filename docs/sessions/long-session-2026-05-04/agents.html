@@ -5,11 +5,110 @@
 <title>Per agente — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+  @media (max-width: 1100px) {
+    .agents-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 700px) {
+    .agents-grid { grid-template-columns: 1fr; }
+  }
+  .agent-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .agent-card .head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .agent-card .emoji {
+    font-size: 22px;
+    line-height: 1;
+  }
+  .agent-card .name {
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+  .agent-card .role-color {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: auto;
+  }
+  .agent-card .kpis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 6px 0 10px;
+  }
+  .agent-card .kpi {
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    min-width: 0;
+  }
+  .agent-card .kpi .lbl {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .agent-card .kpi .val {
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .agent-card canvas {
+    width: 100% !important;
+    height: 160px !important;
+  }
+  .agent-card .empty {
+    color: var(--muted);
+    font-size: 12px;
+    font-style: italic;
+    padding: 26px 4px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 10px;
+  }
+  .legend .swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>👥 Per Agente</h1>
-  <p class="subtitle">Sezione assegnata a dev3 — placeholder, da popolare.</p>
+  <p class="subtitle">Una mini-card per ciascun ruolo del team — attività vs pause nella long session.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -20,9 +119,260 @@
 </header>
 <main>
   <section>
-    <p class="note">⚠️ Sezione vuota — vedi README.md per assegnazione iniziale.</p>
+    <h2>Griglia 3×3 — un grafico per agente</h2>
+    <div class="narrative">
+      Ogni card mostra l'attività di un ruolo nella finestra della long session
+      (<code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>). Linea: <strong>messaggi
+      inviati</strong> (proxy del lavoro effettivo, dato che i token non sono
+      attribuiti per agente nei dati esportati). Barre: <strong>throttle applicato</strong>
+      (secondi di pausa imposti dal pacing-bridge). I tre KPI sintetizzano: messaggi
+      totali, pausa totale, finestra di attività osservata. Il <em>maestro</em>
+      compare come placeholder: non risulta attivo in questa sessione.
+    </div>
+    <div class="legend">
+      <span><span class="swatch" id="lg-msg-color"></span>Messaggi inviati / ora</span>
+      <span><span class="swatch" style="background:#eb5757"></span>Throttle applicato (s) / ora</span>
+      <span>Finestra: 18h · bin = 1h</span>
+    </div>
+    <div class="agents-grid" id="agents-grid"></div>
   </section>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+(async function () {
+  const RD = window.ReportData;
+  const HOUR_MS = 3600 * 1000;
+  const startMs = RD.SESSION_START;
+  const endMs = RD.SESSION_END;
+  const nBins = Math.round((endMs - startMs) / HOUR_MS);
+
+  const ROLES = [
+    "capitano",
+    "scout",
+    "scrittore",
+    "scorer",
+    "critico",
+    "analista",
+    "assistente",
+    "sentinella",
+    "maestro",
+  ];
+
+  function baseRole(s) {
+    if (!s) return "";
+    return String(s).split("-")[0].toLowerCase();
+  }
+  function emptyBins() {
+    return new Array(nBins).fill(0);
+  }
+  function fmtSec(s) {
+    if (!s) return "0s";
+    if (s < 60) return Math.round(s) + "s";
+    const m = Math.floor(s / 60);
+    const r = Math.round(s % 60);
+    if (m < 60) return r ? `${m}m${String(r).padStart(2, "0")}s` : `${m}m`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}h${String(rm).padStart(2, "0")}m`;
+  }
+  function fmtBinLabel(i) {
+    const t = new Date(startMs + i * HOUR_MS);
+    const hh = String(t.getUTCHours()).padStart(2, "0");
+    return `${hh}:00`;
+  }
+
+  const labels = Array.from({ length: nBins }, (_, i) => fmtBinLabel(i));
+
+  const grid = document.getElementById("agents-grid");
+  document.getElementById("lg-msg-color").style.background = "#56ccf2";
+
+  let data;
+  try {
+    data = await RD.loadAll();
+  } catch (e) {
+    grid.innerHTML = `<div class="empty">Errore caricamento dati: ${e.message}</div>`;
+    return;
+  }
+
+  const msgBins = {};
+  const thrBins = {};
+  const firstActive = {};
+  const lastActive = {};
+  const totalMsg = {};
+  const totalThr = {};
+
+  for (const r of ROLES) {
+    msgBins[r] = emptyBins();
+    thrBins[r] = emptyBins();
+    totalMsg[r] = 0;
+    totalThr[r] = 0;
+  }
+
+  for (const m of data.messages) {
+    if (!RD.inSession(m)) continue;
+    const role = baseRole(m.from) || baseRole(m.session);
+    if (!ROLES.includes(role)) continue;
+    const t = Date.parse(m.ts);
+    const idx = Math.floor((t - startMs) / HOUR_MS);
+    if (idx < 0 || idx >= nBins) continue;
+    msgBins[role][idx]++;
+    totalMsg[role]++;
+    if (firstActive[role] == null || t < firstActive[role]) firstActive[role] = t;
+    if (lastActive[role] == null || t > lastActive[role]) lastActive[role] = t;
+  }
+
+  for (const ev of data.throttle) {
+    if (!RD.inSession(ev)) continue;
+    const role = baseRole(ev.agent);
+    if (!ROLES.includes(role)) continue;
+    const t = Date.parse(ev.ts);
+    const idx = Math.floor((t - startMs) / HOUR_MS);
+    if (idx < 0 || idx >= nBins) continue;
+    const sec = Number(ev.applied_sec) || 0;
+    thrBins[role][idx] += sec;
+    totalThr[role] += sec;
+  }
+
+  function activeWindowLabel(role) {
+    const a = firstActive[role];
+    const b = lastActive[role];
+    if (a == null || b == null) return "—";
+    const fmt = (t) => {
+      const d = new Date(t);
+      return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    };
+    return `${fmt(a)}→${fmt(b)}`;
+  }
+
+  for (const role of ROLES) {
+    const card = document.createElement("div");
+    card.className = "agent-card";
+
+    const color = RD.AGENT_COLORS[role] || "#888";
+    const emoji = RD.AGENT_EMOJI[role] || "🤖";
+
+    const head = document.createElement("div");
+    head.className = "head";
+    head.innerHTML = `
+      <span class="emoji">${emoji}</span>
+      <span class="name">${role}</span>
+      <span class="role-color" style="background:${color}" title="${color}"></span>
+    `;
+    card.appendChild(head);
+
+    const hasData = totalMsg[role] > 0 || totalThr[role] > 0;
+
+    if (!hasData) {
+      const kpis = document.createElement("div");
+      kpis.className = "kpis";
+      kpis.innerHTML = `
+        <div class="kpi"><div class="lbl">Messaggi</div><div class="val">0</div></div>
+        <div class="kpi"><div class="lbl">Throttle</div><div class="val">0s</div></div>
+        <div class="kpi"><div class="lbl">Attivo</div><div class="val">—</div></div>
+      `;
+      card.appendChild(kpis);
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Non attivo in questa finestra";
+      card.appendChild(empty);
+      grid.appendChild(card);
+      continue;
+    }
+
+    const kpis = document.createElement("div");
+    kpis.className = "kpis";
+    kpis.innerHTML = `
+      <div class="kpi"><div class="lbl">Messaggi</div><div class="val">${totalMsg[role]}</div></div>
+      <div class="kpi"><div class="lbl">Throttle</div><div class="val">${fmtSec(totalThr[role])}</div></div>
+      <div class="kpi"><div class="lbl">Attivo (UTC)</div><div class="val">${activeWindowLabel(role)}</div></div>
+    `;
+    card.appendChild(kpis);
+
+    const canvas = document.createElement("canvas");
+    card.appendChild(canvas);
+    grid.appendChild(card);
+
+    new Chart(canvas.getContext("2d"), {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: "bar",
+            label: "Throttle (s)",
+            data: thrBins[role],
+            backgroundColor: "rgba(235, 87, 87, 0.55)",
+            borderColor: "rgba(235, 87, 87, 0.9)",
+            borderWidth: 0,
+            yAxisID: "y2",
+            order: 2,
+          },
+          {
+            type: "line",
+            label: "Messaggi",
+            data: msgBins[role],
+            borderColor: color,
+            backgroundColor: color + "33",
+            borderWidth: 2,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: true,
+            yAxisID: "y1",
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => `Ora ${items[0].label} UTC`,
+              label: (ctx) => {
+                if (ctx.dataset.label === "Throttle (s)") {
+                  return `Throttle: ${fmtSec(ctx.parsed.y)}`;
+                }
+                return `Messaggi: ${ctx.parsed.y}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: "#8a93a4",
+              autoSkip: true,
+              maxTicksLimit: 6,
+              font: { size: 10 },
+            },
+            grid: { color: "rgba(255,255,255,0.04)" },
+          },
+          y1: {
+            position: "left",
+            beginAtZero: true,
+            ticks: { color: "#8a93a4", font: { size: 10 }, precision: 0 },
+            grid: { color: "rgba(255,255,255,0.05)" },
+          },
+          y2: {
+            position: "right",
+            beginAtZero: true,
+            ticks: {
+              color: "#8a93a4",
+              font: { size: 10 },
+              callback: (v) => fmtSec(v),
+            },
+            grid: { drawOnChartArea: false },
+          },
+        },
+      },
+    });
+  }
+})();
+</script>
 </body>
 </html>
