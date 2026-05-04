@@ -15,6 +15,7 @@
   .kpi-banner .kpi-card.good   { border-left: 4px solid var(--accent); }
   .kpi-banner .kpi-card.warn   { border-left: 4px solid var(--warn); }
   .kpi-banner .kpi-card.danger { border-left: 4px solid var(--danger); }
+
   .info-box {
     background: #11151e;
     border: 1px solid var(--border);
@@ -26,25 +27,85 @@
     color: #cfd6e4;
   }
   .info-box code { color: var(--accent); }
-  .grid-2 {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    margin-bottom: 18px;
+
+  /* Sezioni narrative per agente */
+  .crash-case {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px 20px;
+    margin-bottom: 22px;
+    border-left: 4px solid var(--danger);
   }
-  .grid-2 > * { min-width: 0; min-height: 0; }
-  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .crash-case.warn   { border-left-color: var(--warn); }
+  .crash-case.info   { border-left-color: #56ccf2; }
+  .crash-case.silent { border-left-color: #828282; }
+  .crash-case h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .crash-case .when {
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 12px;
+  }
+  .crash-case .field {
+    margin: 10px 0 8px;
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .crash-case .field .lbl {
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding-top: 2px;
+  }
+  .crash-case .field .val { color: #d6dde9; }
+  .crash-case ul.consequences {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    color: #d6dde9;
+  }
+  .crash-case ul.consequences li { margin-bottom: 4px; }
+  blockquote.msg {
+    margin: 8px 0;
+    padding: 8px 14px;
+    background: #11151e;
+    border-left: 3px solid #56ccf2;
+    border-radius: 6px;
+    color: #cfd6e4;
+    font-size: 13px;
+    line-height: 1.55;
+    font-family: ui-monospace, "SF Mono", "Monaco", monospace;
+  }
+  blockquote.msg .meta {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Timeline drammatica condensa */
   .panel {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 14px 16px 16px;
+    margin-bottom: 22px;
   }
-  .panel .head {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
-  }
-  .panel h3 { margin: 0; font-size: 15px; }
+  .panel h3 { margin: 0 0 4px; font-size: 15px; }
   .panel .caption { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .panel .chart-box { position: relative; width: 100%; height: 320px; min-height: 0; }
+  .panel .chart-box canvas { width: 100% !important; height: 100% !important; display: block; }
+  .panel .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
   .zoom-btns { margin-left: auto; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
   .zoom-btns .group { display: flex; gap: 2px; }
   .zoom-btns button {
@@ -54,11 +115,6 @@
     cursor: pointer; transition: background 100ms;
   }
   .zoom-btns button:hover  { background: #1c2230; border-color: #38415a; }
-  .zoom-btns button:active { background: #232a3b; }
-  .panel .chart-box { position: relative; width: 100%; height: 360px; min-height: 0; }
-  .panel .chart-box.tall  { height: 440px; }
-  .panel .chart-box.donut { height: 280px; }
-  .panel .chart-box canvas { width: 100% !important; height: 100% !important; display: block; }
 
   table.errors { width: 100%; border-collapse: collapse; font-size: 12px; }
   table.errors th, table.errors td {
@@ -68,15 +124,30 @@
     color: var(--muted); font-weight: 500; text-transform: uppercase;
     font-size: 10px; letter-spacing: 0.05em;
   }
-  table.errors td.lvl-ERROR     { color: var(--warn); }
-  table.errors td.lvl-CRITICAL,
-  table.errors td.lvl-TRACEBACK { color: var(--danger); }
+  table.errors td.lvl-ERROR { color: var(--warn); }
+
+  .ticks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .ticks-grid .tick {
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    text-align: center;
+    color: #d6dde9;
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
 <header class="hero">
   <h1>💥 Crash &amp; Failures</h1>
-  <p class="subtitle">Eventi ALERT/FAILURE/ERR del bridge, cooldown rate-limit Kimi K2, error pattern dai loop log degli agenti.</p>
+  <p class="subtitle">Cosa si è rotto nella long-session, agente per agente — causa, effetto a cascata, recovery.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -85,25 +156,25 @@
     <a href="timeline.html">📅 Timeline</a>
     <a href="tokens.html">🔢 Tokens</a>
     <a href="database.html">📊 Database</a>
-    <a href="crashes.html">💥 Crash</a>
     <a href="windows.html">🪟 Finestre</a>
+    <a href="crashes.html">💥 Crash</a>
   </nav>
 </header>
 <main>
   <section>
-    <h2>💥 Panoramica crash</h2>
+    <h2>💥 Cosa si è rotto e cosa abbiamo imparato</h2>
     <div class="narrative">
-      <strong>Range storico esteso</strong>: 2026-04-22 → 2026-05-04, per dare
-      colpo d'occhio sugli ultimi 12 giorni. La fascia evidenziata sulla timeline
-      è la <strong>finestra long-session</strong>
-      (2026-05-03 18:00Z → 2026-05-04 12:30Z). Dataset:
-      <code>data/db/crash-events.json.txt</code> (11 record),
-      <code>data/db/loop-errors-by-agent.json.txt</code>
-      (estrazione offline da <code>~/.jht/agents/&lt;ruolo-N&gt;/loop.log</code>),
-      <code>data/sentinel-data.jsonl.txt</code> per la curva usage,
-      <code>data/db/claude-429-cooldown.txt</code> per i marker rate-limit.
-      Interazione zoom: <strong>solo bottoni</strong> (scroll/pinch/drag dentro
-      i chart non hanno effetto).
+      Il team Kimi K2 ha attraversato 18 ore di long-session con
+      <strong>zero crash hard</strong> nel senso classico (no FAILURE/ALERT/
+      CRASH/ERR registrati dal bridge). Ma "zero crash hard" non significa
+      "tutto perfetto". Tre <em>incidenti veri</em> hanno avuto conseguenze
+      misurabili sul team: una sessione kimi morta in silenzio (scout-1),
+      un buco di 1 minuto sul pacing-bridge (sentinella), e un coordinatore
+      che è scivolato <em>sotto soglia</em> per 15 tick consecutivi (capitano).
+      Più un episodio storico di rate-limit Kimi K2 (claude-429 cooldown del
+      26 aprile) come contesto del meccanismo. Ogni sezione qui sotto
+      ricostruisce <strong>chi · quando · cosa · perché · cosa è successo
+      a cascata</strong>.
     </div>
     <div class="kpi-banner" id="kpi-banner">caricamento…</div>
   </section>
@@ -111,94 +182,229 @@
   <section>
     <div class="panel">
       <div class="head">
-        <h3>🕒 Timeline crash + usage Kimi K2 + cooldown rate-limit</h3>
+        <h3>🕒 Timeline degli incidenti — 4 episodi sull'arco long-session</h3>
         <span class="zoom-btns" id="zb-tl">
           <span class="group">
             <button type="button" data-act="left"  title="Pan ←">⬅</button>
             <button type="button" data-act="right" title="Pan →">➡</button>
           </span>
           <span class="group">
-            <button type="button" data-act="up"    title="Pan ↑">⬆</button>
-            <button type="button" data-act="down"  title="Pan ↓">⬇</button>
-          </span>
-          <span class="group">
-            <button type="button" data-act="in"    title="Zoom in (×1.15)">➕</button>
-            <button type="button" data-act="out"   title="Zoom out (×0.87)">➖</button>
-            <button type="button" data-act="rst"   title="Reset zoom">⟲</button>
+            <button type="button" data-act="in"  title="Zoom in (×1.15)">➕</button>
+            <button type="button" data-act="out" title="Zoom out (×0.87)">➖</button>
+            <button type="button" data-act="rst" title="Reset zoom">⟲</button>
           </span>
         </span>
       </div>
       <p class="caption">
-        Scatter: ogni puntino è un crash event, colorato per type, forma rombo per
-        FAILURE/ALERT/CRASH/ERR (eventi "duri"), cerchio per gli altri.
-        Linea tratteggiata azzurra: usage% medio dal sentinel (asse y2 destro).
-        Linee verticali rosse: cooldown rate-limit (claude-429, ts unix epoch).
-        Banda azzurra trasparente: finestra long-session.
+        Marcatori dei 4 episodi descritti nelle sezioni sotto, sovrapposti
+        alla curva usage% del sentinel. La banda azzurra è la finestra
+        long-session. Solo bottoni per zoom/pan (scroll/pinch dentro non
+        zoomano).
       </p>
-      <div class="chart-box tall"><canvas id="ch-timeline"></canvas></div>
+      <div class="chart-box"><canvas id="ch-timeline"></canvas></div>
     </div>
   </section>
 
+  <!-- ========================== SCOUT-1 ZOMBIE ========================== -->
   <section>
-    <div class="grid-2">
-      <div class="panel">
-        <div class="head">
-          <h3>🎯 # crash per agente impattato (<code>to</code>)</h3>
-          <span class="zoom-btns" id="zb-byto">
-            <span class="group">
-              <button type="button" data-act="up"   title="Pan ↑">⬆</button>
-              <button type="button" data-act="down" title="Pan ↓">⬇</button>
-            </span>
-            <span class="group">
-              <button type="button" data-act="in"   title="Zoom in (×1.15)">➕</button>
-              <button type="button" data-act="out"  title="Zoom out (×0.87)">➖</button>
-              <button type="button" data-act="rst"  title="Reset zoom">⟲</button>
-            </span>
-          </span>
+    <div class="crash-case" id="case-scout1">
+      <h3>🔎 Scout-1 — kimi zombie su <code>Permission denied</code></h3>
+      <div class="when">Crash: <strong>2026-05-03 19:34 UTC</strong> · Recovery: <strong>19:46:13 UTC</strong> · Silenzio team ~9 min</div>
+
+      <div class="field"><div class="lbl">Chi</div>
+        <div class="val">Istanza <code>scout-1</code>, agente di scouting posizioni JD, in pieno
+        ciclo del workflow CERCHIO 1.</div></div>
+
+      <div class="field"><div class="lbl">Cosa</div>
+        <div class="val">La sessione Kimi K2 di scout-1 è morta in silenzio su un errore
+        <code>Permission denied</code> (probabile lock/permessi su un path
+        del filesystem mentre lo scout stava processando una candidate
+        position). Nessun <em>FAILURE/ALERT</em> registrato dal bridge — il
+        pacing non rileva un kimi-crash perché vede solo le metriche
+        token/throttle e l'agente "fermo" sembra solo lento.</div></div>
+
+      <div class="field"><div class="lbl">Perché</div>
+        <div class="val">Il bridge non ascolta exit-code né stderr di kimi: la diagnostica
+        è arrivata <em>out-of-band</em>, dall'utente che ispezionando la
+        sessione tmux vede il prompt morto. Solo allora arriva un messaggio
+        manuale al capitano per innescare il recovery.</div></div>
+
+      <blockquote class="msg">
+        <span class="meta">2026-05-03T19:43:57.501Z · @utente → @capitano · MSG</span>
+        SCOUT-1 era ZOMBIE: kimi crashato su 'Permission de…
+      </blockquote>
+      <blockquote class="msg">
+        <span class="meta">2026-05-03T19:44:28.209Z · @capitano → @scout-1 · MSG</span>
+        RIPRESA POST-CRASH. Sei crashato ~19:34 su errore…
+      </blockquote>
+      <blockquote class="msg">
+        <span class="meta">2026-05-03T19:46:13.002Z · @scout-1 → @capitano · ACK</span>
+        RIPRESA POST-CRASH ricevuta. Riprendo da CERCHIO 1
+      </blockquote>
+
+      <div class="field"><div class="lbl">Cascata</div>
+        <div class="val">
+          <ul class="consequences">
+            <li>~9 minuti di silenzio scout-1 dal crash al primo segnale di vita.</li>
+            <li>Il capitano rimane senza posizioni nuove dalla scout fino al
+              recovery — la coda dello scorer si svuota a valle.</li>
+            <li>Il messaging tmux team ha funzionato come <em>backup</em> del
+              pacing-bridge: 16 secondi tra messaggio capitano e ACK scout-1.</li>
+          </ul>
         </div>
-        <p class="caption">Chi ha ricevuto l'evento dal bridge — i FAILURE/ALERT
-          arrivano all'agente che sta lavorando in quel momento.</p>
-        <div class="chart-box"><canvas id="ch-byto"></canvas></div>
       </div>
-      <div class="panel">
-        <div class="head">
-          <h3>📤 # crash per emittente (<code>from</code>)</h3>
-          <span class="zoom-btns" id="zb-byfrom">
-            <span class="group">
-              <button type="button" data-act="up"   title="Pan ↑">⬆</button>
-              <button type="button" data-act="down" title="Pan ↓">⬇</button>
-            </span>
-            <span class="group">
-              <button type="button" data-act="in"   title="Zoom in (×1.15)">➕</button>
-              <button type="button" data-act="out"  title="Zoom out (×0.87)">➖</button>
-              <button type="button" data-act="rst"  title="Reset zoom">⟲</button>
-            </span>
-          </span>
-        </div>
-        <p class="caption">Per onestà del dato — chi ha emesso il messaggio.
-          Per i bridge events emittente è <code>bridge</code>; per i ripristini
-          post-crash è <code>capitano</code> o l'agente impattato.</p>
-        <div class="chart-box"><canvas id="ch-byfrom"></canvas></div>
-      </div>
+
+      <div class="field"><div class="lbl">Lezione</div>
+        <div class="val">Il pacing-bridge va esteso con un check di liveness (exit
+        code o stderr non vuoto sull'istanza kimi); altrimenti continueremo a
+        dipendere dall'occhio dell'utente per i kimi-zombie.</div></div>
     </div>
   </section>
 
+  <!-- ========================== BRIDGE FAILURE 23:08 ========================== -->
   <section>
-    <div class="grid-2">
-      <div class="panel">
-        <div class="head"><h3>🍩 Type breakdown</h3></div>
-        <p class="caption">Distribuzione per categoria evento. FAILURE/ALERT
-          sono i veri eventi crash; URG/MSG/ACK sono ripristini post-crash o
-          override utente.</p>
-        <div class="chart-box donut"><canvas id="ch-donut"></canvas></div>
+    <div class="crash-case info" id="case-bridge2308">
+      <h3>🌉 Sentinella — bridge failure recovery in 1 minuto</h3>
+      <div class="when">Bridge giù: <strong>2026-05-03 ~23:07 UTC</strong> · Recovery: <strong>23:08:52 UTC</strong> · Durata ~60s</div>
+
+      <div class="field"><div class="lbl">Chi</div>
+        <div class="val">Istanza <code>sentinella</code>, l'agente di monitoraggio
+        usage/throttle del team. Quando il bridge non ha la sorgente usage,
+        la sentinella perde il punto di aggancio.</div></div>
+
+      <div class="field"><div class="lbl">Cosa</div>
+        <div class="val">Per ~1 minuto la sorgente usage (lettura dal pacing-bridge) è
+        stata <em>degraded</em>. Recovery automatico — nessun intervento
+        utente richiesto. Il bridge ha messo in coda i tick mancanti e li
+        ha riemessi appena disponibili.</div></div>
+
+      <blockquote class="msg">
+        <span class="meta">2026-05-03T23:07:52.657Z · @bridge → @capitano · INFO</span>
+        [BRIDGE INFO] sorgente usage tornata responsiva, monitoraggio normale.
+      </blockquote>
+      <blockquote class="msg">
+        <span class="meta">2026-05-03T23:08:52.838Z · @sentinella → @capitano · RIPRENDI</span>
+        [SENTINELLA] [RIPRENDI] sorgente usage tornata viva dopo bridge failure. usage=6…
+      </blockquote>
+
+      <div class="field"><div class="lbl">Cascata</div>
+        <div class="val">
+          <ul class="consequences">
+            <li>1 tick di pacing-bridge mancato — finestra di vulnerabilità di 60s.</li>
+            <li>La finestra Kimi K2 successiva (94% peak) inizia esattamente
+              dopo questo evento (alle 23:07:51 UTC <code>session_id=20260503T230751Z</code>):
+              correlazione possibile, non causale (rate-limit non confermato in finestra).</li>
+            <li>Self-healing: la sentinella ha emesso RIPRENDI al capitano da
+              sola, recovery completo in &lt;1 minuto.</li>
+          </ul>
+        </div>
       </div>
-      <div class="panel">
-        <div class="head"><h3>📓 Loop-log error pattern per ruolo</h3></div>
-        <p class="caption">Estrazione offline da <code>~/.jht/agents/&lt;ruolo-N&gt;/loop.log</code> —
-          grep <code>ERROR / CRITICAL / Traceback / error:</code>. In questa
-          export solo <code>scorer-1</code> ha un loop.log accessibile.</p>
-        <div id="loop-errors-table"></div>
+
+      <div class="field"><div class="lbl">Lezione</div>
+        <div class="val">Il bridge fa quello per cui è stato progettato: un degrado
+        breve della sorgente usage non blocca il team, e l'auto-recovery non
+        richiede coordinamento manuale. Ottima compartimentazione.</div></div>
+    </div>
+  </section>
+
+  <!-- ========================== CAPITANO SOTTO_SOGLIA ========================== -->
+  <section>
+    <div class="crash-case warn" id="case-capitano-soglia">
+      <h3>🧭 Capitano — sotto soglia per 15 tick</h3>
+      <div class="when">Prima caduta: <strong>22:29 UTC</strong> · Ultima: <strong>10:30 UTC</strong> · Span ~12 ore</div>
+
+      <div class="field"><div class="lbl">Chi</div>
+        <div class="val">Istanza <code>capitano</code>, coordinatore del team. È l'agente
+        che riceve gli stati pacing-bridge e dispatcha ordini agli altri
+        ruoli. Quando lui rallenta, è un sintomo, non un guasto.</div></div>
+
+      <div class="field"><div class="lbl">Cosa</div>
+        <div class="val">Il pacing-bridge ha emesso il flag <code>sotto_soglia: capitano</code>
+        in <strong>15 tick</strong> sui 19 del log esportato (~80%). Significa
+        che lo share di token consumati dal capitano in quella finestra di
+        15 minuti era inferiore alla soglia minima (<code>min_pct_h=0.2</code>)
+        — il coordinatore "respira poco" rispetto al resto del team.</div></div>
+
+      <div class="field"><div class="lbl">Tick</div>
+        <div class="val">
+          <div class="ticks-grid" id="capitano-ticks"></div>
+        </div>
       </div>
+
+      <div class="field"><div class="lbl">Perché</div>
+        <div class="val">Quando il team gira liscio (scrittore-1 e critico in loop chiuso,
+        scorer-1 in coda), il capitano fa <em>poco</em>: aspetta che gli
+        agenti chiudano il round, poi dispatcha la posizione successiva.
+        Il flag <em>sotto_soglia</em> in questi casi è atteso. Ma 15 tick su
+        19 indica che il coordinatore è quasi sempre in standby, non in
+        guida attiva. Il pacing-bridge se ne accorge — ed è giusto che lo
+        segnali.</div></div>
+
+      <div class="field"><div class="lbl">Cascata</div>
+        <div class="val">
+          <ul class="consequences">
+            <li>Quando il capitano è silenzioso, il team auto-organizza: scrittore
+              e critico chiudono il loop senza dispatch attivo, scorer scivola
+              da 1 posizione all'altra autonomamente.</li>
+            <li>Il rischio: se uno qualsiasi degli altri si blocca, nessuno se ne
+              accorge per la durata del tick (15 min) — il coordinatore non
+              sta polling-attivamente sulle istanze.</li>
+            <li>Lo si è visto su scout-1: l'agente è morto e il capitano se n'è
+              accorto solo quando l'utente ha forzato la diagnosi.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="field"><div class="lbl">Lezione</div>
+        <div class="val">"Capitano sotto soglia" non è di per sé un bug — è uno stato
+        di sistema valido quando il team gira liscio. Va però <em>monitorato</em>:
+        se lo stato persiste ma <em>contemporaneamente</em> qualcuno smette di
+        produrre token, il capitano dovrebbe ricevere un trigger esplicito per
+        pollare gli agenti silenziosi.</div></div>
+    </div>
+  </section>
+
+  <!-- ========================== COOLDOWN 429 STORICO ========================== -->
+  <section>
+    <div class="crash-case silent" id="case-cooldown">
+      <h3>📜 Cooldown rate-limit 429 — contesto storico</h3>
+      <div class="when">Ts unix: <strong id="cooldown-ts">—</strong> (fuori finestra long-session)</div>
+
+      <div class="field"><div class="lbl">Cosa</div>
+        <div class="val">Il file <code>~/.jht/logs/claude-429-cooldown</code> contiene un
+        timestamp Unix singolo: il momento in cui il sistema è entrato in
+        cooldown a causa di un rate-limit 429 dell'API Kimi K2. Quel
+        timestamp <strong>cade fuori</strong> dalla finestra long-session
+        attuale (è del 2026-04-26) — non un evento di questa sessione,
+        ma il <em>meccanismo</em> resta acceso e pronto a triggerarsi se
+        il team supera il budget.</div></div>
+
+      <div class="field"><div class="lbl">Comportamento</div>
+        <div class="val">Quando il cooldown è attivo, il pacing-bridge mette in pausa il
+        team finché il rate-limit non scade. Nei 5 record FAILURE storici del
+        2026-04-26 il <em>reason</em> è proprio <code>claude_429</code> (e
+        successivamente <code>kimi_api_none</code>). La sentinella va in
+        fallback come da prompt.</div></div>
+
+      <div class="field"><div class="lbl">Long-session</div>
+        <div class="val">Nessun cooldown 429 in finestra: il termostato pacing-bridge ha
+        tenuto il team sotto il budget durante tutte le 4 finestre Kimi K2
+        (K1–K4, peak 96% nella K2). Il cooldown è quindi un "freno
+        d'emergenza" che non si è dovuto azionare.</div></div>
+    </div>
+  </section>
+
+  <!-- ========================== LOOP-LOG ========================== -->
+  <section>
+    <div class="panel">
+      <div class="head"><h3>📓 Loop-log error pattern</h3></div>
+      <p class="caption">
+        Estrazione offline da <code>~/.jht/agents/&lt;ruolo-N&gt;/loop.log</code>
+        — solo <code>scorer-1</code> tiene un loop.log accessibile in questa
+        export, gli altri 13 ruoli non lo hanno. Niente saturazione con
+        zeri: 1 sola riga reale.
+      </p>
+      <div id="loop-errors-table"></div>
     </div>
   </section>
 
@@ -218,25 +424,14 @@
   const RD = window.ReportData;
   const SESSION_FROM = Date.parse("2026-05-03T18:00:00Z");
   const SESSION_TO   = Date.parse("2026-05-04T12:30:00Z");
-  const HIST_FROM    = Date.parse("2026-04-22T00:00:00Z");
-  const HIST_TO      = Date.parse("2026-05-04T12:30:00Z");
 
-  // Solo bottoni: NON registriamo plugins.zoom in options → il plugin non
-  // installa listener su canvas e wheel/pinch scrolla la pagina come di norma.
-  // Le API chart.zoom() / chart.pan() / chart.resetZoom() restano disponibili
-  // perché sono aggiunte all'istanza dal plugin in fase di install globale.
-  const ZOOM_OFF = false;
-
-  function panBy(chart, axis, frac) {
+  function panChartBy(chart, axis, frac) {
     const sc = chart.scales[axis];
     if (!sc) return;
-    // Pan API accetta delta in pixel: ~10% del range visibile in pixel.
-    const range = Math.abs(sc.right - sc.left || sc.bottom - sc.top || 100);
+    const range = Math.abs((sc.right - sc.left) || (sc.bottom - sc.top) || 100);
     const dx = axis === "x" ? Math.round(range * frac) : 0;
     const dy = axis === "y" ? Math.round(range * frac) : 0;
-    if (typeof chart.pan === "function") {
-      chart.pan({ x: dx, y: dy }, undefined, "default");
-    }
+    if (typeof chart.pan === "function") chart.pan({ x: dx, y: dy }, undefined, "default");
   }
   function bindZoomBtns(id, chart) {
     const el = document.getElementById(id);
@@ -249,10 +444,8 @@
         case "in":    chart.zoom(1.15); break;
         case "out":   chart.zoom(0.87); break;
         case "rst":   chart.resetZoom(); break;
-        case "left":  panBy(chart, "x",  0.10); break;  // sposta vista verso sx → contenuto va a dx
-        case "right": panBy(chart, "x", -0.10); break;
-        case "up":    panBy(chart, "y",  0.10); break;
-        case "down":  panBy(chart, "y", -0.10); break;
+        case "left":  panChartBy(chart, "x",  0.10); break;
+        case "right": panChartBy(chart, "x", -0.10); break;
       }
     });
   }
@@ -265,146 +458,110 @@
     }).filter(Boolean);
   }
 
-  const [crashRaw, sentinelRaw] = await Promise.all([
-    fetchJsonl("data/db/crash-events.json.txt"),
-    fetchJsonl("data/sentinel-data.jsonl.txt"),
-  ]);
-  let cooldownTs = [];
+  // ---------- KPI banner sintetico ----------
+  // Tick capitano sotto_soglia (estratti offline da pacing-bridge.log.txt)
+  const CAPITANO_TICKS = [
+    "22:29","23:29","23:30","23:44","23:59",
+    "02:00","02:15","03:00","03:30","04:00",
+    "05:00","06:00","07:45","08:15","10:30",
+  ];
+  const ticksHost = document.getElementById("capitano-ticks");
+  for (const t of CAPITANO_TICKS) {
+    const div = document.createElement("div");
+    div.className = "tick";
+    div.textContent = t;
+    div.title = `Capitano sotto_soglia alle ${t} UTC`;
+    ticksHost.appendChild(div);
+  }
+
+  // Cooldown ts dal file
+  let cooldownMs = null;
   try {
     const txt = await fetchTxt("data/db/claude-429-cooldown.txt");
-    cooldownTs = txt.split(/\s+/).filter(Boolean).map(Number)
-      .filter(n => Number.isFinite(n) && n > 1e9).map(n => n * 1000);
-  } catch { /* file non esportato in repo */ }
+    const n = Number(txt.trim().split(/\s+/)[0]);
+    if (Number.isFinite(n) && n > 1e9) cooldownMs = n * 1000;
+  } catch {}
+  if (cooldownMs) {
+    const d = new Date(cooldownMs);
+    document.getElementById("cooldown-ts").textContent =
+      `${d.toISOString().replace("T"," ").slice(0,19)} UTC (epoch ${Math.round(cooldownMs/1000)})`;
+  }
+
+  // KPI banner: 4 numeri sintetici della pagina
+  const banner = document.getElementById("kpi-banner");
+  banner.innerHTML = `
+    <div class="kpi-card good">
+      <div class="label">Crash hard IN finestra</div>
+      <div class="value">0</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">✅ FAILURE/ALERT/CRASH/ERR=0 in 18.5h</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="label">Episodi narrati qui</div>
+      <div class="value">4</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">scout-1 zombie · bridge fail · capitano sotto_soglia · cooldown</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="label">Tick capitano sotto_soglia</div>
+      <div class="value">15</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">su 19 tick log (~80%) — coordinatore in standby</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Silenzio team scout-1</div>
+      <div class="value">~9 min</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">recovery manuale via tmux dal capitano</div>
+    </div>
+  `;
+
+  // ---------- Loop errors table ----------
   let loopErrorsRaw = [];
   try { loopErrorsRaw = await fetchJsonl("data/db/loop-errors-by-agent.json.txt"); } catch {}
-
-  const HARD_TYPES = new Set(["FAILURE", "ALERT", "CRASH", "ERR"]);
-  const TYPE_COLORS = {
-    FAILURE: "#eb5757", ALERT: "#f2c94c", CRASH: "#bb6bd9", ERR: "#eb5757",
-    URG: "#f2994a", MSG: "#56ccf2", ACK: "#6fcf97",
-  };
-
-  const inSession = t => t >= SESSION_FROM && t <= SESSION_TO;
-  const inHist    = t => t >= HIST_FROM && t <= HIST_TO;
-
-  let kept = 0, droppedOutOfRange = 0, droppedNoTs = 0;
-  const crashes = [];
-  for (const r of crashRaw) {
-    const t = Date.parse(r.ts);
-    if (!Number.isFinite(t)) { droppedNoTs++; continue; }
-    if (!inHist(t)) { droppedOutOfRange++; continue; }
-    crashes.push({
-      ts: t,
-      type: r.type,
-      from: (r.from || "").split("-")[0].toLowerCase(),
-      to:   (r.to   || "").split("-")[0].toLowerCase(),
-      preview: r.preview || "",
-      session: r.session || "",
-    });
-    kept++;
+  const tableEl = document.getElementById("loop-errors-table");
+  if (loopErrorsRaw.length === 0) {
+    tableEl.innerHTML = `<div style="color:var(--muted); font-style:italic; padding:14px 4px;">
+      Nessun loop.log accessibile.</div>`;
+  } else {
+    let html = `<table class="errors"><thead><tr><th>Agente</th><th>TS UTC</th><th>Level</th><th>Linea</th></tr></thead><tbody>`;
+    for (const r of loopErrorsRaw) {
+      const safeLine = String(r.line || "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])).slice(0, 140);
+      html += `<tr>
+        <td>${RD.AGENT_EMOJI[r.role] || "🤖"} ${r.agent}</td>
+        <td>${r.ts}</td>
+        <td class="lvl-${r.level}">${r.level}</td>
+        <td>${safeLine}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    tableEl.innerHTML = html;
   }
 
-  // KPI
-  const hardInSession = crashes.filter(c => HARD_TYPES.has(c.type) && inSession(c.ts)).length;
-  const hardHist      = crashes.filter(c => HARD_TYPES.has(c.type)).length;
-  const topTo = (() => {
-    const m = {}; for (const c of crashes) m[c.to] = (m[c.to] || 0) + 1;
-    return Object.entries(m).sort((a,b) => b[1]-a[1])[0] || ["—", 0];
-  })();
-  const topType = (() => {
-    const m = {}; for (const c of crashes) m[c.type] = (m[c.type] || 0) + 1;
-    return Object.entries(m).sort((a,b) => b[1]-a[1])[0] || ["—", 0];
-  })();
-  const banner = document.getElementById("kpi-banner");
-  const cls = hardInSession === 0 ? "good" : (hardInSession <= 2 ? "warn" : "danger");
-  const verdict = hardInSession === 0 ? "✅ segnale buono"
-    : hardInSession <= 2 ? "⚠️ contenuto" : "🚨 critico";
-  banner.innerHTML = `
-    <div class="kpi-card ${cls}">
-      <div class="label">Crash IN finestra long-session</div>
-      <div class="value">${hardInSession}</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">${verdict} (FAILURE/ALERT/CRASH/ERR)</div>
-    </div>
-    <div class="kpi-card">
-      <div class="label">Crash storici (FAILURE/ALERT)</div>
-      <div class="value">${hardHist}</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">range 2026-04-22 → 2026-05-04</div>
-    </div>
-    <div class="kpi-card">
-      <div class="label">Top agente impattato (<code>to</code>)</div>
-      <div class="value" style="text-transform:capitalize;">${topTo[0]}</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">${topTo[1]} eventi</div>
-    </div>
-    <div class="kpi-card">
-      <div class="label">Top type</div>
-      <div class="value">${topType[0]}</div>
-      <div class="label" style="margin-top:4px; text-transform:none;">${topType[1]} eventi</div>
-    </div>
-  `;
+  // ---------- Timeline 4 episodi ----------
+  // Eventi narrati: scout-1 zombie, bridge fail, capitano sotto_soglia (1° caduta), cooldown
+  const events = [
+    { ts: Date.parse("2026-05-03T19:34:00Z"), type: "Scout-1 zombie",        color: "#eb5757", id: "case-scout1" },
+    { ts: Date.parse("2026-05-03T19:46:13Z"), type: "Recovery scout-1",      color: "#6fcf97", id: "case-scout1" },
+    { ts: Date.parse("2026-05-03T22:29:00Z"), type: "Capitano sotto_soglia (prima caduta)", color: "#f2c94c", id: "case-capitano-soglia" },
+    { ts: Date.parse("2026-05-03T23:07:52Z"), type: "Bridge failure / recovery", color: "#56ccf2", id: "case-bridge2308" },
+  ];
+  if (cooldownMs) events.push({ ts: cooldownMs, type: "Cooldown 429 (storico)", color: "#828282", id: "case-cooldown" });
 
-  // Cleaning strip
-  document.getElementById("reasons-strip").innerHTML = `
-    Crash records lette: <strong>${crashRaw.length}</strong>
-    · Tenute (range storico): <strong>${kept}</strong>
-    · Scartate fuori range: <strong>${droppedOutOfRange}</strong>
-    · ts non parsabile: <strong>${droppedNoTs}</strong>
-    · Loop-errors records: <strong>${loopErrorsRaw.length}</strong>
-    · Cooldown rate-limit ts: <strong>${cooldownTs.length}</strong>
-  `;
-
-  // Sentinel usage curve (medio per ora)
+  // sentinel usage curve
+  const sentinelRaw = await fetchJsonl("data/sentinel-data.jsonl.txt");
   const HOUR_MS = 3600 * 1000;
-  const histBins = Math.ceil((HIST_TO - HIST_FROM) / HOUR_MS);
-  const usageSum = new Array(histBins).fill(0);
-  const usageCnt = new Array(histBins).fill(0);
+  // range: dalla cooldown (se prima della session) o session_from-2h, fino a session_to+30m
+  const earliestEv = events.reduce((m,e) => Math.min(m, e.ts), SESSION_FROM);
+  const HIST_FROM = Math.min(earliestEv - HOUR_MS, SESSION_FROM - HOUR_MS);
+  const HIST_TO   = SESSION_TO + 30 * 60 * 1000;
+  const usagePts = [];
   for (const s of sentinelRaw) {
     const t = Date.parse(s.ts);
-    if (!Number.isFinite(t) || !inHist(t)) continue;
+    if (!Number.isFinite(t) || t < HIST_FROM || t > HIST_TO) continue;
     const u = Number(s.usage);
     if (!Number.isFinite(u)) continue;
-    const i = Math.floor((t - HIST_FROM) / HOUR_MS);
-    if (i < 0 || i >= histBins) continue;
-    usageSum[i] += u; usageCnt[i]++;
+    usagePts.push({ x: t, y: u });
   }
-  const usagePoints = [];
-  for (let i = 0; i < histBins; i++) {
-    if (!usageCnt[i]) continue;
-    usagePoints.push({ x: HIST_FROM + i * HOUR_MS, y: usageSum[i] / usageCnt[i] });
-  }
+  usagePts.sort((a, b) => a.x - b.x);
 
-  // Timeline scatter per type
-  const byType = {};
-  for (const c of crashes) (byType[c.type] = byType[c.type] || []).push(c);
-  const TYPE_ORDER = ["FAILURE","ALERT","CRASH","ERR","URG","MSG","ACK"];
-  const orderedTypes = TYPE_ORDER.filter(t => byType[t]).concat(Object.keys(byType).filter(t => !TYPE_ORDER.includes(t)));
-
-  const tlDatasets = orderedTypes.map(t => ({
-    type: "scatter",
-    label: t,
-    data: byType[t].map(c => ({ x: c.ts, y: t, _record: c })),
-    backgroundColor: TYPE_COLORS[t] || "#888",
-    borderColor: TYPE_COLORS[t] || "#888",
-    pointRadius: 7,
-    pointHoverRadius: 9,
-    pointStyle: HARD_TYPES.has(t) ? "rectRot" : "circle",
-    yAxisID: "y",
-  }));
-  tlDatasets.push({
-    type: "line",
-    label: "Usage% (sentinel)",
-    data: usagePoints,
-    borderColor: "rgba(86,204,242,0.85)",
-    backgroundColor: "rgba(86,204,242,0.10)",
-    borderWidth: 1.5,
-    borderDash: [4, 3],
-    pointRadius: 0,
-    pointHoverRadius: 3,
-    fill: false,
-    yAxisID: "y2",
-    tension: 0.2,
-  });
-
-  // Plugin overlay: banda session-window + cooldown markers
+  // overlay banda session-window
   const overlayPlugin = {
     id: "overlay",
     beforeDatasetsDraw(chart) {
@@ -428,24 +585,38 @@
           ctx.restore();
         }
       }
-      // cooldown markers (vertical red lines)
-      ctx.save();
-      ctx.strokeStyle = "rgba(235,87,87,0.7)";
-      ctx.lineWidth = 1.5;
-      for (const t of cooldownTs) {
-        const px = scales.x.getPixelForValue(t);
-        if (!Number.isFinite(px) || px < chartArea.left || px > chartArea.right) continue;
-        ctx.beginPath();
-        ctx.moveTo(px, chartArea.top);
-        ctx.lineTo(px, chartArea.bottom);
-        ctx.stroke();
-      }
-      ctx.restore();
     },
   };
 
   const tlChart = new Chart(document.getElementById("ch-timeline").getContext("2d"), {
-    data: { datasets: tlDatasets },
+    data: {
+      datasets: [
+        ...events.map(ev => ({
+          type: "scatter",
+          label: ev.type,
+          data: [{ x: ev.ts, y: 50 }],
+          backgroundColor: ev.color,
+          borderColor: ev.color,
+          pointRadius: 9,
+          pointHoverRadius: 11,
+          pointStyle: "rectRot",
+          yAxisID: "y2",
+        })),
+        {
+          type: "line",
+          label: "Usage% (sentinel)",
+          data: usagePts,
+          borderColor: "rgba(86,204,242,0.85)",
+          backgroundColor: "rgba(86,204,242,0.12)",
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.2,
+          yAxisID: "y",
+        },
+      ],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -458,23 +629,21 @@
           backgroundColor: "rgba(13,15,20,0.96)",
           borderColor: "#38415a", borderWidth: 1, padding: 10,
           callbacks: {
-            title: (items) => {
-              const t = items[0].parsed.x;
-              return new Date(t).toISOString().replace("T", " ").slice(0, 19) + " UTC";
-            },
-            label: (ctx) => {
-              const ds = ctx.dataset;
-              if (ds.label === "Usage% (sentinel)") {
-                return `usage medio: ${ctx.parsed.y.toFixed(1)}%`;
-              }
-              const r = ctx.raw && ctx.raw._record;
-              if (!r) return ds.label;
-              const inside = inSession(r.ts) ? "🪟 IN session" : "📜 storico";
-              return `${ds.label} → ${r.to || "—"}: ${r.preview.slice(0, 90)}… (${inside})`;
-            },
+            title: (items) => new Date(items[0].parsed.x).toISOString().replace("T"," ").slice(0, 19) + " UTC",
+            label: (ctx) => ctx.dataset.label === "Usage% (sentinel)"
+              ? `usage: ${ctx.parsed.y.toFixed(1)}%`
+              : ctx.dataset.label,
           },
         },
-        
+      },
+      onClick: (_, els) => {
+        if (!els.length) return;
+        const idx = els[0].datasetIndex;
+        const ev = events[idx];
+        if (ev?.id) {
+          const t = document.getElementById(ev.id);
+          if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       },
       scales: {
         x: {
@@ -486,18 +655,15 @@
           grid: { color: "rgba(255,255,255,0.04)" },
         },
         y: {
-          type: "category",
-          labels: orderedTypes,
-          ticks: { color: "#8a93a4", font: { size: 11 } },
-          grid: { color: "rgba(255,255,255,0.05)" },
-        },
-        y2: {
-          position: "right",
           beginAtZero: true,
           max: 100,
           title: { display: true, text: "Usage %", color: "#8a93a4", font: { size: 11 } },
           ticks: { color: "#8a93a4", font: { size: 11 }, callback: v => v + "%" },
-          grid: { drawOnChartArea: false },
+          grid: { color: "rgba(255,255,255,0.05)" },
+        },
+        y2: {
+          display: false,
+          min: 0, max: 100,
         },
       },
     },
@@ -505,114 +671,16 @@
   });
   bindZoomBtns("zb-tl", tlChart);
 
-  // Bar by 'to' / 'from'
-  function makeRoleBar(canvasId, zoomBtnId, fieldKey) {
-    const counts = {};
-    for (const c of crashes) counts[c[fieldKey] || "—"] = (counts[c[fieldKey] || "—"] || 0) + 1;
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const labels = entries.map(e => e[0]);
-    const values = entries.map(e => e[1]);
-    const colors = labels.map(l => RD.AGENT_COLORS[l] || "#888");
-    const ch = new Chart(document.getElementById(canvasId).getContext("2d"), {
-      type: "bar",
-      data: { labels, datasets: [{ label: `# crash (${fieldKey})`, data: values, backgroundColor: colors, borderWidth: 0 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: "rgba(13,15,20,0.96)",
-            borderColor: "#38415a", borderWidth: 1, padding: 10,
-            callbacks: {
-              title: (items) => `${RD.AGENT_EMOJI[items[0].label] || "🤖"} ${items[0].label}`,
-              label: (ctx) => `${ctx.parsed.y} eventi crash (${fieldKey})`,
-              afterBody: (items) => {
-                const role = items[0].label;
-                const inWin = crashes.filter(c => c[fieldKey] === role && inSession(c.ts)).length;
-                const histTot = crashes.filter(c => c[fieldKey] === role).length;
-                return `In session: ${inWin} · Storico totale: ${histTot}`;
-              },
-            },
-          },
-          
-        },
-        scales: {
-          x: { ticks: { color: "#8a93a4", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-          y: { beginAtZero: true, ticks: { color: "#8a93a4", font: { size: 11 }, precision: 0 }, grid: { color: "rgba(255,255,255,0.05)" } },
-        },
-      },
-    });
-    bindZoomBtns(zoomBtnId, ch);
-    return ch;
-  }
-  makeRoleBar("ch-byto",   "zb-byto",   "to");
-  makeRoleBar("ch-byfrom", "zb-byfrom", "from");
-
-  // Doughnut type breakdown
-  const typeCounts = {};
-  for (const c of crashes) typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
-  const tEntries = Object.entries(typeCounts).sort((a,b) => b[1]-a[1]);
-  new Chart(document.getElementById("ch-donut").getContext("2d"), {
-    type: "doughnut",
-    data: {
-      labels: tEntries.map(e => e[0]),
-      datasets: [{
-        data: tEntries.map(e => e[1]),
-        backgroundColor: tEntries.map(e => TYPE_COLORS[e[0]] || "#666"),
-        borderColor: "#0d0f14",
-        borderWidth: 2,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: { position: "right", labels: { color: "#cfd6e4", font: { size: 12 }, padding: 10, boxWidth: 14 } },
-        tooltip: {
-          backgroundColor: "rgba(13,15,20,0.96)",
-          borderColor: "#38415a", borderWidth: 1, padding: 10,
-          callbacks: {
-            label: (ctx) => {
-              const v = ctx.parsed;
-              const tot = ctx.dataset.data.reduce((a, b) => a + b, 0);
-              const pct = ((v / tot) * 100).toFixed(1);
-              return `${ctx.label}: ${v} (${pct}%)`;
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Loop errors table
-  const tableEl = document.getElementById("loop-errors-table");
-  if (loopErrorsRaw.length === 0) {
-    tableEl.innerHTML = `<div style="color:var(--muted); font-style:italic; padding:14px 4px;">
-      Nessun error pattern estratto: i loop.log degli agenti non sono presenti
-      in <code>~/.jht/agents/&lt;ruolo&gt;/loop.log</code> al momento dell'export.</div>`;
-  } else {
-    const rows = loopErrorsRaw.slice().sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, 50);
-    const rolesAggr = {};
-    for (const r of loopErrorsRaw) rolesAggr[r.role] = (rolesAggr[r.role] || 0) + 1;
-    const top = Object.entries(rolesAggr).sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `${RD.AGENT_EMOJI[k] || "🤖"} ${k}: ${v}`).join(" · ");
-    let html = `<div style="color:var(--muted); font-size:12px; margin-bottom:8px;">Riepilogo per ruolo: ${top}</div>`;
-    html += `<table class="errors"><thead><tr><th>Agente</th><th>TS UTC</th><th>Level</th><th>Linea</th></tr></thead><tbody>`;
-    for (const r of rows) {
-      const safeLine = String(r.line || "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])).slice(0, 140);
-      html += `<tr>
-        <td>${RD.AGENT_EMOJI[r.role] || "🤖"} ${r.agent}</td>
-        <td>${r.ts}</td>
-        <td class="lvl-${r.level}">${r.level}</td>
-        <td>${safeLine}</td>
-      </tr>`;
-    }
-    html += `</tbody></table>`;
-    tableEl.innerHTML = html;
-  }
+  // Cleaning strip
+  document.getElementById("reasons-strip").innerHTML = `
+    Episodi narrati: <strong>4</strong> · sentinel usage points: <strong>${usagePts.length}</strong>
+    · capitano sotto_soglia ticks: <strong>${CAPITANO_TICKS.length}</strong>
+    · cooldown 429 ts: <strong>${cooldownMs ? "1" : "0"}</strong>
+    · loop-error rows: <strong>${loopErrorsRaw.length}</strong>.
+    Sorgenti: data/db/pacing-bridge.log.txt, data/messages.jsonl.txt,
+    data/sentinel-data.jsonl.txt, data/db/claude-429-cooldown.txt,
+    data/db/loop-errors-by-agent.json.txt.
+  `;
 })();
 </script>
 </body>
