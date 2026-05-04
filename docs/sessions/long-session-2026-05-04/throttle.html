@@ -51,7 +51,7 @@
   <section class="kpi-grid" id="kpi-grid"></section>
 
   <section>
-    <h2>Cosa stiamo guardando</h2>
+    <h2>🔭 Cosa stiamo guardando</h2>
     <div class="narrative">
       <h4>Throttle reali vs checkpoint heartbeat</h4>
       <p>
@@ -78,7 +78,7 @@
   </section>
 
   <section>
-    <h2>Timeline pause per agente</h2>
+    <h2>⏰ Timeline pause per agente</h2>
     <div class="chart-wrap tall">
       <h3>🛣 Lane chart — quando ogni agente si è fermato</h3>
       <p class="caption">
@@ -90,9 +90,9 @@
       </p>
       <div class="filter-bar">
         <span>Mostra:</span>
-        <button data-filter="real" class="active" id="btn-real">Pause reali</button>
-        <button data-filter="checkpoint" id="btn-cp">+ Checkpoint</button>
-        <button data-filter="all" id="btn-all">Tutto</button>
+        <button data-filter="real" class="active" id="btn-real">⏸ Pause reali</button>
+        <button data-filter="checkpoint" id="btn-cp">💓 + Checkpoint</button>
+        <button data-filter="all" id="btn-all">🌐 Tutto</button>
       </div>
       <canvas id="lane"></canvas>
     </div>
@@ -121,7 +121,7 @@
   </section>
 
   <section>
-    <h2>Tempo totale fermo per agente</h2>
+    <h2>⏳ Tempo totale fermo per agente</h2>
     <div class="chart-wrap">
       <h3>📊 Durata cumulata pause per agente (stacked per categoria)</h3>
       <p class="caption">
@@ -158,7 +158,7 @@
   </section>
 
   <section>
-    <h2>Perché si sono fermati</h2>
+    <h2>❓ Perché si sono fermati</h2>
     <div class="chart-wrap">
       <h3>🧷 Distribuzione per categoria di motivazione</h3>
       <p class="caption">
@@ -232,7 +232,42 @@
   </section>
 
   <section>
-    <h2>Quando si sono fermati</h2>
+    <h2>🚦 Quanti agenti fermi insieme</h2>
+    <div class="chart-wrap">
+      <h3>👥 Concorrenza pause — # agenti distinti contemporaneamente fermi</h3>
+      <p class="caption">
+        Per ogni minuto della sessione: quanti agenti distinti erano in pausa
+        in quel momento. Si calcola facendo lo sweep dei segmenti
+        [start, start+applied_sec] di ogni pausa reale e contando le sovrapposizioni.
+      </p>
+      <canvas id="concurrency"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Quando il team era bloccato in massa</h4>
+      <p>
+        Una pausa singola è normale; tre o quattro agenti fermi insieme è
+        un evento. I picchi di questo grafico identificano i momenti in
+        cui il team intero ha rallentato — di solito coincidono con un
+        ordine "RALLENTARE URG" del Capitano o con un wait critico
+        sincronizzato di un round review.
+      </p>
+      <p>
+        Le valli (1 solo agente fermo, o zero) sono i momenti di
+        massima produttività: 3 agenti su 4 stavano consumando token.
+        Una sessione ben calibrata mostra un'oscillazione sana fra 0 e 2;
+        plateau lunghi a 3+ sono il segnale che il pacing sta tagliando troppo.
+      </p>
+      <p>
+        Da incrociare con i marker di reset finestra (linee verticali del
+        lane chart): se i picchi cadono sempre vicino al reset, è il
+        normale "ultimo metro" prima della finestra nuova. Se cadono nel
+        mezzo, è il termostato che ha trovato la proiezione fuori traiettoria.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>🕘 Quando si sono fermati</h2>
     <div class="chart-wrap">
       <h3>🌊 Ondate orarie — # pause per ora di sessione, stacked per categoria</h3>
       <p class="caption">
@@ -267,7 +302,7 @@
   </section>
 
   <section>
-    <h2>Top reason esatte</h2>
+    <h2>🏷 Top reason esatte</h2>
     <div class="chart-wrap" style="padding: 14px 20px;">
       <h3>🔍 Le 12 motivazioni più frequenti</h3>
       <p class="caption">
@@ -291,7 +326,7 @@
   </section>
 
   <section>
-    <h2>Note tecniche</h2>
+    <h2>⚙️ Note tecniche</h2>
     <div class="narrative">
       <h4>Come è stato classificato il <code>reason</code></h4>
       <p>
@@ -479,14 +514,14 @@
 
   const kpiGrid = document.getElementById("kpi-grid");
   const kpis = [
-    { label: "Pause reali", value: realPauses.length },
-    { label: "Checkpoint heartbeat", value: checkpoints.length },
-    { label: "Tempo totale fermo", value: fmtMin(totalSec) },
-    { label: "Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
-    { label: "Pausa mediana", value: fmtSec(median) },
-    { label: "Pausa media", value: fmtSec(meanSec) },
-    { label: "Pausa più lunga", value: fmtSec(maxSec) },
-    { label: "% sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
+    { label: "⏸ Pause reali", value: realPauses.length },
+    { label: "💓 Checkpoint heartbeat", value: checkpoints.length },
+    { label: "⏳ Tempo totale fermo", value: fmtMin(totalSec) },
+    { label: "🏆 Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
+    { label: "➗ Pausa mediana", value: fmtSec(median) },
+    { label: "📐 Pausa media", value: fmtSec(meanSec) },
+    { label: "📏 Pausa più lunga", value: fmtSec(maxSec) },
+    { label: "📊 % sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
   ];
   for (const k of kpis) {
     const div = document.createElement("div");
@@ -846,6 +881,75 @@
       plugins: { legend: { display: false } },
     },
   });
+  // ----- Concorrenza pause: # agenti distinti fermi insieme nel tempo -----
+  // Discretizzazione a 60s per leggibilità. Per ogni segmento [start, end]
+  // contiamo quanti agenti DISTINTI sono attivi in ogni bin. Se un agente
+  // ha 2 pause in un bin contano come 1 (Set per agente).
+  const BIN_SEC = 60;
+  const startSec = ReportData.SESSION_START / 1000;
+  const endSec = ReportData.SESSION_END / 1000;
+  const nBins = Math.ceil((endSec - startSec) / BIN_SEC);
+  const binAgents = Array.from({ length: nBins }, () => new Set());
+  for (const ev of realPauses) {
+    const s = ev.ts_unix;
+    const dur = ev.applied_sec || 0;
+    if (dur <= 0) continue;
+    const e = s + dur;
+    const i0 = Math.max(0, Math.floor((s - startSec) / BIN_SEC));
+    const i1 = Math.min(nBins - 1, Math.floor((e - startSec) / BIN_SEC));
+    if (i1 < 0 || i0 >= nBins) continue;
+    for (let i = i0; i <= i1; i++) binAgents[i].add(ev.agent || "?");
+  }
+  const concurrencyData = binAgents.map((set, i) => ({
+    x: (startSec + i * BIN_SEC) * 1000,
+    y: set.size,
+  }));
+  new Chart(document.getElementById("concurrency").getContext("2d"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "# agenti fermi",
+          data: concurrencyData,
+          borderColor: "#eb5757",
+          backgroundColor: "#eb575722",
+          fill: true,
+          tension: 0,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          stepped: "before",
+        },
+      ],
+    },
+    plugins: [windowMarkersPlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      scales: {
+        x: {
+          type: "linear",
+          min: ReportData.SESSION_START,
+          max: ReportData.SESSION_END,
+          ticks: {
+            color: "#8a93a4",
+            callback: (v) => new Date(v).toISOString().slice(11, 16) + "Z",
+            maxTicksLimit: 12,
+          },
+          grid: { color: "#1f2532" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#8a93a4", precision: 0, stepSize: 1 },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "agenti distinti fermi", color: "#8a93a4" },
+        },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+
   // ----- Hourly stacked: pause per ora di sessione x categoria -----
   const HOUR_MS = 3600 * 1000;
   const hourStart = Math.floor(ReportData.SESSION_START / HOUR_MS) * HOUR_MS;
