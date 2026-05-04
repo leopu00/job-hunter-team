@@ -500,26 +500,33 @@
   const HAS_ZOOM = typeof window !== "undefined"
     && (window.ChartZoom || (Chart.registry && Chart.registry.plugins.get("zoom")));
 
-  // Helper: opzioni zoom XY + pan XY (richiesta master). wheel + pinch zoom,
-  // pan via drag click (pulsante sinistro). Mode "xy" su tutti i chart eccetto
-  // doughnut (chart 4) che non supporta zoom utile.
+  // Zoom: SOLO via bottoni (no wheel/pinch/drag — richiesta master, trackpad
+  // scroll resta libero di scrollare la pagina). Plugin caricato per esporre
+  // chart.zoom()/pan()/resetZoom() come API JS. Mode "xy" così i bottoni pan
+  // funzionano su entrambi gli assi.
   function zoomOpts() {
     return {
-      pan: { enabled: true, mode: "xy" },
-      zoom: {
-        wheel: { enabled: true },
-        pinch: { enabled: true },
-        mode: "xy",
-      },
+      pan: { enabled: false, mode: "xy" },
+      zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false }, mode: "xy" },
     };
+  }
+  // Step di pan = 10% del range visibile dell'asse (px).
+  function panStep(chart, axis) {
+    try {
+      const sc = chart.scales[axis];
+      if (!sc) return 50;
+      const px = Math.abs(sc.right - sc.left || sc.bottom - sc.top);
+      return Math.max(20, Math.round(px * 0.1));
+    } catch (e) { return 50; }
   }
 
   // ============== HELPER toggle row + reset zoom ==============
   // Mappa canvas-id → Chart instance, popolata man mano che i chart vengono creati.
   const chartRegistry = new Map();
   function injectZoomToolbar(canvasId, chartInstance) {
-    // Inietta toolbar 3-pack ➕/➖/⟲ in alto a destra di .chart-wrap che contiene canvasId.
-    if (!chartInstance.zoom || !chartInstance.resetZoom) return; // plugin zoom non attivo
+    // 7 bottoni in 3 gruppi: zoom (in/out/reset) · pan-X (← →) · pan-Y (↑ ↓).
+    // Step di pan = 10% del range visibile dell'asse, calcolato al click.
+    if (!chartInstance.zoom || !chartInstance.resetZoom) return;
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const wrap = canvas.closest(".chart-wrap");
@@ -527,14 +534,23 @@
     const tb = document.createElement("div");
     tb.className = "chart-toolbar";
     tb.innerHTML = `
-      <button data-zoom="in" title="Zoom in">➕</button>
-      <button data-zoom="out" title="Zoom out">➖</button>
+      <button data-zoom="in" title="Zoom in (1.15×)">➕</button>
+      <button data-zoom="out" title="Zoom out (0.87×)">➖</button>
       <button data-zoom="reset" title="Reset zoom">⟲</button>
+      <button data-pan="left" title="Pan ← (10% range X)">⬅</button>
+      <button data-pan="right" title="Pan → (10% range X)">➡</button>
+      <button data-pan="up" title="Pan ↑ (10% range Y)">⬆</button>
+      <button data-pan="down" title="Pan ↓ (10% range Y)">⬇</button>
     `;
     wrap.appendChild(tb);
-    tb.querySelector('[data-zoom="in"]').addEventListener("click", () => chartInstance.zoom(1.2));
-    tb.querySelector('[data-zoom="out"]').addEventListener("click", () => chartInstance.zoom(0.8));
-    tb.querySelector('[data-zoom="reset"]').addEventListener("click", () => chartInstance.resetZoom());
+    const $ = (sel) => tb.querySelector(sel);
+    $('[data-zoom="in"]').addEventListener("click", () => chartInstance.zoom(1.15));
+    $('[data-zoom="out"]').addEventListener("click", () => chartInstance.zoom(0.87));
+    $('[data-zoom="reset"]').addEventListener("click", () => chartInstance.resetZoom());
+    $('[data-pan="left"]').addEventListener("click", () => chartInstance.pan({ x: panStep(chartInstance, "x") }));
+    $('[data-pan="right"]').addEventListener("click", () => chartInstance.pan({ x: -panStep(chartInstance, "x") }));
+    $('[data-pan="up"]').addEventListener("click", () => chartInstance.pan({ y: panStep(chartInstance, "y") }));
+    $('[data-pan="down"]').addEventListener("click", () => chartInstance.pan({ y: -panStep(chartInstance, "y") }));
   }
   function registerToggle(canvasId, chartInstance) {
     chartRegistry.set(canvasId, chartInstance);
