@@ -1,0 +1,301 @@
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=1% proj=95.0% status=ATTENZIONE reset=in 4h 42m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=13% proj=96.98% status=ATTENZIONE reset=in 4h 37m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=33% proj=102.52% status=ATTENZIONE reset=in 4h 32m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=49% proj=105.34% status=ATTENZIONE reset=in 4h 27m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=80% proj=114.64% status=ATTENZIONE reset=in 4h 21m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=93% proj=113.46% status=ATTENZIONE reset=in 4h 16m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=114.56% status=ATTENZIONE reset=in 4h 11m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 3h 29m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 3h 2m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 2h 23m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 2h 14m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 2h 8m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 2h 3m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 1h 48m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 1h 43m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V4 (filtro intelligente). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei il FILTRO tra il bridge e il Capitano: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato fresco (usage/proj/status). Tu fai tmux capture-pane -t CAPITANO per vedere se sta gia' lavorando, poi applichi REGOLA-FILTRO: se proj<95% taci, se 95-105% guarda contesto Capitano, se >105% o usage>=90% notifica sempre. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK] e segui le tue regole."}
+{"content":"[BRIDGE TICK] usage=100% proj=100.0% status=ATTENZIONE reset=in 1h 38m src=bridge. Valuta se notificare il Capitano (vedi REGOLA-FILTRO nel tuo prompt)."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=15:51:42 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=15:57:19 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=15:58:20 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=15:59:21 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:00:23 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:02:25 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:03:27 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:04:28 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:05:29 — esegui check usage e procedi."}
+{"content":"[BRIDGE TICK] ts=16:06:31 — esegui check usage e procedi."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=17:27:13 usage=1% proj=1.0% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:28:45 usage=2% proj=186.48% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:29:47 usage=2% proj=139.37% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:30:49 usage=3% proj=167.01% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:31:51 usage=3% proj=139.01% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:32:53 usage=4% proj=158.74% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:33:55 usage=5% proj=173.51% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:34:57 usage=6% proj=185.01% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:35:59 usage=6% proj=166.43% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:37:01 usage=6% proj=151.25% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:38:03 usage=6% proj=138.63% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:39:04 usage=6% proj=128.02% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:40:05 usage=6% proj=118.95% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:41:06 usage=6% proj=111.06% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:42:08 usage=6% proj=104.13% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:43:09 usage=6% proj=98.04% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:44:40 usage=6% proj=90.21% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:46:12 usage=7% proj=97.37% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:47:44 usage=7% proj=90.64% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:49:15 usage=7% proj=84.76% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:50:47 usage=8% proj=90.97% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:52:19 usage=9% proj=96.47% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:53:51 usage=10% proj=101.36% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:54:52 usage=10% proj=97.78% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:56:24 usage=11% proj=102.22% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:57:26 usage=11% proj=98.9% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:58:57 usage=12% proj=102.94% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:59:59 usage=13% proj=108.17% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:01:01 usage=13% proj=105.0% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=18:04:25 usage=14% proj=14.0% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:05:57 usage=14% proj=93.86% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:07:29 usage=15% proj=120.91% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:09:33 usage=16% proj=124.73% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:10:34 usage=17% proj=142.01% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:11:36 usage=17% proj=126.76% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:12:38 usage=17% proj=114.67% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:14:42 usage=18% proj=117.8% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:15:45 usage=18% proj=109.4% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:16:47 usage=18% proj=102.24% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:17:49 usage=19% proj=112.7% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:18:51 usage=19% proj=106.26% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:19:52 usage=19% proj=100.6% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:20:54 usage=20% proj=109.36% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:21:56 usage=20% proj=104.14% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:22:58 usage=20% proj=99.46% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:24:30 usage=21% proj=104.83% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:25:31 usage=21% proj=100.65% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:26:33 usage=22% proj=107.32% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:27:35 usage=22% proj=103.36% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:28:38 usage=22% proj=99.72% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:30:10 usage=23% proj=103.94% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:31:12 usage=23% proj=100.57% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:32:15 usage=24% proj=105.94% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:33:17 usage=24% proj=102.77% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:34:19 usage=26% proj=115.6% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:35:21 usage=26% proj=112.33% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:36:23 usage=27% proj=118.09% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:37:25 usage=27% proj=111.11% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:38:27 usage=27% proj=111.98% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:39:29 usage=28% proj=113.84% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:40:32 usage=28% proj=106.84% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:41:35 usage=28% proj=106.44% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:42:37 usage=29% proj=107.04% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:43:39 usage=29% proj=106.65% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:44:41 usage=29% proj=106.26% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:45:43 usage=30% proj=113.26% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:46:45 usage=30% proj=106.5% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:47:47 usage=30% proj=106.1% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:48:49 usage=31% proj=113.02% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:49:52 usage=31% proj=106.31% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:50:53 usage=31% proj=105.91% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:51:56 usage=32% proj=112.72% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:52:58 usage=32% proj=106.1% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:54:00 usage=32% proj=105.71% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:55:02 usage=33% proj=112.43% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:56:04 usage=33% proj=107.07% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:57:06 usage=34% proj=113.8% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:58:08 usage=34% proj=107.27% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:59:10 usage=34% proj=106.89% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:00:12 usage=35% proj=113.53% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:01:15 usage=35% proj=108.26% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:02:17 usage=35% proj=107.89% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:03:19 usage=36% proj=108.49% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:04:21 usage=36% proj=108.07% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:05:23 usage=36% proj=95.73% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:06:55 usage=37% proj=101.12% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:07:58 usage=37% proj=94.97% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:09:30 usage=37% proj=93.59% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:11:02 usage=38% proj=98.78% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:12:34 usage=40% proj=104.77% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:13:36 usage=40% proj=104.39% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:14:38 usage=40% proj=104.01% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:15:40 usage=41% proj=104.64% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:16:42 usage=41% proj=104.26% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:17:45 usage=41% proj=103.88% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:18:47 usage=41% proj=98.3% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:20:19 usage=42% proj=103.02% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:21:21 usage=42% proj=102.63% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:22:24 usage=42% proj=97.24% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:23:56 usage=43% proj=101.84% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:24:58 usage=43% proj=101.47% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:26:00 usage=43% proj=96.24% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:27:33 usage=44% proj=100.72% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:28:35 usage=44% proj=100.35% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:29:37 usage=44% proj=95.32% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:31:09 usage=45% proj=99.66% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:32:41 usage=45% proj=93.93% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:34:14 usage=46% proj=98.12% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:35:46 usage=46% proj=96.91% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:37:18 usage=47% proj=96.73% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:38:50 usage=47% proj=95.57% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:40:22 usage=48% proj=99.4% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:41:54 usage=48% proj=94.35% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:43:27 usage=49% proj=98.07% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:44:59 usage=49% proj=96.95% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:46:31 usage=50% proj=97.43% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:48:03 usage=50% proj=96.34% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:49:36 usage=51% proj=100.36% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:50:38 usage=51% proj=97.07% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:52:10 usage=51% proj=89.55% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:53:42 usage=52% proj=93.08% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:55:14 usage=53% proj=96.47% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:56:46 usage=53% proj=92.17% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:58:19 usage=54% proj=95.45% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:59:51 usage=54% proj=94.48% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:01:23 usage=54% proj=93.52% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:02:56 usage=54% proj=90.05% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:07:59 usage=55% proj=89.3% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:09:31 usage=55% proj=88.51% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:11:03 usage=55% proj=85.54% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:12:35 usage=56% proj=88.32% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:14:07 usage=57% proj=91.01% status=STEADY reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:15:39 usage=57% proj=88.16% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=20:17:12 usage=60% proj=97.45% status=ATTENZIONE reset=22:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:41:43 usage=63% proj=63.0% status=SOTTOUTILIZZO reset=22:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[@capitano -> @sentinella] [ACK] ORDINE SOTTOUTILIZZO eseguito. Avviati: SCOUT-1, SCOUT-2, ANALISTA-1. Tutti in boot e kick-off inviato. Context: SCOUT-1 0% (starting), SCOUT-2 5.6% (active), ANALISTA-1 5.4% (active, ha già lanciato db_query). Attendo prossimo tick."}
+{"content":"[BRIDGE TICK] ts=21:16:53 usage=1% proj=1.0% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:18:26 usage=3% proj=288.87% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:19:28 usage=4% proj=288.15% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:20:30 usage=4% proj=230.2% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:21:32 usage=4% proj=191.62% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] Throttle 0 ricevuto. Confermo: team congelato, zero azioni. Attendo proj < 100% e tuo ordine di ripartenza."}
+{"content":"[BRIDGE TICK] ts=21:23:36 usage=5% proj=179.32% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] ORDINE PEGGIORAMENTO POST-FREEZE eseguito. freeze_team.py ha freezato 3 sessioni. Kill manuali confermati: SCOUT-1 ✓, SCOUT-2 ✓, ANALISTA-1 ✓. Sessioni attive rimaste: CAPITANO, SENTINELLA, ASSISTENTE. Zero operativi fino a reset. Proj risalita bloccata alla radice."}
+{"content":"[BRIDGE TICK] ts=21:24:38 usage=5% proj=159.31% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] RECOVERY TRACKING ricevuto. Trend SCENDE_OK confermato. Nessun operativo attivo da throttle-are (killati post-freeze). Consumo=0. Mantengo freeze totale fino a proj < 100%."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=21:56:22 usage=9% proj=9.0% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=22:05:17 usage=12% proj=60.71% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=22:17:21 usage=18% proj=113.61% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] ORDINE RALLENTARE eseguito. Applicato THROTTLE 1 a SCOUT-1 (unico operativo attivo): sleep 30s tra task. Nessun nuovo spawn. Sessioni operativo attive: SCOUT-1."}
+{"content":"[BRIDGE TICK] ts=22:44:58 usage=20% proj=20.0% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] RIENTRO ricevuto. Throttle 0 applicato a SCOUT-1 (velocità normale). Nessun nuovo spawn — aspetto prossimo ordine per scaling."}
+{"content":"[BRIDGE TICK] ts=22:52:01 usage=22% proj=78.44% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=22:59:05 usage=24% proj=78.43% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] PUSH G-SPOT eseguito. Spawnato SCRITTORE-1 (kimi, effort high) — coda scored>=50 presente (26 scored, almeno 1 >=50). Kick-off inviato. Nessun altro spawn."}
+{"content":"[BRIDGE TICK] ts=23:16:09 usage=34% proj=112.51% status=ATTENZIONE reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] ORDINE RALLENTARE eseguito. Applicato THROTTLE 1 a TUTTI gli operativi attivi: SCOUT-1 e SCRITTORE-1 (sleep 30s tra task). Nessun nuovo spawn."}
+{"content":"[BRIDGE TICK] ts=00:24:15 usage=48% proj=78.1% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] RIENTRO ricevuto. Throttle 0 applicato a SCOUT-1 e SCRITTORE-1 (velocità normale). Nessun nuovo spawn — aspetto prossimo ordine per scaling."}
+{"content":"[BRIDGE TICK] ts=01:49:23 usage=73% proj=79.21% status=SOTTOUTILIZZO reset=02:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] PUSH G-SPOT eseguito. Spawnato ANALISTA-1 (kimi, effort high) — coda scored>=50 vuota, bottleneck è a monte (16 new + 20 checked). Kick-off inviato. Nessun altro spawn."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=15:03:41 usage=5% proj=67.16% status=SOTTOUTILIZZO reset=18:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:18:45 usage=10% proj=67.15% status=SOTTOUTILIZZO reset=18:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=15:39:40 usage=19% proj=114.76% status=ATTENZIONE reset=18:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:54:44 usage=31% proj=130.08% status=ATTENZIONE reset=18:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=16:45:21 usage=47% proj=114.75% status=ATTENZIONE reset=18:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=18:30:01 usage=2% proj=113.39% status=ATTENZIONE reset=23:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=19:11:13 usage=10% proj=105.06% status=ATTENZIONE reset=23:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] THROTTLE 1 applicato a tutti gli agenti operativi: SCOUT-1, ANALISTA-1, SCORER-1, SCRITTORE-1, CRITICO. Sleep 30s tra task attivo. Nessun nuovo spawn. Monitoring in corso."}
+{"content":"[BRIDGE TICK] ts=19:26:17 usage=19% proj=141.89% status=ATTENZIONE reset=23:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] THROTTLE 2 applicato a tutti gli agenti operativi. Sleep 120s tra task. Nessuna istanza extra da fermare (1 per ruolo per ordine Comandante). Monitoring in corso."}
+{"content":"[BRIDGE TICK] ts=19:41:22 usage=24% proj=119.33% status=ATTENZIONE reset=23:11 src=bridge."}
+{"content":"[@capitano -> @sentinella] [ACK] FREEZE + KILL eseguiti. Operativi terminati: SCOUT-1, ANALISTA-1, SCORER-1, SCRITTORE-1, CRITICO, CRITICO-S1. Rimangono CAPITANO, SENTINELLA, ASSISTENTE. Attendo reset finestra."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=22:22:52 usage=45% proj=45.0% status=SOTTOUTILIZZO reset=23:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=14:54:38 usage=3% proj=112.12% status=ATTENZIONE reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:09:42 usage=3% proj=35.72% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:24:46 usage=7% proj=49.57% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:39:52 usage=14% proj=70.54% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:54:56 usage=17% proj=66.48% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:10:00 usage=23% proj=73.5% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:39:07 usage=42% proj=106.08% status=ATTENZIONE reset=19:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:30:14 usage=45% proj=73.29% status=SOTTOUTILIZZO reset=19:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio V5 (watchdog attivo). Leggi il tuo prompt (~/agents/sentinella/AGENTS.md o sentinella.md). Sei l'ORGANO DECISIONALE del throttle: ogni 5 min il bridge ti manda [BRIDGE TICK] col dato (usage/proj/status), tu calcoli velocità smussata su 3 letture, determini stato (CRITICO/ATTENZIONE/OK/SOTTOUTILIZZO) e mandi ORDINE concreto al Capitano con throttle=N (sleep Xs) — mai suggerimenti vaghi. Cooldown 2-tick + bypass emergenza (proj>200%, vel>ideale*5, usage>=90%) → in emergenza esegui freeze_team.py PRIMA della notifica. NIENTE sleep/loop. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=19:33:50 usage=8% proj=137.84% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=19:48:53 usage=12% proj=109.91% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."}
+{"content":"[BRIDGE TICK] ts=20:45:51 usage=18% proj=180.72% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:00:55 usage=26% proj=139.41% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:15:59 usage=36% proj=145.48% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:31:03 usage=50% proj=164.63% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=21:46:07 usage=52% proj=136.3% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=22:01:11 usage=61% proj=136.9% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=22:16:18 usage=64% proj=122.34% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=22:31:22 usage=66% proj=110.05% status=ATTENZIONE reset=00:11 src=bridge."}
+{"content":"[BRIDGE FAILURE] ts=22:34:25 fetch fallito (reason=kimi_api_none). Esegui fallback come da prompt."}
+{"content":"[BRIDGE TICK] ts=23:07:50 usage=68% proj=68.0% status=SOTTOUTILIZZO reset=00:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=00:18:57 usage=1% proj=1.0% status=RESET reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=00:34:02 usage=9% proj=155.96% status=ATTENZIONE reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=00:49:07 usage=17% proj=155.97% status=ATTENZIONE reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=01:04:12 usage=19% proj=117.2% status=ATTENZIONE reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=01:39:18 usage=21% proj=73.69% status=SOTTOUTILIZZO reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=01:44:21 usage=24% proj=79.66% status=SOTTOUTILIZZO reset=05:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=05:16:37 usage=1% proj=1.0% status=RESET reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=05:31:42 usage=10% proj=176.8% status=ATTENZIONE reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=05:46:46 usage=13% proj=118.18% status=ATTENZIONE reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=06:01:51 usage=17% proj=105.14% status=ATTENZIONE reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=09:04:07 usage=61% proj=77.2% status=SOTTOUTILIZZO reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=09:19:12 usage=62% proj=73.79% status=SOTTOUTILIZZO reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=09:34:17 usage=63% proj=70.96% status=SOTTOUTILIZZO reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=09:49:21 usage=64% proj=68.1% status=SOTTOUTILIZZO reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=10:04:26 usage=64% proj=65.06% status=SOTTOUTILIZZO reset=10:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=10:19:31 usage=0% proj=0.0% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=10:34:35 usage=1% proj=14.1% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=10:49:40 usage=1% proj=8.22% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=11:04:45 usage=1% proj=5.8% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=11:19:50 usage=1% proj=4.48% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=11:34:56 usage=2% proj=7.31% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=11:50:00 usage=2% proj=6.44% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=12:05:05 usage=2% proj=4.05% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=12:20:10 usage=2% proj=3.89% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=12:35:16 usage=2% proj=3.72% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=12:50:20 usage=2% proj=3.55% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=13:05:25 usage=2% proj=2.0% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=13:20:30 usage=3% proj=4.22% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=13:35:34 usage=3% proj=4.05% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=13:50:39 usage=4% proj=5.78% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=14:05:45 usage=4% proj=5.44% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=14:20:50 usage=4% proj=5.11% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=14:35:54 usage=5% proj=6.16% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=14:51:00 usage=5% proj=5.44% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:06:05 usage=5% proj=5.11% status=SOTTOUTILIZZO reset=15:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:21:10 usage=0% proj=-12.81% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:36:15 usage=1% proj=-8.11% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=15:51:20 usage=1% proj=-7.61% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:06:24 usage=1% proj=-9.81% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:21:29 usage=2% proj=-5.61% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:36:34 usage=2% proj=-5.11% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=16:51:39 usage=3% proj=9.61% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:06:44 usage=3% proj=7.07% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:21:49 usage=3% proj=6.74% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:36:53 usage=3% proj=6.41% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=17:51:58 usage=4% proj=7.07% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:07:02 usage=4% proj=6.74% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:22:07 usage=4% proj=5.2% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:37:13 usage=4% proj=5.04% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
+{"content":"[BRIDGE TICK] ts=18:52:18 usage=4% proj=4.87% status=SOTTOUTILIZZO reset=20:11 src=bridge."}
