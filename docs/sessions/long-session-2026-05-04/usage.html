@@ -261,7 +261,7 @@
 <body>
 <header class="hero">
   <h1>📈 Usage &amp; Token Consumption</h1>
-  <p class="subtitle">Cosa ha mangiato il team nella long session 03→04 maggio — finestre Kimi K2, proiezione, velocity, weekly. Tip: zoom su time-series con drag/wheel+ctrl, pan con shift+drag; pill in alto per nascondere serie.</p>
+  <p class="subtitle">Long session 03→04 maggio — perimetro <strong>3 finestre Kimi K2</strong>: <strong>W1 · 94%</strong> (23:07→00:09 UTC, 1h 1m), <strong>W2 · 96% perfetta</strong> (00:18→05:06, 4h 48m), <strong>W3 · 64%</strong> (05:16→10:10, 4h 54m). Totale <strong>10h 43m</strong> di lavoro reale (esclusi warm-up, micro-reset, gap). Tip: zoom via bottoni ➕➖⟲, pan ⬅⬆⬇➡, pill per togliere serie.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -281,7 +281,7 @@
     <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card"><div class="label">⏱ Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
-      <div class="kpi-card"><div class="label">🪟 Finestre Kimi K2</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">distinte (session_id)</div></div>
+      <div class="kpi-card"><div class="label">🪟 Finestre Kimi K2</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">W1 · W2 · W3 (perimetro analisi)</div></div>
       <div class="kpi-card"><div class="label">🔥 Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
       <div class="kpi-card"><div class="label">📈 Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
       <div class="kpi-card"><div class="label">📅 Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
@@ -297,10 +297,10 @@
   </section>
 
   <section>
-    <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Kimi K2 (#N).">
-      <span class="chart-info" data-tip="Andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Kimi K2 consecutive. Soglia 100% = limite finestra.">ℹ</span>
+    <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Kimi K2 (W2/W3).">
+      <span class="chart-info" data-tip="Andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker W2/W3 sono i confini fra le 3 finestre Kimi K2 (W1 94%, W2 96% perfetta, W3 64%). Soglia 100% = limite finestra.">ℹ</span>
       <h3>1 · 📈 Usage % vs Projection nel tempo</h3>
-      <div class="chart-summary"><span class="icon">📍</span><span>Time series ogni ~3 min: <b>usage%</b> (linea blu piena) e <b>projection%</b> a fine finestra (gialla tratteggiata). Bande rosse = throttle attivo. Marker <code>#N</code> = cambio finestra Kimi K2. Hover per dettagli sul tick.</span></div>
+      <div class="chart-summary"><span class="icon">📍</span><span>Time series ogni ~3 min: <b>usage%</b> (linea blu piena) e <b>projection%</b> a fine finestra (gialla tratteggiata). Bande rosse = throttle attivo. Marker <code>W2</code>/<code>W3</code> = inizio della finestra successiva. Sull'asse X solo i tick dentro le 3 finestre Kimi K2 (gap fra W1→W2 e W2→W3 esclusi).</span></div>
       <div class="series-toggle" data-chart="chart-usage">
         <span class="label">serie</span>
         <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>usage %</button>
@@ -314,7 +314,7 @@
       </div>
       <div class="chart-canvas tall-520"><canvas id="chart-usage"></canvas></div>
       <div class="narrative">
-        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Kimi K2 consecutive (marker <code>#2..#N</code> in alto al cambio di session_id) — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
+        <p>Il perimetro coincide con <strong>3 finestre Kimi K2</strong> consecutive (W1 · 94%, W2 · 96% perfetta, W3 · 64%) — marker <code>W2</code>/<code>W3</code> in alto ai cambi di session_id. Totale <strong>10h 43m</strong> di lavoro reale, con i gap fra una finestra e la successiva esclusi dall'analisi. È la prima volta che il pacing-bridge tiene il team in aria attraversando 3 finestre.</p>
         <p>Le bande rosse traslucide sono i tratti in cui <strong>il termostato era attivo</strong> (throttle=1 nei tick sentinella). Nota come le bande appaiano <em>quando la projection corre via</em>: è esattamente la dinamica voluta — il bridge frena prima che usage tocchi 100, così la curva blu resta sotto la soglia rossa.</p>
         <p>I picchi di projection più cattivi sono concentrati nelle finestre dove il team ha sgomitato di più; altrove la curva gialla resta sotto la diagonale ideale. Il fatto che usage reale (linea piena) chiuda quasi sempre sotto il 100% mentre la projection ha ondeggiato sopra significa che il sistema ha frenato in tempo.</p>
       </div>
@@ -371,9 +371,9 @@
       </div>
     </div>
 
-    <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle finestre Kimi K2 attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
-      <span class="chart-info" data-tip="Visione one-look di tutte le finestre Kimi K2 della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio, bordo rosso = peggior finestra). Linea verde = tempo coperto in min (asse a destra).">ℹ</span>
-      <h3>5 · 🪟 Riepilogo per finestra Kimi K2</h3>
+    <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle 3 finestre Kimi K2 (W1·W2·W3), picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
+      <span class="chart-info" data-tip="Visione one-look delle 3 finestre Kimi K2 del perimetro. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio, bordo rosso = peggior finestra). Linea verde = tempo coperto in min (asse a destra).">ℹ</span>
+      <h3>5 · 🪟 Riepilogo per finestra (W1 · W2 · W3)</h3>
       <div class="chart-summary"><span class="icon">📍</span><span>Bar+line dual-axis. <b>Blu</b>: picco usage% per finestra. <b>Gialla</b>: picco projection% (bordo rosso = peggiore). <b>Verde</b>: durata visibile in min (asse destro). Hover sulla barra per stat completa della finestra.</span></div>
       <div class="series-toggle" data-chart="chart-windows">
         <span class="label">serie</span>
@@ -468,7 +468,7 @@
 </main>
 
 <footer>
-  Generato da <code>usage.html</code> · dati da <code>data/sentinel-data.jsonl.txt</code> + <code>data/chat/*.jsonl.txt</code> · provider <strong>Kimi K2</strong> · range UTC 2026-05-03 18:00 → 2026-05-04 12:00. <span id="cleaning-stats"></span>
+  Generato da <code>usage.html</code> · dati da <code>data/sentinel-data.jsonl.txt</code> + <code>data/chat/*.jsonl.txt</code> · provider <strong>Kimi K2</strong> · perimetro <strong>3 finestre Kimi K2</strong> (W1 23:07Z→00:09Z, W2 00:18Z→05:06Z, W3 05:16Z→10:10Z UTC), totale <strong>10h 43m</strong>. <span id="cleaning-stats"></span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
@@ -655,16 +655,13 @@
     document.getElementById("nb-weekly-eta").textContent = etaH > 0 ? etaH.toFixed(1) : "—";
   }
 
-  // ---------- Boundary detection: dove cambia session_id ----------
-  const sessionBoundaries = [];
-  for (let i = 1; i < sentinel.length; i++) {
-    if (sentinel[i].session_id && sentinel[i].session_id !== sentinel[i - 1].session_id) {
-      sessionBoundaries.push({
-        ts: Date.parse(sentinel[i].ts),
-        session_id: sentinel[i].session_id,
-      });
-    }
-  }
+  // ---------- Boundary: uso direttamente SESSION_WINDOWS (W1/W2/W3) ----------
+  // Master ha definito il perimetro come 3 finestre Kimi K2 (W1 94%, W2 96%
+  // perfetta, W3 64%). Le boundary ora sono i confini W2/W3 (W1 è start
+  // perimetro, non un boundary visibile).
+  const sessionBoundaries = (ReportData.SESSION_WINDOWS || [])
+    .slice(1) // skip W1 (è l'inizio perimetro)
+    .map((w) => ({ ts: w.startMs, label: w.id, session_id: w.session_id }));
 
   // ---------- Throttle ranges: comprimo i tick consecutivi con throttle=1 in bande [tStart,tEnd] ----------
   const throttleRanges = [];
@@ -848,16 +845,15 @@
           ctx.font = "10px -apple-system, sans-serif";
           ctx.fillStyle = "rgba(155,217,197,0.85)";
           ctx.textAlign = "left";
-          let idx = 1; // la finestra #1 inizia all'inizio del range, quindi le boundary sono dalla #2 in poi
           for (const b of sessionBoundaries) {
-            idx += 1;
             const x = scales.x.getPixelForValue(b.ts);
             if (x < chartArea.left || x > chartArea.right) continue;
             ctx.beginPath();
             ctx.moveTo(x, chartArea.top);
             ctx.lineTo(x, chartArea.bottom);
             ctx.stroke();
-            ctx.fillText("#" + idx, x + 3, chartArea.top + 11);
+            // Master ha rinominato perimetro a W1/W2/W3 — uso label dalla SESSION_WINDOWS
+            ctx.fillText(b.label || b.session_id || "", x + 3, chartArea.top + 11);
           }
           ctx.restore();
         },
@@ -1310,7 +1306,7 @@
   // Quante finestre con projection >120%?
   const windowsHot = windows.filter((w) => w.peakProj >= 120).length;
   const windowsOk = windows.length - windowsHot;
-  ins.push(`Su <strong>${windows.length}</strong> finestre Kimi K2 attraversate, <strong>${windowsHot}</strong> hanno toccato proiezioni &gt;120% (vere zone di rischio) e <strong>${windowsOk}</strong> sono rimaste sotto controllo.`);
+  ins.push(`Su <strong>${windows.length}</strong> finestre Kimi K2 nel perimetro (W1 · W2 · W3), <strong>${windowsHot}</strong> hanno toccato proiezioni &gt;120% (vere zone di rischio) e <strong>${windowsOk}</strong> sono rimaste sotto controllo.`);
   // Finestra più "tirata" = max peakProj
   const hottest = windows.reduce((m, w) => (w.peakProj > (m?.peakProj ?? 0) ? w : m), null);
   if (hottest) {
