@@ -1498,6 +1498,39 @@ body { display: flex; flex-direction: column; }
   gap: 18px;
 }
 
+.home__card + .home__card { margin-top: 16px; }
+
+.home__card-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+  align-self: flex-start;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.home__card-link:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+
+.home__card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: -6px;
+}
+
 .home__row {
   display: flex;
   justify-content: space-between;
