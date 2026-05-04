@@ -420,8 +420,14 @@
   // Chat: come Round 2 usage.html
   const RE_CHAT = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]\s*(?:\[([\w-]+)\])?\s*([\s\S]*)/;
   function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h.toString(36); }
+  // dev4 ha rinominato loadChat() → loadChats() in data-loader.js (Round 2 ext);
+  // ora ritorna {records, stats}. Adatto preservando la struttura {content}
+  // per la mia regex inline.
   let chatRaw = [];
-  try { chatRaw = await ReportData.loadChat(); } catch (e) { chatRaw = []; }
+  try {
+    const cr = await ReportData.loadChats();
+    chatRaw = (cr.records || []).map((r) => ({ content: r.content }));
+  } catch (e) { chatRaw = []; }
   stats.chat.total = chatRaw.length;
   const chatRecords = []; // {from, to, type, body, body_len, content}
   const seen = new Set();
