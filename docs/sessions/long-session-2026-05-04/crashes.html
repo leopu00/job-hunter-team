@@ -5,11 +5,78 @@
 <title>💥 Crash — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  .kpi-banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 12px 0 18px;
+  }
+  .kpi-banner .kpi-card.good   { border-left: 4px solid var(--accent); }
+  .kpi-banner .kpi-card.warn   { border-left: 4px solid var(--warn); }
+  .kpi-banner .kpi-card.danger { border-left: 4px solid var(--danger); }
+  .info-box {
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-left: 3px solid #56ccf2;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0 14px;
+    font-size: 13px;
+    color: #cfd6e4;
+  }
+  .info-box code { color: var(--accent); }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+  .grid-2 > * { min-width: 0; min-height: 0; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+  }
+  .panel .head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+  }
+  .panel h3 { margin: 0; font-size: 15px; }
+  .panel .caption { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .zoom-btns { margin-left: auto; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .zoom-btns .group { display: flex; gap: 2px; }
+  .zoom-btns button {
+    background: #11151e; color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 7px; font-size: 11px; line-height: 1.2;
+    cursor: pointer; transition: background 100ms;
+  }
+  .zoom-btns button:hover  { background: #1c2230; border-color: #38415a; }
+  .zoom-btns button:active { background: #232a3b; }
+  .panel .chart-box { position: relative; width: 100%; height: 360px; min-height: 0; }
+  .panel .chart-box.tall  { height: 440px; }
+  .panel .chart-box.donut { height: 280px; }
+  .panel .chart-box canvas { width: 100% !important; height: 100% !important; display: block; }
+
+  table.errors { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.errors th, table.errors td {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  }
+  table.errors th {
+    color: var(--muted); font-weight: 500; text-transform: uppercase;
+    font-size: 10px; letter-spacing: 0.05em;
+  }
+  table.errors td.lvl-ERROR     { color: var(--warn); }
+  table.errors td.lvl-CRITICAL,
+  table.errors td.lvl-TRACEBACK { color: var(--danger); }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>💥 Crash &amp; Failures</h1>
-  <p class="subtitle">Eventi ALERT/FAILURE/CRASH/ERR del team, cooldown rate-limit, log loop degli agenti — cosa si è rotto e quando.</p>
+  <p class="subtitle">Eventi ALERT/FAILURE/ERR del bridge, cooldown rate-limit Kimi K2, error pattern dai loop log degli agenti.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -23,20 +90,529 @@
 </header>
 <main>
   <section>
-    <p class="note">
-      ⚠️ Sezione in costruzione — assegnata a dev3 dopo chiusura Round 2 agents.html.
-      <br>
-      Dati grezzi pronti in <code>data/db/crash-events.json.txt</code> (11 record
-      ALERT/FAILURE/CRASH/ERR estratti da <code>messages.jsonl</code>). NB: i
-      record visibili sono datati 2026-04-26 (fuori finestra session): in
-      finestra <em>2026-05-03 18:00Z → 2026-05-04 12:30Z</em> non ci sono crash
-      registrati nei messages — segnale buono. Mostrare comunque trend storico
-      e correlare con cooldown rate-limit (file <code>claude-429-cooldown</code>
-      con timestamp Unix), e ispezionare loop log per agente
-      (<code>~/.jht/agents/&lt;role&gt;/loop.log</code>).
-    </p>
+    <h2>💥 Panoramica crash</h2>
+    <div class="narrative">
+      <strong>Range storico esteso</strong>: 2026-04-22 → 2026-05-04, per dare
+      colpo d'occhio sugli ultimi 12 giorni. La fascia evidenziata sulla timeline
+      è la <strong>finestra long-session</strong>
+      (2026-05-03 18:00Z → 2026-05-04 12:30Z). Dataset:
+      <code>data/db/crash-events.json.txt</code> (11 record),
+      <code>data/db/loop-errors-by-agent.json.txt</code>
+      (estrazione offline da <code>~/.jht/agents/&lt;ruolo-N&gt;/loop.log</code>),
+      <code>data/sentinel-data.jsonl.txt</code> per la curva usage,
+      <code>data/db/claude-429-cooldown.txt</code> per i marker rate-limit.
+      Interazione zoom: <strong>solo bottoni</strong> (scroll/pinch/drag dentro
+      i chart non hanno effetto).
+    </div>
+    <div class="kpi-banner" id="kpi-banner">caricamento…</div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <div class="head">
+        <h3>🕒 Timeline crash + usage Kimi K2 + cooldown rate-limit</h3>
+        <span class="zoom-btns" id="zb-tl">
+          <span class="group">
+            <button type="button" data-act="left"  title="Pan ←">⬅</button>
+            <button type="button" data-act="right" title="Pan →">➡</button>
+          </span>
+          <span class="group">
+            <button type="button" data-act="up"    title="Pan ↑">⬆</button>
+            <button type="button" data-act="down"  title="Pan ↓">⬇</button>
+          </span>
+          <span class="group">
+            <button type="button" data-act="in"    title="Zoom in (×1.15)">➕</button>
+            <button type="button" data-act="out"   title="Zoom out (×0.87)">➖</button>
+            <button type="button" data-act="rst"   title="Reset zoom">⟲</button>
+          </span>
+        </span>
+      </div>
+      <p class="caption">
+        Scatter: ogni puntino è un crash event, colorato per type, forma rombo per
+        FAILURE/ALERT/CRASH/ERR (eventi "duri"), cerchio per gli altri.
+        Linea tratteggiata azzurra: usage% medio dal sentinel (asse y2 destro).
+        Linee verticali rosse: cooldown rate-limit (claude-429, ts unix epoch).
+        Banda azzurra trasparente: finestra long-session.
+      </p>
+      <div class="chart-box tall"><canvas id="ch-timeline"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="head">
+          <h3>🎯 # crash per agente impattato (<code>to</code>)</h3>
+          <span class="zoom-btns" id="zb-byto">
+            <span class="group">
+              <button type="button" data-act="up"   title="Pan ↑">⬆</button>
+              <button type="button" data-act="down" title="Pan ↓">⬇</button>
+            </span>
+            <span class="group">
+              <button type="button" data-act="in"   title="Zoom in (×1.15)">➕</button>
+              <button type="button" data-act="out"  title="Zoom out (×0.87)">➖</button>
+              <button type="button" data-act="rst"  title="Reset zoom">⟲</button>
+            </span>
+          </span>
+        </div>
+        <p class="caption">Chi ha ricevuto l'evento dal bridge — i FAILURE/ALERT
+          arrivano all'agente che sta lavorando in quel momento.</p>
+        <div class="chart-box"><canvas id="ch-byto"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="head">
+          <h3>📤 # crash per emittente (<code>from</code>)</h3>
+          <span class="zoom-btns" id="zb-byfrom">
+            <span class="group">
+              <button type="button" data-act="up"   title="Pan ↑">⬆</button>
+              <button type="button" data-act="down" title="Pan ↓">⬇</button>
+            </span>
+            <span class="group">
+              <button type="button" data-act="in"   title="Zoom in (×1.15)">➕</button>
+              <button type="button" data-act="out"  title="Zoom out (×0.87)">➖</button>
+              <button type="button" data-act="rst"  title="Reset zoom">⟲</button>
+            </span>
+          </span>
+        </div>
+        <p class="caption">Per onestà del dato — chi ha emesso il messaggio.
+          Per i bridge events emittente è <code>bridge</code>; per i ripristini
+          post-crash è <code>capitano</code> o l'agente impattato.</p>
+        <div class="chart-box"><canvas id="ch-byfrom"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="head"><h3>🍩 Type breakdown</h3></div>
+        <p class="caption">Distribuzione per categoria evento. FAILURE/ALERT
+          sono i veri eventi crash; URG/MSG/ACK sono ripristini post-crash o
+          override utente.</p>
+        <div class="chart-box donut"><canvas id="ch-donut"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="head"><h3>📓 Loop-log error pattern per ruolo</h3></div>
+        <p class="caption">Estrazione offline da <code>~/.jht/agents/&lt;ruolo-N&gt;/loop.log</code> —
+          grep <code>ERROR / CRITICAL / Traceback / error:</code>. In questa
+          export solo <code>scorer-1</code> ha un loop.log accessibile.</p>
+        <div id="loop-errors-table"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reasons" class="info-box">
+    <strong>🧹 Cleaning &amp; provenienza</strong>
+    <div id="reasons-strip" style="margin-top:6px; color:var(--muted); font-size:12px;">caricamento…</div>
   </section>
 </main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+(async function () {
+  const RD = window.ReportData;
+  const SESSION_FROM = Date.parse("2026-05-03T18:00:00Z");
+  const SESSION_TO   = Date.parse("2026-05-04T12:30:00Z");
+  const HIST_FROM    = Date.parse("2026-04-22T00:00:00Z");
+  const HIST_TO      = Date.parse("2026-05-04T12:30:00Z");
+
+  // Solo bottoni: NON registriamo plugins.zoom in options → il plugin non
+  // installa listener su canvas e wheel/pinch scrolla la pagina come di norma.
+  // Le API chart.zoom() / chart.pan() / chart.resetZoom() restano disponibili
+  // perché sono aggiunte all'istanza dal plugin in fase di install globale.
+  const ZOOM_OFF = false;
+
+  function panBy(chart, axis, frac) {
+    const sc = chart.scales[axis];
+    if (!sc) return;
+    // Pan API accetta delta in pixel: ~10% del range visibile in pixel.
+    const range = Math.abs(sc.right - sc.left || sc.bottom - sc.top || 100);
+    const dx = axis === "x" ? Math.round(range * frac) : 0;
+    const dy = axis === "y" ? Math.round(range * frac) : 0;
+    if (typeof chart.pan === "function") {
+      chart.pan({ x: dx, y: dy }, undefined, "default");
+    }
+  }
+  function bindZoomBtns(id, chart) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const a = b.dataset.act;
+      switch (a) {
+        case "in":    chart.zoom(1.15); break;
+        case "out":   chart.zoom(0.87); break;
+        case "rst":   chart.resetZoom(); break;
+        case "left":  panBy(chart, "x",  0.10); break;  // sposta vista verso sx → contenuto va a dx
+        case "right": panBy(chart, "x", -0.10); break;
+        case "up":    panBy(chart, "y",  0.10); break;
+        case "down":  panBy(chart, "y", -0.10); break;
+      }
+    });
+  }
+
+  async function fetchTxt(u) { const r = await fetch(u); if (!r.ok) throw 0; return r.text(); }
+  async function fetchJsonl(u) {
+    const t = await fetchTxt(u);
+    return t.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  }
+
+  const [crashRaw, sentinelRaw] = await Promise.all([
+    fetchJsonl("data/db/crash-events.json.txt"),
+    fetchJsonl("data/sentinel-data.jsonl.txt"),
+  ]);
+  let cooldownTs = [];
+  try {
+    const txt = await fetchTxt("data/db/claude-429-cooldown.txt");
+    cooldownTs = txt.split(/\s+/).filter(Boolean).map(Number)
+      .filter(n => Number.isFinite(n) && n > 1e9).map(n => n * 1000);
+  } catch { /* file non esportato in repo */ }
+  let loopErrorsRaw = [];
+  try { loopErrorsRaw = await fetchJsonl("data/db/loop-errors-by-agent.json.txt"); } catch {}
+
+  const HARD_TYPES = new Set(["FAILURE", "ALERT", "CRASH", "ERR"]);
+  const TYPE_COLORS = {
+    FAILURE: "#eb5757", ALERT: "#f2c94c", CRASH: "#bb6bd9", ERR: "#eb5757",
+    URG: "#f2994a", MSG: "#56ccf2", ACK: "#6fcf97",
+  };
+
+  const inSession = t => t >= SESSION_FROM && t <= SESSION_TO;
+  const inHist    = t => t >= HIST_FROM && t <= HIST_TO;
+
+  let kept = 0, droppedOutOfRange = 0, droppedNoTs = 0;
+  const crashes = [];
+  for (const r of crashRaw) {
+    const t = Date.parse(r.ts);
+    if (!Number.isFinite(t)) { droppedNoTs++; continue; }
+    if (!inHist(t)) { droppedOutOfRange++; continue; }
+    crashes.push({
+      ts: t,
+      type: r.type,
+      from: (r.from || "").split("-")[0].toLowerCase(),
+      to:   (r.to   || "").split("-")[0].toLowerCase(),
+      preview: r.preview || "",
+      session: r.session || "",
+    });
+    kept++;
+  }
+
+  // KPI
+  const hardInSession = crashes.filter(c => HARD_TYPES.has(c.type) && inSession(c.ts)).length;
+  const hardHist      = crashes.filter(c => HARD_TYPES.has(c.type)).length;
+  const topTo = (() => {
+    const m = {}; for (const c of crashes) m[c.to] = (m[c.to] || 0) + 1;
+    return Object.entries(m).sort((a,b) => b[1]-a[1])[0] || ["—", 0];
+  })();
+  const topType = (() => {
+    const m = {}; for (const c of crashes) m[c.type] = (m[c.type] || 0) + 1;
+    return Object.entries(m).sort((a,b) => b[1]-a[1])[0] || ["—", 0];
+  })();
+  const banner = document.getElementById("kpi-banner");
+  const cls = hardInSession === 0 ? "good" : (hardInSession <= 2 ? "warn" : "danger");
+  const verdict = hardInSession === 0 ? "✅ segnale buono"
+    : hardInSession <= 2 ? "⚠️ contenuto" : "🚨 critico";
+  banner.innerHTML = `
+    <div class="kpi-card ${cls}">
+      <div class="label">Crash IN finestra long-session</div>
+      <div class="value">${hardInSession}</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">${verdict} (FAILURE/ALERT/CRASH/ERR)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Crash storici (FAILURE/ALERT)</div>
+      <div class="value">${hardHist}</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">range 2026-04-22 → 2026-05-04</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Top agente impattato (<code>to</code>)</div>
+      <div class="value" style="text-transform:capitalize;">${topTo[0]}</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">${topTo[1]} eventi</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Top type</div>
+      <div class="value">${topType[0]}</div>
+      <div class="label" style="margin-top:4px; text-transform:none;">${topType[1]} eventi</div>
+    </div>
+  `;
+
+  // Cleaning strip
+  document.getElementById("reasons-strip").innerHTML = `
+    Crash records lette: <strong>${crashRaw.length}</strong>
+    · Tenute (range storico): <strong>${kept}</strong>
+    · Scartate fuori range: <strong>${droppedOutOfRange}</strong>
+    · ts non parsabile: <strong>${droppedNoTs}</strong>
+    · Loop-errors records: <strong>${loopErrorsRaw.length}</strong>
+    · Cooldown rate-limit ts: <strong>${cooldownTs.length}</strong>
+  `;
+
+  // Sentinel usage curve (medio per ora)
+  const HOUR_MS = 3600 * 1000;
+  const histBins = Math.ceil((HIST_TO - HIST_FROM) / HOUR_MS);
+  const usageSum = new Array(histBins).fill(0);
+  const usageCnt = new Array(histBins).fill(0);
+  for (const s of sentinelRaw) {
+    const t = Date.parse(s.ts);
+    if (!Number.isFinite(t) || !inHist(t)) continue;
+    const u = Number(s.usage);
+    if (!Number.isFinite(u)) continue;
+    const i = Math.floor((t - HIST_FROM) / HOUR_MS);
+    if (i < 0 || i >= histBins) continue;
+    usageSum[i] += u; usageCnt[i]++;
+  }
+  const usagePoints = [];
+  for (let i = 0; i < histBins; i++) {
+    if (!usageCnt[i]) continue;
+    usagePoints.push({ x: HIST_FROM + i * HOUR_MS, y: usageSum[i] / usageCnt[i] });
+  }
+
+  // Timeline scatter per type
+  const byType = {};
+  for (const c of crashes) (byType[c.type] = byType[c.type] || []).push(c);
+  const TYPE_ORDER = ["FAILURE","ALERT","CRASH","ERR","URG","MSG","ACK"];
+  const orderedTypes = TYPE_ORDER.filter(t => byType[t]).concat(Object.keys(byType).filter(t => !TYPE_ORDER.includes(t)));
+
+  const tlDatasets = orderedTypes.map(t => ({
+    type: "scatter",
+    label: t,
+    data: byType[t].map(c => ({ x: c.ts, y: t, _record: c })),
+    backgroundColor: TYPE_COLORS[t] || "#888",
+    borderColor: TYPE_COLORS[t] || "#888",
+    pointRadius: 7,
+    pointHoverRadius: 9,
+    pointStyle: HARD_TYPES.has(t) ? "rectRot" : "circle",
+    yAxisID: "y",
+  }));
+  tlDatasets.push({
+    type: "line",
+    label: "Usage% (sentinel)",
+    data: usagePoints,
+    borderColor: "rgba(86,204,242,0.85)",
+    backgroundColor: "rgba(86,204,242,0.10)",
+    borderWidth: 1.5,
+    borderDash: [4, 3],
+    pointRadius: 0,
+    pointHoverRadius: 3,
+    fill: false,
+    yAxisID: "y2",
+    tension: 0.2,
+  });
+
+  // Plugin overlay: banda session-window + cooldown markers
+  const overlayPlugin = {
+    id: "overlay",
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!scales.x) return;
+      const xs = scales.x.getPixelForValue(SESSION_FROM);
+      const xe = scales.x.getPixelForValue(SESSION_TO);
+      if (Number.isFinite(xs) && Number.isFinite(xe)) {
+        const a = Math.max(chartArea.left, Math.min(xs, xe));
+        const b = Math.min(chartArea.right, Math.max(xs, xe));
+        if (b > a) {
+          ctx.save();
+          ctx.fillStyle = "rgba(86,204,242,0.07)";
+          ctx.fillRect(a, chartArea.top, b - a, chartArea.bottom - chartArea.top);
+          ctx.strokeStyle = "rgba(86,204,242,0.45)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(a, chartArea.top); ctx.lineTo(a, chartArea.bottom);
+          ctx.moveTo(b, chartArea.top); ctx.lineTo(b, chartArea.bottom);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      // cooldown markers (vertical red lines)
+      ctx.save();
+      ctx.strokeStyle = "rgba(235,87,87,0.7)";
+      ctx.lineWidth = 1.5;
+      for (const t of cooldownTs) {
+        const px = scales.x.getPixelForValue(t);
+        if (!Number.isFinite(px) || px < chartArea.left || px > chartArea.right) continue;
+        ctx.beginPath();
+        ctx.moveTo(px, chartArea.top);
+        ctx.lineTo(px, chartArea.bottom);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+  };
+
+  const tlChart = new Chart(document.getElementById("ch-timeline").getContext("2d"), {
+    data: { datasets: tlDatasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      interaction: { mode: "nearest", intersect: false },
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#cfd6e4", font: { size: 12 }, usePointStyle: true } },
+        tooltip: {
+          backgroundColor: "rgba(13,15,20,0.96)",
+          borderColor: "#38415a", borderWidth: 1, padding: 10,
+          callbacks: {
+            title: (items) => {
+              const t = items[0].parsed.x;
+              return new Date(t).toISOString().replace("T", " ").slice(0, 19) + " UTC";
+            },
+            label: (ctx) => {
+              const ds = ctx.dataset;
+              if (ds.label === "Usage% (sentinel)") {
+                return `usage medio: ${ctx.parsed.y.toFixed(1)}%`;
+              }
+              const r = ctx.raw && ctx.raw._record;
+              if (!r) return ds.label;
+              const inside = inSession(r.ts) ? "🪟 IN session" : "📜 storico";
+              return `${ds.label} → ${r.to || "—"}: ${r.preview.slice(0, 90)}… (${inside})`;
+            },
+          },
+        },
+        
+      },
+      scales: {
+        x: {
+          type: "time",
+          time: { tooltipFormat: "yyyy-MM-dd HH:mm 'UTC'", displayFormats: { hour: "MM-dd HH:mm", day: "MM-dd" } },
+          min: HIST_FROM,
+          max: HIST_TO,
+          ticks: { color: "#8a93a4", font: { size: 11 }, maxTicksLimit: 10 },
+          grid: { color: "rgba(255,255,255,0.04)" },
+        },
+        y: {
+          type: "category",
+          labels: orderedTypes,
+          ticks: { color: "#8a93a4", font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.05)" },
+        },
+        y2: {
+          position: "right",
+          beginAtZero: true,
+          max: 100,
+          title: { display: true, text: "Usage %", color: "#8a93a4", font: { size: 11 } },
+          ticks: { color: "#8a93a4", font: { size: 11 }, callback: v => v + "%" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+    plugins: [overlayPlugin],
+  });
+  bindZoomBtns("zb-tl", tlChart);
+
+  // Bar by 'to' / 'from'
+  function makeRoleBar(canvasId, zoomBtnId, fieldKey) {
+    const counts = {};
+    for (const c of crashes) counts[c[fieldKey] || "—"] = (counts[c[fieldKey] || "—"] || 0) + 1;
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const labels = entries.map(e => e[0]);
+    const values = entries.map(e => e[1]);
+    const colors = labels.map(l => RD.AGENT_COLORS[l] || "#888");
+    const ch = new Chart(document.getElementById(canvasId).getContext("2d"), {
+      type: "bar",
+      data: { labels, datasets: [{ label: `# crash (${fieldKey})`, data: values, backgroundColor: colors, borderWidth: 0 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(13,15,20,0.96)",
+            borderColor: "#38415a", borderWidth: 1, padding: 10,
+            callbacks: {
+              title: (items) => `${RD.AGENT_EMOJI[items[0].label] || "🤖"} ${items[0].label}`,
+              label: (ctx) => `${ctx.parsed.y} eventi crash (${fieldKey})`,
+              afterBody: (items) => {
+                const role = items[0].label;
+                const inWin = crashes.filter(c => c[fieldKey] === role && inSession(c.ts)).length;
+                const histTot = crashes.filter(c => c[fieldKey] === role).length;
+                return `In session: ${inWin} · Storico totale: ${histTot}`;
+              },
+            },
+          },
+          
+        },
+        scales: {
+          x: { ticks: { color: "#8a93a4", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+          y: { beginAtZero: true, ticks: { color: "#8a93a4", font: { size: 11 }, precision: 0 }, grid: { color: "rgba(255,255,255,0.05)" } },
+        },
+      },
+    });
+    bindZoomBtns(zoomBtnId, ch);
+    return ch;
+  }
+  makeRoleBar("ch-byto",   "zb-byto",   "to");
+  makeRoleBar("ch-byfrom", "zb-byfrom", "from");
+
+  // Doughnut type breakdown
+  const typeCounts = {};
+  for (const c of crashes) typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+  const tEntries = Object.entries(typeCounts).sort((a,b) => b[1]-a[1]);
+  new Chart(document.getElementById("ch-donut").getContext("2d"), {
+    type: "doughnut",
+    data: {
+      labels: tEntries.map(e => e[0]),
+      datasets: [{
+        data: tEntries.map(e => e[1]),
+        backgroundColor: tEntries.map(e => TYPE_COLORS[e[0]] || "#666"),
+        borderColor: "#0d0f14",
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: "right", labels: { color: "#cfd6e4", font: { size: 12 }, padding: 10, boxWidth: 14 } },
+        tooltip: {
+          backgroundColor: "rgba(13,15,20,0.96)",
+          borderColor: "#38415a", borderWidth: 1, padding: 10,
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed;
+              const tot = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((v / tot) * 100).toFixed(1);
+              return `${ctx.label}: ${v} (${pct}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Loop errors table
+  const tableEl = document.getElementById("loop-errors-table");
+  if (loopErrorsRaw.length === 0) {
+    tableEl.innerHTML = `<div style="color:var(--muted); font-style:italic; padding:14px 4px;">
+      Nessun error pattern estratto: i loop.log degli agenti non sono presenti
+      in <code>~/.jht/agents/&lt;ruolo&gt;/loop.log</code> al momento dell'export.</div>`;
+  } else {
+    const rows = loopErrorsRaw.slice().sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, 50);
+    const rolesAggr = {};
+    for (const r of loopErrorsRaw) rolesAggr[r.role] = (rolesAggr[r.role] || 0) + 1;
+    const top = Object.entries(rolesAggr).sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${RD.AGENT_EMOJI[k] || "🤖"} ${k}: ${v}`).join(" · ");
+    let html = `<div style="color:var(--muted); font-size:12px; margin-bottom:8px;">Riepilogo per ruolo: ${top}</div>`;
+    html += `<table class="errors"><thead><tr><th>Agente</th><th>TS UTC</th><th>Level</th><th>Linea</th></tr></thead><tbody>`;
+    for (const r of rows) {
+      const safeLine = String(r.line || "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])).slice(0, 140);
+      html += `<tr>
+        <td>${RD.AGENT_EMOJI[r.role] || "🤖"} ${r.agent}</td>
+        <td>${r.ts}</td>
+        <td class="lvl-${r.level}">${r.level}</td>
+        <td>${safeLine}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    tableEl.innerHTML = html;
+  }
+})();
+</script>
 </body>
 </html>
