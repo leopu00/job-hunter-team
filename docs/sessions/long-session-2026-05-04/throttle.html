@@ -6,6 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
 <style>
+  /* Fix dev3 QA: KPI value su singola riga, evita truncation "scrittore-1" → 2 righe. */
+  .kpi-card .value {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   /* Anti-distorsione canvas Chart.js. Pattern raccomandato dalla doc:
      wrappare il canvas in un div position:relative con altezza fissa,
      e dare al canvas width/height 100%. Chart.js a quel punto può
@@ -445,6 +451,9 @@
   <section>
     <h2>💬 Throttle vs contenuto chat (aggregato per agente)</h2>
     <div class="chart-wrap" style="padding: 14px 20px;" title="Scatter aggregato per-agente: X = # throttle event reali in sessione, Y = # menzioni keyword nelle chat dell'agente. Mostra correlazione AGGREGATA, non punto-per-punto.">
+      <p class="caption" style="margin-bottom: 6px;">
+        <strong>Cosa leggi:</strong> ogni punto è un agente. X = quante pause reali ha fatto, Y = quante volte le sue chat citano parole del termostato. Una diagonale = chi è frermato di più ne parla di più.
+      </p>
       <p class="caption" style="border-left: 3px solid var(--warn); padding-left: 10px; color: var(--warn);">
         ⚠️ <strong>Caveat onesto:</strong> i transcript in <code>data/chat/*.jsonl.txt</code>
         non hanno timestamp. Quindi <em>non possiamo</em> correlare punto-per-punto un
@@ -745,8 +754,12 @@ if (window.Chart) {
     { label: "💓 Checkpoint heartbeat", value: checkpoints.length },
     { label: "⏳ Tempo totale fermo", value: fmtMin(totalSec) },
     { label: "🏆 Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
-    { label: "➗ Pausa mediana", value: fmtSec(median) },
-    { label: "📐 Pausa media", value: fmtSec(meanSec) },
+    // Mediana + media collassate in unica card (dev3 review): mostra lo skew
+    // visibile fra P50 e media (di norma media > mediana per code lunghe).
+    {
+      label: "📐 P50 / avg",
+      value: `${fmtSec(median)} / ${fmtSec(meanSec)}`,
+    },
     { label: "📏 Pausa più lunga", value: fmtSec(maxSec) },
     { label: "📊 % sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
   ];
