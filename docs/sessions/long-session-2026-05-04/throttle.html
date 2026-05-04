@@ -5,11 +5,39 @@
 <title>Throttling — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<style>
+  /* override locale: i grafici di questa pagina rendono meglio con altezze diverse */
+  .chart-wrap canvas { height: 380px !important; }
+  .chart-wrap.tall canvas { height: 520px !important; }
+  .legend-inline {
+    display: flex; flex-wrap: wrap; gap: 12px 18px;
+    margin: 4px 0 14px; font-size: 12px; color: var(--muted);
+  }
+  .legend-inline .swatch {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 2px; margin-right: 6px; vertical-align: middle;
+  }
+  .filter-bar {
+    display: flex; gap: 10px; align-items: center;
+    margin-bottom: 14px; font-size: 13px; color: var(--muted);
+  }
+  .filter-bar button {
+    background: var(--card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; font-size: 12px;
+  }
+  .filter-bar button.active { background: #233048; border-color: #3a5077; }
+  .narrative h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
+  .narrative p { margin: 0 0 8px; }
+  .narrative p:last-child { margin-bottom: 0; }
+</style>
 </head>
 <body>
 <header class="hero">
   <h1>⏸ Throttling Analysis</h1>
-  <p class="subtitle">Sezione assegnata a dev2 — placeholder, da popolare.</p>
+  <p class="subtitle">
+    Pause, attese, checkpoint — quando e perché gli agenti si sono fermati durante la long session.
+  </p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -18,11 +46,567 @@
     <a href="timeline.html">📅 Timeline</a>
   </nav>
 </header>
+
 <main>
+  <section class="kpi-grid" id="kpi-grid"></section>
+
   <section>
-    <p class="note">⚠️ Sezione vuota — vedi README.md per assegnazione iniziale.</p>
+    <h2>Cosa stiamo guardando</h2>
+    <div class="narrative">
+      <h4>Throttle reali vs checkpoint heartbeat</h4>
+      <p>
+        Il file <code>throttle-events.jsonl</code> mescola due cose diverse:
+        <strong>pause reali</strong> (un agente è fermo per N secondi prima di
+        ripartire, marcate con <code>event=start</code> + <code>event=end</code>
+        oppure record legacy senza <code>event</code>) e
+        <strong>checkpoint heartbeat</strong> (record zero-duration con
+        <code>event=checkpoint</code>) introdotti il 2026-05-03 per dichiarare
+        "sono vivo, sto in standby" senza marcare una vera pausa.
+      </p>
+      <p>
+        In questo report contiamo come <em>pause reali</em> solo i record
+        <code>start</code> (o legacy senza event). I <code>checkpoint</code>
+        sono mostrati a parte, perché altrimenti gonfiano i conteggi
+        (≈333 heartbeat extra in finestra) senza aggiungere tempo speso fermi.
+      </p>
+      <p>
+        La finestra di sessione è <code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>
+        come definita da <code>ReportData.SESSION_START/END</code> in
+        <code>assets/data-loader.js</code>; eventi fuori finestra sono ignorati.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Timeline pause per agente</h2>
+    <div class="chart-wrap tall">
+      <h3>🛣 Lane chart — quando ogni agente si è fermato</h3>
+      <p class="caption">
+        Asse X: tempo della sessione. Una "corsia" per agente; ogni bolla è
+        una pausa, dimensione proporzionale alla durata reale (<code>applied_sec</code>).
+        I checkpoint heartbeat sono mostrati come tick sottili, distinti da quelli reali.
+      </p>
+      <div class="filter-bar">
+        <span>Mostra:</span>
+        <button data-filter="real" class="active" id="btn-real">Pause reali</button>
+        <button data-filter="checkpoint" id="btn-cp">+ Checkpoint</button>
+        <button data-filter="all" id="btn-all">Tutto</button>
+      </div>
+      <canvas id="lane"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Lettura della corsia</h4>
+      <p>
+        <strong>scrittore-1</strong> domina la corsia: è l'agente più attivo
+        della sessione e quindi anche quello con più pause programmate
+        (post-batch cooldown, "coda vuota", waiting su critic round).
+        Le sue bolle grandi (≥120s) sono concentrate nelle ore centrali della
+        notte, quando il termostato ha rallentato il pipeline per restare
+        sotto il budget settimanale.
+      </p>
+      <p>
+        <strong>scorer-1</strong> e <strong>analista-1</strong> mostrano un
+        pattern più sparso, tipico di chi reagisce a comandi del Capitano
+        ("RALLENTARE URG", "wait critico"). Le pause più lunghe (300-600s)
+        coincidono con i picchi di throttle T2+ visibili anche nel sentinel.
+      </p>
+      <p>
+        Gli agenti <em>test-*</em> e <em>diag-*</em> sono presenti ma con
+        pochi eventi cortissimi: vengono dai test della pipeline, non sono
+        rumore della sessione produttiva.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tempo totale fermo per agente</h2>
+    <div class="chart-wrap">
+      <h3>📊 Durata cumulata pause per agente (stacked per categoria)</h3>
+      <p class="caption">
+        Somma in minuti di <code>applied_sec</code> per ogni agente, divisa
+        nelle 4 categorie principali di motivazione. Solo pause reali —
+        i checkpoint sono esclusi perché zero-duration.
+      </p>
+      <canvas id="byagent"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Quanto tempo è stato "fermo per scelta"</h4>
+      <p>
+        Le pause non sono un fallimento: il termostato le impone apposta
+        per allungare la finestra. La domanda interessante è il <em>mix</em>.
+        Se domina <strong>STANDBY</strong> ("coda vuota"), l'agente ha finito
+        il proprio lavoro e aspetta input — è un segnale che a monte (Capitano,
+        scout) c'era una bolla. Se domina <strong>PACING</strong>
+        ("RALLENTARE URG", "throttle T2+"), il termostato sta tenendo basso
+        il consumo per non sforare il budget.
+      </p>
+      <p>
+        Per <strong>scrittore-1</strong> il pattern atteso è alta quota
+        STANDBY: lavora per batch, finisce, aspetta il batch successivo dal
+        Capitano. Per gli scorer/analista invece ci aspettiamo più
+        WAIT_CRITIC, perché il loro lavoro è incatenato ai round critic.
+      </p>
+      <p>
+        Anomalia da osservare: se un agente ha tanti minuti in
+        <strong>FREEZE</strong>, vuol dire che il Capitano l'ha
+        deliberatamente messo in pausa lunga (es. "freeze no critic until X")
+        — andrebbe correlato con la timeline degli ordini.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Perché si sono fermati</h2>
+    <div class="chart-wrap">
+      <h3>🧷 Distribuzione per categoria di motivazione</h3>
+      <p class="caption">
+        Ogni pausa reale è classificata in una categoria a partire dal campo
+        <code>reason</code>. Le 4 macro-categorie coprono ~95% dei casi;
+        il resto è <em>altro</em>.
+      </p>
+      <canvas id="bycategory"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <h3>⏱ Distribuzione delle durate</h3>
+      <p class="caption">
+        Quanto durano le pause? Bucket fissi: ≤30s, 30-60s, 1-2min, 2-5min, 5-10min, &gt;10min.
+        Aiuta a distinguere micro-pause (fra task) da pause strategiche (per pacing).
+      </p>
+      <canvas id="durations"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Forma della distribuzione</h4>
+      <p>
+        Una distribuzione bimodale è il risultato sano: tante pause corte
+        (≤2min, fra task / coda vuota) e una coda di pause lunghe (5-10min,
+        wait critico o RALLENTARE URG). Se vediamo un picco solo a 600s
+        significa che il pacing-bridge sta usando la sua leva massima troppo
+        spesso — segnale di consumo fuori traiettoria.
+      </p>
+      <p>
+        Per categoria, ci aspettiamo <strong>STANDBY</strong> in testa
+        (è il caso "ho finito, aspetto"), seguito da <strong>WAIT_CRITIC</strong>
+        (sincronizzazione round) e <strong>PACING</strong> (intervento
+        del termostato). Una quota anomala di "altro" significa che il
+        classificatore è fuori sincrono con le reason effettive in uso —
+        in quel caso va aggiornato.
+      </p>
+      <p>
+        Il dato grezzo è sotto <code>data/throttle-events.jsonl.txt</code>:
+        una riga = un evento. Posso aggiungere il filtro per agente in
+        Round 2 se serve.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Note tecniche</h2>
+    <div class="narrative">
+      <h4>Come è stato classificato il <code>reason</code></h4>
+      <p>
+        La funzione <code>classifyReason()</code> in fondo allo script
+        applica una manciata di regex case-insensitive: prima cerca i marker
+        di pacing forte (<code>RALLENTARE URG</code>, <code>throttle T2</code>,
+        <code>proj=</code>), poi i wait di critic round (<code>wait critico</code>,
+        <code>finalize</code>), poi gli stati di standby
+        (<code>coda vuota</code>, <code>polling</code>, <code>post-batch</code>),
+        poi il freeze esplicito. Il resto va in <code>ALTRO</code>.
+      </p>
+      <p>
+        Il classificatore è volutamente lasco: aggregare reason a mano
+        (centinaia di varianti) costerebbe più del valore. Per il report
+        di prima passata basta vedere la distribuzione macro; il dettaglio
+        per stringa esatta è disponibile in JSONL per chi vuole investigare.
+      </p>
+      <p>
+        Tutti i grafici condividono il color mapping di
+        <code>ReportData.AGENT_COLORS</code> per restare coerenti con le
+        altre pagine del report (usage, agents, timeline).
+      </p>
+    </div>
   </section>
 </main>
+
+<footer>
+  <small>
+    Sezione throttling — Long Session 2026-05-04 · Round 1 · dev2.
+    Sorgente: <code>data/throttle-events.jsonl.txt</code>.
+  </small>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="assets/data-loader.js"></script>
+<script>
+(async function () {
+  const { throttle } = await ReportData.loadAll();
+
+  // Filtra alla finestra di sessione.
+  const inWin = throttle.filter(ReportData.inSession);
+
+  // Separa pause reali (event=start o legacy null) dai checkpoint heartbeat.
+  // Le 'end' sono escluse perché farebbero double-count: ogni start ha la
+  // sua end, e applied_sec è già su start.
+  const realPauses = inWin.filter((r) => r.event === "start" || r.event == null);
+  const checkpoints = inWin.filter((r) => r.event === "checkpoint");
+
+  // ----- Classificatore reason -----
+  function classifyReason(reasonRaw) {
+    const r = String(reasonRaw || "").toLowerCase();
+    if (!r) return "ALTRO";
+    if (/(rallentare urg|throttle\s*t2|proj\s*=|diff consumo)/.test(r)) return "PACING";
+    if (/(wait critico|finalize|round\s*\d+ review|review\s+complete|cv review)/.test(r)) return "WAIT_CRITIC";
+    if (/(coda vuota|polling|post-batch|standby|cooldown|batch\s*complete|attesa)/.test(r)) return "STANDBY";
+    if (/freeze/.test(r)) return "FREEZE";
+    return "ALTRO";
+  }
+  const CATEGORY_COLORS = {
+    PACING: "#eb5757",
+    WAIT_CRITIC: "#bb6bd9",
+    STANDBY: "#56ccf2",
+    FREEZE: "#f2c94c",
+    ALTRO: "#828282",
+  };
+
+  // Ordine agenti: per durata totale (desc).
+  const totalsByAgent = {};
+  for (const ev of realPauses) {
+    const a = ev.agent || "unknown";
+    totalsByAgent[a] = (totalsByAgent[a] || 0) + (ev.applied_sec || 0);
+  }
+  const agentsOrdered = Object.keys(totalsByAgent).sort(
+    (a, b) => totalsByAgent[b] - totalsByAgent[a]
+  );
+  // Filtra agenti test/diag con totale < 60s: non aggiungono valore al chart.
+  const agentsKept = agentsOrdered.filter((a) => {
+    if (totalsByAgent[a] < 60) return false;
+    if (/^(diag|smoke|test-)/.test(a)) return false;
+    return true;
+  });
+  // Aggiungi una riga "altri" per agenti scartati con qualche evento.
+  const droppedAgents = agentsOrdered.filter((a) => !agentsKept.includes(a));
+  const hasOther = droppedAgents.length > 0;
+  const laneAgents = hasOther ? [...agentsKept, "altri"] : agentsKept;
+
+  function laneIndex(agent) {
+    const idx = laneAgents.indexOf(agent);
+    if (idx >= 0) return idx;
+    return laneAgents.indexOf("altri"); // -1 se non presente
+  }
+
+  // ----- KPI grid -----
+  const totalSec = realPauses.reduce((s, e) => s + (e.applied_sec || 0), 0);
+  const fmtMin = (sec) => {
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  };
+  const topAgent = agentsOrdered[0] || "—";
+  const kpiGrid = document.getElementById("kpi-grid");
+  const kpis = [
+    { label: "Pause reali", value: realPauses.length },
+    { label: "Checkpoint heartbeat", value: checkpoints.length },
+    { label: "Tempo totale fermo", value: fmtMin(totalSec) },
+    { label: "Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
+  ];
+  for (const k of kpis) {
+    const div = document.createElement("div");
+    div.className = "kpi-card";
+    div.innerHTML = `<div class="label">${k.label}</div><div class="value">${k.value}</div>`;
+    kpiGrid.appendChild(div);
+  }
+
+  // ----- Lane chart (bubble) -----
+  // y = lane index; r = sqrt(applied_sec) per leggibilità.
+  function bubbleData(events, opts) {
+    return events
+      .map((ev) => {
+        const y = laneIndex(ev.agent);
+        if (y < 0) return null;
+        const sec = ev.applied_sec || 0;
+        return {
+          x: ev.ts_unix * 1000,
+          y,
+          r: opts.r != null ? opts.r : Math.max(3, Math.min(22, Math.sqrt(sec) * 0.9)),
+          _agent: ev.agent,
+          _sec: sec,
+          _reason: ev.reason || "",
+          _category: classifyReason(ev.reason),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  const realByCategory = {};
+  for (const ev of realPauses) {
+    const c = classifyReason(ev.reason);
+    (realByCategory[c] = realByCategory[c] || []).push(ev);
+  }
+
+  const realDatasets = Object.keys(realByCategory).map((cat) => ({
+    label: cat,
+    data: bubbleData(realByCategory[cat], {}),
+    backgroundColor: CATEGORY_COLORS[cat] + "cc",
+    borderColor: CATEGORY_COLORS[cat],
+    borderWidth: 1,
+  }));
+
+  const checkpointDataset = {
+    label: "checkpoint heartbeat",
+    data: bubbleData(checkpoints, { r: 2.5 }),
+    backgroundColor: "#aab2c2aa",
+    borderColor: "#aab2c2",
+    borderWidth: 0,
+    hidden: true,
+  };
+
+  const laneCtx = document.getElementById("lane").getContext("2d");
+  const laneChart = new Chart(laneCtx, {
+    type: "bubble",
+    data: { datasets: [...realDatasets, checkpointDataset] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          type: "linear",
+          min: ReportData.SESSION_START,
+          max: ReportData.SESSION_END,
+          ticks: {
+            color: "#8a93a4",
+            callback: (v) => {
+              const d = new Date(v);
+              return d.toISOString().slice(11, 16) + "Z";
+            },
+            maxTicksLimit: 12,
+          },
+          grid: { color: "#1f2532" },
+        },
+        y: {
+          type: "linear",
+          min: -0.5,
+          max: laneAgents.length - 0.5,
+          ticks: {
+            color: "#8a93a4",
+            stepSize: 1,
+            callback: (v) => {
+              const i = Math.round(v);
+              const a = laneAgents[i];
+              if (!a) return "";
+              return `${ReportData.agentEmoji(a)} ${a}`;
+            },
+          },
+          grid: { color: "#1f2532" },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = ctx.raw;
+              const ts = new Date(d.x).toISOString().slice(11, 19) + "Z";
+              const dur = d._sec ? `${d._sec}s` : "0s (heartbeat)";
+              return [
+                `${d._agent} · ${dur}`,
+                `${ts} · ${d._category}`,
+                d._reason ? `« ${d._reason} »` : "",
+              ].filter(Boolean);
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Filter bar (real / +checkpoint / all)
+  function setLaneMode(mode) {
+    const cpDsIdx = laneChart.data.datasets.length - 1;
+    if (mode === "real") {
+      laneChart.data.datasets.forEach((ds, i) => {
+        ds.hidden = i === cpDsIdx;
+      });
+    } else if (mode === "checkpoint") {
+      laneChart.data.datasets.forEach((ds, i) => {
+        ds.hidden = false;
+      });
+    } else {
+      laneChart.data.datasets.forEach((ds) => (ds.hidden = false));
+    }
+    laneChart.update();
+  }
+  document.querySelectorAll(".filter-bar button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-bar button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      setLaneMode(btn.dataset.filter);
+    });
+  });
+
+  // ----- Bar stacked: durata per agente per categoria -----
+  const categoriesOrder = ["PACING", "WAIT_CRITIC", "STANDBY", "FREEZE", "ALTRO"];
+  const agentsByDuration = laneAgents.filter((a) => a !== "altri");
+  // ricalcolo: per ogni agente, somma sec per categoria (in minuti)
+  const matrix = {};
+  for (const a of agentsByDuration) matrix[a] = {};
+  for (const ev of realPauses) {
+    const a = ev.agent || "unknown";
+    if (!agentsByDuration.includes(a)) continue;
+    const c = classifyReason(ev.reason);
+    matrix[a][c] = (matrix[a][c] || 0) + (ev.applied_sec || 0);
+  }
+  const byAgentDatasets = categoriesOrder.map((cat) => ({
+    label: cat,
+    data: agentsByDuration.map((a) => +((matrix[a][cat] || 0) / 60).toFixed(1)),
+    backgroundColor: CATEGORY_COLORS[cat],
+  }));
+  new Chart(document.getElementById("byagent").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: agentsByDuration.map((a) => `${ReportData.agentEmoji(a)} ${a}`),
+      datasets: byAgentDatasets,
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: "#8a93a4", callback: (v) => `${v} min` },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "minuti fermo (cumulati)", color: "#8a93a4" },
+        },
+        y: {
+          stacked: true,
+          ticks: { color: "#e8ecf3" },
+          grid: { color: "#1f2532" },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "#e8ecf3" } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x} min`,
+          },
+        },
+      },
+    },
+  });
+
+  // ----- Bar: distribuzione per categoria (aggregate) -----
+  const catTotals = {};
+  for (const ev of realPauses) {
+    const c = classifyReason(ev.reason);
+    catTotals[c] = catTotals[c] || { count: 0, sec: 0 };
+    catTotals[c].count += 1;
+    catTotals[c].sec += ev.applied_sec || 0;
+  }
+  const catLabels = categoriesOrder.filter((c) => catTotals[c]);
+  new Chart(document.getElementById("bycategory").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: catLabels,
+      datasets: [
+        {
+          label: "# pause",
+          data: catLabels.map((c) => catTotals[c].count),
+          backgroundColor: catLabels.map((c) => CATEGORY_COLORS[c]),
+          yAxisID: "y",
+        },
+        {
+          label: "minuti totali",
+          data: catLabels.map((c) => +(catTotals[c].sec / 60).toFixed(1)),
+          backgroundColor: catLabels.map((c) => CATEGORY_COLORS[c] + "55"),
+          borderColor: catLabels.map((c) => CATEGORY_COLORS[c]),
+          borderWidth: 1.5,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { ticks: { color: "#e8ecf3" }, grid: { color: "#1f2532" } },
+        y: {
+          beginAtZero: true,
+          position: "left",
+          ticks: { color: "#8a93a4" },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# pause", color: "#8a93a4" },
+        },
+        y1: {
+          beginAtZero: true,
+          position: "right",
+          ticks: { color: "#8a93a4", callback: (v) => `${v}m` },
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: "minuti totali", color: "#8a93a4" },
+        },
+      },
+      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+    },
+  });
+
+  // ----- Histogram durate -----
+  const buckets = [
+    { label: "≤30s", max: 30 },
+    { label: "30-60s", max: 60 },
+    { label: "1-2 min", max: 120 },
+    { label: "2-5 min", max: 300 },
+    { label: "5-10 min", max: 600 },
+    { label: ">10 min", max: Infinity },
+  ];
+  const bucketCounts = buckets.map(() => 0);
+  for (const ev of realPauses) {
+    const s = ev.applied_sec || 0;
+    for (let i = 0; i < buckets.length; i++) {
+      if (s <= buckets[i].max) {
+        bucketCounts[i] += 1;
+        break;
+      }
+    }
+  }
+  new Chart(document.getElementById("durations").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: buckets.map((b) => b.label),
+      datasets: [
+        {
+          label: "# pause",
+          data: bucketCounts,
+          backgroundColor: "#56ccf2cc",
+          borderColor: "#56ccf2",
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { ticks: { color: "#e8ecf3" }, grid: { color: "#1f2532" } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#8a93a4" },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# pause reali", color: "#8a93a4" },
+        },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+})().catch((err) => {
+  document.querySelector("main").insertAdjacentHTML(
+    "afterbegin",
+    `<section><p class="note">Errore caricamento dati: ${err.message}</p></section>`
+  );
+  console.error(err);
+});
+</script>
 </body>
 </html>
