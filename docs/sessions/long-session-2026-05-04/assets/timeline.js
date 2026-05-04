@@ -275,8 +275,8 @@
         top: 8,
         iconStyle: { borderColor: "#8a93a4" },
         feature: {
-          dataZoom: { yAxisIndex: "none", title: { zoom: "Box-zoom", back: "Reset zoom" } },
-          restore: { title: "Reset" },
+          // Solo saveAsImage: niente dataZoom box-zoom (sarebbe wheel-style)
+          // né restore (gestito dal bottone ⟲ esterno).
           saveAsImage: { title: "Salva PNG", backgroundColor: "#0d0f14" },
         },
       },
@@ -362,14 +362,11 @@
         splitLine: { lineStyle: { color: "#1a1f2c" } },
       },
       dataZoom: [
-        // X: slider sotto sempre disponibile + inside con modifier Ctrl
+        // SOLO slider visibili — niente "inside" → scroll/pinch dentro al
+        // riquadro è disabilitato (no zoom accidentale da trackpad). Lo
+        // user controlla zoom/pan SOLO tramite slider o bottoni esterni.
         { type: "slider", xAxisIndex: 0, height: 22, bottom: 26, backgroundColor: "rgba(0,0,0,0.2)" },
-        // Inside richiede Ctrl per zoom rotella E per pan trascinato →
-        // scroll normale del trackpad scorre la pagina, Ctrl+scroll = zoom
-        { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: "ctrl", moveOnMouseMove: "ctrl", moveOnMouseWheel: false },
-        // Y: slider a sinistra sempre disponibile + inside con modifier Ctrl
         { type: "slider", yAxisIndex: 0, width: 16, left: 86, top: 50, bottom: 80, backgroundColor: "rgba(0,0,0,0.2)" },
-        { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: "ctrl", moveOnMouseMove: "ctrl", moveOnMouseWheel: false },
       ],
       series,
     });
@@ -378,43 +375,77 @@
     new ResizeObserver(() => chart.resize()).observe(el);
     window.addEventListener("resize", () => chart.resize());
 
-    // -------- bottoni zoom in / out / reset (X + Y) --------
+    // -------- bottoni zoom + pan (X + Y), unico controllo --------
     const zoomCtl = document.getElementById("zoom-controls");
     if (zoomCtl) {
-      // Restringe/dilata la finestra start..end mantenendo il centro.
-      // start/end sono percentuali 0..100.
+      // start/end sono percentuali 0..100. Stato corrente lo leggiamo dagli
+      // slider (l'unico altro modo di muoversi è cliccarli).
+      function getDz(axis) {
+        const opt = chart.getOption().dataZoom || [];
+        const i = opt.findIndex((d) => d && d.type === "slider" && (axis === "x" ? d.xAxisIndex === 0 : d.yAxisIndex === 0));
+        if (i < 0) return [0, 100];
+        return [opt[i].start ?? 0, opt[i].end ?? 100];
+      }
       function shrink(start, end, factor) {
         const center = (start + end) / 2;
         const half = (end - start) / 2 / factor;
         return [Math.max(0, center - half), Math.min(100, center + half)];
       }
-      function getDz(axis) {
-        const opt = chart.getOption().dataZoom || [];
-        const i = opt.findIndex((d) => d && d.type === "inside" && (axis === "x" ? d.xAxisIndex === 0 : d.yAxisIndex === 0));
-        if (i < 0) return [0, 100];
-        return [opt[i].start ?? 0, opt[i].end ?? 100];
+      // Pan: trasla la finestra mantenendo la sua larghezza, cap 0..100.
+      function pan(start, end, deltaPct) {
+        const range = end - start;
+        let s = start + (range * deltaPct) / 100;
+        let e = end + (range * deltaPct) / 100;
+        if (s < 0) { e -= s; s = 0; }
+        if (e > 100) { s -= (e - 100); e = 100; }
+        return [s, e];
       }
-      function applyZoom(factor) {
-        const [xs, xe] = getDz("x");
-        const [ys, ye] = getDz("y");
-        const [nxs, nxe] = shrink(xs, xe, factor);
-        const [nys, nye] = shrink(ys, ye, factor);
-        chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: nxs, end: nxe });
-        chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: nys, end: nye });
+
+      // Step dolci ~13% zoom, ~10% pan. Niente factor 50%: l'utente itera.
+      const ZOOM_STEP = 1.15;
+      const PAN_STEP_PCT = 10;
+
+      function dispatchAxis(axis, start, end) {
+        chart.dispatchAction({
+          type: "dataZoom",
+          [axis === "x" ? "xAxisIndex" : "yAxisIndex"]: 0,
+          start,
+          end,
+        });
       }
-      // Step dolce: ogni click ➕/➖ stringe/allarga la finestra del ~13%
-      // (factor 1.15) anziché 50%. Così l'utente può iterare gradualmente
-      // senza saltare a un livello di zoom troppo aggressivo.
-      const STEP = 1.15;
+
       zoomCtl.addEventListener("click", (ev) => {
         const btn = ev.target.closest("button.zoom-btn[data-zoom]");
         if (!btn) return;
         const action = btn.dataset.zoom;
-        if (action === "in") applyZoom(STEP);
-        else if (action === "out") applyZoom(1 / STEP);
-        else if (action === "reset") {
-          chart.dispatchAction({ type: "dataZoom", xAxisIndex: 0, start: 0, end: 100 });
-          chart.dispatchAction({ type: "dataZoom", yAxisIndex: 0, start: 0, end: 100 });
+        const [xs, xe] = getDz("x");
+        const [ys, ye] = getDz("y");
+        if (action === "in") {
+          const [nxs, nxe] = shrink(xs, xe, ZOOM_STEP);
+          const [nys, nye] = shrink(ys, ye, ZOOM_STEP);
+          dispatchAxis("x", nxs, nxe);
+          dispatchAxis("y", nys, nye);
+        } else if (action === "out") {
+          const [nxs, nxe] = shrink(xs, xe, 1 / ZOOM_STEP);
+          const [nys, nye] = shrink(ys, ye, 1 / ZOOM_STEP);
+          dispatchAxis("x", nxs, nxe);
+          dispatchAxis("y", nys, nye);
+        } else if (action === "reset") {
+          dispatchAxis("x", 0, 100);
+          dispatchAxis("y", 0, 100);
+        } else if (action === "pan-left") {
+          const [s, e] = pan(xs, xe, -PAN_STEP_PCT);
+          dispatchAxis("x", s, e);
+        } else if (action === "pan-right") {
+          const [s, e] = pan(xs, xe, +PAN_STEP_PCT);
+          dispatchAxis("x", s, e);
+        } else if (action === "pan-up") {
+          // ECharts y crescente verso l'alto, quindi "su" = aumenta start/end
+          const [s, e] = pan(ys, ye, +PAN_STEP_PCT);
+          dispatchAxis("y", s, e);
+        } else if (action === "pan-down") {
+          const [s, e] = pan(ys, ye, -PAN_STEP_PCT);
+          dispatchAxis("y", s, e);
         }
       });
     }

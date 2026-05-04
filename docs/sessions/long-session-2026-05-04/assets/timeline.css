@@ -74,6 +74,16 @@ section, .chart-wrap {
 .chart-zoom-controls {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.zoom-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
 }
 
 .zoom-btn {
