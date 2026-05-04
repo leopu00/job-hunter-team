@@ -154,17 +154,73 @@
     return chatIdx.get(key) || null;
   }
 
-  // -------------------- finestra di sessione --------------------
+  // -------------------- finestre di sessione --------------------
 
-  // Filtro alla finestra "long session 2026-05-03 sera → 2026-05-04 mattino".
-  // Tagliamo dal 2026-05-03T18:00:00Z (~ ieri sera) al 2026-05-04T12:00:00Z.
-  // I dev possono raffinare gli estremi guardando i dati.
-  const SESSION_START = Date.parse("2026-05-03T18:00:00Z");
-  const SESSION_END = Date.parse("2026-05-04T12:00:00Z");
+  // PERIMETRO DEFINITIVO (Leone 2026-05-04): l'analisi del report copre SOLO
+  // queste 3 finestre Kimi K2, non il warm-up serale, le micro-finestre o i
+  // gap intermedi. Durata totale attiva = 1h1m + 4h48m + 4h54m = 10h 43m.
+  const SESSION_WINDOWS = [
+    {
+      id: "W1",
+      session_id: "20260503T230751Z",
+      start: "2026-05-03T23:07:51Z",
+      end: "2026-05-04T00:08:58Z",
+      peak: 94,
+      label: "W1 · 94%",
+    },
+    {
+      id: "W2",
+      session_id: "20260504T001858Z",
+      start: "2026-05-04T00:18:58Z",
+      end: "2026-05-04T05:06:37Z",
+      peak: 96,
+      label: "W2 · 96% perfetta",
+    },
+    {
+      id: "W3",
+      session_id: "20260504T051638Z",
+      start: "2026-05-04T05:16:38Z",
+      end: "2026-05-04T10:10:29Z",
+      peak: 64,
+      label: "W3 · 64%",
+    },
+  ].map((w) => ({ ...w, startMs: Date.parse(w.start), endMs: Date.parse(w.end) }));
 
+  // Estremi globali del perimetro (per axis range, non per filtro!).
+  const SESSION_START = SESSION_WINDOWS[0].startMs;
+  const SESSION_END = SESSION_WINDOWS[SESSION_WINDOWS.length - 1].endMs;
+
+  // True se ts cade DENTRO una delle 3 finestre (NON nei gap fra di esse).
+  function inWindows(tsOrRecord) {
+    const ts = typeof tsOrRecord === "string" || typeof tsOrRecord === "number"
+      ? tsOrRecord
+      : (tsOrRecord && tsOrRecord.ts);
+    const t = typeof ts === "number" ? ts : Date.parse(ts);
+    if (!Number.isFinite(t)) return false;
+    for (const w of SESSION_WINDOWS) {
+      if (t >= w.startMs && t <= w.endMs) return true;
+    }
+    return false;
+  }
+
+  // Ritorna la finestra W1/W2/W3 che contiene ts, o null se è in un gap.
+  function windowOf(tsOrRecord) {
+    const ts = typeof tsOrRecord === "string" || typeof tsOrRecord === "number"
+      ? tsOrRecord
+      : (tsOrRecord && tsOrRecord.ts);
+    const t = typeof ts === "number" ? ts : Date.parse(ts);
+    if (!Number.isFinite(t)) return null;
+    for (const w of SESSION_WINDOWS) {
+      if (t >= w.startMs && t <= w.endMs) return w;
+    }
+    return null;
+  }
+
+  // Mantiene compatibilità con il vecchio inSession() ma ora richiede di stare
+  // DENTRO una delle 3 finestre, non solo nell'intervallo grezzo. Codice
+  // esistente che chiamava inSession() ottiene comportamento più stretto.
   function inSession(record) {
-    const t = Date.parse(record.ts);
-    return Number.isFinite(t) && t >= SESSION_START && t <= SESSION_END;
+    return inWindows(record);
   }
 
   // -------------------- cleaning utility --------------------
@@ -172,6 +228,8 @@
   // Filtraggio + dedup + normalizzazione su un dataset arbitrario. Ritorna
   // l'array pulito + uno stats {kept, dropped_window, dropped_dup, dropped_invalid_ts}.
   // dedupKey: funzione record → string (es. ts+from+to+type+preview).
+  // FILTRO: tiene solo record che cadono in una delle 3 SESSION_WINDOWS
+  // (non solo nell'intervallo grezzo: i gap fra finestre vengono scartati).
   function cleanInWindow(records, dedupKey) {
     const out = [];
     const seen = new Set();
@@ -183,7 +241,7 @@
         stats.dropped_invalid_ts++;
         continue;
       }
-      if (t < SESSION_START || t > SESSION_END) {
+      if (!inWindows(t)) {
         stats.dropped_window++;
         continue;
       }
@@ -248,6 +306,9 @@
     enrichPreview,
     cleanInWindow,
     inSession,
+    inWindows,
+    windowOf,
+    SESSION_WINDOWS,
     SESSION_START,
     SESSION_END,
     AGENT_COLORS,
