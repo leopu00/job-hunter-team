@@ -54,13 +54,14 @@
       <div class="legend-pills">
         <span><i class="dot" style="background:#56ccf2"></i>usage %</span>
         <span><i class="dot" style="background:#f2c94c"></i>projection (fine finestra)</span>
+        <span><i class="dot" style="background:rgba(235,87,87,0.18); border:1px solid rgba(235,87,87,0.5)"></i>throttle attivo</span>
         <span><i class="dot" style="background:#eb5757"></i>soglia 100%</span>
       </div>
       <canvas id="chart-usage"></canvas>
       <div class="narrative">
-        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Claude consecutive — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
-        <p>La projection è il segnale più interessante: nelle prime ore tende a sparare alta (oltre 100%) perché il team consuma in burst, ma il pacing-bridge la riporta dentro il riquadro entro pochi tick. I picchi più cattivi sono concentrati nella prima finestra serale e in quella centrale notturna — altrove la curva resta sotto la diagonale ideale.</p>
-        <p>Il fatto che la <em>usage</em> reale (linea piena) chiuda quasi sempre sotto il 100% mentre la projection ha ondeggiato sopra significa che il sistema ha frenato in tempo. Senza throttling avremmo bruciato due o tre finestre.</p>
+        <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Claude consecutive (marker <code>#2..#N</code> in alto al cambio di session_id) — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
+        <p>Le bande rosse traslucide sono i tratti in cui <strong>il termostato era attivo</strong> (throttle=1 nei tick sentinella). Nota come le bande appaiano <em>quando la projection corre via</em>: è esattamente la dinamica voluta — il bridge frena prima che usage tocchi 100, così la curva blu resta sotto la soglia rossa.</p>
+        <p>I picchi di projection più cattivi sono concentrati nelle finestre dove il team ha sgomitato di più; altrove la curva gialla resta sotto la diagonale ideale. Il fatto che usage reale (linea piena) chiuda quasi sempre sotto il 100% mentre la projection ha ondeggiato sopra significa che il sistema ha frenato in tempo.</p>
       </div>
     </div>
 
@@ -188,6 +189,22 @@
     }
   }
 
+  // ---------- Throttle ranges: comprimo i tick consecutivi con throttle=1 in bande [tStart,tEnd] ----------
+  const throttleRanges = [];
+  let curr = null;
+  for (let i = 0; i < sentinel.length; i++) {
+    const r = sentinel[i];
+    const t = Date.parse(r.ts);
+    if (r.throttle) {
+      if (!curr) curr = { tStart: t, tEnd: t };
+      else curr.tEnd = t;
+    } else if (curr) {
+      throttleRanges.push(curr);
+      curr = null;
+    }
+  }
+  if (curr) throttleRanges.push(curr);
+
   // ---------- Chart 1: Usage vs Projection ----------
   const usagePts = sentinel.map((r) => ({ x: Date.parse(r.ts), y: r.usage ?? 0 }));
   // Conservo il valore reale della projection per il tooltip; clip solo per la geometria.
@@ -276,6 +293,23 @@
         },
       },
       {
+        id: "throttleBands",
+        beforeDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          ctx.save();
+          ctx.fillStyle = "rgba(235,87,87,0.10)";
+          for (const range of throttleRanges) {
+            const x1 = scales.x.getPixelForValue(range.tStart);
+            const x2 = scales.x.getPixelForValue(range.tEnd);
+            const left = Math.max(chartArea.left, Math.min(x1, x2));
+            const right = Math.min(chartArea.right, Math.max(x1, x2));
+            const w = Math.max(2, right - left);
+            ctx.fillRect(left, chartArea.top, w, chartArea.bottom - chartArea.top);
+          }
+          ctx.restore();
+        },
+      },
+      {
         id: "sessionBoundaries",
         afterDraw(chart) {
           const { ctx, chartArea, scales } = chart;
@@ -283,13 +317,19 @@
           ctx.strokeStyle = "rgba(155,217,197,0.35)";
           ctx.setLineDash([2, 4]);
           ctx.lineWidth = 1;
+          ctx.font = "10px -apple-system, sans-serif";
+          ctx.fillStyle = "rgba(155,217,197,0.85)";
+          ctx.textAlign = "left";
+          let idx = 1; // la finestra #1 inizia all'inizio del range, quindi le boundary sono dalla #2 in poi
           for (const b of sessionBoundaries) {
+            idx += 1;
             const x = scales.x.getPixelForValue(b.ts);
             if (x < chartArea.left || x > chartArea.right) continue;
             ctx.beginPath();
             ctx.moveTo(x, chartArea.top);
             ctx.lineTo(x, chartArea.bottom);
             ctx.stroke();
+            ctx.fillText("#" + idx, x + 3, chartArea.top + 11);
           }
           ctx.restore();
         },
