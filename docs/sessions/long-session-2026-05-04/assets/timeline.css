@@ -2,7 +2,23 @@
 
 .echart-tall {
   width: 100% !important;
-  height: 480px !important;
+  height: 540px !important;
+  min-height: 540px;
+}
+
+.info-box {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: rgba(86, 204, 242, 0.04);
+  color: #b9c4d4;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.info-box strong {
+  color: var(--fg);
 }
 
 .legend-row {

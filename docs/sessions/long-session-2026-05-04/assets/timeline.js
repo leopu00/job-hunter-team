@@ -175,14 +175,28 @@
         backgroundColor: "#11151e",
         borderColor: "#232836",
         textStyle: { color: "#e8ecf3" },
+        extraCssText: "max-width: 360px; white-space: normal;",
         formatter: (p) => {
           if (!p.data) return "";
+          // Linea usage di sfondo
           if (p.seriesName === "usage") {
             const u = Math.round(((p.data[1] - 0.05) / 0.85) * 100);
-            return `<b>${new Date(p.data[0]).toISOString().slice(11, 19)}Z</b><br/>usage ${u}%`;
+            return `<b>${new Date(p.data[0]).toISOString().slice(11, 19)}Z</b><br/>` +
+                   `<span style="color:#8a93a4">Usage finestra:</span> <b>${u}%</b><br/>` +
+                   `<span style="color:#5d6c84;font-size:11px">Linea di sfondo: serie usage% campionata dalla sentinella ogni ~3 minuti.</span>`;
           }
           const d = p.data;
-          return `<b>${new Date(d.value[0]).toISOString().slice(11, 19)}Z</b><br/>${d.label}<br/><span style="color:#8a93a4">${d.body || ""}</span>`;
+          const ts = new Date(d.value[0]).toISOString().slice(11, 19) + "Z";
+          // Spiegazione semantica per tipo di evento
+          const explain = {
+            window: "🪟 <b>Transizione finestra</b><br/><span style='color:#8a93a4'>Il bridge ha visto un nuovo session_id: la finestra Claude/Kimi è stata resettata.</span>",
+            capitano: "🧭 <b>Messaggio capitano</b><br/><span style='color:#8a93a4'>Comunicazione di tipo URG / WARN / REPORT / DONE / ALERT verso un agente.</span>",
+            throttle: `⏸ <b>Throttle event</b><br/><span style='color:#8a93a4'>Pausa applicata dal pacing-bridge per evitare che la proiezione sfori la finestra. Raggio ∝ √(secondi).</span>`,
+            peak: "🔥 <b>Picco usage ≥ 90%</b><br/><span style='color:#8a93a4'>Primo tick in cui la finestra raggiunge soglia di guardia. Il termostato comincia a stringere.</span>",
+          };
+          return `<b>${ts}</b><br/>${explain[d.kind] || ""}<br/>` +
+                 `<span style="color:#d6dde9"><b>${escapeHtml(d.label)}</b></span><br/>` +
+                 (d.body ? `<span style="color:#94a0b4;font-size:12px">${escapeHtml(d.body)}</span>` : "");
         },
       },
       xAxis: {
