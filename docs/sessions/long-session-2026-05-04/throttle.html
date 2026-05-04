@@ -6,20 +6,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
 <style>
-  /* override locale: i grafici di questa pagina rendono meglio con altezze diverse.
-     Usiamo min-height + height con !important per battere il global styles.css
-     (height: 360px) e impedire a Chart.js di comprimere il canvas. */
+  /* Anti-distorsione canvas Chart.js. Pattern raccomandato dalla doc:
+     wrappare il canvas in un div position:relative con altezza fissa,
+     e dare al canvas width/height 100%. Chart.js a quel punto può
+     adattare correttamente il drawing buffer all'area CSS. */
+  .chart-wrap { position: relative; }
+  .chart-wrap .canvas-host {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    min-height: 380px;
+  }
+  .chart-wrap.tall .canvas-host {
+    height: 520px;
+    min-height: 520px;
+  }
+  .chart-wrap.dense .canvas-host {
+    height: 420px;
+    min-height: 420px;
+  }
   .chart-wrap canvas {
-    min-height: 380px !important;
-    height: 380px !important;
-  }
-  .chart-wrap.tall canvas {
-    min-height: 520px !important;
-    height: 520px !important;
-  }
-  .chart-wrap.dense canvas {
-    min-height: 420px !important;
-    height: 420px !important;
+    width: 100% !important;
+    height: 100% !important;
   }
   .legend-inline {
     display: flex; flex-wrap: wrap; gap: 12px 18px;
@@ -114,7 +122,7 @@
         <button data-filter="checkpoint" id="btn-cp">💓 + Checkpoint</button>
         <button data-filter="all" id="btn-all">🌐 Tutto</button>
       </div>
-      <canvas id="lane"></canvas>
+      <div class="canvas-host"><canvas id="lane"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Lettura della corsia</h4>
@@ -149,7 +157,7 @@
         nelle 4 categorie principali di motivazione. Solo pause reali —
         i checkpoint sono esclusi perché zero-duration.
       </p>
-      <canvas id="byagent"></canvas>
+      <div class="canvas-host"><canvas id="byagent"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Quanto tempo è stato "fermo per scelta"</h4>
@@ -186,7 +194,7 @@
         <code>reason</code>. Le 4 macro-categorie coprono ~95% dei casi;
         il resto è <em>altro</em>.
       </p>
-      <canvas id="bycategory"></canvas>
+      <div class="canvas-host"><canvas id="bycategory"></canvas></div>
     </div>
     <div class="chart-wrap dense" title="Line chart stepped per i top-3 agenti per durata totale: minuti cumulati in pausa istante per istante. Salita ripida = pausa lunga in corso, plateau = lavoro pieno.">
       <h3>📈 Tempo cumulato fermo nel corso della sessione</h3>
@@ -195,7 +203,7 @@
         per istante. Una salita ripida = il termostato sta tenendo l'agente
         fermo a lungo; un plateau = l'agente sta lavorando.
       </p>
-      <canvas id="cumulative"></canvas>
+      <div class="canvas-host"><canvas id="cumulative"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Termostato visibile in 3 linee</h4>
@@ -224,7 +232,7 @@
         Quanto durano le pause? Bucket fissi: ≤30s, 30-60s, 1-2min, 2-5min, 5-10min, &gt;10min.
         Aiuta a distinguere micro-pause (fra task) da pause strategiche (per pacing).
       </p>
-      <canvas id="durations"></canvas>
+      <div class="canvas-host"><canvas id="durations"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Forma della distribuzione</h4>
@@ -260,7 +268,7 @@
         in quel momento. Si calcola facendo lo sweep dei segmenti
         [start, start+applied_sec] di ogni pausa reale e contando le sovrapposizioni.
       </p>
-      <canvas id="concurrency"></canvas>
+      <div class="canvas-host"><canvas id="concurrency"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Quando il team era bloccato in massa</h4>
@@ -295,7 +303,7 @@
         macro-categoria. Mostra le "ondate" del termostato attraverso le 18 ore
         di sessione — dove il pacing si concentra e quando invece il team gira pieno.
       </p>
-      <canvas id="hourly"></canvas>
+      <div class="canvas-host"><canvas id="hourly"></canvas></div>
     </div>
     <div class="narrative">
       <h4>Quando il termostato ha "spinto"</h4>
@@ -442,6 +450,24 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="assets/data-loader.js"></script>
 <script>
+// Default Chart.js: tooltip più leggibili e sempre attivati.
+// padding+font più grande, displayColors per le serie.
+if (window.Chart) {
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+  Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
+  Chart.defaults.plugins.tooltip.footerFont = { size: 12, weight: "400" };
+  Chart.defaults.plugins.tooltip.displayColors = true;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.backgroundColor = "rgba(22, 26, 35, 0.96)";
+  Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
+  Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
+  Chart.defaults.plugins.tooltip.footerColor = "#8a93a4";
+  Chart.defaults.plugins.tooltip.borderColor = "rgba(140, 148, 160, 0.4)";
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+}
+
 (async function () {
   const { throttle, sentinel } = await ReportData.loadAll();
 
@@ -725,6 +751,10 @@
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      // Bubble chart: 'index' non si applica (no asse X condiviso fra punti),
+      // uso 'nearest' con intersect:false per agganciare il bubble più vicino
+      // anche senza hover esatto.
+      interaction: { mode: "nearest", intersect: false, axis: "xy" },
       scales: {
         x: {
           type: "linear",
@@ -829,6 +859,7 @@
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           stacked: true,
@@ -892,6 +923,7 @@
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: { ticks: { color: "#e8ecf3" }, grid: { color: "#1f2532" } },
         y: {
@@ -972,6 +1004,7 @@
       maintainAspectRatio: false,
       animation: false,
       parsing: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           type: "linear",
@@ -1046,6 +1079,7 @@
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: { ticks: { color: "#e8ecf3" }, grid: { color: "#1f2532" } },
         y: {
@@ -1116,6 +1150,7 @@
       maintainAspectRatio: false,
       animation: false,
       parsing: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           type: "linear",
@@ -1190,6 +1225,7 @@
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           stacked: true,
