@@ -138,9 +138,14 @@
         (≈333 heartbeat extra in finestra) senza aggiungere tempo speso fermi.
       </p>
       <p>
-        La finestra di sessione è <code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>
-        come definita da <code>ReportData.SESSION_START/END</code> in
-        <code>assets/data-loader.js</code>; eventi fuori finestra sono ignorati.
+        Il <strong>perimetro di sessione</strong> è la concatenazione delle
+        3 finestre Kimi K2 della long session: <code>W1 · 94%</code> (23:07:51Z
+        → 00:08:58Z, ~1h), <code>W2 · 96% perfetta</code> (00:18:58Z → 05:06:37Z,
+        ~4h48m), <code>W3 · 64%</code> (05:16:38Z → 10:10:29Z, ~4h54m).
+        Totale attivo <strong>~10h 43m</strong>. I gap fra le finestre (warm-up
+        pre-W1, transizioni 10-15 min) sono esclusi: l'helper
+        <code>ReportData.inSession()</code> filtra solo ciò che cade dentro le
+        3 finestre, non l'intervallo grezzo.
       </p>
     </div>
   </section>
@@ -153,8 +158,10 @@
         Asse X: tempo della sessione. Una "corsia" per agente; ogni bolla è
         una pausa, dimensione proporzionale alla durata reale (<code>applied_sec</code>).
         I checkpoint heartbeat sono mostrati come tick sottili, distinti da quelli reali.
-        Le linee verticali gialle tratteggiate sono i <strong>reset di finestra</strong>
-        (≈5h) ricavati dal cambio di <code>reset_at</code> nel sentinel.
+        Le linee verticali gialle tratteggiate marcano l'inizio di ognuna
+        delle 3 finestre Kimi K2 ufficiali (<code>W1 · 94%</code>,
+        <code>W2 · 96%</code>, <code>W3 · 64%</code>) come definite in
+        <code>ReportData.SESSION_WINDOWS</code>.
       </p>
       <div class="filter-bar">
         <span>Mostra:</span>
@@ -348,7 +355,7 @@
       <h3>🌊 Ondate orarie — # pause per ora di sessione, stacked per categoria</h3>
       <p class="caption">
         Un bin per ora UTC: quante pause sono iniziate in quell'ora, divise per
-        macro-categoria. Mostra le "ondate" del termostato attraverso le 18 ore
+        macro-categoria. Mostra le "ondate" del termostato attraverso le ~10h 43m attive
         di sessione — dove il pacing si concentra e quando invece il team gira pieno.
       </p>
       <div class="canvas-host"><canvas id="hourly"></canvas></div>
@@ -584,38 +591,26 @@ if (window.Chart) {
   // Filtra alla finestra di sessione.
   const inWin = throttle.filter(ReportData.inSession);
 
-  // ----- Boundary finestra Kimi K2 -----
-  // La sessione gira su Kimi K2 (la sentinella traccia provider=kimi nella
-  // finestra 2026-05-03→04). Una "nuova finestra da 5h" si riconosce dal
-  // cambio di reset_at (HH:MM): ogni volta che la sentinella vede un orario
-  // di reset diverso, è iniziata una nuova window. Calcoliamo i boundary
-  // una volta per i marker verticali.
-  const sentinelInWin = sentinel
-    .filter(ReportData.inSession)
-    .filter((r) => r && r.provider && r.reset_at)
-    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
-  const windowBoundaries = [];
-  let lastReset = null;
-  for (const r of sentinelInWin) {
-    if (r.reset_at !== lastReset) {
-      windowBoundaries.push({
-        ts_unix: Date.parse(r.ts),
-        reset_at: r.reset_at,
-        session_id: r.session_id || "",
-      });
-      lastReset = r.reset_at;
-    }
-  }
-  // Helper: dato un ts (ms), restituisce l'indice e info della finestra Kimi K2
-  // attiva in quel momento. Una finestra è il range [boundary[i], boundary[i+1]).
+  // ----- Finestre Kimi K2 (perimetro ufficiale) -----
+  // Le 3 finestre canoniche W1/W2/W3 vengono direttamente da
+  // ReportData.SESSION_WINDOWS (definite in assets/data-loader.js).
+  // Niente più calcolo boundary "manuale" via reset_at del sentinel:
+  // il perimetro è dichiarato a monte e condiviso fra tutte le pagine.
+  const SESSION_WINDOWS = ReportData.SESSION_WINDOWS;
+  // windowBoundaries: lista degli inizi finestra per il plugin marker.
+  const windowBoundaries = SESSION_WINDOWS.map((w) => ({
+    ts_unix: w.startMs,
+    label: w.label,           // "W1 · 94%", "W2 · 96% perfetta", "W3 · 64%"
+    id: w.id,                 // "W1" / "W2" / "W3"
+    reset_at: w.label,        // riusato dal vecchio plugin marker (string label)
+    session_id: w.session_id,
+  }));
+  // Helper: dato un ts (ms), restituisce la finestra Kimi K2 attiva (o null
+  // se siamo in un gap fra finestre). Usa ReportData.windowOf esposto.
   function windowAt(tsMs) {
-    if (!windowBoundaries.length) return null;
-    for (let i = windowBoundaries.length - 1; i >= 0; i--) {
-      if (tsMs >= windowBoundaries[i].ts_unix) {
-        return { idx: i + 1, reset_at: windowBoundaries[i].reset_at };
-      }
-    }
-    return { idx: 0, reset_at: "(pre)" };
+    const w = ReportData.windowOf(tsMs);
+    if (!w) return null;
+    return { idx: SESSION_WINDOWS.indexOf(w) + 1, label: w.label, id: w.id };
   }
 
   // Plugin per disegnare linee verticali tratteggiate sui boundary (lane + cumul).
@@ -641,7 +636,7 @@ if (window.Chart) {
         ctx.moveTo(x, top);
         ctx.lineTo(x, bottom);
         ctx.stroke();
-        const label = "→ reset " + b.reset_at;
+        const label = "→ " + b.label;
         ctx.fillText(label, x + 4, top + 12);
       }
       ctx.restore();
@@ -727,7 +722,12 @@ if (window.Chart) {
 
   // % del tempo della sessione che l'agente top ha passato fermo.
   // Numeratore: applied_sec totale di topAgent. Denominatore: durata sessione (s).
-  const sessionLenSec = (ReportData.SESSION_END - ReportData.SESSION_START) / 1000;
+  // Durata attiva = somma delle 3 finestre Kimi K2 (gap esclusi), non
+  // l'intervallo SESSION_START → SESSION_END che includerebbe i gap.
+  const sessionLenSec = ReportData.SESSION_WINDOWS.reduce(
+    (s, w) => s + (w.endMs - w.startMs) / 1000,
+    0
+  );
   const topAgentSec = totalsByAgent[topAgent] || 0;
   const topAgentPct = sessionLenSec > 0 ? (topAgentSec / sessionLenSec) * 100 : 0;
 
@@ -801,7 +801,7 @@ if (window.Chart) {
       tracciati nel lane chart).
       L'agente top, ${ReportData.agentEmoji(topAgent)} <code>${topAgent}</code>,
       ha passato <strong>${fmtMin(topAgentSec)}</strong> in pausa cumulata —
-      ${topAgentPct.toFixed(1)}% della finestra di sessione di 18 ore.</p>
+      ${topAgentPct.toFixed(1)}% delle ~10h 43m attive nelle 3 finestre Kimi K2.</p>
       <p>L'ora di picco è <strong>${peakHour}</strong> con
       <strong>${peakN} pause iniziate</strong> nello stesso bin orario:
       è il momento più "denso" del termostato, da incrociare con i comandi
@@ -962,7 +962,7 @@ if (window.Chart) {
               const ts = new Date(d.x).toISOString().slice(11, 19) + "Z";
               const dur = d._sec ? `${d._sec}s (${(d._sec/60).toFixed(1)} min)` : "0s (heartbeat)";
               const w = windowAt(d.x);
-              const winLabel = w ? `Finestra Kimi K2 #${w.idx} (reset ${w.reset_at})` : "—";
+              const winLabel = w ? `Finestra Kimi K2: ${w.label}` : "(gap fra finestre)";
               return [
                 `${d._agent} · ${dur}`,
                 `Categoria: ${d._category}`,
@@ -1713,21 +1713,13 @@ if (window.Chart) {
     }
   }
 
-  // ----- Card per finestra Kimi K2 -----
+  // ----- Card per finestra Kimi K2 (W1/W2/W3) -----
   const windowsGrid = document.getElementById("windows-grid");
-  if (windowsGrid && windowBoundaries.length) {
-    // Costruisci i range [start, end) per ogni finestra. L'ultima va fino a SESSION_END.
-    const ranges = windowBoundaries.map((b, i) => ({
-      reset_at: b.reset_at,
-      start: b.ts_unix,
-      end: i + 1 < windowBoundaries.length
-        ? windowBoundaries[i + 1].ts_unix
-        : ReportData.SESSION_END,
-    }));
-    ranges.forEach((win, i) => {
+  if (windowsGrid && SESSION_WINDOWS.length) {
+    SESSION_WINDOWS.forEach((win, i) => {
       const evs = realPauses.filter((e) => {
         const t = e.ts_unix * 1000;
-        return t >= win.start && t < win.end;
+        return t >= win.startMs && t <= win.endMs;
       });
       const winSec = evs.reduce((s, e) => s + (e.applied_sec || 0), 0);
       // Categoria dominante per minuti
@@ -1740,16 +1732,16 @@ if (window.Chart) {
       for (const c in catSec) {
         if (catSec[c] > domCatSec) { domCatSec = catSec[c]; domCat = c; }
       }
-      const winLenH = ((win.end - win.start) / 3600 / 1000).toFixed(1);
-      const fromHHMM = new Date(win.start).toISOString().slice(11, 16) + "Z";
-      const toHHMM = new Date(win.end).toISOString().slice(11, 16) + "Z";
+      const winLenH = ((win.endMs - win.startMs) / 3600 / 1000).toFixed(1);
+      const fromHHMM = new Date(win.startMs).toISOString().slice(11, 16) + "Z";
+      const toHHMM = new Date(win.endMs).toISOString().slice(11, 16) + "Z";
       const card = document.createElement("div");
       card.className = "kpi-card";
-      card.title = `Finestra dal cambio reset_at della sentinella. Range ${fromHHMM} → ${toHHMM} (~${winLenH}h).`;
+      card.title = `${win.label} — range ${fromHHMM} → ${toHHMM} (~${winLenH}h). Da ReportData.SESSION_WINDOWS.`;
       const swatch = `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;
         background:${CATEGORY_COLORS[domCat] || "#888"};margin-right:6px;vertical-align:middle;"></span>`;
       card.innerHTML = `
-        <div class="label">🪟 Finestra ${i + 1} · reset ${win.reset_at}</div>
+        <div class="label">🪟 ${win.label}</div>
         <div class="value" style="font-size:18px; line-height:1.3;">
           ${evs.length} pause<br>
           <span style="font-size:14px; color: var(--muted);">${fmtMin(winSec)} fermo</span>
