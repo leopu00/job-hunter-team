@@ -147,9 +147,12 @@
 <header class="hero">
   <h1>🪟 Le due finestre top — 94% & 96%</h1>
   <p class="subtitle">
-    Due finestre Kimi K2 back-to-back, picco a 10 minuti l'una dall'altra.
-    La 94% è la <em>tensione</em> (il termostato spinto al massimo), la 96%
-    è la <em>finestra perfetta</em> (durata piena, mission-log compatto).
+    <strong>W1 · 94%</strong> e <strong>W2 · 96% perfetta</strong>: due delle
+    3 finestre Kimi K2 ufficiali della long session (la terza è W3 · 64%,
+    ~10h 43m totali attivi). Sono back-to-back, picco a 10 minuti l'una
+    dall'altra. La 94% è la <em>tensione</em> (il termostato spinto al
+    massimo), la 96% è la <em>finestra perfetta</em> (durata piena,
+    mission-log compatto).
   </p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
@@ -166,8 +169,8 @@
 
 <div class="windows-toc">
   <strong>Salta a:</strong>
-  <a href="#win-94">🟡 Finestra 94% (tensione)</a>
-  <a href="#win-96">🟢 Finestra 96% (perfetta)</a>
+  <a href="#win-94">🟡 W1 · 94% (tensione)</a>
+  <a href="#win-96">🟢 W2 · 96% (perfetta)</a>
 </div>
 
 <main>
@@ -175,12 +178,13 @@
   <section id="win-94">
     <div class="window-banner peak94">
       <div>
-        <h2>🟡 Finestra 94% — la tensione del termostato</h2>
+        <h2>🟡 W1 · 94% — la tensione del termostato</h2>
         <div class="subtitle">
           <code>session_id=20260503T230751Z</code> ·
           inizio <strong>23:07:51 UTC</strong> ·
           picco <strong>94%</strong> alle <strong>00:08:58 UTC</strong> ·
-          durata ~1h
+          durata <strong>~1h 1m</strong> (W1 ufficiale di
+          <code>ReportData.SESSION_WINDOWS</code>)
         </div>
       </div>
       <div class="peak-pill">
@@ -466,13 +470,18 @@ if (window.Chart) {
   Chart.defaults.plugins.tooltip.borderWidth = 1;
 }
 
-// Range temporali delle 2 finestre: gli end vengono dal cambio di session_id
-// nel sentinel (verificato in fase di profilazione dati).
+// Range temporali della finestra 94%: ora allineata a
+// ReportData.SESSION_WINDOWS[0] (W1) — perimetro ufficiale.
+// W1.start = 23:07:51 UTC, W1.end = 00:08:58 UTC (= peak), durata ~1h 1m.
+// Prima usavo end=00:18:58 (cambio session_id sentinel) ma includeva il gap
+// di 10min fra W1 e W2. Ora chiudo esattamente al peak come da perimetro.
+const _W1_OFFICIAL = (window.ReportData && ReportData.SESSION_WINDOWS && ReportData.SESSION_WINDOWS[0]) || null;
 const WIN_94 = {
-  sid: "20260503T230751Z",
-  startMs: Date.parse("2026-05-03T23:07:51Z"),
-  endMs:   Date.parse("2026-05-04T00:18:58Z"),
+  sid: _W1_OFFICIAL ? _W1_OFFICIAL.session_id : "20260503T230751Z",
+  startMs: _W1_OFFICIAL ? _W1_OFFICIAL.startMs : Date.parse("2026-05-03T23:07:51Z"),
+  endMs:   _W1_OFFICIAL ? _W1_OFFICIAL.endMs   : Date.parse("2026-05-04T00:08:58Z"),
   peakMs:  Date.parse("2026-05-04T00:08:58Z"),
+  label:   _W1_OFFICIAL ? _W1_OFFICIAL.label   : "W1 · 94%",
 };
 
 const WIN_96 = {
