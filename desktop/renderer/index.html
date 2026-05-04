@@ -467,13 +467,10 @@
             </p>
           </header>
           <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.runtimeTitle">🐳 Runtime Docker</div>
             <div class="home__row">
               <span class="home__row-label" data-i18n="home.docker.state">Stato</span>
               <span class="home__row-value" id="home-docker-state">—</span>
-            </div>
-            <div class="home__row">
-              <span class="home__row-label" data-i18n="home.docker.image">Immagine JHT</span>
-              <span class="home__row-value" id="home-docker-image">—</span>
             </div>
             <div class="home__actions home__actions--inline">
               <button class="btn btn--ghost" id="home-btn-docker-refresh" data-i18n="home.docker.refresh">
@@ -483,6 +480,32 @@
                 Apri Docker Desktop
               </button>
             </div>
+          </div>
+          <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.imageTitle">📦 Container JHT</div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.image">Immagine</span>
+              <span class="home__row-value" id="home-docker-image">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-name-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageName">Nome</span>
+              <span class="home__row-value" id="home-docker-image-name">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-version-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageVersion">Versione</span>
+              <span class="home__row-value" id="home-docker-image-version">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-created-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageCreated">Data</span>
+              <span class="home__row-value" id="home-docker-image-created">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-size-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageSize">Dimensione</span>
+              <span class="home__row-value" id="home-docker-image-size">—</span>
+            </div>
+            <a href="#" class="home__card-link" id="home-docker-image-releases" data-i18n="home.docker.imageReleases">
+              Vedi tutte le release →
+            </a>
           </div>
         </div>
 
