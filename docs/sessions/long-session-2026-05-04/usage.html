@@ -41,6 +41,15 @@
     background: #11151e; padding: 1px 6px; border-radius: 4px;
     font-size: 12px; color: #c8cedb;
   }
+  .status-badge {
+    display: inline-block; vertical-align: middle;
+    margin-left: 12px; padding: 4px 12px;
+    border-radius: 999px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .status-badge.green { background: rgba(111,207,151,0.12); color: #6fcf97; border-color: rgba(111,207,151,0.4); }
+  .status-badge.yellow { background: rgba(242,201,76,0.12); color: #f2c94c; border-color: rgba(242,201,76,0.4); }
+  .status-badge.red { background: rgba(235,87,87,0.12); color: #eb5757; border-color: rgba(235,87,87,0.4); }
   /* Override altezze canvas: lo shared styles.css forza 360px !important.
      Qui rispecifico per ciascun grafico con priorità più alta (id selector + !important). */
   .chart-wrap canvas#chart-usage { height: 520px !important; min-height: 520px; }
@@ -61,6 +70,49 @@
     transition: background 120ms, color 120ms;
   }
   .chart-info:hover { background: #2a3142; color: var(--fg); }
+  /* TOC sticky a destra — solo su viewport ampi. */
+  .with-toc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 32px;
+    align-items: start;
+  }
+  .toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+  .toc h4 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+  }
+  .toc a {
+    display: block;
+    padding: 5px 8px;
+    margin: 1px -8px;
+    border-radius: 6px;
+    color: var(--fg);
+    text-decoration: none;
+    transition: background 100ms;
+  }
+  .toc a:hover { background: #1f2532; }
+  .toc a.active {
+    background: #1f2532;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  @media (max-width: 1180px) {
+    .with-toc { grid-template-columns: 1fr; }
+    .toc { position: relative; top: 0; }
+  }
   table.windows .bad { color: #eb5757; }
   table.windows .ok  { color: #6fcf97; }
   table.windows .warn { color: #f2c94c; }
@@ -79,7 +131,8 @@
   </nav>
 </header>
 
-<main>
+<main class="with-toc">
+<div class="main-col">
   <section id="kpi">
     <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid" id="kpi-grid">
@@ -93,14 +146,14 @@
   </section>
 
   <section id="insights">
-    <h2>🧠 In sintesi</h2>
+    <h2>🧠 In sintesi <span id="status-badge" class="status-badge"></span></h2>
     <div class="insights-card" id="insights-card">
       <ul id="insights-list"><li>caricamento…</li></ul>
     </div>
   </section>
 
   <section>
-    <div class="chart-wrap" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Claude (#N).">
+    <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Claude (#N).">
       <span class="chart-info" title="Cosa indica questo grafico: andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Claude consecutive. Soglia 100% = limite finestra; sopra 100% saremmo in over.">ℹ</span>
       <h3>1 · 📈 Usage % vs Projection nel tempo</h3>
       <p class="caption">La sentinella misura ogni ~3 min la percentuale consumata della finestra corrente (linea piena) e proietta il consumo a fine finestra (linea tratteggiata). Quando la projection si stacca verso l'alto è il termostato a mettere freno.</p>
@@ -118,7 +171,7 @@
       </div>
     </div>
 
-    <div class="chart-wrap" title="Time series: velocity_smooth (EMA del consumo, area verde) e velocity_ideal (target per chiudere a 100% al reset, viola tratteggiata).">
+    <div class="chart-wrap" id="chart2" title="Time series: velocity_smooth (EMA del consumo, area verde) e velocity_ideal (target per chiudere a 100% al reset, viola tratteggiata).">
       <span class="chart-info" title="Cosa indica: ritmo di consumo punti%/h. Verde = velocity reale smussata, viola = ritmo ideale per terminare la finestra a 100% senza sforare. I gap nella verde sono i reset di finestra (delta negativo artificiale, escluso). Sopra il viola = throttle deve attivarsi.">ℹ</span>
       <h3>2 · 🌡 Velocity reale vs Velocity ideale</h3>
       <p class="caption">Velocity = punti % / ora. La velocity_ideal è il ritmo che, mantenuto, chiude la finestra esattamente al 100% al reset. Sotto questa soglia siamo in sottoutilizzo, sopra si rischia di sforare.</p>
@@ -138,7 +191,7 @@
     </div>
 
     <div class="grid-2">
-      <div class="chart-wrap" title="Curva accumulativa weekly_usage (% del budget settimanale Claude consumata).">
+      <div class="chart-wrap" id="chart3" title="Curva accumulativa weekly_usage (% del budget settimanale Claude consumata).">
         <span class="chart-info" title="Cosa indica: budget settimanale residuo. Curva monotona crescente, una volta a 100% il piano si esaurisce. Pendenza ripida = team che spinge, piatta = checkpoint/attesa.">ℹ</span>
         <h3>3 · 📅 Weekly Usage — la curva accumulativa</h3>
         <p class="caption">Percentuale del budget settimanale Claude consumata nel tempo. È il vero limite di lungo periodo: una volta a 100% il piano si esaurisce.</p>
@@ -150,7 +203,7 @@
         </div>
       </div>
 
-      <div class="chart-wrap" title="Doughnut: percentuale di tick in ciascuno status sentinella (SOTTOUTILIZZO, ATTENZIONE, STEADY, RESET).">
+      <div class="chart-wrap" id="chart4" title="Doughnut: percentuale di tick in ciascuno status sentinella (SOTTOUTILIZZO, ATTENZIONE, STEADY, RESET).">
         <span class="chart-info" title="Cosa indica: quanto tempo è passato in ciascuno status. SOTTOUTILIZZO = c'è margine, ATTENZIONE = il bridge sorveglia, STEADY = zona ideale, RESET = confini finestra. Bilanciamento ATTENZIONE/SOTTOUTILIZZO ≈ 50/50 = pacing in regime.">ℹ</span>
         <h3>4 · 📊 Status sentinella — distribuzione tempo</h3>
         <p class="caption">Percentuale di tick passati in ciascuno status: <em>SOTTOUTILIZZO</em>, <em>ATTENZIONE</em>, <em>STEADY</em>, <em>RESET</em>. È la radiografia di quanto è stato in zona di comfort il team.</p>
@@ -163,7 +216,7 @@
       </div>
     </div>
 
-    <div class="chart-wrap" title="Bar+line dual-axis: per ognuna delle finestre Claude attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
+    <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle finestre Claude attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
       <span class="chart-info" title="Cosa indica: visione one-look di tutte le finestre Claude della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio). Linea verde = tempo coperto dalla sentinella in quella finestra (asse minuti a destra).">ℹ</span>
       <h3>5 · 🪟 Riepilogo per finestra Claude</h3>
       <p class="caption">Per ognuna delle finestre Claude attraversate dalla sessione: durata di copertura, picco di usage raggiunto, e proiezione massima vista. Una finestra "sana" chiude vicino al 100% senza picchi di projection sopra 110%.</p>
@@ -196,7 +249,7 @@
       </div>
     </div>
 
-    <div class="chart-wrap" title="Time series: delta projection_naive − projection (effetto dello smoother del pacing-bridge). Verde quando riduce allarme, rosso quando aggiunge cautela.">
+    <div class="chart-wrap" id="chart6" title="Time series: delta projection_naive − projection (effetto dello smoother del pacing-bridge). Verde quando riduce allarme, rosso quando aggiunge cautela.">
       <span class="chart-info" title="Cosa indica: quanto il pacing-bridge sta correggendo la proiezione naive. Verde (>0) = naive esagerava, smoother calma. Rosso (<0) = naive era ottimista, smoother frena. Vicino a zero = nessuna correzione necessaria.">ℹ</span>
       <h3>6 · 🪄 Effetto smoothing del bridge — projection_naive vs projection</h3>
       <p class="caption">La sentinella calcola due proiezioni: <em>projection_naive</em> (estrapolazione lineare del consumo corrente) e <em>projection</em> (corretta dallo smoother del pacing-bridge). La differenza <code>naive − smooth</code> dice quanto il bridge sta "addolcendo" il segnale.</p>
@@ -212,6 +265,18 @@
       </div>
     </div>
   </section>
+</div>
+<aside class="toc" aria-label="Indice pagina">
+  <h4>Indice</h4>
+  <a href="#kpi" data-toc>🌙 Numeri chiave</a>
+  <a href="#insights" data-toc>🧠 In sintesi</a>
+  <a href="#chart1" data-toc>📈 1 · Usage / projection</a>
+  <a href="#chart2" data-toc>🌡 2 · Velocity</a>
+  <a href="#chart3" data-toc>📅 3 · Weekly</a>
+  <a href="#chart4" data-toc>📊 4 · Status</a>
+  <a href="#chart5" data-toc>🪟 5 · Per finestra</a>
+  <a href="#chart6" data-toc>🪄 6 · Smoothing</a>
+</aside>
 </main>
 
 <footer>
@@ -395,6 +460,41 @@
           ctx.fillStyle = "rgba(235,87,87,0.85)";
           ctx.font = "11px -apple-system, sans-serif";
           ctx.fillText("100%", chartArea.right - 38, y - 4);
+          ctx.restore();
+        },
+      },
+      {
+        id: "peakMarker",
+        afterDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          if (!peakUsageRec) return;
+          const x = scales.x.getPixelForValue(Date.parse(peakUsageRec.ts));
+          const y = scales.y.getPixelForValue(peakUsageRec.usage);
+          if (x < chartArea.left || x > chartArea.right) return;
+          ctx.save();
+          // Marker punto
+          ctx.fillStyle = "#eb5757";
+          ctx.strokeStyle = "#0d0f14";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Label
+          const label = "🔥 picco " + peakUsageRec.usage + "%";
+          ctx.font = "600 11px -apple-system, sans-serif";
+          const w = ctx.measureText(label).width + 12;
+          let lx = x + 12, ly = y - 18;
+          if (lx + w > chartArea.right) lx = x - 12 - w;
+          ctx.fillStyle = "rgba(13,15,20,0.9)";
+          ctx.strokeStyle = "rgba(235,87,87,0.5)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(lx, ly - 11, w, 22, 4) : ctx.rect(lx, ly - 11, w, 22);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#eb5757";
+          ctx.fillText(label, lx + 6, ly + 4);
           ctx.restore();
         },
       },
@@ -720,6 +820,10 @@
   const winDurMin = windows.map((w) => Math.round((w.tEnd - w.tStart) / 60000));
   const winPeakU = windows.map((w) => w.peakUsage);
   const winPeakP = windows.map((w) => Math.min(w.peakProj, 200));
+  // Highlight peggior finestra (max peakProj) con bordo rosso spesso.
+  const worstIdx = windows.reduce((m, w, i) => (w.peakProj > (windows[m]?.peakProj ?? 0) ? i : m), 0);
+  const winPeakPBorderColor = winPeakP.map((_, i) => i === worstIdx ? "#eb5757" : "transparent");
+  const winPeakPBorderWidth = winPeakP.map((_, i) => i === worstIdx ? 2 : 0);
 
   new Chart(document.getElementById("chart-windows"), {
     type: "bar",
@@ -737,6 +841,8 @@
           label: "picco projection %",
           data: winPeakP,
           backgroundColor: "#f2c94c",
+          borderColor: winPeakPBorderColor,
+          borderWidth: winPeakPBorderWidth,
           borderRadius: 4,
           yAxisID: "y",
         },
@@ -845,6 +951,23 @@
     `;
     tbody.appendChild(tr);
   });
+
+  // ---------- Status badge globale (verde/giallo/rosso) ----------
+  // Verde se nessuna finestra ha sforato 100% e <30% tick in throttle.
+  // Giallo se projection toccata >120% in qualche finestra OR throttle 30-70%.
+  // Rosso se usage reale ha sfondato 95% (rischio sforamento) OR throttle >70%.
+  const peakAbsUsage = sentinel.reduce((m, r) => Math.max(m, r.usage ?? 0), 0);
+  const peakAbsProj = sentinel.reduce((m, r) => Math.max(m, r.projection ?? 0), 0);
+  const throttleRatioGlobal = sentinel.length ? sentinel.filter((r) => r.throttle).length / sentinel.length : 0;
+  let badgeClass = "green", badgeText = "🟢 sessione gestita bene";
+  if (peakAbsUsage >= 95 || throttleRatioGlobal > 0.7) {
+    badgeClass = "red"; badgeText = "🔴 sessione critica — sfioramento o throttle saturo";
+  } else if (peakAbsProj > 120 || throttleRatioGlobal > 0.3) {
+    badgeClass = "yellow"; badgeText = "🟡 termostato sotto pressione — pacing tirato";
+  }
+  const badge = document.getElementById("status-badge");
+  badge.className = "status-badge " + badgeClass;
+  badge.textContent = badgeText;
 
   // ---------- Insights "In sintesi" ----------
   const insightsList = document.getElementById("insights-list");
@@ -999,6 +1122,34 @@
       },
     ],
   });
+
+  // ---------- Scroll-spy TOC ----------
+  // IntersectionObserver evidenzia la voce TOC corrispondente alla sezione
+  // più visibile a schermo. Soglia 30% per evitare flickering.
+  const tocLinks = Array.from(document.querySelectorAll(".toc a[data-toc]"));
+  const tocTargets = tocLinks
+    .map((a) => ({ a, el: document.querySelector(a.getAttribute("href")) }))
+    .filter((t) => t.el);
+  const setActive = (id) => {
+    tocLinks.forEach((a) => {
+      a.classList.toggle("active", a.getAttribute("href") === "#" + id);
+    });
+  };
+  if ("IntersectionObserver" in window && tocTargets.length) {
+    let visible = new Map();
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) visible.set(e.target.id, e.intersectionRatio);
+        else visible.delete(e.target.id);
+      }
+      let bestId = null, bestRatio = 0;
+      for (const [id, r] of visible) {
+        if (r > bestRatio) { bestRatio = r; bestId = id; }
+      }
+      if (bestId) setActive(bestId);
+    }, { threshold: [0.3, 0.6] });
+    tocTargets.forEach((t) => obs.observe(t.el));
+  }
 })();
 </script>
 </body>
