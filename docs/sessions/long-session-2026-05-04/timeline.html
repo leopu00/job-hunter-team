@@ -5,11 +5,17 @@
 <title>Timeline — Long Session 2026-05-04</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/timeline.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
 <header class="hero">
   <h1>📅 Timeline &amp; Narrativa</h1>
-  <p class="subtitle">Sezione assegnata a dev4 — placeholder, da popolare.</p>
+  <p class="subtitle">
+    Cronologia eventi della long session — kickoff agenti, transizioni di
+    finestra, throttle, messaggi del capitano. Letta da sinistra a destra è la
+    storia della notte.
+  </p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -18,11 +24,163 @@
     <a href="timeline.html">📅 Timeline</a>
   </nav>
 </header>
+
 <main>
-  <section>
-    <p class="note">⚠️ Sezione vuota — vedi README.md per assegnazione iniziale.</p>
+
+  <section id="overview-chart">
+    <h2>Vista d'insieme</h2>
+    <p class="caption-muted">
+      Ogni puntino è un evento. Le corsie verticali separano i tipi: in alto le
+      <em>transizioni di finestra</em> (i reset Claude/Kimi che la sentinella
+      vede come <code>session_id</code> nuovo), poi i <em>messaggi capitano</em>,
+      poi i <em>throttle</em> (raggio = secondi applicati), poi i <em>picchi
+      usage</em>. La curva chiara sullo sfondo è l'usage% campionato.
+    </p>
+    <div class="chart-wrap">
+      <h3>Timeline multi-corsia</h3>
+      <p class="caption">
+        Scroll orizzontale dentro al riquadro: ECharts dataZoom in basso per
+        navigare. Hover su un evento per dettagli.
+      </p>
+      <div id="timeline-chart" class="echart-tall"></div>
+      <div class="legend-row">
+        <span class="legend-pill" data-lane="window">🪟 Finestra</span>
+        <span class="legend-pill" data-lane="capitano">🧭 Capitano</span>
+        <span class="legend-pill" data-lane="throttle">⏸ Throttle</span>
+        <span class="legend-pill" data-lane="peak">🔥 Peak ≥90%</span>
+      </div>
+    </div>
   </section>
+
+  <section id="finestre">
+    <h2>Le finestre attraversate</h2>
+    <p class="caption-muted">
+      Ogni riga è una finestra Claude/Kimi distinta vista dalla sentinella
+      (cambio di <code>session_id</code>). Le finestre brevi sono test di reset
+      manuale; le due lunghe sono le finestre "vere" da circa 5 ore.
+    </p>
+    <div id="windows-table"></div>
+    <div class="narrative">
+      <strong>Cosa raccontano queste righe.</strong>
+      Le prime tre righe (19:12, 19:16, 20:40) sono micro-finestre: il bridge
+      ha visto il provider riavviarsi più volte in pochi minuti — tipico di un
+      warm-up con reset manuali per allineare il termostato. Da lì in poi la
+      sessione si stabilizza in due finestre lunghe back-to-back (23:07→00:08
+      e 00:18→05:06), e una terza notturna leggera (05:16→10:10). È <em>questa</em>
+      la "doppia finestra Claude" promessa nel briefing: non ci sono buchi in
+      mezzo, la transizione è invisibile dal punto di vista del team.
+    </div>
+  </section>
+
+  <section id="storia">
+    <h2>La storia in cinque atti</h2>
+    <p class="caption-muted">
+      Le narrazioni sotto sono ricavate dai dati e dai log testuali — non sono
+      commento opinionato ma riassunto puntuale di cosa è successo.
+    </p>
+
+    <article class="phase" id="atto-1">
+      <h3>Atto 1 — Kickoff serale (18:00 → 19:30 UTC)</h3>
+      <div id="phase-1-events" class="phase-events"></div>
+      <div class="narrative">
+        <strong>Qui è cresciuto il team.</strong>
+        Dopo il primo tick alle 18:00, il capitano apre i loop dei lavoratori
+        uno alla volta: scout-1, analista-1, scrittore-1. Ogni kickoff è un
+        messaggio <code>MSG</code> seguito da un <code>ACK</code> dell'agente —
+        la stretta di mano che la sentinella userà come baseline per misurare
+        il consumo. La velocità ideale resta sopra 400%/h: significa che
+        c'è ancora tantissimo "budget" rispetto a ciò che il team consuma.
+      </div>
+    </article>
+
+    <article class="phase" id="atto-2">
+      <h3>Atto 2 — Ramp-up e prime pause (19:30 → 23:00 UTC)</h3>
+      <div id="phase-2-events" class="phase-events"></div>
+      <div class="narrative">
+        <strong>Qui è andato in throttling perché il proiettato usciva dalla
+        finestra.</strong>
+        Da analista-1 partono le prime pause da 120s con motivazione
+        <code>proj 137%</code>: il termostato proietta che, mantenendo questo
+        ritmo, l'agente brucerebbe il 137% della finestra prima del reset. La
+        risposta non è bloccare, ma rallentare di pochi minuti per
+        riportare la proiezione sotto il 100%. Da metà serata si aggiungono
+        scrittore-1 e scorer-1, che diventeranno i due grandi consumatori
+        della notte.
+      </div>
+    </article>
+
+    <article class="phase" id="atto-3">
+      <h3>Atto 3 — Transizione di finestra (23:07 → 00:18 UTC)</h3>
+      <div id="phase-3-events" class="phase-events"></div>
+      <div class="narrative">
+        <strong>Qui c'è stata la transizione di finestra.</strong>
+        Alle 23:07 il bridge registra un nuovo <code>session_id</code>: la
+        finestra Kimi viene resettata. Prima del reset l'usage tocca 94%,
+        a un soffio dal limite — il termostato ha tenuto la rotta senza far
+        deragliare la finestra. Subito dopo, alle 00:18 UTC, parte la finestra
+        successiva (peak finale 96%) e il team continua a lavorare come se
+        nulla fosse: nessun riavvio manuale, nessun messaggio di "ho perso
+        contesto". Questo è il momento chiave del run.
+      </div>
+    </article>
+
+    <article class="phase" id="atto-4">
+      <h3>Atto 4 — Notte profonda e picco (00:18 → 05:16 UTC)</h3>
+      <div id="phase-4-events" class="phase-events"></div>
+      <div class="narrative">
+        <strong>Qui il termostato ha lavorato di fino.</strong>
+        È l'ora dei lunghi throttle: scrittore-1 e scorer-1 accumulano pause
+        da 120s e 300s in cascata, segnale che la proiezione restava sopra il
+        target e il bridge insisteva. Il picco della finestra raggiunge 96%
+        intorno alle 03:00 UTC — soglia di guardia ma non saturazione. La
+        differenza fra "rallentare" e "fermarsi" è tutta qui: il team non si
+        ferma mai, ma il ritmo si appiattisce volutamente.
+      </div>
+    </article>
+
+    <article class="phase" id="atto-5">
+      <h3>Atto 5 — Mattina, terza finestra leggera (05:16 → 12:00 UTC)</h3>
+      <div id="phase-5-events" class="phase-events"></div>
+      <div class="narrative">
+        <strong>Qui la pressione si scarica.</strong>
+        Reset alle 05:16 UTC: nuova finestra, peak 64% — molto sotto le
+        precedenti. Il throttle si rarefa, le motivazioni cambiano da
+        "proj XXX%" a "coda vuota, attesa 2min" e "wait critico R3 file write":
+        non è più il termostato a frenare, è il flusso di lavoro che ha meno
+        cose in coda. Alle 10:13 UTC la quarta finestra parte praticamente da
+        zero, e il run si conclude in scia.
+      </div>
+    </article>
+  </section>
+
+  <section id="messaggi">
+    <h2>Tutti gli eventi (scrollabili)</h2>
+    <p class="caption-muted">
+      Ordinati per timestamp. Filtra per tipo cliccando le pillole.
+    </p>
+    <div class="filter-row" id="filter-row">
+      <button class="filter-pill is-on" data-kind="window">🪟 Finestra</button>
+      <button class="filter-pill is-on" data-kind="capitano">🧭 Capitano</button>
+      <button class="filter-pill is-on" data-kind="kickoff">🚀 Kickoff</button>
+      <button class="filter-pill is-on" data-kind="throttle">⏸ Throttle</button>
+      <button class="filter-pill is-on" data-kind="peak">🔥 Peak</button>
+      <span class="filter-stats" id="filter-stats"></span>
+    </div>
+    <ol class="event-log" id="event-log"></ol>
+  </section>
+
 </main>
+
+<footer>
+  <small>
+    Eventi estratti da <code>data/sentinel-data.jsonl.txt</code>,
+    <code>data/throttle-events.jsonl.txt</code>,
+    <code>data/messages.jsonl.txt</code>. Finestra:
+    <code>2026-05-03T18:00Z → 2026-05-04T12:00Z</code>.
+  </small>
+</footer>
+
 <script src="assets/data-loader.js"></script>
+<script src="assets/timeline.js"></script>
 </body>
 </html>
