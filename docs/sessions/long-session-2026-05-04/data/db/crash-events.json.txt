@@ -1,0 +1,11 @@
+{"ts": "2026-04-26T01:32:14.308Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "FAILURE", "preview": "[BRIDGE FAILURE] fetch fallito (reason=claude_429). Esegui fallback come da prom"}
+{"ts": "2026-04-26T01:35:15.548Z", "session": "CAPITANO", "from": "bridge", "to": "capitano", "type": "ALERT", "preview": "[BRIDGE ALERT] sorgente usage degraded da 3 tick (~4 min, reason=claude_429). La"}
+{"ts": "2026-04-26T01:40:51.353Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "FAILURE", "preview": "[BRIDGE FAILURE] fetch fallito (reason=claude_429). Esegui fallback come da prom"}
+{"ts": "2026-04-26T20:34:08.949Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "FAILURE", "preview": "[BRIDGE FAILURE] ts=20:34:08 fetch fallito (reason=kimi_api_none). Esegui fallba"}
+{"ts": "2026-04-26T22:13:34.126Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "FAILURE", "preview": "[BRIDGE FAILURE] ts=22:13:33 fetch fallito (reason=kimi_api_none). Esegui fallba"}
+{"ts": "2026-05-02T15:40:14.928Z", "session": "CAPITANO", "from": "utente", "to": "capitano", "type": "URG", "preview": "[@utente -> @capitano] [URG] OVERRIDE: spawna SUBITO tutti gli agenti mancanti ("}
+{"ts": "2026-05-02T18:33:40.468Z", "session": "CAPITANO", "from": "utente", "to": "capitano", "type": "MSG", "preview": "[@utente -> @capitano] [MSG] OVERRIDE BOOT: ignora la regola \"1 spawn alla volta"}
+{"ts": "2026-05-03T19:44:28.209Z", "session": "SCOUT-1", "from": "capitano", "to": "scout-1", "type": "MSG", "preview": "[@capitano -> @scout-1] [MSG] RIPRESA POST-CRASH. Sei crashato ~19:34 su errore "}
+{"ts": "2026-05-03T19:46:13.002Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "ACK", "preview": "[@scout-1 -> @capitano] [ACK] RIPRESA POST-CRASH ricevuta. Riprendo da CERCHIO 1"}
+{"ts": "2026-05-03T22:34:43.445Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "FAILURE", "preview": "[BRIDGE FAILURE] ts=22:34:25 fetch fallito (reason=kimi_api_none). Esegui fallba"}
+{"ts": "2026-05-03T22:40:45.113Z", "session": "CAPITANO", "from": "bridge", "to": "capitano", "type": "ALERT", "preview": "[BRIDGE ALERT] sorgente usage degraded da 3 tick (~9 min, reason=kimi_api_none)."}

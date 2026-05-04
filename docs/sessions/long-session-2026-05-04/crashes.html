@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>💥 Crash — Long Session 2026-05-04</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="hero">
+  <h1>💥 Crash &amp; Failures</h1>
+  <p class="subtitle">Eventi ALERT/FAILURE/CRASH/ERR del team, cooldown rate-limit, log loop degli agenti — cosa si è rotto e quando.</p>
+  <nav class="tabs">
+    <a href="index.html">🏠 Home</a>
+    <a href="usage.html">📈 Usage</a>
+    <a href="throttle.html">⏸ Throttling</a>
+    <a href="agents.html">👥 Per agente</a>
+    <a href="timeline.html">📅 Timeline</a>
+    <a href="tokens.html">🔢 Tokens</a>
+    <a href="database.html">📊 Database</a>
+    <a href="crashes.html">💥 Crash</a>
+  </nav>
+</header>
+<main>
+  <section>
+    <p class="note">
+      ⚠️ Sezione in costruzione — assegnata a dev3 dopo chiusura Round 2 agents.html.
+      <br>
+      Dati grezzi pronti in <code>data/db/crash-events.json.txt</code> (11 record
+      ALERT/FAILURE/CRASH/ERR estratti da <code>messages.jsonl</code>). NB: i
+      record visibili sono datati 2026-04-26 (fuori finestra session): in
+      finestra <em>2026-05-03 18:00Z → 2026-05-04 12:30Z</em> non ci sono crash
+      registrati nei messages — segnale buono. Mostrare comunque trend storico
+      e correlare con cooldown rate-limit (file <code>claude-429-cooldown</code>
+      con timestamp Unix), e ispezionare loop log per agente
+      (<code>~/.jht/agents/&lt;role&gt;/loop.log</code>).
+    </p>
+  </section>
+</main>
+<script src="assets/data-loader.js"></script>
+</body>
+</html>
