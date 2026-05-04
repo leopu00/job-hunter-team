@@ -230,6 +230,65 @@
   </section>
 
   <section>
+    <h2>Quando si sono fermati</h2>
+    <div class="chart-wrap">
+      <h3>🌊 Ondate orarie — # pause per ora di sessione, stacked per categoria</h3>
+      <p class="caption">
+        Un bin per ora UTC: quante pause sono iniziate in quell'ora, divise per
+        macro-categoria. Mostra le "ondate" del termostato attraverso le 18 ore
+        di sessione — dove il pacing si concentra e quando invece il team gira pieno.
+      </p>
+      <canvas id="hourly"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Quando il termostato ha "spinto"</h4>
+      <p>
+        Il bar stacked per ora rivela due cose. Primo: dove cade la massa
+        delle pause STANDBY (di solito la fascia centrale della notte, quando
+        scrittore-1 ha esaurito i batch in coda e aspetta nuove posizioni dallo scout).
+        Secondo: in quali ore appare PACING — è lì che il termostato ha
+        rilevato proiezione &gt;100% e ha forzato pause T2+ per rientrare.
+      </p>
+      <p>
+        Le ore con barra alta e quasi solo PACING sono le più interessanti
+        per un postmortem: il termostato ha fatto il suo lavoro ma a costo
+        di tempo agente. Le ore con barra alta solo STANDBY suggeriscono
+        invece un collo di bottiglia upstream (scout, capitano), non un
+        problema di budget.
+      </p>
+      <p>
+        Una serie di ore consecutive senza barra (gap) è un periodo in cui
+        il team ha lavorato senza fermarsi — di norma 1-2 ore di throughput
+        pieno, intervallate da micro-pause sotto la soglia del bin.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Top reason esatte</h2>
+    <div class="chart-wrap" style="padding: 14px 20px;">
+      <h3>🔍 Le 12 motivazioni più frequenti</h3>
+      <p class="caption">
+        Stringa <code>reason</code> grezza così come scritta dall'agente.
+        Permette di cercare nell'investigazione manuale, oltre la
+        classificazione automatica.
+      </p>
+      <table id="top-reasons" style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="text-align:left; color:var(--muted); border-bottom:1px solid var(--border);">
+            <th style="padding:8px 6px;">#</th>
+            <th style="padding:8px 6px;">Categoria</th>
+            <th style="padding:8px 6px;">Reason</th>
+            <th style="padding:8px 6px; text-align:right;"># pause</th>
+            <th style="padding:8px 6px; text-align:right;">Σ minuti</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
     <h2>Note tecniche</h2>
     <div class="narrative">
       <h4>Come è stato classificato il <code>reason</code></h4>
@@ -698,6 +757,92 @@
       plugins: { legend: { display: false } },
     },
   });
+  // ----- Hourly stacked: pause per ora di sessione x categoria -----
+  const HOUR_MS = 3600 * 1000;
+  const hourStart = Math.floor(ReportData.SESSION_START / HOUR_MS) * HOUR_MS;
+  const hourEnd = Math.ceil(ReportData.SESSION_END / HOUR_MS) * HOUR_MS;
+  const hourBins = [];
+  for (let t = hourStart; t < hourEnd; t += HOUR_MS) hourBins.push(t);
+  const hourlyByCat = {};
+  for (const cat of categoriesOrder) {
+    hourlyByCat[cat] = hourBins.map(() => 0);
+  }
+  for (const ev of realPauses) {
+    const t = ev.ts_unix * 1000;
+    const idx = Math.floor((t - hourStart) / HOUR_MS);
+    if (idx < 0 || idx >= hourBins.length) continue;
+    hourlyByCat[classifyReason(ev.reason)][idx] += 1;
+  }
+  new Chart(document.getElementById("hourly").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: hourBins.map((t) => new Date(t).toISOString().slice(11, 16) + "Z"),
+      datasets: categoriesOrder
+        .filter((c) => hourlyByCat[c].some((v) => v > 0))
+        .map((c) => ({
+          label: c,
+          data: hourlyByCat[c],
+          backgroundColor: CATEGORY_COLORS[c],
+          stack: "hourly",
+        })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: "#8a93a4" },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "ora UTC (inizio bin)", color: "#8a93a4" },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: "#8a93a4" },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "# pause iniziate", color: "#8a93a4" },
+        },
+      },
+      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+    },
+  });
+
+  // ----- Top reason table -----
+  const reasonAgg = new Map();
+  for (const ev of realPauses) {
+    const key = (ev.reason || "(vuota)").trim() || "(vuota)";
+    if (!reasonAgg.has(key)) {
+      reasonAgg.set(key, { count: 0, sec: 0, cat: classifyReason(ev.reason) });
+    }
+    const r = reasonAgg.get(key);
+    r.count += 1;
+    r.sec += ev.applied_sec || 0;
+  }
+  const topReasons = Array.from(reasonAgg.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12);
+  const tbody = document.querySelector("#top-reasons tbody");
+  topReasons.forEach(([reason, r], i) => {
+    const tr = document.createElement("tr");
+    tr.style.borderBottom = "1px solid var(--border)";
+    tr.innerHTML = `
+      <td style="padding:8px 6px; color:var(--muted);">${i + 1}</td>
+      <td style="padding:8px 6px;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;
+          background:${CATEGORY_COLORS[r.cat]};margin-right:6px;vertical-align:middle;"></span>
+        ${r.cat}
+      </td>
+      <td style="padding:8px 6px;"><code style="font-size:12px;">${reason.replace(/[<>&]/g, (c) =>
+        ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])
+      )}</code></td>
+      <td style="padding:8px 6px; text-align:right;">${r.count}</td>
+      <td style="padding:8px 6px; text-align:right;">${(r.sec / 60).toFixed(1)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
 })().catch((err) => {
   document.querySelector("main").insertAdjacentHTML(
     "afterbegin",
