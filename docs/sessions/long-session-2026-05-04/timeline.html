@@ -132,63 +132,74 @@
     </p>
 
     <article class="act" id="atto-1">
-      <h3>🚀 Atto 1 — Setup, una stanza che si riempie (18:00 → 19:30 UTC)</h3>
+      <h3>🚀 Atto 1 — Setup (18:00 → 19:30 UTC)</h3>
       <p>
-        La long session non comincia con un boato ma con un tick. Alle
-        <code>18:00:23 UTC</code> la sentinella registra il primo campione e
-        scopre che la finestra Kimi K2 attiva è ancora quella aperta nel
-        pomeriggio (<code>20260503T144735Z</code>): il bridge non ha bisogno di
-        farne una nuova, basta agganciarla. Per oltre un'ora il pannello resta
-        immobile, usage al 46%, velocity zero — la stanza è vuota e respira.
+        Alle <code>18:00:23 UTC</code> il bridge campiona la finestra ancora
+        attiva dal pomeriggio (<code>20260503T144735Z</code>, usage 46%,
+        velocity 0). Per 78 minuti il pannello non si muove.
       </p>
       <p>
-        Il primo movimento è del capitano. Alle <code>19:18:07 UTC</code>
-        manda <code>MSG</code> a scout-1: <em>«Inizia il loop principale»</em>.
-        Diciassette minuti dopo, alle <code>19:34:13 UTC</code>, è il turno di
-        analista-1 — stesso copione, stessa stretta di mano (<code>ACK</code> di
-        ritorno entro pochi secondi). La sentinella, nel frattempo, ha già
-        deciso di parlare per prima: alle <code>19:34:19 UTC</code> emette il
-        suo primo <code>URG</code> della notte, <em>«ORDINE: RALLENTARE»</em>,
-        contro un usage che è ancora 8% — una manovra preventiva, non una
-        reazione.
+        Alle <code>19:18:07 UTC</code> il capitano apre il primo loop —
+        scout-1 — e sedici minuti dopo, alle <code>19:34:13 UTC</code>, è il
+        turno di analista-1.
       </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@capitano → @scout-1] · <code>MSG</code> · 19:18:07 UTC</span>
+        <em>«Inizia il loop principale. Leggi il prompt (~/agents/scout/...)
+        e parti col CERCHIO 1 (Remote EU, Junior).»</em>
+      </blockquote>
+      <p>
+        Sei secondi dopo il kickoff di analista-1, alle <code>19:34:19 UTC</code>,
+        la sentinella alza la voce — usage ancora 8%, nessun throttle reale
+        scattato.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@sentinella → @capitano] · <code>URG</code> · 19:34:19 UTC</span>
+        <em>«ORDINE: RALLENTARE. usage=8% vel=28.1%/h (ideale 458.3%/h)
+        proj=137%.»</em>
+      </blockquote>
       <div class="inline-chart" id="mini-chart-act1" data-act="1"
            title="Atto 1 · usage% nelle prime 1.5h: piatto al 46% poi reset finestra"></div>
       <p class="kicker">
-        Il team non aveva ancora bruciato un ciclo, ma il termostato era già al
-        suo posto.
+        Il primo <code>URG</code> arriva a usage 8%, prima che esistesse
+        del lavoro da rallentare.
       </p>
     </article>
 
     <article class="act" id="atto-2">
-      <h3>📈 Atto 2 — La tensione si insinua (19:30 → 23:00 UTC)</h3>
+      <h3>📈 Atto 2 — Tensione (19:30 → 23:00 UTC)</h3>
       <p>
-        Alle <code>19:35:32 UTC</code> arriva il primo throttle reale della
-        sessione: analista-1 si mette in pausa per 120 secondi con motivazione
-        <code>proj 137%</code>. Tradotto: tenendo questo ritmo, l'agente
-        brucerebbe il 137% della finestra prima del reset; il termostato non
-        lo lascia fare. Pochi secondi più tardi (<code>19:37:32 UTC</code>) la
-        stessa motivazione, stessi 120 secondi: la proiezione non cala da
-        sola, va costretta a calare.
+        Alle <code>19:35:32 UTC</code> analista-1 scatta il primo throttle
+        reale: 120 secondi con motivazione <code>proj 137%</code>. Dieci
+        secondi prima (<code>19:35:22 UTC</code>) il capitano aveva girato
+        l'ordine.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@capitano → @scout-1] · <code>URG</code> · 19:35:22 UTC</span>
+        <em>«RALLENTA — proj=137.84%. Chiama subito: jht-throttle 120
+        --agent scout-1.»</em>
+      </blockquote>
+      <p>
+        Analista-1 si ferma altre quattro volte fra le <code>19:42</code> e le
+        <code>19:50 UTC</code> con motivazione <code>post-batch cooldown</code>.
+        In parallelo scout-1 chiude i suoi primi batch CERCHIO 1.
       </p>
       <p>
-        Per più di un'ora il team rumoreggia in basso: scout-1 batch dopo
-        batch, analista-1 in modalità intermittente (cinque pause consecutive
-        di "post-batch cooldown" tra le <code>19:42</code> e le
-        <code>19:50 UTC</code>). Il capitano ne approfitta per scalare:
-        <code>20:44:16 UTC</code> kickoff scout-2; <code>20:44:43 UTC</code>
-        kickoff scorer-1; <code>20:44:57 UTC</code> kickoff scrittore-1.
-        Tre nuovi loop in undici secondi — è qui che la stanza, da spazio
-        d'ascolto, diventa cantiere.
+        Alle <code>20:44:16/43/57 UTC</code> il capitano scala con tre
+        kickoff in undici secondi: scout-2, scorer-1, scrittore-1.
       </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@capitano → @scorer-1] · <code>MSG</code> · 20:44:43 UTC</span>
+        <em>«Inizia il loop. Coda: db_query.py next-for-scorer.»</em>
+      </blockquote>
       <div class="inline-chart" id="mini-chart-act2" data-act="2"
            title="Atto 2 · usage% e projection nelle 3.5h serali: la proiezione esce, l'usage sale dietro"></div>
       <p>
-        La sentinella alza il volume in proporzione: alle <code>21:31:28 UTC</code>
-        usage 50% e proj 200%+, alle <code>22:01:42 UTC</code> usage 61%,
-        velocity 36%/h contro un ideale di 169%/h. I numeri non spaventano —
-        ma è la traiettoria che racconta la verità: se nessuno frena, alle
-        sette del mattino la finestra è già morta.
+        La sentinella scala col team: <code>21:31:28 UTC</code> usage 50%
+        proj 200%+; <code>22:01:42 UTC</code> usage 61% velocity 36%/h
+        contro ideale 169%/h. Velocity collassa, proj resta sopra il 100%:
+        a questo ritmo la finestra finisce a budget esaurito alle 7 del
+        mattino.
       </p>
       <p class="kicker">
         Il termostato non ha bloccato — ha respirato.
@@ -198,32 +209,49 @@
     <article class="act" id="atto-3">
       <h3>🔄 Atto 3 — Climax: la finestra muore senza fare rumore (23:00 → 00:30 UTC)</h3>
       <p>
-        Alle <code>23:07:51 UTC</code> il bridge vede un nuovo
-        <code>session_id</code> — <code>20260503T230751Z</code> — e capisce
-        che la finestra precedente è morta. Ma il team non se ne accorge.
-        Nessun agente perde contesto, nessuna coda salta, nessun messaggio
-        di "rebooting" attraversa il canale. Il pacing-bridge, calmo, comincia
-        a tarare il consumo della nuova finestra come se fosse la
-        continuazione naturale della precedente.
+        Alle <code>23:07:51 UTC</code> il bridge vede
+        <code>session_id=20260503T230751Z</code>, usage 68%, velocity 0. Nei
+        50 minuti successivi la finestra esplode: usage sale
+        68→71→72→74→76→79→84→91% al ritmo di 1–7 punti per tick, velocity_smooth
+        passa da 11 a 23%/h. La projection rimbalza fra 99% e 130%, mai stabile.
       </p>
       <p>
-        Alle <code>23:58:57 UTC</code> la nuova finestra tocca il
-        <strong>91%</strong> di usage con proiezione al 96.42% e una
-        velocity_smooth di 23.88%/h. È il primo picco serio della notte,
-        quattordici minuti prima di mezzanotte. La sentinella tiene il
-        sangue freddo: nessun ordine di freeze, solo throttle mirati su
-        scrittore-1 e scorer-1, i due agenti che da solo accumuleranno
-        685 e 366 minuti di pausa rispettivamente.
+        Mentre l'usage sale, il critico chiude 6 review per scrittore-1 fra
+        le <code>23:11</code> e le <code>23:36 UTC</code> — score 6.0, 6.5,
+        6.5, 6.0, 5.0, 4.5/10. Nello stesso intervallo scrittore-1 manda al
+        capitano sei <code>RES</code>: ID 111 (6.0), 115 (6.0), 128 (5.0),
+        162 (6.0), 183 (7.5), 190 (8.0). Sei CV chiusi in 44 minuti mentre
+        la finestra si avvicina al budget.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@scrittore-1 → @capitano] · <code>RES</code> · 23:56:07 UTC</span>
+        <em>«ID 190 — 3 round completati. Voto finale: 8.0/10. PASS.»</em>
+      </blockquote>
+      <p>
+        Il termostato risponde con 124 throttle in due ore: scorer-1 ne
+        assorbe 63, scrittore-1 37, analista-1 24. Mentre scrittore-1 chiude
+        i sei CV, scorer-1 — il consumatore principale — non produce nessun
+        output visibile in finestra: sta solo bruciando token. Il bridge lo
+        frena per primo proprio per questo.
       </p>
       <div class="inline-chart" id="mini-chart-act3" data-act="3"
            title="Atto 3 · zoom 22:00–01:00 UTC: la transizione di finestra (linea verticale) e i throttle attorno"></div>
       <p>
-        Alle <code>00:18:58 UTC</code> il bridge registra l'ennesima
-        transizione: nuova finestra <code>20260504T001858Z</code>. È la
-        finestra che durerà più di tutte — quasi cinque ore di lavoro
-        consecutivo. Eppure il timeline complessivo non mostra un buco:
-        quella che dall'esterno sembrerebbe una "interruzione" è invisibile
-        dentro il flusso.
+        Alle <code>23:58:57 UTC</code> la finestra tocca 91% (delta +7% in
+        un singolo tick — il salto più grande della notte), proj 96.42%.
+        Dieci minuti dopo, alle <code>00:08:58 UTC</code>, picca a 94% con
+        proj 94.86%. Alle <code>00:18:58 UTC</code> il bridge vede
+        <code>session_id=20260504T001858Z</code>, usage 1%. La finestra
+        è morta e ne è nata una nuova.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@sentinella → @capitano] · <code>BUS</code> · 00:19:26 UTC</span>
+        <em>«RESET SESSIONE. Budget: 100% disponibile. Prossimo reset: 05:11.»</em>
+      </blockquote>
+      <p>
+        Scout-1 manda due <code>REPORT</code> batch alle <code>23:59:54</code>
+        e <code>00:05:36 UTC</code>, completati a cavallo della transizione.
+        Il team non si è accorto del reset.
       </p>
       <p class="kicker">
         Due finestre attaccate, una sola stanza che lavora.
@@ -231,56 +259,75 @@
     </article>
 
     <article class="act" id="atto-4">
-      <h3>🌙 Atto 4 — Notte profonda, throttle a cascata (00:30 → 05:16 UTC)</h3>
+      <h3>🌙 Atto 4 — Notte profonda (00:30 → 05:16 UTC)</h3>
       <p>
-        Le ore tra mezzanotte e l'alba sono dominate da una constante: pause.
-        Alle <code>00:34:46 UTC</code> e poi <code>00:49:31 UTC</code> la
-        sentinella emette due <code>URG</code> di RALLENTARE in rapida
-        successione — la velocity di scrittore-1 supera l'ideale e qualunque
-        altra cosa. Da lì in poi è una colonna sonora di throttle ogni due
-        minuti: <code>scrittore-1 +120s · scrittore-1 +120s · scorer-1 +300s
-        · analista-1 +120s</code>, ripetuti finché il proiettato non scende.
+        Alle <code>00:34:46 UTC</code> la sentinella emette il primo
+        <code>URG</code> della notte profonda — usage 9%, velocity 32%/h
+        contro ideale 18%/h, proj 159%.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@capitano → @scorer-1] · <code>URG</code> · 00:35:10 UTC</span>
+        <em>«RALLENTARE — chiama jht-throttle 120 --agent scorer-1.»</em>
+      </blockquote>
+      <p>
+        Da qui in poi è una colonna sonora di pause: <code>scrittore-1
+        +120s</code>, <code>scorer-1 +300s</code>, <code>analista-1 +120s</code>,
+        ripetute ogni due minuti finché la proj non rientra sotto il 100%.
       </p>
       <p>
-        Alle <code>04:46:36 UTC</code> la finestra raggiunge il suo
-        <strong>peak</strong>: 92% di usage, projection 100.23%,
-        velocity_smooth scesa a 18.85%/h. Il termostato ha funzionato così
-        bene che la proiezione sfiora il 100% senza superarlo: la finestra
-        verrà attraversata fino al suo reset naturale alle 10:11, non un
-        minuto prima e non un minuto dopo.
+        Mentre il termostato frena, scrittore-1 produce comunque output:
+        alle <code>03:01:28</code>, <code>03:11:06</code> e
+        <code>03:21:06 UTC</code> chiude tre CV consecutivi (ID 189 → 5.5/10
+        PASS, ID 188 → 5.5/10 PASS, ID 191 → 6.0/10 PASS).
       </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@scrittore-1 → @capitano] · <code>RES</code> · 03:21:06 UTC</span>
+        <em>«ID 191 — 3 round completi. Voto: 6.0/10 (PASS).»</em>
+      </blockquote>
       <div class="inline-chart" id="mini-chart-act4" data-act="4"
            title="Atto 4 · usage 00:18–05:16 con peak 92% verso le 04:46 e cascata throttle scrittore-1/scorer-1"></div>
       <p>
-        Numeri della notte: scrittore-1 <strong>385 throttle, 685 minuti</strong>
-        di pausa cumulata; scorer-1 <strong>144 throttle, 366 minuti</strong>;
-        analista-1 <strong>94 throttle, 264 minuti</strong>. Sono numeri
-        enormi. E sono il prezzo che il bridge ha scelto di pagare per non
-        far morire la finestra a mezzanotte e mezza.
+        Alle <code>04:46:36 UTC</code> la finestra picca a 92% con proj
+        100.23% e velocity_smooth scesa a 18.85%/h. Numeri totali della
+        notte: scrittore-1 <strong>385 throttle / 685 min</strong>, scorer-1
+        <strong>144 / 366 min</strong>, analista-1 <strong>94 / 264 min</strong>.
+        17,5 ore di pausa cumulata su due agenti — il prezzo per non far
+        morire la finestra alle 00:30.
       </p>
       <p class="kicker">
-        Quando la pressione sale, l'unica vera scelta è chi rallentare —
-        e di quanto.
+        Quando la pressione sale, l'unica vera scelta è chi rallentare
+        — e di quanto.
       </p>
     </article>
 
     <article class="act" id="atto-5">
-      <h3>🌅 Atto 5 — Epilogo: la pressione si scarica (05:16 → 12:00 UTC)</h3>
+      <h3>🌅 Atto 5 — Epilogo (05:16 → 12:00 UTC)</h3>
       <p>
         Alle <code>05:16:38 UTC</code> apre la finestra
-        <code>20260504T051638Z</code>. È un'altra finestra lunga, ma diversa:
-        peak 64% al massimo, proj sempre ben sotto il 100%, throttle che si
-        rarefanno. Cambiano anche le motivazioni: spariscono i <code>proj
-        137%</code> e tornano frasi tecniche tipo <em>«coda vuota, attesa 2
-        min»</em> e <em>«wait critico R3 file write»</em>. Non è più il
-        termostato a frenare il team — è il team che ha meno cose in coda
-        perché il grosso del lavoro è già stato fatto.
+        <code>20260504T051638Z</code> — usage 1%, budget 100% disponibile.
+        Quattordici minuti dopo la sentinella batte un altro <code>URG</code>:
+        proj risalita a 171% sul nuovo ritmo.
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@capitano → @scrittore-1] · <code>URG</code> · 05:30:25 UTC</span>
+        <em>«RALLENTARE — proj=171% sopra 100%. Throttle 60.»</em>
+      </blockquote>
+      <blockquote class="quote">
+        <span class="qhdr">[@scrittore-1 → @capitano] · <code>ACK</code> · 05:30:46 UTC</span>
+        <em>«RALLENTARE ricevuto. Throttle 60s in corso.»</em>
+      </blockquote>
+      <p>
+        Ventuno secondi tra ordine e <code>ACK</code>. Da lì in poi peak 64%
+        massimo, proj sempre sotto il 100%, throttle rarefatti. Le
+        motivazioni cambiano: spariscono i <code>proj 137%</code> e tornano
+        <code>coda vuota, attesa 2min</code> e <code>wait critico R3 file
+        write</code>. Non è più il termostato a frenare il team — è il team
+        che ha meno cose in coda.
       </p>
       <p>
         Alle <code>10:13:30 UTC</code> apre la quinta finestra del run,
-        praticamente da zero (usage 0% per i primi tick). La sessione, da
-        questo momento, scivola verso la fine senza tensioni. Alle
-        <code>12:00 UTC</code> il taglio del report.
+        usage 0% sui primi tick. Alle <code>12:00 UTC</code> il taglio del
+        report.
       </p>
       <p class="kicker">
         Una finestra muore alle 23:07 e nessuno se ne accorge: questo è il
