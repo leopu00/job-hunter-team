@@ -121,7 +121,18 @@
   }
   .agent-card .emoji { font-size: 22px; line-height: 1; }
   .agent-card .name { font-size: 16px; font-weight: 700; text-transform: capitalize; }
-  .agent-card .role-color { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; }
+  .agent-card .role-color { width: 8px; height: 8px; border-radius: 50%; }
+  .agent-card .zoom-btns {
+    display: flex; gap: 4px; margin-left: auto; align-items: center;
+  }
+  .agent-card .zoom-btns button {
+    background: #11151e; color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 7px; font-size: 11px; line-height: 1.2;
+    cursor: pointer; transition: background 100ms, border-color 100ms;
+  }
+  .agent-card .zoom-btns button:hover { background: #1c2230; border-color: #38415a; }
+  .agent-card .zoom-btns button:active { background: #232a3b; }
   .agent-card .kpis {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px;
   }
@@ -136,7 +147,7 @@
     font-size: 16px; font-weight: 700; margin-top: 2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .agent-card .chart-box { position: relative; width: 100%; height: 220px; min-height: 0; }
+  .agent-card .chart-box { position: relative; width: 100%; height: 320px; min-height: 0; }
   .agent-card .chart-box canvas { width: 100% !important; height: 100% !important; display: block; }
   .agent-card .empty {
     color: var(--muted); font-size: 12px; font-style: italic;
@@ -566,6 +577,11 @@
     head.innerHTML = `
       <span class="emoji">${em}</span>
       <span class="name">${role}</span>
+      <span class="zoom-btns" id="zb-${role}">
+        <button type="button" data-act="in"  title="Zoom in (×1.2)">➕</button>
+        <button type="button" data-act="out" title="Zoom out (×0.8)">➖</button>
+        <button type="button" data-act="rst" title="Reset zoom">⟲</button>
+      </span>
       <span class="role-color" style="background:${color}" title="${color}"></span>
     `;
     card.appendChild(head);
@@ -619,7 +635,7 @@
       barPercentage: 0.7,
     }));
 
-    new Chart(canvas.getContext("2d"), {
+    const miniChart = new Chart(canvas.getContext("2d"), {
       type: "bar",
       data: { labels: ["msg"], datasets: typeDatasets },
       options: {
@@ -645,6 +661,18 @@
               afterBody: () => `Totale messaggi: ${a.total} · finestra Kimi K2 attiva: ${kimiOf(a.firstTs)}`,
             },
           },
+          zoom: {
+            pan: { enabled: true, mode: "xy", modifierKey: null },
+            zoom: {
+              wheel: { enabled: true },
+              pinch: { enabled: true },
+              mode: "xy",
+            },
+            limits: {
+              x: { min: "original", max: "original", minRange: 5 },
+              y: { min: "original", max: "original" },
+            },
+          },
         },
         scales: {
           x: {
@@ -661,6 +689,19 @@
         },
       },
     });
+
+    // Wire-up bottoni zoom ➕ ➖ ⟲
+    const zb = document.getElementById(`zb-${role}`);
+    if (zb) {
+      zb.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("button");
+        if (!btn) return;
+        const act = btn.dataset.act;
+        if (act === "in")  miniChart.zoom(1.2);
+        else if (act === "out") miniChart.zoom(0.8);
+        else if (act === "rst") miniChart.resetZoom();
+      });
+    }
   }
 
   syncCardDim();
