@@ -63,6 +63,14 @@
   <section class="kpi-grid" id="kpi-grid"></section>
 
   <section>
+    <h2>📌 In tre numeri</h2>
+    <div class="narrative" id="exec-summary">
+      <h4>Riepilogo automatico</h4>
+      <p>Calcolo in corso…</p>
+    </div>
+  </section>
+
+  <section>
     <h2>🔭 Cosa stiamo guardando</h2>
     <div class="narrative">
       <h4>Throttle reali vs checkpoint heartbeat</h4>
@@ -540,6 +548,63 @@
     div.className = "kpi-card";
     div.innerHTML = `<div class="label">${k.label}</div><div class="value">${k.value}</div>`;
     kpiGrid.appendChild(div);
+  }
+
+  // ----- Executive summary "In tre numeri" -----
+  // Tre osservazioni dinamiche: agenti che si sono effettivamente fermati,
+  // ora con più pause iniziate, % della sessione con almeno 2 agenti fermi.
+  {
+    const distinctAgents = new Set(realPauses.map((e) => e.agent).filter(Boolean));
+    // Ora di picco (riconto rapido bin orari)
+    const HOUR_MS_S = 3600 * 1000;
+    const hourStart_S = Math.floor(ReportData.SESSION_START / HOUR_MS_S) * HOUR_MS_S;
+    const hourCounts = {};
+    for (const ev of realPauses) {
+      const t = ev.ts_unix * 1000;
+      const idx = Math.floor((t - hourStart_S) / HOUR_MS_S);
+      hourCounts[idx] = (hourCounts[idx] || 0) + 1;
+    }
+    let peakIdx = 0, peakN = 0;
+    for (const k in hourCounts) {
+      if (hourCounts[k] > peakN) { peakN = hourCounts[k]; peakIdx = +k; }
+    }
+    const peakHour = new Date(hourStart_S + peakIdx * HOUR_MS_S)
+      .toISOString().slice(11, 16) + "Z";
+    // Quanti minuti della sessione hanno avuto >=2 agenti fermi (dal vettore concorrenza
+    // calcoleremo dopo, qui ricalcolo rapido).
+    const _start_es = ReportData.SESSION_START / 1000;
+    const _end_es = ReportData.SESSION_END / 1000;
+    const _nbins = Math.ceil((_end_es - _start_es) / 60);
+    const _bin = Array.from({ length: _nbins }, () => new Set());
+    for (const ev of realPauses) {
+      const dur = ev.applied_sec || 0;
+      if (dur <= 0) continue;
+      const i0 = Math.max(0, Math.floor((ev.ts_unix - _start_es) / 60));
+      const i1 = Math.min(_nbins - 1, Math.floor((ev.ts_unix + dur - _start_es) / 60));
+      for (let i = i0; i <= i1; i++) _bin[i].add(ev.agent || "?");
+    }
+    const minutesMulti = _bin.filter((s) => s.size >= 2).length;
+    const pctMulti = ((minutesMulti / _nbins) * 100).toFixed(1);
+
+    const exec = document.getElementById("exec-summary");
+    exec.innerHTML = `
+      <h4>📌 Le tre cose da sapere</h4>
+      <p><strong>${distinctAgents.size} agenti distinti</strong> hanno fatto
+      almeno una pausa reale durante la sessione (su ${laneAgents.filter(a=>a!=="altri").length}
+      tracciati nel lane chart).
+      L'agente top, ${ReportData.agentEmoji(topAgent)} <code>${topAgent}</code>,
+      ha passato <strong>${fmtMin(topAgentSec)}</strong> in pausa cumulata —
+      ${topAgentPct.toFixed(1)}% della finestra di sessione di 18 ore.</p>
+      <p>L'ora di picco è <strong>${peakHour}</strong> con
+      <strong>${peakN} pause iniziate</strong> nello stesso bin orario:
+      è il momento più "denso" del termostato, da incrociare con i comandi
+      del Capitano nella timeline per capire se è stato un "RALLENTARE URG"
+      di gruppo o una coda vuota collettiva.</p>
+      <p>Per il <strong>${pctMulti}%</strong> dei minuti della sessione c'erano
+      <strong>2 o più agenti fermi insieme</strong>: la sovrapposizione delle
+      pause è la firma del termostato che lavora in sincrono sull'intero team,
+      visibile nel grafico Concorrenza.</p>
+    `;
   }
 
   // ----- Lane chart (bubble) -----
