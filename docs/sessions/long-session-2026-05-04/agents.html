@@ -76,8 +76,20 @@
   }
   .agent-card canvas {
     width: 100% !important;
-    height: 160px !important;
+    min-height: 360px !important;
+    height: 360px !important;
   }
+  .info-box {
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-left: 3px solid #56ccf2;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0 14px;
+    font-size: 13px;
+    color: #cfd6e4;
+  }
+  .info-box code { color: var(--accent); }
   .agent-card .empty {
     color: var(--muted);
     font-size: 12px;
@@ -133,6 +145,15 @@
       <span><span class="swatch" id="lg-msg-color"></span>Messaggi inviati / ora</span>
       <span><span class="swatch" style="background:#eb5757"></span>Throttle applicato (s) / ora</span>
       <span>Finestra: 18h · bin = 1h</span>
+    </div>
+    <div class="info-box">
+      💡 <strong>Come leggere ogni card</strong> — passa il mouse sui grafici per
+      tooltip dettagliati. La <strong>linea</strong> conta i messaggi inviati
+      dall'agente nell'ora indicata sull'asse X (UTC). Le <strong>barre rosse</strong>
+      misurano i secondi di pausa che il pacing-bridge ha imposto a quell'agente
+      nella stessa ora (somma su tutte le istanze del ruolo, es. <code>scrittore-1
+      + scrittore-2</code>). Linea piatta a 0 = agente silente. Picco rosso senza
+      linea = solo pause registrate, zero traffico.
     </div>
     <div class="agents-grid" id="agents-grid"></div>
   </section>
@@ -248,6 +269,7 @@
   for (const role of ROLES) {
     const card = document.createElement("div");
     card.className = "agent-card";
+    card.title = `${role}: linea = messaggi inviati / ora (UTC), barre rosse = throttle applicato / ora. Bin = 1h. Hover sul grafico per dettagli.`;
 
     const color = RD.AGENT_COLORS[role] || "#888";
     const emoji = RD.AGENT_EMOJI[role] || "🤖";
@@ -331,13 +353,36 @@
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: "rgba(13,15,20,0.96)",
+            borderColor: color,
+            borderWidth: 1,
+            padding: 10,
+            titleFont: { size: 12, weight: "700" },
+            bodyFont: { size: 12 },
+            footerFont: { size: 11, weight: "400" },
+            footerColor: "#8a93a4",
             callbacks: {
-              title: (items) => `Ora ${items[0].label} UTC`,
+              title: (items) => {
+                const i = items[0].dataIndex;
+                const startH = labels[i];
+                const endH = labels[i + 1] || "12:00";
+                return `${emoji} ${role} · ${startH}–${endH} UTC`;
+              },
               label: (ctx) => {
                 if (ctx.dataset.label === "Throttle (s)") {
-                  return `Throttle: ${fmtSec(ctx.parsed.y)}`;
+                  const s = ctx.parsed.y;
+                  return `⏸ Throttle: ${fmtSec(s)}${s >= 60 ? ` (${s}s)` : ""}`;
                 }
-                return `Messaggi: ${ctx.parsed.y}`;
+                return `💬 Messaggi: ${ctx.parsed.y}`;
+              },
+              afterBody: (items) => {
+                const i = items[0].dataIndex;
+                const m = msgBins[role][i] || 0;
+                const th = thrBins[role][i] || 0;
+                if (m === 0 && th === 0) return "Nessuna attività in questa ora.";
+                if (m > 0 && th === 0) return "Attivo, nessuna pausa imposta.";
+                if (m === 0 && th > 0) return "Solo pause registrate, traffico zero.";
+                return "Attivo con pause concomitanti.";
               },
             },
           },
