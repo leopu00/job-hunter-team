@@ -238,12 +238,12 @@
 
     <h2>🧩 Mini-card per ruolo — type breakdown e KPI</h2>
     <div class="narrative">
-      Una card per ciascun ruolo del team. Le 6 sessioni Kimi K2 esportate
-      coprono <strong>capitano, scrittore, scorer, critico, analista,
-      sentinella</strong>. <strong>Scout, assistente, maestro</strong>
-      non hanno transcript Kimi K2 in questa export — placeholder grigi,
-      attesi nei prossimi run. Ogni card mostra il <em>type breakdown</em>
-      dei messaggi (MSG/ACK/REQ/…) come barra orizzontale stacked.
+      Una card per ogni ruolo che ha prodotto messaggi nella long-session: le
+      6 sessioni Kimi K2 esportate coprono <strong>capitano, scrittore, scorer,
+      critico, analista, sentinella</strong>. Scout, assistente e maestro non
+      hanno transcript in questa export — non li mostriamo, evitiamo card mute.
+      Ogni card mostra il <em>type breakdown</em> dei messaggi (MSG/ACK/REQ/…)
+      come barra orizzontale stacked.
     </div>
 
     <div class="agents-grid" id="agents-grid"></div>
@@ -435,8 +435,8 @@
   `;
 
   // ---------- big chart ----------
-  const activeRoles = new Set(ROLES.filter(r => aggr[r].total > 0));
-  const datasets = ROLES.map(role => {
+  // Solo serie con dati: niente line piatte a 0 nella legend.
+  const datasets = ROLES.filter(r => aggr[r].total > 0).map(role => {
     const color = RD.AGENT_COLORS[role] || "#888";
     return {
       label: `${RD.AGENT_EMOJI[role] || "🤖"} ${role}`,
@@ -449,7 +449,6 @@
       pointRadius: 0,
       pointHoverRadius: 4,
       fill: false,
-      hidden: !activeRoles.has(role),
     };
   });
 
@@ -545,18 +544,17 @@
   })();
 
   // ---------- toolbar checkboxes ----------
+  // Mostriamo solo agenti con dati: niente toggle disabili "muti".
+  const ACTIVE_ROLES = ROLES.filter(r => aggr[r].total > 0);
   const togglesEl = document.getElementById("agent-toggles");
-  for (const role of ROLES) {
-    const has = aggr[role].total > 0;
+  for (const role of ACTIVE_ROLES) {
     const color = RD.AGENT_COLORS[role] || "#888";
     const em = RD.AGENT_EMOJI[role] || "🤖";
     const lbl = document.createElement("label");
-    lbl.className = "agent-toggle" + (has ? "" : " disabled");
-    lbl.title = has
-      ? `${role}: ${aggr[role].total} messaggi · len̄ ${aggr[role].avgLen} ch · clicca per togglare`
-      : `${role}: nessun transcript Kimi K2 in questa export`;
+    lbl.className = "agent-toggle";
+    lbl.title = `${role}: ${aggr[role].total} messaggi · len̄ ${aggr[role].avgLen} ch · clicca per togglare`;
     lbl.innerHTML = `
-      <input type="checkbox" id="tg-${role}" ${has ? "checked" : ""} ${has ? "" : "disabled"}>
+      <input type="checkbox" id="tg-${role}" checked>
       <span class="swatch" style="background:${color}"></span>
       <span class="em">${em}</span>
       <span class="nm">${role}</span>
@@ -573,32 +571,32 @@
     syncCardDim();
   }
   function syncCardDim() {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
       const card = document.getElementById(`card-${role}`);
       if (!card) continue;
-      if (cb && !cb.disabled && !cb.checked) card.classList.add("dim");
+      if (cb && !cb.checked) card.classList.add("dim");
       else card.classList.remove("dim");
     }
   }
   document.getElementById("btn-all").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = true;
+      if (cb) cb.checked = true;
     }
     applyToggles();
   });
   document.getElementById("btn-none").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = false;
+      if (cb) cb.checked = false;
     }
     applyToggles();
   });
   document.getElementById("btn-invert").addEventListener("click", () => {
-    for (const role of ROLES) {
+    for (const role of ACTIVE_ROLES) {
       const cb = document.getElementById(`tg-${role}`);
-      if (cb && !cb.disabled) cb.checked = !cb.checked;
+      if (cb) cb.checked = !cb.checked;
     }
     applyToggles();
   });
@@ -614,7 +612,8 @@
   };
 
   const grid = document.getElementById("agents-grid");
-  for (const role of ROLES) {
+  // Mostriamo card solo per agenti con dati — niente placeholder muti.
+  for (const role of ACTIVE_ROLES) {
     const card = document.createElement("div");
     card.className = "agent-card";
     card.id = `card-${role}`;
@@ -627,8 +626,8 @@
       <span class="emoji">${em}</span>
       <span class="name">${role}</span>
       <span class="zoom-btns" id="zb-${role}">
-        <button type="button" data-act="in"  title="Zoom in (×1.2)">➕</button>
-        <button type="button" data-act="out" title="Zoom out (×0.8)">➖</button>
+        <button type="button" data-act="in"  title="Zoom in (×1.15)">➕</button>
+        <button type="button" data-act="out" title="Zoom out (×0.87)">➖</button>
         <button type="button" data-act="rst" title="Reset zoom">⟲</button>
       </span>
       <span class="role-color" style="background:${color}" title="${color}"></span>
