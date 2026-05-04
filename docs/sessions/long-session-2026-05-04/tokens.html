@@ -260,6 +260,28 @@
         <p>Il grafico è una sintesi cross-page: usage.html (throttle) + chat (token). È la prova che pacing-bridge e consumo non sono universi separati ma una stessa metrica vista da angoli diversi.</p>
       </div>
     </div>
+
+    <div class="chart-wrap" id="chart5">
+      <span class="chart-info" data-tip="Token output team divisi per categoria di uso (coordinamento, scarto, retry, scraping a vuoto, escalation, output utile). Il residuo verde è ciò che è arrivato fino al DB.">ℹ</span>
+      <h3>5 · 🪣 Dove sono finiti i token — categorizzazione e waterfall</h3>
+      <div class="chart-summary"><span class="icon">📍</span><span><b>Sorgente:</b> chat content (~31k token output team), classificato euristicamente per pattern <code>from/to/TYPE/body</code>. <b>Caveat:</b> la categorizzazione è basata su regex e firma temporale (retry post-429), <em>non</em> su tracciamento token reale del provider — è una stima per individuare lo spreco. La barra in basso mostra il <b>lavoro effettivo</b> registrato nel DB (positions/scores/applications/excluded) — confronta col <a href="database.html">database.html</a> di dev2 per i count separati. Il delta fra "output utile" stimato e "lavoro effettivo" DB è il dubbio analitico Leone: solo 22 positions in 18h non quadrano col consumo.</span></div>
+      <div class="series-toggle" data-chart="chart-categories">
+        <span class="label">categorie</span>
+        <span id="cat-pills"></span>
+        <span class="quick">
+          <button data-action="all">Tutti</button>
+          <button data-action="none">Nessuno</button>
+          <button data-action="invert">Inverti</button>
+        </span>
+      </div>
+      <div class="chart-canvas tall-440"><canvas id="chart-categories"></canvas></div>
+      <div class="data-quality" id="cat-quality">classificazione in corso…</div>
+      <div class="narrative">
+        <p>Il primo stacked bar (in alto) divide i ~31k token output del team in <strong>6 categorie</strong>: <strong>coordinamento capitano</strong> (broadcast, ordini, ack), <strong>ragionamento scartato</strong> (positions filtrate, score basso), <strong>retry post-throttle</strong> (riprova dopo 429/cooldown), <strong>scraping a vuoto</strong> (scout senza match), <strong>cross-talk/escalation</strong> (URG senza retry), <strong>output utile</strong> (residuo che dovrebbe finire in DB). Le prime 5 sono <em>overhead</em>; la sesta è il vero rendimento.</p>
+        <p>Il secondo stacked bar (in basso, sulla stessa scala X) racconta cosa il <strong>DB ha effettivamente registrato</strong> in finestra: positions_new, positions_updated, scores_in_win, applications_in_win, positions_excluded, companies/highlights warmup. È la versione misurata del residuo "output utile" sopra.</p>
+        <p>La differenza fra la barra in alto (output utile stimato dai token) e la barra in basso (lavoro effettivo DB) è la sorpresa: tanti token, poco DB. Le cause sono nelle prime 5 categorie — coordinamento, retry, scraping a vuoto. Per chiudere il gap bisogna ridurre l'overhead, non aumentare i token.</p>
+      </div>
+    </div>
   </section>
 </div>
 
@@ -270,6 +292,7 @@
   <a href="#chart2" data-toc>📊 2 · Per agente</a>
   <a href="#chart3" data-toc>🔥 3 · Top picchi</a>
   <a href="#chart4" data-toc>🌡 4 · Throttle×token</a>
+  <a href="#chart5" data-toc>🪣 5 · Dove finiscono</a>
 </aside>
 </main>
 
@@ -829,6 +852,212 @@
     },
   });
   registerToggle("chart-tokens-throttle", chart4Inst);
+
+  // ============== CHART 5: categorizzazione token + waterfall lavoro DB ==============
+  // Categorie (concordate con dev2 in coordinamento PRE-CODE):
+  //   a) coordinamento capitano  (orchestration overhead)
+  //   b) ragionamento scartato   (positions filtrate, score basso)
+  //   c) retry post-throttle/429 (firma sentinella ravvicinata)
+  //   d) scraping a vuoto        (scout senza match)
+  //   e) cross-talk/escalation   (URG senza retry)
+  //   f) output utile (residuo)  (dovrebbe finire in DB → vedi database.html)
+  // La categorizzazione è euristica (regex+TYPE+timestamp), non token reali.
+  // Each chat record contributes body_len/4 ~tokens nella categoria assegnata.
+  const CAT_LABELS = {
+    coord: "(a) coordinamento capitano",
+    discard: "(b) ragionamento scartato",
+    retry: "(c) retry post-throttle/429",
+    scrape: "(d) scraping a vuoto",
+    escalation: "(e) cross-talk/escalation",
+    useful: "(f) output utile (→ DB)",
+  };
+  const CAT_COLOR = {
+    coord: "#f2994a", // capitano color (arancione)
+    discard: "#828282", // grigio (lavoro buttato)
+    retry: "#eb5757", // rosso (post-error)
+    scrape: "#bb6bd9", // viola (scout-empty)
+    escalation: "#f2c94c", // giallo (URG)
+    useful: "#6fcf97", // verde (residuo positivo)
+  };
+  // Set helper per i throttle ts (epoch sec) — match retry: chat record entro 120s
+  // dopo un throttle event di scrittura nel chat ts (non abbiamo chat.ts diretto;
+  // come proxy, usiamo l'indice di posizione nei file chat e cerchiamo URG/ACK
+  // ravvicinati nel content). Approccio semplificato: "retry" se body matches
+  // /riprov|retry|cooldown|429|dopo throttle|riproviamo|nuovo tentativo/.
+  const RE_RETRY = /\b(riprov|retry|cooldown|429|dopo throttle|riproviamo|nuovo tentativo|tentativo\s+\d+)\b/i;
+  const RE_DISCARD = /\b(scartat[oa]|skip|filtr[oa]|non match|score\s*[<:]?\s*[0-4]\b|score basso|non rilevante|esclud)\b/i;
+  const RE_SCRAPE_EMPTY = /\b(no positions found|nessuna position|0 results|empty|parse fail|nessun match|no jobs|0 nuovi|no new)\b/i;
+
+  function classifyChatRecord(c) {
+    const from = (c.from || "").toLowerCase();
+    const to = (c.to || "").toLowerCase();
+    const type = (c.type || "").toUpperCase();
+    const body = c.body || "";
+    // (c) RETRY: pattern testuale specifico
+    if (RE_RETRY.test(body)) return "retry";
+    // (a) COORDINAMENTO capitano: orchestration overhead
+    if (from === "capitano" && (type === "MSG" || type === "INFO" || type === "STATUS" || type === "ACK")) return "coord";
+    if (to === "capitano" && type === "ACK") return "coord";
+    // (d) SCRAPING vuoto: scout con report empty
+    if (/^scout/.test(from) && (type === "REPORT" || type === "RES") && RE_SCRAPE_EMPTY.test(body)) return "scrape";
+    // (b) RAGIONAMENTO scartato: pattern body
+    if (RE_DISCARD.test(body)) return "discard";
+    // (e) ESCALATION: URG cross-talk senza retry
+    if (type === "URG") return "escalation";
+    // (f) OUTPUT UTILE: residuo (vero lavoro che dovrebbe arrivare al DB)
+    return "useful";
+  }
+
+  const catTotals = { coord: 0, discard: 0, retry: 0, scrape: 0, escalation: 0, useful: 0 };
+  for (const c of chatRecords) {
+    if (!c.body || !c.body_len) continue;
+    const cat = classifyChatRecord(c);
+    catTotals[cat] += Math.round(c.body_len / 4);
+  }
+  const catTotalSum = Object.values(catTotals).reduce((a, b) => a + b, 0);
+
+  // ----- Lavoro effettivo DB: carico positions/scores/applications JSON -----
+  // dev2 espone gli stessi count separati in database.html — mantengo le label
+  // simmetriche per cross-page consistency.
+  async function loadDbJson(file) {
+    try {
+      const txt = await fetch("data/db/" + file).then((r) => r.text());
+      const arr = JSON.parse(txt);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  const [positions, scores, applications] = await Promise.all([
+    loadDbJson("positions.json.txt"),
+    loadDbJson("scores.json.txt"),
+    loadDbJson("applications.json.txt"),
+  ]);
+  const inWin = (iso) => {
+    if (!iso) return false;
+    // Normalizzo "YYYY-MM-DD HH:MM:SS" o ISO con T+Z
+    const t = Date.parse((iso.length === 19 ? iso.replace(" ", "T") + "Z" : iso));
+    return Number.isFinite(t) && t >= ReportData.SESSION_START && t <= ReportData.SESSION_END;
+  };
+  const dbCounts = {
+    positions_new: positions.filter((p) => inWin(p.found_at)).length,
+    positions_updated: positions.filter((p) => !inWin(p.found_at) && inWin(p.last_checked)).length,
+    scores_in_win: scores.filter((s) => inWin(s.scored_at)).length,
+    applications_in_win: applications.filter((a) => inWin(a.written_at) || inWin(a.applied_at)).length,
+    positions_excluded: positions.filter((p) => p.status === "excluded" && inWin(p.found_at || p.last_checked)).length,
+  };
+  const dbTotal = Object.values(dbCounts).reduce((a, b) => a + b, 0);
+
+  // Costruisco datasets stacked bar orizzontale: 2 barre (token categorie / lavoro DB).
+  // 6 dataset per le categorie, 5 dataset per i count DB. Per allinearli sullo
+  // stesso chart, uso una bar orizzontale stacked con 2 categorie sull'asse Y
+  // ("Token output (~stima)", "Lavoro DB (count record)") e ogni dataset
+  // contribuisce a entrambe come opzione visibile/nascosta.
+  // Approccio più semplice: 2 bar separate visivamente, dataset diversi.
+  // Stack 1: token categorie (a-f) — valori in token (~k unit).
+  // Stack 2: lavoro DB — valori in count record.
+  // Le 2 barre sullo stesso chart richiedono 2 scale x diverse (linear / linear)
+  // ma è gestibile con yAxisID.
+  // Soluzione semplificata: 1 chart con 6+5=11 dataset, 2 categorie sull'asse Y.
+  // Ogni dataset ha valore solo per uno dei 2 step Y (l'altro è 0).
+
+  const Y_LABELS = ["📤 Token output (~tokens)", "🗄 Lavoro DB (count record)"];
+  const datasets5 = [];
+  // Categorie token (top bar)
+  Object.keys(CAT_LABELS).forEach((key) => {
+    datasets5.push({
+      label: CAT_LABELS[key],
+      data: [catTotals[key], 0], // solo top bar
+      backgroundColor: CAT_COLOR[key],
+      borderColor: "#0d0f14",
+      borderWidth: 1,
+      borderRadius: 4,
+      stack: "tokens",
+    });
+  });
+  // Lavoro DB (bottom bar) — colori coerenti: useful=verde per output, altri shading
+  const DB_COLORS = {
+    positions_new: "#6fcf97",
+    positions_updated: "#56ccf2",
+    scores_in_win: "#bb6bd9",
+    applications_in_win: "#9bd9c5",
+    positions_excluded: "#828282",
+  };
+  const DB_LABELS = {
+    positions_new: "positions nuove",
+    positions_updated: "positions aggiornate",
+    scores_in_win: "scored",
+    applications_in_win: "applications",
+    positions_excluded: "scartati (excluded)",
+  };
+  Object.keys(dbCounts).forEach((key) => {
+    datasets5.push({
+      label: DB_LABELS[key],
+      data: [0, dbCounts[key]], // solo bottom bar
+      backgroundColor: DB_COLORS[key],
+      borderColor: "#0d0f14",
+      borderWidth: 1,
+      borderRadius: 4,
+      stack: "db",
+    });
+  });
+
+  // Pills per series-toggle
+  const catPillsHost = document.getElementById("cat-pills");
+  datasets5.forEach((ds, i) => {
+    const b = document.createElement("button");
+    b.className = "pill";
+    b.setAttribute("data-series", String(i));
+    b.setAttribute("data-active", "true");
+    b.innerHTML = `<span class="swatch" style="background:${ds.backgroundColor}"></span>${ds.label}`;
+    catPillsHost.appendChild(b);
+  });
+
+  const chart5Inst = new Chart(document.getElementById("chart-categories"), {
+    type: "bar",
+    data: { labels: Y_LABELS, datasets: datasets5 },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        zoom: HAS_ZOOM ? zoomOpts() : undefined,
+        tooltip: {
+          callbacks: {
+            title: (items) => Y_LABELS[items[0].dataIndex],
+            label: (ctx) => {
+              if (ctx.parsed.x === 0) return null;
+              const isToken = ctx.dataIndex === 0;
+              if (isToken) {
+                const pct = catTotalSum > 0 ? ((ctx.parsed.x / catTotalSum) * 100).toFixed(1) : "0";
+                return `${ctx.dataset.label}: ~${fmtNum(ctx.parsed.x)} token (${pct}%)`;
+              }
+              return `${ctx.dataset.label}: ${fmtNum(ctx.parsed.x)} record`;
+            },
+            footer: (items) => {
+              const isToken = items[0].dataIndex === 0;
+              return isToken ? `totale token output team: ~${fmtNum(catTotalSum)}` : `lavoro effettivo DB: ${fmtNum(dbTotal)} record`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmtNum(v) }, grid: { color: "rgba(255,255,255,0.06)" } },
+        y: { stacked: true, grid: { color: "rgba(255,255,255,0.04)" } },
+      },
+    },
+  });
+  registerToggle("chart-categories", chart5Inst);
+
+  // Quality strip categorie
+  const catRows = Object.keys(CAT_LABELS).map((k) => {
+    const pct = catTotalSum > 0 ? ((catTotals[k] / catTotalSum) * 100).toFixed(1) : "0";
+    return `${CAT_LABELS[k]}: <code>${fmtNum(catTotals[k])}</code> (${pct}%)`;
+  }).join(" · ");
+  document.getElementById("cat-quality").innerHTML =
+    `<strong>Categorizzazione token</strong>: ${catRows}. ` +
+    `Totale chat parsato: <code>${fmtNum(catTotalSum)}</code> token (~chars/4 sui body classificati). ` +
+    `<strong>Lavoro DB</strong>: ${Object.entries(dbCounts).map(([k, v]) => `${DB_LABELS[k]}=<code>${v}</code>`).join(" · ")} (totale <code>${dbTotal}</code> record).`;
 
   // ============== Scroll-spy TOC ==============
   const tocLinks = Array.from(document.querySelectorAll(".toc a[data-toc]"));
