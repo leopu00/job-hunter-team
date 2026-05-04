@@ -167,6 +167,36 @@
       <canvas id="bycategory"></canvas>
     </div>
     <div class="chart-wrap">
+      <h3>📈 Tempo cumulato fermo nel corso della sessione</h3>
+      <p class="caption">
+        Per i top-3 agenti per durata totale: minuti cumulati in pausa istante
+        per istante. Una salita ripida = il termostato sta tenendo l'agente
+        fermo a lungo; un plateau = l'agente sta lavorando.
+      </p>
+      <canvas id="cumulative"></canvas>
+    </div>
+    <div class="narrative">
+      <h4>Termostato visibile in 3 linee</h4>
+      <p>
+        Questo grafico è la migliore lettura della <em>politica del termostato</em>:
+        quando una linea sale ripida, il pacing-bridge ha messo l'agente in
+        pausa lunga per non sforare il budget settimanale; quando è piatta,
+        l'agente sta consumando token (cioè lavorando).
+      </p>
+      <p>
+        Se le tre linee salgono in modo sincrono in una stessa fascia oraria,
+        è il segno che il Capitano ha ordinato un "RALLENTARE URG"
+        di gruppo, non una decisione del singolo agente. Plateau lunghi
+        coincidono invece con periodi di throughput pieno della pipeline
+        (più review, meno attese).
+      </p>
+      <p>
+        L'altezza finale della linea è il KPI "tempo totale fermo": il
+        valore più alto va all'agente più sotto pressione del termostato,
+        non necessariamente al più produttivo.
+      </p>
+    </div>
+    <div class="chart-wrap">
       <h3>⏱ Distribuzione delle durate</h3>
       <p class="caption">
         Quanto durano le pause? Bucket fissi: ≤30s, 30-60s, 1-2min, 2-5min, 5-10min, &gt;10min.
@@ -253,10 +283,19 @@
   function classifyReason(reasonRaw) {
     const r = String(reasonRaw || "").toLowerCase();
     if (!r) return "ALTRO";
+    // PACING: termostato attivo (consumo fuori traiettoria)
     if (/(rallentare urg|throttle\s*t2|proj\s*=|diff consumo)/.test(r)) return "PACING";
-    if (/(wait critico|finalize|round\s*\d+ review|review\s+complete|cv review)/.test(r)) return "WAIT_CRITIC";
-    if (/(coda vuota|polling|post-batch|standby|cooldown|batch\s*complete|attesa)/.test(r)) return "STANDBY";
+    // FREEZE: stop esplicito ordinato dal Capitano (anche "no critic until")
     if (/freeze/.test(r)) return "FREEZE";
+    // WAIT_CRITIC: attesa sincrona su un round critic (msg #N o finalize round)
+    if (/(wait critico|finalize\s+#|wait\s+for\s+critic)/.test(r)) return "WAIT_CRITIC";
+    // STANDBY: pause post-task / coda vuota / cooldown — è la categoria di gran lunga
+    // più comune e va presa anche su "review completed", "batch completato",
+    // "Capitano T1/T2", che sono pause programmate fra un task e l'altro.
+    if (
+      /(coda vuota|polling|post-batch|standby|cooldown|batch\s*complete|batch completato|attesa|review\s+complete|review completed|round\s*\d+ review|cv review|completed|capitano t[12])/
+        .test(r)
+    ) return "STANDBY";
     return "ALTRO";
   }
   const CATEGORY_COLORS = {
@@ -545,6 +584,65 @@
           ticks: { color: "#8a93a4", callback: (v) => `${v}m` },
           grid: { drawOnChartArea: false },
           title: { display: true, text: "minuti totali", color: "#8a93a4" },
+        },
+      },
+      plugins: { legend: { labels: { color: "#e8ecf3" } } },
+    },
+  });
+
+  // ----- Cumulative line: top-3 agenti, minuti fermi cumulati nel tempo -----
+  const top3 = agentsByDuration.slice(0, 3);
+  const cumulativeDatasets = top3.map((agent) => {
+    const evs = realPauses
+      .filter((e) => e.agent === agent)
+      .sort((a, b) => a.ts_unix - b.ts_unix);
+    let acc = 0;
+    const points = [
+      { x: ReportData.SESSION_START, y: 0 },
+      ...evs.map((e) => {
+        acc += (e.applied_sec || 0) / 60;
+        return { x: e.ts_unix * 1000, y: +acc.toFixed(2) };
+      }),
+      // Estensione fino a fine sessione (per allineare le linee).
+      { x: ReportData.SESSION_END, y: +acc.toFixed(2) },
+    ];
+    const color = ReportData.agentColor(agent);
+    return {
+      label: `${ReportData.agentEmoji(agent)} ${agent}`,
+      data: points,
+      borderColor: color,
+      backgroundColor: color + "22",
+      tension: 0.05,
+      pointRadius: 0,
+      borderWidth: 2,
+      stepped: "before",
+    };
+  });
+  new Chart(document.getElementById("cumulative").getContext("2d"), {
+    type: "line",
+    data: { datasets: cumulativeDatasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      scales: {
+        x: {
+          type: "linear",
+          min: ReportData.SESSION_START,
+          max: ReportData.SESSION_END,
+          ticks: {
+            color: "#8a93a4",
+            callback: (v) => new Date(v).toISOString().slice(11, 16) + "Z",
+            maxTicksLimit: 12,
+          },
+          grid: { color: "#1f2532" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#8a93a4", callback: (v) => `${v}m` },
+          grid: { color: "#1f2532" },
+          title: { display: true, text: "minuti fermo cumulati", color: "#8a93a4" },
         },
       },
       plugins: { legend: { labels: { color: "#e8ecf3" } } },
