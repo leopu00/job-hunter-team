@@ -144,23 +144,25 @@
       .filter((e) => LANES[e.kind])
       .map((e) => {
         const lane = LANES[e.kind];
-        let symbolSize = 8;
+        let symbolSize = 10;
         if (e.kind === "throttle") {
           const s = (e.payload && e.payload.applied_sec) || 60;
-          symbolSize = Math.min(20, 4 + Math.sqrt(s));
+          symbolSize = Math.max(8, Math.min(22, 6 + Math.sqrt(s)));
         } else if (e.kind === "window") {
-          symbolSize = 14;
-        } else if (e.kind === "peak") {
           symbolSize = 16;
+        } else if (e.kind === "peak") {
+          symbolSize = 18;
         }
         return {
           value: [e.ts, lane.y],
-          itemStyle: { color: lane.color, opacity: e.kind === "throttle" ? 0.55 : 0.95 },
+          itemStyle: { color: lane.color, opacity: e.kind === "throttle" ? 0.7 : 0.95, borderColor: "rgba(255,255,255,0.2)", borderWidth: 1 },
           symbolSize,
           name: e.label,
           label: e.label,
           body: e.body,
           kind: e.kind,
+          agent: e.agent || null,
+          payload: e.payload || null,
         };
       });
 
@@ -172,31 +174,60 @@
       grid: { left: 70, right: 30, top: 30, bottom: 60 },
       tooltip: {
         trigger: "item",
-        backgroundColor: "#11151e",
-        borderColor: "#232836",
-        textStyle: { color: "#e8ecf3" },
-        extraCssText: "max-width: 360px; white-space: normal;",
+        triggerOn: "mousemove|click",
+        confine: true,
+        appendToBody: true,
+        enterable: false,
+        backgroundColor: "rgba(17,21,30,0.97)",
+        borderColor: "#3a5077",
+        borderWidth: 1,
+        padding: [10, 12],
+        textStyle: { color: "#e8ecf3", fontSize: 13, lineHeight: 18 },
+        extraCssText: "max-width: 420px; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.45); z-index: 9999;",
+        axisPointer: { type: "cross", crossStyle: { color: "#3a5077" } },
         formatter: (p) => {
           if (!p.data) return "";
           // Linea usage di sfondo
           if (p.seriesName === "usage") {
             const u = Math.round(((p.data[1] - 0.05) / 0.85) * 100);
-            return `<b>${new Date(p.data[0]).toISOString().slice(11, 19)}Z</b><br/>` +
-                   `<span style="color:#8a93a4">Usage finestra:</span> <b>${u}%</b><br/>` +
-                   `<span style="color:#5d6c84;font-size:11px">Linea di sfondo: serie usage% campionata dalla sentinella ogni ~3 minuti.</span>`;
+            return `<div style="font-size:13px"><b>${new Date(p.data[0]).toISOString().slice(11, 19)}Z</b> &nbsp;<span style="color:#5d6c84">UTC</span></div>` +
+                   `<div style="margin-top:4px"><span style="color:#8a93a4">Asse Y · Usage finestra:</span> <b style="color:#56ccf2">${u}%</b></div>` +
+                   `<div style="color:#5d6c84;font-size:11px;margin-top:6px">Linea di sfondo (sentinella, ~3 min/sample). Scala interna 5%–90% del riquadro.</div>`;
           }
           const d = p.data;
           const ts = new Date(d.value[0]).toISOString().slice(11, 19) + "Z";
+          const date = new Date(d.value[0]).toISOString().slice(0, 10);
           // Spiegazione semantica per tipo di evento
-          const explain = {
-            window: "🪟 <b>Transizione finestra</b><br/><span style='color:#8a93a4'>Il bridge ha visto un nuovo session_id: la finestra Claude/Kimi è stata resettata.</span>",
-            capitano: "🧭 <b>Messaggio capitano</b><br/><span style='color:#8a93a4'>Comunicazione di tipo URG / WARN / REPORT / DONE / ALERT verso un agente.</span>",
-            throttle: `⏸ <b>Throttle event</b><br/><span style='color:#8a93a4'>Pausa applicata dal pacing-bridge per evitare che la proiezione sfori la finestra. Raggio ∝ √(secondi).</span>`,
-            peak: "🔥 <b>Picco usage ≥ 90%</b><br/><span style='color:#8a93a4'>Primo tick in cui la finestra raggiunge soglia di guardia. Il termostato comincia a stringere.</span>",
+          const head = {
+            window: "🪟 <b>Transizione finestra Claude/Kimi</b>",
+            capitano: "🧭 <b>Messaggio capitano</b>",
+            throttle: "⏸ <b>Throttle event</b>",
+            peak: "🔥 <b>Picco usage ≥ 90%</b>",
           };
-          return `<b>${ts}</b><br/>${explain[d.kind] || ""}<br/>` +
-                 `<span style="color:#d6dde9"><b>${escapeHtml(d.label)}</b></span><br/>` +
-                 (d.body ? `<span style="color:#94a0b4;font-size:12px">${escapeHtml(d.body)}</span>` : "");
+          const explain = {
+            window: "Il bridge ha visto un nuovo <code>session_id</code>: la finestra è stata resettata.",
+            capitano: "Comunicazione di tipo URG / WARN / REPORT / DONE / ALERT verso un agente.",
+            throttle: "Pausa applicata dal pacing-bridge per evitare che la proiezione sfori la finestra.",
+            peak: "Primo tick in cui la finestra raggiunge soglia di guardia. Il termostato stringe.",
+          };
+          let extras = "";
+          if (d.agent) extras += `<div><span style="color:#8a93a4">Agente:</span> <b style="color:${LANES[d.kind].color}">${escapeHtml(d.agent)}</b></div>`;
+          if (d.kind === "throttle" && d.payload) {
+            extras += `<div><span style="color:#8a93a4">Pausa applicata:</span> <b>${Math.round(d.payload.applied_sec)} s</b>` +
+                      (d.payload.requested_sec && d.payload.requested_sec !== d.payload.applied_sec
+                        ? ` <span style="color:#5d6c84">(richiesti ${Math.round(d.payload.requested_sec)} s)</span>`
+                        : "") + "</div>";
+          }
+          if (d.kind === "window" && d.payload) {
+            extras += `<div><span style="color:#8a93a4">Provider:</span> <b>${escapeHtml(d.payload.provider || "?")}</b> &nbsp; <span style="color:#8a93a4">reset@</span>${escapeHtml(d.payload.reset || "?")}</div>` +
+                      `<div><span style="color:#8a93a4">session_id:</span> <code style="color:#56ccf2">${escapeHtml(d.payload.sid || "")}</code></div>`;
+          }
+          return `<div style="font-size:13px"><b>${date} ${ts}</b> &nbsp;<span style="color:#5d6c84">UTC</span></div>` +
+                 `<div style="margin-top:4px">${head[d.kind] || ""}</div>` +
+                 `<div style="color:#8a93a4;font-size:12px;margin-top:2px">${explain[d.kind] || ""}</div>` +
+                 `<div style="margin-top:6px;color:#d6dde9"><b>${escapeHtml(d.label)}</b></div>` +
+                 extras +
+                 (d.body ? `<div style="color:#94a0b4;font-size:12px;margin-top:4px">${escapeHtml(d.body)}</div>` : "");
         },
       },
       xAxis: {
@@ -230,9 +261,10 @@
           type: "line",
           data: usagePoints,
           showSymbol: false,
-          lineStyle: { color: "#3a4a64", width: 1.2, type: "dashed" },
-          areaStyle: { color: "rgba(86,204,242,0.05)" },
+          lineStyle: { color: "#3a4a64", width: 1.4, type: "dashed" },
+          areaStyle: { color: "rgba(86,204,242,0.06)" },
           z: 1,
+          emphasis: { lineStyle: { color: "#56ccf2", width: 1.8 } },
           tooltip: { show: true },
         },
         {
@@ -240,6 +272,10 @@
           type: "scatter",
           data: seriesData,
           z: 5,
+          emphasis: {
+            scale: 1.6,
+            itemStyle: { borderColor: "#fff", borderWidth: 2, shadowBlur: 10, shadowColor: "rgba(255,255,255,0.4)" },
+          },
         },
       ],
     });
