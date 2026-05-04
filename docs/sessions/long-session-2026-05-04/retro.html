@@ -39,14 +39,27 @@
 
   .retro-item .tag {
     display: inline-block;
+    position: relative;
     font-size: 11px;
     color: #b9c4d4;
     background: rgba(140, 148, 160, 0.12);
     padding: 2px 8px;
     border-radius: 12px;
     letter-spacing: 0.04em;
-    margin-right: 8px;
+    /* dev1+dev2 QA Round 3 R-D: separatore visivo fra tag e titolo */
+    margin-right: 18px;
     font-variant-numeric: tabular-nums;
+  }
+  .retro-item .tag::after {
+    /* "·" posizionato FUORI dal background del pill, fra tag e titolo */
+    content: "·";
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    color: #5d6c84;
+    font-weight: 400;
+    background: transparent;
   }
 
   .retro-item h3 {
@@ -165,9 +178,10 @@
       (95.8% del bound).
     </p>
     <p>
-      Il prezzo: <strong>scrittore-1 685 min di throttle</strong> (≈53% del
-      lavoro frenato) + scorer-1 366 min, due agenti che hanno assorbito 17h
-      e mezza cumulate di pausa. Bottleneck strutturale, non di pacing.
+      Il prezzo: scrittore-1 ha cumulato <strong>372 min in-perimetro</strong>
+      (6h 12m, 59% delle pause reali nelle 3 finestre attive) — più di 5×
+      analista-1 che ne ha 1h 12m. Bottleneck strutturale, non di pacing
+      (dettagli in B1).
     </p>
     <p>
       Il bridge è <em>predittivo a tick-level</em> (anticipa 5 secondi prima
@@ -237,8 +251,8 @@
     <div class="retro-item bene">
       <h3><span class="tag">A4</span>Pipeline ad alto throughput</h3>
       <p>
-        22 positions trovate dagli scout, 22 verificate dall'analista, 18
-        applicazioni inviate. Conversion <strong>22→18 = 82%</strong>,
+        22 positions trovate dagli scout, 22 verificate dall'analista, 17
+        applicazioni inviate. Conversion <strong>22→17 = 77%</strong>,
         pass-rate critico <strong>13/17 = 76%</strong> (critic_score ≥ 5),
         critic_score mediano 5.5/10. Il flow funziona end-to-end nonostante
         il throttling pesante.
@@ -264,9 +278,9 @@
       <p>
         Dopo il ricovero scout-1 zombie, il capitano emette
         <code>RIPRESA POST-CRASH</code> e scout-1 risponde con
-        <code>ACK</code> alle <code>19:46 UTC</code>. La messaggistica
-        sopravvive al failure del bridge: tmux è la rete di sicurezza
-        operativa.
+        <code>ACK</code> alle <code>19:46 UTC</code> (pre-W1, fuori
+        perimetro). La messaggistica sopravvive al failure del bridge:
+        tmux è la rete di sicurezza operativa.
       </p>
     </div>
   </section>
