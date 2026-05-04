@@ -50,14 +50,29 @@
   .status-badge.green { background: rgba(111,207,151,0.12); color: #6fcf97; border-color: rgba(111,207,151,0.4); }
   .status-badge.yellow { background: rgba(242,201,76,0.12); color: #f2c94c; border-color: rgba(242,201,76,0.4); }
   .status-badge.red { background: rgba(235,87,87,0.12); color: #eb5757; border-color: rgba(235,87,87,0.4); }
-  /* Override altezze canvas: lo shared styles.css forza 360px !important.
-     Qui rispecifico per ciascun grafico con priorità più alta (id selector + !important). */
-  .chart-wrap canvas#chart-usage { height: 520px !important; min-height: 520px; }
-  .chart-wrap canvas#chart-velocity { height: 460px !important; min-height: 460px; }
-  .chart-wrap canvas#chart-weekly { height: 400px !important; min-height: 400px; }
-  .chart-wrap canvas#chart-status { height: 400px !important; min-height: 400px; }
-  .chart-wrap canvas#chart-windows { height: 480px !important; min-height: 480px; }
-  .chart-wrap canvas#chart-smoothing { height: 440px !important; min-height: 440px; }
+  /* Wrap canvas in container con position:relative e altezza esplicita.
+     Chart.js options.responsive:true + maintainAspectRatio:false richiede
+     che il parent del canvas abbia dimensioni esplicite, altrimenti l'auto-resize
+     genera distorsioni. Lo shared styles.css forza canvas a 360px !important:
+     qui resettiamo a 100% del wrapper (specificità .chart-wrap .chart-canvas canvas). */
+  .chart-canvas {
+    position: relative;
+    width: 100%;
+  }
+  .chart-canvas.tall-520 { height: 520px; }
+  .chart-canvas.tall-480 { height: 480px; }
+  .chart-canvas.tall-460 { height: 460px; }
+  .chart-canvas.tall-440 { height: 440px; }
+  .chart-canvas.tall-400 { height: 400px; }
+  .chart-wrap .chart-canvas canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+  }
+  /* Le grid-cell con grafici devono poter rimpicciolire sotto la min-content
+     dei figli, altrimenti il responsive resize non trigger correttamente. */
+  .main-col { min-width: 0; }
+  .grid-2 > * { min-width: 0; }
   /* Info badge nel header del chart-wrap. */
   .chart-wrap { position: relative; }
   .chart-info {
@@ -70,6 +85,45 @@
     transition: background 120ms, color 120ms;
   }
   .chart-info:hover { background: #2a3142; color: var(--fg); }
+  /* Tooltip CSS istantaneo (zero delay nativo) per .chart-info[data-tip]. */
+  .chart-info[data-tip] { position: absolute; }
+  .chart-info[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: 28px;
+    right: 0;
+    width: 280px;
+    background: rgba(13,15,20,0.97);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+    text-align: left;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  /* Caption potenziata: info-box visibile con icona, bordo accent. */
+  .chart-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #11151e;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0 14px;
+    font-size: 13px;
+    color: #d6dde9;
+    line-height: 1.5;
+  }
+  .chart-summary .icon { font-size: 14px; flex-shrink: 0; }
   /* TOC sticky a destra — solo su viewport ampi. */
   .with-toc {
     display: grid;
@@ -154,16 +208,16 @@
 
   <section>
     <div class="chart-wrap" id="chart1" title="Time series: usage% (linea piena) e projection% (tratteggiata) per ogni tick sentinella; bande rosse = throttle attivo; linee verticali = cambio finestra Claude (#N).">
-      <span class="chart-info" title="Cosa indica questo grafico: andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Claude consecutive. Soglia 100% = limite finestra; sopra 100% saremmo in over.">ℹ</span>
+      <span class="chart-info" data-tip="Andamento nel tempo della % consumata e della stima fine-finestra. Le bande rosse traslucide segnano i tick in cui il termostato era acceso. I marker #2..#N sono i confini fra finestre Claude consecutive. Soglia 100% = limite finestra.">ℹ</span>
       <h3>1 · 📈 Usage % vs Projection nel tempo</h3>
-      <p class="caption">La sentinella misura ogni ~3 min la percentuale consumata della finestra corrente (linea piena) e proietta il consumo a fine finestra (linea tratteggiata). Quando la projection si stacca verso l'alto è il termostato a mettere freno.</p>
+      <div class="chart-summary"><span class="icon">📍</span><span>Time series ogni ~3 min: <b>usage%</b> (linea blu piena) e <b>projection%</b> a fine finestra (gialla tratteggiata). Bande rosse = throttle attivo. Marker <code>#N</code> = cambio finestra Claude. Hover per dettagli sul tick.</span></div>
       <div class="legend-pills">
         <span><i class="dot" style="background:#56ccf2"></i>usage %</span>
         <span><i class="dot" style="background:#f2c94c"></i>projection (fine finestra)</span>
         <span><i class="dot" style="background:rgba(235,87,87,0.18); border:1px solid rgba(235,87,87,0.5)"></i>throttle attivo</span>
         <span><i class="dot" style="background:#eb5757"></i>soglia 100%</span>
       </div>
-      <canvas id="chart-usage"></canvas>
+      <div class="chart-canvas tall-520"><canvas id="chart-usage"></canvas></div>
       <div class="narrative">
         <p>La sessione attraversa <strong id="nb-windows-count">N</strong> finestre Claude consecutive (marker <code>#2..#N</code> in alto al cambio di session_id) — è la prima volta che il pacing-bridge tiene il team in aria oltre le 5 ore canoniche di una singola finestra. I drop verticali a 0 sono i reset: la finestra precedente si chiude, parte la nuova, l'usage riparte da zero.</p>
         <p>Le bande rosse traslucide sono i tratti in cui <strong>il termostato era attivo</strong> (throttle=1 nei tick sentinella). Nota come le bande appaiano <em>quando la projection corre via</em>: è esattamente la dinamica voluta — il bridge frena prima che usage tocchi 100, così la curva blu resta sotto la soglia rossa.</p>
@@ -172,16 +226,16 @@
     </div>
 
     <div class="chart-wrap" id="chart2" title="Time series: velocity_smooth (EMA del consumo, area verde) e velocity_ideal (target per chiudere a 100% al reset, viola tratteggiata).">
-      <span class="chart-info" title="Cosa indica: ritmo di consumo punti%/h. Verde = velocity reale smussata, viola = ritmo ideale per terminare la finestra a 100% senza sforare. I gap nella verde sono i reset di finestra (delta negativo artificiale, escluso). Sopra il viola = throttle deve attivarsi.">ℹ</span>
+      <span class="chart-info" data-tip="Ritmo di consumo in punti%/h. Verde = velocity reale smussata, viola = ritmo ideale per chiudere a 100% al reset. I gap verdi sono i reset di finestra (delta negativo, escluso). Pallini gialli = velocity_decreasing flag bridge.">ℹ</span>
       <h3>2 · 🌡 Velocity reale vs Velocity ideale</h3>
-      <p class="caption">Velocity = punti % / ora. La velocity_ideal è il ritmo che, mantenuto, chiude la finestra esattamente al 100% al reset. Sotto questa soglia siamo in sottoutilizzo, sopra si rischia di sforare.</p>
+      <div class="chart-summary"><span class="icon">📍</span><span>Velocity = <b>punti%/h</b>. Sotto la viola = sottoutilizzo, sopra = rischio sforamento. Pallini gialli = tick con flag <code>velocity_decreasing</code> (bridge ha rilevato un calo).</span></div>
       <div class="legend-pills">
         <span><i class="dot" style="background:#6fcf97"></i>velocity_smooth (reale, EMA)</span>
         <span><i class="dot" style="background:#bb6bd9"></i>velocity_ideal (target)</span>
         <span><i class="dot" style="background:#f2c94c"></i>velocity_decreasing (flag bridge)</span>
         <span><i class="dot" style="background:rgba(235,87,87,0.35)"></i>area sopra ideale (rischio)</span>
       </div>
-      <canvas id="chart-velocity"></canvas>
+      <div class="chart-canvas tall-460"><canvas id="chart-velocity"></canvas></div>
       <div class="narrative">
         <p>Quando la curva verde sta sotto quella viola, il team sta lasciando token sul tavolo (non sfruttiamo abbastanza la finestra). Quando la sorpassa, il termostato deve attivarsi: throttle e checkpoint forzati per rallentare gli agenti e portare la velocity in zona ideale.</p>
         <p>Si vede chiaramente che <strong>la velocity reale oscilla intorno alla ideale</strong> per quasi tutta la sessione — è esattamente il comportamento desiderato di un termostato funzionante. Le escursioni sopra-soglia sono brevi e seguite da rientri rapidi.</p>
@@ -192,10 +246,10 @@
 
     <div class="grid-2">
       <div class="chart-wrap" id="chart3" title="Curva accumulativa weekly_usage (% del budget settimanale Claude consumata).">
-        <span class="chart-info" title="Cosa indica: budget settimanale residuo. Curva monotona crescente, una volta a 100% il piano si esaurisce. Pendenza ripida = team che spinge, piatta = checkpoint/attesa.">ℹ</span>
+        <span class="chart-info" data-tip="Budget settimanale residuo. Curva monotona crescente, una volta a 100% il piano si esaurisce. Pendenza ripida = team che spinge, piatta = checkpoint/attesa.">ℹ</span>
         <h3>3 · 📅 Weekly Usage — la curva accumulativa</h3>
-        <p class="caption">Percentuale del budget settimanale Claude consumata nel tempo. È il vero limite di lungo periodo: una volta a 100% il piano si esaurisce.</p>
-        <canvas id="chart-weekly"></canvas>
+        <div class="chart-summary"><span class="icon">📍</span><span>% del <b>budget settimanale Claude</b> consumata. Linea step monotona: una volta a 100% il piano si esaurisce. Hover per il valore puntuale al tick.</span></div>
+        <div class="chart-canvas tall-400"><canvas id="chart-weekly"></canvas></div>
         <div class="narrative">
           <p>Il weekly è una curva monotona crescente — non si torna indietro. La long session ha consumato circa <strong id="nb-weekly-delta">N</strong> punti percentuali del budget settimanale in <strong id="nb-weekly-hours">N</strong> ore di lavoro reale.</p>
           <p>La pendenza è il segnale: tratti ripidi = team che spinge, tratti piatti = team in attesa o in checkpoint. Le inflessioni più nette coincidono con l'inizio delle finestre Claude più produttive.</p>
@@ -204,10 +258,10 @@
       </div>
 
       <div class="chart-wrap" id="chart4" title="Doughnut: percentuale di tick in ciascuno status sentinella (SOTTOUTILIZZO, ATTENZIONE, STEADY, RESET).">
-        <span class="chart-info" title="Cosa indica: quanto tempo è passato in ciascuno status. SOTTOUTILIZZO = c'è margine, ATTENZIONE = il bridge sorveglia, STEADY = zona ideale, RESET = confini finestra. Bilanciamento ATTENZIONE/SOTTOUTILIZZO ≈ 50/50 = pacing in regime.">ℹ</span>
+        <span class="chart-info" data-tip="Quanto tempo è passato in ciascuno status. SOTTOUTILIZZO = c'è margine, ATTENZIONE = bridge sorveglia, STEADY = zona ideale, RESET = confini finestra. Numero al centro = % in banda (no RESET/OVER).">ℹ</span>
         <h3>4 · 📊 Status sentinella — distribuzione tempo</h3>
-        <p class="caption">Percentuale di tick passati in ciascuno status: <em>SOTTOUTILIZZO</em>, <em>ATTENZIONE</em>, <em>STEADY</em>, <em>RESET</em>. È la radiografia di quanto è stato in zona di comfort il team.</p>
-        <canvas id="chart-status"></canvas>
+        <div class="chart-summary"><span class="icon">📍</span><span>Doughnut: distribuzione tick per <b>status</b>. Hover su una fetta per percentuale + significato. Il numero al centro è la frazione di tempo "in banda" (SOTTOUTILIZZO+STEADY+ATTENZIONE).</span></div>
+        <div class="chart-canvas tall-400"><canvas id="chart-status"></canvas></div>
         <div class="narrative">
           <p>Un team sano alterna SOTTOUTILIZZO (siamo in pista, possiamo accelerare) e ATTENZIONE (stiamo tirando, il bridge sorveglia). STEADY è la zona ideale — vorremmo che fosse più grande nelle prossime sessioni.</p>
           <p>RESET sono i confini fra finestre Claude: pochi tick, ma fondamentali perché segnano la transizione. La loro presenza in numero coerente con le finestre conferma che la sentinella non ha avuto buchi di copertura.</p>
@@ -217,15 +271,15 @@
     </div>
 
     <div class="chart-wrap" id="chart5" title="Bar+line dual-axis: per ognuna delle finestre Claude attraversate, picco usage% (blu), picco projection% (giallo), durata visibile in min (linea verde).">
-      <span class="chart-info" title="Cosa indica: visione one-look di tutte le finestre Claude della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio). Linea verde = tempo coperto dalla sentinella in quella finestra (asse minuti a destra).">ℹ</span>
+      <span class="chart-info" data-tip="Visione one-look di tutte le finestre Claude della sessione. Bar blu = quanto sfruttata. Bar gialla = quanto vicino allo sforamento (>110% = rischio, bordo rosso = peggior finestra). Linea verde = tempo coperto in min (asse a destra).">ℹ</span>
       <h3>5 · 🪟 Riepilogo per finestra Claude</h3>
-      <p class="caption">Per ognuna delle finestre Claude attraversate dalla sessione: durata di copertura, picco di usage raggiunto, e proiezione massima vista. Una finestra "sana" chiude vicino al 100% senza picchi di projection sopra 110%.</p>
+      <div class="chart-summary"><span class="icon">📍</span><span>Bar+line dual-axis. <b>Blu</b>: picco usage% per finestra. <b>Gialla</b>: picco projection% (bordo rosso = peggiore). <b>Verde</b>: durata visibile in min (asse destro). Hover sulla barra per stat completa della finestra.</span></div>
       <div class="legend-pills">
         <span><i class="dot" style="background:#56ccf2"></i>picco usage %</span>
         <span><i class="dot" style="background:#f2c94c"></i>picco projection %</span>
         <span><i class="dot" style="background:#9bd9c5"></i>durata visibile (min)</span>
       </div>
-      <canvas id="chart-windows"></canvas>
+      <div class="chart-canvas tall-480"><canvas id="chart-windows"></canvas></div>
       <table class="windows" id="windows-table">
         <thead>
           <tr>
@@ -250,14 +304,14 @@
     </div>
 
     <div class="chart-wrap" id="chart6" title="Time series: delta projection_naive − projection (effetto dello smoother del pacing-bridge). Verde quando riduce allarme, rosso quando aggiunge cautela.">
-      <span class="chart-info" title="Cosa indica: quanto il pacing-bridge sta correggendo la proiezione naive. Verde (>0) = naive esagerava, smoother calma. Rosso (<0) = naive era ottimista, smoother frena. Vicino a zero = nessuna correzione necessaria.">ℹ</span>
+      <span class="chart-info" data-tip="Quanto il pacing-bridge sta correggendo la proiezione naive. Verde (>0) = naive esagerava, smoother calma. Rosso (<0) = naive era ottimista, smoother frena. Vicino a zero = nessuna correzione necessaria.">ℹ</span>
       <h3>6 · 🪄 Effetto smoothing del bridge — projection_naive vs projection</h3>
-      <p class="caption">La sentinella calcola due proiezioni: <em>projection_naive</em> (estrapolazione lineare del consumo corrente) e <em>projection</em> (corretta dallo smoother del pacing-bridge). La differenza <code>naive − smooth</code> dice quanto il bridge sta "addolcendo" il segnale.</p>
+      <div class="chart-summary"><span class="icon">📍</span><span>Delta <code>projection_naive − projection</code> in punti percentuali. <b>Verde</b> (>0) = smoother riduce allarme. <b>Rosso</b> (&lt;0) = smoother aggiunge cautela. Hover per i valori raw naive vs smooth al tick.</span></div>
       <div class="legend-pills">
         <span><i class="dot" style="background:#6fcf97"></i>delta &gt; 0 (smoother riduce allarme)</span>
         <span><i class="dot" style="background:#eb5757"></i>delta &lt; 0 (smoother aumenta cautela)</span>
       </div>
-      <canvas id="chart-smoothing"></canvas>
+      <div class="chart-canvas tall-440"><canvas id="chart-smoothing"></canvas></div>
       <div class="narrative">
         <p>Quando la curva è verde (delta positivo) il bridge sta dicendo "calma, la naive sta esagerando" e tiene il team in pista. Quando è rossa (delta negativo) il bridge sta aggiungendo cautela: la velocity istantanea sembra ok ma il pattern recente suggerisce di frenare comunque.</p>
         <p>Una correzione media bassa (vicino a zero) significa che la naive è già una buona proiezione e il bridge non sta forzando. Le escursioni più ampie corrispondono ai burst (smoother salva da false alarm) e ai momenti di accumulo silenzioso (smoother anticipa il problema).</p>
@@ -292,6 +346,23 @@
   Chart.defaults.color = "#c8cedb";
   Chart.defaults.borderColor = "#232836";
   Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif";
+  // Tooltip globale: padding generoso, font 13px, point-style icon coerente,
+  // hover veloce (animation:false sul tooltip). Le opzioni qui vengono
+  // ereditate da tutti i grafici e poi raffinate con callback per chart.
+  Chart.defaults.plugins.tooltip.backgroundColor = "rgba(13,15,20,0.96)";
+  Chart.defaults.plugins.tooltip.borderColor = "#2a3142";
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.padding = 12;
+  Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+  Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
+  Chart.defaults.plugins.tooltip.titleSpacing = 4;
+  Chart.defaults.plugins.tooltip.bodySpacing = 4;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.usePointStyle = true;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.caretSize = 6;
+  Chart.defaults.plugins.tooltip.titleColor = "#e8ecf3";
+  Chart.defaults.plugins.tooltip.bodyColor = "#d6dde9";
 
   const all = await ReportData.loadAll();
   const sentinel = all.sentinel.filter(ReportData.inSession);
@@ -680,13 +751,18 @@
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: "rgba(13,15,20,0.95)",
-          borderColor: "var(--border)",
+          borderColor: "#232836",
           borderWidth: 1,
-          padding: 10,
+          padding: 12,
+          titleFont: { size: 13, weight: "600" },
+          bodyFont: { size: 13 },
+          boxPadding: 6,
+          usePointStyle: true,
           callbacks: {
             title: (items) => "🕒 " + new Date(items[0].parsed.x).toLocaleString("it-IT"),
             label: (ctx) => `📅 budget weekly consumato: ${ctx.parsed.y}% (residuo ${100 - ctx.parsed.y}%)`,
