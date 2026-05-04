@@ -331,7 +331,11 @@ const ZOOM_IN_FACTOR = 1.15;
 const ZOOM_OUT_FACTOR = 0.87;
 const PAN_FRACTION = 0.10;
 if (window.Chart) {
-  Chart.defaults.plugins.zoom = ZOOM_OPTIONS;
+  // Nota dev3 cross-review: NON impostiamo Chart.defaults.plugins.zoom.
+  // Il plugin globalmente registrato installa comunque le API
+  // chart.zoom/pan/resetZoom anche senza config, ma se mettiamo zoom nei
+  // defaults il plugin può catturare wheel events sopra il canvas anche con
+  // wheel.enabled:false. Lo passiamo per-istanza solo dove serve.
   Chart.defaults.plugins.tooltip.padding = 10;
   Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
   Chart.defaults.plugins.tooltip.bodyFont = { size: 13 };
@@ -376,9 +380,11 @@ const WIN_94 = {
     const t = Date.parse(r.ts || "");
     return t >= WIN_94.startMs && t <= WIN_94.endMs;
   });
-  const cap94 = msgs94.filter(
-    (r) => r.session === "CAPITANO" || (r.preview || "").includes("@capitano")
-  );
+  // Mission log "Capitano": SOLO messaggi con session=CAPITANO (cioè quelli
+  // emessi DALLA sessione tmux del Capitano). Avevamo incluso anche
+  // "preview includes @capitano" ma quel match raccoglie messaggi
+  // INDIRIZZATI al capitano da altri agenti, che non sono ordini suoi.
+  const cap94 = msgs94.filter((r) => r.session === "CAPITANO");
 
   // ----- KPI banner 94% -----
   const peak94 = sent94.reduce(
@@ -498,6 +504,7 @@ const WIN_94 = {
         },
       },
       plugins: {
+        zoom: ZOOM_OPTIONS,
         legend: { labels: { color: "#e8ecf3" } },
         tooltip: {
           callbacks: {
@@ -576,6 +583,7 @@ const WIN_94 = {
         },
       },
       plugins: {
+        zoom: ZOOM_OPTIONS,
         legend: { labels: { color: "#e8ecf3" } },
         tooltip: {
           callbacks: {
