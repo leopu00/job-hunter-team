@@ -50,6 +50,20 @@
   .status-badge.green { background: rgba(111,207,151,0.12); color: #6fcf97; border-color: rgba(111,207,151,0.4); }
   .status-badge.yellow { background: rgba(242,201,76,0.12); color: #f2c94c; border-color: rgba(242,201,76,0.4); }
   .status-badge.red { background: rgba(235,87,87,0.12); color: #eb5757; border-color: rgba(235,87,87,0.4); }
+  /* Skeleton shimmer per loading state — copre il flash iniziale dei placeholder
+     "…" e del badge "In sintesi" prima del fetch async (B7+B8 dev4 review). */
+  @keyframes skeletonShimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #1a1f2c 0%, #2a3142 50%, #1a1f2c 100%);
+    background-size: 400px 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    color: var(--muted);
+    border-radius: 4px;
+  }
+  .kpi-card .value.skeleton { display: inline-block; min-width: 60px; height: 28px; line-height: 28px; }
   /* Wrap canvas in container con position:relative e altezza esplicita.
      Chart.js options.responsive:true + maintainAspectRatio:false richiede
      che il parent del canvas abbia dimensioni esplicite, altrimenti l'auto-resize
@@ -280,17 +294,17 @@
   <section id="kpi">
     <h2>🌙 Numeri chiave</h2>
     <div class="kpi-grid" id="kpi-grid">
-      <div class="kpi-card"><div class="label">⏱ Durata sessione</div><div class="value" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
-      <div class="kpi-card"><div class="label">🪟 Finestre Kimi K2</div><div class="value" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">W1 · W2 · W3 (perimetro analisi)</div></div>
-      <div class="kpi-card"><div class="label">🔥 Picco usage</div><div class="value" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
-      <div class="kpi-card"><div class="label">📈 Proiezione max</div><div class="value" id="kpi-proj">…</div><div class="sub">peggiore stima fine-finestra vista in sessione</div></div>
-      <div class="kpi-card"><div class="label">📅 Weekly Δ</div><div class="value" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
-      <div class="kpi-card"><div class="label">👁 Tick sentinella</div><div class="value" id="kpi-ticks">…</div><div class="sub">campioni ~ ogni 3 min</div></div>
+      <div class="kpi-card"><div class="label">⏱ Durata sessione</div><div class="value skeleton" id="kpi-duration">…</div><div class="sub" id="kpi-duration-sub"></div></div>
+      <div class="kpi-card"><div class="label">🪟 Finestre Kimi K2</div><div class="value skeleton" id="kpi-windows">…</div><div class="sub" id="kpi-windows-sub">W1 · W2 · W3 (perimetro analisi)</div></div>
+      <div class="kpi-card"><div class="label">🔥 Picco usage</div><div class="value skeleton" id="kpi-peak">…</div><div class="sub" id="kpi-peak-sub"></div></div>
+      <div class="kpi-card"><div class="label">📈 Proiezione max</div><div class="value skeleton" id="kpi-proj">…</div><div class="sub" id="kpi-proj-sub">peggiore stima fine-finestra (ts + finestra)</div></div>
+      <div class="kpi-card"><div class="label">📅 Weekly Δ</div><div class="value skeleton" id="kpi-weekly">…</div><div class="sub" id="kpi-weekly-sub">consumo settimanale start → end</div></div>
+      <div class="kpi-card"><div class="label">👁 Tick sentinella</div><div class="value skeleton" id="kpi-ticks">…</div><div class="sub">campioni ~ ogni 3 min</div></div>
     </div>
   </section>
 
   <section id="insights">
-    <h2>🧠 In sintesi <span id="status-badge" class="status-badge"></span></h2>
+    <h2>🧠 In sintesi <span id="status-badge" class="status-badge skeleton">calcolo…</span></h2>
     <div class="insights-card" id="insights-card">
       <ul id="insights-list"><li>caricamento…</li></ul>
     </div>
@@ -398,7 +412,7 @@
             <th>tick</th>
             <th>picco usage</th>
             <th>picco proj</th>
-            <th>throttle %</th>
+            <th title="Formula: tick con throttle ON / tick totali nel range della finestra (numero ↑ = pacing-bridge attivo più spesso).">throttle %</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -424,7 +438,7 @@
       <div class="chart-canvas tall-440"><canvas id="chart-smoothing"></canvas></div>
       <div class="narrative">
         <p>Quando la curva è verde (delta positivo) il bridge sta dicendo "calma, la naive sta esagerando" e tiene il team in pista. Quando è rossa (delta negativo) il bridge sta aggiungendo cautela: la velocity istantanea sembra ok ma il pattern recente suggerisce di frenare comunque.</p>
-        <p>Una correzione media bassa (vicino a zero) significa che la naive è già una buona proiezione e il bridge non sta forzando. Le escursioni più ampie corrispondono ai burst (smoother salva da false alarm) e ai momenti di accumulo silenzioso (smoother anticipa il problema).</p>
+        <p>Una correzione media bassa (vicino a zero) significa che la naive è già una buona proiezione e il bridge non sta forzando. Le escursioni più ampie corrispondono ai burst (smoother salva da false alarm) e ai momenti di accumulo silenzioso (smoother anticipa il problema). Esempio concreto in W2: alle <code>04:16:33 UTC</code> projection_naive arriva a <strong>102.11%</strong> mentre il bridge la corregge a <strong>96.42%</strong> (delta +5.69pp) — 40 minuti dopo, alle <code>04:56:36</code>, la projection scende a 97.74% mentre l'usage continua a salire da 92→93%: il cross-over usage↑/proj↓ è il frutto di queste correzioni cumulate.</p>
         <p>È la metrica che giustifica l'esistenza del pacing-bridge: senza la correzione, il termostato accenderebbe e spegnerebbe il throttle a ogni tick di velocity, generando un gait innaturale per gli agenti. Con la correzione, il throttle resta acceso quanto serve e si spegne solo quando il segnale si stabilizza.</p>
       </div>
     </div>
@@ -432,7 +446,7 @@
     <div class="chart-wrap" id="chart7" title="Volume di output (chat) per agente: numero messaggi, caratteri totali, breakdown per type. Proxy token = chars / 4.">
       <span class="chart-info" data-tip="Chi ha parlato di più nel team? Bar dual-axis: count messaggi (sx) + token approssimati char/4 (dx). Sopra il chart un breakdown per type (REQ/MSG/REPORT/ACK/RES…).">ℹ</span>
       <h3>7 · 🗨 Volume output per agente — chat history</h3>
-      <div class="chart-summary"><span class="icon">📍</span><span>Aggregazione dei <b>1035 messaggi</b> della session chat parsati da <code>data/chat/</code> (schema <code>[@from -&gt; @to] [TYPE] body</code>). Bar blu = numero messaggi inviati. Bar viola = token approssimati (<code>chars/4</code>). Hover per breakdown completo.</span></div>
+      <div class="chart-summary"><span class="icon">📍</span><span>Aggregazione dei messaggi chat parsati da <code>data/chat/</code> nel perimetro 3 finestre (schema <code>[@from -&gt; @to] [TYPE] body</code>). Conteggio dinamico esposto nel data-quality strip sotto. Bar blu = numero messaggi inviati. Bar viola = token approssimati (<code>chars/4</code>). Hover per breakdown completo.</span></div>
       <div class="series-toggle" data-chart="chart-agent-volume">
         <span class="label">serie</span>
         <button class="pill" data-series="0" data-active="true"><span class="swatch" style="background:#56ccf2"></span>messaggi inviati</button>
@@ -634,15 +648,33 @@
 
   const fmtTime = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
   const fmtPctH = (h) => `${h.toFixed(1)} h`;
-  document.getElementById("kpi-duration").textContent = fmtPctH(durationH);
+  // Helper rimuove skeleton + setta testo (B7/B8 dev4 review).
+  function setKpi(id, text) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove("skeleton");
+  }
+  setKpi("kpi-duration", fmtPctH(durationH));
   document.getElementById("kpi-duration-sub").textContent = `${fmtTime(tStart)} → ${fmtTime(tEnd)} (locale)`;
-  document.getElementById("kpi-windows").textContent = String(sessionIds.size);
-  document.getElementById("kpi-peak").textContent = `${peakUsage}%`;
+  setKpi("kpi-windows", String(sessionIds.size));
+  setKpi("kpi-peak", `${peakUsage}%`);
   document.getElementById("kpi-peak-sub").textContent = peakUsageRec ? `alle ${fmtTime(Date.parse(peakUsageRec.ts))}` : "";
-  document.getElementById("kpi-proj").textContent = `${Math.round(peakProj)}%`;
-  document.getElementById("kpi-weekly").textContent = weeklyDelta != null ? `+${weeklyDelta} pp` : "n/d";
+  setKpi("kpi-proj", `${Math.round(peakProj)}%`);
+  // Arricchisco sub con ts + finestra del peakProj (B3 dev4 review).
+  const peakProjRec = sentinel.find((r) => r.projection === peakProj);
+  const subProj = document.getElementById("kpi-proj-sub");
+  if (subProj) {
+    if (peakProjRec) {
+      const win = ReportData.windowOf ? ReportData.windowOf(Date.parse(peakProjRec.ts)) : null;
+      subProj.textContent = `alle ${fmtTime(Date.parse(peakProjRec.ts))}${win ? " · " + win.label : ""}`;
+    } else {
+      subProj.textContent = "peggiore stima fine-finestra";
+    }
+  }
+  setKpi("kpi-weekly", weeklyDelta != null ? `+${weeklyDelta} pp` : "n/d");
   document.getElementById("kpi-weekly-sub").textContent = weeklyDelta != null ? `da ${weeklyStart}% a ${weeklyEnd}%` : "";
-  document.getElementById("kpi-ticks").textContent = String(sentinel.length);
+  setKpi("kpi-ticks", String(sentinel.length));
 
   // Riempio narrative dinamiche
   document.getElementById("nb-windows-count").textContent = String(sessionIds.size);
@@ -814,6 +846,29 @@
           ctx.stroke();
           ctx.fillStyle = "#eb5757";
           ctx.fillText(label, lx + 6, ly + 4);
+          ctx.restore();
+        },
+      },
+      {
+        // B10 dev4 review: i 2 gap fra W1↔W2 e W2↔W3 (perimetro 3 finestre)
+        // appaiono come "vuoto" sull'asse X; segnaliamo esplicitamente con
+        // banda grigia + label "gap escluso" per evitare confusione.
+        id: "windowGaps",
+        beforeDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          const wins = ReportData.SESSION_WINDOWS || [];
+          if (wins.length < 2) return;
+          ctx.save();
+          ctx.fillStyle = "rgba(130,130,130,0.10)";
+          for (let i = 1; i < wins.length; i++) {
+            const x1 = scales.x.getPixelForValue(wins[i - 1].endMs);
+            const x2 = scales.x.getPixelForValue(wins[i].startMs);
+            const left = Math.max(chartArea.left, Math.min(x1, x2));
+            const right = Math.min(chartArea.right, Math.max(x1, x2));
+            const w = right - left;
+            if (w < 2) continue;
+            ctx.fillRect(left, chartArea.top, w, chartArea.bottom - chartArea.top);
+          }
           ctx.restore();
         },
       },
@@ -1296,7 +1351,7 @@
     badgeClass = "yellow"; badgeText = "🟡 termostato sotto pressione — pacing tirato";
   }
   const badge = document.getElementById("status-badge");
-  badge.className = "status-badge " + badgeClass;
+  badge.className = "status-badge " + badgeClass; // rimuove anche .skeleton
   badge.textContent = badgeText;
 
   // ---------- Insights "In sintesi" ----------

@@ -160,8 +160,6 @@
 </header>
 
 <main>
-  <section class="kpi-grid" id="kpi-grid"></section>
-
   <section>
     <h2>🔭 Cosa stiamo guardando</h2>
     <div class="narrative">
@@ -177,15 +175,23 @@
         ma scored o re-applicata dentro conta come "aggiornata", non si perde.
       </p>
       <p>
-        ⚠️ <strong>Caveat dati vuoti.</strong>
-        <code>companies.json.txt</code> e <code>highlights.json.txt</code> non
-        hanno record con <code>analyzed_at</code> o <code>created_at</code>
-        dentro le finestre di sessione: le company deep-dive e gli highlights
-        sono nel pre-warmup serale, fuori da W1/W2/W3. Per le company viene
-        riportato sia il KPI "Companies analyzed_at in win" (esplicito,
-        zero in questa sessione) sia "Companies toccate" (distinct count
-        sulle positions del lavoro effettivo, valore positivo perché ogni
-        posizione cita una company).
+        ⚠️ <strong>Caveat dati vuoti.</strong> <code>companies.json.txt</code>
+        e <code>highlights.json.txt</code> non hanno record con
+        <code>analyzed_at</code> o <code>created_at</code> dentro le finestre:
+        le company deep-dive e gli highlights sono nel pre-warmup serale,
+        fuori da W1/W2/W3. Per questo NON sono mostrati come KPI separati
+        (sarebbero card a 0 distratte) ma vengono riassunti dal singolo KPI
+        "Companies toccate" (distinct count sulle positions del lavoro
+        effettivo).
+      </p>
+      <p>
+        ⚠️ <strong>Caveat written/scored disallineati.</strong> Vedrai sotto
+        "Written in sessione = 17" ma "Scored in sessione = 6" (visibile nel
+        funnel). Le 11 written che non hanno scoring nella stessa finestra
+        derivano da posizioni <em>già scored nel pre-warmup</em>: il team
+        ha continuato a iterare con il critico su CV pre-esistenti. È la
+        firma di una sessione "scrittore-centric" dove il bottleneck è
+        scrittura/critica, non discovery.
       </p>
       <p>
         Le analisi sono lette così: <strong>Funnel</strong> per il colpo d'occhio
@@ -199,6 +205,8 @@
       </p>
     </div>
   </section>
+
+  <section class="kpi-grid" id="kpi-grid"></section>
 
   <section>
     <h2>📉 Funnel — trovate → scored → ready → written → PASS</h2>
@@ -544,19 +552,18 @@ if (window.Chart) {
     ? (scoresIn.reduce((s, r) => s + (r.total_score || 0), 0) / scoresIn.length).toFixed(1)
     : "—";
 
+  // 6 KPI top per "30s rule" (review dev3): collassati i 12 di prima.
+  // Companies analyzed_at e Highlights (entrambi 0) rimossi — il caveat
+  // narrativo sopra i KPI spiega che sono pre-warmup, fuori finestra.
+  // I count separati nuove/aggiornate/scored/excluded vengono raccontati
+  // dal funnel sotto, non servono come KPI individuali.
   const kpis = [
     { label: "💼 Lavoro effettivo (UNION)", value: unionPosIds.size },
-    { label: "🆕 Nuove in sessione", value: newPosIds.size },
-    { label: "♻️ Aggiornate (scored/written)", value: updatedPosIds.size },
-    { label: "🎯 Scored in sessione", value: scoredPosIds.size },
     { label: "✍️ Written in sessione", value: writtenPosIds.size },
-    { label: "🚫 Scartate (excluded)", value: excludedPosIds.size },
     { label: "👍 Verdict PASS", value: passApps.length },
     { label: "📈 Pass rate", value: `${passRate}%` },
     { label: "📐 Score medio", value: avgScore },
     { label: "🏢 Companies toccate", value: distinctCompaniesSet.size },
-    { label: "🏢 Companies analyzed_at in win", value: companies.length },
-    { label: "💡 Highlights in win", value: highlights.length },
   ];
   const kpiGrid = document.getElementById("kpi-grid");
   for (const k of kpis) {
@@ -586,21 +593,31 @@ if (window.Chart) {
   ];
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
   const funnelEl = document.getElementById("funnel");
-  for (const st of stages) {
+  stages.forEach((st, i) => {
     const widthPct = (st.count / maxCount) * 100;
     const ofTotal = ((st.count / stageTrovate.size) * 100).toFixed(0);
+    // Conversion rate fra step (rispetto allo stage precedente) — chiesto da
+    // dev3 in QA round 2: oltre alla % sul totale, mostra il drop step-by-step.
+    const prev = i > 0 ? stages[i - 1].count : null;
+    const stepRate =
+      prev != null && prev > 0
+        ? `${((st.count / prev) * 100).toFixed(0)}% del precedente`
+        : "stage iniziale";
     const row = document.createElement("div");
     row.className = "funnel-row";
-    row.title = `${st.label}: ${st.count} (${ofTotal}% del totale trovate)`;
+    row.title = `${st.label}: ${st.count} (${ofTotal}% del totale, ${stepRate})`;
     row.innerHTML = `
       <div class="funnel-label">${st.label}</div>
       <div class="funnel-bar ${st.klass}" style="width: ${widthPct}%; min-width: 60px;">
         <div class="funnel-pct">${ofTotal}%</div>
       </div>
-      <div class="funnel-count"><strong>${st.count}</strong> / ${stageTrovate.size}</div>
+      <div class="funnel-count">
+        <strong>${st.count}</strong> / ${stageTrovate.size}
+        <div style="font-size:11px; color:var(--muted); margin-top:2px;">${stepRate}</div>
+      </div>
     `;
     funnelEl.appendChild(row);
-  }
+  });
 
   // ----- BAR critic_verdict -----
   const verdictCounts = { PASS: 0, NEEDS_WORK: 0, REJECT: 0, "(null)": 0 };
