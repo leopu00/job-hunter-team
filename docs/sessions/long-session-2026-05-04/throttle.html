@@ -346,6 +346,31 @@
   </section>
 
   <section>
+    <h2>🚨 Le 5 pause più lunghe</h2>
+    <div class="chart-wrap" style="padding: 14px 20px;" title="Tabella delle 5 pause con applied_sec massimo: gli incidenti singoli più costosi della sessione, da incrociare con la timeline Capitano per capire la causa.">
+      <p class="caption">
+        Outlier per durata: queste 5 pause da sole pesano una quota
+        sproporzionata sul tempo totale fermo. Ognuna meriterebbe un
+        controllo manuale nella timeline per capire se era pacing
+        forzato, attesa lunga su critic, o un freeze esplicito.
+      </p>
+      <table id="top-longest" style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="text-align:left; color:var(--muted); border-bottom:1px solid var(--border);">
+            <th style="padding:8px 6px;">#</th>
+            <th style="padding:8px 6px;">Quando (UTC)</th>
+            <th style="padding:8px 6px;">Agente</th>
+            <th style="padding:8px 6px; text-align:right;">Durata</th>
+            <th style="padding:8px 6px;">Categoria</th>
+            <th style="padding:8px 6px;">Reason</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
     <h2>⚙️ Note tecniche</h2>
     <div class="narrative">
       <h4>Come è stato classificato il <code>reason</code></h4>
@@ -1198,6 +1223,38 @@
     `;
     tbody.appendChild(tr);
   });
+
+  // ----- Top 5 pause più lunghe -----
+  const escapeHtml = (s) =>
+    String(s).replace(/[<>&]/g, (c) =>
+      ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])
+    );
+  const longest = realPauses
+    .filter((e) => (e.applied_sec || 0) > 0)
+    .sort((a, b) => (b.applied_sec || 0) - (a.applied_sec || 0))
+    .slice(0, 5);
+  const longestBody = document.querySelector("#top-longest tbody");
+  if (longestBody) {
+    longest.forEach((ev, i) => {
+      const ts = new Date(ev.ts_unix * 1000).toISOString().slice(0, 16).replace("T", " ");
+      const cat = classifyReason(ev.reason);
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid var(--border)";
+      tr.innerHTML = `
+        <td style="padding:8px 6px; color:var(--muted);">${i + 1}</td>
+        <td style="padding:8px 6px; font-variant-numeric: tabular-nums;">${ts}Z</td>
+        <td style="padding:8px 6px;">${ReportData.agentEmoji(ev.agent)} <code style="font-size:12px;">${escapeHtml(ev.agent || "?")}</code></td>
+        <td style="padding:8px 6px; text-align:right; font-variant-numeric: tabular-nums;">${fmtSec(ev.applied_sec)}</td>
+        <td style="padding:8px 6px;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;
+            background:${CATEGORY_COLORS[cat]};margin-right:6px;vertical-align:middle;"></span>
+          ${cat}
+        </td>
+        <td style="padding:8px 6px;"><code style="font-size:12px;">${escapeHtml(ev.reason || "(vuota)")}</code></td>
+      `;
+      longestBody.appendChild(tr);
+    });
+  }
 
 })().catch((err) => {
   document.querySelector("main").insertAdjacentHTML(
