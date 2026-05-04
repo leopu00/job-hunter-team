@@ -276,6 +276,41 @@ section, .chart-wrap {
   padding-left: 22px;
 }
 
+.mission-log .quote {
+  margin: 14px 0;
+  padding: 10px 14px 10px 16px;
+  background: rgba(86, 204, 242, 0.04);
+  border-left: 3px solid #56ccf2;
+  border-radius: 4px;
+  color: #d6dde9;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mission-log .quote em {
+  font-style: italic;
+  color: #e8ecf3;
+}
+
+.mission-log .quote .qhdr {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  color: #8a93a4;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-log .quote code {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #2a3550;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #f2c94c;
+}
+
 .mission-log .lessons li {
   margin-bottom: 10px;
   line-height: 1.55;
