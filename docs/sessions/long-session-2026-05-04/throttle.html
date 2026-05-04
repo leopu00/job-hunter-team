@@ -85,6 +85,8 @@
         Asse X: tempo della sessione. Una "corsia" per agente; ogni bolla è
         una pausa, dimensione proporzionale alla durata reale (<code>applied_sec</code>).
         I checkpoint heartbeat sono mostrati come tick sottili, distinti da quelli reali.
+        Le linee verticali gialle tratteggiate sono i <strong>reset di finestra</strong>
+        (≈5h) ricavati dal cambio di <code>reset_at</code> nel sentinel.
       </p>
       <div class="filter-bar">
         <span>Mostra:</span>
@@ -327,10 +329,62 @@
 <script src="assets/data-loader.js"></script>
 <script>
 (async function () {
-  const { throttle } = await ReportData.loadAll();
+  const { throttle, sentinel } = await ReportData.loadAll();
 
   // Filtra alla finestra di sessione.
   const inWin = throttle.filter(ReportData.inSession);
+
+  // ----- Boundary finestra Claude/Kimi -----
+  // Il provider che la sentinella sta tracciando in finestra è kimi (claude
+  // assente nei sentinel records della sessione 2026-05-03→04). Una "nuova
+  // finestra da 5h" si riconosce dal cambio di reset_at (HH:MM): ogni volta
+  // che la sentinella vede un orario di reset diverso, è iniziata una nuova
+  // window. Calcoliamo i boundary una volta per i marker verticali.
+  const sentinelInWin = sentinel
+    .filter(ReportData.inSession)
+    .filter((r) => r && r.provider && r.reset_at)
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const windowBoundaries = [];
+  let lastReset = null;
+  for (const r of sentinelInWin) {
+    if (r.reset_at !== lastReset) {
+      windowBoundaries.push({
+        ts_unix: Date.parse(r.ts),
+        reset_at: r.reset_at,
+        session_id: r.session_id || "",
+      });
+      lastReset = r.reset_at;
+    }
+  }
+  // Plugin per disegnare linee verticali tratteggiate sui boundary (lane + cumul).
+  const windowMarkersPlugin = {
+    id: "windowMarkers",
+    afterDraw(chart) {
+      if (!windowBoundaries.length) return;
+      const xScale = chart.scales.x;
+      if (!xScale) return;
+      const top = chart.chartArea.top;
+      const bottom = chart.chartArea.bottom;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "rgba(242, 201, 76, 0.45)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(242, 201, 76, 0.85)";
+      ctx.font = "11px -apple-system, system-ui, sans-serif";
+      for (const b of windowBoundaries) {
+        const x = xScale.getPixelForValue(b.ts_unix);
+        if (x < chart.chartArea.left || x > chart.chartArea.right) continue;
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        const label = "→ reset " + b.reset_at;
+        ctx.fillText(label, x + 4, top + 12);
+      }
+      ctx.restore();
+    },
+  };
 
   // Separa pause reali (event=start o legacy null) dai checkpoint heartbeat.
   // Le 'end' sono escluse perché farebbero double-count: ogni start ha la
@@ -495,6 +549,7 @@
   const laneChart = new Chart(laneCtx, {
     type: "bubble",
     data: { datasets: [...realDatasets, checkpointDataset] },
+    plugins: [windowMarkersPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -713,6 +768,7 @@
   new Chart(document.getElementById("cumulative").getContext("2d"), {
     type: "line",
     data: { datasets: cumulativeDatasets },
+    plugins: [windowMarkersPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
