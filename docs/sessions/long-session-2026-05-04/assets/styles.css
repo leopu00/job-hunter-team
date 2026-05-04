@@ -1,0 +1,146 @@
+:root {
+  --bg: #0d0f14;
+  --fg: #e8ecf3;
+  --muted: #8a93a4;
+  --accent: #6fcf97;
+  --warn: #f2c94c;
+  --danger: #eb5757;
+  --card: #161a23;
+  --border: #232836;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.hero {
+  padding: 32px 48px 24px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #1a1f2c 0%, var(--bg) 100%);
+}
+
+.hero h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.hero .subtitle {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tabs a {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  transition: background 120ms;
+}
+
+.tabs a:hover {
+  background: #1f2532;
+}
+
+main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 48px 64px;
+}
+
+section {
+  margin-bottom: 48px;
+}
+
+section h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+
+.note {
+  color: var(--warn);
+  font-size: 13px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.kpi-card .label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.kpi-card .value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.chart-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.chart-wrap h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.chart-wrap .caption {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+
+.chart-wrap canvas,
+.chart-wrap .echart {
+  width: 100% !important;
+  height: 360px !important;
+}
+
+.narrative {
+  background: #11151e;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 14px 18px;
+  margin: 18px 0;
+  color: #d6dde9;
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 16px 48px;
+  color: var(--muted);
+  font-size: 12px;
+}
