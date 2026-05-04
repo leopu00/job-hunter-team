@@ -2,11 +2,13 @@
 
 // AgentActivityChart — vista combinata "rate token + eventi throttle".
 // Carica entrambe le API:
-//   /api/tokens/by-agent  → linee rate per agente (kT/min) — top 70%
-//   /api/tokens/throttle  → rettangoli throttle (lane-assigned) — bottom 30%
-// Asse X temporale condiviso. Stesso colore per stesso agente in entrambe
-// le bande, così la correlazione "consumo dominante → throttle ordinato"
-// si legge a colpo d'occhio.
+//   /api/tokens/by-agent  → linee rate per agente (kT/min)
+//   /api/tokens/throttle  → barre orizzontali throttle (start→end, lane-stack)
+// Layout unico: barre e linee condividono la stessa area; le pause throttle
+// sono rettangoli orizzontali la cui lunghezza = durata reale sull'asse X.
+// Toggle "tutto / solo rate / solo pause" per togliere visivamente una delle
+// due serie. Stesso colore per stesso agente, così "picco di rate ↔ pausa
+// throttle conseguente" si legge a colpo d'occhio nello stesso spazio.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { colorForAgent as colorFor } from './agent-colors'
@@ -68,6 +70,10 @@ export default function AgentActivityChart() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [range, setRange] = useState<RangeId>('30m')
+  // view: quali serie disegnare. 'both' = linee + barre sovrapposte,
+  // 'rate' = solo linee, 'throttle' = solo barre. Disattivare entrambe non
+  // ha senso → tre stati esclusivi (radio) invece di due booleani.
+  const [view, setView] = useState<'rate' | 'throttle' | 'both'>('both')
 
   const fetchAll = (minutes: number, signal?: AbortSignal) => {
     const bucketSec = Math.max(1, Math.round((minutes * 60) / 120))
@@ -115,26 +121,58 @@ export default function AgentActivityChart() {
             Attività agenti — rate consumo + throttle
           </h2>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-            Linee = kT/min per agente · Barre in basso = pause throttle (start→durata).
-            Stessi colori per agente: vedi se i picchi di rate coincidono con throttle ordinati.
+            Linee = kT/min per agente · Barre orizzontali = pause throttle (start↔end).
+            Stessi colori per agente: la barra cade esattamente nel tempo in cui l&apos;agente era in pausa.
           </p>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {RANGES.map(r => (
-            <button
-              key={r.id}
-              onClick={() => setRange(r.id)}
-              className="px-2.5 py-1 rounded text-[10px] font-medium transition-colors"
-              style={{
-                background: range === r.id ? 'rgba(34,211,238,0.15)' : 'transparent',
-                color: range === r.id ? '#22d3ee' : 'var(--color-dim)',
-                border: `1px solid ${range === r.id ? 'rgba(34,211,238,0.35)' : 'var(--color-border)'}`,
-                cursor: 'pointer',
-              }}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Toggle vista: rate / throttle / entrambi */}
+          <div className="flex">
+            {([
+              { id: 'both' as const,     label: 'tutto' },
+              { id: 'rate' as const,     label: 'solo rate' },
+              { id: 'throttle' as const, label: 'solo pause' },
+            ]).map((opt, i, arr) => {
+              const active = view === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setView(opt.id)}
+                  className="px-2.5 py-1 text-[10px] font-medium transition-colors"
+                  style={{
+                    background: active ? 'rgba(34,211,238,0.15)' : 'transparent',
+                    color: active ? '#22d3ee' : 'var(--color-dim)',
+                    border: `1px solid ${active ? 'rgba(34,211,238,0.35)' : 'var(--color-border)'}`,
+                    borderLeftWidth: i > 0 ? 0 : 1,
+                    borderTopLeftRadius: i === 0 ? 4 : 0,
+                    borderBottomLeftRadius: i === 0 ? 4 : 0,
+                    borderTopRightRadius: i === arr.length - 1 ? 4 : 0,
+                    borderBottomRightRadius: i === arr.length - 1 ? 4 : 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {RANGES.map(r => (
+              <button
+                key={r.id}
+                onClick={() => setRange(r.id)}
+                className="px-2.5 py-1 rounded text-[10px] font-medium transition-colors"
+                style={{
+                  background: range === r.id ? 'rgba(34,211,238,0.15)' : 'transparent',
+                  color: range === r.id ? '#22d3ee' : 'var(--color-dim)',
+                  border: `1px solid ${range === r.id ? 'rgba(34,211,238,0.35)' : 'var(--color-border)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -144,27 +182,33 @@ export default function AgentActivityChart() {
       {error && !tokens && (
         <div className="h-[360px] flex items-center justify-center text-[11px] text-[var(--color-warn,#f87171)]">{error}</div>
       )}
-      {tokens && throttle && <Chart tokens={tokens} throttle={throttle} />}
+      {tokens && throttle && <Chart tokens={tokens} throttle={throttle} view={view} />}
     </div>
   )
 }
 
 type Bar = { x: number; y: number; w: number; h: number; color: string; agent: string; sec: number; tsStart: string; tsEnd: string; interrupted: boolean; orphan: boolean }
 
-function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: ThrottlePayload }) {
+function Chart({
+  tokens, throttle, view,
+}: {
+  tokens: TokensPayload; throttle: ThrottlePayload;
+  view: 'rate' | 'throttle' | 'both';
+}) {
+  const showRate = view === 'rate' || view === 'both'
+  const showThrottle = view === 'throttle' || view === 'both'
+
   const W = 900
   const H = 380
   const PAD = { top: 16, right: 24, bottom: 28, left: 64 }
-  const GAP = 14            // gap tra banda rate e banda throttle
-  const RATIO_RATE = 0.7    // 70% top per linee rate
   const innerW = W - PAD.left - PAD.right
   const innerH = H - PAD.top - PAD.bottom
-  const rateH = (innerH - GAP) * RATIO_RATE
-  const throttleH = (innerH - GAP) * (1 - RATIO_RATE)
-  const rateTop = PAD.top
-  const rateBot = rateTop + rateH
-  const throttleTop = rateBot + GAP
-  const throttleBot = throttleTop + throttleH
+  // Layout unico: niente più bande separate. Le linee rate occupano tutto
+  // l'altezza utile; le barre throttle sono rettangoli orizzontali in
+  // overlay, lane-stacked dal basso così non oscurano le linee in alto.
+  const chartTop = PAD.top
+  const chartBot = PAD.top + innerH
+  const chartH = innerH
 
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hoverPos, setHoverPos] = useState<{ xPct: number; yPct: number } | null>(null)
@@ -221,7 +265,7 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
 
   const n = tokens.series.length
   const xAtIdx = (i: number) => PAD.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW)
-  const yAtRate = (v: number) => rateTop + rateH - (v / rateMax) * rateH
+  const yAtRate = (v: number) => chartTop + chartH - (v / rateMax) * chartH
 
   const ratePaths = useMemo(() => {
     return tokens.agents.filter(isVisible).map(agent => {
@@ -236,20 +280,18 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
     })
   }, [rateDisplay, tokens.agents, rateMax, hidden]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // === BANDA THROTTLE (bottom): rettangoli larghezza fissa, lane assignment ===
-  const throttleMaxSec = useMemo(() => {
-    let m = 0
-    for (const iv of throttle.intervals) if (isVisible(iv.agent) && iv.sec > m) m = iv.sec
-    return m > 0 ? m * 1.1 : 60
-  }, [throttle.intervals, hidden]) // eslint-disable-line react-hooks/exhaustive-deps
-  const yAtThrottle = (sec: number) => throttleBot - (sec / throttleMaxSec) * throttleH
-
-  const BAR_W = 6
+  // === BARRE THROTTLE (overlay orizzontale): rettangoli posizionati sull'asse
+  // X esattamente dove cade la pausa (start→end). Lane-stack dal basso
+  // verso l'alto: se due pause si sovrappongono temporalmente vanno su lane
+  // diverse impilate. La durata è larghezza in pixel (xAtTime(end) - xAtTime(start)),
+  // NON è più altezza Y — niente più asse secondario per i secondi. ===
+  const BAR_H = 7
+  const LANE_GAP = 1
   const bars = useMemo<Bar[]>(() => {
     const sorted = [...throttle.intervals]
       .filter(iv => isVisible(iv.agent))
       .sort((a, b) => new Date(a.ts_start).getTime() - new Date(b.ts_start).getTime())
-    const lanes: number[] = []
+    const lanes: number[] = []  // ts_end_ms occupato per ogni lane
     const out: Bar[] = []
     for (const iv of sorted) {
       const startMs = new Date(iv.ts_start).getTime()
@@ -258,13 +300,16 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
       if (lane < 0) { lane = lanes.length; lanes.push(endMs) }
       else lanes[lane] = endMs
       const xs = xAtTime(startMs)
-      const y = yAtThrottle(iv.sec)
-      const h = throttleBot - y
+      const xe = xAtTime(endMs)
+      // Larghezza minima 2px per render visibile delle pause brevissime.
+      const w = Math.max(2, xe - xs)
+      // Lane 0 è il fondo del chart, lane crescenti vanno verso l'alto.
+      const y = chartBot - (lane + 1) * BAR_H - lane * LANE_GAP
       out.push({
-        x: xs + lane * BAR_W,
+        x: xs,
         y,
-        w: BAR_W - 1,
-        h,
+        w,
+        h: BAR_H,
         color: colorFor(iv.agent),
         agent: iv.agent,
         sec: iv.sec,
@@ -275,18 +320,13 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
       })
     }
     return out
-  }, [throttle.intervals, sinceMs, spanMs, throttleMaxSec, hidden]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [throttle.intervals, sinceMs, spanMs, hidden]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Y ticks rate (sx) + throttle (dx, asse secondario)
+  // Y ticks rate (sx) — un solo asse Y ora, niente più secondario.
   const rateTicks = useMemo(() => Array.from({ length: 4 }, (_, i) => {
     const v = (rateMax * (i + 1)) / 4
     return { v, y: yAtRate(v) }
   }), [rateMax]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const throttleTicks = useMemo(() => [
-    { v: throttleMaxSec, y: yAtThrottle(throttleMaxSec) },
-    { v: throttleMaxSec / 2, y: yAtThrottle(throttleMaxSec / 2) },
-  ], [throttleMaxSec]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const xTicks = useMemo(() => {
     if (n === 0) return []
@@ -302,6 +342,9 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
   }, [tokens, n]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // === Hover ===
+  // Le barre throttle sono ora overlay orizzontali in fondo all'area chart;
+  // hit-test rettangolare ha precedenza sulle linee (così cliccando una pausa
+  // si vede subito il suo dettaglio anche se sopra c'è una linea rate).
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
     if (!svg) return
@@ -313,22 +356,27 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
     if (xViewBox < PAD.left || xViewBox > W - PAD.right) {
       setHoverIdx(null); setHoverBar(null); setHoverPos(null); return
     }
-    // Quale banda? Se il cursore è nella banda throttle cerca la barra più vicina
-    if (yViewBox >= throttleTop - 4) {
-      let best: Bar | null = null
-      let bestDx = Infinity
+    // 1) Hit-test esatto sulle barre throttle (rect contains)
+    let hitBar: Bar | null = null
+    if (showThrottle) {
       for (const b of bars) {
-        const cx = b.x + b.w / 2
-        const dx = Math.abs(xViewBox - cx)
-        if (dx < bestDx) { bestDx = dx; best = b }
+        if (xViewBox >= b.x && xViewBox <= b.x + b.w &&
+            yViewBox >= b.y - 1 && yViewBox <= b.y + b.h + 1) {
+          hitBar = b
+          break
+        }
       }
-      setHoverBar(bestDx <= 12 ? best : null)
+    }
+    if (hitBar) {
+      setHoverBar(hitBar)
       setHoverIdx(null)
-    } else {
+    } else if (showRate) {
       const ratio = (xViewBox - PAD.left) / innerW
       const idx = Math.round(ratio * (n - 1))
       setHoverIdx(Math.max(0, Math.min(n - 1, idx)))
       setHoverBar(null)
+    } else {
+      setHoverBar(null); setHoverIdx(null)
     }
     setHoverPos({ xPct: (xPx / rect.width) * 100, yPct: (yPx / rect.height) * 100 })
   }
@@ -355,11 +403,9 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
         onMouseLeave={handleLeave}
         style={{ display: 'block' }}
       >
-        {/* sfondo banda throttle (sottile evidenziazione) */}
-        <rect x={PAD.left} y={throttleTop} width={innerW} height={throttleH}
-              fill="rgba(255,255,255,0.015)" stroke="var(--color-border)" strokeOpacity={0.3} />
-        {/* griglia rate (sx) */}
-        {rateTicks.map((t, i) => (
+        {/* griglia rate (sx) — visibile solo se le linee rate sono attive,
+            altrimenti la griglia kT/min sarebbe rumore senza dati */}
+        {showRate && rateTicks.map((t, i) => (
           <g key={`r${i}`}>
             <line x1={PAD.left} x2={W - PAD.right} y1={t.y} y2={t.y}
                   stroke="var(--color-border)" strokeDasharray="3 4" opacity={0.4} />
@@ -369,13 +415,6 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
             </text>
           </g>
         ))}
-        {/* tick scala throttle (sx, sotto la banda) */}
-        {throttleTicks.map((t, i) => (
-          <text key={`t${i}`} x={PAD.left - 8} y={t.y + 3} fontSize={10}
-                fill="var(--color-dim)" textAnchor="end" opacity={0.7}>
-            {formatSec(t.v)}
-          </text>
-        ))}
         {/* asse X labels */}
         {xTicks.map((t, i) => (
           <text key={`x${i}`} x={t.x} y={H - PAD.bottom + 14}
@@ -384,34 +423,34 @@ function Chart({ tokens, throttle }: { tokens: TokensPayload; throttle: Throttle
           </text>
         ))}
         {/* linee rate */}
-        {ratePaths.map(p => (
+        {showRate && ratePaths.map(p => (
           <path key={p.agent} d={p.d} stroke={p.color} strokeWidth={1.6}
                 fill="none" opacity={0.92} style={{ pointerEvents: 'none' }} />
         ))}
-        {/* barre throttle */}
-        {bars.map((b, i) => {
+        {/* barre throttle (rettangoli orizzontali, lane-stack dal basso) */}
+        {showThrottle && bars.map((b, i) => {
           const active = hoverBar === b
           const muted = b.interrupted || b.orphan
           return (
             <rect key={`${b.agent}-${i}`}
                   x={b.x} y={b.y} width={b.w} height={b.h}
                   fill={b.color}
-                  opacity={active ? 1 : muted ? 0.4 : 0.85}
+                  opacity={active ? 1 : muted ? 0.45 : 0.78}
                   stroke={active ? '#fff' : muted ? b.color : 'none'}
                   strokeWidth={active ? 1 : muted ? 1 : 0}
                   strokeDasharray={muted && !active ? '2 2' : undefined}
-                  rx={0.5}
+                  rx={1}
                   style={{ pointerEvents: 'none' }} />
           )
         })}
-        {/* crosshair (banda rate) */}
-        {hoverIdx !== null && (
+        {/* crosshair sull'intera area chart */}
+        {hoverIdx !== null && showRate && (
           <line x1={xAtIdx(hoverIdx)} x2={xAtIdx(hoverIdx)}
-                y1={rateTop} y2={H - PAD.bottom}
+                y1={chartTop} y2={chartBot}
                 stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
         )}
         {/* marker hover linee */}
-        {hoverIdx !== null && tokens.agents.filter(isVisible).map(a => {
+        {hoverIdx !== null && showRate && tokens.agents.filter(isVisible).map(a => {
           const v = hoverRow?.[a]
           if (typeof v !== 'number' || v <= 0) return null
           return (
