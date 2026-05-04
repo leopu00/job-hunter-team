@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>🪞 Retrospettiva — Long Session 2026-05-04</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/timeline.css">
+<style>
+  /* Stile retro: stesso pattern mission-log, sezioni a tre colonne logiche */
+  .retro-section {
+    max-width: 920px;
+    margin-bottom: 48px;
+  }
+
+  .retro-section h2 {
+    font-size: 22px;
+    margin: 0 0 6px;
+  }
+
+  .retro-section .section-intro {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 22px;
+  }
+
+  .retro-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+  }
+
+  .retro-item.bene { border-left-color: #6fcf97; }
+  .retro-item.male { border-left-color: #eb5757; }
+  .retro-item.fix  { border-left-color: #f2c94c; }
+
+  .retro-item .tag {
+    display: inline-block;
+    font-size: 11px;
+    color: #b9c4d4;
+    background: rgba(140, 148, 160, 0.12);
+    padding: 2px 8px;
+    border-radius: 12px;
+    letter-spacing: 0.04em;
+    margin-right: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .retro-item h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+
+  .retro-item p {
+    margin: 0 0 8px;
+    line-height: 1.65;
+    font-size: 14.5px;
+  }
+
+  .retro-item p:last-child { margin-bottom: 0; }
+
+  .retro-item code {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid #2a3550;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #b3e0f7;
+  }
+
+  .retro-item .quote {
+    margin: 10px 0;
+    padding: 8px 14px;
+    background: rgba(86, 204, 242, 0.04);
+    border-left: 3px solid #56ccf2;
+    border-radius: 4px;
+    font-size: 13.5px;
+  }
+
+  .retro-item .quote em { color: #e8ecf3; }
+
+  .retro-item .quote .qhdr {
+    display: block;
+    font-style: normal;
+    font-size: 11.5px;
+    color: #8a93a4;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .retro-tldr {
+    background: linear-gradient(135deg, #1a2638 0%, #161a23 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 32px;
+  }
+
+  .retro-tldr h3 {
+    margin: 0 0 8px;
+    font-size: 17px;
+  }
+
+  .retro-tldr p {
+    margin: 0 0 6px;
+    line-height: 1.6;
+    font-size: 14.5px;
+  }
+
+  .retro-tldr p:last-child { margin: 0; }
+
+  .toc-row {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin: 14px 0 28px;
+    font-size: 13px;
+  }
+
+  .toc-row a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+  }
+
+  .toc-row a:hover { color: var(--fg); background: var(--card); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>🪞 Retrospettiva — Long Session 2026-05-04</h1>
+  <p class="subtitle">
+    Cosa abbiamo imparato in 18 ore consecutive di team multi-finestra
+    Kimi K2. Sei cose che hanno funzionato, sei che non hanno funzionato,
+    quattro raccomandazioni operative.
+  </p>
+  <nav class="tabs">
+    <a href="index.html">🏠 Home</a>
+    <a href="usage.html">📈 Usage</a>
+    <a href="throttle.html">⏸ Throttling</a>
+    <a href="agents.html">👥 Per agente</a>
+    <a href="timeline.html">📅 Timeline</a>
+    <a href="tokens.html">🔢 Tokens</a>
+    <a href="database.html">📊 Database</a>
+    <a href="windows.html">🪟 Finestre</a>
+    <a href="crashes.html">💥 Crash</a>
+    <a href="retro.html">🪞 Retro</a>
+  </nav>
+</header>
+
+<main>
+  <section class="retro-tldr">
+    <h3>📜 In tre frasi</h3>
+    <p>
+      In <strong>10h 43m</strong> attive su tre finestre Kimi K2 (W1 94%,
+      W2 96% perfetta, W3 64%) il bridge ha vinto il cross-over della
+      projection: alle <code>04:16:33 UTC</code> proj 102.11%, alle
+      <code>04:56:36 UTC</code> proj scesa a 97.74% mentre usage saliva
+      84→93%. La W2 ha chiuso al peak 96% usando <strong>287/300 minuti</strong>
+      (95.8% del bound).
+    </p>
+    <p>
+      Il prezzo: <strong>scrittore-1 685 min di throttle</strong> (≈53% del
+      lavoro frenato) + scorer-1 366 min, due agenti che hanno assorbito 17h
+      e mezza cumulate di pausa. Bottleneck strutturale, non di pacing.
+    </p>
+    <p>
+      Il bridge è <em>predittivo a tick-level</em> (anticipa 5 secondi prima
+      del primo throttle, vedi A2) ma <em>reattivo a cluster-level</em>
+      (latency &gt;15min nei cluster sopra-ideale, vedi B2). R1–R5 propongono
+      come renderlo predittivo anche sui cluster: soft-cap pre-emissione,
+      redundancy scrittore, pre-filtro scout, broadcast primitive,
+      perimetro allineato ai boundary finestra.
+    </p>
+  </section>
+
+  <div class="toc-row">
+    <a href="#bene">✅ Bene (6)</a>
+    <a href="#male">❌ Male (6)</a>
+    <a href="#fix">🔧 Aggiustare (4 + 1)</a>
+  </div>
+
+  <!-- ====================== BENE ====================== -->
+  <section class="retro-section" id="bene">
+    <h2>✅ Cosa ha funzionato (6)</h2>
+    <p class="section-intro">
+      Sei comportamenti del sistema confermati dai dati: numeri inline,
+      timestamp UTC, citazioni dai log dove rilevanti.
+    </p>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A1</span>Termostato vince i picchi</h3>
+      <p>
+        Finestra <code>20260504T001858Z</code> (96%): alle
+        <code>04:16:33 UTC</code> usage 84%, projection schizza a
+        <strong>102.11%</strong>. Quaranta minuti dopo, alle
+        <code>04:56:36 UTC</code>, usage è salito a 93% ma projection è
+        <em>scesa</em> a <strong>97.74%</strong>. Il bridge non ha solo
+        rallentato: ha cambiato la traiettoria della finestra. Il peak finale
+        chiude a 96% con proj 97.43%, margine di sicurezza tre punti.
+      </p>
+    </div>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A2</span>Pacing predittivo a tick-level</h3>
+      <p>
+        Il primo <code>URG</code> della sessione è alle
+        <code>19:34:19 UTC</code> a usage <strong>8%</strong>, cinque secondi
+        <em>prima</em> del primo throttle reale (<code>19:35:32 UTC</code> su
+        analista-1). La sentinella anticipa la velocity, non la rincorre.
+        Vale a tick-level — la storia cambia nei cluster (vedi B2).
+      </p>
+      <blockquote class="quote">
+        <span class="qhdr">[@sentinella → @capitano] · <code>URG</code> · 19:34:19 UTC</span>
+        <em>«ORDINE: RALLENTARE. usage=8% vel=28.1%/h (ideale 458.3%/h)
+        proj=137%.»</em>
+      </blockquote>
+    </div>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A3</span>Transizione 94→96 invisibile al team</h3>
+      <p>
+        Tre timestamp consecutivi: <code>23:07:51 UTC</code> nuova finestra
+        20260503T230751Z, <code>00:08:58 UTC</code> peak 94%,
+        <code>00:18:58 UTC</code> reset a 1% (nuova finestra 20260504T001858Z).
+        Scout-1 manda due <code>REPORT</code> batch alle <code>23:59:54</code>
+        e <code>00:05:36 UTC</code> — esattamente a cavallo del reset, senza
+        perdere contesto.
+      </p>
+    </div>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A4</span>Pipeline ad alto throughput</h3>
+      <p>
+        22 positions trovate dagli scout, 22 verificate dall'analista, 18
+        applicazioni inviate. Conversion <strong>22→18 = 82%</strong>,
+        pass-rate critico <strong>13/17 = 76%</strong> (critic_score ≥ 5),
+        critic_score mediano 5.5/10. Il flow funziona end-to-end nonostante
+        il throttling pesante.
+      </p>
+    </div>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A5</span>Zero crash hard in 18.5h</h3>
+      <p>
+        Nella long session: due eventi minori e ricoverati. <strong>Scout-1
+        zombie</strong> ricoverato in &lt;3 min dal momento in cui l'utente ha
+        forzato la diagnosi. <strong>Bridge failure</strong> alle 23:07
+        ricoverato dalla sentinella stessa. Nessun process crash, nessuna
+        perdita di stato persistente.
+      </p>
+    </div>
+
+    <div class="retro-item bene">
+      <h3><span class="tag">A6</span>Tmux team come backup quando il bridge non basta</h3>
+      <p>
+        Dopo il ricovero scout-1 zombie, il capitano emette
+        <code>RIPRESA POST-CRASH</code> e scout-1 risponde con
+        <code>ACK</code> alle <code>19:46 UTC</code>. La messaggistica
+        sopravvive al failure del bridge: tmux è la rete di sicurezza
+        operativa.
+      </p>
+    </div>
+  </section>
+
+  <!-- ====================== MALE ====================== -->
+  <section class="retro-section" id="male">
+    <h2>❌ Cosa non ha funzionato (6)</h2>
+    <p class="section-intro">
+      Sei criticità misurabili. Non sono fail catastrofici — sono lacune
+      strutturali che si vedono solo guardando il quadro intero.
+    </p>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B1</span>Scrittore-1 single-point-of-bottleneck</h3>
+      <p>
+        Scrittore-1 assorbe il <strong>50% del totale token chat content</strong>
+        (82.7k chars su 165k), il <strong>59% delle pause reali</strong> (193 di
+        325) e cumula <strong>6h 12m</strong> ferme contro 1h 12m di analista-1.
+        Il termostato lo trattiene <strong>5×</strong> di più. Nessuna redundancy
+        sul produttore principale: se scrittore-1 si ferma, si ferma il flusso.
+      </p>
+    </div>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B2</span>Pacing reattivo nei cluster</h3>
+      <p>
+        Il bridge tien conto di un tick alla volta (decisione locale corretta,
+        vedi A2) ma non riconosce un cluster di 5 tick consecutivi sopra
+        ideale (decisione di pattern mancata).
+      </p>
+      <p>
+        In alcune finestre velocity_smooth supera velocity_ideal per
+        <strong>&gt;5 tick consecutivi (~15 min)</strong> prima che il
+        throttle riporti la rotta. Esempio: finestra 20260503T230751Z (W1)
+        fra le <code>23:11</code> e le <code>23:36 UTC</code>, 124 throttle
+        applicati in 2h ma l'usage sale comunque <strong>68→91%</strong>:
+        il bridge sta frenando ogni singolo agente al momento giusto, ma
+        non vede che il cluster aggregato continua a uscire dall'ideale.
+      </p>
+    </div>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B3</span>Picchi singoli ingovernabili</h3>
+      <p>
+        Top-10 messaggi sopra <strong>2k caratteri ciascuno</strong>: un
+        singolo msg = un bucket 5min di consumo. Quasi sempre scrittore→capitano
+        con CV ID o analista→capitano con deep-dive. Il bridge può solo
+        throttlare <em>dopo</em> che il messaggio è uscito; non c'è soft-cap
+        a livello prompt né chunking automatico.
+      </p>
+    </div>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B4</span>Salary-fit tira giù gli score</h3>
+      <p>
+        Sub-score medi nel database: stack <strong>8.1</strong>, remote
+        <strong>8.0</strong>, exp <strong>8.2</strong>, ma salary-fit
+        <strong>5.3/10</strong>. Lo scout porta posizioni sotto-mediana sulla
+        retribuzione: molte finiscono nella zona 70-79 con total_score tirato
+        giù dal salary, perdendo il taglio dei top.
+      </p>
+    </div>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B5</span>Gap ricorrenti nei critic_notes</h3>
+      <p>
+        Su 18 candidate scrutinate: <strong>education weak 6/18 (33%)</strong>,
+        <strong>AWS mancante 4/18 (22%)</strong>, <strong>Docker mancante
+        4/18 (22%)</strong>. Sono gap che il pre-filtro dello scout potrebbe
+        intercettare prima che la posizione consumi cicli scorer e critico.
+      </p>
+    </div>
+
+    <div class="retro-item male">
+      <h3><span class="tag">B6</span>Buco osservabilità chat capitano-worker</h3>
+      <p>
+        In finestra 96% (198 messages totali) solo <strong>5 MSG diretti del
+        capitano</strong> e <strong>6 ACK</strong>. Il chat principale è
+        povero proprio quando il termostato lavora di più — non si vede COME
+        il capitano sta decidendo. Aggravante: zero transcript Kimi K2
+        esportabili per scout, assistente, maestro = <strong>3 ruoli
+        ciechi</strong> alla telemetry.
+      </p>
+    </div>
+  </section>
+
+  <!-- ====================== FIX ====================== -->
+  <section class="retro-section" id="fix">
+    <h2>🔧 Cosa aggiustare (4 + 1)</h2>
+    <p class="section-intro">
+      Quattro raccomandazioni operative concrete e una nota extra sul
+      perimetro temporale dei prossimi report.
+    </p>
+
+    <div class="retro-item fix">
+      <h3><span class="tag">R1</span>Soft-cap a livello prompt (pre-emissione)</h3>
+      <p>
+        Throttling pre-emissione su messaggi &gt;2k caratteri: chunking
+        automatico, multi-turn split. Oggi il bridge interviene <em>ex-post</em>;
+        un soft-cap a livello prompt eviterebbe i picchi singoli ingovernabili
+        descritti in B3.
+      </p>
+    </div>
+
+    <div class="retro-item fix">
+      <h3><span class="tag">R2</span>Redundancy sui produttori principali</h3>
+      <p>
+        Spawnare scrittore-2/scrittore-3 prima che scrittore-1 raggiunga il
+        50% del consumo token. Il single-point-of-bottleneck (B1) è strutturale,
+        non dipende dal pacing — il termostato può solo frenare, non
+        parallelizzare.
+      </p>
+    </div>
+
+    <div class="retro-item fix">
+      <h3><span class="tag">R3</span>Pre-filtro scout sui gap ricorrenti</h3>
+      <p>
+        Bloccare nello scout posizioni che richiedono education STEM-strict +
+        AWS + Docker prima dell'analisi (33% + 22% + 22% del fail, vedi B5).
+        Risparmia cicli scorer e critico, alza la conversion 22→18 e
+        riduce il throttling a valle.
+      </p>
+    </div>
+
+    <div class="retro-item fix">
+      <h3><span class="tag">R4</span>Broadcast primitive nel capitano</h3>
+      <p>
+        I <code>URG</code> ridondanti girati a 2-3 agenti in 2-3 secondi (es.
+        <code>19:35:22 → 19:35:23 UTC</code>, due <code>URG</code> consecutivi
+        a scout-1 e analista-1) sprecano cicli e amplificano il rumore in
+        chat. Una primitiva broadcast a livello tmux/bridge eviterebbe la
+        duplicazione manuale.
+      </p>
+    </div>
+
+    <div class="retro-item fix">
+      <h3><span class="tag">R5 · extra</span>Range temporale del prossimo report</h3>
+      <p>
+        Il taglio attuale <code>2026-05-03T18:00Z → 2026-05-04T12:00Z</code>
+        spezza a metà la prima e l'ultima finestra Kimi K2. Allineare i
+        boundary del prossimo report alle transizioni di
+        <code>session_id</code> evita di perdere informazione e rende
+        confrontabili le metriche per-finestra fra report consecutivi.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <small>
+    Retrospettiva consolidata da contributi cross-team:
+    <strong>dev1</strong> · <strong>dev2</strong> · <strong>dev3</strong> ·
+    <strong>dev4</strong> · sintesi <strong>master</strong>. Dati da
+    <code>data/sentinel-data.jsonl.txt</code>,
+    <code>data/throttle-events.jsonl.txt</code>,
+    <code>data/messages.jsonl.txt</code>,
+    <code>data/db/*</code>,
+    <code>data/chat/*</code>.
+  </small>
+</footer>
+</body>
+</html>
