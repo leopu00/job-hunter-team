@@ -47,6 +47,12 @@
     padding: 6px 12px; cursor: pointer; font-size: 12px;
   }
   .filter-bar button.active { background: #233048; border-color: #3a5077; }
+  .filter-bar.agent-pills button:not(.active) {
+    opacity: 0.45;
+  }
+  .filter-bar.agent-pills button:not(.active):hover {
+    opacity: 0.75;
+  }
   .narrative h4 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
   .narrative p { margin: 0 0 8px; }
   .narrative p:last-child { margin-bottom: 0; }
@@ -121,6 +127,14 @@
         <button data-filter="real" class="active" id="btn-real">⏸ Pause reali</button>
         <button data-filter="checkpoint" id="btn-cp">💓 + Checkpoint</button>
         <button data-filter="all" id="btn-all">🌐 Tutto</button>
+      </div>
+      <div class="filter-bar agent-pills" id="agent-pills">
+        <span>Agenti:</span>
+        <button data-act="all" class="active">✅ Tutti</button>
+        <button data-act="none">⚪ Nessuno</button>
+        <button data-act="invert">🔄 Inverti</button>
+        <span style="opacity:0.5; padding: 0 6px;">|</span>
+        <span id="per-agent-pills" style="display:flex; flex-wrap:wrap; gap:6px;"></span>
       </div>
       <div class="canvas-host"><canvas id="lane"></canvas></div>
     </div>
@@ -354,7 +368,7 @@
   </section>
 
   <section>
-    <h2>🪟 Per finestra Claude/Kimi</h2>
+    <h2>🪟 Per finestra Kimi K2</h2>
     <p class="caption">
       La long session ha attraversato più finestre da ~5h: per ognuna mostriamo
       quante pause sono iniziate, quanti minuti totali di throttle, e quale
@@ -365,7 +379,7 @@
     <div class="narrative">
       <h4>Cosa raccontano le finestre</h4>
       <p>
-        Le finestre Claude/Kimi sono il vero "orologio" del consumo: ogni
+        Le finestre Kimi K2 sono il vero "orologio" del consumo: ogni
         nuova finestra resetta il budget, e il pacing-bridge ricalibra. Una
         finestra con tante pause e categoria dominante <strong>PACING</strong>
         è una finestra in cui il termostato ha lavorato sodo per restare in
@@ -383,6 +397,44 @@
         La prima finestra è quella iniziata <em>prima</em> dell'inizio della
         sessione tracciata: i suoi dati sono parziali, perché il primo evento
         che vediamo è già a metà della finestra. Le successive sono complete.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>💬 Throttle vs contenuto chat (aggregato per agente)</h2>
+    <div class="chart-wrap" style="padding: 14px 20px;" title="Scatter aggregato per-agente: X = # throttle event reali in sessione, Y = # menzioni keyword nelle chat dell'agente. Mostra correlazione AGGREGATA, non punto-per-punto.">
+      <p class="caption" style="border-left: 3px solid var(--warn); padding-left: 10px; color: var(--warn);">
+        ⚠️ <strong>Caveat onesto:</strong> i transcript in <code>data/chat/*.jsonl.txt</code>
+        non hanno timestamp. Quindi <em>non possiamo</em> correlare punto-per-punto un
+        throttle event a un messaggio specifico nel tempo. Quello che mostriamo qui
+        è una correlazione <strong>aggregata per-agente</strong>: # throttle reali vs
+        # menzioni keyword nelle chat. Onestà sul limite del dato batte falsa precisione.
+      </p>
+      <div class="canvas-host" style="height: 380px;"><canvas id="chat-scatter"></canvas></div>
+    </div>
+    <div class="narrative">
+      <h4>Cosa cercare in questo scatter</h4>
+      <p>
+        Ogni punto è un <strong>agente</strong>. La X è il numero di pause reali
+        durante la sessione; la Y è il numero di volte in cui le sue chat citano
+        parole tipiche del termostato (rallentare, throttle, standby, wait,
+        critic, batch, coda vuota). Una correlazione lineare ben visibile
+        (punti su una diagonale) suggerisce che gli agenti più sotto throttling
+        sono anche quelli che ne parlano di più — coerenza tra azione e narrazione.
+      </p>
+      <p>
+        Outlier in alto a sinistra (poche pause, tanti riferimenti) segnalano un
+        agente che <em>discute</em> il throttling di altri (es. il Capitano che
+        ordina "RALLENTARE URG"). Outlier in basso a destra (tante pause, poche
+        menzioni) sono agenti silenziosi: subiscono il throttling senza
+        commentarlo nei messaggi.
+      </p>
+      <p>
+        Le keyword sono cercate <strong>case-insensitive</strong> e <strong>una
+        per messaggio</strong> (un content che cita 3 volte "throttle" conta come
+        1). I duplicati esatti per hash MD5 del content sono già scartati nel
+        cleaning, così come i content vuoti.
       </p>
     </div>
   </section>
@@ -474,12 +526,12 @@ if (window.Chart) {
   // Filtra alla finestra di sessione.
   const inWin = throttle.filter(ReportData.inSession);
 
-  // ----- Boundary finestra Claude/Kimi -----
-  // Il provider che la sentinella sta tracciando in finestra è kimi (claude
-  // assente nei sentinel records della sessione 2026-05-03→04). Una "nuova
-  // finestra da 5h" si riconosce dal cambio di reset_at (HH:MM): ogni volta
-  // che la sentinella vede un orario di reset diverso, è iniziata una nuova
-  // window. Calcoliamo i boundary una volta per i marker verticali.
+  // ----- Boundary finestra Kimi K2 -----
+  // La sessione gira su Kimi K2 (la sentinella traccia provider=kimi nella
+  // finestra 2026-05-03→04). Una "nuova finestra da 5h" si riconosce dal
+  // cambio di reset_at (HH:MM): ogni volta che la sentinella vede un orario
+  // di reset diverso, è iniziata una nuova window. Calcoliamo i boundary
+  // una volta per i marker verticali.
   const sentinelInWin = sentinel
     .filter(ReportData.inSession)
     .filter((r) => r && r.provider && r.reset_at)
@@ -496,6 +548,18 @@ if (window.Chart) {
       lastReset = r.reset_at;
     }
   }
+  // Helper: dato un ts (ms), restituisce l'indice e info della finestra Kimi K2
+  // attiva in quel momento. Una finestra è il range [boundary[i], boundary[i+1]).
+  function windowAt(tsMs) {
+    if (!windowBoundaries.length) return null;
+    for (let i = windowBoundaries.length - 1; i >= 0; i--) {
+      if (tsMs >= windowBoundaries[i].ts_unix) {
+        return { idx: i + 1, reset_at: windowBoundaries[i].reset_at };
+      }
+    }
+    return { idx: 0, reset_at: "(pre)" };
+  }
+
   // Plugin per disegnare linee verticali tratteggiate sui boundary (lane + cumul).
   const windowMarkersPlugin = {
     id: "windowMarkers",
@@ -719,22 +783,52 @@ if (window.Chart) {
       .filter(Boolean);
   }
 
-  const realByCategory = {};
+  // Refactor lane chart: un dataset PER AGENTE (non per categoria) → la legend
+  // Chart.js diventa togglable per agente. La categoria di ogni bubble è
+  // codificata nel colore di sfondo per-point (array), il colore del border
+  // resta il colore canonico dell'agente per identificarlo a colpo d'occhio.
+  const realByAgent = {};
   for (const ev of realPauses) {
-    const c = classifyReason(ev.reason);
-    (realByCategory[c] = realByCategory[c] || []).push(ev);
+    const a = ev.agent || "?";
+    if (!laneAgents.includes(a) && !laneAgents.includes("altri")) continue;
+    (realByAgent[a] = realByAgent[a] || []).push(ev);
+  }
+  const realDatasets = laneAgents
+    .filter((a) => a !== "altri")
+    .map((agent) => {
+      const evs = realByAgent[agent] || [];
+      const data = bubbleData(evs, {});
+      return {
+        label: `${ReportData.agentEmoji(agent)} ${agent}`,
+        _agent: agent,
+        data,
+        backgroundColor: data.map((d) => (CATEGORY_COLORS[d._category] || "#888") + "cc"),
+        borderColor: ReportData.agentColor(agent),
+        borderWidth: 1.5,
+        hoverBorderWidth: 2.5,
+      };
+    });
+  // Dataset "altri" per agenti scartati con qualche evento.
+  if (laneAgents.includes("altri")) {
+    const evsOther = realPauses.filter((e) => !laneAgents.includes(e.agent));
+    if (evsOther.length) {
+      const dataOther = bubbleData(evsOther, {});
+      realDatasets.push({
+        label: "altri",
+        _agent: "altri",
+        data: dataOther,
+        backgroundColor: dataOther.map(
+          (d) => (CATEGORY_COLORS[d._category] || "#888") + "aa"
+        ),
+        borderColor: "#888",
+        borderWidth: 1,
+      });
+    }
   }
 
-  const realDatasets = Object.keys(realByCategory).map((cat) => ({
-    label: cat,
-    data: bubbleData(realByCategory[cat], {}),
-    backgroundColor: CATEGORY_COLORS[cat] + "cc",
-    borderColor: CATEGORY_COLORS[cat],
-    borderWidth: 1,
-  }));
-
   const checkpointDataset = {
-    label: "checkpoint heartbeat",
+    label: "💓 checkpoint heartbeat",
+    _agent: "(checkpoint)",
     data: bubbleData(checkpoints, { r: 2.5 }),
     backgroundColor: "#aab2c2aa",
     borderColor: "#aab2c2",
@@ -788,18 +882,31 @@ if (window.Chart) {
         },
       },
       plugins: {
-        legend: { labels: { color: "#e8ecf3" } },
+        legend: {
+          labels: { color: "#e8ecf3", boxWidth: 14, padding: 10 },
+          // Toggle nativo per click sulla legend: già abilitato di default
+          // (onClick standard Chart.js → setDatasetVisibility).
+        },
         tooltip: {
           callbacks: {
+            title: (items) => {
+              const d = items[0]?.raw;
+              if (!d) return "";
+              const ts = new Date(d.x).toISOString();
+              return ts.slice(0, 10) + " " + ts.slice(11, 19) + "Z";
+            },
             label: (ctx) => {
               const d = ctx.raw;
               const ts = new Date(d.x).toISOString().slice(11, 19) + "Z";
-              const dur = d._sec ? `${d._sec}s` : "0s (heartbeat)";
+              const dur = d._sec ? `${d._sec}s (${(d._sec/60).toFixed(1)} min)` : "0s (heartbeat)";
+              const w = windowAt(d.x);
+              const winLabel = w ? `Finestra Kimi K2 #${w.idx} (reset ${w.reset_at})` : "—";
               return [
                 `${d._agent} · ${dur}`,
-                `${ts} · ${d._category}`,
-                d._reason ? `« ${d._reason} »` : "",
-              ].filter(Boolean);
+                `Categoria: ${d._category}`,
+                `Reason: ${d._reason || "(vuota)"}`,
+                winLabel,
+              ];
             },
           },
         },
@@ -807,27 +914,71 @@ if (window.Chart) {
     },
   });
 
-  // Filter bar (real / +checkpoint / all)
+  // Filter bar (real / +checkpoint / all) — agisce sul dataset checkpoint.
+  // Distingue dal pill row degli agenti (data-act) usando data-filter come ancora.
   function setLaneMode(mode) {
     const cpDsIdx = laneChart.data.datasets.length - 1;
     if (mode === "real") {
-      laneChart.data.datasets.forEach((ds, i) => {
-        ds.hidden = i === cpDsIdx;
-      });
-    } else if (mode === "checkpoint") {
-      laneChart.data.datasets.forEach((ds, i) => {
-        ds.hidden = false;
-      });
+      laneChart.data.datasets[cpDsIdx].hidden = true;
     } else {
-      laneChart.data.datasets.forEach((ds) => (ds.hidden = false));
+      laneChart.data.datasets[cpDsIdx].hidden = false;
     }
     laneChart.update();
   }
-  document.querySelectorAll(".filter-bar button").forEach((btn) => {
+  document.querySelectorAll('button[data-filter]').forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".filter-bar button").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll('button[data-filter]').forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       setLaneMode(btn.dataset.filter);
+    });
+  });
+
+  // ----- Pill row per-agente: Tutti / Nessuno / Inverti + per-agente -----
+  // Genera una pill per ogni dataset agente. Il click toggle la visibilità
+  // del corrispondente dataset Chart.js. Le legend Chart.js continua a
+  // funzionare normalmente: i due meccanismi si tengono in sincrono.
+  const perAgentPills = document.getElementById("per-agent-pills");
+  const agentDatasetIdx = {};
+  laneChart.data.datasets.forEach((ds, i) => {
+    if (ds._agent && ds._agent !== "(checkpoint)") agentDatasetIdx[ds._agent] = i;
+  });
+  function renderPills() {
+    perAgentPills.innerHTML = "";
+    for (const agent of Object.keys(agentDatasetIdx)) {
+      const i = agentDatasetIdx[agent];
+      const ds = laneChart.data.datasets[i];
+      const visible = !ds.hidden;
+      const btn = document.createElement("button");
+      btn.dataset.agent = agent;
+      btn.className = visible ? "active" : "";
+      const swatch = `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;
+        background:${ReportData.agentColor(agent)};margin-right:5px;vertical-align:middle;"></span>`;
+      btn.innerHTML = `${swatch}${ReportData.agentEmoji(agent)} ${agent}`;
+      btn.addEventListener("click", () => {
+        ds.hidden = !ds.hidden;
+        laneChart.update();
+        renderPills();
+      });
+      perAgentPills.appendChild(btn);
+    }
+  }
+  renderPills();
+  // Tutti / Nessuno / Inverti
+  document.querySelectorAll('#agent-pills button[data-act]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      for (const agent of Object.keys(agentDatasetIdx)) {
+        const ds = laneChart.data.datasets[agentDatasetIdx[agent]];
+        if (act === "all") ds.hidden = false;
+        else if (act === "none") ds.hidden = true;
+        else if (act === "invert") ds.hidden = !ds.hidden;
+      }
+      document.querySelectorAll('#agent-pills button[data-act]').forEach((b) =>
+        b.classList.remove("active")
+      );
+      btn.classList.add("active");
+      laneChart.update();
+      renderPills();
     });
   });
 
@@ -1326,7 +1477,181 @@ if (window.Chart) {
     });
   }
 
-  // ----- Card per finestra Claude/Kimi -----
+  // ----- Chat correlation aggregata (no timestamp) -----
+  // Carica i 6 file data/chat/*.jsonl.txt, mappa ogni file → agente target
+  // prevalente (parsing dei [@from -> @target]), conta menzioni keyword per
+  // agente, costruisce uno scatter X=# throttle reali Y=# menzioni keyword.
+  // Cleaning: skip content vuoto, dedup esatto via Set, parse JSON difensivo.
+  try {
+    const chatFiles = [
+      "21768540336d770a63202e62a69ff597",
+      "3936717a8b038a2a6744da2d7b6a22b3",
+      "404b813f0e1dd211abe1b60cf9f59dc4",
+      "5559e893db692744042bcac086a97df8",
+      "705d7742d1d9dfc3708adc78207c7907",
+      "ed84b19113f9ed310f2a23c1674e144a",
+    ];
+    const KEYWORDS = [
+      "rallentare",
+      "throttle",
+      "standby",
+      "wait",
+      "critic",
+      "batch",
+      "coda vuota",
+    ];
+    const agentMsgs = {}; // agent -> [content,...] (deduplicated)
+    const seen = new Set();
+    let totalRows = 0, droppedEmpty = 0, droppedDup = 0, droppedParse = 0;
+    await Promise.all(
+      chatFiles.map(async (h) => {
+        const txt = await fetch(`data/chat/${h}.jsonl.txt`).then((r) => r.text());
+        const lines = txt.split("\n").filter(Boolean);
+        const targetCounts = {};
+        const contents = [];
+        for (const line of lines) {
+          totalRows++;
+          let r;
+          try {
+            r = JSON.parse(line);
+          } catch {
+            droppedParse++;
+            continue;
+          }
+          const c = (r && r.content ? String(r.content) : "").trim();
+          if (!c) { droppedEmpty++; continue; }
+          if (seen.has(c)) { droppedDup++; continue; }
+          seen.add(c);
+          contents.push(c);
+          const m = c.match(/^\[@[\w-]+\s*->\s*@([\w-]+)\]/);
+          if (m) targetCounts[m[1]] = (targetCounts[m[1]] || 0) + 1;
+        }
+        // Agente di questo file = target prevalente.
+        let owner = "?", best = 0;
+        for (const k in targetCounts) {
+          if (targetCounts[k] > best) { best = targetCounts[k]; owner = k; }
+        }
+        // Normalizza: se owner è "scrittore-1" → ok, ma "capitano" è l'owner per il file dove
+        // tutti i messaggi sono indirizzati al capitano (il capitano riceve).
+        agentMsgs[owner] = (agentMsgs[owner] || []).concat(contents);
+      })
+    );
+    // Conta menzioni keyword per agente (case-insensitive, 1 hit per messaggio).
+    const kwByAgent = {};
+    for (const ag in agentMsgs) {
+      let n = 0;
+      for (const c of agentMsgs[ag]) {
+        const lc = c.toLowerCase();
+        if (KEYWORDS.some((k) => lc.includes(k))) n++;
+      }
+      kwByAgent[ag] = n;
+    }
+    // # throttle reali per agente (già calcolato in totalsByAgent come secondi).
+    // Devo ricontare gli eventi (non i secondi).
+    const realCountByAgent = {};
+    for (const e of realPauses) {
+      const a = e.agent || "?";
+      realCountByAgent[a] = (realCountByAgent[a] || 0) + 1;
+    }
+    // Costruisci scatter: 1 punto per agente che ha SIA throttle SIA chat.
+    const scatterPoints = [];
+    const scatterColors = [];
+    const scatterLabels = [];
+    const allAgents = new Set([...Object.keys(kwByAgent), ...Object.keys(realCountByAgent)]);
+    for (const ag of allAgents) {
+      if (ag === "?") continue;
+      const x = realCountByAgent[ag] || 0;
+      const y = kwByAgent[ag] || 0;
+      // Skip outliers irrilevanti: 0,0 (non interessanti).
+      if (x === 0 && y === 0) continue;
+      scatterPoints.push({ x, y, _agent: ag });
+      scatterColors.push(ReportData.agentColor(ag));
+      scatterLabels.push(`${ReportData.agentEmoji(ag)} ${ag}`);
+    }
+    const scatterEl = document.getElementById("chat-scatter");
+    if (scatterEl) {
+      new Chart(scatterEl.getContext("2d"), {
+        type: "scatter",
+        data: {
+          datasets: [
+            {
+              label: "agenti",
+              data: scatterPoints,
+              backgroundColor: scatterColors.map((c) => c + "cc"),
+              borderColor: scatterColors,
+              borderWidth: 1.5,
+              pointRadius: 9,
+              pointHoverRadius: 12,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: "nearest", intersect: false, axis: "xy" },
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: { color: "#8a93a4" },
+              grid: { color: "#1f2532" },
+              title: {
+                display: true,
+                text: "# throttle event reali (sessione)",
+                color: "#8a93a4",
+              },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: "#8a93a4" },
+              grid: { color: "#1f2532" },
+              title: {
+                display: true,
+                text: "# menzioni keyword nelle chat",
+                color: "#8a93a4",
+              },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => items[0]?.raw._agent || "",
+                label: (ctx) => [
+                  `${ctx.parsed.x} pause reali`,
+                  `${ctx.parsed.y} messaggi con keyword`,
+                  "(aggregato sessione, no timestamp)",
+                ],
+              },
+            },
+          },
+        },
+      });
+    }
+    // Aggiungi info cleaning sotto al chart.
+    const captionParent = scatterEl?.closest(".chart-wrap");
+    if (captionParent) {
+      const info = document.createElement("p");
+      info.className = "caption";
+      info.style.cssText = "margin-top:10px; font-size:12px;";
+      info.innerHTML =
+        `<strong>Cleaning chat:</strong> ${totalRows} righe lette, ` +
+        `${droppedEmpty} content vuoti scartati, ${droppedDup} duplicati esatti scartati, ` +
+        `${droppedParse} righe non-JSON. ${seen.size} messaggi unici utilizzati.`;
+      captionParent.appendChild(info);
+    }
+  } catch (e) {
+    console.warn("chat correlation failed:", e);
+    const scatterEl = document.getElementById("chat-scatter");
+    if (scatterEl?.parentElement) {
+      scatterEl.parentElement.insertAdjacentHTML(
+        "afterbegin",
+        `<p class="note">⚠️ Errore caricamento data/chat/: ${e.message}</p>`
+      );
+    }
+  }
+
+  // ----- Card per finestra Kimi K2 -----
   const windowsGrid = document.getElementById("windows-grid");
   if (windowsGrid && windowBoundaries.length) {
     // Costruisci i range [start, end) per ogni finestra. L'ultima va fino a SESSION_END.
