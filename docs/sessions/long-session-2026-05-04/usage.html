@@ -120,6 +120,21 @@
         <p>La metrica da osservare per la prossima sessione è quella delle finestre con projection &gt;130%: sono i momenti in cui abbiamo davvero rischiato. Se il pacing-bridge sapesse "ricordare" pattern di queste finestre potrebbe pre-frenare con più anticipo.</p>
       </div>
     </div>
+
+    <div class="chart-wrap">
+      <h3>6 · Effetto smoothing del bridge — projection_naive vs projection</h3>
+      <p class="caption">La sentinella calcola due proiezioni: <em>projection_naive</em> (estrapolazione lineare del consumo corrente) e <em>projection</em> (corretta dallo smoother del pacing-bridge). La differenza <code>naive − smooth</code> dice quanto il bridge sta "addolcendo" il segnale.</p>
+      <div class="legend-pills">
+        <span><i class="dot" style="background:#6fcf97"></i>delta &gt; 0 (smoother riduce allarme)</span>
+        <span><i class="dot" style="background:#eb5757"></i>delta &lt; 0 (smoother aumenta cautela)</span>
+      </div>
+      <canvas id="chart-smoothing"></canvas>
+      <div class="narrative">
+        <p>Quando la curva è verde (delta positivo) il bridge sta dicendo "calma, la naive sta esagerando" e tiene il team in pista. Quando è rossa (delta negativo) il bridge sta aggiungendo cautela: la velocity istantanea sembra ok ma il pattern recente suggerisce di frenare comunque.</p>
+        <p>Una correzione media bassa (vicino a zero) significa che la naive è già una buona proiezione e il bridge non sta forzando. Le escursioni più ampie corrispondono ai burst (smoother salva da false alarm) e ai momenti di accumulo silenzioso (smoother anticipa il problema).</p>
+        <p>È la metrica che giustifica l'esistenza del pacing-bridge: senza la correzione, il termostato accenderebbe e spegnerebbe il throttle a ogni tick di velocity, generando un gait innaturale per gli agenti. Con la correzione, il throttle resta acceso quanto serve e si spegne solo quando il segnale si stabilizza.</p>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -521,11 +536,12 @@
   }
   // Ordino per inizio cronologico così le barre raccontano la sequenza temporale.
   const windows = Array.from(windowMap.values()).sort((a, b) => a.tStart - b.tStart);
-  const winLabels = windows.map((w) => {
+  const winLabels = windows.map((w, i) => {
     const d = new Date(w.tStart);
-    // session_id formato 20260504T101330Z → estraggo HH:MM dalla parte ora
     const hh = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-    return `${hh}`;
+    // 03/19:16 → giorno + ora, così le finestre brevi adiacenti non si confondono.
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `#${i + 1} · ${dd}/${hh}`;
   });
   const winDurMin = windows.map((w) => Math.round((w.tEnd - w.tStart) / 60000));
   const winPeakU = windows.map((w) => w.peakUsage);
@@ -591,7 +607,7 @@
         },
       },
       scales: {
-        x: { grid: { color: "rgba(255,255,255,0.04)" }, title: { display: true, text: "inizio finestra (ora locale)", color: "#8a93a4" } },
+        x: { grid: { color: "rgba(255,255,255,0.04)" }, title: { display: true, text: "finestra (#N · giorno/ora locale)", color: "#8a93a4" }, ticks: { autoSkip: false, maxRotation: 0 } },
         y: {
           beginAtZero: true,
           ticks: { callback: (v) => v + "%" },
@@ -607,6 +623,103 @@
         },
       },
     },
+  });
+
+  // ---------- Chart 6: smoothing delta = projection_naive - projection ----------
+  // La serie va spezzata sui reset come la velocity, perché projection_naive
+  // sul primo tick di una nuova finestra può divergere artificialmente.
+  const smoothPts = [];
+  let prevSession2 = null;
+  for (const r of sentinel) {
+    if (prevSession2 && r.session_id !== prevSession2) {
+      smoothPts.push({ x: Date.parse(r.ts) - 1, y: null });
+    }
+    if (r.status === "RESET" || r.projection_naive == null || r.projection == null) {
+      smoothPts.push({ x: Date.parse(r.ts), y: null });
+    } else {
+      // delta = naive - smoother. >0 → smoother riduce allarme; <0 → aumenta cautela.
+      const d = (r.projection_naive ?? 0) - (r.projection ?? 0);
+      // Clip per leggibilità: i picchi >150 sono outlier (cambio finestra mascherato).
+      smoothPts.push({ x: Date.parse(r.ts), y: Math.max(-100, Math.min(100, d)) });
+    }
+    prevSession2 = r.session_id || prevSession2;
+  }
+
+  new Chart(document.getElementById("chart-smoothing"), {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "naive − smooth",
+          data: smoothPts,
+          borderColor: (ctx) => {
+            const v = ctx.parsed?.y;
+            return v != null && v < 0 ? "#eb5757" : "#6fcf97";
+          },
+          backgroundColor: (ctx) => {
+            const v = ctx.parsed?.y;
+            return v != null && v < 0 ? "rgba(235,87,87,0.18)" : "rgba(111,207,151,0.18)";
+          },
+          segment: {
+            borderColor: (ctx) => {
+              const y = ctx.p1?.parsed?.y;
+              return y != null && y < 0 ? "#eb5757" : "#6fcf97";
+            },
+            backgroundColor: (ctx) => {
+              const y = ctx.p1?.parsed?.y;
+              return y != null && y < 0 ? "rgba(235,87,87,0.18)" : "rgba(111,207,151,0.18)";
+            },
+          },
+          fill: { target: { value: 0 } },
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+          spanGaps: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString("it-IT"),
+            label: (ctx) => {
+              if (ctx.parsed.y == null) return null;
+              const sign = ctx.parsed.y >= 0 ? "+" : "";
+              return `naive − smooth: ${sign}${ctx.parsed.y.toFixed(1)} pp`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: {
+          ticks: { callback: (v) => (v > 0 ? "+" : "") + v + " pp" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+      },
+    },
+    plugins: [
+      {
+        id: "zeroLine",
+        afterDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          const y = scales.y.getPixelForValue(0);
+          ctx.save();
+          ctx.strokeStyle = "rgba(200,206,219,0.35)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.restore();
+        },
+      },
+    ],
   });
 })();
 </script>
