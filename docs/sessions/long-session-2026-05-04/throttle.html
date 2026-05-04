@@ -400,12 +400,39 @@
     return `${h}h ${m % 60}m`;
   };
   const topAgent = agentsOrdered[0] || "—";
+
+  // Statistiche durata: media, mediana, max (su pause reali con applied_sec>0)
+  const durs = realPauses.map((e) => e.applied_sec || 0).filter((s) => s > 0).sort((a, b) => a - b);
+  const median = durs.length
+    ? durs[Math.floor(durs.length / 2)]
+    : 0;
+  const meanSec = durs.length ? durs.reduce((s, v) => s + v, 0) / durs.length : 0;
+  const maxSec = durs.length ? durs[durs.length - 1] : 0;
+
+  // % del tempo della sessione che l'agente top ha passato fermo.
+  // Numeratore: applied_sec totale di topAgent. Denominatore: durata sessione (s).
+  const sessionLenSec = (ReportData.SESSION_END - ReportData.SESSION_START) / 1000;
+  const topAgentSec = totalsByAgent[topAgent] || 0;
+  const topAgentPct = sessionLenSec > 0 ? (topAgentSec / sessionLenSec) * 100 : 0;
+
+  const fmtSec = (s) => {
+    if (s < 60) return `${Math.round(s)}s`;
+    if (s < 3600) return `${Math.round(s / 60)}m`;
+    const h = Math.floor(s / 3600);
+    const m = Math.round((s - h * 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
   const kpiGrid = document.getElementById("kpi-grid");
   const kpis = [
     { label: "Pause reali", value: realPauses.length },
     { label: "Checkpoint heartbeat", value: checkpoints.length },
     { label: "Tempo totale fermo", value: fmtMin(totalSec) },
     { label: "Agente top", value: `${ReportData.agentEmoji(topAgent)} ${topAgent}` },
+    { label: "Pausa mediana", value: fmtSec(median) },
+    { label: "Pausa media", value: fmtSec(meanSec) },
+    { label: "Pausa più lunga", value: fmtSec(maxSec) },
+    { label: "% sessione fermo (top)", value: `${topAgentPct.toFixed(1)}%` },
   ];
   for (const k of kpis) {
     const div = document.createElement("div");
@@ -416,6 +443,12 @@
 
   // ----- Lane chart (bubble) -----
   // y = lane index; r = sqrt(applied_sec) per leggibilità.
+  // Jitter Y deterministico: pseudo-random in [-0.28, 0.28] basato su ts_unix.
+  // Stabile fra reload (stesso ts → stesso jitter), evita pile su scrittore-1.
+  function jitter(seed) {
+    const x = Math.sin(seed * 12.9898) * 43758.5453;
+    return ((x - Math.floor(x)) - 0.5) * 0.56;
+  }
   function bubbleData(events, opts) {
     return events
       .map((ev) => {
@@ -424,7 +457,7 @@
         const sec = ev.applied_sec || 0;
         return {
           x: ev.ts_unix * 1000,
-          y,
+          y: y + jitter(ev.ts_unix),
           r: opts.r != null ? opts.r : Math.max(3, Math.min(22, Math.sqrt(sec) * 0.9)),
           _agent: ev.agent,
           _sec: sec,
