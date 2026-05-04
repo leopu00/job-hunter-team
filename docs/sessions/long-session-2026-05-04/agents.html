@@ -6,89 +6,80 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/styles.css">
 <style>
-  .agents-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
-  }
-  .agents-grid > * {
-    min-width: 0;
-    min-height: 0;
-  }
-  @media (max-width: 1100px) {
-    .agents-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 700px) {
-    .agents-grid { grid-template-columns: 1fr; }
-  }
-  .agent-card {
+  /* ---------- toolbar / pill ---------- */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    align-items: center;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 14px 16px 16px;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+    padding: 12px 14px;
+    margin: 12px 0 16px;
   }
-  .agent-card .head {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    margin-bottom: 4px;
+  .toolbar .pill {
+    background: #11151e;
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 100ms, border-color 100ms;
   }
-  .agent-card .emoji {
-    font-size: 22px;
-    line-height: 1;
+  .toolbar .pill:hover { background: #1c2230; border-color: #38415a; }
+  .toolbar .pill.primary { border-color: var(--accent); color: var(--accent); }
+  .toolbar .sep {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+    margin: 0 4px;
   }
-  .agent-card .name {
-    font-size: 16px;
-    font-weight: 700;
-    text-transform: capitalize;
-  }
-  .agent-card .role-color {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-left: auto;
-  }
-  .agent-card .kpis {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 6px 0 10px;
-  }
-  .agent-card .kpi {
+  .toolbar label.agent-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: #11151e;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 8px;
-    min-width: 0;
+    border-radius: 999px;
+    padding: 4px 10px 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
   }
-  .agent-card .kpi .lbl {
-    color: var(--muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  .toolbar label.agent-toggle.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
-  .agent-card .kpi .val {
-    font-size: 16px;
-    font-weight: 700;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .toolbar label.agent-toggle input { accent-color: var(--accent); margin: 0; }
+  .toolbar label.agent-toggle .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
   }
-  .agent-card .chart-box {
+  .toolbar label.agent-toggle .em { font-size: 13px; line-height: 1; }
+  .toolbar label.agent-toggle .nm { text-transform: capitalize; }
+
+  /* ---------- big chart ---------- */
+  .big-chart {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px 18px;
+    margin-bottom: 18px;
+  }
+  .big-chart h3 { margin: 0 0 4px; font-size: 16px; }
+  .big-chart .caption { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .big-chart .chart-box {
     position: relative;
     width: 100%;
-    height: 320px;
+    height: 420px;
     min-height: 0;
   }
-  .agent-card .chart-box canvas {
-    width: 100% !important;
-    height: 100% !important;
-    display: block;
+  .big-chart .chart-box canvas {
+    width: 100% !important; height: 100% !important; display: block;
   }
+
+  /* ---------- info-box / cleaning ---------- */
   .info-box {
     background: #11151e;
     border: 1px solid var(--border);
@@ -100,37 +91,64 @@
     color: #cfd6e4;
   }
   .info-box code { color: var(--accent); }
+  .cleaning-strip {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    color: var(--muted); font-size: 12px;
+    margin-top: 6px;
+  }
+  .cleaning-strip strong { color: var(--fg); }
+
+  /* ---------- 3x3 grid + cards ---------- */
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .agents-grid > * { min-width: 0; min-height: 0; }
+  @media (max-width: 1100px) { .agents-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 700px)  { .agents-grid { grid-template-columns: 1fr; } }
+  .agent-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    display: flex; flex-direction: column;
+    min-width: 0;
+  }
+  .agent-card.dim { opacity: 0.45; }
+  .agent-card .head {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;
+  }
+  .agent-card .emoji { font-size: 22px; line-height: 1; }
+  .agent-card .name { font-size: 16px; font-weight: 700; text-transform: capitalize; }
+  .agent-card .role-color { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; }
+  .agent-card .kpis {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px;
+  }
+  .agent-card .kpi {
+    background: #11151e; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 8px; min-width: 0;
+  }
+  .agent-card .kpi .lbl {
+    color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .agent-card .kpi .val {
+    font-size: 16px; font-weight: 700; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .agent-card .chart-box { position: relative; width: 100%; height: 220px; min-height: 0; }
+  .agent-card .chart-box canvas { width: 100% !important; height: 100% !important; display: block; }
   .agent-card .empty {
-    color: var(--muted);
-    font-size: 12px;
-    font-style: italic;
-    padding: 26px 4px;
-    text-align: center;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 10px;
-  }
-  .legend .swatch {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    margin-right: 6px;
-    vertical-align: middle;
+    color: var(--muted); font-size: 12px; font-style: italic;
+    padding: 26px 4px; text-align: center;
+    border: 1px dashed var(--border); border-radius: 8px;
   }
 </style>
 </head>
 <body>
 <header class="hero">
   <h1>👥 Per Agente</h1>
-  <p class="subtitle">Una mini-card per ciascun ruolo del team — attività vs pause nella long session.</p>
+  <p class="subtitle">Attività di ciascun ruolo del team durante la long session — dai transcript Kimi K2.</p>
   <nav class="tabs">
     <a href="index.html">🏠 Home</a>
     <a href="usage.html">📈 Usage</a>
@@ -141,34 +159,59 @@
 </header>
 <main>
   <section>
-    <h2>👥 Griglia 3×3 — un grafico per agente</h2>
+    <h2>👥 Attività per agente — Kimi K2</h2>
     <div class="narrative">
-      Ogni card mostra l'attività di un ruolo nella finestra della long session
-      (<code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>). Linea: <strong>messaggi
-      inviati</strong> (proxy del lavoro effettivo, dato che i token non sono
-      attribuiti per agente nei dati esportati). Barre: <strong>throttle applicato</strong>
-      (secondi di pausa imposti dal pacing-bridge). I tre KPI sintetizzano: messaggi
-      totali, pausa totale, finestra di attività osservata. Il <em>maestro</em>
-      compare come placeholder: non risulta attivo in questa sessione.
+      Ogni agente del team gira su un'istanza Kimi K2 con proprio transcript
+      (<code>data/chat/&lt;hash&gt;.jsonl.txt</code>, 6 sessioni). Per ogni messaggio
+      del transcript ricostruiamo: <strong>chi parla con chi</strong>
+      (regex <code>[@from -&gt; @to] [TYPE] body</code>), <strong>lunghezza
+      del messaggio</strong> (proxy del lavoro prodotto, char/4 ≈ token),
+      <strong>tipo</strong> (MSG, ACK, REQ, RES, REPORT, INFO, …) e
+      <strong>timestamp reale</strong> via cross-reference con
+      <code>messages.jsonl</code> (match prefisso 60 char). I record senza match
+      restano nella sessione ma non finiscono nella line temporale.
     </div>
-    <div class="legend">
-      <span><span class="swatch" id="lg-msg-color"></span>Messaggi inviati / ora</span>
-      <span><span class="swatch" style="background:#eb5757"></span>Throttle applicato (s) / ora</span>
-      <span>Finestra: 18h · bin = 1h</span>
+
+    <div id="cleaning-info" class="info-box">
+      <strong>🧹 Data cleaning</strong>
+      <div class="cleaning-strip" id="cleaning-strip">caricamento…</div>
     </div>
-    <div class="info-box">
-      💡 <strong>Come leggere ogni card</strong> — passa il mouse sui grafici per
-      tooltip dettagliati. La <strong>linea</strong> conta i messaggi inviati
-      dall'agente nell'ora indicata sull'asse X (UTC). Le <strong>barre rosse</strong>
-      misurano i secondi di pausa che il pacing-bridge ha imposto a quell'agente
-      nella stessa ora (somma su tutte le istanze del ruolo, es. <code>scrittore-1
-      + scrittore-2</code>). Linea piatta a 0 = agente silente. Picco rosso senza
-      linea = solo pause registrate, zero traffico.
+
+    <div class="toolbar" id="toolbar">
+      <button type="button" class="pill primary" id="btn-all">✓ Tutti</button>
+      <button type="button" class="pill" id="btn-none">∅ Nessuno</button>
+      <button type="button" class="pill" id="btn-invert">⇄ Inverti</button>
+      <span class="sep"></span>
+      <span id="agent-toggles" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
     </div>
+
+    <div class="big-chart">
+      <h3>📈 Volume messaggi per agente, per ora UTC</h3>
+      <p class="caption">
+        Attivazione selettiva via toolbar o legend (cliccabile). Hover per
+        timestamp esatto, conteggio messaggi, lunghezza media nell'ora,
+        finestra Kimi K2 attiva. Drag per fare pan, scroll/pinch per zoomare.
+      </p>
+      <div class="chart-box"><canvas id="big-chart"></canvas></div>
+    </div>
+
+    <h2>🧩 Mini-card per ruolo — type breakdown e KPI</h2>
+    <div class="narrative">
+      Una card per ciascun ruolo del team. Le 6 sessioni Kimi K2 esportate
+      coprono <strong>capitano, scrittore, scorer, critico, analista,
+      sentinella</strong>. <strong>Scout, assistente, maestro</strong>
+      non hanno transcript Kimi K2 in questa export — placeholder grigi,
+      attesi nei prossimi run. Ogni card mostra il <em>type breakdown</em>
+      dei messaggi (MSG/ACK/REQ/…) come barra orizzontale stacked.
+    </div>
+
     <div class="agents-grid" id="agents-grid"></div>
   </section>
 </main>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="assets/data-loader.js"></script>
 <script>
 (async function () {
@@ -177,150 +220,386 @@
   const startMs = RD.SESSION_START;
   const endMs = RD.SESSION_END;
   const nBins = Math.round((endMs - startMs) / HOUR_MS);
-
-  const ROLES = [
-    "capitano",
-    "scout",
-    "scrittore",
-    "scorer",
-    "critico",
-    "analista",
-    "assistente",
-    "sentinella",
-    "maestro",
+  const ROLES = ["capitano","scout","scrittore","scorer","critico","analista","assistente","sentinella","maestro"];
+  // Hash sessione → agente owner (mappato via prefisso più frequente, vedi cleaning offline)
+  const CHAT_FILES = [
+    "21768540336d770a63202e62a69ff597",
+    "3936717a8b038a2a6744da2d7b6a22b3",
+    "404b813f0e1dd211abe1b60cf9f59dc4",
+    "5559e893db692744042bcac086a97df8",
+    "705d7742d1d9dfc3708adc78207c7907",
+    "ed84b19113f9ed310f2a23c1674e144a",
   ];
-
-  function baseRole(s) {
-    if (!s) return "";
-    return String(s).split("-")[0].toLowerCase();
+  // Finestre Kimi K2 (5h ciascuna, allineate a SESSION_START 18:00Z)
+  const KIMI_WINDOWS = [
+    { id: "K1", from: startMs,                  to: startMs + 5*HOUR_MS,  label: "K1 18:00→23:00 UTC" },
+    { id: "K2", from: startMs + 5*HOUR_MS,      to: startMs + 10*HOUR_MS, label: "K2 23:00→04:00 UTC" },
+    { id: "K3", from: startMs + 10*HOUR_MS,     to: startMs + 15*HOUR_MS, label: "K3 04:00→09:00 UTC" },
+    { id: "K4", from: startMs + 15*HOUR_MS,     to: endMs,                label: "K4 09:00→12:00 UTC" },
+  ];
+  function kimiOf(ts) {
+    if (ts == null) return "—";
+    for (const w of KIMI_WINDOWS) if (ts >= w.from && ts < w.to) return w.label;
+    return "—";
   }
-  function emptyBins() {
-    return new Array(nBins).fill(0);
+
+  function fetchJsonl(url) {
+    return fetch(url).then(r => r.text()).then(txt =>
+      txt.split("\n").map((ln, i) => {
+        ln = ln.trim();
+        if (!ln) return { _empty: true, _idx: i };
+        try { return JSON.parse(ln); }
+        catch { return { _corrupt: true, _idx: i }; }
+      })
+    );
   }
   function fmtSec(s) {
     if (!s) return "0s";
     if (s < 60) return Math.round(s) + "s";
-    const m = Math.floor(s / 60);
-    const r = Math.round(s % 60);
-    if (m < 60) return r ? `${m}m${String(r).padStart(2, "0")}s` : `${m}m`;
-    const h = Math.floor(m / 60);
-    const rm = m % 60;
-    return `${h}h${String(rm).padStart(2, "0")}m`;
+    const m = Math.floor(s/60), r = Math.round(s%60);
+    if (m < 60) return r ? `${m}m${String(r).padStart(2,"0")}s` : `${m}m`;
+    const h = Math.floor(m/60), rm = m%60;
+    return `${h}h${String(rm).padStart(2,"0")}m`;
   }
-  function fmtBinLabel(i) {
+  function fmtBin(i) {
     const t = new Date(startMs + i * HOUR_MS);
-    const hh = String(t.getUTCHours()).padStart(2, "0");
-    return `${hh}:00`;
+    return `${String(t.getUTCHours()).padStart(2,"0")}:00`;
+  }
+  const labels = Array.from({ length: nBins }, (_, i) => fmtBin(i));
+
+  // ---------- load + clean chat + messages ----------
+  const cleaningStats = { total:0, empty:0, corrupt:0, dedup:0, kept:0, matched:0, unmatched:0 };
+  const messagesArr = await RD.fetchJsonl("data/messages.jsonl.txt");
+  // Mappa preview→ts: la stessa preview può comparire più volte nei mesi.
+  // Preferiamo SEMPRE il ts che cade nella finestra long-session, altrimenti
+  // il più recente — evita match spuri ai messaggi storici di aprile.
+  const previewBuckets = new Map();
+  for (const m of messagesArr) {
+    const p = (m.preview || "").slice(0, 60);
+    if (!p || !m.ts) continue;
+    const t = Date.parse(m.ts);
+    if (!previewBuckets.has(p)) previewBuckets.set(p, []);
+    previewBuckets.get(p).push(t);
+  }
+  const previewToTs = new Map();
+  for (const [p, arr] of previewBuckets) {
+    arr.sort((a, b) => a - b);
+    const inWin = arr.find(t => t >= startMs && t <= endMs);
+    previewToTs.set(p, inWin != null ? inWin : arr[arr.length - 1]);
   }
 
-  const labels = Array.from({ length: nBins }, (_, i) => fmtBinLabel(i));
+  const PREFIX_RE = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]\s*\[(\w+)\]\s*([\s\S]*)$/;
+  const PREFIX_RE_LIGHT = /^\[@([\w-]+)\s*->\s*@([\w-]+)\]/;
+
+  // results: per-agent records [{ ts, len, type, from, to, idx }]
+  const perAgent = {}; for (const r of ROLES) perAgent[r] = [];
+  const sessionToAgent = {};
+  const sessionSeen = new Set();
+
+  for (const h of CHAT_FILES) {
+    const arr = await fetchJsonl(`data/chat/${h}.jsonl.txt`);
+    // first pass: detect owner agent
+    const counts = {};
+    for (const r of arr) {
+      cleaningStats.total++;
+      if (r._empty) { cleaningStats.empty++; continue; }
+      if (r._corrupt) { cleaningStats.corrupt++; continue; }
+      const c = r.content;
+      if (!c || !String(c).trim()) { cleaningStats.empty++; continue; }
+      const m = String(c).match(PREFIX_RE_LIGHT);
+      if (m) {
+        const tgt = m[2].split("-")[0].toLowerCase();
+        counts[tgt] = (counts[tgt] || 0) + 1;
+      }
+    }
+    let owner = "sconosciuto";
+    if (Object.keys(counts).length) {
+      owner = Object.entries(counts).sort((a,b) => b[1]-a[1])[0][0];
+    }
+    sessionToAgent[h] = owner;
+
+    // second pass: build records
+    for (let i = 0; i < arr.length; i++) {
+      const r = arr[i];
+      if (r._empty || r._corrupt) continue;
+      const c = String(r.content || "");
+      if (!c.trim()) continue;
+      const dedupKey = `${h}|${c.slice(0, 200)}`;
+      if (sessionSeen.has(dedupKey)) { cleaningStats.dedup++; continue; }
+      sessionSeen.add(dedupKey);
+
+      let frm = "", to = owner, type = "SYS", body = c;
+      const fm = c.match(PREFIX_RE);
+      if (fm) {
+        frm = fm[1].split("-")[0].toLowerCase();
+        to  = fm[2].split("-")[0].toLowerCase();
+        type = fm[3];
+        body = fm[4];
+      }
+
+      const prefix60 = c.slice(0, 60);
+      const ts = previewToTs.get(prefix60) ?? null;
+      if (ts) cleaningStats.matched++; else cleaningStats.unmatched++;
+      cleaningStats.kept++;
+
+      if (ROLES.includes(owner)) {
+        perAgent[owner].push({ ts, len: c.length, type, from: frm, to, idx: i, session: h });
+      }
+    }
+  }
+
+  // ---------- aggregates per agent ----------
+  const aggr = {};
+  for (const role of ROLES) {
+    const rec = perAgent[role] || [];
+    const bins = new Array(nBins).fill(0);
+    const lenBins = new Array(nBins).fill(0);
+    let totalLen = 0;
+    let firstTs = null, lastTs = null;
+    const types = {};
+    for (const r of rec) {
+      totalLen += r.len;
+      types[r.type] = (types[r.type] || 0) + 1;
+      // Bin / firstTs / lastTs solo se il ts cade nella finestra long-session.
+      if (r.ts != null && r.ts >= startMs && r.ts <= endMs) {
+        if (firstTs == null || r.ts < firstTs) firstTs = r.ts;
+        if (lastTs == null || r.ts > lastTs) lastTs = r.ts;
+        const idx = Math.floor((r.ts - startMs) / HOUR_MS);
+        if (idx >= 0 && idx < nBins) {
+          bins[idx]++;
+          lenBins[idx] += r.len;
+        }
+      }
+    }
+    aggr[role] = {
+      total: rec.length,
+      bins,
+      avgLen: rec.length ? Math.round(totalLen / rec.length) : 0,
+      avgLenBin: bins.map((c, i) => c ? Math.round(lenBins[i] / c) : 0),
+      types,
+      firstTs, lastTs,
+    };
+  }
+
+  // ---------- cleaning strip ----------
+  const cs = document.getElementById("cleaning-strip");
+  cs.innerHTML = `
+    Righe lette: <strong>${cleaningStats.total}</strong>
+    · Scartate vuote/null: <strong>${cleaningStats.empty}</strong>
+    · Corrotte: <strong>${cleaningStats.corrupt}</strong>
+    · Duplicate (session+content): <strong>${cleaningStats.dedup}</strong>
+    · Tenute: <strong>${cleaningStats.kept}</strong>
+    · ts cross-ref OK: <strong>${cleaningStats.matched}</strong>
+    · ts NULL (fallback indice): <strong>${cleaningStats.unmatched}</strong>
+  `;
+
+  // ---------- big chart ----------
+  const activeRoles = new Set(ROLES.filter(r => aggr[r].total > 0));
+  const datasets = ROLES.map(role => {
+    const color = RD.AGENT_COLORS[role] || "#888";
+    return {
+      label: `${RD.AGENT_EMOJI[role] || "🤖"} ${role}`,
+      _role: role,
+      data: aggr[role].bins,
+      borderColor: color,
+      backgroundColor: color + "22",
+      borderWidth: 2,
+      tension: 0.25,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      fill: false,
+      hidden: !activeRoles.has(role),
+    };
+  });
+
+  const bigCtx = document.getElementById("big-chart").getContext("2d");
+  const bigChart = new Chart(bigCtx, {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#cfd6e4", font: { size: 12 }, padding: 12, usePointStyle: true },
+          onClick: (e, item, legend) => {
+            const role = legend.chart.data.datasets[item.datasetIndex]._role;
+            const cb = document.getElementById(`tg-${role}`);
+            if (cb && !cb.disabled) cb.checked = !cb.checked;
+            applyToggles();
+          },
+        },
+        tooltip: {
+          backgroundColor: "rgba(13,15,20,0.96)",
+          borderColor: "#38415a",
+          borderWidth: 1,
+          padding: 12,
+          titleFont: { size: 13, weight: "700" },
+          bodyFont: { size: 12 },
+          footerFont: { size: 11, weight: "400" },
+          footerColor: "#8a93a4",
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              const ts = startMs + i * HOUR_MS;
+              const a = labels[i], b = labels[i+1] || "12:00";
+              return `${a}–${b} UTC · ${kimiOf(ts)}`;
+            },
+            label: (ctx) => {
+              const role = ctx.dataset._role;
+              const i = ctx.dataIndex;
+              const c = aggr[role].bins[i];
+              const al = aggr[role].avgLenBin[i];
+              const em = RD.AGENT_EMOJI[role] || "🤖";
+              if (!c) return `${em} ${role}: silente`;
+              return `${em} ${role}: ${c} msg · len̄ ${al} ch (~${Math.round(al/4)} tok)`;
+            },
+          },
+        },
+        zoom: {
+          pan: { enabled: true, mode: "x", modifierKey: null },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: "x",
+          },
+          limits: { x: { min: "original", max: "original" } },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#8a93a4", autoSkip: true, maxTicksLimit: 12, font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.04)" },
+        },
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: "Messaggi / ora", color: "#8a93a4", font: { size: 11 } },
+          ticks: { color: "#8a93a4", font: { size: 11 }, precision: 0 },
+          grid: { color: "rgba(255,255,255,0.05)" },
+        },
+      },
+    },
+  });
+
+  // ---------- toolbar checkboxes ----------
+  const togglesEl = document.getElementById("agent-toggles");
+  for (const role of ROLES) {
+    const has = aggr[role].total > 0;
+    const color = RD.AGENT_COLORS[role] || "#888";
+    const em = RD.AGENT_EMOJI[role] || "🤖";
+    const lbl = document.createElement("label");
+    lbl.className = "agent-toggle" + (has ? "" : " disabled");
+    lbl.title = has
+      ? `${role}: ${aggr[role].total} messaggi · len̄ ${aggr[role].avgLen} ch · clicca per togglare`
+      : `${role}: nessun transcript Kimi K2 in questa export`;
+    lbl.innerHTML = `
+      <input type="checkbox" id="tg-${role}" ${has ? "checked" : ""} ${has ? "" : "disabled"}>
+      <span class="swatch" style="background:${color}"></span>
+      <span class="em">${em}</span>
+      <span class="nm">${role}</span>
+    `;
+    togglesEl.appendChild(lbl);
+    lbl.querySelector("input").addEventListener("change", applyToggles);
+  }
+  function applyToggles() {
+    for (const ds of bigChart.data.datasets) {
+      const cb = document.getElementById(`tg-${ds._role}`);
+      ds.hidden = !(cb && cb.checked);
+    }
+    bigChart.update();
+    syncCardDim();
+  }
+  function syncCardDim() {
+    for (const role of ROLES) {
+      const cb = document.getElementById(`tg-${role}`);
+      const card = document.getElementById(`card-${role}`);
+      if (!card) continue;
+      if (cb && !cb.disabled && !cb.checked) card.classList.add("dim");
+      else card.classList.remove("dim");
+    }
+  }
+  document.getElementById("btn-all").addEventListener("click", () => {
+    for (const role of ROLES) {
+      const cb = document.getElementById(`tg-${role}`);
+      if (cb && !cb.disabled) cb.checked = true;
+    }
+    applyToggles();
+  });
+  document.getElementById("btn-none").addEventListener("click", () => {
+    for (const role of ROLES) {
+      const cb = document.getElementById(`tg-${role}`);
+      if (cb && !cb.disabled) cb.checked = false;
+    }
+    applyToggles();
+  });
+  document.getElementById("btn-invert").addEventListener("click", () => {
+    for (const role of ROLES) {
+      const cb = document.getElementById(`tg-${role}`);
+      if (cb && !cb.disabled) cb.checked = !cb.checked;
+    }
+    applyToggles();
+  });
+
+  // ---------- mini cards (3x3 type breakdown) ----------
+  const TYPE_ORDER = ["MSG","REQ","ACK","RES","REPORT","INFO","STATUS","SYS","CHAT","URG","WARN","DONE","CONFERMA","RIPRENDI","NOTIFY","VERIFICA","SKIP"];
+  const TYPE_COLORS = {
+    MSG:"#56ccf2", REQ:"#bb6bd9", ACK:"#6fcf97", RES:"#f2c94c",
+    REPORT:"#f2994a", INFO:"#9bd9c5", STATUS:"#828282",
+    SYS:"#3d4759", CHAT:"#eb5757", URG:"#eb5757", WARN:"#f2c94c",
+    DONE:"#6fcf97", CONFERMA:"#6fcf97", RIPRENDI:"#9b51e0", NOTIFY:"#56ccf2",
+    VERIFICA:"#9bd9c5", SKIP:"#828282",
+  };
 
   const grid = document.getElementById("agents-grid");
-  document.getElementById("lg-msg-color").style.background = "#56ccf2";
-
-  let data;
-  try {
-    data = await RD.loadAll();
-  } catch (e) {
-    grid.innerHTML = `<div class="empty">Errore caricamento dati: ${e.message}</div>`;
-    return;
-  }
-
-  const msgBins = {};
-  const thrBins = {};
-  const firstActive = {};
-  const lastActive = {};
-  const totalMsg = {};
-  const totalThr = {};
-
-  for (const r of ROLES) {
-    msgBins[r] = emptyBins();
-    thrBins[r] = emptyBins();
-    totalMsg[r] = 0;
-    totalThr[r] = 0;
-  }
-
-  for (const m of data.messages) {
-    if (!RD.inSession(m)) continue;
-    const role = baseRole(m.from) || baseRole(m.session);
-    if (!ROLES.includes(role)) continue;
-    const t = Date.parse(m.ts);
-    const idx = Math.floor((t - startMs) / HOUR_MS);
-    if (idx < 0 || idx >= nBins) continue;
-    msgBins[role][idx]++;
-    totalMsg[role]++;
-    if (firstActive[role] == null || t < firstActive[role]) firstActive[role] = t;
-    if (lastActive[role] == null || t > lastActive[role]) lastActive[role] = t;
-  }
-
-  for (const ev of data.throttle) {
-    if (!RD.inSession(ev)) continue;
-    const role = baseRole(ev.agent);
-    if (!ROLES.includes(role)) continue;
-    const t = Date.parse(ev.ts);
-    const idx = Math.floor((t - startMs) / HOUR_MS);
-    if (idx < 0 || idx >= nBins) continue;
-    const sec = Number(ev.applied_sec) || 0;
-    thrBins[role][idx] += sec;
-    totalThr[role] += sec;
-  }
-
-  function activeWindowLabel(role) {
-    const a = firstActive[role];
-    const b = lastActive[role];
-    if (a == null || b == null) return "—";
-    const fmt = (t) => {
-      const d = new Date(t);
-      return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-    };
-    return `${fmt(a)}→${fmt(b)}`;
-  }
-
   for (const role of ROLES) {
     const card = document.createElement("div");
     card.className = "agent-card";
-    card.title = `${role}: linea = messaggi inviati / ora (UTC), barre rosse = throttle applicato / ora. Bin = 1h. Hover sul grafico per dettagli.`;
-
+    card.id = `card-${role}`;
     const color = RD.AGENT_COLORS[role] || "#888";
-    const emoji = RD.AGENT_EMOJI[role] || "🤖";
+    const em = RD.AGENT_EMOJI[role] || "🤖";
 
     const head = document.createElement("div");
     head.className = "head";
     head.innerHTML = `
-      <span class="emoji">${emoji}</span>
+      <span class="emoji">${em}</span>
       <span class="name">${role}</span>
       <span class="role-color" style="background:${color}" title="${color}"></span>
     `;
     card.appendChild(head);
 
-    const hasData = totalMsg[role] > 0 || totalThr[role] > 0;
-
-    if (!hasData) {
+    const a = aggr[role];
+    if (!a || a.total === 0) {
       const kpis = document.createElement("div");
       kpis.className = "kpis";
       kpis.innerHTML = `
         <div class="kpi"><div class="lbl">💬 Messaggi</div><div class="val">0</div></div>
-        <div class="kpi"><div class="lbl">⏸ Throttle</div><div class="val">0s</div></div>
-        <div class="kpi"><div class="lbl">🕒 Attivo</div><div class="val">—</div></div>
+        <div class="kpi"><div class="lbl">📏 Len̄</div><div class="val">—</div></div>
+        <div class="kpi"><div class="lbl">🪟 Kimi K2</div><div class="val">—</div></div>
       `;
       card.appendChild(kpis);
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = "Non attivo in questa finestra";
+      empty.textContent = "Nessun transcript Kimi K2 in export";
       card.appendChild(empty);
       grid.appendChild(card);
       continue;
     }
 
+    const fmtTs = (t) => t == null ? "—"
+      : `${String(new Date(t).getUTCHours()).padStart(2,"0")}:${String(new Date(t).getUTCMinutes()).padStart(2,"0")}`;
     const kpis = document.createElement("div");
     kpis.className = "kpis";
     kpis.innerHTML = `
-      <div class="kpi"><div class="lbl">💬 Messaggi</div><div class="val">${totalMsg[role]}</div></div>
-      <div class="kpi"><div class="lbl">⏸ Throttle</div><div class="val">${fmtSec(totalThr[role])}</div></div>
-      <div class="kpi"><div class="lbl">🕒 Attivo (UTC)</div><div class="val">${activeWindowLabel(role)}</div></div>
+      <div class="kpi"><div class="lbl">💬 Messaggi</div><div class="val">${a.total}</div></div>
+      <div class="kpi"><div class="lbl">📏 Len̄</div><div class="val">${a.avgLen} ch</div></div>
+      <div class="kpi"><div class="lbl">🪟 Attivo (UTC)</div><div class="val">${fmtTs(a.firstTs)}→${fmtTs(a.lastTs)}</div></div>
     `;
     card.appendChild(kpis);
 
+    // type breakdown stacked bar
     const chartBox = document.createElement("div");
     chartBox.className = "chart-box";
     const canvas = document.createElement("canvas");
@@ -328,110 +607,63 @@
     card.appendChild(chartBox);
     grid.appendChild(card);
 
+    const types = a.types;
+    const orderedTypes = TYPE_ORDER.filter(t => types[t]).concat(
+      Object.keys(types).filter(t => !TYPE_ORDER.includes(t))
+    );
+    const typeDatasets = orderedTypes.map(t => ({
+      label: t,
+      data: [types[t]],
+      backgroundColor: TYPE_COLORS[t] || "#666",
+      borderWidth: 0,
+      barPercentage: 0.7,
+    }));
+
     new Chart(canvas.getContext("2d"), {
-      data: {
-        labels,
-        datasets: [
-          {
-            type: "bar",
-            label: "Throttle (s)",
-            data: thrBins[role],
-            backgroundColor: "rgba(235, 87, 87, 0.55)",
-            borderColor: "rgba(235, 87, 87, 0.9)",
-            borderWidth: 0,
-            yAxisID: "y2",
-            order: 2,
-          },
-          {
-            type: "line",
-            label: "Messaggi",
-            data: msgBins[role],
-            borderColor: color,
-            backgroundColor: color + "33",
-            borderWidth: 2,
-            tension: 0.25,
-            pointRadius: 0,
-            pointHoverRadius: 3,
-            fill: true,
-            yAxisID: "y1",
-            order: 1,
-          },
-        ],
-      },
+      type: "bar",
+      data: { labels: ["msg"], datasets: typeDatasets },
       options: {
+        indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: {
+            position: "bottom",
+            labels: { color: "#cfd6e4", font: { size: 10 }, padding: 6, boxWidth: 10, boxHeight: 10 },
+          },
           tooltip: {
             backgroundColor: "rgba(13,15,20,0.96)",
-            borderColor: color,
-            borderWidth: 1,
-            padding: 10,
-            titleFont: { size: 12, weight: "700" },
-            bodyFont: { size: 12 },
-            footerFont: { size: 11, weight: "400" },
-            footerColor: "#8a93a4",
+            borderColor: color, borderWidth: 1, padding: 8,
             callbacks: {
-              title: (items) => {
-                const i = items[0].dataIndex;
-                const startH = labels[i];
-                const endH = labels[i + 1] || "12:00";
-                return `${emoji} ${role} · ${startH}–${endH} UTC`;
-              },
+              title: () => `${em} ${role} · type breakdown`,
               label: (ctx) => {
-                if (ctx.dataset.label === "Throttle (s)") {
-                  const s = ctx.parsed.y;
-                  return `⏸ Throttle: ${fmtSec(s)}${s >= 60 ? ` (${s}s)` : ""}`;
-                }
-                return `💬 Messaggi: ${ctx.parsed.y}`;
+                const v = ctx.parsed.x;
+                const pct = ((v / a.total) * 100).toFixed(1);
+                return `${ctx.dataset.label}: ${v} (${pct}%)`;
               },
-              afterBody: (items) => {
-                const i = items[0].dataIndex;
-                const m = msgBins[role][i] || 0;
-                const th = thrBins[role][i] || 0;
-                if (m === 0 && th === 0) return "Nessuna attività in questa ora.";
-                if (m > 0 && th === 0) return "Attivo, nessuna pausa imposta.";
-                if (m === 0 && th > 0) return "Solo pause registrate, traffico zero.";
-                return "Attivo con pause concomitanti.";
-              },
+              afterBody: () => `Totale messaggi: ${a.total} · finestra Kimi K2 attiva: ${kimiOf(a.firstTs)}`,
             },
           },
         },
         scales: {
           x: {
-            ticks: {
-              color: "#8a93a4",
-              autoSkip: true,
-              maxTicksLimit: 6,
-              font: { size: 10 },
-            },
-            grid: { color: "rgba(255,255,255,0.04)" },
-          },
-          y1: {
-            position: "left",
+            stacked: true,
             beginAtZero: true,
-            ticks: { color: "#8a93a4", font: { size: 10 }, precision: 0 },
+            ticks: { color: "#8a93a4", font: { size: 10 } },
             grid: { color: "rgba(255,255,255,0.05)" },
           },
-          y2: {
-            position: "right",
-            beginAtZero: true,
-            suggestedMax: Math.max(60, ...thrBins[role]) || 60,
-            ticks: {
-              color: "#8a93a4",
-              font: { size: 10 },
-              maxTicksLimit: 5,
-              callback: (v) => fmtSec(v),
-            },
-            grid: { drawOnChartArea: false },
+          y: {
+            stacked: true,
+            ticks: { color: "#8a93a4", font: { size: 10 } },
+            grid: { display: false },
           },
         },
       },
     });
   }
+
+  syncCardDim();
 })();
 </script>
 </body>
