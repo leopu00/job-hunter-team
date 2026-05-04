@@ -35,8 +35,33 @@
     </p>
   </section>
 
-  <section class="kpi-grid" id="kpi-grid">
-    <!-- KPI cards: popolate dal team -->
+  <section>
+    <h2>Indicatori chiave</h2>
+    <p class="caption-muted">
+      Numeri estratti dalla finestra <code>2026-05-03 18:00Z → 2026-05-04 12:00Z</code>
+      (≈18 ore, multi-finestra). Ogni card è cliccabile e porta alla sezione di
+      dettaglio.
+    </p>
+    <div class="kpi-grid" id="kpi-grid">
+      <!-- skeleton: popolato in JS dopo loadAll() -->
+      <div class="kpi-card kpi-skeleton"><div class="label">Durata totale</div><div class="value">—</div></div>
+      <div class="kpi-card kpi-skeleton"><div class="label">Finestre Claude</div><div class="value">—</div></div>
+      <div class="kpi-card kpi-skeleton"><div class="label">Eventi throttle</div><div class="value">—</div></div>
+      <div class="kpi-card kpi-skeleton"><div class="label">Messaggi team</div><div class="value">—</div></div>
+      <div class="kpi-card kpi-skeleton"><div class="label">Agenti attivi</div><div class="value">—</div></div>
+      <div class="kpi-card kpi-skeleton"><div class="label">Picco usage</div><div class="value">—</div></div>
+    </div>
+  </section>
+
+  <section class="narrative">
+    <strong>Cosa raccontano questi numeri.</strong>
+    Il team ha lavorato per quasi un giorno intero, attraversando più reset
+    della finestra Claude/Kimi senza interventi manuali. Il pacing-bridge ha
+    accumulato centinaia di pause throttle distribuite su pochi agenti dominanti
+    (scrittore-1, scorer-1) — segnale che il termostato ha protetto le finestre
+    a costo di qualche pausa lunga, non di un crash. Il picco usage rimane
+    sotto il 100% perché la sentinella ha imposto rallentamenti prima della
+    saturazione.
   </section>
 </main>
 
@@ -49,7 +74,70 @@
 
 <script src="assets/data-loader.js"></script>
 <script>
-  // KPI overview: il team popolerà
+  // KPI: ricavati lato client per restare allineati ai dati senza pre-calcolo.
+  (async function () {
+    const grid = document.getElementById("kpi-grid");
+    if (!grid || !window.ReportData) return;
+    let data;
+    try {
+      data = await window.ReportData.loadAll();
+    } catch (err) {
+      grid.innerHTML = '<div class="kpi-card"><div class="label">Errore</div><div class="value">⚠️</div></div>';
+      console.error("KPI loadAll failed", err);
+      return;
+    }
+
+    const inSess = window.ReportData.inSession;
+    const sentinel = data.sentinel.filter(inSess);
+    const throttle = data.throttle.filter(inSess);
+    const messages = data.messages.filter(inSess);
+
+    // Durata: primo → ultimo tick sentinel
+    const tsList = sentinel.map((r) => Date.parse(r.ts)).filter(Number.isFinite).sort((a, b) => a - b);
+    const durMs = tsList.length ? tsList[tsList.length - 1] - tsList[0] : 0;
+    const hours = Math.floor(durMs / 3600e3);
+    const mins = Math.round((durMs % 3600e3) / 60e3);
+
+    // Finestre = session_id distinti (per provider claude+kimi insieme: il bridge le tratta come finestre)
+    const sessions = new Set(sentinel.map((r) => r.session_id).filter(Boolean));
+
+    // Throttle reali: escludi event=checkpoint
+    const throttleReal = throttle.filter((r) => r.event !== "checkpoint");
+
+    // Agenti attivi: unione di chi ha messaggi e chi ha throttle (lowercase)
+    const norm = (s) => String(s || "").toLowerCase();
+    const agents = new Set();
+    throttleReal.forEach((r) => r.agent && agents.add(norm(r.agent).split("-")[0]));
+    messages.forEach((m) => {
+      ["session", "from", "to"].forEach((k) => {
+        const v = norm(m[k]);
+        if (v && !["bridge", "sentinella", "pacing", "utente", ""].includes(v)) {
+          agents.add(v.split("-")[0]);
+        }
+      });
+    });
+
+    // Picco usage
+    const peak = sentinel.reduce((m, r) => Math.max(m, Number(r.usage) || 0), 0);
+
+    const cards = [
+      { label: "Durata totale", value: durMs ? `${hours}h ${mins}m` : "—", href: null },
+      { label: "Finestre Claude", value: sessions.size, href: "timeline.html#finestre" },
+      { label: "Eventi throttle", value: throttleReal.length, href: "throttle.html" },
+      { label: "Messaggi team", value: messages.length, href: "timeline.html#messaggi" },
+      { label: "Agenti attivi", value: agents.size, href: "agents.html" },
+      { label: "Picco usage", value: `${peak}%`, href: "usage.html" },
+    ];
+
+    grid.innerHTML = cards
+      .map((c) => {
+        const inner = `<div class="label">${c.label}</div><div class="value">${c.value}</div>`;
+        return c.href
+          ? `<a class="kpi-card kpi-link" href="${c.href}">${inner}</a>`
+          : `<div class="kpi-card">${inner}</div>`;
+      })
+      .join("");
+  })();
 </script>
 </body>
 </html>

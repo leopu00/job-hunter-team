@@ -104,6 +104,28 @@ section h2 {
   margin-top: 6px;
 }
 
+.kpi-card.kpi-skeleton .value {
+  color: var(--muted);
+}
+
+a.kpi-card.kpi-link {
+  text-decoration: none;
+  color: var(--fg);
+  display: block;
+  transition: border-color 120ms, background 120ms;
+}
+
+a.kpi-card.kpi-link:hover {
+  border-color: var(--accent);
+  background: #1b2230;
+}
+
+.caption-muted {
+  color: var(--muted);
+  font-size: 13px;
+  margin: -4px 0 14px;
+}
+
 .chart-wrap {
   background: var(--card);
   border: 1px solid var(--border);
