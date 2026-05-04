@@ -125,6 +125,7 @@
       <div class="legend-pills">
         <span><i class="dot" style="background:#6fcf97"></i>velocity_smooth (reale, EMA)</span>
         <span><i class="dot" style="background:#bb6bd9"></i>velocity_ideal (target)</span>
+        <span><i class="dot" style="background:#f2c94c"></i>velocity_decreasing (flag bridge)</span>
         <span><i class="dot" style="background:rgba(235,87,87,0.35)"></i>area sopra ideale (rischio)</span>
       </div>
       <canvas id="chart-velocity"></canvas>
@@ -132,6 +133,7 @@
         <p>Quando la curva verde sta sotto quella viola, il team sta lasciando token sul tavolo (non sfruttiamo abbastanza la finestra). Quando la sorpassa, il termostato deve attivarsi: throttle e checkpoint forzati per rallentare gli agenti e portare la velocity in zona ideale.</p>
         <p>Si vede chiaramente che <strong>la velocity reale oscilla intorno alla ideale</strong> per quasi tutta la sessione — è esattamente il comportamento desiderato di un termostato funzionante. Le escursioni sopra-soglia sono brevi e seguite da rientri rapidi.</p>
         <p>I gap nella linea verde sono i reset di finestra: la velocity calcolata sul primo tick di una nuova finestra è uno spike negativo (usage da 90 a 0) e va letto come confine, non come velocità reale. La separa dal resto per non sporcare l'analisi.</p>
+        <p>I pallini gialli sono i tick con il flag <code>velocity_decreasing</code>: il bridge ha rilevato un calo nel ritmo e ha aggiunto smoothing alla projection (vedi <a href="#" onclick="document.getElementById('chart-smoothing').scrollIntoView({behavior:'smooth'}); return false;">grafico 6</a>). Quando i pallini compaiono in cluster sopra la linea viola, è il momento in cui l'attenzione del termostato è massima.</p>
       </div>
     </div>
 
@@ -447,6 +449,7 @@
   // velocity al cambio di finestra non distorcono il grafico).
   const velReal = [];
   const velIdeal = [];
+  const velDecreasing = []; // dataset per i punti dove velocity_decreasing=true
   let prevSession = null;
   for (const r of sentinel) {
     if (prevSession && r.session_id !== prevSession) {
@@ -457,8 +460,12 @@
     // Sul primo tick della nuova finestra la velocity_smooth è ancora reset-spike → la
     // tratto come gap invece che come dato reale.
     const isResetSpike = r.status === "RESET" || (r.velocity_smooth ?? 0) < -10;
-    velReal.push({ x: Date.parse(r.ts), y: isResetSpike ? null : (r.velocity_smooth ?? 0) });
+    const yReal = isResetSpike ? null : (r.velocity_smooth ?? 0);
+    velReal.push({ x: Date.parse(r.ts), y: yReal });
     velIdeal.push({ x: Date.parse(r.ts), y: r.velocity_ideal ?? 0 });
+    if (r.velocity_decreasing && yReal != null) {
+      velDecreasing.push({ x: Date.parse(r.ts), y: yReal });
+    }
     prevSession = r.session_id || prevSession;
   }
 
@@ -489,6 +496,16 @@
           borderWidth: 1.5,
           spanGaps: false,
         },
+        {
+          label: "velocity_decreasing",
+          data: velDecreasing,
+          showLine: false,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: "#f2c94c",
+          pointBorderColor: "#0d0f14",
+          pointBorderWidth: 1,
+        },
       ],
     },
     options: {
@@ -508,6 +525,9 @@
               if (ctx.parsed.y == null) return null;
               if (ctx.dataset.label === "velocity_smooth") {
                 return `🟢 velocity reale (EMA): ${ctx.parsed.y.toFixed(1)} %/h`;
+              }
+              if (ctx.dataset.label === "velocity_decreasing") {
+                return `🟡 velocity_decreasing flag: il bridge sta vedendo un calo, la projection sarà smussata`;
               }
               return `🟣 velocity ideale (target): ${ctx.parsed.y.toFixed(1)} %/h`;
             },
@@ -598,6 +618,11 @@
     RESET: "#828282",
   };
 
+  // Calcolo % "in banda" = SOTTOUTILIZZO + STEADY + ATTENZIONE (cioè fuori RESET/OVER).
+  const totalStatus = statusOrder.reduce((a, k) => a + statusCounts[k], 0);
+  const inBand = (statusCounts.SOTTOUTILIZZO || 0) + (statusCounts.STEADY || 0) + (statusCounts.ATTENZIONE || 0);
+  const inBandPct = totalStatus ? Math.round((inBand / totalStatus) * 100) : 0;
+
   new Chart(document.getElementById("chart-status"), {
     type: "doughnut",
     data: {
@@ -641,6 +666,26 @@
         },
       },
     },
+    plugins: [
+      {
+        id: "centerLabel",
+        afterDraw(chart) {
+          const { ctx, chartArea } = chart;
+          const cx = (chartArea.left + chartArea.right) / 2;
+          const cy = (chartArea.top + chartArea.bottom) / 2;
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#e8ecf3";
+          ctx.font = "700 28px -apple-system, sans-serif";
+          ctx.fillText(inBandPct + "%", cx, cy - 8);
+          ctx.fillStyle = "#8a93a4";
+          ctx.font = "11px -apple-system, sans-serif";
+          ctx.fillText("in banda (no RESET/OVER)", cx, cy + 14);
+          ctx.restore();
+        },
+      },
+    ],
   });
 
   // ---------- Chart 5: Riepilogo per finestra Claude ----------
