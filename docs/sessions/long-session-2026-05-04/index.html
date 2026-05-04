@@ -205,19 +205,33 @@
     // Finestre Kimi K2 = SESSION_WINDOWS (perimetro definitivo, sempre 3)
     const windowsCount = (window.ReportData.SESSION_WINDOWS || []).length;
 
-    // Throttle reali: escludi event=checkpoint
-    const throttleReal = throttle.filter((r) => r.event !== "checkpoint");
+    // Throttle reali (formula canonica allineata a throttle.html dev2):
+    // event=start o event=null (legacy senza event field) — NON event=end
+    // (chiusura della pausa, non evento aggiuntivo) e NON event=checkpoint
+    // (heartbeat zero-duration). Filtri inclusivi davano DOPPIO CONTEGGIO
+    // (start+end per ogni pausa = 232×2=464, sbagliato).
+    const throttleReal = throttle.filter(
+      (r) => r.event === "start" || r.event == null,
+    );
 
-    // Agenti attivi: unione di chi ha messaggi e chi ha throttle (lowercase)
+    // Agenti attivi: unione di chi ha messaggi e chi ha throttle, escludendo
+    // ruoli infrastrutturali (bridge/sentinella/pacing/utente) e ruoli
+    // fittizi/diagnostici (test/smoke/diag) che entrano da throttle-events
+    // come nomi agente non canonici. Allineato a agents.html dev3.
+    const EXCLUDE = new Set([
+      "bridge", "sentinella", "pacing", "utente",
+      "test", "smoke", "diag", "",
+    ]);
     const norm = (s) => String(s || "").toLowerCase();
     const agents = new Set();
-    throttleReal.forEach((r) => r.agent && agents.add(norm(r.agent).split("-")[0]));
+    throttleReal.forEach((r) => {
+      const v = norm(r.agent).split("-")[0];
+      if (v && !EXCLUDE.has(v)) agents.add(v);
+    });
     messages.forEach((m) => {
       ["session", "from", "to"].forEach((k) => {
-        const v = norm(m[k]);
-        if (v && !["bridge", "sentinella", "pacing", "utente", ""].includes(v)) {
-          agents.add(v.split("-")[0]);
-        }
+        const v = norm(m[k]).split("-")[0];
+        if (v && !EXCLUDE.has(v)) agents.add(v);
       });
     });
 
@@ -227,7 +241,7 @@
     const cards = [
       { label: "⏱ Durata", value: durMs ? `${hours}h ${mins}m` : "—", href: null },
       { label: "🪟 Finestre Kimi K2", value: windowsCount, href: "windows.html" },
-      { label: "⏸ Pause throttle", value: throttleReal.length, href: "throttle.html" },
+      { label: "⏸ Throttle reali", value: throttleReal.length, href: "throttle.html" },
       { label: "💬 Messaggi team", value: messages.length, href: "timeline.html" },
       { label: "👥 Ruoli con attività", value: agents.size, href: "agents.html" },
       { label: "🔥 Picco usage", value: `${peak}%`, href: "windows.html" },
