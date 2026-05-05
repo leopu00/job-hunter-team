@@ -189,7 +189,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 ##### 🚀 [JHT-BRIDGE-V8] Auto-incentive — bridge accelerates underutilized teams (NEW 2026-05-02)
 
-- **Background:** during the 2026-04-30/05-01 session, the team did NOT fully self-utilize the rate budget toward the end of the window. The Comandante had to send 3 manual nudges (`controlla lo usage`, `non state sfruttando la FINESTRA AL MASSIMO`, `SPINGI AL MASSIMO SENZA SFORARE`) to push consumption from ~70% to ~84%.
+- **Background:** during the 2026-04-30/05-01 session, the team did NOT fully self-utilize the rate budget toward the end of the window. The user had to send 3 manual nudges (`controlla lo usage`, `non state sfruttando la FINESTRA AL MASSIMO`, `SPINGI AL MASSIMO SENZA SFORARE`) to push consumption from ~70% to ~84%.
 - **Idea:** dual of the V6 cooldown. Today the bridge slows the team down; tomorrow it should also speed them up if it sees budget unused near reset.
 - **Trigger:** `proj < 80% AND reset_window_remaining < 90min AND velocity < target × 0.7`
 - **Action:** bridge sends `[BRIDGE NUDGE] proj 60%, reset in 1h — push harder` to the Capitano (1 message per cooldown_window, like the down-throttle direction).
