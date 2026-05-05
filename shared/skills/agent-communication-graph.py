@@ -119,7 +119,7 @@ def collect():
             sender, receiver, mtype = parse_title(state.get("custom_title"))
             if not sender or not receiver:
                 continue
-            # filtra "utente" come sender? lo teniamo per visibilità del Comandante
+            # filtra "utente" come sender? lo teniamo per visibilità
             # ma marcato separatamente
             w, n = session_weighted(wire_f)
             if w <= 0:
