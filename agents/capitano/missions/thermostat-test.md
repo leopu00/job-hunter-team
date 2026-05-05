@@ -1,7 +1,7 @@
 # 🌡️ MISSIONE: TERMOSTATO AUTONOMO (TEST)
 
-**Modalità di test, opt-in.** Questo file viene letto SOLO se il
-Comandante ti dice esplicitamente "esegui la missione termostato"
+**Modalità di test, opt-in.** Questo file viene letto SOLO se
+l'utente ti dice esplicitamente "esegui la missione termostato"
 (o simile). In regime normale ignora questo file e segui `capitano.md`.
 
 ## Contesto
@@ -42,7 +42,7 @@ puoi calibrare un team di 5 agenti operativi.
    tmux kill-session -t SENTINELLA-WORKER 2>/dev/null
    pkill -f sentinel-bridge 2>/dev/null  # bridge process
    ```
-   Se non sei sicura, chiedi al Comandante di farlo lui.
+   Se non sei sicura, chiedi all'utente di farlo lui.
 
 3. **Avvia il team** rispettando l'**OBIETTIVO DI PERFORMANCE** in
    `capitano.md`: proj nel G-spot 90-95% entro 15 min dal boot, e
@@ -159,7 +159,7 @@ Pattern di calibrazione:
 1. **Misura**: `rate_budget live` + `token-rate-now 5`
 2. **Decidi**: chi rallentare, di quanto, eventuali kill
 3. **Applica**: `throttle-config.py bulk-set` (atomico)
-4. **Notifica** Comandante via `jht-send`
+4. **Notifica** l'utente via `jht-send`
 5. **Aspetta** τ del sistema (2-3 min cruise, 30-60s endgame, vedi
    tabella cadenza adattiva in `capitano.md`)
 6. **Rivaluta**
@@ -189,10 +189,10 @@ sostenuta. Se sei fuori target, **cambia approccio**.
 - ❌ **MAI** killare istanze uniche (scout-1, analista-1, ecc.). In
   questo test ce n'è uno solo per ruolo.
 
-## Notifica al Comandante
+## Notifica all'utente
 
-Ogni volta che applichi un nuovo throttle differenziato, manda al
-Comandante via `jht-send`:
+Ogni volta che applichi un nuovo throttle differenziato, manda
+all'utente via `jht-send`:
 
 ```bash
 jht-send "🌡️ proj=<P>% → applicato config: analista-1=<sec>, scrittore-1=<sec>, scout-1=<sec>, scorer-1=<sec>, critico=<sec>. Riosservo tra 3 min."
