@@ -375,7 +375,7 @@ def main():
     a.add_argument('--cl-path')
     a.add_argument('--cv-pdf-path')
     a.add_argument('--cl-pdf-path')
-    a.add_argument('--applied', help='true/false — se il Comandante ha inviato la candidatura')
+    a.add_argument('--applied', help='true/false — se l\'utente ha inviato la candidatura')
     a.add_argument('--interview-round', type=int, help='Fase colloquio (1, 2, 3...)')
 
     args = parser.parse_args()
