@@ -36,13 +36,11 @@ Su JHT il rischio è concreto: un beta tester anglofono che scrive *"find me pyt
 ```
 agents/
   capitano/
-    capitano.md          ← baseline (= English, allineata a DEFAULT_LOCALE='en')
-    capitano.it.md       ← override italiano (futuro)
-    capitano.hu.md       ← override ungherese (futuro)
-    capitano.es.md       ← override spagnolo (futuro)
+    capitano.md          ← baseline (oggi italiano — vedi sezione "Status reale")
+    capitano.<loc>.md    ← override per locale specifico (futuro, oggi inesistenti)
   scrittore-1/
-    scrittore.md         ← baseline EN
-    scrittore.it.md
+    scrittore.md         ← baseline IT
+    scrittore.<loc>.md
   ...
 ```
 
@@ -122,47 +120,91 @@ Il resto del flow (`cmp` + `cp` per single source of truth) resta invariato.
 
 ---
 
-## 📅 Sequencing post-scaffolding
+## ⚠️ Status reale (onesto)
+
+**Architettura:** ✅ deployed (hook in `start-agent.sh`).
+**Contenuti tradotti:** ❌ zero.
+**Lavoro di traduzione in corso:** ❌ nessuno.
+
+La branch parallela menzionata altrove **NON traduce** i prompt: ottimizza i contenuti italiani esistenti. Quindi `<role>.md` resterà in italiano anche dopo che quella branch fa merge.
+
+### Conseguenza: drift mismatch attivo
+
+Da [Anthropic docs](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) Claude segue di norma la lingua dell'utente. Da [Claude Lab](https://claudelab.net/en/articles/claude-ai/claude-japanese-response-english-switch-fix) sappiamo che con system prompt molto pesanti in lingua diversa subentra il drift. Sommando i due:
+
+- Default user locale = `en` (settato 2026-05-06 in `shared/i18n/types.ts`)
+- Baseline `<role>.md` = italiano (~2500+ righe totali sui 9 agenti)
+- Risultato: un nuovo utente con default `en` che scrive *"find me python jobs"* può vedere il Capitano rispondere in italiano per drift.
+
+### Sequencing realistico
 
 ```
-ORA  (post-scaffolding 2026-05-06)
-├─ <role>.md = italiano (baseline storico)
-├─ start-agent.sh prova <role>.<locale>.md → fallback <role>.md
-├─ DEFAULT_LOCALE='en' (settings + i18n-prefs.json)
-│  ⚠️ inconsistenza temporanea: prefs dice EN ma il file servito è IT
-│  → effetto: language drift già attivo come prima (zero regressione)
-│  → mitigazione transitoria: documentata sotto in "🩹 Quick patch RULE-T14"
+ORA  (2026-05-06)
+├─ Architettura risoluzione lingua: ✅ deployed in start-agent.sh
+├─ Contenuti: <role>.md italiano per tutti i 9 agenti
+├─ DEFAULT_LOCALE='en' settato ma senza prompt EN da servire
+│  → drift mismatch ATTIVO per locale != 'it'
+│  → tre mitigazioni possibili (vedi "Decisioni aperte" sotto)
 │
-├─ traduzione branch merge (futuro vicino)
-│  └─ <role>.md diventa EN (baseline corretta)
-│  └─ <role>.it.md aggiunto come override per locale='it' (preserva esistente)
+└─ Branch ottimizzazione prompt (in corso)
+   └─ Aggiorna <role>.md mantenendolo italiano
+   └─ NON cambia la situazione lingua
+
+FUTURO  (chi/quando = TBD, non assegnato)
+├─ Task di traduzione esplicito (oggi inesistente nel BACKLOG come task attivo)
+│  └─ Opzione 1: traduce <role>.md → EN, sposta IT in <role>.it.md
+│  └─ Opzione 2: aggiunge solo <role>.en.md, lascia <role>.md italiano
 │
-└─ aggiungere lingue (futuro lontano)
-   └─ <role>.hu.md, <role>.es.md, ecc. — community translation
+└─ Community translation per altre lingue
+   └─ <role>.hu.md, <role>.es.md, ecc.
 ```
+
+## 🤔 Decisioni aperte (da prendere col manutentore)
+
+Tre approcci possibili per chiudere il gap drift:
+
+### Opzione A — Tenere baseline IT (status quo onesto)
+- `<role>.md` = italiano, `DEFAULT_LOCALE='en'` (come ora)
+- `<role>.en.md` arriva quando qualcuno traduce
+- *Pro:* nessun lavoro immediato. *Contro:* drift attivo per default user EN.
+
+### Opzione B — Rollback DEFAULT_LOCALE a 'it'
+- Riallinea l'apparato a quanto effettivamente serviamo
+- Contraddice memory `feedback_lang_picker_default_english` (che voleva EN per il desktop wizard)
+- *Pro:* coerenza interna immediata. *Contro:* rollback del fix di stamattina.
+
+### Opzione C — Quick patch RULE-T14
+- Aggiungere a `agents/_team/team-rules.md` una regola "respond in user's language"
+- Neutralizza il drift indipendentemente dalla lingua del system prompt
+- *Pro:* costo ~5 minuti, risolve il problema reale. *Contro:* tocca file in lavorazione su altra branch (richiede coordinamento).
+
+Mia raccomandazione attuale: **Opzione C** se l'altra branch lo accetta, altrimenti **Opzione A** + accettare il drift fino a traduzione esplicita.
 
 ---
 
-## 🩹 Quick patch RULE-T14 (transitorio, da decidere)
+## 🩹 Quick patch RULE-T14 (specifica completa)
 
-Fino a che la traduzione EN non landa, il drift è ancora attivo. Per mitigarlo c'è un'opzione molto economica (~5 minuti):
+Testo proposto da aggiungere a `agents/_team/team-rules.md`:
 
-Aggiungere a `agents/_team/team-rules.md` una regola di alto livello:
+> **RULE-T14 (Lingua di output)** — Rispondi sempre nella lingua in cui l'utente ti ha scritto, indipendentemente dalla lingua di queste regole o dei tuoi prompt d'identità. Se l'utente scrive in inglese, rispondi in inglese. Se scrive in italiano, rispondi in italiano. Vale per: chat con l'utente, commenti nei deliverable (CV, cover letter, riassunti). I messaggi inter-agente possono restare in italiano (sono tecnici, non visibili all'utente).
 
-> **RULE-T14 (Lingua di output)** — Rispondi sempre nella lingua in cui l'utente ti ha scritto, indipendentemente dalla lingua di queste regole. Se l'utente scrive in inglese, rispondi in inglese. Se scrive in italiano, rispondi in italiano. Vale per: chat con l'utente, commenti nei deliverable (CV, cover letter), messaggi inter-agente sono indifferenti perché tecnici.
-
-⚠️ **Non implementato ora** perché l'utente ha richiesto esplicitamente di non toccare i file d'identità / regole team che sono in lavorazione su branch parallela. Se sull'altra branch viene aggiunta una regola equivalente, questo patch diventa no-op.
+⚠️ **Non implementato in questo commit** — l'utente ha chiesto di non toccare i file `agents/_team/*.md` in lavorazione su branch parallela. Da coordinare col manutentore di quella branch o applicare quando il merge è completato.
 
 ---
 
 ## ✅ Acceptance
 
+**Architettura (questo commit):**
 - [x] Convenzione documentata (questo file)
 - [x] `start-agent.sh` risolve `<role>.<locale>.md` con fallback
-- [x] `BACKLOG.md` + `ROADMAP.md` aggiornati con la nuova baseline EN
-- [ ] Smoke test su un singolo agente con `<role>.it.md` placeholder che scrive una stringa diversa (es. "ITALIAN VERSION") + verifica che start-agent.sh la pesca quando `i18n-prefs.json:locale=it` (deferito a quando esistono almeno 2 file da confrontare)
-- [ ] Localizzazione `_team/`, `_manual/`, `_skills/` (sprint successivo)
-- [ ] Traduzione contenuti EN dei file `<role>.md` (branch parallela)
+- [x] `BACKLOG.md` + `ROADMAP.md` aggiornati con status onesto
+
+**Resta aperto:**
+- [ ] Decidere fra opzione A/B/C sopra (drift mitigation)
+- [ ] Smoke test risoluzione lingua (deferito a quando esistono almeno 2 file da confrontare)
+- [ ] Task esplicito di traduzione contenuti `<role>.md` → EN (oggi inesistente)
+- [ ] Localizzazione `_team/`, `_manual/`, `_skills/` (sprint futuro)
+- [ ] Community translation per HU/ES/DE/FR (sprint futuro)
 
 ---
 
