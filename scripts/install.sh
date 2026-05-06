@@ -221,6 +221,11 @@ install_colima_macos() {
 }
 
 install_docker_linux() {
+  # Installa Docker Engine + Docker Compose v2 plugin. Su Ubuntu 24.04
+  # `apt install docker.io` NON include il plugin compose: senza,
+  # `docker compose ...` fallisce con "unknown shorthand flag 'f'" e il
+  # wrapper jht non parte. Tracciato come gotcha durante il primo smoke
+  # VPS Hetzner del 2026-05-06 (vedi docs/internal/2026-05-06-vps-providers-research.md).
   case "$PKG" in
     apt)
       run sudo_maybe apt-get update -qq
@@ -228,11 +233,19 @@ install_docker_linux() {
         info "Installo docker.io..."
         run sudo_maybe apt-get install -y docker.io || fail "Installazione docker.io fallita"
       fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose-v2 (plugin)..."
+        run sudo_maybe apt-get install -y docker-compose-v2 || fail "Installazione docker-compose-v2 fallita"
+      fi
       ;;
     dnf)
       if ! command -v docker &>/dev/null; then
         info "Installo docker..."
         run sudo_maybe dnf install -y docker || fail "Installazione docker fallita"
+      fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose-plugin..."
+        run sudo_maybe dnf install -y docker-compose-plugin || warn "Installazione docker-compose-plugin fallita — verifica manualmente"
       fi
       ;;
     pacman)
@@ -240,9 +253,14 @@ install_docker_linux() {
         info "Installo docker..."
         run sudo_maybe pacman -Sy --noconfirm docker || fail "Installazione docker fallita"
       fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose..."
+        run sudo_maybe pacman -S --noconfirm docker-compose || warn "Installazione docker-compose fallita — verifica manualmente"
+      fi
       ;;
     *)
       command -v docker &>/dev/null || fail "Package manager sconosciuto. Installa docker manualmente o riprova con --no-docker."
+      docker compose version &>/dev/null || warn "docker compose v2 non disponibile — installa il plugin manualmente"
       ;;
   esac
   # Su Linux/WSL2 il daemon di solito non parte da solo
