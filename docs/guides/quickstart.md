@@ -75,19 +75,23 @@ The script:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2)
 2. Installs the **Docker runtime** (Colima on macOS via Homebrew, `docker.io` on Linux/WSL2)
-3. Pulls the JHT image from GHCR (`ghcr.io/leopu00/jht:latest`)
-4. Creates a `jht` wrapper in `~/.local/bin` that does `docker run` with the standard bind-mount contract
-5. Drops you into the interactive setup wizard
+3. Downloads `docker-compose.yml` to `~/.jht/runtime/`
+4. Downloads the `jht` wrapper bash to `~/.local/bin/jht`
+
+The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/2026-05-06-host-container-split.md`](../internal/2026-05-06-host-container-split.md) for the design rationale.
 
 After install:
 
 ```bash
-jht setup            # interactive wizard if you skipped it
+jht up               # starts the container (pulls image on first run)
+jht setup            # interactive wizard
 jht doctor           # check prerequisites
 jht providers add    # add your subscription (Claude / Codex / Kimi)
 jht team start       # start the team
 jht team status      # check it's running
 ```
+
+The container runs `restart: unless-stopped`, so it survives host reboots. To stop everything: `jht down`. To upgrade: `jht upgrade`.
 
 You'll end up with two folders:
 
@@ -109,12 +113,14 @@ For contributors hacking on the repo. See [`.github/CONTRIBUTING.md`](../.github
 git clone https://github.com/leopu00/job-hunter-team.git
 cd job-hunter-team
 
-# 2. Spin up the dev container (recommended — same env as production)
-docker compose up -d
+# 2. Spin up the dev container with hot-reload of the local sources
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 # 3. Or work in host mode if you're iterating on the web UI
 npm --prefix web run dev:host
 ```
+
+> 💡 The two-file pattern (`docker-compose.yml` + `docker-compose.dev.yml`) keeps the production compose image-only (what users get via `install.sh`) while the dev override re-adds `build:` and bind-mounts of `web/`, `agents/`, `shared/`, `.launcher/` for hot-reload. Plain `docker compose up -d` (no `-f` flags) runs the production compose without any local source bindings — useful to verify the GHCR image stands on its own.
 
 For dev tasks specifically:
 
