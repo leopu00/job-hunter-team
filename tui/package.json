@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx src/tui.ts",
     "build": "tsc",
-    "start": "node dist/tui.js"
+    "start": "node dist/tui/src/tui.js"
   },
   "dependencies": {
     "@mariozechner/pi-tui": "^0.64.0",
