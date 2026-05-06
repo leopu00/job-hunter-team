@@ -211,9 +211,19 @@ function resolveUpdateTarget(id) {
 }
 
 function findRepoRoot(startDir = process.cwd()) {
-  // Cerca docker-compose.yml risalendo: l'update DEVE girare dalla root del
-  // repo (o dalla dir che contiene il compose del container jht), altrimenti
-  // `docker compose run` non trova il servizio.
+  // Cerca docker-compose.yml in ordine di precedenza:
+  //   1. JHT_COMPOSE_FILE (set dal wrapper bash su VPS / utenti install.sh)
+  //   2. ~/.jht/runtime/ (default install.sh Docker-mode dal 2026-05-06)
+  //   3. risalendo dal CWD (path "from source", contributor)
+  // L'update DEVE girare dalla dir che contiene il compose del container jht,
+  // altrimenti `docker compose run` non trova il servizio.
+  if (process.env.JHT_COMPOSE_FILE) {
+    const dir = resolve(process.env.JHT_COMPOSE_FILE, '..');
+    if (existsSync(join(dir, 'docker-compose.yml'))) return dir;
+  }
+  const runtimeDir = process.env.JHT_RUNTIME_DIR || join(homedir(), '.jht', 'runtime');
+  if (existsSync(join(runtimeDir, 'docker-compose.yml'))) return runtimeDir;
+
   let dir = resolve(startDir);
   for (let i = 0; i < 6; i++) {
     if (existsSync(join(dir, 'docker-compose.yml'))) return dir;

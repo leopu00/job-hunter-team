@@ -48,6 +48,8 @@ export function registerSetupCommand(program) {
     .option('--secret-mode <mode>', 'Come salvare la key (plaintext|env|file)', 'plaintext')
     .option('--secret-env <name>', 'Nome env var per la API key')
     .option('--secret-file <path>', 'Path file per la API key')
+    .option('--subscription-email <email>', 'Email account provider (richiesto con --auth-method subscription)')
+    .option('--subscription-token <token>', 'Session token sub (opzionale; il login OAuth lo gestisce il CLI provider)')
     .option('--model <model>', 'Modello AI default')
     .option('--skip-health', 'Salta il health check della API key')
     .option('--reset', 'Ricomincia la configurazione da zero')
