@@ -385,11 +385,32 @@ case "$PROVIDER" in
   *)                   IDENTITY_FILE="AGENTS.md" ;;
 esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
-TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
+
+# Risoluzione locale del template d'identità.
+# Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
+# Locale letto da $JHT_HOME/i18n-prefs.json; default 'en' (allineato a
+# DEFAULT_LOCALE in shared/i18n/types.ts). Il fallback è silenzioso perché
+# durante la transizione molti override per-locale non esisteranno ancora.
+# Vedi docs/internal/2026-05-06-agent-prompts-i18n.md per il design completo.
+USER_LOCALE="en"
+PREFS_FILE="${JHT_HOME:-$HOME/.jht}/i18n-prefs.json"
+if [ -f "$PREFS_FILE" ] && command -v jq >/dev/null 2>&1; then
+  USER_LOCALE="$(jq -r '.locale // "en"' "$PREFS_FILE" 2>/dev/null || echo en)"
+  # Sanity guard: se jq ritorna stringa vuota o null, ricadi su 'en'.
+  [ -z "$USER_LOCALE" ] || [ "$USER_LOCALE" = "null" ] && USER_LOCALE="en"
+fi
+
+LOCALIZED_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.$USER_LOCALE.md"
+BASELINE_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
+if [ -f "$LOCALIZED_TEMPLATE" ]; then
+  TEMPLATE="$LOCALIZED_TEMPLATE"
+else
+  TEMPLATE="$BASELINE_TEMPLATE"
+fi
 
 if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
   echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
-  echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $IDENTITY_DEST manualmente."
+  echo "Crea agents/$ROLE/$ROLE.md (baseline) o agents/$ROLE/$ROLE.$USER_LOCALE.md, oppure $IDENTITY_DEST manualmente."
   exit 1
 fi
 # Copia il template se il file runtime non esiste o differisce dal repo.
@@ -401,7 +422,7 @@ fi
 # vince sempre.
 if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$IDENTITY_DEST"; }; then
   cp "$TEMPLATE" "$IDENTITY_DEST"
-  echo "  → $IDENTITY_FILE sincronizzato da template ($ROLE.md)"
+  echo "  → $IDENTITY_FILE sincronizzato da template ($(basename "$TEMPLATE"))"
 fi
 
 # ── Skill distribution ──────────────────────────────────────────────────────

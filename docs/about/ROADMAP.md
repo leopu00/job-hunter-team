@@ -162,12 +162,25 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
    language at onboarding, the launcher should pin the team to the
    matching prompt set so the Captain, Sentinel, Writer, etc. all
    speak that language end-to-end (orders, feedback, chat replies).
-   Implies: per-language directory layout (e.g. `<role>.it.md` /
-   `<role>.en.md` or a `prompts/<lang>/` overlay), a startup hook
-   in `start-agent.sh` that picks the right file, language tag in
-   `jht.config.json`, and translator workflow for the prompt corpus.
-   Today everything is Italian — keep that as the baseline, plan the
-   English/Hungarian/Spanish/etc. corpus as a follow-up sprint.
+   **Why it matters:** Anthropic docs document a "language drift"
+   pattern — when system prompts contain heavy non-English content,
+   Claude infers conversation language from the system prompt mass
+   and can drift away from the user's query language. JHT prompts
+   today total thousands of lines (capitano.md alone is 647) → real
+   risk for an English-speaking beta tester writing
+   `find me python jobs` and getting Italian back. See
+   `docs/internal/2026-05-06-agent-prompts-i18n.md` for the design.
+   **Convention chosen:** `<role>.<locale>.md` siblings with fallback
+   to `<role>.md` (= English baseline, default user locale). Startup
+   hook in `start-agent.sh` reads `~/.jht/i18n-prefs.json` and picks
+   the right file. **Status:** infrastructure scaffolded 2026-05-06
+   (resolution hook + design doc); content translation deferred —
+   identity files actively edited on a separate branch, will land
+   as `<role>.en.md` overrides once that branch merges (English will
+   become baseline after `<role>.md` files are themselves rewritten
+   in EN). Remaining work: per-language overlays for `_team/`,
+   `_manual/`, `_skills/` (those are read directly via `Read` tool,
+   not copied by the launcher → need a different resolution path).
 ```
 
 For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
