@@ -69,7 +69,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_team/team-rules.md](../agents/_team/team-rules.md) | Regole condivise team (RULE-T*), inherited da tutti gli agenti | — | 2026-05-02 | ✅ |
 | [agents/_manual/anti-collision.md](../agents/_manual/anti-collision.md) | Come evitare scritture concorrenti sul DB tra agenti | — | 2026-04-28 | ✅ |
 | [agents/_manual/communication-rules.md](../agents/_manual/communication-rules.md) | Regole comunicazione inter-agent (jht-tmux-send, jht-send) | — | 2026-05-02 | ✅ |
-| [agents/_manual/db-schema.md](../agents/_manual/db-schema.md) | Schema SQLite `~/.jht/jobs.db` (5 tabelle) | — | 2026-04-28 | ✅ |
+| [agents/_manual/db-schema.md](../agents/_manual/db-schema.md) | Schema SQLite `~/.jht/jobs.db` (5 tabelle) | — | 2026-05-06 | ✅ |
 | [agents/_manual/sessions.md](../agents/_manual/sessions.md) | Gestione sessioni team (start/stop/reset) | — | 2026-04-28 | ✅ |
 
 
@@ -104,7 +104,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-04-27 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers" | — | 2026-04-30 | ✅ |
-| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica per fasi (open source → desktop) | — | 2026-04-28 | ✅ |
+| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica per fasi (open source → desktop) | — | 2026-05-06 | ✅ |
 | [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-04-27 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-04-27 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-04-27 | ✅ |
@@ -125,8 +125,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/quickstart.md](./guides/quickstart.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-04-27 | ✅ |
-| [docs/guides/cli-install.md](./guides/cli-install.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-04-27 | ✅ |
+| [docs/guides/quickstart.md](./guides/quickstart.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-05-06 | ✅ |
+| [docs/guides/cli-install.md](./guides/cli-install.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-05-06 | ✅ |
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-04-27 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-04-27 | ✅ |
 | [docs/guides/feedback-ticketing.md](./guides/feedback-ticketing.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
@@ -144,6 +144,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/2026-05-03-rate-kimi-weights.md](./internal/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
 | [docs/internal/2026-05-04-vps-deployment-design.md](./internal/2026-05-04-vps-deployment-design.md) | Design deploy VPS (3 path: SSH manuale / web pairing / launcher) | — | 2026-05-04 | ✅ |
 | [docs/internal/TODO-bridge-v7.md](./internal/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
+| [docs/internal/2026-05-06-host-container-split.md](./internal/2026-05-06-host-container-split.md) | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
+| [docs/internal/2026-05-06-launch-infra-costs.md](./internal/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
+| [docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | — | ✅ |
 
 
 ## 🔒 docs/security
