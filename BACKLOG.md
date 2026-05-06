@@ -267,13 +267,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
-- **Problem:** today the user has no clear way to choose between the 3 execution modes. README hints but doesn't decide for them.
+- **Problem:** today the user has no clear way to choose between the 3 execution modes. README hints but doesn't decide for them. Inoltre i prezzi VPS approssimativi ("circa €5/mo") nei doc sono fuorvianti — listini cambiano spesso e differenza tra €4 e €10 e' significativa.
 - **Task:** create `docs/guides/VPS-COMPARISON.md` with a decision tree:
   - "Hai un PC vecchio in casa?" → Mode 2 (PC dedicato)
   - "Vuoi pagare €5/mese e dimenticartene?" → Mode 3 (VPS), 30min setup guidato (Phase 3) o SSH manuale (oggi)
   - "Vuoi zero pensieri / setup?" → Mode 1 (PC locale, ma deve restare on)
 - **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
+- **Provider research feeder:** [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
 #### 🟡 MEDIUM PRIORITY
 
