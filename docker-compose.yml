@@ -15,7 +15,9 @@
 
 services:
   jht:
-    image: ghcr.io/leopu00/jht:latest
+    # Override via env var: JHT_IMAGE=ghcr.io/leopu00/jht:dev-1 jht upgrade
+    # Utile per testare immagini di branch dev prima del merge a master.
+    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}
     container_name: jht
     # Override del CMD Dockerfile (--help): avvia la dashboard web
     # (Next.js su :3000 + infra) e resta in foreground come PID 1.
