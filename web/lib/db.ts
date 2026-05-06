@@ -103,7 +103,9 @@ CREATE TABLE IF NOT EXISTS positions (
   found_by TEXT,
   found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   deadline TEXT,
-  status TEXT DEFAULT 'new',
+  status TEXT DEFAULT 'new' CHECK (status IN (
+    'new','checked','scored','writing','ready','applied','response','excluded'
+  )),
   notes TEXT,
   last_checked TIMESTAMP,
   FOREIGN KEY (company_id) REFERENCES companies(id)
@@ -167,7 +169,7 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 `
 
 export function initDb(_workspacePath?: string): void {
