@@ -26,8 +26,8 @@ export async function GET() {
   }
 
   const legacy_ids = (data ?? [])
-    .map((row) => row.legacy_id)
-    .filter((x): x is number => typeof x === 'number')
+    .map((row: { legacy_id: number | null }) => row.legacy_id)
+    .filter((x: number | null): x is number => typeof x === 'number')
 
   return NextResponse.json({ legacy_ids })
 }
