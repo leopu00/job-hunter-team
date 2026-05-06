@@ -14,6 +14,7 @@ import {
   JHT_CONFIG_DIR,
   writeConfigFile,
   validateApiKey,
+  validateEmail,
 } from './setup-helpers.js';
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
@@ -55,8 +56,9 @@ export async function runNonInteractiveSetup(opts) {
   const secretMode = opts.secretMode || 'plaintext';
   const model = opts.model || selectedProvider.models[0].value;
 
-  // --- Assembla API key (SecretRef) ---
+  // --- Assembla API key (SecretRef) o subscription ---
   let apiKeySecret;
+  let subscriptionConfig;
   if (authMethod === 'api_key') {
     if (secretMode === 'env') {
       const envName = opts.secretEnv || (providerName === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerName.toUpperCase()}_API_KEY`);
@@ -78,6 +80,24 @@ export async function runNonInteractiveSetup(opts) {
       if (err) { console.error(pc.red(err)); process.exitCode = 1; return; }
       apiKeySecret = formatSecretForConfig('plaintext', opts.apiKey.trim());
     }
+  } else if (authMethod === 'subscription') {
+    if (!opts.subscriptionEmail) {
+      console.error(pc.red('--subscription-email obbligatorio con --auth-method subscription'));
+      console.error(pc.dim('  Esempio: jht setup --non-interactive --provider claude \\'));
+      console.error(pc.dim('             --auth-method subscription --subscription-email tu@example.com'));
+      process.exitCode = 1;
+      return;
+    }
+    const emailErr = validateEmail(opts.subscriptionEmail);
+    if (emailErr) { console.error(pc.red(emailErr)); process.exitCode = 1; return; }
+    subscriptionConfig = { email: opts.subscriptionEmail.trim() };
+    if (opts.subscriptionToken) {
+      subscriptionConfig.session_token = opts.subscriptionToken.trim();
+    }
+  } else {
+    console.error(pc.red(`--auth-method "${authMethod}" non valido. Usa: api_key, subscription`));
+    process.exitCode = 1;
+    return;
   }
 
   // --- Health check ---
@@ -92,6 +112,9 @@ export async function runNonInteractiveSetup(opts) {
   if (apiKeySecret) {
     if (apiKeySecret.type === 'plaintext') providerConfig.api_key = apiKeySecret.value;
     else providerConfig.api_key_ref = apiKeySecret;
+  }
+  if (subscriptionConfig) {
+    providerConfig.subscription = subscriptionConfig;
   }
 
   const config = {
@@ -112,8 +135,16 @@ export async function runNonInteractiveSetup(opts) {
   // --- Riepilogo ---
   console.log(pc.green('\n  Config salvata!\n'));
   console.log(`  Provider:   ${selectedProvider.label}`);
-  console.log(`  Auth:       ${authMethod === 'api_key' ? describeSecret(apiKeySecret) : 'subscription'}`);
+  if (authMethod === 'api_key') {
+    console.log(`  Auth:       ${describeSecret(apiKeySecret)}`);
+  } else {
+    console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ', token preset' : ''})`);
+  }
   console.log(`  Modello:    ${model}`);
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
+  if (authMethod === 'subscription') {
+    console.log(pc.dim('  Prossimo passo: jht providers update ' + (providerName === 'claude' ? 'claude' : providerName === 'openai' ? 'codex' : 'kimi')));
+    console.log(pc.dim('  Poi avvia il CLI provider per il login OAuth (device flow).\n'));
+  }
 }
