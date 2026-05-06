@@ -673,16 +673,14 @@ All 5 tasks from 04-22 have been implemented:
 
 ## 🐛 KNOWN BUGS
 
-### 🔴 [BUG-TUI-BUILD] `tui/` build fail su master — blocca CI Docker
+### ✅ [BUG-TUI-BUILD] `tui/` build fail su master — RISOLTO 2026-05-06
 
-- **File:** `tui/src/oauth/storage.ts:9` importa `../../../shared/credentials/passphrase.js`, ma `tui/tsconfig.json` ha `rootDir: "src"` → `error TS6059: File '/app/shared/credentials/passphrase.ts' is not under 'rootDir' '/app/tui/src'`.
-- **Introdotto da:** `6f35755d fix(credentials): no piu' fallback machine-derived (helper passphrase)`.
-- **Conseguenza:** `npm run build --prefix tui` fallisce → `Dockerfile` step 13 fallisce → CI workflow `Docker — Build & push` (`.github/workflows/docker.yml`) rotta dal commit suddetto. L'immagine `ghcr.io/leopu00/jht:latest` su GHCR è ferma al **19 aprile 2026**: chi pulla l'immagine ha una build vecchia e il dev mode crasha (es. `croner` aggiunto dopo, mancante).
-- **Fix proposto:** opzioni in ordine di pulizia:
-  - Cambiare `tui/tsconfig.json` con `rootDir: ".."` + `include: ["src/**/*", "../shared/credentials/**/*"]` e aggiornare `tui/package.json` `start` a `node dist/tui/src/tui.js` (refactor struttura output).
-  - Oppure introdurre `composite` TS project references con `shared/credentials` come sottoprogetto.
-  - Workaround minimo (sconsigliato, duplica codice): copiare `passphrase.ts` dentro `tui/src/`.
-- **Verifica:** `docker compose build jht` localmente deve passare + `gh run list -w "Docker — Build & push"` deve tornare verde.
+- **File:** `tui/src/oauth/storage.ts:9` importava `../../../shared/credentials/passphrase.js`, ma `tui/tsconfig.json` aveva `rootDir: "src"` → `error TS6059: File '/app/shared/credentials/passphrase.ts' is not under 'rootDir' '/app/tui/src'`.
+- **Introdotto da:** `6f35755d fix(credentials): no piu' fallback machine-derived (helper passphrase)` (2026-04-27).
+- **Impatto:** dal 27 aprile `npm run build --prefix tui` falliva → `Dockerfile` step 13 → CI workflow `Docker — Build & push` rotto. Image `ghcr.io/leopu00/jht:latest` ferma al 19 aprile, chi la pullava avviava codice nuovo dentro un layer vecchio.
+- **Fix applicato:** `tui/tsconfig.json` con `rootDir: ".."` + `include: ["src/**/*", "../shared/credentials/passphrase.ts"]` (file singolo invece del glob, per non tirare dentro `storage.ts` che dipende da `shared/paths.js` — non in scope per la TUI). `tui/package.json` `start` aggiornato a `node dist/tui/src/tui.js` per riflettere la nuova struttura di output (`dist/tui/src/` + `dist/shared/credentials/`).
+- **Verifica locale:** `npm run build --prefix tui` ✅ verde, smoke-test runtime `import('./dist/shared/credentials/passphrase.js')` esporta `MissingPassphraseError` + `resolveJhtPassphrase`.
+- **Da verificare in CI:** `gh run list -w "Docker — Build & push"` deve tornare verde al primo push, e l'image GHCR deve riprendere il publish weekly.
 
 ### 🟡 [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione
 
