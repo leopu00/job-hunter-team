@@ -71,9 +71,39 @@ container_up() {
   docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
 }
 
+# Allinea l'owner delle dir bind-mountate all'UID che il container usa
+# internamente (jht = 1001). Senza questo, su VPS root (uid 0) il
+# container 'jht' non puo' scrivere in /jht_home: EACCES su jht.config.json,
+# ~/.jht/.npm-global, ecc.
+#
+# Override via JHT_BIND_OWNER (default 1001:1001). Best-effort: ignora
+# fallimenti chown su Mac/Colima dove userns mapping gestisce diversamente.
+ensure_bind_owner() {
+  [ "$(uname -s)" = "Linux" ] || return 0
+  local target="${JHT_BIND_OWNER:-1001:1001}"
+  local target_uid="${target%%:*}"
+  local home_dir="${JHT_HOME_HOST:-$HOME/.jht}"
+  local user_dir="${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"
+  mkdir -p "$home_dir" "$user_dir" 2>/dev/null || true
+  for d in "$home_dir" "$user_dir"; do
+    [ -d "$d" ] || continue
+    local cur_uid
+    cur_uid=$(stat -c '%u' "$d" 2>/dev/null || echo "")
+    if [ -n "$cur_uid" ] && [ "$cur_uid" != "$target_uid" ]; then
+      info "Allineo owner di $d a $target (era uid $cur_uid)..."
+      if [ "$(id -u)" = "0" ]; then
+        chown -R "$target" "$d" 2>/dev/null || warn "chown fallito su $d"
+      else
+        sudo chown -R "$target" "$d" 2>/dev/null || warn "sudo chown fallito su $d (potrebbe servire 'sudo $0 up')"
+      fi
+    fi
+  done
+}
+
 ensure_up() {
   if ! container_up; then
     info "Container '$CONTAINER' non attivo, lo avvio..."
+    ensure_bind_owner
     compose up -d
     # Attendi che il container sia in stato running prima di proseguire.
     local tries=20
@@ -105,6 +135,7 @@ case "$SUB" in
   up|start-container)
     require_docker
     require_compose_file
+    ensure_bind_owner
     compose up -d
     ;;
 
@@ -123,6 +154,7 @@ case "$SUB" in
   recreate)
     require_docker
     require_compose_file
+    ensure_bind_owner
     compose down
     compose up -d
     ;;
@@ -130,6 +162,7 @@ case "$SUB" in
   upgrade)
     require_docker
     require_compose_file
+    ensure_bind_owner
     compose pull
     compose up -d
     ;;

@@ -244,6 +244,18 @@ async function handleUpdate(id) {
     process.exit(1);
   }
 
+  // Branch in-container vs host:
+  // - Sul container (IS_CONTAINER=1, path Docker via wrapper bash) non c'e'
+  //   docker daemon: eseguiamo i comandi npm/uv direttamente. L'install
+  //   scrive in /jht_home/.npm-global che e' bind-mounted sull'host, quindi
+  //   persiste cross-container e cross-restart.
+  // - Sull'host (path "from source", contributor) usiamo docker compose run
+  //   per ottenere un container effimero isolato (evita rename collisions
+  //   sui binari npm in uso dal container running).
+  if (process.env.IS_CONTAINER === '1') {
+    return handleUpdateInContainer(targets);
+  }
+
   const repoRoot = findRepoRoot();
   if (!repoRoot || !existsSync(join(repoRoot, 'docker-compose.yml'))) {
     console.error(`${ERR}  docker-compose.yml non trovato. Esegui dalla root del repo JHT.`);
@@ -276,6 +288,27 @@ async function handleUpdate(id) {
 
   if (failed > 0) process.exit(1);
 
+  console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
+}
+
+async function handleUpdateInContainer(targets) {
+  let failed = 0;
+  for (const target of targets) {
+    const steps = UPDATE_SPECS[target];
+    console.log(`\n  ${DIM}── Updating ${target} (in-container) ──${RESET}`);
+    for (const step of steps) {
+      console.log(`  ${DIM}$ ${step.entrypoint} ${step.args.join(' ')}${RESET}`);
+      const env = { ...process.env, ...(step.env || {}) };
+      const r = spawnSync(step.entrypoint, step.args, { stdio: 'inherit', env });
+      if (r.status !== 0) {
+        console.error(`  ${ERR}  step fallito (exit ${r.status}) per ${target}`);
+        failed++;
+        break;
+      }
+    }
+    if (!failed) console.log(`  ${OK}  ${target} aggiornato`);
+  }
+  if (failed > 0) process.exit(1);
   console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
 }
 
