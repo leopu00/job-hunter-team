@@ -150,7 +150,7 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 ✅ Hungarian (`hu.json`) — partial, community contribution
 ⬜ Per-language JSON files refactor (today translations.ts inline)
 ⬜ Language switcher in web dashboard (desktop already has one)
-⬜ Fix DEFAULT_LOCALE mismatch (shared/i18n='it' vs desktop wizard='en')
+✅ Fix DEFAULT_LOCALE mismatch — shared/i18n + web fallbacks allineati a 'en' (2026-05-06)
 ⬜ Spanish, German, French, Portuguese translations
 ⬜ Translator-facing documentation
 ⬜ **Localize agent prompts & runtime docs**: all files agents read at

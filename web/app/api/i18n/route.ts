@@ -25,7 +25,7 @@ function loadPrefs(): { locale: Locale } {
     const raw = JSON.parse(fs.readFileSync(PREFS_PATH, 'utf-8'));
     if (raw.locale === 'it' || raw.locale === 'en' || raw.locale === 'hu') return raw;
   } catch { /* default */ }
-  return { locale: 'it' };
+  return { locale: 'en' };
 }
 
 function savePrefs(prefs: { locale: Locale }): void {

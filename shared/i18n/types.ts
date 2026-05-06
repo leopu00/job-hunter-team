@@ -4,7 +4,7 @@
 
 export const LOCALES = ['it', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];
-export const DEFAULT_LOCALE: Locale = 'it';
+export const DEFAULT_LOCALE: Locale = 'en';
 
 /** Mappa chiave → traduzione. Supporta nesting con dot notation. */
 export type TranslationMap = Record<string, string | Record<string, string>>;
