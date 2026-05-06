@@ -555,7 +555,26 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - ⬜ Refactor `shared/i18n/translations.ts` to load per-language files (today inline)
 - ✅ **Fix mismatch DEFAULT_LOCALE** (2026-05-06): `shared/i18n/types.ts` allineato a `'en'`, e con esso il fallback in `web/app/api/i18n/route.ts` (`loadPrefs()`) e i context default in `web/app/components/DashboardI18n.tsx`. Il fallback per chiavi mancanti in `t()` (riga 557, `TRANSLATIONS['it']`) resta `'it'` perché è secondary fallback per traduzioni assenti, non default-locale utente.
 - ⬜ Language switcher in web dashboard (desktop launcher already has one)
-- 🟡 **[JHT-I18N-AGENT-PROMPTS] Localizzazione prompt d'identità agenti** *(scaffolding done 2026-05-06)*. Anthropic doc avverte che system prompt eterogenei in lingua diversa da quella dell'utente causano "language drift" — Claude può rispondere nella lingua del prompt invece che dell'utente. Su JHT il rischio è reale: i 9 prompt agenti sommano migliaia di righe in italiano (es. `capitano.md` 647 righe) → un beta tester anglofono che scrive `find me python jobs` rischia risposta in italiano per inerzia del system prompt. **Convenzione scelta:** `agents/<role>/<role>.<locale>.md` siblings con fallback a `<role>.md` (= baseline = English, allineato a `DEFAULT_LOCALE`). Vedi design completo in [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md). **Status 2026-05-06:** ✅ hook risoluzione lingua aggiunto a `.launcher/start-agent.sh` (legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback `<role>.md`). ⬜ contenuti EN dei file identità in arrivo da branch parallela (oggi `<role>.md` è ancora in italiano → start-agent.sh continua a usare quello come fallback, no regressione). ⬜ overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool dall'agente, non copiati dal launcher → serve risoluzione diversa, fuori scope di questa scaffolding).
+- 🟡 **[JHT-I18N-AGENT-PROMPTS] Localizzazione prompt d'identità agenti** *(architettura scaffolded 2026-05-06, contenuti DA FARE)*.
+
+  **Problema:** Anthropic doc avverte che system prompt pesanti in lingua ≠ user causano "language drift" (Claude risponde nella lingua del prompt invece che dell'utente). Su JHT i 9 prompt agenti sommano ~2500+ righe in italiano (capitano.md 647) → un nuovo utente con `DEFAULT_LOCALE='en'` che scrive `find me python jobs` rischia risposta italiana.
+
+  **Convenzione scelta:** `agents/<role>/<role>.<locale>.md` siblings con fallback `<role>.md`. Vedi design completo in [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md).
+
+  **Stato 2026-05-06 — onesto:**
+  - ✅ Architettura: hook risoluzione lingua deployed in `.launcher/start-agent.sh` (legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback baseline).
+  - ❌ Contenuti tradotti: **zero**. La branch parallela in corso ottimizza i file italiani — non li traduce. Quindi baseline `<role>.md` resta italiano nel prevedibile.
+  - ⚠️ Inconsistenza attiva: `DEFAULT_LOCALE='en'` (settato stamattina per onboarding desktop) + baseline IT → drift mismatch reale per utenti default-EN.
+
+  **Decisioni aperte (vedi design doc per dettaglio):**
+  - 🅰️ Status quo + accettare drift fino a traduzione esplicita futura
+  - 🅱️ Rollback `DEFAULT_LOCALE='it'` (riallinea ma contraddice memory `feedback_lang_picker_default_english`)
+  - 🅲 RULE-T14 in `team-rules.md` ("respond in user's language") — neutralizza drift in 5 min, ma tocca file in lavorazione altra branch → da coordinare
+
+  **Sprint futuri (oggi non assegnati a nessuno):**
+  - ⬜ Task esplicito traduzione `<role>.md` → EN (zero attività in corso)
+  - ⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
+  - ⬜ Community translation HU/ES/DE/FR (post-launch)
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 

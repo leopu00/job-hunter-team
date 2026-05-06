@@ -171,16 +171,24 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
    `find me python jobs` and getting Italian back. See
    `docs/internal/2026-05-06-agent-prompts-i18n.md` for the design.
    **Convention chosen:** `<role>.<locale>.md` siblings with fallback
-   to `<role>.md` (= English baseline, default user locale). Startup
-   hook in `start-agent.sh` reads `~/.jht/i18n-prefs.json` and picks
-   the right file. **Status:** infrastructure scaffolded 2026-05-06
-   (resolution hook + design doc); content translation deferred —
-   identity files actively edited on a separate branch, will land
-   as `<role>.en.md` overrides once that branch merges (English will
-   become baseline after `<role>.md` files are themselves rewritten
-   in EN). Remaining work: per-language overlays for `_team/`,
-   `_manual/`, `_skills/` (those are read directly via `Read` tool,
-   not copied by the launcher → need a different resolution path).
+   to `<role>.md` (baseline). Startup hook in `start-agent.sh` reads
+   `~/.jht/i18n-prefs.json` and picks the right file.
+   **Status — honest:**
+   - ✅ Architecture: resolution hook deployed 2026-05-06.
+   - ❌ Translated content: zero files exist. No active translation
+     work on any branch — the parallel branch in progress optimizes
+     the Italian files, does not translate them.
+   - ⚠️ Drift mismatch active: `DEFAULT_LOCALE='en'` set 2026-05-06
+     for the desktop onboarding wizard, but baseline `<role>.md` is
+     still Italian → a default-EN user gets Italian prompts and may
+     experience drift on EN queries.
+   - 🤔 Open decisions (see design doc): keep status quo / rollback
+     DEFAULT_LOCALE to 'it' / quick patch RULE-T14 in `team-rules.md`.
+     None implemented yet — the team-rules edit is blocked by the
+     parallel branch coordination.
+   - ⬜ Future explicit task (unassigned today): translate `<role>.md`
+     content to English. Overlay for `_team/`, `_manual/`, `_skills/`
+     (read directly via `Read` tool, not copied by the launcher).
 ```
 
 For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
