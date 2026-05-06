@@ -1,0 +1,359 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "description": "Entry point del repo: vision, install, panoramica team agenti, provider",
+      "last_review": null
+    },
+    {
+      "path": "BACKLOG.md",
+      "description": "Roadmap completa con priorità e fasi 1-6, blocker pre-launch",
+      "last_review": null
+    },
+    {
+      "path": "CHANGELOG.md",
+      "description": "Changelog formato Keep-a-Changelog, cronologia rilasci",
+      "last_review": null
+    },
+    {
+      "path": "CODE_OF_CONDUCT.md",
+      "description": "Contributor Covenant 2.1, contatto `leopu00@gmail.com`",
+      "last_review": null
+    },
+    {
+      "path": "SECURITY.md",
+      "description": "Responsible disclosure + contatti security",
+      "last_review": null
+    },
+    {
+      "path": ".github/CONTRIBUTING.md",
+      "description": "Guida contributors EN, link CoC, workflow PR",
+      "last_review": null
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "description": "Template GitHub issue per bug",
+      "last_review": null
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.md",
+      "description": "Template GitHub issue per feature request",
+      "last_review": null
+    },
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "description": "Template PR con summary + test plan",
+      "last_review": null
+    },
+    {
+      "path": "agents/capitano/capitano.md",
+      "description": "🎖️ Capitano — orchestrator del team, distribuisce ordini",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/sentinella.md",
+      "description": "💂 Sentinella — watchdog rate-limit, fallback del bridge",
+      "last_review": null
+    },
+    {
+      "path": "agents/scout/scout.md",
+      "description": "🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web)",
+      "last_review": null
+    },
+    {
+      "path": "agents/analista/analista.md",
+      "description": "🔍 Analista — filtra JD vs profilo, popola companies/highlights",
+      "last_review": null
+    },
+    {
+      "path": "agents/scorer/scorer.md",
+      "description": "🎯 Scorer — assegna score 0-100 alle posizioni filtrate",
+      "last_review": null
+    },
+    {
+      "path": "agents/scrittore/scrittore.md",
+      "description": "✍️ Scrittore — genera CV + cover letter per posizione",
+      "last_review": null
+    },
+    {
+      "path": "agents/critico/critico.md",
+      "description": "🧐 Critico — review qualità CV/cover prima dell'invio",
+      "last_review": null
+    },
+    {
+      "path": "agents/assistente/assistente.md",
+      "description": "🤝 Assistente — config profilo utente, supporto setup",
+      "last_review": null
+    },
+    {
+      "path": "agents/maestro/maestro.md",
+      "description": "🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf)",
+      "last_review": null
+    },
+    {
+      "path": "agents/capitano/missions/thermostat-test.md",
+      "description": "🌡️ Missione opt-in test termostato senza Sentinella",
+      "last_review": null
+    },
+    {
+      "path": "agents/_team/architettura.md",
+      "description": "Architettura V5 4-tier (Bridge → Sentinella → Capitano → agenti)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_team/team-rules.md",
+      "description": "Regole condivise team (RULE-T*), inherited da tutti gli agenti",
+      "last_review": null
+    },
+    {
+      "path": "agents/_manual/anti-collision.md",
+      "description": "Come evitare scritture concorrenti sul DB tra agenti",
+      "last_review": null
+    },
+    {
+      "path": "agents/_manual/communication-rules.md",
+      "description": "Regole comunicazione inter-agent (jht-tmux-send, jht-send)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_manual/db-schema.md",
+      "description": "Schema SQLite `~/.jht/jobs.db` (5 tabelle)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_manual/sessions.md",
+      "description": "Gestione sessioni team (start/stop/reset)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/db-insert/SKILL.md",
+      "description": "INSERT su positions/companies/position_highlights",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/db-query/SKILL.md",
+      "description": "SELECT helper read-only sul DB jobs",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/db-update/SKILL.md",
+      "description": "UPDATE stato/score di righe esistenti",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/rate-budget/SKILL.md",
+      "description": "Calcolo budget rate-limit per provider",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/tmux-send/SKILL.md",
+      "description": "Invio messaggi inter-agent via tmux send-keys",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle/SKILL.md",
+      "description": "Throttle azioni agente per restare in budget",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle/DESIGN-NOTES.md",
+      "description": "Design throttle \"blocco hard\" — ⚠️ da rivedere prima rollout",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/check-usage-http/SKILL.md",
+      "description": "Check usage via endpoint HTTP provider",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/check-usage-tui/SKILL.md",
+      "description": "Check usage via TUI/CLI provider",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/decision-throttle/SKILL.md",
+      "description": "Logica decisione throttle (STEADY/ATTENZIONE/EMERGENZA)",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/emergency-handling/SKILL.md",
+      "description": "Gestione emergenze rate (HARD FREEZE, PAUSA TEAM)",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/memory-state/SKILL.md",
+      "description": "Stato in memoria Sentinella tra tick",
+      "last_review": null
+    },
+    {
+      "path": "agents/sentinella/_skills/order-formats/SKILL.md",
+      "description": "Format ordini protocollo (MANTIENI/SCALA UP/RIENTRO)",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/STORY.md",
+      "description": "Origin story (legacy 200 offerte/5 colloqui in 2 settimane)",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/VISION.md",
+      "description": "Vision long-term, Maestro 🧙‍♂️, \"AI on the side of workers\"",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/ROADMAP.md",
+      "description": "Roadmap pubblica per fasi (open source → desktop)",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/PROVIDERS.md",
+      "description": "Matrice provider Claude/Codex/Kimi con costi e tier",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/MONITORING.md",
+      "description": "Stack monitoring V5 (Bridge + Sentinella event-driven)",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/RESULTS.md",
+      "description": "Risultati reali utenti beta (matrice persona × provider)",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/README.md",
+      "description": "Indice ADR + convenzione di scrittura",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0001-colima-not-docker-desktop.md",
+      "description": "ADR-0001: Colima invece di Docker Desktop su macOS",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0002-three-supported-agent-clis.md",
+      "description": "ADR-0002: 3 CLI supportate (Claude Code, Codex, Kimi)",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0003-single-writer-team.md",
+      "description": "ADR-0003: single-writer pattern sul DB",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0004-subscription-only-no-api-keys.md",
+      "description": "ADR-0004: solo subscription, no API key",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/quickstart.md",
+      "description": "Guida quickstart utente (3 path: desktop, repo, one-liner)",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/cli-install.md",
+      "description": "Spec dell'installer one-liner `install.sh` (AS-IS)",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/AI-AGENT-INTEGRATION.md",
+      "description": "Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor)",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/BETA.md",
+      "description": "Onboarding beta tester + matrice coverage 10 celle",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/feedback-ticketing.md",
+      "description": "Runbook pagina /feedback + API `/api/feedback`",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/MAINTAINERS.md",
+      "description": "🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/INFRA.md",
+      "description": "Diagramma deployment (container + storage + sync opzionale)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/release.md",
+      "description": "Procedura cut-release (tag vX.Y.Z + GH workflow)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-01-bridge-and-token-monitoring.md",
+      "description": "Analisi bridge V6 + token-meter, roadmap V7",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-01-team-session-report.md",
+      "description": "Report sessione team 30 apr/1 mag UTC",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-03-rate-kimi-weights.md",
+      "description": "Calibrazione empirica pesi rate Kimi K2",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-04-vps-deployment-design.md",
+      "description": "Design deploy VPS (3 path: SSH manuale / web pairing / launcher)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/TODO-bridge-v7.md",
+      "description": "📌 Punch list bridge V7 + token monitor (entry point)",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/README.md",
+      "description": "Indice security review pre-launch",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/01-pre-launch-review.md",
+      "description": "Review pre-launch (33/35 task chiusi)",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/02-openclaw-comparison.md",
+      "description": "Confronto sicurezza con OpenClaw",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/03-implementation-tradeoffs.md",
+      "description": "Tradeoff implementativi delle mitigation",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/04-threat-model.md",
+      "description": "Threat model completo del progetto",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/05-checklist.md",
+      "description": "Checklist sicurezza pre-public-release",
+      "last_review": null
+    },
+    {
+      "path": "docs/security/06-post-fix-comparison.md",
+      "description": "Snapshot post-fix (score 30% → 74%)",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/long-session-2026-05-04/README.md",
+      "description": "Report sessione 10h+ con 2 finestre Claude back-to-back",
+      "last_review": null
+    },
+    {
+      "path": "supabase/README.md",
+      "description": "Schema multi-tenant Postgres + RLS (BYO backend)",
+      "last_review": null
+    }
+  ]
+}
