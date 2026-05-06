@@ -703,6 +703,16 @@ All 5 tasks from 04-22 have been implemented:
 - **Verifica locale:** `npm run build --prefix tui` ✅ verde, smoke-test runtime `import('./dist/shared/credentials/passphrase.js')` esporta `MissingPassphraseError` + `resolveJhtPassphrase`.
 - **Da verificare in CI:** `gh run list -w "Docker — Build & push"` deve tornare verde al primo push, e l'image GHCR deve riprendere il publish weekly.
 
+### 🟡 [BUG-CLACK-TTY-DOCKER-EXEC] Wizard `jht setup` interattivo non riceve frecce via `docker exec -it`
+
+- **Sintomo:** lanciato `jht setup` (modalita' interattiva) sul VPS via SSH, il prompt clack/prompts si ferma al primo selettore (`Modalita' di setup`) e le frecce ↑↓ arrivano come testo letterale `^[[A` `^[[B`.
+- **Scoperto:** primo bring-up VPS Hetzner CPX22 del 2026-05-06.
+- **Chain TTY:** PowerShell ConPTY → ssh.exe Windows OpenSSH → SSH al VPS → bash → wrapper `/root/.local/bin/jht` → `docker exec -it jht node /app/cli/bin/jht.js setup` → clack/prompts. Riprodotto sia da PowerShell sia da WSL Ubuntu+ssh.exe in tmux. Quindi il problema NON e' il chain trasporto host-side, e' dentro al container.
+- **Causa probabile:** clack chiama `process.stdin.setRawMode(true)` per intercettare keypress. Quando `node` e' lanciato via `docker exec -it`, la pty fornita non supporta `setRawMode` (silently fails) o non propaga gli eventi keypress. Le frecce arrivano come byte ANSI normali invece che intercettate.
+- **Workaround attuale:** usare `jht setup --non-interactive` con tutti i flag (commit 86c08174 ha aggiunto `--subscription-email`/`--subscription-token` per il path subscription).
+- **Fix proposto:** (a) verificare `process.stdin.isTTY` + `setRawMode` capability all'inizio del wizard e fallback a non-interactive con messaggio guidato; (b) investigare se `docker exec -t` (vs `-it`) o forzare `TERM=xterm-256color` cambia comportamento; (c) considerare un bridge di prompts via `stty raw`.
+- **Priorita':** bassa per VPS (workaround OK), alta per UX desktop launcher se in futuro lancia `jht setup` via embedded terminal.
+
 ### 🟢 [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato
 
 - **File:** `cli/src/commands/doctor.js:19`
