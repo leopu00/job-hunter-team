@@ -696,10 +696,43 @@ All 5 tasks from 04-22 have been implemented:
 - **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
 - **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
----
+### 🔴 [BUG-TURBOPACK-SSRF-RESOLVE] `next build` fallisce su Turbopack — module resolution `shared/net/ssrf.js`
 
----
+- **File:** `web/lib/ssrf.ts:12` (e `:10`, `:13`)
+- **Errore (riproducibile su `master` e `dev-2`):**
+  ```
+  Module not found: Can't resolve '../../shared/net/ssrf.js'
+  Import traces:
+    ./web/lib/ssrf.ts → ./web/app/api/sessions/[id]/route.ts
+    ./web/lib/ssrf.ts → ./web/app/api/webhooks/route.ts
+  ```
+- **Causa probabile:** Turbopack (default in Next 16.2.2) non risolve gli import con estensione `.js` che puntano a file `.ts` fuori dal package `web/` (qui `dev-2/shared/net/ssrf.ts`). Il modulo esiste fisicamente, ma il resolver non fa il fallback `.js → .ts`. Webpack legacy gestiva questa convenzione ESM-style, Turbopack richiede setup esplicito o estensione corretta.
+- **Conseguenza:** `npm run build --prefix web` rotto → CI Vercel a rischio se non c'è una toolchain alternativa (verificare `vercel build` actual config). Fixato dal lato `next.config.ts` con `turbopack.resolveExtensions` o cambiando l'estensione da `.js` a `.ts` nei tre import.
+- **Storia:** introdotto da commit `43594a50` *(feat(web/webhooks): route test-ping through SSRF-guarded fetch)* + `d55e822d` *(feat(shared/net): add SSRF dispatcher)*. Emerso durante smoke test del fix CSP JSON-LD (2026-05-06).
+- **Fix proposto:**
+  - 🥇 Tentativo 1 (zero rischio): cambiare `from "../../shared/net/ssrf.js"` → `from "../../shared/net/ssrf"` nei 3 punti di `web/lib/ssrf.ts` (l'estensione esplicita non è obbligatoria con TS path resolution).
+  - 🥈 Tentativo 2: aggiungere a `web/next.config.ts` `turbopack: { resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'] }` per forzare il fallback.
+  - 🥉 Fallback: copiare `shared/net/ssrf.ts` come dipendenza locale di `web/` (rompe principio shared, sconsigliato).
+- **Verifica:** `npm run build --prefix web` deve completare senza error.
 
-## 📞 Maintainer reference
+### 🔴 [BUG-TURBOPACK-MONOREPO-RESOLVE] `next dev` resolver cerca `tailwindcss` dal monorepo root
+
+- **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
+- **Errore (riproducibile in dev su Windows):**
+  ```
+  Error: Can't resolve 'tailwindcss' in 'C:\Users\leone.puglisi\repos\job-hunter-team\dev-2'
+    resolve as module
+      C:\...\dev-2\node_modules doesn't exist or is not a directory
+      C:\...\repos\node_modules doesn't exist or is not a directory
+      ... (path lookup risale fino a C:\)
+  ```
+- **Causa probabile:** `outputFileTracingRoot: MONOREPO_ROOT` in `next.config.ts` (riga ~9) imposta come root il parent di `web/`. Turbopack/PostCSS in dev usa quel root per la node-module resolution di tailwindcss invece di `web/node_modules/`. Il problema è specifico del setup monorepo Windows; Vercel CI parte già con cwd diverso e potrebbe non vederlo.
+- **Conseguenza:** primo GET `/` dopo `npm run dev` blocca Turbopack su un loop di resolve falliti → CPU/IO saturati → server inutilizzabile per smoke locale. Vedi memoria `feedback_no_heavy_smoke_tests_stacking`.
+- **Storia:** non chiaro quando introdotto; emerso 2026-05-06 durante runtime smoke del fix CSP JSON-LD.
+- **Fix proposto:**
+  - 🥇 Verificare che `outputFileTracingRoot` non venga propagato come module-resolution root in dev (è pensato solo per Vercel file tracing in build).
+  - 🥈 Aggiungere `tailwindcss` esplicitamente in `web/next.config.ts` `experimental.externalDir` o forzare PostCSS config a usare `path.resolve(__dirname, 'node_modules/tailwindcss')`.
+  - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
+- **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
 
 Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).
