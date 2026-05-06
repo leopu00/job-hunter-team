@@ -710,18 +710,55 @@ All 5 tasks from 04-22 have been implemented:
 - **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
 - **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
-### 🟡 [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione
+### ✅ [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione — FIXED 2026-05-06
 
-- **File:** `web/app/components/landing/JsonLd.tsx`
-- **Stato:** in dev funziona (CSP usa `'unsafe-inline'`). In produzione il CSP è `script-src 'self' 'nonce-XXX' 'strict-dynamic'`: il browser blocca `<script type="application/ld+json">` senza nonce → si perde il rich snippet di Google (SoftwareApplication + WebSite schema) sulla landing.
-- **Causa:** `app/page.tsx` ha `'use client'` e importa `<JsonLd />`. `JsonLd` per leggere il nonce dovrebbe usare `next/headers`, che è solo Server. Tolto `getNonce()` come quick fix per sbloccare il dev mode.
-- **Fix proposto:** spostare `<JsonLd />` da `app/page.tsx` a un Server Component più alto (es. `app/layout.tsx` per la landing, o un nuovo `app/(landing)/layout.tsx` con guard `pathname === '/'`), poi rimettere `getNonce()` + `nonce={nonce}` sui due `<script>`.
-- **Riferimenti:** introdotto dal commit CSP `cda78a17`, fixato parzialmente dal cleanup successivo.
+- **File:** `web/app/components/landing/JsonLd.tsx` + `web/app/page.tsx` + nuovo `web/app/components/landing/LandingClient.tsx`
+- **Era:** in dev funziona (CSP `'unsafe-inline'`). In prod CSP `script-src 'self' 'nonce-XXX' 'strict-dynamic'` bloccava i `<script type="application/ld+json">` senza nonce → niente rich snippet Google (SoftwareApplication + WebSite schema).
+- **Causa:** `app/page.tsx` era `'use client'` (per `useSearchParams`/`useRouter`/`useState` del toggle `?login=true`) e importava `<JsonLd />` come figlio. `getNonce()` usa `next/headers` → server-only, non utilizzabile dentro a Client Component.
+- **Fix applicato (split server/client):**
+  1. `JsonLd.tsx` → `async` + `await getNonce()` + `nonce={nonce}` sui due `<script>` (stesso pattern di `BreadcrumbJsonLd.tsx`).
+  2. Nuovo `LandingClient.tsx` `'use client'` → contiene `LandingI18nProvider` + `LoginPage` + `BackButton` + icone Google/GitHub + tutta la logica interattiva.
+  3. `page.tsx` → Server Component `async` che legge `searchParams` (`login`, `error`), renderizza `<JsonLd />` + `<LandingClient wantsLogin authError />`.
+- **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
+- **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
----
+### 🔴 [BUG-TURBOPACK-SSRF-RESOLVE] `next build` fallisce su Turbopack — module resolution `shared/net/ssrf.js`
 
----
+- **File:** `web/lib/ssrf.ts:12` (e `:10`, `:13`)
+- **Errore (riproducibile su `master` e `dev-2`):**
+  ```
+  Module not found: Can't resolve '../../shared/net/ssrf.js'
+  Import traces:
+    ./web/lib/ssrf.ts → ./web/app/api/sessions/[id]/route.ts
+    ./web/lib/ssrf.ts → ./web/app/api/webhooks/route.ts
+  ```
+- **Causa probabile:** Turbopack (default in Next 16.2.2) non risolve gli import con estensione `.js` che puntano a file `.ts` fuori dal package `web/` (qui `dev-2/shared/net/ssrf.ts`). Il modulo esiste fisicamente, ma il resolver non fa il fallback `.js → .ts`. Webpack legacy gestiva questa convenzione ESM-style, Turbopack richiede setup esplicito o estensione corretta.
+- **Conseguenza:** `npm run build --prefix web` rotto → CI Vercel a rischio se non c'è una toolchain alternativa (verificare `vercel build` actual config). Fixato dal lato `next.config.ts` con `turbopack.resolveExtensions` o cambiando l'estensione da `.js` a `.ts` nei tre import.
+- **Storia:** introdotto da commit `43594a50` *(feat(web/webhooks): route test-ping through SSRF-guarded fetch)* + `d55e822d` *(feat(shared/net): add SSRF dispatcher)*. Emerso durante smoke test del fix CSP JSON-LD (2026-05-06).
+- **Fix proposto:**
+  - 🥇 Tentativo 1 (zero rischio): cambiare `from "../../shared/net/ssrf.js"` → `from "../../shared/net/ssrf"` nei 3 punti di `web/lib/ssrf.ts` (l'estensione esplicita non è obbligatoria con TS path resolution).
+  - 🥈 Tentativo 2: aggiungere a `web/next.config.ts` `turbopack: { resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'] }` per forzare il fallback.
+  - 🥉 Fallback: copiare `shared/net/ssrf.ts` come dipendenza locale di `web/` (rompe principio shared, sconsigliato).
+- **Verifica:** `npm run build --prefix web` deve completare senza error.
 
-## 📞 Maintainer reference
+### 🔴 [BUG-TURBOPACK-MONOREPO-RESOLVE] `next dev` resolver cerca `tailwindcss` dal monorepo root
+
+- **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
+- **Errore (riproducibile in dev su Windows):**
+  ```
+  Error: Can't resolve 'tailwindcss' in 'C:\Users\leone.puglisi\repos\job-hunter-team\dev-2'
+    resolve as module
+      C:\...\dev-2\node_modules doesn't exist or is not a directory
+      C:\...\repos\node_modules doesn't exist or is not a directory
+      ... (path lookup risale fino a C:\)
+  ```
+- **Causa probabile:** `outputFileTracingRoot: MONOREPO_ROOT` in `next.config.ts` (riga ~9) imposta come root il parent di `web/`. Turbopack/PostCSS in dev usa quel root per la node-module resolution di tailwindcss invece di `web/node_modules/`. Il problema è specifico del setup monorepo Windows; Vercel CI parte già con cwd diverso e potrebbe non vederlo.
+- **Conseguenza:** primo GET `/` dopo `npm run dev` blocca Turbopack su un loop di resolve falliti → CPU/IO saturati → server inutilizzabile per smoke locale. Vedi memoria `feedback_no_heavy_smoke_tests_stacking`.
+- **Storia:** non chiaro quando introdotto; emerso 2026-05-06 durante runtime smoke del fix CSP JSON-LD.
+- **Fix proposto:**
+  - 🥇 Verificare che `outputFileTracingRoot` non venga propagato come module-resolution root in dev (è pensato solo per Vercel file tracing in build).
+  - 🥈 Aggiungere `tailwindcss` esplicitamente in `web/next.config.ts` `experimental.externalDir` o forzare PostCSS config a usare `path.resolve(__dirname, 'node_modules/tailwindcss')`.
+  - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
+- **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
 
 Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).
