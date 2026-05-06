@@ -1,0 +1,36 @@
+# Job Hunter Team — Dev override
+#
+# Override del docker-compose.yml di produzione per il dev workflow:
+# build locale dell'immagine + bind-mount dei sorgenti per hot-reload.
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Equivalente al vecchio `docker compose up -d` pre 2026-05-06 (split
+# host/container, vedi docs/internal/2026-05-06-host-container-split.md).
+#
+# Cosa cambia rispetto al compose di produzione:
+# - build locale dal Dockerfile (sovrascrive l'immagine GHCR pullata)
+# - bind-mount di web/, agents/, shared/, .launcher/ per modifiche
+#   visibili senza ricostruire l'immagine
+# - anonymous volume per node_modules e .next (preserva i binari Linux
+#   contro overrides Windows/Mac)
+
+services:
+  jht:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Sorgenti del repo — hot-reload senza rebuild dell'immagine.
+      # Next.js dev-server ricompila al cambio di .ts/.tsx.
+      # start-agent.sh rilegge i prompt markdown ad ogni lancio agent.
+      - ./web:/app/web
+      - /app/web/node_modules
+      - /app/web/.next
+      - ./agents:/app/agents
+      - ./shared:/app/shared
+      # .launcher/start-agent.sh + .launcher/sentinel-ticker.py sono
+      # i file piu' modificati durante lo sviluppo: senza bind-mount
+      # ogni fix richiederebbe un rebuild o un docker cp manuale.
+      - ./.launcher:/app/.launcher
