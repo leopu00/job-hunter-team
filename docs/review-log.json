@@ -354,6 +354,21 @@
       "path": "supabase/README.md",
       "description": "Schema multi-tenant Postgres + RLS (BYO backend)",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-06-host-container-split.md",
+      "description": "⚙️ Split host/container — CLI wrapper + dev compose, design e razionale",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-06-launch-infra-costs.md",
+      "description": "💰 Stima costi infra per public launch (Vercel/Supabase/domain)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md",
+      "description": "🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math",
+      "last_review": null
     }
   ]
 }
