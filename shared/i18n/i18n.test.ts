@@ -34,8 +34,8 @@ describe("constants", () => {
     assert.deepEqual([...LOCALES], ["it", "en"]);
   });
 
-  it("DEFAULT_LOCALE e' it", () => {
-    assert.equal(DEFAULT_LOCALE, "it");
+  it("DEFAULT_LOCALE e' en", () => {
+    assert.equal(DEFAULT_LOCALE, "en");
   });
 });
 

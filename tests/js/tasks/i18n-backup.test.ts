@@ -23,9 +23,9 @@ describe("i18n — config, consistenza, edge case", () => {
     expect(DEFAULT_I18N_CONFIG.dictionaries.it).toEqual({});
     expect(DEFAULT_I18N_CONFIG.dictionaries.en).toEqual({});
   });
-  it("LOCALES contiene it e en, DEFAULT_LOCALE it", () => {
+  it("LOCALES contiene it e en, DEFAULT_LOCALE en", () => {
     expect([...LOCALES]).toEqual(["it", "en"]);
-    expect(DEFAULT_LOCALE).toBe("it");
+    expect(DEFAULT_LOCALE).toBe("en");
   });
   it("isValidLocale: boundary — stringa vuota, numeri, case sensitive", () => {
     expect(isValidLocale("")).toBe(false);
