@@ -1,7 +1,18 @@
 // cli/src/utils/container-proxy.js
-// Proxy helper verso il container `jht`. Il team reale gira dentro il
-// container Docker, non sull'host; il CLI `jht` sull'host deve poter
-// interrogare e comandare quell'ambiente via `docker exec`.
+// Proxy helper verso il container `jht`.
+//
+// Due modalita' di funzionamento:
+//
+// 1. CLI gira sull'HOST (path "from source" o `--no-docker`):
+//    le funzioni proxano via `docker exec jht ...` verso il container
+//    long-running.
+//
+// 2. CLI gira DENTRO al container (path Docker via wrapper bash, IS_CONTAINER=1):
+//    le funzioni eseguono i comandi localmente senza docker exec —
+//    siamo gia' nel posto giusto.
+//
+// La modalita' e' decisa da `process.env.IS_CONTAINER`. Stessa API per
+// i chiamanti — niente `docker exec` quando il CLI e' gia' nel container.
 //
 // ESM: il package cli/ ha "type": "module".
 //
@@ -13,12 +24,16 @@ import { spawnSync } from 'node:child_process';
 
 export const CONTAINER_NAME = process.env.JHT_CONTAINER_NAME || 'jht';
 
+const INSIDE_CONTAINER = process.env.IS_CONTAINER === '1';
+
 export function dockerAvailable() {
+  if (INSIDE_CONTAINER) return true;
   const r = spawnSync('docker', ['--version'], { stdio: 'ignore' });
   return r.status === 0;
 }
 
 export function containerRunning(name = CONTAINER_NAME) {
+  if (INSIDE_CONTAINER) return name === CONTAINER_NAME;
   if (!dockerAvailable()) return false;
   const r = spawnSync('docker', ['ps', '--filter', `name=^${name}$`, '--format', '{{.Names}}'], {
     encoding: 'utf8',
@@ -27,12 +42,31 @@ export function containerRunning(name = CONTAINER_NAME) {
 }
 
 /**
- * Esegue `docker exec <container> bash -c <cmd>` e ritorna
- * { ok, stdout, stderr, code }. Mantiene il codice d'uscita del
- * processo interno, cosi' il chiamante puo' distinguere fallimento
- * docker (ok=false) da fallimento comando (code !== 0).
+ * Esegue il comando dentro al container target.
+ * - Sull'host: `docker exec <container> bash -c <cmd>`
+ * - In-container: `bash -c <cmd>` direttamente (no docker exec).
+ *
+ * Ritorna { ok, stdout, stderr, code }. Il codice d'uscita del processo
+ * interno e' preservato — il chiamante puo' distinguere fallimento del
+ * trasporto (ok=false) da fallimento del comando (code !== 0).
  */
 export function execInContainer(cmd, { container = CONTAINER_NAME, timeoutMs = 30_000 } = {}) {
+  if (INSIDE_CONTAINER) {
+    if (container !== CONTAINER_NAME) {
+      return { ok: false, stdout: '', stderr: `container '${container}' non raggiungibile dall'interno di '${CONTAINER_NAME}'`, code: -1 };
+    }
+    const r = spawnSync('bash', ['-c', cmd], {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+    });
+    return {
+      ok: r.status !== null,
+      stdout: (r.stdout || '').toString(),
+      stderr: (r.stderr || '').toString(),
+      code: r.status ?? -1,
+    };
+  }
+
   if (!containerRunning(container)) {
     return { ok: false, stdout: '', stderr: `container '${container}' non attivo`, code: -1 };
   }
@@ -50,11 +84,36 @@ export function execInContainer(cmd, { container = CONTAINER_NAME, timeoutMs = 3
 }
 
 /**
- * `docker exec <container> bash <script> <args...>` per invocare uno
- * script con argomenti separati (niente parsing shell del chiamante).
- * Path di script deve essere quello CONTAINER-side (es. /app/.launcher/...).
+ * Esegue uno script dentro al container target con argomenti separati
+ * (niente parsing shell del chiamante).
+ * - Sull'host: `docker exec <container> bash <script> <args...>`.
+ * - In-container: `bash <script> <args...>` direttamente.
+ * - `detached: true` mappa a `docker exec -d` sull'host; in-container
+ *   fa lo spawn detached con stdio='ignore' (parent non aspetta).
+ *
+ * Path di script DEVE essere quello container-side (es. /app/.launcher/...),
+ * e' lo stesso filesystem in entrambe le modalita'.
  */
 export function execScriptInContainer(scriptPath, args = [], { container = CONTAINER_NAME, detached = false } = {}) {
+  if (INSIDE_CONTAINER) {
+    if (container !== CONTAINER_NAME) {
+      return { ok: false, stdout: '', stderr: `container '${container}' non raggiungibile dall'interno di '${CONTAINER_NAME}'`, code: -1 };
+    }
+    if (detached) {
+      const child = spawnSync('bash', ['-c', `nohup bash "${scriptPath}" ${args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(' ')} >/dev/null 2>&1 &`], {
+        encoding: 'utf8',
+      });
+      return { ok: child.status !== null, stdout: '', stderr: '', code: child.status ?? 0 };
+    }
+    const r = spawnSync('bash', [scriptPath, ...args], { encoding: 'utf8' });
+    return {
+      ok: r.status !== null,
+      stdout: (r.stdout || '').toString(),
+      stderr: (r.stderr || '').toString(),
+      code: r.status ?? -1,
+    };
+  }
+
   if (!containerRunning(container)) {
     return { ok: false, stdout: '', stderr: `container '${container}' non attivo`, code: -1 };
   }
