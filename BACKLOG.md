@@ -722,24 +722,38 @@ All 5 tasks from 04-22 have been implemented:
 - **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
 - **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
-### 🔴 [BUG-TURBOPACK-SSRF-RESOLVE] `next build` fallisce su Turbopack — module resolution `shared/net/ssrf.js`
+### 🔴 [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/`
 
-- **File:** `web/lib/ssrf.ts:12` (e `:10`, `:13`)
-- **Errore (riproducibile su `master` e `dev-2`):**
+- **🚨 PRIORITÀ MASSIMA: blocca QUALSIASI deploy production via Vercel.** Master è 783 commit avanti rispetto a `production` ma il build fallisce sulla CI Vercel ufficiale (Linux infra). Production ferma alla v0.1.12 (19 giorni fa).
+- **File coinvolti:** `web/lib/ssrf.ts` (entry point), poi cascata in `shared/net/ssrf.ts` (+ `./ip.js`, `./hostname.js`, `./string-coerce.js`). Pattern sistemico: **127 file in `shared/` usano `.js` extension** (convenzione ESM TypeScript corretta per node runtime).
+- **Errore Vercel (verificato 2026-05-06 con `vercel deploy`):**
   ```
+  ▲ Next.js 16.2.4 (Turbopack)
+  ./web/lib/ssrf.ts:12:1
   Module not found: Can't resolve '../../shared/net/ssrf.js'
-  Import traces:
-    ./web/lib/ssrf.ts → ./web/app/api/sessions/[id]/route.ts
-    ./web/lib/ssrf.ts → ./web/app/api/webhooks/route.ts
+  
+  → dopo fix superficiale (rimosso .js da web/lib/ssrf.ts), errore si propaga:
+  
+  ./shared/net/ssrf.ts:62:1
+  Module not found: Can't resolve './string-coerce.js'
+  Import traces: shared/net/ssrf.ts → web/app/api/about/route.ts
+                                    → web/app/api/webhooks/route.ts
   ```
-- **Causa probabile:** Turbopack (default in Next 16.2.2) non risolve gli import con estensione `.js` che puntano a file `.ts` fuori dal package `web/` (qui `dev-2/shared/net/ssrf.ts`). Il modulo esiste fisicamente, ma il resolver non fa il fallback `.js → .ts`. Webpack legacy gestiva questa convenzione ESM-style, Turbopack richiede setup esplicito o estensione corretta.
-- **Conseguenza:** `npm run build --prefix web` rotto → CI Vercel a rischio se non c'è una toolchain alternativa (verificare `vercel build` actual config). Fixato dal lato `next.config.ts` con `turbopack.resolveExtensions` o cambiando l'estensione da `.js` a `.ts` nei tre import.
-- **Storia:** introdotto da commit `43594a50` *(feat(web/webhooks): route test-ping through SSRF-guarded fetch)* + `d55e822d` *(feat(shared/net): add SSRF dispatcher)*. Emerso durante smoke test del fix CSP JSON-LD (2026-05-06).
-- **Fix proposto:**
-  - 🥇 Tentativo 1 (zero rischio): cambiare `from "../../shared/net/ssrf.js"` → `from "../../shared/net/ssrf"` nei 3 punti di `web/lib/ssrf.ts` (l'estensione esplicita non è obbligatoria con TS path resolution).
-  - 🥈 Tentativo 2: aggiungere a `web/next.config.ts` `turbopack: { resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'] }` per forzare il fallback.
-  - 🥉 Fallback: copiare `shared/net/ssrf.ts` come dipendenza locale di `web/` (rompe principio shared, sconsigliato).
-- **Verifica:** `npm run build --prefix web` deve completare senza error.
+- **Root cause:** Turbopack (default in Next 16.2) **non implementa il webpack-style `extensionAlias` `.js → .ts`** né il fallback automatico per import ESM con estensione esplicita verso file `.ts`. Le 127 occorrenze di `.js` in `shared/` sono **corrette per node ESM runtime** (cli/, tui/ le consumano direttamente con `node`), ma incompatibili con Turbopack quando consumate da `web/`.
+- **Storia:** introdotto da commit `43594a50` *(feat(web/webhooks): route test-ping through SSRF-guarded fetch)* + `d55e822d` *(feat(shared/net): add SSRF dispatcher)*. È la **prima volta che `web/` consuma `shared/`** nel progetto — prima della SSRF feature, nessun import cross-package esisteva. Bug latente da quando il commit è andato su master (quindi >19 giorni — last successful prod deploy precede 43594a50).
+- **Conseguenze a cascata:**
+  - `npm run build --prefix web` fallisce locale + Vercel (stesso errore Linux/Windows)
+  - Tentato fix superficiale `from "../../shared/net/ssrf"` (rimuove .js) → propaga il problema dentro `shared/net/ssrf.ts` stesso
+  - Il pattern .js NON va rimosso massivamente da `shared/` (127 file, romperebbe consumer node ESM)
+- **Fix da valutare in sessione dedicata** (in ordine di preferenza):
+  - 🥇 **Turbopack `transpilePackages`**: aggiungere a `web/next.config.ts` qualcosa come `transpilePackages: ['../shared']` per forzare Turbopack a transpilare `shared/` come fosse un workspace package. Da verificare se basta a triggerare il fallback `.js → .ts`.
+  - 🥈 **Fallback webpack**: `next build --webpack` (se ancora supportato in Next 16.2). Webpack ha `extensionAlias: { '.js': ['.ts', '.js'] }` nativo. Trade-off: build più lente, abbandono di Turbopack.
+  - 🥉 **Pre-build `shared/`**: aggiungere step `tsc` che compila `shared/*.ts → shared/*.js` in una `dist/` consumata da web. Più invasivo, richiede aggiornare anche cli/, tui/ per puntare a `dist/`.
+  - 🥉 **Workspace package proper**: convertire `shared/` in un `npm workspaces` package con `package.json` proprio + build step. Più clean ma refactor sostanziale.
+- **Verifica successo:** `vercel deploy` deve completare con stato `Ready`, URL preview accessibile, build log senza error.
+- **Tentati e falliti (2026-05-06):**
+  - ❌ Rimuovere `.js` solo da `web/lib/ssrf.ts` → propaga il problema un livello più in profondità (shared/net/ssrf.ts e i suoi 3 import).
+- **Memoria correlata:** `feedback_no_heavy_smoke_tests_stacking` (no build+dev consecutivi su Windows).
 
 ### 🔴 [BUG-TURBOPACK-MONOREPO-RESOLVE] `next dev` resolver cerca `tailwindcss` dal monorepo root
 
