@@ -79,13 +79,21 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `--dry-run` | off | Print every install/download/mutating action without executing any of them |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
-| `JHT_BRANCH` | `main` | Branch checked out in native mode |
+| `JHT_BRANCH` | `master` | Branch checked out in native mode + raw download base in Docker mode |
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
+| `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
-| `JHT_IMAGE` | `ghcr.io/leopu00/jht:latest` | Container image used by the wrapper |
+| `JHT_IMAGE` | `ghcr.io/leopu00/jht:latest` | Container image referenced by the compose |
+| `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for `docker-compose.yml` + `jht-wrapper.sh` downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
-### 🐳 Default path — Docker (5 steps)
+### 🐳 Default path — Docker (4 steps)
+
+> Since 2026-05-06 the Docker path follows the **host/container split**
+> design — see [`docs/internal/2026-05-06-host-container-split.md`](../internal/2026-05-06-host-container-split.md).
+> The wrapper does not run an ephemeral `docker run --rm` per command:
+> it dispatches to `docker compose` (lifecycle) or `docker exec` (operativity)
+> against a long-running `jht` container.
 
 1. **Detect system** — `uname -s` → macOS / Linux / WSL (`grep microsoft
    /proc/version`); on Linux/WSL also picks `apt` / `dnf` / `pacman`.
@@ -98,23 +106,20 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
      sudo.
 3. **Verify Docker** — `docker info`. On Linux falls back to `sudo docker
    info` if the user is not yet in the `docker` group.
-4. **Pull image** — `docker pull $IMAGE`. A failure here is non-fatal:
-   the wrapper is still installed and re-running the installer once the
-   image is published completes the install.
-5. **Write `jht` wrapper** — generates `$JHT_BIN_DIR/jht` as a small
-   shell script that:
-   - ensures Colima is up on macOS,
-   - mounts only `~/.jht` → `/jht_home` and `~/Documents/Job Hunter Team`
-     → `/jht_user` (sandbox),
-   - forwards a fixed allow-list of env vars used by the three supported
-     CLIs (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MOONSHOT_API_KEY`,
-     `CLAUDE_CODE_OAUTH_TOKEN`). These are intended as power-user
-     escape hatches — the default flow is subscription-based CLI
-     login inside the tmux session (see ADR 0004),
-   - publishes container port `3000`.
+4. **Download wrapper + compose** — `curl -fsSL` of:
+   - `$JHT_RAW_BASE/docker-compose.yml` → `$JHT_RUNTIME_DIR/docker-compose.yml`
+   - `$JHT_RAW_BASE/scripts/jht-wrapper.sh` → `$JHT_BIN_DIR/jht` (chmod +x)
 
-   The wrapper is intentionally bash-3.2-compatible (macOS) and avoids
-   bash arrays under `set -u`.
+   The image is **not pulled eagerly**: `jht up` (the first command the
+   user runs) does `docker compose up -d`, which pulls the image lazily
+   and starts the long-running container.
+
+   The wrapper is a thin (~165 LOC) host-side dispatcher: lifecycle
+   commands (`up`/`down`/`restart`/`recreate`/`upgrade`/`logs`/`status`/`shell`)
+   call `docker compose` / `docker logs` / `docker inspect`; everything
+   else is forwarded as `docker exec -it jht node /app/cli/bin/jht.js
+   <args>`. Auto-up: lifecycle of the container is transparent on
+   first run.
 
 ### 🛠️ Expert path — native (`--no-docker`, 7 steps)
 
@@ -157,6 +162,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `~/.jht/` (host) → `/jht_home` (container) | Config, `jobs.db`, agents, credentials |
 | `~/Documents/Job Hunter Team/` (host) → `/jht_user` (container) | CVs, generated outputs |
 | `$JHT_BIN_DIR/jht` (default `~/.local/bin/jht`) | The wrapper (Docker) or symlink (native) |
+| `$JHT_RUNTIME_DIR/docker-compose.yml` (default `~/.jht/runtime/`, Docker only) | The compose file the wrapper drives |
 | `$JHT_INSTALL_DIR` (default `~/.jht/src`, native only) | The cloned repo |
 
 If `$JHT_BIN_DIR` is not on `$PATH`, the script warns and prints the
@@ -210,27 +216,27 @@ Colima, no image pulled):
 
   mode:   Docker (isolato)
   image:  ghcr.io/leopu00/jht:latest
+  branch: master
+  runtime:$HOME/.jht/runtime
   dry-run: ON (nessuna modifica al sistema)
 
-[1/5] Rilevamento sistema
+[1/4] Rilevamento sistema
   ✓ macOS
 
-[2/5] Container runtime
+[2/4] Container runtime
   ▸ Installo Colima (runtime container Apache 2.0, no Docker Desktop)...
   [dry-run] would execute: brew install colima
   ✓ docker CLI gia' installato
   [dry-run] would execute: colima start (se non gia' attivo)
 
-[3/5] Verifica docker
+[3/4] Verifica docker
   [dry-run] would execute: docker info
 
-[4/5] Download immagine ghcr.io/leopu00/jht:latest
-  [dry-run] would execute: docker pull ghcr.io/leopu00/jht:latest
-
-[5/5] Wrapper jht (docker run)
-  [dry-run] would execute: mkdir -p $HOME/.local/bin
-  [dry-run] would write wrapper: $HOME/.local/bin/jht
-  [dry-run] wrapper launches: docker run --rm -v $HOME/.jht:/jht_home ...
+[4/4] Download wrapper + docker-compose.yml
+  [dry-run] would execute: mkdir -p $HOME/.jht/runtime $HOME/.local/bin
+  [dry-run] would download: …/master/docker-compose.yml -> $HOME/.jht/runtime/docker-compose.yml
+  [dry-run] would download: …/master/scripts/jht-wrapper.sh -> $HOME/.local/bin/jht
+  [dry-run] would execute: chmod +x $HOME/.local/bin/jht
 ```
 
 What `--dry-run` covers:
@@ -238,10 +244,9 @@ What `--dry-run` covers:
 - `brew install`, `apt-get install`, `dnf install`, `pacman -S`
 - `curl ... | bash` style one-liners (Homebrew, NodeSource)
 - `colima start`, `systemctl enable --now docker`, `service docker start`
-- `docker info`, `docker pull`
-- `git clone`, `git fetch`, `git reset`
-- `mkdir -p` on persistent paths, `chmod +x`, `ln -s`
-- wrapper-script heredoc at `$JHT_BIN_DIR/jht`
+- `docker info`, image pull (lazy on first `jht up`, no longer eager in install.sh)
+- `git clone`, `git fetch`, `git reset` (--no-docker path only)
+- `mkdir -p` on persistent paths, `chmod +x`, `curl -fsSL` of compose+wrapper
 - the final `jht setup` wizard (skipped in dry-run)
 
 What `--dry-run` intentionally does **not** do:
