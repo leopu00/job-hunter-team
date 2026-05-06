@@ -230,20 +230,40 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Problem:** dashboard queries Supabase ✅ (in production), but some widgets may still use mock data.
 - **Task:** audit `web/app/(protected)/dashboard/` component by component, identify and wire residual mocks.
 
+##### 🏗️ [JHT-INSTALL-SPLIT] Host/container split — wrapper bash + install.sh ridisegno ✅ partial DONE 2026-05-06
+
+- **Why prerequisite of [JHT-VPS-VALIDATE]:** install.sh Docker-mode era architettonicamente rotto per VPS. Il wrapper effimero `docker run --rm <image> "$@"` infilava il CLI Node dentro un container che non vedeva il daemon Docker dell'host → `jht setup` ok, `jht team start` 💥. Anche se l'utente avesse risolto, `docker-compose.yml` non era baked nell'immagine e il path Docker non clonava il repo, quindi `jht container up` non aveva un compose da usare.
+- **Design:** split in due ruoli del binario `jht`:
+  - host-side: wrapper bash sottile (~165 righe) che fa `docker compose` + `docker exec`
+  - container-side: il CLI Node attuale, raggiunto via `docker exec -it jht node /app/cli/bin/jht.js <args>`
+- **Done 2026-05-06:**
+  - Design doc completo: `docs/internal/2026-05-06-host-container-split.md`
+  - `scripts/jht-wrapper.sh` (wrapper bash con auto-up, lifecycle, exec proxy)
+  - `cli/src/utils/container-proxy.js` con branch IS_CONTAINER=1 (passthrough, retro-compat con il path "from source")
+  - `docker-compose.yml` riscritto image-only + production-friendly (no `build:`, no bind sorgenti)
+  - `docker-compose.dev.yml` nuovo override per dev workflow (build + bind hot-reload)
+  - `scripts/install.sh` Docker-mode da 5 → 4 step: scarica wrapper + compose da raw.github invece di generare wrapper inline + docker pull eager
+  - Aggiornati `docs/guides/quickstart.md`, `docs/guides/cli-install.md`
+  - Validazione full-flow in WSL Ubuntu 22.04 con immagine GHCR del 27/4: `jht up` → `status` → `--help` → `team list` → `logs` → `down` tutto verde
+- **Still open:** smoke test su VPS reale Hetzner — vedi [JHT-VPS-VALIDATE] sotto. Refactor cleanup di `cli/utils/container-proxy.js` (rimozione completa, oggi e' compat layer) deferito a post-launch — il passthrough basta per il design.
+
 ##### 🚀 [JHT-VPS-VALIDATE] Validate end-to-end setup on a real VPS ⬜ pre-launch — **tech-only / manual path**
 
 - **Scope:** this task validates the **manual SSH + one-liner** path only (tier 🥉 tech-user). The friendly UX for non-tech users is a separate task: see [JHT-VPS-FRIENDLY] in PHASE 3.
 - **Problem:** the VPS / cloud rental mode is our ⭐ target setup (see Vision), but we've never actually deployed JHT on a real VPS end-to-end. Today the recommended setup is unvalidated.
+- **Prerequisite:** [JHT-INSTALL-SPLIT] (✅ done 2026-05-06) — il flow `curl install.sh | bash` ora funziona davvero per il path Docker (prima era rotto su `jht team start`).
 - **Task:**
-  1. Pick one provider (Hetzner CX22 €4.5/mo is the easiest start)
+  1. Pick one provider (Hetzner CX22 €4.5/mo is the easiest start, CPX21 €5.5 if 2 GB are tight)
   2. Provision manually, run the install one-liner: `curl https://jobhunterteam.ai/install.sh | bash`
-  3. Configure provider subscription + start the team
-  4. Verify: container starts, agents come up, web dashboard reachable (via SSH tunnel or public IP), Telegram works, monitoring stays in window
-  5. Document gotchas, edge cases, missing dependencies, in `docs/VPS-SETUP.md` (new doc)
-- **Why:** until we've actually run this end-to-end, recommending VPS as the target setup is theoretical. Also: this validates that the install script + container + provider auth all work outside the maintainer's local PC.
+  3. `jht up` (lazy pull image + start container long-running)
+  4. `jht setup` (configure profile + provider)
+  5. `jht team start`
+  6. Verify: container starts, agents come up, web dashboard reachable (via SSH tunnel or public IP), Telegram works, monitoring stays in window
+  7. Document gotchas, edge cases, missing dependencies, in `docs/VPS-SETUP.md` (new doc)
+- **Why:** until we've actually run this end-to-end on a real VPS (not WSL simulation), recommending VPS as the target setup is theoretical. Also: this validates that the install script + container + provider auth all work outside the maintainer's local PC.
 - **Output:** working VPS deploy + `docs/VPS-SETUP.md` with step-by-step guide
 - **Bonus:** adds 1 cell to the test campaign matrix (provider × tier × persona, but on VPS instead of local)
-- **Design rationale:** see [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md) — explains why the manual path stays as fallback for tech users while the desktop wizard becomes the default for non-tech.
+- **Design rationale:** see [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md) — explains why the manual path stays as fallback for tech users while the desktop wizard becomes the default for non-tech. Implementation rationale: [`docs/internal/2026-05-06-host-container-split.md`](docs/internal/2026-05-06-host-container-split.md).
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
@@ -681,6 +701,14 @@ All 5 tasks from 04-22 have been implemented:
 - **Fix applicato:** `tui/tsconfig.json` con `rootDir: ".."` + `include: ["src/**/*", "../shared/credentials/passphrase.ts"]` (file singolo invece del glob, per non tirare dentro `storage.ts` che dipende da `shared/paths.js` — non in scope per la TUI). `tui/package.json` `start` aggiornato a `node dist/tui/src/tui.js` per riflettere la nuova struttura di output (`dist/tui/src/` + `dist/shared/credentials/`).
 - **Verifica locale:** `npm run build --prefix tui` ✅ verde, smoke-test runtime `import('./dist/shared/credentials/passphrase.js')` esporta `MissingPassphraseError` + `resolveJhtPassphrase`.
 - **Da verificare in CI:** `gh run list -w "Docker — Build & push"` deve tornare verde al primo push, e l'image GHCR deve riprendere il publish weekly.
+
+### 🟢 [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato
+
+- **File:** `cli/src/commands/doctor.js:19`
+- **Stato:** `cmdVersion(cmd)` usa `${cmd} --version` per tutti i binari, ma `tmux 3.3a` non riconosce `--version` (vuole `-V` maiuscolo) e ritorna usage + status 1. Risultato: doctor segnala "tmux: non trovato" anche su install validi (sia host con tmux apt-installato sia dentro al container JHT che ha `/usr/bin/tmux 3.3a` baked).
+- **Scoperto durante:** spike host/container split del 2026-05-06.
+- **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
+- **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
 ### 🟡 [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione
 
