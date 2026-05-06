@@ -1,7 +1,7 @@
 // Comando team start
 import { execSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, claudeAvailable, isSessionActive,
@@ -10,79 +10,139 @@ import {
 } from './agents.js';
 import { execInContainer } from '../../utils/container-proxy.js';
 
-// In container mode il default team e' solo CAPITANO: il bridge di
-// monitoraggio rate-limit nasce con lui da start-agent.sh, e il Capitano
-// poi scala il resto secondo le sue soglie (come fa la web UI via
-// /api/team/start-all). Su host legacy teniamo il default completo.
-const DEFAULT_TEAM_CONTAINER = ['capitano'];
-
 function shellEscape(value) {
   return String(value).replace(/'/g, "'\\''");
 }
 
+// Tick idle (default 10 min, range 1-60): il bridge usa questo come
+// ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
+// quando status CRITICO / host saturo / team operativo attivo. Stesso
+// fallback della web UI in /api/team/start-all/route.ts.
+function readSentinellaTickMinutes() {
+  try {
+    const cfg = JSON.parse(readFileSync(JHT_CONFIG_PATH, 'utf-8'));
+    const n = Number(cfg?.sentinella_tick_minutes);
+    if (Number.isFinite(n) && n >= 1 && n <= 60) return Math.round(n);
+  } catch { /* fallback */ }
+  return 10;
+}
+
+// Bootstrap container del team — replica `/api/team/start-all` (web UI).
+// Sequenza V5 ordinata (rivista 2026-04-26):
+//   1. SENTINELLA: tmux session + CLI boot + kick-off, da SOLA (cosi' e'
+//      pronta a ricevere il primo [BRIDGE TICK])
+//   2. BRIDGE: processo Python background (sentinel-bridge.py +
+//      pacing-bridge.py spawned da start-agent.sh quando role=bridge).
+//      Pre-delay 20s per dare tempo al CLI Sentinella di stabilizzarsi.
+//   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per ULTIMO
+//      cosi' quando parte il monitoring e' gia' stabile e ha almeno un
+//      sample fresco. Pre-delay 5s.
+// Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li
+// scala il Capitano secondo le sue soglie, leggendo lo stato Bridge.
+function buildContainerBootstrap() {
+  const tickMin = readSentinellaTickMinutes();
+  return [
+    { role: 'sentinella', session: 'SENTINELLA' },
+    {
+      role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
+      preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' },
+    },
+    {
+      role: 'capitano', session: 'CAPITANO',
+      preDelayMs: 5000, env: { JHT_TICK_INTERVAL: String(tickMin) },
+    },
+  ];
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 // ── Container mode ─────────────────────────────────────────────────
-function startActionContainer(agentArg, options = {}) {
+async function startActionContainer(agentArg, options = {}) {
   const mode = options.mode || 'default';
-  const targets = agentArg ? [agentArg] : DEFAULT_TEAM_CONTAINER;
+
+  // Senza arg: bootstrap completo (SENTINELLA + BRIDGE + CAPITANO),
+  // come fa la web UI. Con arg: lancia il singolo agente specificato.
+  const useBootstrap = !agentArg;
+  const bootstrap = useBootstrap ? buildContainerBootstrap() : null;
 
   console.log('');
   console.log(c.bold('Avvio agenti nel container jht...'));
-  console.log(c.dim(`  Mode: ${mode}`));
+  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: SENTINELLA + BRIDGE + CAPITANO' : ''}`));
   console.log('');
 
   let started = 0;
   let skipped = 0;
 
-  for (const target of targets) {
-    const parsed = parseAgentArg(target);
+  if (useBootstrap) {
+    for (const item of bootstrap) {
+      if (item.preDelayMs && item.preDelayMs > 0) {
+        console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
+        await sleep(item.preDelayMs);
+      }
+      const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session });
+      if (result === 'started') started++;
+      else if (result === 'skipped') skipped++;
+    }
+  } else {
+    const parsed = parseAgentArg(agentArg);
     if (!parsed) {
-      console.log(`  ${c.red('✗')} ${target} — ruolo non riconosciuto`);
-      continue;
-    }
-    const { role, instance } = parsed;
-    const sName = sessionName(role, instance);
-
-    if (isSessionActive(sName)) {
-      console.log(`  ${c.yellow('⏭')} ${sName} — gia attivo`);
-      skipped++;
-      continue;
-    }
-
-    // Delego tutto a /app/.launcher/start-agent.sh: template CLAUDE.md/
-    // AGENTS.md copy, env var, provider detection, tmux create, CLI
-    // launch, kick-off. L'arg instance va passato se multi.
-    const agent = AGENTS.find((a) => a.role === role);
-    const scriptArgs = agent.multi && instance ? [role, instance] : [role];
-    const quoted = scriptArgs.map((a) => `'${shellEscape(a)}'`).join(' ');
-    const prefix =
-      (mode === 'fast' ? 'JHT_MODE=fast ' : '') +
-      // Bootstrap default del bridge di monitoraggio (spawned dal Capitano).
-      // Il file jht.config.json sovrascrive dinamicamente, questo e' il
-      // fallback se il config non ha sentinella_tick_minutes.
-      (role === 'capitano' ? 'JHT_TICK_INTERVAL=10 ' : '');
-    const cmd = `${prefix}bash /app/.launcher/start-agent.sh ${quoted}`;
-    const r = execInContainer(cmd);
-    if (r.code === 0) {
-      console.log(`  ${c.green('✓')} ${sName} avviato`);
-      started++;
+      console.log(`  ${c.red('✗')} ${agentArg} — ruolo non riconosciuto`);
     } else {
-      const msg = (r.stderr || r.stdout || 'errore').split('\n').filter(Boolean).slice(-1)[0];
-      console.log(`  ${c.red('✗')} ${sName} — ${msg}`);
+      const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
+      if (result === 'started') started++;
+      else if (result === 'skipped') skipped++;
     }
   }
 
   console.log('');
   console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}`);
-  console.log(c.dim('  Il Capitano scalera' + ' gli altri agenti secondo le sue soglie.'));
+  if (useBootstrap) {
+    console.log(c.dim('  Il Capitano scalera' + ' gli altri agenti secondo le soglie del Bridge.'));
+  }
   console.log('');
 }
 
-export function startAction(agentArg, options) {
+function launchInContainer({ role, instance, mode, env, notATmuxSession, sessionLabel }) {
+  const sName = sessionLabel || sessionName(role, instance);
+
+  // Skip has-session check per i ruoli non-tmux (bridge): start-agent.sh
+  // gestisce il singleton internamente via /proc cmdline scan.
+  if (!notATmuxSession && isSessionActive(sName)) {
+    console.log(`  ${c.yellow('⏭')} ${sName} — gia attivo`);
+    return 'skipped';
+  }
+
+  const agent = AGENTS.find((a) => a.role === role);
+  const useInstance = agent?.multi && instance;
+  const scriptArgs = useInstance ? [role, instance] : [role];
+  const quoted = scriptArgs.map((a) => `'${shellEscape(a)}'`).join(' ');
+
+  const envParts = [];
+  if (mode === 'fast') envParts.push("JHT_MODE='fast'");
+  if (env) {
+    for (const [k, v] of Object.entries(env)) {
+      envParts.push(`${k}='${shellEscape(v)}'`);
+    }
+  }
+  const prefix = envParts.length ? envParts.join(' ') + ' ' : '';
+  const cmd = `${prefix}bash /app/.launcher/start-agent.sh ${quoted}`;
+  const r = execInContainer(cmd);
+  if (r.code === 0) {
+    console.log(`  ${c.green('✓')} ${sName} avviato`);
+    return 'started';
+  }
+  const msg = (r.stderr || r.stdout || 'errore').split('\n').filter(Boolean).slice(-1)[0];
+  console.log(`  ${c.red('✗')} ${sName} — ${msg}`);
+  return 'error';
+}
+
+export async function startAction(agentArg, options) {
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
-  // jht. Stessa identica logica della web UI, coerente col boot del
-  // bridge Sentinella e con le dipendenze CLI installate nell'immagine.
+  // jht. Stessa identica logica della web UI (/api/team/start-all),
+  // coerente col boot del bridge Sentinella e con le dipendenze CLI
+  // installate nell'immagine.
   if (usingContainer()) {
-    return startActionContainer(agentArg, options);
+    return await startActionContainer(agentArg, options);
   }
 
   if (!tmuxAvailable()) {
