@@ -247,23 +247,31 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - Validazione full-flow in WSL Ubuntu 22.04 con immagine GHCR del 27/4: `jht up` → `status` → `--help` → `team list` → `logs` → `down` tutto verde
 - **Still open:** smoke test su VPS reale Hetzner — vedi [JHT-VPS-VALIDATE] sotto. Refactor cleanup di `cli/utils/container-proxy.js` (rimozione completa, oggi e' compat layer) deferito a post-launch — il passthrough basta per il design.
 
-##### 🚀 [JHT-VPS-VALIDATE] Validate end-to-end setup on a real VPS ⬜ pre-launch — **tech-only / manual path**
+##### 🚀 [JHT-VPS-VALIDATE] Validate end-to-end setup on a real VPS ✅ DONE 2026-05-06 — **tech-only / manual path**
 
 - **Scope:** this task validates the **manual SSH + one-liner** path only (tier 🥉 tech-user). The friendly UX for non-tech users is a separate task: see [JHT-VPS-FRIENDLY] in PHASE 3.
-- **Problem:** the VPS / cloud rental mode is our ⭐ target setup (see Vision), but we've never actually deployed JHT on a real VPS end-to-end. Today the recommended setup is unvalidated.
-- **Prerequisite:** [JHT-INSTALL-SPLIT] (✅ done 2026-05-06) — il flow `curl install.sh | bash` ora funziona davvero per il path Docker (prima era rotto su `jht team start`).
-- **Task:**
-  1. Pick one provider (Hetzner CX22 €4.5/mo is the easiest start, CPX21 €5.5 if 2 GB are tight)
-  2. Provision manually, run the install one-liner: `curl https://jobhunterteam.ai/install.sh | bash`
-  3. `jht up` (lazy pull image + start container long-running)
-  4. `jht setup` (configure profile + provider)
-  5. `jht team start`
-  6. Verify: container starts, agents come up, web dashboard reachable (via SSH tunnel or public IP), Telegram works, monitoring stays in window
-  7. Document gotchas, edge cases, missing dependencies, in `docs/VPS-SETUP.md` (new doc)
-- **Why:** until we've actually run this end-to-end on a real VPS (not WSL simulation), recommending VPS as the target setup is theoretical. Also: this validates that the install script + container + provider auth all work outside the maintainer's local PC.
-- **Output:** working VPS deploy + `docs/VPS-SETUP.md` with step-by-step guide
-- **Bonus:** adds 1 cell to the test campaign matrix (provider × tier × persona, but on VPS instead of local)
-- **Design rationale:** see [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md) — explains why the manual path stays as fallback for tech users while the desktop wizard becomes the default for non-tech. Implementation rationale: [`docs/internal/2026-05-06-host-container-split.md`](docs/internal/2026-05-06-host-container-split.md).
+- **Done 2026-05-06:** primo bring-up end-to-end su VPS Hetzner CPX22 (Helsinki). Validati 8 step:
+  1. ✅ Provisioning Hetzner CPX22 (€9.75/mo, 4GB / 2 vCPU AMD EPYC, Ubuntu 24.04)
+  2. ✅ SSH key dedicata + verifica fingerprint
+  3. ✅ `curl install.sh | bash` (4 step Docker-mode, ~1 min totale)
+  4. ✅ `jht up` (pull immagine 750MB + start container long-running, 30s su Hetzner mirror)
+  5. ✅ `jht setup --non-interactive --provider claude --auth-method subscription --subscription-email`
+  6. ✅ `jht providers update claude` (in-container npm install di `@anthropic-ai/claude-code` 2.1.131)
+  7. ✅ Login OAuth device flow Claude Max via `docker exec -it jht claude` (subscription riconosciuta: "Opus 4.7 (1M context) · Claude Max")
+  8. ✅ `jht team start` → CAPITANO in tmux session interna al container
+- **Bug trovati e fixati durante il bring-up (su `dev-1`):**
+  - `11900977` install.sh aggiunge `docker-compose-v2` (Ubuntu 24.04 non lo include in `docker.io`)
+  - `86c08174` `setup --non-interactive` supporta `--subscription-email` (Zod schema richiedeva `subscription.email` ma flag mancante)
+  - `4b10a9db` `JHT_IMAGE` env override nel compose (test branch dev senza merge a master)
+  - `cb5b9bab` `providers update` IS_CONTAINER passthrough (no docker compose run dentro al container, npm install diretto in /jht_home/.npm-global) + `ensure_bind_owner` chown 1001:1001 sui bind dir su Linux (fix EACCES su VPS root uid 0)
+- **Bug noti residui (non-blocking per il VPS use case):**
+  - `[BUG-CLACK-TTY-DOCKER-EXEC]` — wizard interattivo non riceve frecce via docker exec (workaround: `--non-interactive` con tutti i flag, gia' tutti presenti)
+  - `[BUG-VPS-AUTH-TUNNEL]` — Supabase OAuth callback configurato solo per dominio prod, web UI auth non funziona via SSH tunnel `localhost:3000` (workaround: usare CLI / Telegram per gestire team su VPS; fix: aggiungere localhost agli additional redirect URLs Supabase)
+  - `[BUG-CSP-JSONLD-LANDING]` (riapertura) — fix dev-4 (`e48eebee`) incompleto, hydration mismatch su `nonce` JSON-LD persiste in produzione
+- **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
+- **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
+- **Bonus:** ✅ aggiunge 1 cell al test campaign matrix (Hetzner CPX22 / Linux Ubuntu 24.04 / Claude Max).
+- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md), implementation: [`docs/internal/2026-05-06-host-container-split.md`](docs/internal/2026-05-06-host-container-split.md), provider research: [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md).
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
@@ -721,7 +729,24 @@ All 5 tasks from 04-22 have been implemented:
 - **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
 - **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
-### ✅ [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione — FIXED 2026-05-06
+### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
+
+- **Sintomo:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost. L'utente non puo' completare l'auth lato VPS via tunnel.
+- **Scoperto:** primo bring-up VPS del 2026-05-06.
+- **Causa:** Supabase project ha solo `https://jobhunterteam.ai/**` come allowed redirect URLs. Manca `http://localhost:3000/**` per dev/tunnel mode.
+- **Workaround attuale:** usa CLI (`jht team status`, `jht sentinella tail`, `jht positions list`) o Telegram per gestire team su VPS senza web UI piena.
+- **Fix proposto:** (a) aggiungere `http://localhost:3000/**` agli additional redirect URLs nel dashboard Supabase project (Authentication → URL Configuration); (b) documentare il flow "tunnel + login" in `docs/guides/VPS-SETUP.md`; (c) per Phase 2 launcher, considerare un OAuth proxy locale che bypassa il problema.
+- **Priorita':** alta — la web UI e' la principale interfaccia "user-facing" della VPS. Senza, l'utente VPS deve usare solo CLI / Telegram, peggiora UX.
+
+### 🟡 [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch persiste in produzione (post-fix dev-4)
+
+- **Sintomo:** browser su `http://localhost:3000/?login=true` (via SSH tunnel da VPS) mostra console error "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties": server-rendered nonce `nonce="ULcGU/..."` vs client `nonce=""`.
+- **Stato:** il fix originale di [BUG-CSP-JSONLD-LANDING] (commit `e48eebee` su dev-4, mergato in master 2026-05-06) era pensato per separare server/client component, ma l'hydration mismatch persiste. Probabilmente `JsonLd.tsx` legge il nonce solo server-side ma il client React tenta hydration con `nonce=""` (default).
+- **Scoperto:** primo bring-up VPS del 2026-05-06 (l'utente ha aperto il browser sul tunnel e visto il warning React).
+- **Fix proposto:** verificare se il bug e' specifico al tunnel/dev mode o anche su prod (`https://jobhunterteam.ai`). Se cosmetico-only e l'app funziona, demote a 🟢. Investigare se Server Component `<JsonLd />` viene re-renderizzato come Client Component da qualche `'use client'` esterno.
+- **Priorita':** media — non blocca login/funzionalita', ma rumore nel console log + warning React fastidioso per dev e per chi apre browser console.
+
+### ✅ [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione — FIXED 2026-05-06 (riapertura come V2)
 
 - **File:** `web/app/components/landing/JsonLd.tsx` + `web/app/page.tsx` + nuovo `web/app/components/landing/LandingClient.tsx`
 - **Era:** in dev funziona (CSP `'unsafe-inline'`). In prod CSP `script-src 'self' 'nonce-XXX' 'strict-dynamic'` bloccava i `<script type="application/ld+json">` senza nonce → niente rich snippet Google (SoftwareApplication + WebSite schema).
