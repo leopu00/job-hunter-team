@@ -1,24 +1,24 @@
-# Job Hunter Team — Runtime container (root compose)
+# Job Hunter Team — Runtime container (production / utenti finali)
 #
-# Uso tipico:
-#   docker compose run --rm jht setup
-#   docker compose up -d jht
+# Questo compose e' il default per chi installa JHT via:
+#   curl -fsSL https://jobhunterteam.ai/install.sh | bash
+#
+# install.sh scarica questo file in ~/.jht/runtime/docker-compose.yml.
+# Il wrapper bash ~/.local/bin/jht lo usa per docker compose up/down/exec.
+#
+# Image-only: nessun bind dei sorgenti, nessun `build:`. Tutto cio' che
+# serve sta dentro l'immagine GHCR. Per il dev mode con hot-reload usa
+# docker-compose.dev.yml (override) — vedi commento in fondo al file.
 #
 # Stato persistente: bind-mount di ~/.jht (config nascosta) e
 # ~/Documents/Job Hunter Team (CV e output visibili).
-#
-# Nota: questo compose è separato da web/docker-compose.yml, che è
-# usato solo per lo sviluppo locale del frontend Next.js.
 
 services:
   jht:
     image: ghcr.io/leopu00/jht:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: jht
     # Override del CMD Dockerfile (--help): avvia la dashboard web
-    # (Next.js dev su :3000 + infra) e resta in foreground.
+    # (Next.js su :3000 + infra) e resta in foreground come PID 1.
     command: ["dashboard", "--no-browser"]
     environment:
       # HOME points at the bind-mounted /jht_home so CLI credential
@@ -27,6 +27,10 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
+      # IS_CONTAINER=1 abilita il passthrough in cli/src/utils/container-proxy.js:
+      # le funzioni che oggi farebbero `docker exec jht ...` eseguono
+      # comandi locali (siamo gia' nel posto giusto). Vedi
+      # docs/internal/2026-05-06-host-container-split.md.
       - IS_CONTAINER=1
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -34,36 +38,28 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       # Inotify su bind-mount Windows+WSL2 non fa sempre propagare gli
-      # eventi di modifica: forziamo il polling sia per webpack (fallback)
-      # sia per Turbopack di Next 16.
+      # eventi di modifica: polling generale per Next.js / Turbopack.
+      # Innocuo su VPS Linux dove inotify funziona nativo.
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
       - TURBOPACK_WATCH_POLL=true
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
-      # ── Dev bind-mounts ────────────────────────────────────────────
-      # Sorgenti del repo montati dentro /app per hot-reload senza
-      # dover ricostruire l'immagine ad ogni modifica.
-      #   - web/: Next dev-server ricompila quando cambiano i .ts/.tsx
-      #   - agents/: prompt markdown letti da start-agent.sh al lancio
-      #   - shared/: skill Python condivise chiamate dagli agenti
-      # Gli anonymous volumes dopo mascherano node_modules/.next cosi'
-      # i binari linux installati nell'immagine restano intatti anche
-      # se l'host e' Windows/Mac (non hanno un node_modules compatibile).
-      - ./web:/app/web
-      - /app/web/node_modules
-      - /app/web/.next
-      - ./agents:/app/agents
-      - ./shared:/app/shared
-      # .launcher/ contiene start-agent.sh e sentinel-ticker.py: modificati
-      # di frequente in dev. Senza bind-mount il container userebbe la
-      # copia baked dell'immagine e servirebbe un docker cp manuale ad ogni fix.
-      - ./.launcher:/app/.launcher
     ports:
       # Bind solo a 127.0.0.1: previene LAN access. Per esporre in rete,
-      # mettere il container dietro un reverse proxy (nginx/traefik).
+      # mettere il container dietro un reverse proxy (nginx/traefik) o
+      # un tunnel Tailscale.
       - "127.0.0.1:3000:3000"
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+# ── Dev mode ────────────────────────────────────────────────────────────
+#
+# Per sviluppare con hot-reload dei sorgenti (web/, agents/, shared/,
+# .launcher/) usa l'override docker-compose.dev.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Build l'immagine localmente dal Dockerfile invece di pullare da GHCR.
