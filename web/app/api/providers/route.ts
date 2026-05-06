@@ -305,8 +305,8 @@ export async function POST(req: Request) {
     providerId,
     stoppedSessions: stopped,
     installedVersion,
-    stdout: (r.stdout || '').trim(),
-    stderr: (r.stderr || '').trim(),
+    stdout: String(r.stdout || '').trim(),
+    stderr: String(r.stderr || '').trim(),
     code: r.status,
   }, { status: ok ? 200 : 500 })
 }
