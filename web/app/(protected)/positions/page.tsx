@@ -95,7 +95,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       .select('legacy_id')
       .eq('user_id', user.id)
       .not('legacy_id', 'is', null)
-    syncedIds = new Set((data ?? []).map((r) => r.legacy_id).filter((x): x is number => typeof x === 'number'))
+    syncedIds = new Set((data ?? []).map((r: { legacy_id: number | null }) => r.legacy_id).filter((x: number | null): x is number => typeof x === 'number'))
   }
 
   // Applica filtro sync dopo aver caricato syncedIds. Una position senza
