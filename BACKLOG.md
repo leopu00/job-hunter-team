@@ -684,13 +684,17 @@ All 5 tasks from 04-22 have been implemented:
   - Workaround minimo (sconsigliato, duplica codice): copiare `passphrase.ts` dentro `tui/src/`.
 - **Verifica:** `docker compose build jht` localmente deve passare + `gh run list -w "Docker — Build & push"` deve tornare verde.
 
-### 🟡 [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione
+### ✅ [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione — FIXED 2026-05-06
 
-- **File:** `web/app/components/landing/JsonLd.tsx`
-- **Stato:** in dev funziona (CSP usa `'unsafe-inline'`). In produzione il CSP è `script-src 'self' 'nonce-XXX' 'strict-dynamic'`: il browser blocca `<script type="application/ld+json">` senza nonce → si perde il rich snippet di Google (SoftwareApplication + WebSite schema) sulla landing.
-- **Causa:** `app/page.tsx` ha `'use client'` e importa `<JsonLd />`. `JsonLd` per leggere il nonce dovrebbe usare `next/headers`, che è solo Server. Tolto `getNonce()` come quick fix per sbloccare il dev mode.
-- **Fix proposto:** spostare `<JsonLd />` da `app/page.tsx` a un Server Component più alto (es. `app/layout.tsx` per la landing, o un nuovo `app/(landing)/layout.tsx` con guard `pathname === '/'`), poi rimettere `getNonce()` + `nonce={nonce}` sui due `<script>`.
-- **Riferimenti:** introdotto dal commit CSP `cda78a17`, fixato parzialmente dal cleanup successivo.
+- **File:** `web/app/components/landing/JsonLd.tsx` + `web/app/page.tsx` + nuovo `web/app/components/landing/LandingClient.tsx`
+- **Era:** in dev funziona (CSP `'unsafe-inline'`). In prod CSP `script-src 'self' 'nonce-XXX' 'strict-dynamic'` bloccava i `<script type="application/ld+json">` senza nonce → niente rich snippet Google (SoftwareApplication + WebSite schema).
+- **Causa:** `app/page.tsx` era `'use client'` (per `useSearchParams`/`useRouter`/`useState` del toggle `?login=true`) e importava `<JsonLd />` come figlio. `getNonce()` usa `next/headers` → server-only, non utilizzabile dentro a Client Component.
+- **Fix applicato (split server/client):**
+  1. `JsonLd.tsx` → `async` + `await getNonce()` + `nonce={nonce}` sui due `<script>` (stesso pattern di `BreadcrumbJsonLd.tsx`).
+  2. Nuovo `LandingClient.tsx` `'use client'` → contiene `LandingI18nProvider` + `LoginPage` + `BackButton` + icone Google/GitHub + tutta la logica interattiva.
+  3. `page.tsx` → Server Component `async` che legge `searchParams` (`login`, `error`), renderizza `<JsonLd />` + `<LandingClient wantsLogin authError />`.
+- **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
+- **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
 ---
 
