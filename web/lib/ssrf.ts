@@ -3,14 +3,21 @@
  *
  * Centralised so route handlers do not each invent their own private-IP
  * heuristics. The validation primitives live in
- * [`shared/net/ssrf.ts`](../../shared/net/ssrf.ts) — this file just bundles
- * the policies that actually apply to JHT's web routes.
+ * [`./net/ssrf.ts`](./net/ssrf.ts) — this file just bundles the policies
+ * that actually apply to JHT's web routes.
+ *
+ * NB: i primitives vivono dentro `web/lib/net/` invece che in `shared/net/`
+ * perché Turbopack (Next 16) non risolve correttamente cross-package import
+ * + npm packages (ipaddr.js) consumati da file fuori dal project root.
+ * Vedi BUG-TURBOPACK-SHARED-RESOLVE in BACKLOG.md per la storia completa.
+ * `shared/net/` resta in repo come riferimento OpenClaw originale e per
+ * eventuali futuri consumer non-web (cli/, tui/) che useranno node ESM.
  */
 
-import { safeFetch, type SafeFetchOptions, type SsrFPolicy } from "../../shared/net/ssrf.js";
+import { safeFetch, type SafeFetchOptions, type SsrFPolicy } from "./net/ssrf";
 
-export { safeFetch, SsrFBlockedError, validateUrl } from "../../shared/net/ssrf.js";
-export type { SafeFetchOptions, SsrFPolicy } from "../../shared/net/ssrf.js";
+export { safeFetch, SsrFBlockedError, validateUrl } from "./net/ssrf";
+export type { SafeFetchOptions, SsrFPolicy } from "./net/ssrf";
 
 /**
  * Strict policy: block all private/loopback/link-local/special-use targets.
