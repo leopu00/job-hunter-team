@@ -37,7 +37,14 @@ def get_db() -> sqlite3.Connection:
 
 
 def ensure_schema(conn: sqlite3.Connection):
-    """Crea le tabelle se non esistono (schema V2)."""
+    """Crea le tabelle se non esistono (schema V3).
+
+    La migrazione retroattiva v2→v3 (CHECK su positions.status) viene
+    eseguita PRIMA del CREATE TABLE IF NOT EXISTS, così i CREATE TRIGGER
+    IF NOT EXISTS più sotto ricreano i trigger anti-'now' che il DROP
+    TABLE della migrazione butta via insieme ai loro vincoli.
+    """
+    _migrate_v2_to_v3(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,7 +82,9 @@ def ensure_schema(conn: sqlite3.Connection):
         found_by TEXT,
         found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deadline TEXT,
-        status TEXT DEFAULT 'new',
+        status TEXT DEFAULT 'new' CHECK (status IN (
+            'new','checked','scored','writing','ready','applied','response','excluded'
+        )),
         notes TEXT,
         last_checked TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id)
@@ -208,8 +217,78 @@ def ensure_schema(conn: sqlite3.Connection):
       );
     END;
     """)
-    conn.execute("PRAGMA user_version = 2")
+    conn.execute("PRAGMA user_version = 3")
     conn.commit()
+
+
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """Aggiunge CHECK su positions.status per DB già su user_version 2.
+
+    SQLite non supporta `ALTER TABLE ADD CHECK`: serve il rituale
+    create-new + copy + drop + rename. Eseguito solo se la versione
+    sul disco è esattamente 2 (DB nuovi finiscono già a 3 via il
+    CREATE TABLE qui sopra; DB più vecchi non sono mai esistiti in
+    produzione).
+
+    Idempotente: se positions ha già il CHECK, l'INSERT passa e la
+    rename ha lo stesso schema → operazione no-op semantica. Se un
+    valore non-canonico fosse presente, l'INSERT fallirebbe; in tal
+    caso meglio fail-fast che corruzione silenziosa.
+    """
+    current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if current_version != 2:
+        return
+
+    schema_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'"
+    ).fetchone()
+    if schema_row:
+        # Marker preciso: la stringa "check(statusin" (whitespace strip + upper)
+        # è univoca al CHECK constraint che vogliamo. Una guard naive su 'CHECK'
+        # falsa-positivava sulla colonna `last_checked`.
+        sql_norm = ''.join((schema_row['sql'] or '').upper().split())
+        if 'CHECK(STATUSIN' in sql_norm:
+            return  # già migrato (es. DB ricreato da un client più recente)
+
+    conn.executescript("""
+        CREATE TABLE positions_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            company TEXT NOT NULL,
+            company_id INTEGER,
+            location TEXT,
+            remote_type TEXT,
+            salary_declared_min INTEGER,
+            salary_declared_max INTEGER,
+            salary_declared_currency TEXT DEFAULT 'EUR',
+            salary_estimated_min INTEGER,
+            salary_estimated_max INTEGER,
+            salary_estimated_currency TEXT DEFAULT 'EUR',
+            salary_estimated_source TEXT,
+            url TEXT,
+            source TEXT,
+            jd_text TEXT,
+            requirements TEXT,
+            found_by TEXT,
+            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deadline TEXT,
+            status TEXT DEFAULT 'new' CHECK (status IN (
+                'new','checked','scored','writing','ready','applied','response','excluded'
+            )),
+            notes TEXT,
+            last_checked TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id)
+        );
+
+        INSERT INTO positions_new SELECT * FROM positions;
+        DROP TABLE positions;
+        ALTER TABLE positions_new RENAME TO positions;
+
+        CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+        CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
+        CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
+        CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
+    """)
 
 
 def resolve_company_id(conn: sqlite3.Connection, company_name: str):

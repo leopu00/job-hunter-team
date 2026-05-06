@@ -1,7 +1,8 @@
-# Database Schema — jobs.db (V2)
+# Database Schema — jobs.db (V3)
 
-**Aggiornato**: 2026-04-28
-**Schema version**: `PRAGMA user_version = 2`
+**Aggiornato**: 2026-05-06
+**Schema version**: `PRAGMA user_version = 3`
+**Cambio rispetto a V2**: aggiunto `CHECK` constraint su `positions.status` (vedi tabella positions sotto). Migrazione retroattiva automatica via `_migrate_v2_to_v3()` in `shared/skills/_db.py`.
 **Path**: `$JHT_HOME/jobs.db` (canonical) — fallback `shared/data/jobs.db` per uso fuori container
 **Skill scripts**: `shared/skills/`
 
@@ -50,7 +51,7 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | found_by | TEXT | | Chi l'ha trovata (scout-1, etc.) |
 | found_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando trovata |
 | deadline | TEXT | | Scadenza (YYYY-MM-DD o "non presente") |
-| status | TEXT | new | new → checked → scored → writing → ready → applied → response · `excluded` da qualsiasi step |
+| status | TEXT | new | new → checked → scored → writing → ready → applied → response · `excluded` da qualsiasi step. **V3: vincolato da `CHECK` constraint** — i valori non in questa lista vengono rigettati con `IntegrityError`. |
 | notes | TEXT | | Note libere |
 | last_checked | TIMESTAMP | | Ultima verifica link/JD |
 
