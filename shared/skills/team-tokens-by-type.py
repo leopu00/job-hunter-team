@@ -48,6 +48,7 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_DIR = JHT_HOME / ".kimi" / "sessions"
 CLAUDE_DIR = JHT_HOME / ".claude" / "projects"
 CLAUDE_AGENT_PREFIX = "-jht-home-agents-"
+CODEX_DIR = JHT_HOME / ".codex" / "sessions"
 
 
 def _parse_iso_to_ts(s) -> float:
@@ -142,6 +143,64 @@ def _collect_claude(events: list, since_ts: float) -> None:
                 continue
 
 
+def _collect_codex(events: list, since_ts: float) -> None:
+    """Aggrega last_token_usage da rollout-*.jsonl Codex.
+
+    Mapping ai 4 tipi del chart team-tokens-by-type:
+      • input_other  = input_tokens - cached_input_tokens (input "fresco")
+      • output       = output_tokens + reasoning_output_tokens
+      • cache_read   = cached_input_tokens
+      • cache_creation = 0 (Codex non distingue cache creation come Kimi/Claude)
+    Salta i token_count senza info (snapshot rate-limit pre-call).
+    """
+    if not CODEX_DIR.exists():
+        return
+    cutoff = since_ts - 3600
+    for rollout in CODEX_DIR.rglob("rollout-*.jsonl"):
+        try:
+            mtime = rollout.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff:
+            continue
+        try:
+            with rollout.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if e.get("type") != "event_msg":
+                        continue
+                    pl = e.get("payload") or {}
+                    if pl.get("type") != "token_count":
+                        continue
+                    tu = (pl.get("info") or {}).get("last_token_usage")
+                    if not isinstance(tu, dict):
+                        continue
+                    ts_raw = e.get("timestamp")
+                    ts = _parse_iso_to_ts(ts_raw) if isinstance(ts_raw, str) else 0.0
+                    if ts <= 0 or ts < since_ts:
+                        continue
+                    in_total = float(tu.get("input_tokens", 0) or 0)
+                    cached = float(tu.get("cached_input_tokens", 0) or 0)
+                    out_t = float(tu.get("output_tokens", 0) or 0)
+                    reasoning = float(tu.get("reasoning_output_tokens", 0) or 0)
+                    fresh_input = max(0.0, in_total - cached)
+                    events.append((
+                        ts,
+                        fresh_input,
+                        out_t + reasoning,
+                        cached,
+                        0.0,
+                    ))
+        except OSError:
+            continue
+
+
 def build_series(events, since_ts: float, now_ts: float, bucket_sec: int):
     """Bucket fissi nel range [since_ts, now_ts] con cumulativo team per
     ogni tipo. Ritorna list[dict]."""
@@ -193,6 +252,7 @@ def main():
     events: list = []
     _collect_kimi(events, since_ts)
     _collect_claude(events, since_ts)
+    _collect_codex(events, since_ts)
 
     series, totals = build_series(events, since_ts, now_ts, args.bucket_sec)
     out = {
