@@ -441,17 +441,35 @@ def format_message(d: dict) -> str:
         parts.append(f"sotto_soglia: {skipped_names}")
 
     v = d["verdict"]
+    # Damping anti-oscillazione: il capitano risponde con interventi binari
+    # (throttle 30s o reset 0s) → fract_pct grandi causano swing ±50% tra
+    # tick adiacenti. Cap a 25% e suggerisci correzione GRADUALE solo sul
+    # top consumer, mai tutto-il-team o reset globale. Identifica il
+    # nome dell'agente con kt-share massima per nominalizzarlo nel verdict.
+    cap_pct = min(25.0, float(v.get("frac_pct") or 0))
+    top_consumer = None
+    if d.get("agents"):
+        sorted_agents = sorted(
+            d["agents"], key=lambda a: a.get("share", 0) or 0, reverse=True,
+        )
+        if sorted_agents:
+            top_consumer = sorted_agents[0].get("name")
+    top_hint = f" (top consumer: {top_consumer})" if top_consumer else ""
     if v["kind"] == "SFORO":
         parts.append(
             f"VERDETTO: SFORO +{v['delta']:.2f}%/h sopra target → "
-            f"riduci la velocità del team del {v['frac_pct']:.0f}% "
-            f"applicando pause agli agenti più veloci."
+            f"riduci la velocità del team del {cap_pct:.0f}%"
+            f"{top_hint}. Aggiungi 10-15s di throttle SOLO al top consumer "
+            f"(jht-throttle.py set <agente> +10), NON applicare a tutti, "
+            f"NON resettare gli altri."
         )
     elif v["kind"] == "MARGINE":
         parts.append(
             f"VERDETTO: MARGINE −{v['delta']:.2f}%/h sotto target → "
-            f"puoi accelerare il team del {v['frac_pct']:.0f}% "
-            f"(rimuovi throttle / spawna)."
+            f"puoi accelerare il team del {cap_pct:.0f}%"
+            f"{top_hint}. Riduci di 10-15s il throttle SOLO al top consumer "
+            f"(jht-throttle.py set <agente> -10), oppure spawna 1 agente "
+            f"in più; NON resettare tutto a 0."
         )
     elif v["kind"] == "ALLINEATO":
         parts.append(
