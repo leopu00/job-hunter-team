@@ -749,6 +749,26 @@ All 5 tasks from 04-22 have been implemented:
 - **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
 - **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
+### 🔴 [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accetta il "Bypass Permissions" prompt di Claude Code 2.1+
+
+- **Sintomo:** `jht team start` su VPS dev-1 (commit `6958fb42`, immagine GHCR del 2026-05-07): bootstrap mostra "✓ CAPITANO avviato" ma attaching alla sessione tmux interna (`docker exec -it jht tmux attach -t CAPITANO`) rivela che claude e' uscito immediatamente e il pane mostra il prompt bash. Stesso fato per SENTINELLA (probabilmente). Solo BRIDGE (Python, no claude CLI) gira correttamente.
+- **Causa:** Claude Code 2.1.x mostra un warning prompt al primo run anche con `--dangerously-skip-permissions`:
+  ```
+  WARNING: Claude Code running in Bypass Permissions mode
+    _ 1. No, exit          ← default
+      2. Yes, I accept
+    Enter to confirm
+  ```
+  `start-agent.sh` fa auto-`Enter` cieco (`sleep 4 && tmux send-keys Enter && sleep 3 && tmux send-keys Enter`) assumendo versioni precedenti dove `--dangerously-skip-permissions` bypassava il prompt. Il primo Enter ora seleziona "1. No, exit" → claude exit pulito → bash prompt orfano. Risultato: il Capitano e' un fantasma — sessione tmux esiste, log /tmp/sentinel-bridge.log scrive, ma il LLM non gira.
+- **Scoperto:** primo retest VPS Hetzner del 2026-05-07 dopo fix bootstrap commit `6958fb42`.
+- **Fix proposti** (in ordine di pulizia):
+  1. **Pre-creare `~/.claude/settings.json`** con `"hasTrustDialogAccepted": true` (o equivalente) in `start-agent.sh` prima del primo lancio claude. Approccio piu' robusto, niente race condition con send-keys.
+  2. **Cambiare il send-keys** da `Enter` a `Down + Enter`, o `2 + Enter`. Fragile (dipende dal layout esatto del prompt — se claude cambia i numeri/labels rompe).
+  3. **Detect del prompt e response condizionale** (capture-pane → grep "Bypass Permissions" → send Down/Enter). Robusto ma piu' codice.
+- **Priorita':** 🔴 BLOCKER — il team JHT su VPS NON funziona senza questo fix. Il bootstrap CLI (commit `6958fb42`) sembra OK ma il Capitano non gira realmente, quindi la pipeline e' inerte.
+- **Bug analogo verificare:** anche `SENTINELLA` lancia claude via start-agent.sh — probabilmente lo stesso fate. Verificare con `docker exec -it jht tmux attach -t SENTINELLA` se vedi bash prompt o claude vivo.
+- **Workaround temporaneo:** dopo `jht team start`, manualmente `docker exec -it jht tmux attach -t CAPITANO`, premere `↓ + Enter` al prompt warning (replica per SENTINELLA). Detach con `Ctrl+B Ctrl+B d`.
+
 ### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
 
 - **Sintomo:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost. L'utente non puo' completare l'auth lato VPS via tunnel.
