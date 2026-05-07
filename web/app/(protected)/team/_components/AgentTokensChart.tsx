@@ -99,7 +99,7 @@ export default function AgentTokensChart() {
           </h2>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
             {mode === 'cumulative'
-              ? 'Consumo cumulativo weighted (Kimi · wire.jsonl). Aggiornamento ogni 30s.'
+              ? 'Consumo cumulativo weighted (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Aggiornamento ogni 30s.'
               : 'Velocità di consumo per bucket — kT/min weighted. Aggiornamento ogni 30s.'}
           </p>
         </div>
