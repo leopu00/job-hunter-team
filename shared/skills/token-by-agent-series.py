@@ -70,6 +70,10 @@ KIMI_DIR = JHT_HOME / ".kimi" / "sessions"
 # diverso da Kimi (vedi `read_claude_events`).
 CLAUDE_DIR = JHT_HOME / ".claude" / "projects"
 CLAUDE_AGENT_PREFIX = "-jht-home-agents-"
+# Codex (OpenAI): rollout-*.jsonl sotto ~/.codex/sessions/YYYY/MM/DD/.
+# Il binding sessione→agente arriva direttamente dal `session_meta`
+# iniziale: payload.cwd = "/jht_home/agents/<role>" → agent = basename.
+CODEX_DIR = JHT_HOME / ".codex" / "sessions"
 
 
 def _extract_agent_from_text(text: str):
@@ -171,6 +175,26 @@ def billing_weighted_claude(usage: dict) -> float:
     )
 
 
+def billing_weighted_codex(usage: dict) -> float:
+    """Costo weighted di un evento token Codex (event_msg/token_count).
+
+    Lo schema Codex riporta `input_tokens` come totale grezzo che INCLUDE
+    la quota cached: per allinearsi alla definizione Kimi (input_other =
+    input fresco non cached) sottraiamo `cached_input_tokens`. Output
+    somma sia `output_tokens` (testo finale) sia `reasoning_output_tokens`
+    (chain-of-thought interna), entrambi fatturati. Pesi 1.0/1.0/0.0
+    coerenti con Kimi K2 per evitare scale divergenti nel chart unificato.
+    """
+    if not isinstance(usage, dict):
+        return 0.0
+    in_t = int(usage.get("input_tokens", 0) or 0)
+    cached = int(usage.get("cached_input_tokens", 0) or 0)
+    out_t = int(usage.get("output_tokens", 0) or 0)
+    reasoning = int(usage.get("reasoning_output_tokens", 0) or 0)
+    fresh_input = max(0, in_t - cached)
+    return float(fresh_input * W_INPUT + (out_t + reasoning) * W_OUTPUT)
+
+
 def _parse_iso_to_ts(s) -> float:
     """ISO string → epoch unix. Tollera 'Z' e timezone offset."""
     if not isinstance(s, str):
@@ -270,14 +294,78 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
                 continue
 
 
+def _collect_codex(by_agent: dict, since_ts: float) -> None:
+    """Estende by_agent con eventi token Codex sotto ~/.codex/sessions/.
+
+    Ogni rollout-*.jsonl è una sessione Codex CLI con:
+      • prima riga `type=session_meta` → payload.cwd = "/jht_home/agents/<role>"
+        (basename → nome agente, fallback "?unknown" se assente)
+      • righe `type=event_msg` con payload.type=token_count → payload.info
+        contiene last_token_usage = {input_tokens, cached_input_tokens,
+        output_tokens, reasoning_output_tokens, total_tokens}.
+        Il PRIMO token_count di ogni sessione ha info=null (snapshot
+        rate-limit pre-call) e va saltato.
+
+    Filtro mtime: i rollout chiusi prima di since_ts - 1h vengono saltati
+    senza aprirli, per non costare O(n_files) ad ogni tick del bridge.
+    """
+    if not CODEX_DIR.exists():
+        return
+    cutoff = since_ts - 3600
+    for rollout in CODEX_DIR.rglob("rollout-*.jsonl"):
+        try:
+            mtime = rollout.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff:
+            continue
+        agent = None
+        try:
+            with rollout.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    typ = e.get("type")
+                    pl = e.get("payload") or {}
+                    if typ == "session_meta":
+                        cwd = pl.get("cwd") or ""
+                        if isinstance(cwd, str) and cwd:
+                            agent = Path(cwd).name.lower() or None
+                        continue
+                    if typ != "event_msg":
+                        continue
+                    if pl.get("type") != "token_count":
+                        continue
+                    info = pl.get("info") or {}
+                    last = info.get("last_token_usage")
+                    if not isinstance(last, dict):
+                        continue
+                    ts_raw = e.get("timestamp")
+                    ts = _parse_iso_to_ts(ts_raw) if isinstance(ts_raw, str) else 0.0
+                    if ts <= 0 or ts < since_ts:
+                        continue
+                    w = billing_weighted_codex(last)
+                    if w <= 0:
+                        continue
+                    by_agent[agent or "?unknown"].append((ts, float(w)))
+        except OSError:
+            continue
+
+
 def collect_events(since_ts: float):
     """Aggrega eventi token weighted per ogni agente da TUTTI i provider
-    locali (Kimi wire.jsonl + Claude project jsonl). Ritorna dict[agent]
-    -> list[(ts, weighted)] ordinato cronologicamente.
+    locali (Kimi wire.jsonl + Claude project jsonl + Codex rollout JSONL).
+    Ritorna dict[agent] -> list[(ts, weighted)] ordinato cronologicamente.
     """
     by_agent: dict = defaultdict(list)
     _collect_kimi(by_agent, since_ts)
     _collect_claude(by_agent, since_ts)
+    _collect_codex(by_agent, since_ts)
     for a in by_agent:
         by_agent[a].sort()
     return by_agent
