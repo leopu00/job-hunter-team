@@ -23,8 +23,12 @@
 # ║  Opzioni (env var / flag):                                               ║
 # ║    --no-docker             Salta il container, installa nativo (expert)  ║
 # ║    --dry-run               Mostra solo le azioni che verrebbero eseguite ║
-# ║    JHT_BRANCH=dev-1        Branch sorgente per wrapper+compose           ║
-# ║                            (default: master)                             ║
+# ║    --branch <name>         Branch sorgente per wrapper+compose           ║
+# ║                            (equivalente a JHT_BRANCH=<name>, default     ║
+# ║                            master). Esempio per testare dev-1:           ║
+# ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
+# ║    JHT_BRANCH=dev-1        Branch sorgente (env var, alternativa a       ║
+# ║                            --branch). default: master                    ║
 # ║    JHT_INSTALL_DIR         Dove clonare la repo (default: $HOME/.jht/src,║
 # ║                            usato solo da --no-docker)                    ║
 # ║    JHT_RUNTIME_DIR         Dove scaricare docker-compose.yml             ║
@@ -53,27 +57,43 @@ INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
 BIN_DIR="${JHT_BIN_DIR:-$HOME/.local/bin}"
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
-RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
 MIN_NODE_MAJOR=22
 
 # ── Argomenti ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
 DRY_RUN=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-docker) USE_DOCKER=0 ;;
-    --with-docker) USE_DOCKER=1 ;;  # alias retro-compat
-    --dry-run) DRY_RUN=1 ;;
+# Position-based parser: gestisce sia flag standalone (--no-docker) sia
+# coppie key/value (--branch dev-1). Non usiamo `for arg in "$@"` perche'
+# perde il legame tra --branch e il valore successivo.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-docker) USE_DOCKER=0; shift ;;
+    --with-docker) USE_DOCKER=1; shift ;;  # alias retro-compat
+    --dry-run) DRY_RUN=1; shift ;;
+    --branch)
+      # Override esplicito della branch, equivalente a JHT_BRANCH=<name>.
+      # Utile per testare branch dev-N senza set dell'env var
+      # (BUG-INSTALL-BRANCH-MASTER-DEFAULT). Vince su JHT_BRANCH se entrambi.
+      [ -n "${2:-}" ] || { printf "%s richiede un argomento\n" "$1" >&2; exit 2; }
+      BRANCH="$2"
+      shift 2
+      ;;
+    --branch=*) BRANCH="${1#*=}"; shift ;;
     -h|--help)
       sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
-      printf "Argomento non riconosciuto: %s\n" "$arg" >&2
+      printf "Argomento non riconosciuto: %s\n" "$1" >&2
       exit 2
       ;;
   esac
 done
+
+# RAW_BASE va calcolato DOPO arg parsing perche' `--branch` puo' aver
+# sovrascritto $BRANCH. Senza, lo --branch non avrebbe effetto sui download
+# di docker-compose.yml e jht-wrapper.sh in download_runtime_files().
+RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
 
 # ── Colori ────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
