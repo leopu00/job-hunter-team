@@ -507,10 +507,14 @@ def format_message(d: dict) -> str:
     top_consumer = None
     if d.get("agents"):
         productive = [a for a in d["agents"] if a.get("name") not in NON_PRODUCTIVE]
-        sorted_agents = sorted(
-            productive or d["agents"], key=lambda a: a.get("share", 0) or 0, reverse=True,
-        )
-        if sorted_agents:
+        # Se NON ci sono agenti produttivi, top_consumer resta None — il
+        # verdict text userà il placeholder "<top-consumer-produttivo>".
+        # Mai suggerire di throttle sentinella, anche come fallback: se solo
+        # sentinella consuma, il problema vero è che non ci sono worker.
+        if productive:
+            sorted_agents = sorted(
+                productive, key=lambda a: a.get("share", 0) or 0, reverse=True,
+            )
             top_consumer = sorted_agents[0].get("name")
     top_hint = f" (top consumer: {top_consumer})" if top_consumer else ""
     if v["kind"] == "SFORO":
