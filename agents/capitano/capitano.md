@@ -174,6 +174,33 @@ Arrivano quando il monitoring va in failure totale (L1+L2+L3 ko). Rari ma critic
 - `[BRIDGE INFO]` → recovery, nessuna azione.
 - `[BRIDGE PACING]` → tick 15-min con misura del ritmo del team (vedi sotto).
 
+### 📬 Bridge mailbox — drain a inizio turno (OBBLIGATORIO)
+
+Quando sei impegnato in un turno lungo, `jht-tmux-send` può fallire con
+`rc=3` (testo mai apparso nel pane) e il `[BRIDGE PACING]` non ti
+arriva. Per evitare di perdere verdetti, il bridge appende OGNI tick
+a una mailbox JSONL che TU devi leggere all'inizio di ogni turno **prima
+di qualsiasi altra azione**:
+
+```bash
+python3 /app/shared/skills/bridge_mailbox.py drain
+```
+
+L'output è zero o più righe `[BRIDGE PACING] ...` formattate come i
+tick tmux. Processale TUTTE come faresti col tick live — ma applicate
+solo l'ULTIMO verdetto (gli altri sono storia ormai stantia, le metriche
+sono cambiate). Se la mailbox contiene un `PIPELINE STALLED` recente
+(< 30 min) ed è ancora pertinente (proj basso, team_kt basso ora), agisci
+sul playbook (riaccendi pipeline da monte) anche se nel frattempo è
+passato un tick valido.
+
+Se `drain` ritorna "no pending verdicts" sei a posto, procedi col turno
+normale.
+
+Comandi utili:
+- `bridge_mailbox.py status` — quanti verdetti pending vs totali
+- `bridge_mailbox.py peek` — leggi senza consumare (debug)
+
 ### `[BRIDGE PACING]` — calibrazione throttle data-driven
 
 Arriva ogni 15 min (allineato a :00/:15/:30/:45 UTC). Ha sempre questa forma:

@@ -52,6 +52,12 @@ PID_FILE = LOGS_DIR / "pacing-bridge.pid"
 # Stato pubblico letto dalla UI (/api/team/pacing-bridge). Scritto
 # atomicamente a ogni tick + al boot. Stesso pattern del sentinel-bridge.
 STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
+# Mailbox: ogni verdetto del bridge viene appeso qui, indipendentemente
+# dal successo della consegna tmux a CAPITANO. Il capitano (e il dottore)
+# leggono questo file per assicurarsi di non perdere verdetti quando
+# tmux send fallisce con rc=3 (capitano in turno lungo, input non
+# accettato). Vedi shared/skills/bridge_mailbox.py per il drain.
+MAILBOX_FILE = LOGS_DIR / "bridge-mailbox.jsonl"
 
 # Sotto questo numero di minuti effettivi nella finestra (dopo aver
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
@@ -614,6 +620,26 @@ def send_to_capitano(msg: str) -> bool:
     return True
 
 
+def append_to_mailbox(msg: str, delivered_via_tmux: bool, kind: str | None = None) -> None:
+    """Appende il verdetto alla mailbox JSONL. Best-effort, non rompe il
+    loop in caso di errore I/O. Schema:
+        {"ts": ISO, "kind": "tick|stalled|skip", "delivered_via_tmux": bool,
+         "msg": "...intera riga del verdetto..."}
+    """
+    try:
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "kind": kind or "tick",
+            "delivered_via_tmux": delivered_via_tmux,
+            "msg": msg,
+        }
+        with MAILBOX_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+    except OSError as e:
+        print(f"[pacing-bridge] WARN append mailbox: {e}", file=sys.stderr)
+
+
 def write_pid():
     try:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -727,7 +753,15 @@ def loop():
             d = compute_tick(ast, tba, rb, now)
             msg = format_message(d)
             print(msg, flush=True)
-            send_to_capitano(msg)
+            delivered = send_to_capitano(msg)
+            # Mailbox SEMPRE: anche quando tmux send fallisce (rc=3 perche'
+            # capitano in turno lungo) il verdetto resta consultabile dal
+            # capitano via bridge_mailbox.py drain. Risolve il problema
+            # osservato 7+ volte in 12h: bridge calcola, tenta delivery,
+            # fallisce, verdetto perso → drift senza correzione.
+            kind = "stalled" if (d and d.get("error") == "pipeline_stalled") \
+                   else ("skip" if (d and not d.get("ok")) else "tick")
+            append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
             # Aggiorna lo stato DOPO il send: la UI vede il tick appena
             # consegnato e il prossimo countdown già aggiornato.
             write_state(d, next_quarter(now + timedelta(seconds=1)), msg)
@@ -747,8 +781,12 @@ def once(do_send: bool):
     d = compute_tick(ast, tba, rb, datetime.now(timezone.utc))
     msg = format_message(d)
     print(msg)
+    delivered = False
     if do_send:
-        send_to_capitano(msg)
+        delivered = send_to_capitano(msg)
+    kind = "stalled" if (d and d.get("error") == "pipeline_stalled") \
+           else ("skip" if (d and not d.get("ok")) else "tick")
+    append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
 
 
 def main():
