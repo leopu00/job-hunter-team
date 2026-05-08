@@ -26,21 +26,23 @@ ssh -i ~/.ssh/jht_key root@<VPS_IP>
 
 # 2. Sul VPS:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash      # 4 step, ~1 min
+exec bash -l                                                # raccoglie /etc/profile.d/jht.sh
 jht up                                                      # pull image + start
 jht setup --non-interactive --provider claude \
   --auth-method subscription --subscription-email tu@example.com --skip-health
 jht providers update claude                                 # installa CLI provider
-docker exec -it jht claude                                  # OAuth device flow → /login
+docker exec -it jht claude                                  # OAuth device flow Anthropic → /login
+jht cloud login                                             # browser pairing VPS↔account web (consigliato)
 jht team start                                              # avvia tmux Capitano
 jht team status                                             # verify
 ```
 
-Web UI sul tuo PC (tunnel SSH):
+Vedere i risultati sulla dashboard cloud:
 
-```bash
-# in un altro terminale sul tuo PC:
-ssh -i ~/.ssh/jht_key -L 3000:localhost:3000 root@<VPS_IP>
-# poi browser → http://localhost:3000
+```
+Browser sul tuo PC → https://jobhunterteam.ai/positions
+   (sei gia' loggato dopo `jht cloud login` — i dati appaiono
+    dopo che il team ha trovato i primi job + auto-push)
 ```
 
 ## Step-by-step
@@ -255,7 +257,62 @@ Esci con `/quit` o `Ctrl+C` due volte.
 > bind-mountato a `~/.jht/.claude/` sull'host VPS. Il login persiste
 > cross-restart e cross-rebuild.
 
-### 9. `jht team start` — avvia gli agenti
+### 9. `jht cloud login` — collega VPS all'account web
+
+> 💡 Senza questo step, i job trovati dal team restano SOLO sul VPS.
+> Per vederli sulla dashboard `jobhunterteam.ai/positions` (o per
+> backup), serve abilitare il cloud sync. Il pairing va fatto **una
+> volta sola**: il token resta salvato in `~/.jht/cloud.json`.
+
+```bash
+jht cloud login
+```
+
+Il CLI mostra:
+
+```
+Apri questo URL nel browser:
+  https://jobhunterteam.ai/cli-link
+
+Codice da digitare:
+  ABCD-1234
+
+Aspetto la tua conferma… (TTL ~10 min, polling ogni 2s)
+```
+
+**Sul tuo PC** apri l'URL nel browser. Se non sei loggato, fai login con
+Google o GitHub. Digita il codice mostrato dal CLI (es. `ABCD-1234`),
+conferma. Il CLI sul VPS si sblocca automaticamente:
+
+```
+✓ Pairing completato
+  Base URL:   https://jobhunterteam.ai
+  Token name: cli-2026-05-08
+  User ID:    <uuid>
+
+Sincronizzo i dati locali al cloud...
+✓ Push completato
+  positions:    0 upserted   ← il team non ha ancora cercato
+  scores:       0 upserted
+  applications: 0 upserted
+```
+
+> 🔐 **Privacy**: il token vive solo dentro al VPS (`~/.jht/cloud.json`,
+> mode 0600). Non viene MAI esposto in chiaro al di fuori del CLI →
+> server (HTTPS). Puoi revocarlo da [`/settings/cloud-sync`](https://jobhunterteam.ai/settings/cloud-sync).
+
+> 🛠 **Opzioni avanzate:**
+> - `jht cloud login --name vps-marco` — suggerisce un nome al token (visibile sul web)
+> - `jht cloud login --no-push` — skip push iniziale (CI/scripts)
+> - `jht cloud enable --token jht_sync_xxx` — alternativa con paste manuale del token
+
+> 🌍 **Self-hosting cloud** (per chi vuole eseguire la dashboard su un
+> proprio dominio): `jht cloud login --url https://my-domain.com`. La
+> dashboard deve essere deployata con le 3 routes API
+> (`/api/cloud-sync/{device-init,device-poll,device-confirm}`) +
+> migration `008_cloud_sync_pairing.sql` applicata.
+
+### 10. `jht team start` — avvia gli agenti
 
 ```bash
 jht team start
@@ -281,30 +338,54 @@ jht team status        # 1+ agenti "container jht"
 jht sentinella tail    # follow live monitoring
 ```
 
-### 10. (Opzionale) Web UI dashboard nel browser
+### 11. Dashboard cloud — `https://jobhunterteam.ai/positions`
+
+Dopo `jht cloud login` (step 9) i dati del team vengono pushati sulla
+dashboard cloud. Sul **tuo PC**:
+
+```
+Browser → https://jobhunterteam.ai
+   (sei gia' loggato dal pairing)
+   ↓
+   /positions  → tabella job trovati per te (filtri stack, score, status)
+   /team       → organogramma agenti + chat per ognuno
+   /sentinella → grafici token usage real-time
+   /settings/cloud-sync → gestisci/revoca i token
+```
+
+**Quando aggiornare i dati cloud**: `jht cloud login` fa auto-push una
+volta sola (al pairing). Per push successivi:
+
+```bash
+jht cloud push                       # one-shot manuale
+jht cron add cloud-push '*/15 * * * *'   # ogni 15min (auto-sync)
+```
+
+> 💡 La dashboard cloud è la via consigliata. Il push è **local→cloud
+> only**: i tuoi log/agent state restano sul VPS, solo positions/scores/
+> applications vengono sincronizzate.
+
+### 12. (Avanzato) Web UI direttamente sul VPS via SSH tunnel
+
+> ⚠️ **Path tech-only.** La dashboard prod (`jobhunterteam.ai`) è la
+> raccomandata. Questo path serve solo per debug del backend Next.js
+> locale al VPS, o per ambienti completamente offline.
 
 La dashboard Next.js gira su `127.0.0.1:3000` del VPS — **non esposta in
-rete**. Per raggiungerla dal tuo PC, apri un **secondo terminale** sul tuo
-PC con SSH tunnel:
+rete**. Apri un secondo terminale sul tuo PC con SSH tunnel:
 
 ```bash
 ssh -i ~/.ssh/jht_hetzner -L 3000:localhost:3000 root@<VPS_IP>
 ```
 
-Lascia il tunnel aperto. Sul tuo PC, browser → **http://localhost:3000**.
+Browser → **http://localhost:3000**.
 
-> ⚠️ **Auth Supabase via tunnel SSH** — l'OAuth callback Supabase e'
-> configurato per `jobhunterteam.ai/auth/callback`, NON per `localhost`.
-> Quindi "Login with Google/GitHub" sulla pagina `/?login=true` redirige
-> al sito prod e non torna al tuo tunnel. Le pagine pubbliche (landing,
-> docs) funzionano. Le pagine `/team`, `/positions`, ecc. richiedono
-> login → non accessibili via SSH tunnel.
->
-> **Workaround attuale**: usa la CLI (`jht team status`,
-> `jht sentinella tail`, `jht positions list`) o Telegram per
-> interagire col team via VPS. La web UI piena resta da fixare con
-> additional redirect URLs su Supabase project. Tracciato come task
-> separato.
+> ⚠️ **Auth Supabase via tunnel SSH** — l'OAuth callback è configurato
+> per `jobhunterteam.ai/auth/callback`, non per `localhost`. Le pagine
+> pubbliche funzionano, le protette redirigono a prod. Tracciato come
+> `[BUG-VPS-AUTH-TUNNEL]`. **Per usarla via tunnel** serve aggiungere
+> `http://localhost:3000/**` agli additional redirect URLs nel
+> dashboard Supabase project.
 
 ## Lifecycle e shutdown
 
