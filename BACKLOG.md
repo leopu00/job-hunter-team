@@ -533,6 +533,34 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
 - **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
+#### 🔗 [JHT-UX-CLOUD-PAIRING] Auto-pairing VPS↔account web (no token manuale + 2 comandi CLI)
+
+- **Sintomo / chicken-and-egg:** un utente non-tech che ha appena settato JHT su VPS si trova nello stato:
+  - Team gira benissimo sul VPS, DB pieno di positions/scores per lui
+  - Logga la prima volta su `jobhunterteam.ai` → **dashboard vuota** ("dove sono i miei dati?")
+  - Gap: il VPS NON sa che l'utente esiste; il cloud NON sa che il VPS esiste. Manca il pairing.
+- **Path manuale OGGI (richiede tech-skill):**
+  1. Login web su `jobhunterteam.ai/login` (OAuth Google/GitHub)
+  2. Naviga `/settings/cloud-sync` (menu nascosto)
+  3. Click "Generate token" + dai un nome
+  4. Copia il token `jht_sync_xxxxxxxx` (mostrato una sola volta)
+  5. SSH al VPS (richiede terminale, chiave SSH, conoscenza IP)
+  6. `jht cloud enable --token jht_sync_xxxxxxxx` (verifica via `/api/cloud-sync/ping`)
+  7. `jht cloud push` (push manuale — niente auto-trigger)
+  8. Refresh dashboard → finalmente vede i dati
+- **Scoperto:** simulazione team del 2026-05-08, persona fittizia "Marco Bianchi" appena setuppato su VPS Hetzner.
+- **Path forward (4 alternative, da pesare):**
+  1. **🥇 OAuth device flow `jht cloud login`** — replica del pattern usato da `claude`/`codex`/`kimi` CLI: `jht cloud login` apre un device flow web, l'utente conferma sul browser (gia' loggato), VPS riceve token via callback. ZERO copia-incolla. Sostituisce step 2-6 con un comando solo.
+  2. **🥈 Onboarding empty-state guidato** sul web: quando l'utente logga la prima volta con DB cloud vuoto, mostrare un wizard "Hai un team JHT che gira da qualche parte?" → genera token in 1 click + mostra comando precompilato `jht cloud enable --token=... && jht cloud push` + waiting state ("aspetto ping dal VPS..."). Riduce friction degli step ma non li elimina.
+  3. **Auto-push dopo `enable`**: il `jht cloud enable` auto-triggera anche `jht cloud push` come ultima operazione. Riduce 2 comandi a 1. Questa e' la fix piu' veloce a parita' di altre cose.
+  4. **🤔 Discovery bidirezionale VPS→cloud**: VPS manda heartbeat anonimo (ID hash, # positions) al cloud. Quando l'utente logga la prima volta, dashboard mostra "Hai un team attivo (VPS 65.108.x.x)? Connettilo." Click → challenge-response automatica. Privacy concern: VPS rivela esistenza prima che l'utente decida di collegarlo. Vagliare con threat model.
+- **Linked:**
+  - `[BUG-VPS-AUTH-TUNNEL]` (post-fix abilita web UI sul tunnel ma NON risolve il pairing — ortogonali)
+  - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
+  - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
+- **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
+- **Stato implementazione esistente:** infrastruttura presente (`web/app/api/cloud-sync/{ping,push,tokens}/route.ts`, `cli/src/commands/cloud.js` con `enable/status/push/disable`, `web/app/(protected)/settings/cloud-sync/CloudSyncClient.tsx`). Il pezzo mancante e' SOLO il device flow OAuth-style + wizard onboarding empty-state.
+
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
 - **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
