@@ -77,6 +77,33 @@ async function handleEnable(options) {
   console.log(pc.dim(`  Token name: ${body.token?.name ?? 'unnamed'}`));
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
   console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+
+  // Auto-push: l'utente ha appena collegato il VPS, vuole vedere i dati sul
+  // dashboard subito — non ha senso forzarlo a un secondo comando.
+  if (options.noPush) {
+    console.log(pc.dim(`  Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+    return;
+  }
+  // Se il DB non esiste ancora (team mai avviato): skip silenzioso. Il
+  // pairing e' completo, non e' un errore. L'utente puo' fare push dopo
+  // il primo `jht team start`.
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    console.log(pc.dim(`  Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
+    console.log(pc.dim(`  Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+    return;
+  }
+  console.log('');
+  console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+  // process.exitCode di handlePush e' best-effort: se push fallisce, l'enable
+  // resta valido (token salvato) ma stampiamo l'errore. L'utente puo' riprovare.
+  const prevExitCode = process.exitCode;
+  await handlePush({});
+  if (process.exitCode === 1) {
+    console.log(pc.yellow('  Enable e\' OK ma push iniziale e\' fallito. Riprova: jht cloud push'));
+    process.exitCode = prevExitCode;
+  }
 }
 
 async function handleStatus() {
@@ -238,6 +265,7 @@ export function registerCloudCommand(program) {
     .description('Abilita cloud sync con un token generato dal web')
     .option('--token <token>', 'Token jht_sync_... (obbligatorio)')
     .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
+    .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
     .action(handleEnable);
 
   cloud
