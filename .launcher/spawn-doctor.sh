@@ -77,13 +77,19 @@ sleep 1
 tmux send-keys -t "$SESSION" "codex --yolo -c model_reasoning_effort=high" C-m
 
 # 6) Auto-accept dei trust/approval dialogs (3 Enter cadenzati come
-#    start-agent.sh). Setsid scollega dal nostro process group, così il
-#    watchdog può uscire senza ammazzare lo sleep.
+#    start-agent.sh) e SOLO DOPO inietta il prompt iniziale. Setsid
+#    scollega dal nostro process group così il watchdog può uscire senza
+#    ammazzare lo sleep. Cadenze allungate: codex ci mette ~6s a renderizzare
+#    il banner, gli Enter prima del banner finiscono nel buffer della shell
+#    e non chiudono il trust dialog. Aggiungo anche un Enter di conferma
+#    dopo il prompt perché Ink ha un piccolo lag tra type e submit.
 setsid sh -c "
-  sleep 4 && tmux send-keys -t '$SESSION' Enter
+  sleep 6 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
-  sleep 3 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il giro di health-check come da procedura. Quando hai finito, autodistruggiti come da sezione Self-destruct.' C-m
+  sleep 4 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il giro di health-check come da procedura. Quando hai finito, autodistruggiti come da sezione Self-destruct.'
+  sleep 1 && tmux send-keys -t '$SESSION' Enter
+  sleep 2 && tmux send-keys -t '$SESSION' Enter
 " >/dev/null 2>&1 < /dev/null &
 disown 2>/dev/null
 
