@@ -11,6 +11,7 @@ import TokenTypesChart from './_components/TokenTypesChart'
 import AgentTokensChart from './_components/AgentTokensChart'
 import ThrottleChart from './_components/ThrottleChart'
 import AgentActivityChart from './_components/AgentActivityChart'
+import DoctorPanel from './_components/DoctorPanel'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -304,6 +305,13 @@ export default function TeamCompany() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <AgentActivityChart />
+        </div>
+      </section>
+
+      {/* 🩺 Dottore — health-check ogni 30min, ping/diagnosi/restart */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <DoctorPanel />
         </div>
       </section>
 

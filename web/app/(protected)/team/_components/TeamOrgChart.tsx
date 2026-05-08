@@ -56,6 +56,18 @@ const PACING_NODE = {
   desc: 'Tick every 15 min — sends pacing report to the Captain (per-agent %/h, target speed, verdict).',
 }
 
+// Dottore: agente health-check spawnato ogni 30 min dal watchdog. Pinga
+// ogni agente, diagnostica stallo/CLI morta, e riavvia chi serve. Si
+// auto-distrugge a fine giro. Le sue azioni sono in
+// /jht_home/logs/dottore-actions.jsonl, lette da /api/dottore/actions
+// per mostrare un timeline live nella pagina /team (DoctorPanel).
+const DOCTOR_AGENT = {
+  roleId: 'dottore',
+  emoji: '🩺',
+  name: 'Doctor',
+  desc: 'Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.',
+}
+
 const PIPELINE_AGENTS = [
   { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
   { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
