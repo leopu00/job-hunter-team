@@ -106,6 +106,143 @@ async function handleEnable(options) {
   }
 }
 
+async function handleLogin(options) {
+  const baseUrl = (options.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const initUrl = `${baseUrl}/api/cloud-sync/device-init`;
+
+  // 1. Init: chiede al server una coppia (device_code, user_code).
+  console.log(pc.dim(`Inizio pairing su ${baseUrl}…`));
+  let init;
+  try {
+    const res = await fetch(initUrl, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(
+        pc.red(`Init pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+      );
+      process.exitCode = 1;
+      return;
+    }
+    init = body;
+  } catch (err) {
+    console.error(pc.red(`Errore di rete: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!init.device_code || !init.user_code || !init.verification_url) {
+    console.error(pc.red('Risposta server malformata (manca device_code/user_code/verification_url).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  // 2. Mostra istruzioni all'utente.
+  const tokenNameHint = options.name ? ` (nome consigliato: "${options.name}")` : '';
+  console.log('');
+  console.log(pc.bold(`Apri questo URL nel browser:`));
+  console.log(`  ${pc.cyan(init.verification_url)}`);
+  if (init.verification_url_complete) {
+    console.log(pc.dim(`  (link diretto col codice precompilato: ${init.verification_url_complete})`));
+  }
+  console.log('');
+  console.log(pc.bold(`Codice da digitare:`));
+  console.log(`  ${pc.green(pc.bold(init.user_code))}${tokenNameHint}`);
+  console.log('');
+  console.log(pc.dim(`Aspetto la tua conferma… (TTL ~${Math.round((init.expires_in ?? 600) / 60)} min, polling ogni ${init.interval ?? 2}s)`));
+  console.log(pc.dim(`Premi Ctrl+C per annullare.`));
+
+  // 3. Poll fino a status = approved | expired | timeout.
+  const pollUrl = `${baseUrl}/api/cloud-sync/device-poll`;
+  const intervalMs = Math.max(1, init.interval ?? 2) * 1000;
+  const expiresAtMs = Date.now() + (init.expires_in ?? 600) * 1000;
+  let approved = null;
+
+  while (Date.now() < expiresAtMs) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    let res;
+    try {
+      res = await fetch(pollUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_code: init.device_code }),
+      });
+    } catch (err) {
+      // Tolerante a network blip transitorio: continua il poll.
+      console.error(pc.yellow(`  ⚠ poll error transitorio: ${err.message}, ritento...`));
+      continue;
+    }
+    const body = await res.json().catch(() => ({}));
+
+    if (res.status === 202 && body.status === 'pending') continue;
+    if (res.status === 410) {
+      console.error(pc.red(`\nSessione ${body.status || 'expired'}. Riavvia 'jht cloud login'.`));
+      process.exitCode = 1;
+      return;
+    }
+    if (res.status === 404) {
+      console.error(pc.red(`\nSessione non trovata sul server. Riavvia 'jht cloud login'.`));
+      process.exitCode = 1;
+      return;
+    }
+    if (!res.ok) {
+      console.error(pc.red(`\nPoll error (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
+      process.exitCode = 1;
+      return;
+    }
+    if (body.status === 'approved' && body.token) {
+      approved = body;
+      break;
+    }
+    // Status sconosciuto: log e continua, conservativo.
+    console.error(pc.yellow(`  ⚠ poll status inatteso: ${body.status || 'undefined'}, continuo...`));
+  }
+
+  if (!approved) {
+    console.error(pc.red(`\nTimeout pairing (${Math.round((init.expires_in ?? 600) / 60)} min). Riavvia 'jht cloud login'.`));
+    process.exitCode = 1;
+    return;
+  }
+
+  // 4. Salva config + auto-push.
+  await saveCloudConfig({
+    enabled: true,
+    base_url: baseUrl,
+    token: approved.token,
+    user_id: approved.user_id,
+    token_name: approved.token_name ?? null,
+    enabled_at: new Date().toISOString(),
+  });
+
+  console.log('');
+  console.log(pc.green(`✓ Pairing completato`));
+  console.log(pc.dim(`  Base URL:   ${baseUrl}`));
+  console.log(pc.dim(`  Token name: ${approved.token_name ?? 'unnamed'}`));
+  console.log(pc.dim(`  User ID:    ${approved.user_id}`));
+  console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+
+  if (options.noPush) {
+    console.log('');
+    console.log(pc.dim(`Push iniziale skippato (--no-push). Esegui: jht cloud push`));
+    return;
+  }
+  try {
+    await stat(JHT_DB_PATH);
+  } catch {
+    console.log('');
+    console.log(pc.dim(`Nessun DB locale ancora (${JHT_DB_PATH}). Push skippato.`));
+    console.log(pc.dim(`Avvia il team con 'jht team start' e poi 'jht cloud push'.`));
+    return;
+  }
+  console.log('');
+  console.log(pc.dim('Sincronizzo i dati locali al cloud...'));
+  const prevExitCode = process.exitCode;
+  await handlePush({});
+  if (process.exitCode === 1) {
+    console.log(pc.yellow(`  Pairing OK ma push iniziale fallito. Riprova: jht cloud push`));
+    process.exitCode = prevExitCode;
+  }
+}
+
 async function handleStatus() {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
@@ -261,8 +398,16 @@ export function registerCloudCommand(program) {
     .description('Gestione cloud sync (opt-in): enable, status, disable');
 
   cloud
+    .command('login')
+    .description('Pairing browser-based: nessun token paste manuale (consigliato)')
+    .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
+    .option('--name <name>', 'Suggerimento per il nome del token sul web (es. "vps-marco")')
+    .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
+    .action(handleLogin);
+
+  cloud
     .command('enable')
-    .description('Abilita cloud sync con un token generato dal web')
+    .description('Abilita cloud sync con un token gia\' generato dal web (manual paste)')
     .option('--token <token>', 'Token jht_sync_... (obbligatorio)')
     .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
     .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
