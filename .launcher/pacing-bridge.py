@@ -271,6 +271,38 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
     team_kt = sum(agent_kt.values())
 
     if delta_usage <= 0 or team_kt <= 0:
+        # Carica sample sentinel anche nel path di skip — serve per
+        # distinguere "team idle (PIPELINE STALLED)" da "team consuma ma
+        # quantizzazione provider lo nasconde".
+        sample = rb.load_last_sample() or {}
+        proj = sample.get("projection")
+        usage_now = sample.get("usage", u_last)
+        # PIPELINE STALLED: team_kt veramente basso (workers fermi) AND
+        # proiezione sotto target. In questo caso il bridge avvisa il
+        # capitano di riaccendere la pipeline anche senza ratio valida —
+        # senza questo escalation il sistema entra in deadlock (bridge
+        # skippa, capitano non riceve nudge, team resta fermo).
+        # Soglie: team_kt < 5 = "praticamente nessun consumo nel window";
+        # proj < 70% = "stiamo sprecando >20% del budget alla chiusura".
+        STALL_KT_THRESHOLD = 5.0
+        STALL_PROJ_THRESHOLD = 70.0
+        if (
+            team_kt < STALL_KT_THRESHOLD
+            and isinstance(proj, (int, float))
+            and proj < STALL_PROJ_THRESHOLD
+        ):
+            return {
+                "ok": False,
+                "now": now,
+                "error": "pipeline_stalled",
+                "delta_usage": delta_usage,
+                "team_kt": team_kt,
+                "usage_now": usage_now,
+                "proj": proj,
+                "h_to_reset": hours_to_reset(sample.get("reset_at"), now),
+                "hint": "PIPELINE STALLED — pochi token consumati e proj "
+                        "sotto target. Riaccendere pipeline da monte.",
+            }
         return {
             "ok": False,
             "now": now,
@@ -380,6 +412,26 @@ def format_message(d: dict) -> str:
     rompere l'Enter delle TUI Ink (Kimi/Claude/Codex), parsabile dall'LLM."""
     if not d.get("ok"):
         why = d.get("error", "unknown")
+        # PIPELINE STALLED: messaggio attivo (non solo "tick saltato") con
+        # comando esplicito per il capitano. Triggerato quando team_kt < 5
+        # e proj < 70% — vedi compute_projection.
+        if why == "pipeline_stalled":
+            usage_now = d.get("usage_now", "?")
+            proj = d.get("proj", "?")
+            proj_str = f"{proj:.0f}%" if isinstance(proj, (int, float)) else str(proj)
+            h_to_reset = d.get("h_to_reset")
+            h_str = f"{h_to_reset:.2f}h" if isinstance(h_to_reset, (int, float)) else "?"
+            return (
+                f"[BRIDGE PACING] PIPELINE STALLED — usage={usage_now}% "
+                f"proj={proj_str} reset_in={h_str} team_kt={d.get('team_kt', 0):.1f} "
+                f"(praticamente zero consumo nei 15m). Applica regola "
+                f"PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py next-for-scrittore "
+                f"per coda residua e promozioni 40-49; (2) spawna SCOUT se range "
+                f"vuoto; (3) ANALISTA per companies non analizzate; (4) SCORER per "
+                f"unscored; (5) SCRITTORE quando coda scored>=50 si riempie. "
+                f"NON aspettare prossimo tick valido — bridge non puo' calcolare "
+                f"ratio senza consumo, e tu non puoi aspettare tick senza pipeline."
+            )
         extra = ""
         if "delta_usage" in d:
             extra = f" delta_usage={d['delta_usage']} team_kt={d.get('team_kt', '?')}"
@@ -447,29 +499,40 @@ def format_message(d: dict) -> str:
     # top consumer, mai tutto-il-team o reset globale. Identifica il
     # nome dell'agente con kt-share massima per nominalizzarlo nel verdict.
     cap_pct = min(25.0, float(v.get("frac_pct") or 0))
+    # Top consumer per il throttle hint: escludi sempre gli agenti di
+    # monitoring (sentinella, sentinella-worker) e l'?unknown — non sono
+    # worker produttivi, throttllarli non serve a nulla. Caso 04:44:
+    # share era 100% sentinella ma il vero problema era pipeline vuota.
+    NON_PRODUCTIVE = {"sentinella", "sentinella-worker", "?unknown", "maestro"}
     top_consumer = None
     if d.get("agents"):
+        productive = [a for a in d["agents"] if a.get("name") not in NON_PRODUCTIVE]
         sorted_agents = sorted(
-            d["agents"], key=lambda a: a.get("share", 0) or 0, reverse=True,
+            productive or d["agents"], key=lambda a: a.get("share", 0) or 0, reverse=True,
         )
         if sorted_agents:
             top_consumer = sorted_agents[0].get("name")
     top_hint = f" (top consumer: {top_consumer})" if top_consumer else ""
     if v["kind"] == "SFORO":
+        cmd = (
+            f"jht-throttle.py set {top_consumer} +10"
+            if top_consumer else
+            "jht-throttle.py set <top-consumer-produttivo> +10"
+        )
         parts.append(
-            f"VERDETTO: SFORO +{v['delta']:.2f}%/h sopra target → "
-            f"riduci la velocità del team del {cap_pct:.0f}%"
-            f"{top_hint}. Aggiungi 10-15s di throttle SOLO al top consumer "
-            f"(jht-throttle.py set <agente> +10), NON applicare a tutti, "
-            f"NON resettare gli altri."
+            f"VERDETTO: SFORO +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
+            f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
         )
     elif v["kind"] == "MARGINE":
+        cmd = (
+            f"jht-throttle.py set {top_consumer} -10"
+            if top_consumer else
+            "jht-throttle.py set <top-consumer-produttivo> -10"
+        )
         parts.append(
-            f"VERDETTO: MARGINE −{v['delta']:.2f}%/h sotto target → "
-            f"puoi accelerare il team del {cap_pct:.0f}%"
-            f"{top_hint}. Riduci di 10-15s il throttle SOLO al top consumer "
-            f"(jht-throttle.py set <agente> -10), oppure spawna 1 agente "
-            f"in più; NON resettare tutto a 0."
+            f"VERDETTO: MARGINE -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
+            f"{top_hint} | CMD: {cmd} (oppure spawna 1 agente) | "
+            f"NO global reset"
         )
     elif v["kind"] == "ALLINEATO":
         parts.append(
