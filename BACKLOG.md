@@ -749,9 +749,9 @@ All 5 tasks from 04-22 have been implemented:
 - **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
 - **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
-### 🔴 [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accetta il "Bypass Permissions" prompt di Claude Code 2.1+
+### ✅ [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accettava il "Bypass Permissions" prompt di Claude Code 2.1+ — FIXED 2026-05-08 (commit `7106ef6e`)
 
-- **Sintomo:** `jht team start` su VPS dev-1 (commit `6958fb42`, immagine GHCR del 2026-05-07): bootstrap mostra "✓ CAPITANO avviato" ma attaching alla sessione tmux interna (`docker exec -it jht tmux attach -t CAPITANO`) rivela che claude e' uscito immediatamente e il pane mostra il prompt bash. Stesso fato per SENTINELLA (probabilmente). Solo BRIDGE (Python, no claude CLI) gira correttamente.
+- **Sintomo:** `jht team start` su VPS dev-1 (commit `6958fb42`, immagine GHCR del 2026-05-07): bootstrap mostra "✓ CAPITANO avviato" ma attaching alla sessione tmux interna (`docker exec -it jht tmux attach -t CAPITANO`) rivela che claude e' uscito immediatamente e il pane mostra il prompt bash. Stesso fato confermato anche per SENTINELLA. Solo BRIDGE (Python, no claude CLI) girava correttamente.
 - **Causa:** Claude Code 2.1.x mostra un warning prompt al primo run anche con `--dangerously-skip-permissions`:
   ```
   WARNING: Claude Code running in Bypass Permissions mode
@@ -759,15 +759,47 @@ All 5 tasks from 04-22 have been implemented:
       2. Yes, I accept
     Enter to confirm
   ```
-  `start-agent.sh` fa auto-`Enter` cieco (`sleep 4 && tmux send-keys Enter && sleep 3 && tmux send-keys Enter`) assumendo versioni precedenti dove `--dangerously-skip-permissions` bypassava il prompt. Il primo Enter ora seleziona "1. No, exit" → claude exit pulito → bash prompt orfano. Risultato: il Capitano e' un fantasma — sessione tmux esiste, log /tmp/sentinel-bridge.log scrive, ma il LLM non gira.
-- **Scoperto:** primo retest VPS Hetzner del 2026-05-07 dopo fix bootstrap commit `6958fb42`.
-- **Fix proposti** (in ordine di pulizia):
-  1. **Pre-creare `~/.claude/settings.json`** con `"hasTrustDialogAccepted": true` (o equivalente) in `start-agent.sh` prima del primo lancio claude. Approccio piu' robusto, niente race condition con send-keys.
-  2. **Cambiare il send-keys** da `Enter` a `Down + Enter`, o `2 + Enter`. Fragile (dipende dal layout esatto del prompt — se claude cambia i numeri/labels rompe).
-  3. **Detect del prompt e response condizionale** (capture-pane → grep "Bypass Permissions" → send Down/Enter). Robusto ma piu' codice.
-- **Priorita':** 🔴 BLOCKER — il team JHT su VPS NON funziona senza questo fix. Il bootstrap CLI (commit `6958fb42`) sembra OK ma il Capitano non gira realmente, quindi la pipeline e' inerte.
-- **Bug analogo verificare:** anche `SENTINELLA` lancia claude via start-agent.sh — probabilmente lo stesso fate. Verificare con `docker exec -it jht tmux attach -t SENTINELLA` se vedi bash prompt o claude vivo.
-- **Workaround temporaneo:** dopo `jht team start`, manualmente `docker exec -it jht tmux attach -t CAPITANO`, premere `↓ + Enter` al prompt warning (replica per SENTINELLA). Detach con `Ctrl+B Ctrl+B d`.
+  `start-agent.sh` faceva auto-`Enter` cieco (3× `sleep 3 && tmux send-keys Enter`) assumendo versioni precedenti dove `--dangerously-skip-permissions` bypassava il prompt. Il primo Enter ora seleziona "1. No, exit" → claude exit pulito → bash prompt orfano. Risultato: il Capitano era un fantasma — sessione tmux esiste, log /tmp/sentinel-bridge.log scrive, ma il LLM non girava.
+- **Fix applicato** (commit `7106ef6e`, branch `vps-fix-claude-trust`): **detect-and-respond** invece di blind Enter. Capture-pane ogni 2s per ~12s; se trova `"Bypass Permissions mode"` manda `Down + sleep 1s + Enter` (sceglie "2. Yes, I accept"); se trova il classico folder-trust dialog manda Enter (default "Yes"); fallback Enter dopo 12s per compat con CLI senza prompt. Modificate due location: WORKER block (sentinella fallback /usage TUI) + main agent launch block.
+- **Approcci alternativi testati e scartati:**
+  - `permissions.skipDangerousModePermissionPrompt: true` in `~/.claude/settings.json` → non onorato in Claude Code 2.1.131-133 (regression nota, [issue #36168](https://github.com/anthropics/claude-code/issues/36168)).
+  - `permissions.defaultMode: "bypassPermissions"` → idem, ignorato.
+  - Singolo `Down+Enter` combinato senza sleep tra → key debounce TUI lo perde.
+- **Validato 2026-05-08:** VPS Hetzner CPX22, immagine `ghcr.io/leopu00/jht:dev-1` con `start-agent.sh` patched via `docker cp`. CAPITANO + SENTINELLA mostrano `⏵⏵ bypass permissions on (shift+tab to cycle)`, kick-off arrivato, CAPITANO ha auto-spawnato SCOUT-1 (validation ricorsiva: il fix copre anche gli agenti spawn-ati dal Capitano).
+- **Storia:** scoperto durante retest VPS del 2026-05-07 dopo fix bootstrap V5 (`6958fb42`). Fix scelto: opzione 3 (detect-respond robusto) invece di opzione 1 (settings.json) o 2 (Down+Enter cieco).
+
+### 🟡 [BUG-INSTALL-PATH-NOT-EXPORTED] `install.sh` non esporta `/root/.local/bin` al PATH di sistema
+
+- **Sintomo:** dopo `curl install.sh | bash` su VPS Ubuntu 24.04 fresca, lanciare `jht <subcmd>` ritorna `Command 'jht' not found, did you mean: ...`. Il wrapper esiste in `/root/.local/bin/jht` ma quel path non e' nel PATH della shell perche' la dir non esisteva al login (Bash su Ubuntu auto-popola `~/.local/bin` solo se la dir gia' esiste — vedi `/etc/skel/.profile` con `if [ -d "$HOME/.local/bin" ]`).
+- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
+- **Stato attuale:** install.sh stampa un warning + istruzione manuale (`export PATH="$PATH:/root/.local/bin"`) ma NON automatizza. Tutti i comandi successivi nel wizard (es. `jht up`, `jht setup`) falliscono a meno che l'utente non rilegga la guida e copi-incolli il comando export.
+- **Fix proposto:** install.sh deve scrivere automaticamente il PATH a una location persistente:
+  - **root user**: `/etc/profile.d/jht.sh` (system-wide, picked up da ogni nuovo shell login)
+  - **non-root user**: append `~/.bashrc` + `~/.zshrc` se esistono e non gia' presente
+  - Stampare comunque il workaround per la sessione corrente (`export PATH=...`) perche' subshell di curl|bash non puo' modificare il parent shell.
+- **Priorita':** media — bloccante per UX VPS, workaround disponibile ma cattivo first-impression.
+- **File:** `scripts/install.sh:309-356` (funzione `download_runtime_files()`).
+
+### 🟡 [BUG-INSTALL-BRANCH-MASTER-DEFAULT] `install.sh` scarica runtime files da `master` anche se fetch-ato da branch dev-N
+
+- **Sintomo:** `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash` esegue install.sh dalla branch `dev-1` ma poi scarica `docker-compose.yml` e `jht-wrapper.sh` da `master` (default `BRANCH="${JHT_BRANCH:-master}"`). Risultato su VPS dev-1: container partiva con compose master vecchio (no `${JHT_IMAGE:-}` override del commit `4b10a9db`), pullando `:latest` invece di `:dev-1`. Lo split master/dev-1 cli falliva poi su `--subscription-email` (presente solo nel CLI di `:dev-1`, image fix `86c08174`).
+- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
+- **Workaround attuale:** prefissare `JHT_BRANCH=dev-1`:
+  ```bash
+  JHT_BRANCH=dev-1 curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash
+  ```
+  Oppure post-install, ri-scaricare manualmente:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/docker-compose.yml -o /root/.jht/runtime/docker-compose.yml
+  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/jht-wrapper.sh -o /root/.local/bin/jht
+  ```
+- **Fix proposti:**
+  1. install.sh accetta argomento posizionale `--branch dev-1` per esplicito.
+  2. install.sh prova a inferire la branch dal proprio URL via `$0` e `BASH_SOURCE` (rotto sotto `curl | bash` perche' lo script viene letto da stdin, ma marker file con SHA potrebbe funzionare).
+  3. Build step CI che inietta `BRANCH=<branch_name>` nel publish di install.sh per ogni branch (substituzione marker `__BRANCH__`).
+  4. Documentazione esplicita in `VPS-SETUP.md` + `quickstart.md` su `JHT_BRANCH` env var per devs.
+- **Priorita':** media (devs only — utenti finali curl-ano da `jobhunterteam.ai/install.sh` che servono master). Bloccante per workflow di test branch su VPS.
+- **File:** `scripts/install.sh:51` (`BRANCH="${JHT_BRANCH:-master}"`).
 
 ### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
 
