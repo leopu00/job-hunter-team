@@ -347,9 +347,44 @@ download_runtime_files() {
       PATH_READY=1
       ;;
     *)
-      warn "$BIN_DIR non e' nel PATH."
-      info "Aggiungi questa riga al tuo shell rc (~/.zshrc, ~/.bashrc):"
-      printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
+      # Auto-add a una location persistente cosi' i prossimi shell login
+      # vedono `jht` senza intervento manuale (BUG-INSTALL-PATH-NOT-EXPORTED).
+      # Su Ubuntu Bash, ~/.profile contiene gia' il guard
+      # `if [ -d "$HOME/.local/bin" ]; then PATH="$HOME/.local/bin:$PATH"; fi`,
+      # ma quel guard si valuta SOLO al login successivo a quando la dir e'
+      # creata — installando JHT in una sessione gia' aperta, la dir non
+      # esisteva al login → PATH non popolato → `jht` not found.
+      # Il subshell di `curl | bash` non puo' modificare il PATH del parent,
+      # quindi serve scrivere a un file sourced dal prossimo shell.
+      local persistent_added=0
+      if [ "${EUID:-$(id -u)}" -eq 0 ] && [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+        # System-wide (preferito su VPS root): /etc/profile.d/<file>.sh viene
+        # sourceto da /etc/profile a ogni login interactive shell.
+        printf 'export PATH="$PATH:%s"\n' "$BIN_DIR" > /etc/profile.d/jht.sh
+        chmod 644 /etc/profile.d/jht.sh
+        ok "PATH aggiunto a /etc/profile.d/jht.sh (system-wide)"
+        persistent_added=1
+      else
+        # User-level fallback: append a ~/.bashrc + ~/.zshrc se esistono e
+        # non gia' presenti. Idempotente: skip se gia' aggiunto.
+        for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+          if [ -f "$rc" ] && ! grep -q "$BIN_DIR" "$rc" 2>/dev/null; then
+            printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
+            ok "PATH aggiunto a $rc"
+            persistent_added=1
+          fi
+        done
+      fi
+      if [ "$persistent_added" -eq 0 ]; then
+        warn "Nessun shell rc scritto. Aggiungi manualmente:"
+        printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
+      fi
+      # Sessione corrente: il subshell di curl|bash non puo' propagare al
+      # parent. L'utente deve fare `exec bash -l` o source. Stampiamo il
+      # comando per chiarezza.
+      info "Per la sessione corrente:"
+      printf "      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n" "$BIN_DIR"
+      printf "      (oppure apri una nuova shell)\n\n"
       PATH_READY=0
       ;;
   esac
