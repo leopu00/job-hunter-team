@@ -63,12 +63,29 @@ if [ "$ROLE" = "worker" ]; then
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
   tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
-  # Auto-accept trust dialog × 3 (safety net: se il CLI e' gia' trusted
-  # le Enter extra sono innocue; se chiede il prompt, rispondiamo).
+  # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
+  # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
+  # con default "1. No, exit" → blind Enter killa claude. Fix: capture-pane,
+  # se vede il warning manda Down + Enter (sceglie "2. Yes, I accept").
+  # Vedi BACKLOG [BUG-CLAUDE-TRUST-PROMPT].
   setsid sh -c "
-    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
-    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
-    sleep 3  && tmux send-keys -t '$WORKER_SESSION' Enter
+    _i=0
+    while [ \$_i -lt 6 ]; do
+      sleep 2
+      _pane=\$(tmux capture-pane -t '$WORKER_SESSION' -p -S -40 2>/dev/null)
+      if echo \"\$_pane\" | grep -q 'Bypass Permissions mode'; then
+        tmux send-keys -t '$WORKER_SESSION' Down
+        sleep 1
+        tmux send-keys -t '$WORKER_SESSION' Enter
+        exit 0
+      fi
+      if echo \"\$_pane\" | grep -qE 'trust (the files|this folder|this directory)'; then
+        tmux send-keys -t '$WORKER_SESSION' Enter
+        exit 0
+      fi
+      _i=\$((_i + 1))
+    done
+    tmux send-keys -t '$WORKER_SESSION' Enter
   " >/dev/null 2>&1 < /dev/null &
   echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
   exit 0
@@ -558,21 +575,36 @@ else
   tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
-  # Auto-accept any first-launch trust / approval dialog the CLI
-  # might show. Each provider has its own "skip permissions" flag
-  # (claude --dangerously-skip-permissions, kimi --yolo) so in the
-  # steady state these Enters hit an empty prompt and are harmless,
-  # but when the CLI *does* pop up a "do you trust this dir?" modal
-  # on very first run we want to push through it without waiting
-  # for the user.
+  # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
+  # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
+  # con default "1. No, exit" → blind Enter killa claude → CAPITANO/SENTINELLA
+  # diventano fantasmi (sessione tmux esiste ma LLM exited). Vedi BACKLOG
+  # [BUG-CLAUDE-TRUST-PROMPT]. Fix: capture-pane, se trova il warning manda
+  # Down + sleep 1s + Enter (sceglie "2. Yes, I accept"); se trova il classico
+  # folder-trust dialog manda Enter (default "Yes"); fallback Enter dopo 12s.
   # setsid scollega dalla sessione/process-group di chi ha chiamato
   # start-agent.sh: senza, quando start-agent.sh esce il suo caller
   # (Node.js del backend web) manda SIGTERM al process group e ammazza
   # la subshell prima che lo sleep finisca.
   setsid sh -c '
-    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
-    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
-    sleep 3  && tmux send-keys -t "'"$SESSION"'" Enter
+    _sess="'"$SESSION"'"
+    _i=0
+    while [ $_i -lt 6 ]; do
+      sleep 2
+      _pane=$(tmux capture-pane -t "$_sess" -p -S -40 2>/dev/null)
+      if echo "$_pane" | grep -q "Bypass Permissions mode"; then
+        tmux send-keys -t "$_sess" Down
+        sleep 1
+        tmux send-keys -t "$_sess" Enter
+        exit 0
+      fi
+      if echo "$_pane" | grep -qE "trust (the files|this folder|this directory)"; then
+        tmux send-keys -t "$_sess" Enter
+        exit 0
+      fi
+      _i=$((_i + 1))
+    done
+    tmux send-keys -t "$_sess" Enter
   ' >/dev/null 2>&1 < /dev/null &
 fi
 
