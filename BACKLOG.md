@@ -266,7 +266,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - `cb5b9bab` `providers update` IS_CONTAINER passthrough (no docker compose run dentro al container, npm install diretto in /jht_home/.npm-global) + `ensure_bind_owner` chown 1001:1001 sui bind dir su Linux (fix EACCES su VPS root uid 0)
 - **Bug noti residui (non-blocking per il VPS use case):**
   - `[BUG-CLACK-TTY-DOCKER-EXEC]` — wizard interattivo non riceve frecce via docker exec (workaround: `--non-interactive` con tutti i flag, gia' tutti presenti)
-  - `[BUG-VPS-AUTH-TUNNEL]` — Supabase OAuth callback configurato solo per dominio prod, web UI auth non funziona via SSH tunnel `localhost:3000` (workaround: usare CLI / Telegram per gestire team su VPS; fix: aggiungere localhost agli additional redirect URLs Supabase)
+  - `[BUG-VPS-AUTH-TUNNEL]` — Supabase OAuth callback configurato solo per dominio prod, web UI auth non funziona via SSH tunnel `localhost:3000`. **NO workaround:** la dashboard e' l'interfaccia primaria su VPS. Fix actionable in ~10min (aggiungere `http://localhost:3000/**` agli additional redirect URLs Supabase) — vedi entry dedicata nel BUG INDEX.
   - `[BUG-CSP-JSONLD-LANDING]` (riapertura) — fix dev-4 (`e48eebee`) incompleto, hydration mismatch su `nonce` JSON-LD persiste in produzione
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
@@ -532,6 +532,19 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
 - **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
+
+#### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
+
+- **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
+- **Stato attuale (2026-05-08):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Su VPS via SSH tunnel `localhost:3000` e' bloccato da `[BUG-VPS-AUTH-TUNNEL]` (Supabase OAuth callback).
+- **Path forward:**
+  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner Leone (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
+  2. **Step 2 (UX):** verificare che il form `/profile` upload PDF su VPS via tunnel scriva correttamente in `/jht_user/cv/` (bind-mounted `~/Documents/Job Hunter Team/cv/` host). Test end-to-end sul VPS test.
+  3. **Step 3 (OCR):** integrare skill PDF parsing nell'Assistente per auto-estrarre `candidate_profile.yml` dal PDF appena caricato → utente non deve compilare YAML a mano. Skill esiste in `agents/_skills/` (controllare manifest), serve solo cablarla nel flusso `/profile` upload.
+  4. **Step 4 (Telegram, futuro):** Assistente accetta documento `.pdf` come allegato Telegram → stessa pipeline OCR. Roadmap PHASE 2.
+- **Documentation:** aggiornare `docs/guides/VPS-SETUP.md` con sezione "Carica il tuo CV" che mostra il flow web (post-fix auth) come path 🥇, scp/sftp come path 🥈 (per power-user / quando l'auth tunnel e' rotto).
+- **Priorita':** alta (segue il fix di `[BUG-VPS-AUTH-TUNNEL]` — senza quello, niente upload via UI).
+- **Linked:** `[BUG-VPS-AUTH-TUNNEL]` (BLOCKER prerequisito), `[JHT-VPS-FRIENDLY]` (per il path desktop wizard).
 
 #### 🔒 [JHT-CLOUD-06] Secure app ↔ cloud tunnel
 
@@ -804,11 +817,22 @@ All 5 tasks from 04-22 have been implemented:
 ### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
 
 - **Sintomo:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost. L'utente non puo' completare l'auth lato VPS via tunnel.
-- **Scoperto:** primo bring-up VPS del 2026-05-06.
+- **Scoperto:** primo bring-up VPS del 2026-05-06. Riconfermato sul re-test del 2026-05-08.
 - **Causa:** Supabase project ha solo `https://jobhunterteam.ai/**` come allowed redirect URLs. Manca `http://localhost:3000/**` per dev/tunnel mode.
-- **Workaround attuale:** usa CLI (`jht team status`, `jht sentinella tail`, `jht positions list`) o Telegram per gestire team su VPS senza web UI piena.
-- **Fix proposto:** (a) aggiungere `http://localhost:3000/**` agli additional redirect URLs nel dashboard Supabase project (Authentication → URL Configuration); (b) documentare il flow "tunnel + login" in `docs/guides/VPS-SETUP.md`; (c) per Phase 2 launcher, considerare un OAuth proxy locale che bypassa il problema.
-- **Priorita':** alta — la web UI e' la principale interfaccia "user-facing" della VPS. Senza, l'utente VPS deve usare solo CLI / Telegram, peggiora UX.
+- **🚫 NO workaround:** la dashboard web e' l'interfaccia primaria. Senza, manca: `/positions` (tabella job), `/team` (chat per agente + start/stop), `/sentinella` (grafici usage), `/profile` (form upload CV). Il fallback CLI e' incompleto e Telegram bot non e' ancora maturo. Il bug e' bloccante per UX VPS.
+- **🛠️ Fix actionable (~10 min, una persona con accesso Supabase admin):**
+  1. Login [supabase.com/dashboard](https://supabase.com/dashboard) → progetto JHT → **Authentication → URL Configuration**.
+  2. **Site URL:** lascia `https://jobhunterteam.ai` (prod).
+  3. **Redirect URLs (allow list):** aggiungi:
+     - `http://localhost:3000/**`
+     - `http://localhost:3001/**` (per dev mode `dev:host`)
+     - `http://127.0.0.1:3000/**` (alias)
+  4. Save → propagazione immediata, no deploy needed.
+  5. Validare end-to-end: SSH tunnel su VPS test, browser → `http://localhost:3000/?login=true` → Google OAuth → callback su `localhost:3000/auth/callback` → cookie set → redirect a `/positions`. Aggiungere screenshot a `docs/guides/VPS-SETUP.md`.
+  6. Aggiornare `docs/guides/VPS-SETUP.md` step 6 con istruzioni tunnel + login flow.
+- **Owner:** chi ha credenziali admin del Supabase project JHT (Leone).
+- **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
+- **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
 
 ### 🟡 [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch persiste in produzione (post-fix dev-4)
 
