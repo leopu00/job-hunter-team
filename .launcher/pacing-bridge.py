@@ -691,7 +691,12 @@ def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None
     }
     try:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = STATE_FILE.with_suffix(".json.tmp")
+        # PID nel nome del tmp per evitare race se piu' istanze del bridge
+        # girano in parallelo brevemente (es. dopo restart manuale prima
+        # che il vecchio sia uscito). Senza il suffix PID due processi che
+        # creano lo stesso .tmp e fanno os.replace possono perdersi il
+        # rename → "No such file" sull'instance perdente.
+        tmp = STATE_FILE.with_suffix(f".json.tmp.{os.getpid()}")
         tmp.write_text(json.dumps(state, default=str))
         os.replace(tmp, STATE_FILE)
     except OSError as e:
