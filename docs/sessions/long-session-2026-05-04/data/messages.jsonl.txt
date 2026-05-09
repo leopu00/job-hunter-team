@@ -1396,7 +1396,7 @@
 {"ts": "2026-05-02T19:14:14.114Z", "session": "CAPITANO", "from": "analista-1", "to": "capitano", "type": "REPORT", "preview": "[@analista-1 -> @capitano] [REPORT] Coda vuota. Nessuna posizione new da analizz"}
 {"ts": "2026-05-02T19:16:03.246Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 76: ID 119 \u2014 Junior Python De"}
 {"ts": "2026-05-02T19:16:03.995Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 76: ID 120 \u2014 Junior Python Ba"}
-{"ts": "2026-05-02T19:16:22.381Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-02T19:16:22.381Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T19:17:17.963Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 73: ID 122 \u2014 Backend Python E"}
 {"ts": "2026-05-02T19:17:36.324Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Batch scoring completato. #119 MLabs \u2192 76/scor"}
 {"ts": "2026-05-02T19:17:36.677Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
@@ -1433,7 +1433,7 @@
 {"ts": "2026-05-02T19:54:33.701Z", "session": "CRITICO", "from": "capitano", "to": "critico-1", "type": "MSG", "preview": "[@capitano -> @critico-1] [MSG] Inizia. in attesa, scrittore ti chiamer\u00e0"}
 {"ts": "2026-05-02T19:54:59.579Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "INFO", "preview": "[@scorer-1 -> @capitano] [INFO] Coda vuota \u2014 nessuna posizione checked disponibi"}
 {"ts": "2026-05-02T19:56:24.384Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Dashboard: 123 posizioni totali, 0 in stato ch"}
-{"ts": "2026-05-02T19:57:09.152Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T19:57:09.152Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T19:58:37.030Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "URG", "preview": "[@capitano -> @scrittore-1] [URG] THROTTLE T4: esegui jht-throttle 600 --agent s"}
 {"ts": "2026-05-02T19:58:38.527Z", "session": "SCOUT-1", "from": "capitano", "to": "scout-1", "type": "URG", "preview": "[@capitano -> @scout-1] [URG] THROTTLE T4: esegui jht-throttle 600 --agent scout"}
 {"ts": "2026-05-02T19:58:39.992Z", "session": "ANALISTA-1", "from": "capitano", "to": "analista-1", "type": "URG", "preview": "[@capitano -> @analista-1] [URG] THROTTLE T3: esegui jht-throttle 300 --agent an"}
@@ -1469,7 +1469,7 @@
 {"ts": "2026-05-02T20:23:52.392Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "INFO", "preview": "[@scorer-1 -> @capitano] [INFO] Coda scorer: trovata posizione da scorare."}
 {"ts": "2026-05-02T20:23:56.595Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "INFO", "preview": "[@scorer-1 -> @capitano] [INFO] Loop di polling riavviato in background (task ba"}
 {"ts": "2026-05-02T20:24:22.014Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "INFO", "preview": "[@scorer-1 -> @capitano] [INFO] Loop di polling riavviato (task bash-1z17sorp) c"}
-{"ts": "2026-05-02T20:26:19.080Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T20:26:19.080Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T20:27:54.297Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 7.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-02T20:30:41.303Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-02T20:32:33.511Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "URG", "preview": "[@capitano -> @scrittore-1] [URG] THROTTLE T1: esegui jht-throttle 30 --agent sc"}
@@ -1501,7 +1501,7 @@
 {"ts": "2026-05-02T22:28:16.038Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "ACK", "preview": "[@scorer-1 -> @capitano] [ACK] Loop autonomo avviato. Coda vuota al momento (125"}
 {"ts": "2026-05-02T22:28:33.512Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "INFO", "preview": "[@scorer-1 -> @capitano] [INFO] Task background attivo e running. Loop in thrott"}
 {"ts": "2026-05-02T22:28:50.836Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch 4 posizioni inserite da CERCHIO 1 (Remote"}
-{"ts": "2026-05-02T22:30:12.732Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T22:30:12.732Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T22:30:34.308Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "ACK", "preview": "[@scorer-1 -> @capitano] [ACK] Loop autonomo riavviato e stabile. Fix applicato:"}
 {"ts": "2026-05-02T22:30:38.822Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch 4 posizioni inserite da CERCHIO 1 (Remote"}
 {"ts": "2026-05-02T22:31:36.762Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
@@ -1516,7 +1516,7 @@
 {"ts": "2026-05-02T22:38:26.914Z", "session": "SCORER", "from": "analista-1", "to": "scorer", "type": "NOTIFY", "preview": "[@analista-1 -> @scorer] [NOTIFY] Coda checked cresciuta: 3 posizioni pronte per"}
 {"ts": "2026-05-02T22:38:42.585Z", "session": "SCOUT-1", "from": "analista-1", "to": "scout-1", "type": "FEEDBACK", "preview": "[@analista-1 -> @scout-1] [FEEDBACK] Pattern rilevato: 3 insert su remoteok \u2192 3 "}
 {"ts": "2026-05-02T22:39:02.913Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "ACK", "preview": "[@scout-1 -> @analista-1] [ACK] FEEDBACK ricevuto. Posizioni scadute aggiornate:"}
-{"ts": "2026-05-02T22:39:43.112Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T22:39:43.112Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T22:39:51.393Z", "session": "SCOUT-2", "from": "capitano", "to": "scout-2", "type": "MSG", "preview": "[@capitano -> @scout-2] [MSG] Inizia il loop principale. Leggi il tuo prompt (~/"}
 {"ts": "2026-05-02T22:40:43.603Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 65: ID 128 \u2014 GTM Automation E"}
 {"ts": "2026-05-02T22:40:45.140Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 50: ID 131 \u2014 Backend Engineer"}
@@ -1549,8 +1549,8 @@
 {"ts": "2026-05-02T22:48:59.928Z", "session": "SCRITTORE-2", "from": "capitano", "to": "scrittore-2", "type": "MSG", "preview": "[@capitano -> @scrittore-2] [MSG] Inizia. Coda: db_query.py next-for-scrittore. "}
 {"ts": "2026-05-02T22:49:04.882Z", "session": "ANALISTA-1", "from": "scout-2", "to": "analista-1", "type": "INFO", "preview": "[@scout-2 -> @analista-1] [INFO] Batch 3 posizioni inserite (IDs: 142-144). Font"}
 {"ts": "2026-05-02T22:49:40.696Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] Stato CERCHIO-1 (Remote EU). Posizioni inserite"}
-{"ts": "2026-05-02T22:49:53.864Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
-{"ts": "2026-05-02T22:52:05.509Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-02T22:49:53.864Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
+{"ts": "2026-05-02T22:52:05.509Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T22:52:05.648Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-02T22:52:39.208Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] Update CERCHIO-1. Totale posizioni attive inser"}
 {"ts": "2026-05-02T22:52:54.982Z", "session": "ANALISTA-2", "from": "capitano", "to": "analista-2", "type": "MSG", "preview": "[@capitano -> @analista-2] [MSG] Inizia. Coda: db_query.py next-for-analista. Co"}
@@ -1574,7 +1574,7 @@
 {"ts": "2026-05-02T22:56:58.386Z", "session": "ANALISTA-1", "from": "scout-3", "to": "analista-1", "type": "INFO", "preview": "[@scout-3 -> @analista-1] [INFO] Batch 3 posizioni inserite (IDs 147-149). CERCH"}
 {"ts": "2026-05-02T22:57:01.235Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 65: ID 145 \u2014 Web Developer @ "}
 {"ts": "2026-05-02T22:57:02.802Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Scored ID 145: 65/100 \u2014 Web Developer @ Epoch "}
-{"ts": "2026-05-02T22:57:14.899Z", "session": "CRITICO-S3", "from": "scrittore-3", "to": "critico", "type": "REQ", "preview": "[@scrittore-3 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-02T22:57:14.899Z", "session": "CRITICO-S3", "from": "scrittore-3", "to": "critico", "type": "REQ", "preview": "[@scrittore-3 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T22:57:30.668Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-02T22:57:33.231Z", "session": "ANALISTA-1", "from": "scout-2", "to": "analista-1", "type": "INFO", "preview": "[@scout-2 -> @analista-1] [INFO] Batch 2: 2 posizioni inserite (IDs: 145-146). F"}
 {"ts": "2026-05-02T22:58:07.164Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca ROUND 3: PDF: /jht_user/cv/CV_Leon"}
@@ -1589,7 +1589,7 @@
 {"ts": "2026-05-02T23:00:12.230Z", "session": "CRITICO-S3", "from": "scrittore-3", "to": "critico", "type": "REQ", "preview": "[@scrittore-3 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-02T23:00:31.526Z", "session": "ANALISTA-1", "from": "scout-2", "to": "analista-1", "type": "INFO", "preview": "[@scout-2 -> @analista-1] [INFO] Batch 3: 2 posizioni inserite (IDs: 150-151). F"}
 {"ts": "2026-05-02T23:00:39.187Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Nessun nuovo batch nelle ultime ore. Pipeline s"}
-{"ts": "2026-05-02T23:00:47.318Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T23:00:47.318Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T23:01:04.906Z", "session": "CAPITANO", "from": "utente", "to": "capitano", "type": "URG", "preview": "[@utente -> @capitano] [URG] ENDGAME WINDOW: la missione termostato \u00e8 stata aggi"}
 {"ts": "2026-05-02T23:01:07.440Z", "session": "SCRITTORE-3", "from": "critico", "to": "scrittore-3", "type": "RES", "preview": "[@critico -> @scrittore-3] [RES] Review done. Score: 7.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-02T23:01:30.997Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 63: ID 148 \u2014 Junior Software "}
@@ -1614,7 +1614,7 @@
 {"ts": "2026-05-02T23:06:00.126Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 3 (FINALE): PDF: /jht_user/c"}
 {"ts": "2026-05-02T23:06:07.755Z", "session": "SCRITTORE-2", "from": "critico", "to": "scrittore-2", "type": "RES", "preview": "[@critico -> @scrittore-2] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-02T23:06:51.705Z", "session": "CAPITANO", "from": "utente", "to": "capitano", "type": "URG", "preview": "[@utente -> @capitano] [URG] [DEATHMATCH] MANCANO 5 MINUTI AL RESET. proj=105%. "}
-{"ts": "2026-05-02T23:07:03.070Z", "session": "CRITICO-S3", "from": "scrittore-3", "to": "critico", "type": "REQ", "preview": "[@scrittore-3 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-02T23:07:03.070Z", "session": "CRITICO-S3", "from": "scrittore-3", "to": "critico", "type": "REQ", "preview": "[@scrittore-3 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T23:07:03.689Z", "session": "CAPITANO", "from": "scout-3", "to": "capitano", "type": "WARNING", "preview": "[@scout-3 -> @capitano] [WARNING] Throttle config per scout-3 sembra essere 300s"}
 {"ts": "2026-05-02T23:07:19.863Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca ROUND 3: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-02T23:07:48.511Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 3 (FINALE): PDF: /jht_user/c"}
@@ -1629,7 +1629,7 @@
 {"ts": "2026-05-02T23:37:26.062Z", "session": "CRITICO", "from": "capitano", "to": "critico", "type": "MSG", "preview": "[@capitano -> @critico] [MSG] Sei in attesa. Lo Scrittore ti chiamer\u00e0 con JD + P"}
 {"ts": "2026-05-02T23:37:50.668Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "STATUS", "preview": "[@scorer-1 -> @capitano] [STATUS] Loop attivo (PID 62702). Coda vuota al momento"}
 {"ts": "2026-05-02T23:38:11.145Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "DETAIL", "preview": "[@scorer-1 -> @capitano] [DETAIL] Verificato: #117 scored (63), #118 excluded (l"}
-{"ts": "2026-05-02T23:40:19.425Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-02T23:40:19.425Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-02T23:41:07.495Z", "session": "SCOUT-1", "from": "capitano", "to": "scout-1", "type": "INFO", "preview": "[@capitano -> @scout-1] [INFO] Throttle L8 attivo: tra ogni task chiama jht-thro"}
 {"ts": "2026-05-02T23:41:08.872Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "INFO", "preview": "[@capitano -> @scrittore-1] [INFO] Throttle L6 attivo: tra ogni task chiama jht-"}
 {"ts": "2026-05-02T23:41:10.573Z", "session": "SCORER-1", "from": "capitano", "to": "scorer-1", "type": "INFO", "preview": "[@capitano -> @scorer-1] [INFO] Throttle L6 attivo: tra ogni task chiama jht-thr"}
@@ -1655,7 +1655,7 @@
 {"ts": "2026-05-03T00:04:19.836Z", "session": "ANALISTA-1", "from": "capitano", "to": "analista-1", "type": "INFO", "preview": "[@capitano -> @analista-1] [INFO] Throttle ridotto a L3: tra ogni task chiama jh"}
 {"ts": "2026-05-03T00:04:21.691Z", "session": "SCORER-1", "from": "capitano", "to": "scorer-1", "type": "INFO", "preview": "[@capitano -> @scorer-1] [INFO] Throttle ridotto a L3: tra ogni task chiama jht-"}
 {"ts": "2026-05-03T00:04:44.264Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "ACK", "preview": "[@scorer-1 -> @capitano] [ACK] Throttle L3 applicato. scorer_loop.py ripristinat"}
-{"ts": "2026-05-03T00:05:20.065Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T00:05:20.065Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T00:06:54.981Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:07:22.621Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch 2 posizioni inserite (IDs: 153-154). 1) C"}
 {"ts": "2026-05-03T00:09:33.476Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1666,7 +1666,7 @@
 {"ts": "2026-05-03T00:16:25.441Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch 3 posizioni inserite (IDs: 153-155). 1) C"}
 {"ts": "2026-05-03T00:16:40.576Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 73: ID 155 \u2014 Full-Stack Devel"}
 {"ts": "2026-05-03T00:16:42.131Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Scored ID 155: 73/100 \u2014 Full-Stack Developer ("}
-{"ts": "2026-05-03T00:18:43.877Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T00:18:43.877Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T00:18:50.022Z", "session": "CAPITANO", "from": "analista-1", "to": "capitano", "type": "REPORT", "preview": "[@analista-1 -> @capitano] [REPORT] Task completati nel turno: #153 Canonical (c"}
 {"ts": "2026-05-03T00:20:20.292Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:21:03.365Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1674,7 +1674,7 @@
 {"ts": "2026-05-03T00:23:05.755Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 3 (FINALE): PDF: /jht_user/c"}
 {"ts": "2026-05-03T00:24:34.913Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:24:51.931Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 155 \u2014 3 round. Voto: 5.0/10 (PASS per sogli"}
-{"ts": "2026-05-03T00:27:11.286Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T00:27:11.286Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T00:28:36.332Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:29:30.508Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T00:30:39.995Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10 (was 6.0/10). File: "}
@@ -1682,7 +1682,7 @@
 {"ts": "2026-05-03T00:32:52.385Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Posizione aggiuntiva inserita (ID: 156). Zencar"}
 {"ts": "2026-05-03T00:33:43.906Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:34:09.141Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 80 \u2014 3 round. Voto: 5.5/10 (PASS per soglia"}
-{"ts": "2026-05-03T00:36:34.292Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T00:36:34.292Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T00:37:54.940Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T00:38:54.051Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T00:39:34.777Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] CERCHIO 1 (Remote EU) \u2014 Stato avanzamento. Font"}
@@ -1695,7 +1695,7 @@
 {"ts": "2026-05-03T00:48:08.271Z", "session": "SCOUT-1", "from": "capitano", "to": "scout-1", "type": "INFO", "preview": "[@capitano -> @scout-1] [INFO] Throttle L6 attivo: tra ogni task chiama jht-thro"}
 {"ts": "2026-05-03T00:50:17.868Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "ACK", "preview": "[@scout-1 -> @capitano] [ACK] Ricevuto. Throttle L6: 2\u00d7 consecutive per task. In"}
 {"ts": "2026-05-03T00:52:23.804Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch CERCHIO 2 (Italia/Roma on-site/hybrid) in"}
-{"ts": "2026-05-03T00:53:29.531Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T00:53:29.531Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T00:54:35.163Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch CERCHIO 2 aggiornato: +2 posizioni inseri"}
 {"ts": "2026-05-03T00:56:02.323Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "TICK", "preview": "[BRIDGE TICK] ts=00:56:01 usage=35% proj=35.0% status=SOTTOUTILIZZO reset=04:11 "}
 {"ts": "2026-05-03T00:57:01.014Z", "session": "CAPITANO", "from": "utente", "to": "capitano", "type": "MSG", "preview": "[@utente -> @capitano] [MSG] MISSIONE TERMOSTATO \u2014 TEST 3 (FINESTRA 5h, pattern "}
@@ -1706,7 +1706,7 @@
 {"ts": "2026-05-03T00:58:31.651Z", "session": "CRITICO", "from": "capitano", "to": "critico", "type": "MSG", "preview": "[@capitano -> @critico] [MSG] Sei in attesa. Lo Scrittore ti chiamer\u00e0 con JD + P"}
 {"ts": "2026-05-03T00:59:56.538Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "ACK", "preview": "[@scorer-1 -> @capitano] [ACK] Loop avviato. scorer_loop.py in esecuzione (task "}
 {"ts": "2026-05-03T01:01:29.634Z", "session": "CAPITANO", "from": "analista-1", "to": "capitano", "type": "REPORT", "preview": "[@analista-1 -> @capitano] [REPORT] Batch completato: analizzate 2 posizioni (#1"}
-{"ts": "2026-05-03T01:01:48.013Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T01:01:48.013Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T01:02:27.243Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Loop riavviato su PID 115242 (nohup, survive-t"}
 {"ts": "2026-05-03T01:03:34.791Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:05:22.347Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1719,7 +1719,7 @@
 {"ts": "2026-05-03T01:09:48.823Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Scored ID 163: 78/100 \u2014 Jr-Mid Python Develope"}
 {"ts": "2026-05-03T01:10:38.277Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:11:07.438Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 140 \u2014 3 round completati. Voto: 5.0/10 (PAS"}
-{"ts": "2026-05-03T01:12:42.804Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T01:12:42.804Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T01:14:16.114Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:14:28.242Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 78: ID 163 \u2014 Jr-Mid Python De"}
 {"ts": "2026-05-03T01:14:29.793Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Scored ID 163: 78/100 \u2014 Jr-Mid Python Develope"}
@@ -1743,8 +1743,8 @@
 {"ts": "2026-05-03T01:26:41.984Z", "session": "SCOUT-1", "from": "scout-2", "to": "scout-1", "type": "COORD", "preview": "[@scout-2 -> @scout-1] [COORD] OK, confermo. CERCHIO 2 Remote Global per me, tu "}
 {"ts": "2026-05-03T01:26:57.925Z", "session": "SCRITTORE-1", "from": "scrittore-2", "to": "scrittore-1", "type": "CLAIM", "preview": "[@scrittore-2 -> @SCRITTORE-1] [CLAIM] Posizione #164 CGM Consulting \u2014 presa in "}
 {"ts": "2026-05-03T01:27:00.068Z", "session": "SCOUT-2", "from": "scout-1", "to": "scout-2", "type": "COORD", "preview": "[@scout-1 -> @scout-2] [COORD] Ricevuto e confermato. Buona caccia su CERCHIO 2!"}
-{"ts": "2026-05-03T01:27:24.492Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
-{"ts": "2026-05-03T01:27:33.303Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T01:27:24.492Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
+{"ts": "2026-05-03T01:27:33.303Z", "session": "CRITICO-S2", "from": "scrittore-2", "to": "critico", "type": "REQ", "preview": "[@scrittore-2 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T01:28:34.177Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 7.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:28:59.330Z", "session": "SCRITTORE-2", "from": "critico", "to": "scrittore-2", "type": "RES", "preview": "[@critico -> @scrittore-2] [RES] Review done. Score: 6.5/10. File: /jht_home/age"}
 {"ts": "2026-05-03T01:30:22.590Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1762,7 +1762,7 @@
 {"ts": "2026-05-03T01:36:26.766Z", "session": "ANALISTA-1", "from": "scout-1", "to": "analista-1", "type": "INFO", "preview": "[@scout-1 -> @analista-1] [INFO] Batch 5 posizioni inserite su CERCHIO 1 (Remote"}
 {"ts": "2026-05-03T01:36:28.305Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] CERCHIO 1 avanzamento. Inserite 5 posizioni (ID"}
 {"ts": "2026-05-03T01:37:36.563Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 163 \u2014 3 round completati. Voti: R1=7.5, R2="}
-{"ts": "2026-05-03T01:39:56.332Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T01:39:56.332Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T01:40:26.937Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 67: ID 167 \u2014 Junior Full Stac"}
 {"ts": "2026-05-03T01:40:28.516Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Scored ID 167: 67/100 \u2014 Junior Full Stack Deve"}
 {"ts": "2026-05-03T01:40:29.564Z", "session": "SCRITTORE-1", "from": "scorer-1", "to": "scrittore-1", "type": "INFO", "preview": "[@scorer-1 -> @scrittore-1] [INFO] Nuova pos score 50: ID 168 \u2014 R&D Back-end Dev"}
@@ -1775,7 +1775,7 @@
 {"ts": "2026-05-03T01:48:30.010Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 5.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T01:48:39.374Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:49:40.649Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 86 \u2014 3 round completati. Voti: R1=4.0, R2=4"}
-{"ts": "2026-05-03T01:51:35.226Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T01:51:35.226Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T01:52:51.311Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 6.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T01:53:05.067Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T01:53:57.513Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1783,7 +1783,7 @@
 {"ts": "2026-05-03T01:57:03.079Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 3: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T01:59:08.763Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:00:22.187Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 95 \u2014 3 round completati. Voti: R1=6.0, R2=6"}
-{"ts": "2026-05-03T02:01:51.330Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T02:01:51.330Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T02:03:22.581Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:06:13.790Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T02:11:13.575Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
@@ -1792,8 +1792,8 @@
 {"ts": "2026-05-03T02:14:15.159Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:15:20.661Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 143 \u2014 3 round completati. Voti: R1=5.0, R2="}
 {"ts": "2026-05-03T02:18:31.874Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "URG", "preview": "[@capitano -> @scrittore-1] [URG] CRITICO-S1B \u00e8 stato terminato per calibrazione"}
-{"ts": "2026-05-03T02:18:44.989Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
-{"ts": "2026-05-03T02:19:30.464Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T02:18:44.989Z", "session": "CRITICO-S1B", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
+{"ts": "2026-05-03T02:19:30.464Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T02:20:38.608Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 7.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T02:20:48.455Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 7.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:23:53.462Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1801,7 +1801,7 @@
 {"ts": "2026-05-03T02:27:41.315Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 3: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T02:31:37.440Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 7.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:34:04.336Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 92 \u2014 3 round completati. Voti: R1=7.0, R2=8"}
-{"ts": "2026-05-03T02:35:48.233Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T02:35:48.233Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T02:37:12.188Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 4.5/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T02:37:22.845Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:38:05.057Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Loop attivo da ~1h. Coda checked vuota da 30+ "}
@@ -1812,7 +1812,7 @@
 {"ts": "2026-05-03T02:43:43.879Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 5.5/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T02:43:51.496Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:46:00.638Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 167 \u2014 3 round completati. Voti: R1=4.5, R2="}
-{"ts": "2026-05-03T02:48:07.557Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T02:48:07.557Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T02:49:43.613Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 5.5/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T02:49:58.479Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:52:06.009Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1821,7 +1821,7 @@
 {"ts": "2026-05-03T02:58:26.879Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T02:59:33.529Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 69 \u2014 3 round completati. Voti: R1=5.5, R2=4"}
 {"ts": "2026-05-03T02:59:57.993Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "STATUS", "preview": "[@scrittore-1 -> @capitano] [STATUS] Riassunto sessione: 8 posizioni processate."}
-{"ts": "2026-05-03T03:01:25.119Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T03:01:25.119Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T03:03:09.327Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 5.5/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T03:03:18.527Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T03:05:57.037Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
@@ -1832,7 +1832,7 @@
 {"ts": "2026-05-03T03:11:05.261Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T03:11:16.949Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 102 \u2014 3 round completati. Voti: R1=5.5, R2="}
 {"ts": "2026-05-03T03:12:47.427Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "REPORT", "preview": "[@scorer-1 -> @capitano] [REPORT] Loop riavviato correttamente. Background task "}
-{"ts": "2026-05-03T03:14:08.252Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T03:14:08.252Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T03:15:18.882Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T03:18:05.083Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T03:19:09.519Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 5.5/10. File: /jht_user/crit"}
@@ -1840,7 +1840,7 @@
 {"ts": "2026-05-03T03:21:15.856Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T03:23:38.839Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 104 \u2014 3 round completati. Voti: R1=4.0, R2="}
 {"ts": "2026-05-03T03:23:53.937Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "STATUS", "preview": "[@scrittore-1 -> @capitano] [STATUS] Riassunto aggiornato: 10 posizioni processa"}
-{"ts": "2026-05-03T03:26:03.611Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T03:26:03.611Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T03:27:59.137Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 6.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T03:30:04.923Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-03T03:33:56.433Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
@@ -1848,7 +1848,7 @@
 {"ts": "2026-05-03T03:38:05.839Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 6.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T03:40:28.081Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 113 \u2014 3 round completati. Voti: R1=6.0, R2="}
 {"ts": "2026-05-03T03:40:43.436Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "STATUS", "preview": "[@scrittore-1 -> @capitano] [STATUS] Riassunto aggiornato: 11 posizioni processa"}
-{"ts": "2026-05-03T03:44:33.976Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_Leone_Emanue"}
+{"ts": "2026-05-03T03:44:33.976Z", "session": "CRITICO-S1C", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T03:46:19.915Z", "session": "SCRITTORE-", "from": "critico", "to": "scrittore-", "type": "RES", "preview": "[@critico -> @scrittore-] [RES] Review done. Score: 6.0/10. File: /jht_user/crit"}
 {"ts": "2026-05-03T03:46:33.246Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T14:47:35.836Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "TICK", "preview": "[BRIDGE TICK] ts=14:47:35 usage=0% proj=0.0% status=SOTTOUTILIZZO reset=19:11 sr"}
@@ -1886,11 +1886,11 @@
 {"ts": "2026-05-03T16:12:41.179Z", "session": "ASSISTENTE", "from": "capitano", "to": "assistente", "type": "RIPRENDI", "preview": "[@capitano -> @assistente] [RIPRENDI] ORDINE Sentinella: ACCELERARE. Throttle re"}
 {"ts": "2026-05-03T16:13:02.986Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "ACK", "preview": "[@scout-1 -> @capitano] [ACK] ORDINE ricevuto: ACCELERARE. Nota tecnica: process"}
 {"ts": "2026-05-03T16:13:06.871Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "MSG", "preview": "[@capitano -> @scrittore-1] [MSG] Inizia. Coda: db_query.py next-for-scrittore. "}
-{"ts": "2026-05-03T16:15:57.934Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:15:57.934Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:17:59.099Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.0/10. File: /jht_user/cri"}
-{"ts": "2026-05-03T16:19:12.755Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:19:12.755Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:21:40.982Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
-{"ts": "2026-05-03T16:22:44.111Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:22:44.111Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:23:45.699Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] Batch 3 nuove posizioni inserite (IDs: 175-177)"}
 {"ts": "2026-05-03T16:23:47.243Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] ID 175: Calabrio (Verint) - Engineer Software ("}
 {"ts": "2026-05-03T16:23:48.823Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "REPORT", "preview": "[@scout-1 -> @capitano] [REPORT] ID 176: Algolia - Junior Developer Support Engi"}
@@ -1900,21 +1900,21 @@
 {"ts": "2026-05-03T16:24:05.600Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T16:24:19.757Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 145 \u2014 3 round. Voto: 4.5/10 (REJECT). Gate:"}
 {"ts": "2026-05-03T16:24:33.276Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "ACK", "preview": "[@capitano -> @scrittore-1] [ACK] ID 145 \u2014 voto 4.5/10, status excluded. Ricevut"}
-{"ts": "2026-05-03T16:25:57.859Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:25:57.859Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:27:11.449Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
-{"ts": "2026-05-03T16:28:23.359Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:28:23.359Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:32:02.685Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
-{"ts": "2026-05-03T16:33:17.168Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:33:17.168Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:35:01.972Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T16:35:19.340Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 150 \u2014 3 round. Voto: 6.5/10 (PASS). Gate: r"}
 {"ts": "2026-05-03T16:35:26.752Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "ACK", "preview": "[@capitano -> @scrittore-1] [ACK] ID 150 \u2014 voto 6.5/10, status ready. Ottimo lav"}
-{"ts": "2026-05-03T16:37:32.905Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:37:32.905Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:39:03.041Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T16:39:08.157Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "TICK", "preview": "[BRIDGE TICK] ts=16:39:07 usage=42% proj=106.08% status=ATTENZIONE reset=19:11 s"}
 {"ts": "2026-05-03T16:40:08.801Z", "session": "CAPITANO", "from": "sentinella", "to": "capitano", "type": "URG", "preview": "[SENTINELLA] [URG] ORDINE: RALLENTARE. usage=42% vel=67%/h (ideale 19.8%/h) proj"}
 {"ts": "2026-05-03T16:40:30.040Z", "session": "SCOUT-1", "from": "capitano", "to": "scout-1", "type": "URG", "preview": "[@capitano -> @scout-1] [URG] ORDINE Sentinella: RALLENTARE. Proj=106% >100%. Ch"}
 {"ts": "2026-05-03T16:40:31.430Z", "session": "ASSISTENTE", "from": "capitano", "to": "assistente", "type": "URG", "preview": "[@capitano -> @assistente] [URG] ORDINE Sentinella: RALLENTARE. Proj=106% >100%."}
-{"ts": "2026-05-03T16:40:31.469Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T16:40:31.469Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T16:40:32.649Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "URG", "preview": "[@capitano -> @scrittore-1] [URG] ORDINE Sentinella: RALLENTARE. Proj=106% >100%"}
 {"ts": "2026-05-03T16:40:43.505Z", "session": "CAPITANO", "from": "scout-1", "to": "capitano", "type": "ACK", "preview": "[@scout-1 -> @capitano] [ACK] Throttle 600s applicato. Progetto 106% \u2014 rallento "}
 {"ts": "2026-05-03T16:41:54.386Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
@@ -1982,7 +1982,7 @@
 {"ts": "2026-05-03T20:59:19.333Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "DONE", "preview": "[@scorer-1 -> @capitano] [DONE] FREEZE 600s completato. Throttle start+wait term"}
 {"ts": "2026-05-03T21:00:00.071Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 20:59 UTC window=15m (effettivi 14.1m, post-reset session) sampl"}
 {"ts": "2026-05-03T21:00:23.529Z", "session": "ANALISTA-1", "from": "scout-2", "to": "analista-1", "type": "INFO", "preview": "[@scout-2 -> @analista-1] [INFO] Batch 3 posizioni inserite (IDs: 184-186). Cerc"}
-{"ts": "2026-05-03T21:00:38.598Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-03T21:00:38.598Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-03T21:00:56.500Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "TICK", "preview": "[BRIDGE TICK] ts=21:00:55 usage=26% proj=139.41% status=ATTENZIONE reset=00:11 s"}
 {"ts": "2026-05-03T21:01:37.796Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-03T21:01:56.584Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "STATUS", "preview": "[@scorer-1 -> @capitano] [STATUS] Batch completato: 10 posizioni processed (7 sc"}
@@ -2199,7 +2199,7 @@
 {"ts": "2026-05-04T01:42:44.730Z", "session": "SCRITTORE-1", "from": "scrittore-1", "to": "scrittore-1", "type": "CLAIM", "preview": "[@scrittore-1 -> @scrittore-1] [CLAIM] Prendo posizione #197 (dexter health) \u2014 b"}
 {"ts": "2026-05-04T01:44:22.033Z", "session": "SENTINELLA", "from": "bridge", "to": "sentinella", "type": "TICK", "preview": "[BRIDGE TICK] ts=01:44:21 usage=24% proj=79.66% status=SOTTOUTILIZZO reset=05:11"}
 {"ts": "2026-05-04T01:45:00.745Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 01:45 UTC window=15m (effettivi 5.7m, post-reset session) sample"}
-{"ts": "2026-05-04T01:45:09.455Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T01:45:09.455Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T01:45:57.715Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "INFO", "preview": "[@scrittore-1 -> @critico] [INFO] Se non riesci a leggere il PDF, leggi il markd"}
 {"ts": "2026-05-04T01:46:45.418Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T01:48:04.110Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
@@ -2273,31 +2273,31 @@
 {"ts": "2026-05-04T03:30:26.062Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "INFO", "preview": "[@capitano -> @scrittore-1] [INFO] Throttle leggero 30s applicato \u2014 proj ha supe"}
 {"ts": "2026-05-04T03:30:34.851Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Blind review Round 3 FINAL. Read /jht_home/agen"}
 {"ts": "2026-05-04T03:31:37.584Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 180 \u2014 3 round completi. Voto: 4.6/10 (REJEC"}
-{"ts": "2026-05-04T03:41:12.895Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T03:41:12.895Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T03:42:58.349Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_home/age"}
 {"ts": "2026-05-04T03:45:00.061Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] tick saltato reason=insufficient_samples."}
 {"ts": "2026-05-04T03:45:47.271Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 2 Review: PDF: /jht_user/cv/CV_LeoneEmanu"}
 {"ts": "2026-05-04T03:47:29.348Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T03:48:46.646Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 3 Final Review: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T03:50:28.232Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 117 \u2014 3 round. Voto: 6.0/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T03:54:41.853Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T03:54:41.853Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T03:55:54.188Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T03:58:25.198Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 2 Review: PDF: /jht_user/cv/CV_LeoneEmanu"}
 {"ts": "2026-05-04T04:00:00.775Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 04:00 UTC window=15m (effettivi 13.5m, post-reset session) sampl"}
 {"ts": "2026-05-04T04:00:40.298Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:01:56.874Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 3 Final Review: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T04:04:08.199Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 187 \u2014 3 round. Voto: 6.0/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T04:07:58.192Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T04:07:58.192Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T04:09:40.500Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:11:53.163Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 2 Review: PDF: /jht_user/cv/CV_LeoneEmanu"}
 {"ts": "2026-05-04T04:13:28.305Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:15:00.059Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] tick saltato reason=insufficient_samples."}
 {"ts": "2026-05-04T04:15:03.443Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 3 Final Review: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T04:17:13.365Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 116 \u2014 3 round. Voto: 5.5/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T04:20:51.642Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T04:20:51.642Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T04:23:11.654Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:23:33.319Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 142 \u2014 1 round (excluded after R1). Voto: 4."}
-{"ts": "2026-05-04T04:26:57.661Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T04:26:57.661Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T04:29:15.757Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:30:00.755Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 04:30 UTC window=15m (effettivi 13.4m, post-reset session) sampl"}
 {"ts": "2026-05-04T04:30:21.783Z", "session": "SCRITTORE-1", "from": "capitano", "to": "scrittore-1", "type": "URG", "preview": "[@capitano -> @scrittore-1] [URG] RALLENTARE \u2014 proj=101.92% sopra 100%, reset tr"}
@@ -2306,18 +2306,18 @@
 {"ts": "2026-05-04T04:31:44.436Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 7.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:34:08.851Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 3 Final Review: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T04:36:42.241Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 148 \u2014 3 round. Voto: 7.0/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T04:41:44.223Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T04:41:44.223Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T04:43:34.170Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:45:00.051Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] tick saltato reason=insufficient_samples."}
 {"ts": "2026-05-04T04:45:21.005Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 2 Review: PDF: /jht_user/cv/CV_LeoneEmanu"}
 {"ts": "2026-05-04T04:47:16.521Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.7/10. Verdict: NEEDS_WORK"}
 {"ts": "2026-05-04T04:48:58.905Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Round 3 Final Review: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T04:51:25.856Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 200 \u2014 3 round. Voto: 6.8/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T04:56:19.809Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T04:56:19.809Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T04:57:44.387Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_home/age"}
 {"ts": "2026-05-04T04:58:58.979Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 78 \u2014 1 round (excluded after R1). Voto: 5.0"}
 {"ts": "2026-05-04T05:00:00.804Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 05:00 UTC window=15m (effettivi 13.4m, post-reset session) sampl"}
-{"ts": "2026-05-04T05:08:32.219Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T05:08:32.219Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T05:09:58.966Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T05:12:15.844Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T05:13:28.177Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6.5/10. File: /jht_user/cri"}
@@ -2331,7 +2331,7 @@
 {"ts": "2026-05-04T05:17:52.550Z", "session": "SCRITTORE-1", "from": "", "to": "", "type": "", "preview": "[CAPITANO] [RIPRENDI] RESET SESSIONE \u2014 budget 100%, prossimo reset 10:11 UTC. Th"}
 {"ts": "2026-05-04T05:18:11.565Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 85 \u2014 3 round. Voto: 6.0/10 (PASS). PDF: /jh"}
 {"ts": "2026-05-04T05:18:23.645Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "STATUS", "preview": "[@scorer-1 -> @capitano] [STATUS] Throttle check OK. Coda next-for-scorer: VUOTA"}
-{"ts": "2026-05-04T05:21:45.466Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T05:21:45.466Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T05:22:16.477Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "INFO", "preview": "[@scrittore-1 -> @critico] [INFO] Il PDF non \u00e8 leggibile direttamente. Usa il CV"}
 {"ts": "2026-05-04T05:23:32.172Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T05:24:57.479Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
@@ -2350,7 +2350,7 @@
 {"ts": "2026-05-04T05:32:18.816Z", "session": "SCORER-1", "from": "capitano", "to": "scorer-1", "type": "URG", "preview": "[@capitano -> @scorer-1] [URG] RALLENTARE \u2014 chiama jht-throttle 300 --agent scor"}
 {"ts": "2026-05-04T05:33:03.980Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "ACK", "preview": "[@scrittore-1 -> @capitano] [ACK] RALLENTARE 300s ricevuto. Timeout massimo cons"}
 {"ts": "2026-05-04T05:37:45.735Z", "session": "CAPITANO", "from": "scorer-1", "to": "capitano", "type": "ACK", "preview": "[@scorer-1 -> @capitano] [ACK] Throttle 300s completato. Nota: foreground shell "}
-{"ts": "2026-05-04T05:39:47.291Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T05:39:47.291Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T05:41:05.816Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T05:44:02.584Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T05:45:00.768Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 05:45 UTC window=15m (effettivi 13.3m, post-reset session) sampl"}
@@ -2359,7 +2359,7 @@
 {"ts": "2026-05-04T05:47:27.199Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 3 (FINAL): PDF: /jht_user/cv"}
 {"ts": "2026-05-04T05:49:53.764Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T05:50:34.161Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 166 \u2014 3 round. Voto: 5.0/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T05:54:07.706Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T05:54:07.706Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T05:55:45.979Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T05:57:56.583Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T05:59:00.690Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
@@ -2369,7 +2369,7 @@
 {"ts": "2026-05-04T06:02:27.639Z", "session": "CAPITANO", "from": "sentinella", "to": "capitano", "type": "URG", "preview": "[SENTINELLA] [URG] ORDINE: RALLENTARE. usage=17% vel=16%/h (ideale 18%/h) proj=1"}
 {"ts": "2026-05-04T06:02:49.213Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.0/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T06:04:31.161Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 153 \u2014 3 round. Voto: 5.0/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T06:07:48.034Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T06:07:48.034Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T06:09:46.377Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 6/10. File: /jht_user/criti"}
 {"ts": "2026-05-04T06:11:58.209Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T06:13:25.732Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
@@ -2377,7 +2377,7 @@
 {"ts": "2026-05-04T06:15:27.072Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca Round 3 (FINAL): PDF: /jht_user/cv"}
 {"ts": "2026-05-04T06:18:07.225Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 5.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T06:18:36.279Z", "session": "CAPITANO", "from": "scrittore-1", "to": "capitano", "type": "RES", "preview": "[@scrittore-1 -> @capitano] [RES] ID 192 \u2014 3 round. Voto: 5.5/10 (PASS). PDF: /j"}
-{"ts": "2026-05-04T06:25:14.562Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_LeoneEmanuel"}
+{"ts": "2026-05-04T06:25:14.562Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca: PDF: /jht_user/cv/CV_<redacted>"}
 {"ts": "2026-05-04T06:27:22.298Z", "session": "SCRITTORE-1", "from": "critico", "to": "scrittore-1", "type": "RES", "preview": "[@critico -> @scrittore-1] [RES] Review done. Score: 4.5/10. File: /jht_user/cri"}
 {"ts": "2026-05-04T06:29:47.558Z", "session": "CRITICO-S1", "from": "scrittore-1", "to": "critico", "type": "REQ", "preview": "[@scrittore-1 -> @critico] [REQ] Review cieca ROUND 2: PDF: /jht_user/cv/CV_Leon"}
 {"ts": "2026-05-04T06:30:00.775Z", "session": "CAPITANO", "from": "pacing", "to": "capitano", "type": "PACING", "preview": "[BRIDGE PACING] 06:30 UTC window=15m (effettivi 11.0m, post-reset session) sampl"}
