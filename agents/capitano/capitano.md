@@ -146,7 +146,31 @@ Se vedi `Killed by timeout (60s)` nel `tmux capture-pane` di un agente bersaglio
 - **`[EMERGENZA] FREEZATO`** → Sentinella ha già fatto Esc, decidi se ripartire dopo il reset.
 - **`ACCELERARE` `Throttle: 0`** → primo via libera. Spawna **un solo** agente, aspetta conferma prossimo tick prima del successivo (mai 5 di colpo).
 - **`SCALA UP`** → proj < 70% da 2+ tick. Consulta `db_query.py stats` per il bottleneck, spawna 1 agente sul ruolo, attendi tick.
-- **`PIPELINE VUOTA + UNDERSHOOT`** → proj < 80% AND coda scrittore vuota (scored ≥ 50). NON aspettare nuovi ordini. Riaccendi la pipeline DA MONTE: (1) controlla range 40-49 con `db_query.py next-for-scrittore --threshold 40` e promuovi le valide alzando lo score; (2) spawna 1 SCOUT per trovare nuove posizioni se il range 40-49 è vuoto o poco significativo; (3) spawna ANALISTA se ci sono nuove companies non analizzate; (4) spawna SCORER se ci sono `analyzed` non scorate; (5) appena la coda scrittore si riempie, spawna 1 SCRITTORE. Obiettivo: portare proj sopra 85% entro 2 tick. Razionale: una pipeline che si ferma per "coda vuota" mentre proj è < 80% sta sprecando 30+ punti di rate budget; il team DEVE auto-rifornirsi senza ordini espliciti.
+- **`PIPELINE VUOTA + UNDERSHOOT`** → proj < 80% AND coda scrittore vuota (scored ≥ 50). NON aspettare nuovi ordini. Riaccendi la pipeline ma SCEGLI L'AGENTE GIUSTO LEGGENDO IL BACKLOG, non spawnare sempre scout. Procedura DATA-DRIVEN obbligatoria:
+
+  **STEP 1 — diagnosi backlog** (sempre prima di spawn):
+  ```
+  python3 /app/shared/skills/db_query.py stats
+  ```
+  Conta: `positions` (P), `scores` (S), `applications` (A). Calcola:
+    - **UNSCORED** = P − S (posizioni che lo scorer deve ancora valutare)
+    - **DRAFT_BLOCKED** = applications con status=`draft` (loop scrittore↔critico in stallo)
+    - **SCRITTORE_QUEUE** = positions con score ≥ 50 e nessuna application
+    - **PROMOTABLE_40_49** = positions con score 40-49 e nessuna application
+
+  **STEP 2 — scelta priorità** (bottleneck reale, non lavoro nuovo):
+
+  | Condizione | Azione (ordine ASSOLUTO) |
+  |---|---|
+  | `DRAFT_BLOCKED ≥ 50` | **PRIMA**: sblocca il critico-loop. Spawna `CRITICO-S2/S3/S4` se non vivi (3 istanze parallele). Ogni CRITICO-S processa 1 application draft alla volta. |
+  | `UNSCORED ≥ 20` | **POI**: spawna `SCORER-2` (e SCORER-3 se UNSCORED ≥ 50). Una sola istanza scorer è insufficiente con 20+ in coda. |
+  | `SCRITTORE_QUEUE ≥ 5` | spawna 1 `SCRITTORE-N` se non vivi 3 (max). |
+  | `PROMOTABLE_40_49 ≥ 5` | promuovi le migliori 5 alzando lo score (db_query.py + UPDATE diretta), poi tratta come SCRITTORE_QUEUE. |
+  | `SCRITTORE_QUEUE < 5 AND PROMOTABLE_40_49 < 5` | SOLO ALLORA spawna 1 `SCOUT-N` per nuove posizioni. |
+
+  **STEP 3 — anti-pattern da NON fare**: NON spawnare scout come prima azione se UNSCORED > 20 — produce solo più backlog senza output. NON resettare throttle a 0 globalmente — applica jht-throttle solo al ruolo che hai spawnato.
+
+  **Obiettivo**: portare proj sopra 85% entro 2 tick smaltendo BACKLOG, non aggiungendo nuovo lavoro a monte. Razionale empirico (osservato nelle finestre W3-W6, peak medio 57-61%): scout produce 3 positions/h consistenti, ma scorer/critico non smaltiscono il backlog → 88 unscored e 217 draft accumulati = 12+ punti di rate budget non sfruttati. La cura sta a VALLE della pipeline, non a monte.
 - **`PUSH G-SPOT`** → proj 70-90% stagnante. 1 solo agente leggero (SCRITTORE se scored ≥ 50, altrimenti il bottleneck) per spingere a 90-95.
 - **`MANTIENI`** → target band 90-95% per ≥ 3 tick. Non spawnare, non rallentare. Coordina ACK e basta.
 - **`[RECOVERY TRACKING]`** → INFO durante recovery, no azione. Se Δ è lento, diagnosi autonoma (db_query, rate_budget live extra) per decidere tagli senza aspettare.
