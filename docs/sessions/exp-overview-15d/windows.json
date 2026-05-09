@@ -1,0 +1,524 @@
+[
+ {
+  "session_id": "20260425T231107Z",
+  "provider": "openai",
+  "open_ts": "2026-04-25T23:11:07.605109+00:00",
+  "close_ts": "2026-04-25T23:44:16.333420+00:00",
+  "samples": 7,
+  "peak": 76,
+  "duration_min": 33
+ },
+ {
+  "session_id": "20260425T235438Z",
+  "provider": "claude",
+  "open_ts": "2026-04-25T23:54:38.652823+00:00",
+  "close_ts": "2026-04-26T00:39:53.930620+00:00",
+  "samples": 11,
+  "peak": 13,
+  "duration_min": 45
+ },
+ {
+  "session_id": "20260426T004138Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T00:41:38.342685+00:00",
+  "close_ts": "2026-04-26T00:46:13.278310+00:00",
+  "samples": 5,
+  "peak": 15,
+  "duration_min": 5
+ },
+ {
+  "session_id": "20260426T010747Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T01:07:47.354063+00:00",
+  "close_ts": "2026-04-26T01:39:49.888078+00:00",
+  "samples": 19,
+  "peak": 36,
+  "duration_min": 32
+ },
+ {
+  "session_id": "20260426T020948Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T02:09:48.216520+00:00",
+  "close_ts": "2026-04-26T02:19:43.501301+00:00",
+  "samples": 8,
+  "peak": 40,
+  "duration_min": 10
+ },
+ {
+  "session_id": "20260426T022514Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T02:25:14.533995+00:00",
+  "close_ts": "2026-04-26T02:40:23.091462+00:00",
+  "samples": 11,
+  "peak": 43,
+  "duration_min": 15
+ },
+ {
+  "session_id": "20260426T025410Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T02:54:10.619841+00:00",
+  "close_ts": "2026-04-26T03:01:48.790420+00:00",
+  "samples": 8,
+  "peak": 51,
+  "duration_min": 8
+ },
+ {
+  "session_id": "20260426T030813Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T03:08:13.351937+00:00",
+  "close_ts": "2026-04-26T03:29:06.062046+00:00",
+  "samples": 15,
+  "peak": 59,
+  "duration_min": 21
+ },
+ {
+  "session_id": "20260426T033141Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T03:31:41.407489+00:00",
+  "close_ts": "2026-04-26T04:11:05.753785+00:00",
+  "samples": 20,
+  "peak": 75,
+  "duration_min": 39
+ },
+ {
+  "session_id": "20260426T041409Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T04:14:09.634020+00:00",
+  "close_ts": "2026-04-26T04:31:58.328093+00:00",
+  "samples": 10,
+  "peak": 81,
+  "duration_min": 18
+ },
+ {
+  "session_id": "20260426T064043Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T06:40:43.049420+00:00",
+  "close_ts": "2026-04-26T07:19:34.005454+00:00",
+  "samples": 5,
+  "peak": 7,
+  "duration_min": 39
+ },
+ {
+  "session_id": "20260426T102217Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T10:22:17.661953+00:00",
+  "close_ts": "2026-04-26T11:03:12.513869+00:00",
+  "samples": 36,
+  "peak": 21,
+  "duration_min": 41
+ },
+ {
+  "session_id": "20260426T110439Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T11:04:39.480480+00:00",
+  "close_ts": "2026-04-26T11:42:31.345456+00:00",
+  "samples": 26,
+  "peak": 32,
+  "duration_min": 38
+ },
+ {
+  "session_id": "20260426T151545Z",
+  "provider": "claude",
+  "open_ts": "2026-04-26T15:15:45.096462+00:00",
+  "close_ts": "2026-04-26T15:37:26.417613+00:00",
+  "samples": 13,
+  "peak": 12.0,
+  "duration_min": 22
+ },
+ {
+  "session_id": "20260426T154131Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-26T15:41:31.523421+00:00",
+  "close_ts": "2026-04-26T16:06:37.105432+00:00",
+  "samples": 18,
+  "peak": 25,
+  "duration_min": 25
+ },
+ {
+  "session_id": "20260426T162021Z",
+  "provider": "openai",
+  "open_ts": "2026-04-26T16:20:21.820743+00:00",
+  "close_ts": "2026-04-26T16:38:44.843790+00:00",
+  "samples": 19,
+  "peak": 13,
+  "duration_min": 18
+ },
+ {
+  "session_id": "20260426T172542Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-26T17:25:42.820322+00:00",
+  "close_ts": "2026-04-26T18:01:02.058686+00:00",
+  "samples": 31,
+  "peak": 13,
+  "duration_min": 35
+ },
+ {
+  "session_id": "20260426T180253Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-26T18:02:53.858513+00:00",
+  "close_ts": "2026-04-26T20:17:13.107032+00:00",
+  "samples": 109,
+  "peak": 60,
+  "duration_min": 134
+ },
+ {
+  "session_id": "20260426T231944Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-26T23:19:44.138302+00:00",
+  "close_ts": "2026-04-26T23:27:16.576320+00:00",
+  "samples": 6,
+  "peak": 4,
+  "duration_min": 8
+ },
+ {
+  "session_id": "20260430T211522Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-30T21:15:22.347660+00:00",
+  "close_ts": "2026-04-30T21:32:14.801592+00:00",
+  "samples": 18,
+  "peak": 5,
+  "duration_min": 17
+ },
+ {
+  "session_id": "20260430T220015Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-30T22:00:15.700722+00:00",
+  "close_ts": "2026-04-30T22:20:24.186027+00:00",
+  "samples": 9,
+  "peak": 19,
+  "duration_min": 20
+ },
+ {
+  "session_id": "20260430T224459Z",
+  "provider": "kimi",
+  "open_ts": "2026-04-30T22:44:59.395242+00:00",
+  "close_ts": "2026-05-01T02:10:29.937111+00:00",
+  "samples": 44,
+  "peak": 84,
+  "duration_min": 206
+ },
+ {
+  "session_id": "20260502T144837Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T14:48:37.721827+00:00",
+  "close_ts": "2026-05-02T15:27:49.597567+00:00",
+  "samples": 15,
+  "peak": 12,
+  "duration_min": 39
+ },
+ {
+  "session_id": "20260502T152837Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T15:28:37.267073+00:00",
+  "close_ts": "2026-05-02T16:15:50.716280+00:00",
+  "samples": 18,
+  "peak": 43,
+  "duration_min": 47
+ },
+ {
+  "session_id": "20260502T164019Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T16:40:19.013933+00:00",
+  "close_ts": "2026-05-02T16:54:25.360561+00:00",
+  "samples": 7,
+  "peak": 53,
+  "duration_min": 14
+ },
+ {
+  "session_id": "20260502T182458Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T18:24:58.874806+00:00",
+  "close_ts": "2026-05-02T18:36:04.150352+00:00",
+  "samples": 6,
+  "peak": 5,
+  "duration_min": 11
+ },
+ {
+  "session_id": "20260502T190611Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T19:06:11.716393+00:00",
+  "close_ts": "2026-05-02T19:50:26.049144+00:00",
+  "samples": 17,
+  "peak": 25,
+  "duration_min": 44
+ },
+ {
+  "session_id": "20260502T195157Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T19:51:57.631063+00:00",
+  "close_ts": "2026-05-02T22:22:52.624141+00:00",
+  "samples": 57,
+  "peak": 45,
+  "duration_min": 151
+ },
+ {
+  "session_id": "20260502T222300Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T22:23:00.898544+00:00",
+  "close_ts": "2026-05-02T23:10:41.349947+00:00",
+  "samples": 24,
+  "peak": 100,
+  "duration_min": 48
+ },
+ {
+  "session_id": "20260502T231424Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T23:14:24.581930+00:00",
+  "close_ts": "2026-05-02T23:30:09.862717+00:00",
+  "samples": 6,
+  "peak": 0,
+  "duration_min": 16
+ },
+ {
+  "session_id": "20260502T233304Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-02T23:33:04.773175+00:00",
+  "close_ts": "2026-05-03T00:53:18.634651+00:00",
+  "samples": 56,
+  "peak": 34,
+  "duration_min": 80
+ },
+ {
+  "session_id": "20260503T005602Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T00:56:02.289582+00:00",
+  "close_ts": "2026-05-03T01:21:59.460898+00:00",
+  "samples": 30,
+  "peak": 51,
+  "duration_min": 26
+ },
+ {
+  "session_id": "20260503T012216Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T01:22:16.052287+00:00",
+  "close_ts": "2026-05-03T04:10:22.311181+00:00",
+  "samples": 195,
+  "peak": 100,
+  "duration_min": 168
+ },
+ {
+  "session_id": "20260503T041453Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T04:14:53.589437+00:00",
+  "close_ts": "2026-05-03T10:11:07.856827+00:00",
+  "samples": 242,
+  "peak": 0,
+  "duration_min": 356
+ },
+ {
+  "session_id": "20260503T144735Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T14:47:35.803736+00:00",
+  "close_ts": "2026-05-03T19:09:38.838161+00:00",
+  "samples": 83,
+  "peak": 46,
+  "duration_min": 262
+ },
+ {
+  "session_id": "20260503T191646Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T19:16:46.891426+00:00",
+  "close_ts": "2026-05-03T20:14:56.373083+00:00",
+  "samples": 21,
+  "peak": 14,
+  "duration_min": 58
+ },
+ {
+  "session_id": "20260503T204049Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T20:40:49.820740+00:00",
+  "close_ts": "2026-05-03T22:31:23.610135+00:00",
+  "samples": 38,
+  "peak": 66,
+  "duration_min": 111
+ },
+ {
+  "session_id": "20260503T230751Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-03T23:07:51.068501+00:00",
+  "close_ts": "2026-05-04T00:08:58.057062+00:00",
+  "samples": 13,
+  "peak": 94,
+  "duration_min": 61
+ },
+ {
+  "session_id": "20260504T001858Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-04T00:18:58.664742+00:00",
+  "close_ts": "2026-05-04T05:06:37.885893+00:00",
+  "samples": 50,
+  "peak": 96,
+  "duration_min": 288
+ },
+ {
+  "session_id": "20260504T051638Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-04T05:16:38.545441+00:00",
+  "close_ts": "2026-05-04T10:10:29.998803+00:00",
+  "samples": 60,
+  "peak": 64,
+  "duration_min": 294
+ },
+ {
+  "session_id": "20260504T101330Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-04T10:13:30.647886+00:00",
+  "close_ts": "2026-05-04T20:46:37.335419+00:00",
+  "samples": 211,
+  "peak": 5,
+  "duration_min": 633
+ },
+ {
+  "session_id": "20260504T204714Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-04T20:47:14.450400+00:00",
+  "close_ts": "2026-05-05T01:09:10.580961+00:00",
+  "samples": 76,
+  "peak": 79,
+  "duration_min": 262
+ },
+ {
+  "session_id": "20260505T011212Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-05T01:12:12.754919+00:00",
+  "close_ts": "2026-05-05T06:10:58.002503+00:00",
+  "samples": 86,
+  "peak": 69,
+  "duration_min": 299
+ },
+ {
+  "session_id": "20260505T061358Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-05T06:13:58.538635+00:00",
+  "close_ts": "2026-05-05T16:42:58.545178+00:00",
+  "samples": 210,
+  "peak": 14,
+  "duration_min": 629
+ },
+ {
+  "session_id": "20260505T164533Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-05T16:45:33.390837+00:00",
+  "close_ts": "2026-05-05T21:09:32.394307+00:00",
+  "samples": 77,
+  "peak": 63,
+  "duration_min": 264
+ },
+ {
+  "session_id": "20260505T211232Z",
+  "provider": "kimi",
+  "open_ts": "2026-05-05T21:12:32.974151+00:00",
+  "close_ts": "2026-05-05T22:03:45.454683+00:00",
+  "samples": 18,
+  "peak": 0,
+  "duration_min": 51
+ },
+ {
+  "session_id": "20260505T220607Z",
+  "provider": "openai",
+  "open_ts": "2026-05-05T22:06:07.950627+00:00",
+  "close_ts": "2026-05-06T01:01:17.098874+00:00",
+  "samples": 49,
+  "peak": 52,
+  "duration_min": 175
+ },
+ {
+  "session_id": "20260506T060438Z",
+  "provider": "openai",
+  "open_ts": "2026-05-06T06:04:38.190348+00:00",
+  "close_ts": "2026-05-06T08:16:38.447697+00:00",
+  "samples": 33,
+  "peak": 62,
+  "duration_min": 132
+ },
+ {
+  "session_id": "20260506T081939Z",
+  "provider": "openai",
+  "open_ts": "2026-05-06T08:19:39.858405+00:00",
+  "close_ts": "2026-05-06T20:35:36.165080+00:00",
+  "samples": 246,
+  "peak": 1,
+  "duration_min": 736
+ },
+ {
+  "session_id": "20260506T203555Z",
+  "provider": "openai",
+  "open_ts": "2026-05-06T20:35:55.019721+00:00",
+  "close_ts": "2026-05-06T21:56:01.661312+00:00",
+  "samples": 24,
+  "peak": 27,
+  "duration_min": 80
+ },
+ {
+  "session_id": "20260507T195322Z",
+  "provider": "openai",
+  "open_ts": "2026-05-07T19:53:22.048881+00:00",
+  "close_ts": "2026-05-08T01:12:00.954424+00:00",
+  "samples": 88,
+  "peak": 85,
+  "duration_min": 319
+ },
+ {
+  "session_id": "20260508T011502Z",
+  "provider": "openai",
+  "open_ts": "2026-05-08T01:15:02.416310+00:00",
+  "close_ts": "2026-05-08T05:52:15.063613+00:00",
+  "samples": 61,
+  "peak": 100,
+  "duration_min": 277
+ },
+ {
+  "session_id": "20260508T060215Z",
+  "provider": "openai",
+  "open_ts": "2026-05-08T06:02:15.126761+00:00",
+  "close_ts": "2026-05-08T10:59:47.918232+00:00",
+  "samples": 100,
+  "peak": 57,
+  "duration_min": 298
+ },
+ {
+  "session_id": "20260508T111650Z",
+  "provider": "openai",
+  "open_ts": "2026-05-08T11:16:50.944157+00:00",
+  "close_ts": "2026-05-08T16:03:19.352597+00:00",
+  "samples": 95,
+  "peak": 61,
+  "duration_min": 286
+ },
+ {
+  "session_id": "20260508T160619Z",
+  "provider": "openai",
+  "open_ts": "2026-05-08T16:06:19.411791+00:00",
+  "close_ts": "2026-05-08T21:02:55.997378+00:00",
+  "samples": 100,
+  "peak": 62,
+  "duration_min": 297
+ },
+ {
+  "session_id": "20260508T210556Z",
+  "provider": "openai",
+  "open_ts": "2026-05-08T21:05:56.062527+00:00",
+  "close_ts": "2026-05-09T02:04:28.218019+00:00",
+  "samples": 101,
+  "peak": 50,
+  "duration_min": 299
+ },
+ {
+  "session_id": "20260509T020729Z",
+  "provider": "openai",
+  "open_ts": "2026-05-09T02:07:29.628776+00:00",
+  "close_ts": "2026-05-09T07:05:45.448628+00:00",
+  "samples": 94,
+  "peak": 76,
+  "duration_min": 298
+ },
+ {
+  "session_id": "20260509T070845Z",
+  "provider": "openai",
+  "open_ts": "2026-05-09T07:08:45.409896+00:00",
+  "close_ts": "2026-05-09T10:58:59.773927+00:00",
+  "samples": 78,
+  "peak": 4,
+  "duration_min": 230
+ }
+]
