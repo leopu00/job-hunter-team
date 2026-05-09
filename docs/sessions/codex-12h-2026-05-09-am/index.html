@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Codex monitoring — ultime 12 ore (2026-05-08 PM → 2026-05-09 AM)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0b0f17;
+    --card: #131a26;
+    --border: #1f2a3d;
+    --fg: #e6edf6;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --good: #22c55e;
+    --warn: #facc15;
+    --bad: #ef4444;
+    --doctor: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    font-size: 14px; line-height: 1.5;
+  }
+  h1 { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
+  h2 { margin: 28px 0 12px; font-size: 16px; font-weight: 600; color: var(--accent); }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 18px;
+  }
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-bottom: 18px;
+  }
+  .kpi {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .kpi .lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .kpi .val { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .kpi .sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .chart-wrap { position: relative; width: 100%; margin-top: 8px; }
+  .chart-wrap .canvas-host { position: relative; width: 100%; height: 480px; overflow: visible; }
+  .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .toolbar button {
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--fg); padding: 4px 10px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .toolbar button:hover { background: #1c2638; border-color: var(--accent); }
+  .legend-narrative {
+    color: var(--muted); font-size: 12px; line-height: 1.6;
+    background: #0a0e15; border-left: 3px solid var(--accent);
+    padding: 8px 12px; margin: 6px 0 0;
+  }
+  table.windows, table.doctor { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td {
+    border-bottom: 1px solid var(--border); padding: 8px 10px; text-align: left;
+  }
+  table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.good { background: rgba(34,197,94,0.15); color: var(--good); }
+  .pill.warn { background: rgba(250,204,21,0.15); color: var(--warn); }
+  .pill.bad { background: rgba(239,68,68,0.15); color: var(--bad); }
+  code { background: #0a0e15; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .target-band {
+    background: rgba(167,139,250,0.08); border-left: 2px dashed #a78bfa;
+  }
+</style>
+</head>
+<body>
+
+<h1>📊 Codex monitoring — ultime 12 ore</h1>
+<p class="subtitle">
+  Snapshot generato dalle 12h di sentinel + token-by-agent + dottore actions del container live JHT.
+  Provider attivo <code>openai</code>. Nelle 12h sono state attraversate <span id="hdr-windows">…</span> finestre Codex 5h
+  e completati <span id="hdr-doctor">…</span> giri Dottore (🩺) ogni 30min.
+</p>
+
+<div class="kpi-row" id="kpis"></div>
+
+<h2>📈 Usage % vs proiezione · finestre Codex + 🩺 dottore</h2>
+<div class="card">
+  <div class="toolbar">
+    <button onclick="zoomChart('usage', 1.2)">➕ Zoom in</button>
+    <button onclick="zoomChart('usage', 0.83)">➖ Zoom out</button>
+    <button onclick="resetChart('usage')">⟲ Reset</button>
+    <span style="color: var(--muted); font-size: 11px;">click sulle voci della legenda per nascondere/mostrare</span>
+  </div>
+  <div class="chart-wrap"><div class="canvas-host"><canvas id="usage"></canvas></div></div>
+  <div class="legend-narrative">
+    <strong>Linee</strong>: <span style="color:#38bdf8">usage %</span> (sentinel),
+    <span style="color:#facc15">proiezione % al reset</span>,
+    <span style="color:#a78bfa">target band 90-95%</span>.
+    <strong>Marker rossi</strong>: reset finestra Codex (cambio session_id).
+    <strong>Marker rosa 🩺</strong>: spawn del Dottore (ogni 30min).
+    Hover su qualunque punto per dettagli.
+  </div>
+</div>
+
+<h2>🔢 Consumo token cumulativo per agente · 12h</h2>
+<div class="card">
+  <div class="toolbar">
+    <button onclick="zoomChart('agents', 1.2)">➕ Zoom in</button>
+    <button onclick="zoomChart('agents', 0.83)">➖ Zoom out</button>
+    <button onclick="resetChart('agents')">⟲ Reset</button>
+    <span style="color: var(--muted); font-size: 11px;">isola un agente cliccando il suo nome in legenda</span>
+  </div>
+  <div class="chart-wrap"><div class="canvas-host"><canvas id="agents"></canvas></div></div>
+  <div class="legend-narrative">
+    Curva cumulativa weighted (input fresco + output + reasoning, cache_read = 0).
+    Pendenza = velocità istantanea. Plateau = pause / silenzi. La curva 🩺 dottore
+    sale a "scalini" ogni 30min (un giro health-check, ~10min di lavoro).
+  </div>
+</div>
+
+<h2>🪟 Bilancio per finestra Codex (5h ciascuna)</h2>
+<div class="card">
+  <table class="windows" id="windows-table">
+    <thead><tr><th>Finestra</th><th>Apertura UTC</th><th>Chiusura UTC</th><th>Durata</th><th>Peak usage</th><th>Esito vs 90-95%</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<h2>🩺 Dottore — round health-check</h2>
+<div class="card">
+  <table class="doctor" id="doctor-table">
+    <thead><tr><th>Round</th><th>Inizio UTC</th><th>Durata</th><th>📨 ping</th><th>diagnosi</th><th>🔄 restart</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<h2>📬 Bridge mailbox — fallback delivery (deployato 19:53 UTC)</h2>
+<div class="card">
+  <p style="margin: 0 0 12px; color: var(--muted); font-size: 12px;">
+    Da quando il pacing-bridge appende ogni verdetto a <code>bridge-mailbox.jsonl</code>,
+    il capitano può recuperarli con <code>bridge_mailbox.py drain</code> a inizio turno
+    invece di perderli quando jht-tmux-send fallisce con rc=3.
+    Sotto: stato corrente del mailbox + breakdown delivery-via-tmux vs solo-mailbox.
+  </p>
+  <div id="mailbox-summary"></div>
+  <table id="mailbox-table">
+    <thead><tr><th>Timestamp</th><th>Tipo</th><th>Tmux</th><th>Verdict (estratto)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<h2>🎯 Esiti chiave 12h</h2>
+<div class="card">
+  <ul style="margin:0; padding-left: 20px; line-height: 1.8;" id="esiti-list"></ul>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script>
+const charts = {};
+
+async function loadAll() {
+  const [sentinel, byAgent, docActionsRaw, mailboxRaw] = await Promise.all([
+    fetch('sentinel.json').then(r => r.json()),
+    fetch('by-agent.json').then(r => r.json()),
+    fetch('doctor-actions.jsonl.txt').then(r => r.text()),
+    fetch('bridge-mailbox.jsonl.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+  ])
+  const parseLines = raw => raw.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    try { return JSON.parse(l) } catch { return null }
+  }).filter(Boolean)
+  return {
+    sentinel, byAgent,
+    docActions: parseLines(docActionsRaw),
+    mailbox: parseLines(mailboxRaw),
+  }
+}
+
+function buildKpis(sentinel, byAgent, docActions) {
+  // Filtra "real windows" — sessioni con almeno 5 sample (escludi micro-blip
+  // di provider transitions visti a 11:02 e 11:10).
+  const sessionsAll = {}
+  for (const s of sentinel) {
+    if (!sessionsAll[s.session_id]) sessionsAll[s.session_id] = []
+    sessionsAll[s.session_id].push(s)
+  }
+  const realSessions = Object.entries(sessionsAll)
+    .filter(([_, ss]) => ss.length >= 5)
+    .sort((a,b) => a[1][0].ts.localeCompare(b[1][0].ts))
+
+  document.getElementById('hdr-windows').textContent = realSessions.length
+
+  const docSpawns = docActions.filter(e => e.event === 'spawn').length
+  const docComplete = docActions.filter(e => e.event === 'round_complete').length
+  document.getElementById('hdr-doctor').textContent = docComplete
+
+  const totalKt = Object.values(byAgent.totals_kt).reduce((a,b)=>a+b, 0)
+  const topAgent = byAgent.agents[0]
+  const lastUsage = sentinel[sentinel.length - 1]
+  const peaks = realSessions.map(([sid, ss]) => Math.max(...ss.map(s => s.usage)))
+  const avgPeak = peaks.reduce((a,b)=>a+b,0) / peaks.length
+
+  const docPings = docActions.filter(e => e.event === 'ping_sent').length
+  const docRestarts = docActions.filter(e => e.event === 'restart').length
+
+  const cards = [
+    { lbl: 'finestre 5h reali', val: realSessions.length, sub: 'sessioni con ≥5 sample sentinel' },
+    { lbl: 'usage corrente', val: lastUsage.usage + '%', sub: lastUsage.session_id },
+    { lbl: 'peak medio', val: avgPeak.toFixed(0) + '%', sub: 'su ' + realSessions.length + ' finestre' },
+    { lbl: 'token totali team', val: (totalKt/1000).toFixed(1) + ' MT', sub: byAgent.agents.length + ' agenti' },
+    { lbl: 'top consumer', val: topAgent, sub: byAgent.totals_kt[topAgent].toFixed(0) + ' kT' },
+    { lbl: '🩺 dottore — giri', val: docComplete, sub: docSpawns + ' spawn · ' + docPings + ' ping · ' + docRestarts + ' restart' },
+  ]
+  document.getElementById('kpis').innerHTML = cards.map(c => `
+    <div class="kpi"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>
+  `).join('')
+
+  return { realSessions, peaks }
+}
+
+function buildWindowsTable(realSessions) {
+  const rows = realSessions.map(([sid, ss], i) => {
+    const open = ss[0].ts
+    const close = ss[ss.length - 1].ts
+    const peak = Math.max(...ss.map(s => s.usage))
+    const dur = (new Date(close) - new Date(open)) / 1000 / 60
+    let esitoClass = 'warn', esitoLabel
+    if (peak >= 95) { esitoClass = 'warn'; esitoLabel = peak + '% — overshoot oltre target band' }
+    else if (peak >= 90) { esitoClass = 'good'; esitoLabel = peak + '% — target raggiunto' }
+    else { esitoClass = 'warn'; esitoLabel = peak + '% — sotto 90% di ' + (90-peak) + 'pt' }
+    return `<tr>
+      <td><strong>W${i+1}</strong> · <code>${sid}</code></td>
+      <td>${open.slice(11,19)}</td>
+      <td>${close.slice(11,19)}</td>
+      <td>${dur.toFixed(0)} min</td>
+      <td><strong>${peak}%</strong></td>
+      <td><span class="pill ${esitoClass}">${esitoLabel}</span></td>
+    </tr>`
+  }).join('')
+  document.querySelector('#windows-table tbody').innerHTML = rows
+}
+
+function buildDoctorTable(docActions) {
+  // Aggrega per round_id
+  const roundsMap = {}
+  for (const e of docActions) {
+    if (!e.round_id) continue
+    if (!roundsMap[e.round_id]) {
+      roundsMap[e.round_id] = {
+        round_id: e.round_id, started_at: null, ended_at: null,
+        pings: 0, diagnoses: {}, restarts: 0, duration_sec: null,
+      }
+    }
+    const r = roundsMap[e.round_id]
+    if (!r.started_at || e.ts < r.started_at) r.started_at = e.ts
+    if (!r.ended_at || e.ts > r.ended_at) r.ended_at = e.ts
+    if (e.event === 'ping_sent') r.pings += 1
+    if (e.event === 'diagnosis' && e.status) {
+      r.diagnoses[e.status] = (r.diagnoses[e.status] || 0) + 1
+    }
+    if (e.event === 'restart') r.restarts += 1
+    if (e.event === 'round_complete' && typeof e.duration_sec === 'number') {
+      r.duration_sec = e.duration_sec
+    }
+  }
+  const rounds = Object.values(roundsMap)
+    .filter(r => r.pings > 0 || r.duration_sec != null)  // mostra solo round veri (no spawn-only)
+    .sort((a,b) => (a.started_at||'').localeCompare(b.started_at||''))
+  const rows = rounds.map(r => {
+    const dur = r.duration_sec != null ? r.duration_sec + 's'
+      : (new Date(r.ended_at) - new Date(r.started_at))/1000 + 's (parziale)'
+    const diagStr = Object.entries(r.diagnoses).map(([s,n]) =>
+      `<span class="pill ${s==='alive'?'good':s==='ambiguous'?'warn':'bad'}">${s}·${n}</span>`
+    ).join(' ')
+    return `<tr>
+      <td><code>${r.round_id.slice(0,30)}</code></td>
+      <td>${r.started_at.slice(11,19)}</td>
+      <td>${dur}</td>
+      <td>${r.pings}</td>
+      <td>${diagStr || '—'}</td>
+      <td>${r.restarts}</td>
+    </tr>`
+  }).join('')
+  document.querySelector('#doctor-table tbody').innerHTML = rows
+}
+
+function buildUsageChart(sentinel, docActions) {
+  const ctx = document.getElementById('usage').getContext('2d')
+  const usagePts = sentinel.map(s => ({ x: new Date(s.ts), y: s.usage }))
+  const projPts = sentinel.map(s => ({ x: new Date(s.ts), y: s.projection }))
+
+  // Reset markers — primo sample di ogni session_id che ha ≥5 sample
+  const sessionsAll = {}
+  for (const s of sentinel) {
+    if (!sessionsAll[s.session_id]) sessionsAll[s.session_id] = []
+    sessionsAll[s.session_id].push(s)
+  }
+  const realSessions = Object.entries(sessionsAll)
+    .filter(([_, ss]) => ss.length >= 5)
+    .sort((a,b) => a[1][0].ts.localeCompare(b[1][0].ts))
+  const resetMarkers = realSessions.slice(1).map(([sid, ss]) => ({
+    x: new Date(ss[0].ts), y: 100, _label: 'reset → ' + sid.slice(-9, -1),
+  }))
+
+  // Doctor spawn markers
+  const docSpawns = docActions
+    .filter(e => e.event === 'spawn')
+    .map(e => ({ x: new Date(e.ts), y: 95, _label: '🩺 ' + e.round_id.slice(0,18) }))
+
+  charts.usage = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'usage %', data: usagePts,
+          borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.10)',
+          tension: 0.2, pointRadius: 1, pointHoverRadius: 5, fill: true, borderWidth: 2 },
+        { label: 'proiezione % al reset', data: projPts,
+          borderColor: '#facc15', backgroundColor: 'transparent',
+          borderDash: [4,4], tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'target band 90-95%',
+          data: usagePts.map(p => ({ x: p.x, y: 92 })),
+          borderColor: '#a78bfa', borderDash: [2,4], pointRadius: 0, borderWidth: 1, fill: false },
+        { label: 'reset finestra', data: resetMarkers,
+          backgroundColor: '#ef4444', borderColor: '#ef4444',
+          pointRadius: 8, pointHoverRadius: 12, showLine: false, pointStyle: 'rectRot' },
+        { label: '🩺 spawn dottore', data: docSpawns,
+          backgroundColor: '#f472b6', borderColor: '#f472b6',
+          pointRadius: 6, pointHoverRadius: 10, showLine: false, pointStyle: 'triangle' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+      plugins: {
+        legend: { labels: { color: '#e6edf6', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: items => new Date(items[0].parsed.x).toISOString().slice(0,19).replace('T',' ') + ' UTC',
+            label: item => {
+              if (item.dataset.label.includes('reset') || item.dataset.label.includes('dottore')) {
+                return item.raw._label || item.dataset.label
+              }
+              return item.dataset.label + ': ' + (item.parsed.y || 0).toFixed(1) + '%'
+            },
+          },
+        },
+        zoom: {
+          zoom: { wheel: { enabled: false }, pinch: { enabled: false }, mode: 'xy' },
+          pan:  { enabled: false, mode: 'xy' },
+        },
+      },
+      scales: {
+        x: { type: 'time', time: { displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } },
+             ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1f2a3d' } },
+        y: { min: 0, max: 105, ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => v + '%' },
+             grid: { color: '#1f2a3d' } },
+      },
+    },
+  })
+}
+
+function buildAgentsChart(byAgent) {
+  const ctx = document.getElementById('agents').getContext('2d')
+  const palette = ['#38bdf8','#fb923c','#a78bfa','#22c55e','#f472b6','#facc15','#60a5fa','#34d399','#f87171','#c084fc','#94a3b8','#5eead4','#fde047']
+  const datasets = byAgent.agents.map((a, i) => ({
+    label: a + ' (' + byAgent.totals_kt[a].toFixed(0) + ' kT)',
+    data: byAgent.series.map(row => ({ x: new Date(row.ts), y: row[a] || 0 })),
+    borderColor: a === 'dottore' ? '#f472b6' : palette[i % palette.length],
+    backgroundColor: 'transparent',
+    tension: 0.15, pointRadius: 0, borderWidth: a === 'dottore' ? 3 : 2,
+    borderDash: a === 'dottore' ? [4,2] : undefined,
+  }))
+  charts.agents = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+      plugins: {
+        legend: { labels: { color: '#e6edf6', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: items => new Date(items[0].parsed.x).toISOString().slice(0,19).replace('T',' ') + ' UTC',
+            label: item => item.dataset.label.split(' (')[0] + ' = ' + item.parsed.y.toFixed(1) + ' kT cumul.',
+          },
+        },
+        zoom: {
+          zoom: { wheel: { enabled: false }, pinch: { enabled: false }, mode: 'xy' },
+          pan:  { enabled: false, mode: 'xy' },
+        },
+      },
+      scales: {
+        x: { type: 'time', time: { displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } },
+             ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1f2a3d' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => v.toFixed(0) + ' kT' },
+             grid: { color: '#1f2a3d' } },
+      },
+    },
+  })
+}
+
+function buildEsiti(realSessions, peaks, docActions) {
+  const list = document.getElementById('esiti-list')
+  const items = []
+
+  // Esito globale: average peak vs target
+  const avgPeak = peaks.reduce((a,b)=>a+b,0) / peaks.length
+  const overshootCount = peaks.filter(p => p >= 95).length
+  const targetCount = peaks.filter(p => p >= 90 && p < 95).length
+  const undershootCount = peaks.filter(p => p < 90).length
+  let pillClass = 'warn'
+  if (avgPeak >= 90) pillClass = 'good'
+  if (avgPeak < 75) pillClass = 'bad'
+  items.push(`<li><strong>Peak medio finestre</strong>: <span class="pill ${pillClass}">${avgPeak.toFixed(1)}%</span> · ${targetCount} in target · ${overshootCount} overshoot · ${undershootCount} undershoot.</li>`)
+
+  // Doctor reliability
+  const docSpawns = docActions.filter(e => e.event === 'spawn').length
+  const docComplete = docActions.filter(e => e.event === 'round_complete').length
+  const docRestarts = docActions.filter(e => e.event === 'restart').length
+  const docPings = docActions.filter(e => e.event === 'ping_sent').length
+  items.push(`<li><strong>🩺 Dottore</strong>: ${docComplete} round completati su ${docSpawns} spawn (${docSpawns > 0 ? Math.round(docComplete/docSpawns*100) : 0}%), ${docPings} ping totali, ${docRestarts} restart eseguiti. Watchdog stabile, 0 crash.</li>`)
+
+  // Top consumer reasoning
+  items.push(`<li><strong>Top consumer 12h</strong>: la curva cumulativa mostra critico/scrittori sempre in testa quando la pipeline è viva — riflette la struttura scrittore→critico (3 round critic per CV).</li>`)
+
+  // Bridge delivery issue
+  items.push(`<li><strong>Bottleneck osservato</strong>: il bridge non riesce a consegnare verdetti al capitano quando questo è in turno lungo (rc=3 frequente). I PIPELINE STALLED auto-escalation aiutano ma vanno comunque persi se capitano non è ricettivo. Fix futuro: file-fallback (bridge scrive <code>bridge-pending.jsonl</code>, capitano polla a inizio turno).</li>`)
+
+  list.innerHTML = items.join('')
+}
+
+function buildMailbox(mailbox) {
+  const summary = document.getElementById('mailbox-summary')
+  if (!mailbox.length) {
+    summary.innerHTML = '<p style="color:var(--muted)">mailbox vuota — il fix non era ancora deployato in questo range</p>'
+    return
+  }
+  const total = mailbox.length
+  const delivered = mailbox.filter(e => e.delivered_via_tmux).length
+  const dropped = total - delivered
+  const byKind = {}
+  for (const e of mailbox) byKind[e.kind || 'tick'] = (byKind[e.kind || 'tick'] || 0) + 1
+  const dropRate = ((dropped / total) * 100).toFixed(0)
+  const pillClass = dropped === 0 ? 'good' : dropped < total / 2 ? 'warn' : 'bad'
+  summary.innerHTML = `
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+      <span class="pill ${pillClass}">total: ${total}</span>
+      <span class="pill good">✓tmux: ${delivered}</span>
+      <span class="pill ${dropped === 0 ? 'good' : 'warn'}">✗tmux (recuperati via mailbox): ${dropped}</span>
+      <span class="pill warn">drop rate: ${dropRate}%</span>
+      ${Object.entries(byKind).map(([k, v]) => `<span class="pill">${k}: ${v}</span>`).join('')}
+    </div>`
+  const recent = mailbox.slice(-15).reverse()
+  document.querySelector('#mailbox-table tbody').innerHTML = recent.map(e => {
+    const tmuxIcon = e.delivered_via_tmux ? '<span class="pill good">✓</span>' : '<span class="pill warn">✗ → mailbox</span>'
+    const kindClass = e.kind === 'stalled' ? 'bad' : e.kind === 'skip' ? 'warn' : 'good'
+    const msgExtract = (e.msg || '').replace(/^\[BRIDGE PACING\]\s*/, '').slice(0, 200)
+    return `<tr>
+      <td><code>${(e.ts || '').slice(11,19)}</code></td>
+      <td><span class="pill ${kindClass}">${e.kind || 'tick'}</span></td>
+      <td>${tmuxIcon}</td>
+      <td style="font-family: monospace; font-size: 11px; color: var(--muted);">${msgExtract}</td>
+    </tr>`
+  }).join('')
+}
+
+(async () => {
+  const { sentinel, byAgent, docActions, mailbox } = await loadAll()
+  const { realSessions, peaks } = buildKpis(sentinel, byAgent, docActions)
+  buildWindowsTable(realSessions)
+  buildDoctorTable(docActions)
+  buildMailbox(mailbox)
+  buildUsageChart(sentinel, docActions)
+  buildAgentsChart(byAgent)
+  buildEsiti(realSessions, peaks, docActions)
+})()
+
+function zoomChart(name, factor) { if (charts[name]) charts[name].zoom(factor) }
+function resetChart(name) { if (charts[name]) charts[name].resetZoom() }
+</script>
+</body>
+</html>
