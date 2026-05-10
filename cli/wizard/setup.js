@@ -192,49 +192,29 @@ export async function runSetupWizard(prompter) {
     }
   }
 
-  // --- Step 7: OAuth login provider ---
-  // Il CLI provider (claude/codex/kimi) ha la sua TUI interattiva per il
-  // device-flow OAuth. Non puo' essere spawnato inline qui dentro al wizard
-  // perche' clack non rilascia bene il TTY al child. La soluzione semplice:
-  // dire all'utente di aprire un secondo terminale, fare ssh, e lanciare
-  // `jht oauth-login`. Quando ha finito, torna qui e premiamo Enter.
+  // --- Step 7: istruzioni finali ---
+  // Niente prompt fasulli "completato?" / "avvio?" — il wizard NON puo'
+  // sapere se l'utente ha davvero fatto login OAuth in un altro terminale.
+  // Diamo istruzioni chiare e usciamo. Login + team start sono 2 comandi
+  // che l'utente lancia consecutivamente in un terminale dedicato.
   const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
-  if (oauthCmd) {
-    await prompter.note(
-      `Per autenticare il tuo account ${selectedProvider.label}:\n\n` +
-      `  1. Apri un NUOVO terminale sul tuo computer\n` +
-      `  2. Fai SSH al VPS (stesso comando che hai usato all'inizio)\n` +
-      `  3. Esegui:  jht oauth-login\n` +
-      `  4. Segui le istruzioni: apri l'URL nel browser, fai login,\n` +
-      `     incolla il codice, esci con /quit quando vedi "authenticated"\n` +
-      `  5. Torna qui (in questo terminale) e premi Invio per continuare\n\n` +
-      `Il login viene salvato in modo persistente — lo fai solo una volta.`,
-      `Login ${selectedProvider.label} (in altro terminale)`,
-    );
-    await prompter.confirm({
-      message: 'Login completato? Premi Invio per continuare con l\'avvio del team',
-      initialValue: true,
-    });
-  }
-
-  // --- Step 8: avvia il team adesso? ---
-  const wantStart = await prompter.confirm({
-    message: 'Avviare il team adesso (Sentinella + Bridge + Capitano)?',
-    initialValue: true,
-  });
-  if (wantStart) {
-    console.log('');
-    runJhtSubcommand(['team', 'start'], 'team start');
-    console.log('');
-    await prompter.outro(
-      'Tutto pronto! Il team sta lavorando.\n' +
-      '  Status:  jht team status\n' +
-      '  Logs:    jht logs --tail 30\n' +
-      '  Stop:    jht team stop --all',
-    );
-  } else {
-    await prompter.outro(
-      'Setup completato. Per avviare il team: jht team start',
-    );
-  }
+  await prompter.note(
+    `Mancano 2 comandi, da lanciare in un altro terminale.\n\n` +
+    `1. Apri un altro terminale sul tuo computer e fai SSH al VPS\n` +
+    `   (stesso comando ssh che hai usato all'inizio)\n\n` +
+    `2. Login al tuo account ${selectedProvider.label}:\n\n` +
+    `      jht oauth-login\n\n` +
+    `   Si apre la TUI di ${oauthCmd}. Apri l'URL stampato nel browser,\n` +
+    `   fai login, incolla il codice, e quando vedi "authenticated"\n` +
+    `   esci con /quit (o Ctrl+C due volte).\n\n` +
+    `3. Avvia il team:\n\n` +
+    `      jht team start\n\n` +
+    `Per monitorare:\n` +
+    `   jht team status\n` +
+    `   jht logs --tail 30\n` +
+    `Per fermare:\n` +
+    `   jht team stop --all`,
+    'Ultimi 2 passi (in un altro terminale)',
+  );
+  await prompter.outro('Setup completato.');
 }
