@@ -47,7 +47,7 @@ export async function runNonInteractiveSetup(opts) {
   const providerName = opts.provider || 'claude';
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
   if (!selectedProvider) {
-    console.error(pc.red(`Provider "${providerName}" non valido. Usa: claude, openai, minimax`));
+    console.error(pc.red(`Provider "${providerName}" non valido. Usa: claude, openai, kimi`));
     process.exitCode = 1;
     return;
   }
@@ -144,7 +144,8 @@ export async function runNonInteractiveSetup(opts) {
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {
-    console.log(pc.dim('  Prossimo passo: jht providers update ' + (providerName === 'claude' ? 'claude' : providerName === 'openai' ? 'codex' : 'kimi')));
+    const updateId = providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
+    console.log(pc.dim(`  Prossimo passo: jht providers update ${updateId}`));
     console.log(pc.dim('  Poi avvia il CLI provider per il login OAuth (device flow).\n'));
   }
 }

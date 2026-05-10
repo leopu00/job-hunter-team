@@ -54,7 +54,19 @@ set -euo pipefail
 REPO_URL="${JHT_REPO_URL:-https://github.com/leopu00/job-hunter-team.git}"
 BRANCH="${JHT_BRANCH:-master}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
-BIN_DIR="${JHT_BIN_DIR:-$HOME/.local/bin}"
+
+# BIN_DIR scelta automatica:
+# - root su Linux/WSL  → /usr/local/bin (sempre nel PATH default, no profile.d)
+# - non-root o macOS   → $HOME/.local/bin (richiede /etc/profile.d o ~/.bashrc)
+# Override esplicito sempre rispettato via JHT_BIN_DIR.
+if [ -n "${JHT_BIN_DIR:-}" ]; then
+  BIN_DIR="$JHT_BIN_DIR"
+elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; then
+  BIN_DIR="/usr/local/bin"
+else
+  BIN_DIR="$HOME/.local/bin"
+fi
+
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
 MIN_NODE_MAJOR=22
@@ -331,14 +343,17 @@ download_runtime_files() {
 
   local compose_url="$RAW_BASE/docker-compose.yml"
   local wrapper_url="$RAW_BASE/scripts/jht-wrapper.sh"
+  local hostsetup_url="$RAW_BASE/scripts/host-setup.sh"
   local compose_dest="$RUNTIME_DIR/docker-compose.yml"
   local wrapper_dest="$BIN_DIR/jht"
+  local hostsetup_dest="$RUNTIME_DIR/host-setup.sh"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s %s\n" "$RUNTIME_DIR" "$BIN_DIR"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$compose_url" "$compose_dest"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$wrapper_url" "$wrapper_dest"
-    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s\n" "$wrapper_dest"
+    printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$hostsetup_url" "$hostsetup_dest"
+    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s %s\n" "$wrapper_dest" "$hostsetup_dest"
     case ":$PATH:" in
       *":$BIN_DIR:"*) PATH_READY=1 ;;
       *)              PATH_READY=0 ;;
@@ -360,6 +375,14 @@ download_runtime_files() {
   fi
   chmod +x "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
+
+  info "Scarico host-setup.sh (preflight VPS/swap)..."
+  if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_dest"; then
+    warn "Download host-setup.sh fallito ($hostsetup_url) — proseguo senza preflight"
+  else
+    chmod +x "$hostsetup_dest"
+    ok "host-setup: $hostsetup_dest"
+  fi
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
@@ -399,13 +422,13 @@ download_runtime_files() {
         warn "Nessun shell rc scritto. Aggiungi manualmente:"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       fi
-      # Sessione corrente: il subshell di curl|bash non puo' propagare al
-      # parent. L'utente deve fare `exec bash -l` o source. Stampiamo il
-      # comando per chiarezza.
-      info "Per la sessione corrente:"
-      printf "      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n" "$BIN_DIR"
-      printf "      (oppure apri una nuova shell)\n\n"
-      PATH_READY=0
+      # Aggiorna anche il PATH di questa subshell cosi' i comandi che
+      # install.sh esegue dopo (es. il wizard) trovano `jht`. Il PATH del
+      # parent shell sara' aggiornato al prossimo login (via /etc/profile.d
+      # o ~/.bashrc). Mostriamo PATH_READY=1 nei "prossimi passi" perche'
+      # l'utente di solito apre una nuova shell o ri-esegue exec bash -l.
+      export PATH="$BIN_DIR:$PATH"
+      PATH_READY=1
       ;;
   esac
 }

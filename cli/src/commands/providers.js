@@ -13,8 +13,7 @@ const CREDS_DIR   = join(JHT_DIR, 'credentials');
 const KNOWN_PROVIDERS = {
   anthropic: { name: 'Anthropic (Claude)', envKey: 'ANTHROPIC_API_KEY', aliases: ['claude'] },
   openai:    { name: 'OpenAI (Codex)',     envKey: 'OPENAI_API_KEY',    aliases: ['codex'] },
-  kimi:      { name: 'Kimi (Moonshot)',    envKey: 'MOONSHOT_API_KEY',  aliases: ['moonshot'] },
-  minimax:   { name: 'Minimax',            envKey: 'MINIMAX_API_KEY',   aliases: [] },
+  kimi:      { name: 'Kimi K2 (Moonshot)', envKey: 'MOONSHOT_API_KEY',  aliases: ['moonshot'] },
 };
 
 /**
