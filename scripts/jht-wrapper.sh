@@ -29,6 +29,17 @@ CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
+HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
+
+# Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
+# Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
+# pairing, telegram) sul path VPS.
+HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
+if [ -f "$HOST_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$HOST_ENV_FILE"
+fi
+JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
 
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then
@@ -119,13 +130,16 @@ ensure_up() {
 }
 
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
-exec_flags() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    printf -- '-it'
-  else
-    printf -- '-i'
-  fi
-}
+# Il check va fatto QUI nel parent shell, NON dentro $(...): la command
+# substitution chiude/reindirizza stdin+stdout del subshell, quindi
+# `[ -t 0 ]` e `[ -t 1 ]` sarebbero sempre falsi e il wrapper passerebbe
+# sempre `-i` anche su SSH interattivo. Risultato: clack/wizard riceve
+# stdin senza raw mode → exit silenzioso al primo selettore.
+if [ -t 0 ] && [ -t 1 ]; then
+  EXEC_FLAGS="-it"
+else
+  EXEC_FLAGS="-i"
+fi
 
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
@@ -188,7 +202,47 @@ case "$SUB" in
   shell)
     require_docker
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" bash
+    docker exec $EXEC_FLAGS "$CONTAINER" bash
+    ;;
+
+  # ── OAuth login: lancia il CLI del provider (claude/codex/kimi) per il
+  # device-flow OAuth. Comando dedicato perche' va eseguito in un terminale
+  # separato durante il setup wizard (clack non rilascia bene il TTY).
+  # Per ora hardcode "claude" come provider beta. TODO: leggere active_provider
+  # da ~/.jht/jht.config.json e mappare claude/codex/kimi.
+  oauth-login|claude-login)
+    require_docker
+    require_compose_file
+    ensure_up
+    docker exec $EXEC_FLAGS "$CONTAINER" claude
+    ;;
+
+  # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
+  setup)
+    require_docker
+    require_compose_file
+    # Skip host-setup se utente ha passato --non-interactive (i flag CLI
+    # del wizard sono espliciti, niente domande possibili) o env esplicita.
+    if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
+       && ! printf '%s\n' "$@" | grep -q -- '--non-interactive'; then
+      if [ -x "$HOST_SETUP_SCRIPT" ]; then
+        bash "$HOST_SETUP_SCRIPT" || warn "host-setup.sh terminato con errore — proseguo"
+      else
+        info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
+      fi
+    fi
+    # Re-source host.env DOPO host-setup.sh: il file viene scritto solo li',
+    # quindi il source iniziale del wrapper (top-level) lo manca al primo
+    # setup. Senza questo, JHT_HOST_TYPE arriverebbe "unknown" al wizard
+    # Node e il branch VPS-only (cloud + telegram obbligatori) non si
+    # attiverebbe. Idempotente nei run successivi.
+    if [ -f "$HOST_ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      . "$HOST_ENV_FILE"
+    fi
+    JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
+    ensure_up
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
@@ -196,13 +250,13 @@ case "$SUB" in
     require_docker
     require_compose_file
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" node "$NODE_ENTRY" --help
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --help
     ;;
 
   *)
     require_docker
     require_compose_file
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 esac

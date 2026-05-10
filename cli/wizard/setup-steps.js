@@ -15,6 +15,52 @@ import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 
 /**
+ * Step Telegram OBBLIGATORIO (per VPS).
+ *
+ * Niente prompt "vuoi configurarlo?": chiediamo direttamente token + chat_id.
+ * L'utente DEVE fornire entrambi per uscire dal wizard. Per VPS, Telegram e'
+ * l'unica via di interazione mobile col team senza SSH.
+ */
+export async function promptTelegramRequired(prompter, baseChannels) {
+  const existing = baseChannels?.telegram || undefined;
+
+  await prompter.note(
+    'Telegram e\' obbligatorio: e\' la tua via di interazione col team\n' +
+    'dal telefono (senza SSH).\n\n' +
+    'Come ottenere il token:\n' +
+    '  1. Apri Telegram → cerca @BotFather → scrivi /newbot\n' +
+    '  2. Segui le istruzioni (nome + username che finisce in "bot")\n' +
+    '  3. BotFather risponde con un token tipo "123456789:ABC..."\n\n' +
+    'Come ottenere il Chat ID:\n' +
+    '  1. Cerca @userinfobot su Telegram → premi Start\n' +
+    '  2. Ti risponde con il tuo "Id" (un numero)',
+    'Setup Telegram (obbligatorio)',
+  );
+
+  const botToken = await prompter.text({
+    message: 'Token del bot Telegram',
+    placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
+    initialValue: existing?.bot_token,
+    validate: (v) => {
+      if (!v || v.trim().length === 0) return 'Token obbligatorio';
+      return validateTelegramToken(v);
+    },
+  });
+
+  const chatId = await prompter.text({
+    message: 'Il tuo Chat ID Telegram',
+    placeholder: '123456789',
+    initialValue: existing?.chat_id,
+    validate: (v) => {
+      if (!v || v.trim().length === 0) return 'Chat ID obbligatorio';
+      return validateChatId(v);
+    },
+  });
+
+  return { bot_token: botToken.trim(), chat_id: chatId.trim() };
+}
+
+/**
  * Step Telegram: chiede bot token e chat ID (opzionale).
  */
 export async function promptTelegram(prompter, baseChannels) {
@@ -74,7 +120,9 @@ export async function assembleAndSaveConfig(prompter, params) {
       providerConfig.api_key = apiKey;
     }
   }
-  if (authMethod === 'subscription') providerConfig.subscription = subscriptionConfig;
+  if (authMethod === 'subscription' && subscriptionConfig) {
+    providerConfig.subscription = subscriptionConfig;
+  }
   providerConfig.model = model;
 
   const config = {
@@ -98,53 +146,37 @@ export async function showSummary(prompter, params) {
   const { selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
           model, telegramChannel } = params;
 
-  const authDisplay = authMethod === 'api_key'
-    ? `API Key (${describeSecret(apiKeySecret)})`
-    : `Subscription (${subscriptionConfig?.email ?? 'n/a'})`;
-
+  // Riepilogo minimo: il wizard chiede solo il provider, tutto il resto
+  // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    `Auth:       ${authDisplay}`,
-    `Modello:    ${model}`,
-    `Telegram:   ${telegramChannel ? 'configurato' : 'non configurato'}`,
+    `Auth:       OAuth (lo fai nel prossimo step)`,
     '',
     `Config:     ${JHT_CONFIG_PATH}`,
     `JHT home:   ${JHT_CONFIG_DIR}`,
   ].join('\n');
 
   await prompter.note(summary, 'Riepilogo');
-  await prompter.outro('Setup completato! Esegui jht team start per avviare il team.');
+  // L'outro finale viene emesso dal wizard chiamante (setup.js) DOPO gli step
+  // post-config (providers update / OAuth / team start). Qui non chiudiamo il
+  // flow perche' c'e' altro da chiedere.
 }
 
 /**
- * Prompt subscription: browser OAuth o manuale.
+ * Prompt subscription.
+ *
+ * Storia: avevamo due path (browser OAuth jht-internal + manuale email/token).
+ * Il browser path puntava a `claude.ai/authorize?client_id=jht-claude` che
+ * NON esiste su claude.ai (404 Page not found). Era un OAuth abbozzato mai
+ * implementato server-side. Rimosso 2026-05-10.
+ *
+ * Il login OAuth vero (device flow del CLI provider, es. `claude` di
+ * @anthropic-ai/claude-code) viene fatto in un step separato del wizard
+ * principale: l'utente apre un nuovo terminale e lancia `jht oauth-login`.
+ * Qui chiediamo solo l'email del suo account, salvata nel config per
+ * tracciabilita' (non usata per autenticarsi).
  */
 export async function promptSubscription(prompter, selectedProvider, flow) {
-  const browserAvailable = hasBrowserSupport();
-  const subMethod = await prompter.select({
-    message: 'Come vuoi effettuare il login?',
-    options: [
-      { value: 'browser', label: 'Apri browser per login',
-        hint: browserAvailable ? 'consigliato' : 'browser non disponibile (SSH?)' },
-      { value: 'manual', label: 'Inserisci email e token manualmente' },
-    ],
-    initialValue: browserAvailable ? 'browser' : 'manual',
-  });
-
-  if (subMethod === 'browser') {
-    const providerOAuth = selectedProvider.oauthUrl || `https://${selectedProvider.value}.ai/authorize`;
-    const clientId = selectedProvider.oauthClientId || `jht-${selectedProvider.value}`;
-    await prompter.note('Si aprira\' il browser per il login.', 'Login via browser');
-    const spin = prompter.progress('In attesa del login nel browser...');
-    const result = await startSubscriptionLogin({
-      authorizeUrl: providerOAuth, clientId, scopes: ['read', 'write'], prompter,
-    });
-    spin.stop(result ? 'Login completato!' : 'Login fallito.');
-    if (result) {
-      return { email: `oauth-${selectedProvider.value}`, session_token: result.code, oauth_verifier: result.verifier };
-    }
-    await prompter.note('Login via browser fallito. Inserisci i dati manualmente.', 'Fallback');
-  }
   return promptManualSubscription(prompter, flow);
 }
 
