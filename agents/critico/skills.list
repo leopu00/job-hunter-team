@@ -2,5 +2,13 @@
 # One name per line. Lines starting with `#` and blank lines are ignored.
 # The launcher (start-agent.sh) reads this file at boot and copies the
 # listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# Inter-agent (notify the spawning Writer with [RES])
 tmux-send
+
+# Throttle (cooldown — rare for a one-shot, used only if the Writer
+# delays the kill)
 throttle
+
+# Critico-only operative skill (the entire review contract)
+blind-review
