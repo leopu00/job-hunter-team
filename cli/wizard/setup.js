@@ -9,6 +9,8 @@
  *
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import {
   AI_PROVIDERS,
   readConfigFileSnapshot,
@@ -17,12 +19,92 @@ import {
 } from './setup-helpers.js';
 import {
   promptTelegram,
+  promptTelegramRequired,
   promptSubscription,
   assembleAndSaveConfig,
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
+
+// Mappa provider scelto nel wizard → ID accettato da `providers update`
+// (i providers.js usa "claude" / "codex" / "kimi" come keys).
+const PROVIDER_UPDATE_ID = {
+  claude: 'claude',
+  openai: 'codex',
+  kimi: 'kimi',
+};
+
+// Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
+// che, al primo run senza credenziali, mostra il device-flow URL.
+const PROVIDER_OAUTH_CMD = {
+  claude: 'claude',
+  openai: 'codex',
+  kimi: 'kimi',
+};
+
+/**
+ * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
+ * con stdio inherited. Ritorna true se exit code = 0.
+ */
+function runJhtSubcommand(args, label) {
+  const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.error(`[setup] ${label} fallito (exit ${result.status})`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Esegue il binario provider (es. `claude`) con stdio inherited per OAuth
+ * device-flow. Resta finche' l'utente non esce (Ctrl+C o /quit).
+ */
+function runProviderOauth(cmdName) {
+  const result = spawnSync(cmdName, [], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  // Exit code variabile: claude 2.x esce 0 su /quit, !=0 su Ctrl+C.
+  // Non blocchiamo il wizard sul exit code.
+  return result.error ? false : true;
+}
+
+/**
+ * Path dove i CLI provider salvano le credenziali OAuth dentro al
+ * container. Il polling controlla esistenza + mtime per detectare un
+ * login completato dopo l'inizio dell'attesa.
+ */
+const PROVIDER_CRED_PATHS = {
+  claude: ['/jht_home/.claude/.credentials.json', '/home/jht/.claude/.credentials.json'],
+  codex:  ['/jht_home/.codex/.credentials.json',  '/home/jht/.codex/.credentials.json'],
+  kimi:   ['/jht_home/.config/kimi-cli/credentials.json', '/home/jht/.config/kimi-cli/credentials.json'],
+};
+
+/**
+ * Polling: aspetta che il file credentials di `cmdName` venga creato o
+ * aggiornato dopo `startEpochSec`. Ritorna il path trovato o null in
+ * timeout. Sleep 3s tra check, max `timeoutMs`.
+ */
+async function waitForOauthCredentials(cmdName, startEpochSec, timeoutMs) {
+  const candidates = PROVIDER_CRED_PATHS[cmdName] || [];
+  if (candidates.length === 0) return null;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const p of candidates) {
+      try {
+        const st = fs.statSync(p);
+        if (st.mtimeMs / 1000 >= startEpochSec - 1) return p;
+      } catch { /* ENOENT */ }
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return null;
+}
 
 /**
  * Esegue il setup wizard JHT.
@@ -50,15 +132,9 @@ export async function runSetupWizard(prompter) {
     baseConfig = {};
   }
 
-  // --- Setup mode ---
-  const flow = await prompter.select({
-    message: 'Modalita\' di setup',
-    options: [
-      { value: 'quickstart', label: 'QuickStart', hint: 'configurazione rapida — consigliato' },
-      { value: 'advanced', label: 'Avanzato', hint: 'configura ogni dettaglio' },
-    ],
-    initialValue: 'quickstart',
-  });
+  // Modalita' di setup: sempre "quickstart". Il path "advanced" chiedeva
+  // dettagli (secret-mode, session token) che non servono per la beta.
+  const flow = 'quickstart';
 
   // --- Config esistente ---
   if (snapshot.exists && snapshot.config) {
@@ -78,7 +154,41 @@ export async function runSetupWizard(prompter) {
     if (action === 'reset') baseConfig = {};
   }
 
-  // --- Step 2: Provider AI ---
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP VPS-FIRST: prima di QUALSIASI scelta tecnica, blocca finche' non
+  // c'e' un account web + pairing. Senza account web il tester non puo'
+  // monitorare nulla dal browser, quindi il setup non ha senso.
+  // ────────────────────────────────────────────────────────────────────────
+  const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
+  if (isVps) {
+    await prompter.note(
+      'Apri il browser sul tuo computer e vai su:\n\n' +
+      '      https://jobhunterteam.ai\n\n' +
+      'Fai login con Google (o crea l\'account se non ce l\'hai).\n' +
+      'Lascia la pagina aperta — ti servira\' tra un attimo per il pairing.',
+      'Login web (obbligatorio)',
+    );
+    await prompter.note(
+      'Adesso lancio il pairing CLI ↔ web.\n\n' +
+      'Vedrai stampati un URL (jobhunterteam.ai/cli-link) e un codice.\n' +
+      'Apri l\'URL nello stesso browser dove sei loggato, digita il\n' +
+      'codice, conferma. Il wizard prosegue da solo appena il server\n' +
+      'conferma il pairing.\n\n' +
+      'Se la pagina ti chiede ancora login → torna su jobhunterteam.ai\n' +
+      'e fai login Google prima.',
+      'Pairing cloud (obbligatorio)',
+    );
+    const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
+    if (!cloudOk) {
+      await prompter.outro(
+        'Pairing cloud fallito. Controlla che il deploy web sia OK e\n' +
+        'che tu sia loggato sul browser. Rilancia: jht setup',
+      );
+      return;
+    }
+  }
+
+  // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   const providerChoice = await prompter.select({
     message: 'Provider AI',
     options: AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label, hint: p.hint })),
@@ -86,90 +196,25 @@ export async function runSetupWizard(prompter) {
   });
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 
-  // --- Auth method ---
-  const authMethod = await prompter.select({
-    message: 'Metodo di autenticazione',
-    options: [
-      { value: 'api_key', label: 'API Key', hint: 'inserisci la tua chiave API — consigliato' },
-      { value: 'subscription', label: 'Subscription', hint: 'login con email e sessione' },
-    ],
-    initialValue: baseConfig.providers?.[providerChoice]?.auth_method || 'api_key',
-  });
+  // --- Auth: solo subscription, nessun input richiesto ---
+  // ADR-0004: solo subscription. L'autenticazione VERA (OAuth device flow)
+  // viene fatta dal CLI provider (claude/codex/kimi) in uno step successivo
+  // del wizard. Qui non chiediamo niente: niente email, niente token, niente
+  // browser.
+  const authMethod = 'subscription';
+  const apiKeySecret = undefined;
+  const subscriptionConfig = undefined;
 
-  // --- Step 3: Credenziali con SecretRef ---
-  let apiKeySecret;
-  let subscriptionConfig;
+  // Modello: hardcoded al primo della lista del provider scelto. Il valore
+  // serve come "default globale" del config ma OGNI agente usa il suo
+  // modello (definito nel prompt agente). L'utente non deve scegliere qui.
+  const model = baseConfig.providers?.[providerChoice]?.model
+    || selectedProvider.models[0].value;
 
-  if (authMethod === 'api_key') {
-    // Chiedi come salvare la key (SecretRef pattern)
-    const secretMode = flow === 'advanced'
-      ? await prompter.select({
-          message: 'Come salvare la API key?',
-          options: [
-            { value: 'env', label: 'Variabile d\'ambiente', hint: 'consigliato — niente plaintext nel config' },
-            { value: 'plaintext', label: 'Nel file config', hint: 'piu\' semplice ma meno sicuro' },
-            { value: 'file', label: 'File esterno', hint: 'per Docker/secrets manager' },
-          ],
-          initialValue: 'env',
-        })
-      : 'plaintext'; // quickstart usa plaintext per semplicita'
-
-    if (secretMode === 'env') {
-      const envName = await prompter.text({
-        message: 'Nome variabile d\'ambiente',
-        initialValue: providerChoice === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerChoice.toUpperCase()}_API_KEY`,
-        placeholder: 'ANTHROPIC_API_KEY',
-      });
-      apiKeySecret = formatSecretForConfig('env', envName.trim());
-      await prompter.note(`Assicurati che ${envName.trim()} sia impostata nel tuo shell profile.`, 'Nota');
-    } else if (secretMode === 'file') {
-      const filePath = await prompter.text({
-        message: 'Path del file con la API key',
-        placeholder: '/run/secrets/anthropic-key',
-      });
-      apiKeySecret = formatSecretForConfig('file', filePath.trim());
-    } else {
-      await prompter.note(
-        `Per ottenere una API key per ${selectedProvider.label}:\n${selectedProvider.docsUrl}`,
-        'API Key',
-      );
-      const rawKey = await prompter.text({
-        message: `${selectedProvider.label} API key`,
-        placeholder: selectedProvider.keyPlaceholder,
-        validate: (value) => validateApiKey(selectedProvider, value),
-      });
-      apiKeySecret = formatSecretForConfig('plaintext', rawKey.trim());
-    }
-  }
-
-  if (authMethod === 'subscription') {
-    subscriptionConfig = await promptSubscription(prompter, selectedProvider, flow);
-  }
-
-  // --- Modello AI ---
-  const model = await prompter.select({
-    message: 'Modello AI default',
-    options: selectedProvider.models,
-    initialValue: baseConfig.providers?.[providerChoice]?.model || selectedProvider.models[0].value,
-  });
-
-  // --- Telegram (workspace e' path fisso, non chiesto) ---
-  const telegramChannel = await promptTelegram(prompter, baseConfig.channels);
-
-  // --- Step 5: Health check ---
-  if (authMethod === 'api_key') {
-    const healthy = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
-    if (!healthy) {
-      const cont = await prompter.confirm({
-        message: 'API key non verificata. Continuare e salvare comunque?',
-        initialValue: true,
-      });
-      if (!cont) {
-        await prompter.outro('Setup annullato.');
-        return;
-      }
-    }
-  }
+  // Telegram: chiesto inline solo se VPS (vedi step post-config).
+  // Su locale, la dashboard del browser e' raggiungibile e Telegram
+  // diventa opzionale → si configura dopo con `jht config`.
+  let telegramChannel = baseConfig.channels?.telegram || undefined;
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
@@ -181,4 +226,92 @@ export async function runSetupWizard(prompter) {
     selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
     model, telegramChannel,
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // POST-CONFIG: providers update + OAuth login + team start
+  // Tutti opzionali (l'utente puo' rispondere "no" e farli a mano dopo) ma
+  // proposti di default per arrivare a "team che gira" in un solo wizard.
+  // ────────────────────────────────────────────────────────────────────────
+
+  // --- Step 6: install/update CLI provider (sempre, senza chiedere) ---
+  const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
+  if (updateProviderId) {
+    console.log('');
+    console.log(`Installo il CLI di ${selectedProvider.label}...`);
+    const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
+    if (!ok) {
+      const cont = await prompter.confirm({
+        message: 'Installazione CLI fallita. Vuoi salvare comunque la config e gestirla a mano?',
+        initialValue: false,
+      });
+      if (!cont) {
+        await prompter.outro('Setup interrotto. Riprova con: jht setup');
+        return;
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP VPS-ONLY: Telegram bot OBBLIGATORIO
+  // Cloud pairing e' gia' stato fatto all'inizio del wizard (VPS-FIRST).
+  // Telegram va dopo providers update perche' richiede solo input utente,
+  // non risorse del container.
+  // ────────────────────────────────────────────────────────────────────────
+  if (isVps) {
+    telegramChannel = await promptTelegramRequired(prompter, baseConfig.channels);
+    // Aggiorno config sul disco con il telegram appena configurato.
+    await assembleAndSaveConfig(prompter, {
+      providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
+      telegramChannel, baseProviders: baseConfig.providers || {},
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP 7: OAuth login (BLOCCANTE — wizard polla finche' rileva il login)
+  // ────────────────────────────────────────────────────────────────────────
+  const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
+  const startTs = Date.now() / 1000;
+  await prompter.note(
+    `Adesso apri un altro terminale sul tuo computer, fai SSH al VPS\n` +
+    `(stesso comando ssh che hai usato all'inizio), e lancia:\n\n` +
+    `      jht oauth-login\n\n` +
+    `Si apre la TUI di ${oauthCmd}:\n` +
+    `  1. apri l'URL stampato nel browser sul tuo computer\n` +
+    `  2. fai login con il tuo account ${selectedProvider.label}\n` +
+    `  3. incolla il codice e quando vedi "authenticated" esci con /quit\n\n` +
+    `Sto monitorando il filesystem: appena rilevo le credenziali\n` +
+    `proseguo da solo. Niente da premere qui.`,
+    `Login ${selectedProvider.label} (in altro terminale)`,
+  );
+
+  const credSpinner = prompter.progress(`In attesa del login ${oauthCmd}...`);
+  const credPath = await waitForOauthCredentials(oauthCmd, startTs, 30 * 60 * 1000);
+  if (!credPath) {
+    credSpinner.stop('Timeout (30 min). Login non rilevato.');
+    await prompter.outro(
+      'Login non completato. Quando sei pronto rilancia: jht setup',
+    );
+    return;
+  }
+  credSpinner.stop(`Login ${oauthCmd} rilevato (${credPath})`);
+
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP 8: avvia il team automatically (no prompt)
+  // ────────────────────────────────────────────────────────────────────────
+  console.log('');
+  console.log('Avvio il team (Sentinella + Bridge + Capitano)...');
+  const startOk = runJhtSubcommand(['team', 'start'], 'team start');
+  if (!startOk) {
+    await prompter.outro(
+      'Avvio team fallito. Vedi log sopra. Riprova: jht team start',
+    );
+    return;
+  }
+
+  await prompter.outro(
+    'Tutto pronto! Il team sta lavorando.\n' +
+    '  Status:  jht team status\n' +
+    '  Logs:    jht logs --tail 30\n' +
+    '  Stop:    jht team stop --all',
+  );
 }

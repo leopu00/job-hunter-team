@@ -772,15 +772,15 @@ All 5 tasks from 04-22 have been implemented:
 - **Verifica locale:** `npm run build --prefix tui` ✅ verde, smoke-test runtime `import('./dist/shared/credentials/passphrase.js')` esporta `MissingPassphraseError` + `resolveJhtPassphrase`.
 - **Da verificare in CI:** `gh run list -w "Docker — Build & push"` deve tornare verde al primo push, e l'image GHCR deve riprendere il publish weekly.
 
-### 🟡 [BUG-CLACK-TTY-DOCKER-EXEC] Wizard `jht setup` interattivo non riceve frecce via `docker exec -it`
+### ✅ [BUG-CLACK-TTY-TINI] Wizard `jht setup` esce silenzioso al primo selettore — FIXED 2026-05-10
 
-- **Sintomo:** lanciato `jht setup` (modalita' interattiva) sul VPS via SSH, il prompt clack/prompts si ferma al primo selettore (`Modalita' di setup`) e le frecce ↑↓ arrivano come testo letterale `^[[A` `^[[B`.
-- **Scoperto:** primo bring-up VPS Hetzner CPX22 del 2026-05-06.
-- **Chain TTY:** PowerShell ConPTY → ssh.exe Windows OpenSSH → SSH al VPS → bash → wrapper `/root/.local/bin/jht` → `docker exec -it jht node /app/cli/bin/jht.js setup` → clack/prompts. Riprodotto sia da PowerShell sia da WSL Ubuntu+ssh.exe in tmux. Quindi il problema NON e' il chain trasporto host-side, e' dentro al container.
-- **Causa probabile:** clack chiama `process.stdin.setRawMode(true)` per intercettare keypress. Quando `node` e' lanciato via `docker exec -it`, la pty fornita non supporta `setRawMode` (silently fails) o non propaga gli eventi keypress. Le frecce arrivano come byte ANSI normali invece che intercettate.
-- **Workaround attuale:** usare `jht setup --non-interactive` con tutti i flag (commit 86c08174 ha aggiunto `--subscription-email`/`--subscription-token` per il path subscription).
-- **Fix proposto:** (a) verificare `process.stdin.isTTY` + `setRawMode` capability all'inizio del wizard e fallback a non-interactive con messaggio guidato; (b) investigare se `docker exec -t` (vs `-it`) o forzare `TERM=xterm-256color` cambia comportamento; (c) considerare un bridge di prompts via `stty raw`.
-- **Priorita':** bassa per VPS (workaround OK), alta per UX desktop launcher se in futuro lancia `jht setup` via embedded terminal.
+- **Sintomo originale (2026-05-06):** lanciato `jht setup` interattivo sul VPS, prompt clack si ferma al primo selettore (`Modalita' di setup`); le frecce ↑↓ apparivano come `^[[A` `^[[B` letterali. Diagnosticato erroneamente come problema `docker exec -it` (BUG-CLACK-TTY-DOCKER-EXEC).
+- **Sintomo aggravato (2026-05-10):** ritestato sul VPS Hetzner pulito con image `:dev1` (v0.1.9): wizard non mostra nemmeno le opzioni — esce silenzioso subito dopo la riga `◆ Modalita' di setup`. Il flow esegue `clack.select()` → ritorna immediatamente `Symbol(clack:cancel)` → `guardCancel` lancia `WizardCancelledError` → `handleSetup` cattura silently e ritorna.
+- **Causa root vera:** `tini` come PID 1 nell'ENTRYPOINT del Dockerfile (`Dockerfile:147`) **non in modalita' group**. tini default forwarda i segnali solo al figlio diretto, non al process group; in alcune chain pty questo si traduce in mancata propagazione di keypress raw-mode al processo Node child. Risultato: `process.stdin.isTTY` e `setRawMode(true)` ritornano OK ma gli eventi keypress non arrivano a clack.
+- **Eliminata l'ipotesi `docker exec -it`:** il wrapper attuale usa `docker run --rm -it` ephemeral, non `docker exec`. Stesso bug. Test isolato: `docker run --rm -it --entrypoint /usr/local/bin/node ...` (bypass tini) → wizard funziona perfettamente, frecce risposnsive. `docker run --rm -it --entrypoint /usr/bin/tini ... -g -- node ...` (tini con `-g`) → wizard funziona perfettamente.
+- **Fix applicato:** `Dockerfile:147` aggiunta flag `-g` a tini → `ENTRYPOINT ["/usr/bin/tini", "-g", "--", "node", "/app/cli/bin/jht.js"]`. Group-kill mode forwarda segnali e propaga TTY al process group invece che solo al PID figlio.
+- **Validato 2026-05-10:** VPS Hetzner CPX22 vergine, image `ghcr.io/leopu00/jht:dev1` con override entrypoint `tini -g`. Banner + step Node + selettore con `● QuickStart / ○ Avanzato`. ↓ → `● Avanzato`. ↑ → `● QuickStart`. Selezione live, marker ●/○ alternano correttamente. Da ribuildare image `:dev1` + retest senza override.
+- **Storia diagnostica:** prima ipotesi (docker exec) era data dal contesto del primo test (era allora `docker exec`). Refactor wrapper da exec → run ha lasciato il bug invariato perche' la causa vera era un livello sotto.
 
 ### 🟢 [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato
 
