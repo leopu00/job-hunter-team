@@ -38,11 +38,15 @@ export async function GET() {
   if (denied) return denied
   const active = await activeSessions()
   const agents = AGENTS.map((agent) => {
-    // Conta le istanze attive: il nome esatto della sessione oppure il
-    // suffisso `-<numero>` usato dal Capitano quando spawna più istanze
-    // (SCOUT-1, SCOUT-2). Non contiamo suffissi non-numerici come
-    // SENTINELLA-WORKER (worker accessorio, non un'istanza in più).
-    const instanceRe = new RegExp(`^${agent.session}-\\d+$`)
+    // Conta le istanze attive: il nome esatto della sessione oppure i
+    // suffissi numerici usati dal Capitano quando spawna più istanze:
+    //   - `-<n>`     standard (SCOUT-1, ANALISTA-2)
+    //   - `-S<n>`    convenzione speciale che compare per i critici
+    //                (CRITICO-S1, CRITICO-S2). Va riconosciuta perché
+    //                altrimenti il critico non viene mai contato.
+    // Restano fuori i worker accessori non numerici come
+    // SENTINELLA-WORKER (un thread di servizio, non un'istanza extra).
+    const instanceRe = new RegExp(`^${agent.session}-S?\\d+$`)
     const instances = Array.from(active).filter(
       s => s === agent.session || instanceRe.test(s),
     ).length
