@@ -80,12 +80,12 @@ HOST_TYPE="$DETECTED"
 if [ -t 0 ]; then
   printf "\n%s\n" "Dove stai eseguendo JHT?"
   if [ "$DETECTED" = "vps" ]; then
-    printf "  [%s] 1) Server remoto / VPS    (rilevato)\n" "${BOLD}V${RESET}"
+    printf "  [%b] 1) Server remoto / VPS    (rilevato)\n" "${BOLD}V${RESET}"
     printf "  [ ] 2) Computer locale\n"
     printf "Scelta [1]: "
   else
     printf "  [ ] 1) Server remoto / VPS\n"
-    printf "  [%s] 2) Computer locale       (rilevato)\n" "${BOLD}V${RESET}"
+    printf "  [%b] 2) Computer locale       (rilevato)\n" "${BOLD}V${RESET}"
     printf "Scelta [2]: "
   fi
   read -r CHOICE

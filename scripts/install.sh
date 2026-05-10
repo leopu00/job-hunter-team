@@ -410,13 +410,13 @@ download_runtime_files() {
         warn "Nessun shell rc scritto. Aggiungi manualmente:"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       fi
-      # Sessione corrente: il subshell di curl|bash non puo' propagare al
-      # parent. L'utente deve fare `exec bash -l` o source. Stampiamo il
-      # comando per chiarezza.
-      info "Per la sessione corrente:"
-      printf "      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n" "$BIN_DIR"
-      printf "      (oppure apri una nuova shell)\n\n"
-      PATH_READY=0
+      # Aggiorna anche il PATH di questa subshell cosi' i comandi che
+      # install.sh esegue dopo (es. il wizard) trovano `jht`. Il PATH del
+      # parent shell sara' aggiornato al prossimo login (via /etc/profile.d
+      # o ~/.bashrc). Mostriamo PATH_READY=1 nei "prossimi passi" perche'
+      # l'utente di solito apre una nuova shell o ri-esegue exec bash -l.
+      export PATH="$BIN_DIR:$PATH"
+      PATH_READY=1
       ;;
   esac
 }
