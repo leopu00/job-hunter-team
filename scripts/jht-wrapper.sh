@@ -31,6 +31,16 @@ COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 
+# Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
+# Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
+# pairing, telegram) sul path VPS.
+HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
+if [ -f "$HOST_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$HOST_ENV_FILE"
+fi
+JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
+
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then
   RED='\033[0;31m' YELLOW='\033[1;33m' DIM='\033[2m' BOLD='\033[1m' RESET='\033[0m'
@@ -222,7 +232,7 @@ case "$SUB" in
       fi
     fi
     ensure_up
-    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
@@ -230,13 +240,13 @@ case "$SUB" in
     require_docker
     require_compose_file
     ensure_up
-    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" --help
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --help
     ;;
 
   *)
     require_docker
     require_compose_file
     ensure_up
-    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 esac
