@@ -369,6 +369,56 @@
       "path": "docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md",
       "description": "🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math",
       "last_review": null
+    },
+    {
+      "path": "agents/dottore/dottore.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/VPS-SETUP.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-06-agent-prompts-i18n.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-06-vps-providers-research.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-05-09-experimentation-overview-15d.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/codex-10h-2026-05-08/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/codex-12h-2026-05-08-pm/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/codex-12h-2026-05-09-am/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md",
+      "description": "",
+      "last_review": null
     }
   ]
 }
