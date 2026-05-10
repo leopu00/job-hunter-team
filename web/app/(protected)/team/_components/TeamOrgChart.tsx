@@ -10,6 +10,10 @@ type AgentMeta = {
   color: string
   link?: string | null
   role?: string
+  /** Numero di istanze attive per questo ruolo (1 = singola, >1 = multiple,
+   *  es. quando il Capitano spawna SCOUT-1 + SCOUT-2). Quando >1 il nodo
+   *  mostra un piccolo badge con il count. */
+  instances?: number
 }
 
 // roleId: id lato API (cli/web). name: label mostrato nel chart (EN).
@@ -75,6 +79,38 @@ const PIPELINE_AGENTS = [
   { roleId: 'scrittore', emoji: '\u{1F468}\u200D\uD83C\uDFEB',   name: 'Writer',  desc: 'Prepares tailored CV and cover letter.' },
   { roleId: 'critico',   emoji: '\u{1F468}\u200D\u2696\uFE0F',   name: 'Critic',  desc: 'Reviews materials and flags what needs correction.' },
 ]
+
+// Badge "×N" mostrato sui nodi che rappresentano un ruolo con più istanze
+// attive (es. 2 SCOUT, 2 ANALISTA). Posizionato in alto a sinistra
+// dell'emoji, simmetrico al LED running che sta in alto a destra.
+function InstanceBadge({ count }: { count: number }) {
+  if (count <= 1) return null
+  return (
+    <span
+      aria-label={`${count} instances`}
+      style={{
+        position: 'absolute',
+        bottom: -4,
+        right: -12,
+        minWidth: 16,
+        height: 16,
+        padding: '0 4px',
+        borderRadius: 8,
+        background: 'rgba(34,197,94,0.85)',
+        color: '#000',
+        fontSize: 10,
+        lineHeight: '16px',
+        fontWeight: 700,
+        textAlign: 'center',
+        border: '1px solid rgba(34,197,94,0.5)',
+        fontFamily: 'inherit',
+        zIndex: 2,
+      }}
+    >
+      ×{count}
+    </span>
+  )
+}
 
 function ActiveLed({ active }: { active: boolean }) {
   if (!active) return null
@@ -245,6 +281,11 @@ type Props = {
   /** v2 placeholder: rendi solo la riga superiore (Bridge, Sentinel, Captain,
    *  Pacing) e relative frecce. Usato dalla pagina /team/v2 in costruzione. */
   topRowOnly?: boolean
+  /** Quando true, i nodi non running diventano `visibility: hidden` (lo
+   *  spazio nel grid resta riservato così le frecce non si spostano) e le
+   *  frecce verso/da quei nodi non vengono renderizzate. Usato in
+   *  /team/v2 per mostrare solo gli agenti attivi nelle posizioni canoniche. */
+  hideStopped?: boolean
 }
 
 // Renderer del payload last_report del pacing-bridge dentro al popover.
@@ -398,7 +439,7 @@ const colorFor = (roleish: string): string => {
   return AGENT_COLORS[key] ?? '#34d399'
 }
 
-export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly }: Props) {
+export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly, hideStopped }: Props) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null)
@@ -616,6 +657,16 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     return activeRoles?.has(roleId) ?? false
   }
 
+  // In hideStopped mode un nodo è "visibile" se è davvero attivo. Bridge
+  // e Pacing hanno il loro stato dedicato (process Python, non in
+  // /api/agents), gli altri usano isActive.
+  const isVisible = (roleId: string): boolean => {
+    if (!hideStopped) return true
+    if (roleId === BRIDGE_NODE.roleId) return bridgeRunning
+    if (roleId === PACING_NODE.roleId) return pacingRunning
+    return isActive(roleId)
+  }
+
   // Close popover on outside click or Esc
   useEffect(() => {
     if (!selected) return
@@ -650,11 +701,14 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         // In topRowOnly i nodi pipeline non sono renderizzati: niente
         // captainPaths né chainPaths. Non saltiamo l'intero useEffect
         // perché ci servono comunque bridgePath / sentinelToCaptainPath /
-        // pacingPath calcolati sotto.
+        // pacingPath calcolati sotto. In hideStopped i nodi non running
+        // hanno display:none → rect.width=0: trattiamoli come null per
+        // non disegnare frecce verso il punto (0,0).
         const captainPaths: ArrowPath[] = topRowOnly ? [] : agentEmojiRefs.current
           .map((node, index) => {
             if (!node || index === 4) return null
             const rect = node.getBoundingClientRect()
+            if (rect.width === 0) return null
             const endX = rect.left + rect.width / 2 - flowRect.left
             const endY = rect.top - flowRect.top - 6
             const id = `captain-to-${PIPELINE_AGENTS[index]?.roleId ?? index}`
@@ -663,7 +717,11 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           .filter((p): p is ArrowPath => p !== null)
 
         const agentRects = topRowOnly ? [] : agentEmojiRefs.current
-          .map((node) => (node ? node.getBoundingClientRect() : null))
+          .map((node) => {
+            if (!node) return null
+            const rect = node.getBoundingClientRect()
+            return rect.width === 0 ? null : rect
+          })
 
         const chainPaths: ArrowPath[] = []
         for (let i = 0; i < agentRects.length - 1; i++) {
@@ -1042,7 +1100,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               </marker>
             </defs>
 
-            {arrowOverlay.bridgePath && (
+            {arrowOverlay.bridgePath && isVisible(BRIDGE_NODE.roleId) && isVisible(SENTINEL_AGENT.roleId) && (
               <path
                 id={arrowOverlay.bridgePath.id}
                 d={arrowOverlay.bridgePath.d}
@@ -1055,7 +1113,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               />
             )}
 
-            {arrowOverlay.pacingPath && (
+            {arrowOverlay.pacingPath && isVisible(PACING_NODE.roleId) && isVisible(CAPTAIN_AGENT.roleId) && (
               <path
                 id={arrowOverlay.pacingPath.id}
                 d={arrowOverlay.pacingPath.d}
@@ -1068,7 +1126,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               />
             )}
 
-            {arrowOverlay.sentinelToCaptainPath && (
+            {arrowOverlay.sentinelToCaptainPath && isVisible(SENTINEL_AGENT.roleId) && isVisible(CAPTAIN_AGENT.roleId) && (
               <path
                 id={arrowOverlay.sentinelToCaptainPath.id}
                 d={arrowOverlay.sentinelToCaptainPath.d}
@@ -1081,34 +1139,43 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               />
             )}
 
-            {arrowOverlay.captainPaths.map((p) => (
-              <path
-                key={p.id}
-                id={p.id}
-                d={p.d}
-                fill="none"
-                stroke="rgba(255,255,255,0.28)"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                markerEnd="url(#team-orgchart-arrowhead)"
-                strokeDasharray="4 8"
-              />
-            ))}
+            {arrowOverlay.captainPaths.map((p) => {
+              const targetRole = p.id.replace(/^captain-to-/, '')
+              if (hideStopped && (!isVisible(CAPTAIN_AGENT.roleId) || !isVisible(targetRole))) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.28)"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  markerStart="url(#team-orgchart-arrowhead)"
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="4 8"
+                />
+              )
+            })}
 
-            {arrowOverlay.chainPaths.map((p, index) => (
-              <path
-                key={p.id}
-                id={p.id}
-                d={p.d}
-                fill="none"
-                stroke="rgba(255,255,255,0.22)"
-                strokeWidth="1.35"
-                strokeLinecap="round"
-                markerStart={index === arrowOverlay.chainPaths.length - 1 ? 'url(#team-orgchart-arrowhead)' : undefined}
-                markerEnd="url(#team-orgchart-arrowhead)"
-                strokeDasharray="4 8"
-              />
-            ))}
+            {arrowOverlay.chainPaths.map((p, index) => {
+              const m = p.id.match(/^chain-(.+)-to-(.+)$/)
+              if (hideStopped && m && (!isVisible(m[1]) || !isVisible(m[2]))) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeWidth="1.35"
+                  strokeLinecap="round"
+                  markerStart={index === arrowOverlay.chainPaths.length - 1 ? 'url(#team-orgchart-arrowhead)' : undefined}
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="4 8"
+                />
+              )
+            })}
 
             {/* Pallini messaggio in transito: ogni elemento di messageAnims
                 renderizza un <circle> che percorre il path id-referenziato
@@ -1188,6 +1255,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               aria-expanded={selected === BRIDGE_NODE.roleId}
               aria-label={`${BRIDGE_NODE.name} details`}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-1 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(BRIDGE_NODE.roleId) ? { visibility: 'hidden' } : undefined}
             >
               <span className="relative">
                 <span ref={bridgeEmojiRef} data-team-node="bridge" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{BRIDGE_NODE.emoji}</span>
@@ -1243,10 +1311,12 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               aria-expanded={selected === SENTINEL_AGENT.roleId}
               aria-label={`${SENTINEL_AGENT.name} details`}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-2 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(SENTINEL_AGENT.roleId) ? { visibility: 'hidden' } : undefined}
             >
               <span className="relative">
                 <span ref={sentinelEmojiRef} data-team-node="sentinel" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                 <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} />
+                <InstanceBadge count={agents?.[SENTINEL_AGENT.roleId]?.instances ?? 0} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
 
@@ -1273,10 +1343,12 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               aria-expanded={selected === CAPTAIN_AGENT.roleId}
               aria-label={`${CAPTAIN_AGENT.name} details`}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-3 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(CAPTAIN_AGENT.roleId) ? { visibility: 'hidden' } : undefined}
             >
               <span className="relative">
                 <span ref={captainEmojiRef} data-team-node="captain" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                 <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
+                <InstanceBadge count={agents?.[CAPTAIN_AGENT.roleId]?.instances ?? 0} />
               </span>
               <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
 
@@ -1306,6 +1378,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               aria-expanded={selected === PACING_NODE.roleId}
               aria-label={`${PACING_NODE.name} details`}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-4 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(PACING_NODE.roleId) ? { visibility: 'hidden' } : undefined}
             >
               <span className="relative">
                 <span ref={pacingEmojiRef} data-team-node="pacing" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{PACING_NODE.emoji}</span>
@@ -1350,7 +1423,10 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         </div>
 
         {!topRowOnly && (
-        <div className="grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12">
+        <div className={hideStopped
+          ? 'mt-24 flex flex-wrap justify-center items-start'
+          : 'grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12'}
+          style={hideStopped ? { columnGap: 200 } : undefined}>
           {PIPELINE_AGENTS.map((agent, index) => (
             <div
               key={agent.name}
@@ -1361,6 +1437,10 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               aria-expanded={selected === agent.roleId}
               aria-label={`${agent.name} details`}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px] cursor-pointer outline-none"
+              // In hideStopped + flex layout, gli agenti non running spariscono
+              // dal flusso (display:none) così quelli rimasti si centrano da
+              // soli; nel layout grid normale non serve nascondere niente.
+              style={hideStopped && !isVisible(agent.roleId) ? { display: 'none' } : undefined}
             >
               <span className="relative">
                 <span
@@ -1373,6 +1453,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   {agent.emoji}
                 </span>
                 <ActiveLed active={isActive(agent.roleId)} />
+                <InstanceBadge count={agents?.[agent.roleId]?.instances ?? 0} />
               </span>
               <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
 
