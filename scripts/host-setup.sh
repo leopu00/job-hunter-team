@@ -97,6 +97,12 @@ if [ -t 0 ]; then
   esac
 fi
 
+# Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
+# Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
+JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
+mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
+printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE" > "$JHT_HOME_HOST/host.env"
+
 if [ "$HOST_TYPE" = "local" ]; then
   ok "Host: computer locale — nessuna configurazione swap richiesta"
   exit 0

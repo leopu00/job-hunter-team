@@ -18,6 +18,7 @@ import {
 } from './setup-helpers.js';
 import {
   promptTelegram,
+  promptTelegramRequired,
   promptSubscription,
   assembleAndSaveConfig,
   showSummary,
@@ -143,9 +144,10 @@ export async function runSetupWizard(prompter) {
   const model = baseConfig.providers?.[providerChoice]?.model
     || selectedProvider.models[0].value;
 
-  // Telegram: skip nel wizard base. Si configura dopo con `jht config` se
-  // serve. Per la beta vogliamo zero domande non strettamente necessarie.
-  const telegramChannel = baseConfig.channels?.telegram || undefined;
+  // Telegram: chiesto inline solo se VPS (vedi step post-config).
+  // Su locale, la dashboard del browser e' raggiungibile e Telegram
+  // diventa opzionale → si configura dopo con `jht config`.
+  let telegramChannel = baseConfig.channels?.telegram || undefined;
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
@@ -165,9 +167,6 @@ export async function runSetupWizard(prompter) {
   // ────────────────────────────────────────────────────────────────────────
 
   // --- Step 6: install/update CLI provider (sempre, senza chiedere) ---
-  // Il CLI provider e' obbligatorio per oauth-login e per far girare gli
-  // agenti. Niente prompt opzionale: installiamo sempre. Se l'utente ha
-  // gia' una versione installata, npm fa upgrade idempotente.
   const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
   if (updateProviderId) {
     console.log('');
@@ -183,6 +182,45 @@ export async function runSetupWizard(prompter) {
         return;
       }
     }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP VPS-ONLY: cloud pairing + Telegram OBBLIGATORI
+  //
+  // Su VPS (host detectato come "vps" da host-setup.sh) il tester non avra'
+  // accesso SSH dopo il setup. Userà SOLO browser dashboard + Telegram. Quindi:
+  //   - cloud login OBBLIGATORIO  → linka VPS ↔ account web del tester
+  //   - bot Telegram OBBLIGATORIO → unica via di interazione mobile
+  // ────────────────────────────────────────────────────────────────────────
+  const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
+
+  if (isVps) {
+    // --- Cloud pairing ---
+    await prompter.note(
+      'Il tester usera\' SOLO browser + Telegram (no SSH).\n' +
+      'Devi prima collegare questa VPS al suo account jobhunterteam.ai\n' +
+      'tramite il device flow.\n\n' +
+      'Tra poco vedrai un URL e un codice — apri l\'URL nel browser del\n' +
+      'tester (loggato col suo account), digita il codice, conferma.\n' +
+      'Quando il pairing e\' confermato, il wizard prosegue da solo.',
+      'Pairing cloud (obbligatorio)',
+    );
+    const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
+    if (!cloudOk) {
+      await prompter.outro(
+        'Pairing cloud fallito. Risolvi il problema (deploy web?) e rilancia: jht setup',
+      );
+      return;
+    }
+
+    // --- Telegram bot obbligatorio ---
+    telegramChannel = await promptTelegramRequired(prompter, baseConfig.channels);
+
+    // Aggiorno config sul disco con il telegram appena configurato.
+    await assembleAndSaveConfig(prompter, {
+      providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
+      telegramChannel, baseProviders: baseConfig.providers || {},
+    });
   }
 
   // --- Step 7: istruzioni finali ---
