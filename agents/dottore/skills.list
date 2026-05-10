@@ -1,0 +1,17 @@
+# Skills the Dottore consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# Inter-agent messaging (report al Capitano, kick-off post-respawn)
+tmux-send
+
+# DB access (recover task context before respawning a crashed agent)
+db-query
+
+# Routine round
+liveness-check
+
+# Maintenance (end-of-round only, conditional)
+cache-prune
+py-tools-audit
