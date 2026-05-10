@@ -33,6 +33,8 @@ type RecentPosition = {
   scored_at?: string | null
   last_action_at?: string
   last_action_by?: string
+  last_action_actor?: string
+  voto?: number | null
   url?: string | null
   remote_type?: string | null
   salary_declared_min?: number | null
@@ -40,15 +42,21 @@ type RecentPosition = {
 }
 
 const AGENT_BADGE_COLOR: Record<string, string> = {
-  scout:    '#2196f3',
-  analista: '#00e676',
-  scorer:   '#b388ff',
+  scout:     '#2196f3',
+  analista:  '#00e676',
+  scorer:    '#b388ff',
+  scrittore: '#ffd600',
+  critico:   '#f44336',
+  user:      '#94a3b8',
 }
 
 const AGENT_BADGE_LABEL: Record<string, string> = {
-  scout:    'Scout',
-  analista: 'Analyst',
-  scorer:   'Scorer',
+  scout:     'Scout',
+  analista:  'Analyst',
+  scorer:    'Scorer',
+  scrittore: 'Writer',
+  critico:   'Critic',
+  user:      'User',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -251,14 +259,14 @@ export default function TeamV2Company() {
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
                   <th className="px-3 py-2 font-normal whitespace-nowrap">Updated</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Last by</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Found by</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Title</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Location</th>
-                  <th className="px-3 py-2 font-normal whitespace-nowrap">Source</th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">Status</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap">Source</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap">Actor</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Score</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Voto</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap">Title</th>
+                  <th className="px-3 py-2 font-normal whitespace-nowrap">Location</th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">Salary</th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">Found at</th>
@@ -274,11 +282,8 @@ export default function TeamV2Company() {
                 ) : (
                   recent.map(p => {
                     const statusColor = STATUS_COLORS[p.status] ?? '#94a3b8'
-                    const by = p.last_action_by ?? 'scout'
-                    const byColor = AGENT_BADGE_COLOR[by] ?? '#94a3b8'
-                    const byLabel = AGENT_BADGE_LABEL[by] ?? by
+                    const actor = p.last_action_actor ?? p.last_action_by ?? 'scout'
                     const updatedAt = p.last_action_at ?? p.found_at
-                    const foundBy = p.found_by ?? '—'
                     const salary = (() => {
                       const lo = p.salary_declared_min
                       const hi = p.salary_declared_max
@@ -295,36 +300,31 @@ export default function TeamV2Company() {
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span
                             className="inline-block px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide"
-                            style={{ background: `${byColor}22`, color: byColor, border: `1px solid ${byColor}55` }}
-                          >
-                            {byLabel}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)] font-mono">
-                          {foundBy}
-                        </td>
-                        <td className="px-3 py-2 text-[var(--color-bright)]">
-                          <div className="truncate max-w-[380px]" title={p.title}>{p.title}</div>
-                        </td>
-                        <td className="px-3 py-2 text-[var(--color-muted)]">
-                          <div className="truncate max-w-[180px]" title={p.company}>{p.company}</div>
-                        </td>
-                        <td className="px-3 py-2 text-[var(--color-muted)]">
-                          <div className="truncate max-w-[200px]" title={p.location ?? ''}>{p.location ?? '—'}</div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)]">
-                          {p.source ?? '—'}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span
-                            className="inline-block px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide"
                             style={{ background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55` }}
                           >
                             {p.status}
                           </span>
                         </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)]">
+                          {p.source ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)] font-mono">
+                          {actor}
+                        </td>
+                        <td className="px-3 py-2 text-[var(--color-muted)]">
+                          <div className="truncate max-w-[180px]" title={p.company}>{p.company}</div>
+                        </td>
                         <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
                           {typeof p.score === 'number' ? p.score : '—'}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
+                          {typeof p.voto === 'number' ? p.voto.toFixed(1) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-[var(--color-bright)]">
+                          <div className="truncate max-w-[380px]" title={p.title}>{p.title}</div>
+                        </td>
+                        <td className="px-3 py-2 text-[var(--color-muted)]">
+                          <div className="truncate max-w-[200px]" title={p.location ?? ''}>{p.location ?? '—'}</div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)] font-mono tabular-nums">
                           {salary}
