@@ -218,6 +218,32 @@ export default function TeamCompany() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/team-pyramid"
+              className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
+              style={{
+                background: 'transparent',
+                color: 'var(--color-muted)',
+                border: '1px dashed var(--color-border)',
+                fontFamily: 'inherit',
+              }}
+              title="Vai alla pagina Team Pyramid (work in progress)"
+            >
+              🔺 pyramid
+            </Link>
+            <Link
+              href="/team/v2"
+              className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
+              style={{
+                background: 'transparent',
+                color: 'var(--color-muted)',
+                border: '1px dashed var(--color-border)',
+                fontFamily: 'inherit',
+              }}
+              title="Vai alla pagina Team v2 (work in progress)"
+            >
+              v2 →
+            </Link>
             <button
               onClick={startAll}
               disabled={activeCount === TEAM_AGENTS.length || bulkLoading !== null}
