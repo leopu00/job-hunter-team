@@ -11,13 +11,16 @@ export const dynamic = 'force-dynamic'
 // modifiche alle skill). La pagina /team/v2 polla questo endpoint e
 // quando un timestamp avanza anima il pallino dall'agente al nodo DB.
 //
-//   scout    → MAX(positions.found_at)
-//   scorer   → MAX(scores.scored_at)
-//   analista → MAX(positions.last_checked)
+//   scout      → MAX(positions.found_at)
+//   scorer     → MAX(scores.scored_at)
+//   analista   → MAX(positions.last_checked)
+//   scrittore  → MAX(positions.status_changed_at) WHERE status IN ('writing','review')
+//   critico    → MAX(positions.status_changed_at) WHERE status = 'ready'
 //
-// scrittore e critico mancano perché lo schema attuale non ha un
-// timestamp dedicato (entrambi cambiano `positions.status` ma senza
-// aggiornare un campo datetime per ruolo).
+// `status_changed_at` è popolato da un trigger SQLite a ogni cambio di
+// `positions.status`: il trigger non sa quale agente ha fatto l'UPDATE
+// ma il valore di `status` post-update lo identifica univocamente
+// (mapping nel CASE qui sopra e in getRecentlyTouchedPositionsLocal).
 
 type Row = { ts: string | null }
 
@@ -54,6 +57,22 @@ export async function GET() {
     const r = db.prepare('SELECT MAX(last_checked) AS ts FROM positions').get() as Row
     writes.analista = toUtcIso(r?.ts)
   } catch { writes.analista = null }
+
+  try {
+    const r = db.prepare(`
+      SELECT MAX(status_changed_at) AS ts FROM positions
+      WHERE status IN ('writing','review')
+    `).get() as Row
+    writes.scrittore = toUtcIso(r?.ts)
+  } catch { writes.scrittore = null }
+
+  try {
+    const r = db.prepare(`
+      SELECT MAX(status_changed_at) AS ts FROM positions
+      WHERE status = 'ready'
+    `).get() as Row
+    writes.critico = toUtcIso(r?.ts)
+  } catch { writes.critico = null }
 
   return NextResponse.json({ writes })
 }
