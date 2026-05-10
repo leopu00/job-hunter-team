@@ -29,7 +29,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point del repo: vision, install, panoramica team agenti, provider | — | 2026-04-30 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-05-06 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-05-09 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-04-28 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `info@jobhunterteam.ai` | — | 2026-04-30 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Responsible disclosure + contatti security | — | 2026-04-30 | ✅ |
@@ -49,7 +49,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-05-05 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-05-09 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-05-03 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-05-03 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-05-03 | ✅ |
@@ -59,6 +59,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-05-02 | ✅ |
 | [agents/maestro/maestro.md](../agents/maestro/maestro.md) | 🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf) | — | 2026-05-02 | ✅ |
 | [agents/capitano/missions/thermostat-test.md](../agents/capitano/missions/thermostat-test.md) | 🌡️ Missione opt-in test termostato senza Sentinella | — | 2026-05-05 | ✅ |
+| [agents/dottore/dottore.md](../agents/dottore/dottore.md) | _(da compilare nel JSON)_ | — | 2026-05-08 | ✅ |
 
 
 ## 📐 Team architecture & manuals
@@ -130,6 +131,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-04-27 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-04-27 | ✅ |
 | [docs/guides/feedback-ticketing.md](./guides/feedback-ticketing.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
+| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
 ## 🛰️ docs/internal
@@ -146,7 +148,10 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/TODO-bridge-v7.md](./internal/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
 | [docs/internal/2026-05-06-host-container-split.md](./internal/2026-05-06-host-container-split.md) | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
 | [docs/internal/2026-05-06-launch-infra-costs.md](./internal/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | — | ✅ |
+| [docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
+| [docs/internal/2026-05-06-agent-prompts-i18n.md](./internal/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
+| [docs/internal/2026-05-06-vps-providers-research.md](./internal/2026-05-06-vps-providers-research.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/internal/2026-05-09-experimentation-overview-15d.md](./internal/2026-05-09-experimentation-overview-15d.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
 ## 🔒 docs/security
@@ -167,6 +172,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [docs/sessions/long-session-2026-05-04/README.md](./sessions/long-session-2026-05-04/README.md) | Report sessione 10h+ con 2 finestre Claude back-to-back | — | 2026-05-04 | ✅ |
+| [docs/sessions/README.md](./sessions/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/codex-10h-2026-05-08/README.md](./sessions/codex-10h-2026-05-08/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/codex-12h-2026-05-08-pm/README.md](./sessions/codex-12h-2026-05-08-pm/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/codex-12h-2026-05-09-am/README.md](./sessions/codex-12h-2026-05-09-am/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md](./sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
 ## 🗄️ supabase
