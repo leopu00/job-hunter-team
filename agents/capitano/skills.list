@@ -2,9 +2,22 @@
 # One name per line. Lines starting with `#` and blank lines are ignored.
 # The launcher (start-agent.sh) reads this file at boot and copies the
 # listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# Inter-agent + user communication
 tmux-send
+chat-web
+
+# DB access (read + targeted update; the Captain does NOT insert)
 db-query
-db-insert
 db-update
-rate-budget
+
+# Coordination (the Captain's daily operational loop)
+spawn-agent
+sentinel-orders
+bridge-pacing
+bridge-mailbox
+pipeline-triage
+
+# Throttle config + on-demand rate-budget probe (rare, for ad-hoc diagnosis)
 throttle
+rate-budget
