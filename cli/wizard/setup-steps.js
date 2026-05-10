@@ -15,6 +15,52 @@ import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 
 /**
+ * Step Telegram OBBLIGATORIO (per VPS).
+ *
+ * Niente prompt "vuoi configurarlo?": chiediamo direttamente token + chat_id.
+ * L'utente DEVE fornire entrambi per uscire dal wizard. Per VPS, Telegram e'
+ * l'unica via di interazione mobile col team senza SSH.
+ */
+export async function promptTelegramRequired(prompter, baseChannels) {
+  const existing = baseChannels?.telegram || undefined;
+
+  await prompter.note(
+    'Telegram e\' obbligatorio: e\' la tua via di interazione col team\n' +
+    'dal telefono (senza SSH).\n\n' +
+    'Come ottenere il token:\n' +
+    '  1. Apri Telegram → cerca @BotFather → scrivi /newbot\n' +
+    '  2. Segui le istruzioni (nome + username che finisce in "bot")\n' +
+    '  3. BotFather risponde con un token tipo "123456789:ABC..."\n\n' +
+    'Come ottenere il Chat ID:\n' +
+    '  1. Cerca @userinfobot su Telegram → premi Start\n' +
+    '  2. Ti risponde con il tuo "Id" (un numero)',
+    'Setup Telegram (obbligatorio)',
+  );
+
+  const botToken = await prompter.text({
+    message: 'Token del bot Telegram',
+    placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
+    initialValue: existing?.bot_token,
+    validate: (v) => {
+      if (!v || v.trim().length === 0) return 'Token obbligatorio';
+      return validateTelegramToken(v);
+    },
+  });
+
+  const chatId = await prompter.text({
+    message: 'Il tuo Chat ID Telegram',
+    placeholder: '123456789',
+    initialValue: existing?.chat_id,
+    validate: (v) => {
+      if (!v || v.trim().length === 0) return 'Chat ID obbligatorio';
+      return validateChatId(v);
+    },
+  });
+
+  return { bot_token: botToken.trim(), chat_id: chatId.trim() };
+}
+
+/**
  * Step Telegram: chiede bot token e chat ID (opzionale).
  */
 export async function promptTelegram(prompter, baseChannels) {
