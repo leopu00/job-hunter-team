@@ -13,40 +13,37 @@ export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');
 export const AI_PROVIDERS = [
   {
     value: 'claude',
-    label: 'Anthropic (Claude)',
-    hint: 'consigliato — Claude Sonnet/Opus',
+    label: 'Claude',
     keyPrefix: 'sk-ant-',
     keyPlaceholder: 'sk-ant-api03-...',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     models: [
-      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', hint: 'veloce e capace — consigliato' },
-      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', hint: 'massima qualita\'' },
-      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', hint: 'economico e veloce' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     ],
   },
   {
     value: 'openai',
-    label: 'OpenAI (GPT)',
-    hint: 'GPT-4o, o3, o4-mini',
+    label: 'OpenAI',
     keyPrefix: 'sk-',
     keyPlaceholder: 'sk-proj-...',
     docsUrl: 'https://platform.openai.com/api-keys',
     models: [
-      { value: 'gpt-4o', label: 'GPT-4o', hint: 'veloce e capace — consigliato' },
-      { value: 'o3', label: 'o3', hint: 'ragionamento avanzato' },
-      { value: 'o4-mini', label: 'o4-mini', hint: 'economico' },
+      { value: 'gpt-4o', label: 'GPT-4o' },
+      { value: 'o3', label: 'o3' },
+      { value: 'o4-mini', label: 'o4-mini' },
     ],
   },
   {
     value: 'kimi',
-    label: 'Kimi K2 (Moonshot)',
-    hint: 'subscription Moonshot — alternativa economica',
+    label: 'Moonshot',
     keyPrefix: 'sk-',
     keyPlaceholder: 'sk-...',
     docsUrl: 'https://platform.moonshot.ai',
     models: [
-      { value: 'kimi-k2-0905-preview', label: 'Kimi K2 (preview)', hint: 'modello principale' },
-      { value: 'kimi-k2-turbo-preview', label: 'Kimi K2 turbo', hint: 'piu\' veloce' },
+      { value: 'kimi-k2-0905-preview', label: 'Kimi K2' },
+      { value: 'kimi-k2-turbo-preview', label: 'Kimi K2 turbo' },
     ],
   },
 ];
@@ -95,12 +92,10 @@ export function validateConfigBeforeWrite(config) {
     if (prov.auth_method === 'api_key' && !prov.api_key) {
       errors.push(`providers.${key}: api_key obbligatoria quando auth_method = 'api_key'`);
     }
-    if (prov.auth_method === 'subscription' && !prov.subscription) {
-      errors.push(`providers.${key}: subscription obbligatorio quando auth_method = 'subscription'`);
-    }
-    if (prov.subscription && !prov.subscription.email) {
-      errors.push(`providers.${key}.subscription: email obbligatoria`);
-    }
+    // Per auth_method = 'subscription' non imponiamo piu' un blocco
+    // 'subscription' nel config: l'autenticazione vera e' OAuth device-flow
+    // gestita dal CLI provider (claude/codex/kimi), che salva il token in
+    // ~/.claude/ (e similari) DENTRO al container, non in jht.config.json.
   }
   // workspace non e' piu' parte del config: i path JHT sono fissi
   // (~/.jht + ~/Documents/Job Hunter Team).
