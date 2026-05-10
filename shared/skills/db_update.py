@@ -123,6 +123,14 @@ def update_position(args):
         print("Nessun campo da aggiornare.")
         return
 
+    # Auto-popola `last_actor` con il nome dell'istanza dell'agente
+    # (esportato da start-agent.sh come JHT_AGENT_NAME, es.
+    # "scrittore-1", "critico-s2"). Senza l'env var ricade su un
+    # placeholder così la UI può comunque distinguere chi ha agito.
+    actor = os.environ.get('JHT_AGENT_NAME') or os.environ.get('JHT_AGENT_DIR', '').split('/')[-1] or 'unknown'
+    updates.append("last_actor = ?")
+    params.append(actor)
+
     params.append(args.id)
     cursor = conn.execute(f"UPDATE positions SET {', '.join(updates)} WHERE id = ?", params)
     if cursor.rowcount == 0:

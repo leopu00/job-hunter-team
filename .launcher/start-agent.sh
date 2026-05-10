@@ -381,8 +381,10 @@ mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$
 # Directory di lavoro dell'agente nella zona nascosta
 if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
   AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
+  AGENT_NAME="$ROLE"
 else
   AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
+  AGENT_NAME="${ROLE}-${INSTANCE}"
 fi
 mkdir -p "$AGENT_DIR"
 # Workspace layout (RULE-T12): agents must use these subdirs instead of
@@ -546,6 +548,7 @@ send_env_vars() {
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
   tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
 }
 
 # Rileva se siamo in WSL nativo (non dentro un container Docker Desktop, che
@@ -562,6 +565,7 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
   sleep 8
