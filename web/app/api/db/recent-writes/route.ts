@@ -37,7 +37,7 @@ export async function GET() {
   if (!(await isLocalRequest())) {
     return NextResponse.json({ writes: {} })
   }
-  const ws = getWorkspacePath()
+  const ws = await getWorkspacePath()
   if (!ws) return NextResponse.json({ writes: {} })
 
   const db = getDb(ws)
