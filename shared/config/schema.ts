@@ -3,7 +3,7 @@
  *
  * Validazione centralizzata con regole condizionali:
  * - api_key obbligatoria se auth_method = "api_key"
- * - subscription obbligatorio se auth_method = "subscription"
+ * - subscription opzionale (l'auth vera e' OAuth device-flow del CLI provider)
  */
 
 import { z } from "zod";
@@ -11,13 +11,13 @@ import { z } from "zod";
 // --- Sub-schemas ---
 
 export const SubscriptionSchema = z.object({
-  email: z.string().email("Email non valida"),
+  email: z.string().email("Email non valida").optional(),
   session_token: z.string().optional(),
 });
 
 export const AIProviderSchema = z
   .object({
-    name: z.enum(["claude", "openai", "minimax"]),
+    name: z.enum(["claude", "openai", "kimi"]),
     auth_method: z.enum(["api_key", "subscription"]),
     api_key: z.string().optional(),
     subscription: SubscriptionSchema.optional(),
@@ -29,14 +29,11 @@ export const AIProviderSchema = z
       return true;
     },
     { message: "api_key obbligatoria quando auth_method = 'api_key'", path: ["api_key"] }
-  )
-  .refine(
-    (p) => {
-      if (p.auth_method === "subscription") return !!p.subscription;
-      return true;
-    },
-    { message: "subscription obbligatorio quando auth_method = 'subscription'", path: ["subscription"] }
   );
+  // Niente refine su subscription: per auth_method = "subscription" l'auth
+  // viene fatta dal CLI provider (claude/codex/kimi) via OAuth device flow.
+  // I token vivono fuori dal config (~/.claude/, ecc), quindi 'subscription'
+  // qui e' opzionale e per lo piu' vuoto.
 
 export const TelegramChannelSchema = z.object({
   bot_token: z.string().min(1, "bot_token obbligatorio"),
@@ -53,11 +50,11 @@ export const ChannelsSchema = z.object({
 export const JHTConfigSchema = z
   .object({
     version: z.number().int().positive().default(1),
-    active_provider: z.enum(["claude", "openai", "minimax"]),
+    active_provider: z.enum(["claude", "openai", "kimi"]),
     providers: z.object({
       claude: AIProviderSchema.optional(),
       openai: AIProviderSchema.optional(),
-      minimax: AIProviderSchema.optional(),
+      kimi: AIProviderSchema.optional(),
     }),
     channels: ChannelsSchema.default({}),
     workspace: z.string().min(1, "workspace obbligatorio"),
