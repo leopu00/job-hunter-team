@@ -242,6 +242,9 @@ type Props = {
   actionLoading?: string | null
   /** Backwards-compat: se `agents` non è fornito, usa activeRoles per i LED. */
   activeRoles?: Set<string>
+  /** v2 placeholder: rendi solo la riga superiore (Bridge, Sentinel, Captain,
+   *  Pacing) e relative frecce. Usato dalla pagina /team/v2 in costruzione. */
+  topRowOnly?: boolean
 }
 
 // Renderer del payload last_report del pacing-bridge dentro al popover.
@@ -395,7 +398,7 @@ const colorFor = (roleish: string): string => {
   return AGENT_COLORS[key] ?? '#34d399'
 }
 
-export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles }: Props) {
+export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly }: Props) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null)
@@ -644,7 +647,11 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
         const startX = captainRect.left + captainRect.width / 2 - flowRect.left
         const startY = captainRect.bottom - flowRect.top + 6
 
-        const captainPaths: ArrowPath[] = agentEmojiRefs.current
+        // In topRowOnly i nodi pipeline non sono renderizzati: niente
+        // captainPaths né chainPaths. Non saltiamo l'intero useEffect
+        // perché ci servono comunque bridgePath / sentinelToCaptainPath /
+        // pacingPath calcolati sotto.
+        const captainPaths: ArrowPath[] = topRowOnly ? [] : agentEmojiRefs.current
           .map((node, index) => {
             if (!node || index === 4) return null
             const rect = node.getBoundingClientRect()
@@ -655,7 +662,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           })
           .filter((p): p is ArrowPath => p !== null)
 
-        const agentRects = agentEmojiRefs.current
+        const agentRects = topRowOnly ? [] : agentEmojiRefs.current
           .map((node) => (node ? node.getBoundingClientRect() : null))
 
         const chainPaths: ArrowPath[] = []
@@ -760,7 +767,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
       window.removeEventListener('resize', measure)
       measureRef.current = null
     }
-  }, [])
+  }, [topRowOnly])
 
   // Re-measure forzato quando lo stato del Pacing arriva (polling async).
   // Senza questo, dopo un HMR di Next o un mount con polling lento, la
@@ -1183,7 +1190,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-1 cursor-pointer outline-none"
             >
               <span className="relative">
-                <span ref={bridgeEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{BRIDGE_NODE.emoji}</span>
+                <span ref={bridgeEmojiRef} data-team-node="bridge" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{BRIDGE_NODE.emoji}</span>
                 {/* LED acceso se il bridge sta tickando (cioè se il countdown
                     è inizializzato). Per ora è legato al demo cyclic locale
                     — quando collegheremo il vero stato del process Python
@@ -1238,7 +1245,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-2 cursor-pointer outline-none"
             >
               <span className="relative">
-                <span ref={sentinelEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                <span ref={sentinelEmojiRef} data-team-node="sentinel" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
                 <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
@@ -1268,7 +1275,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-3 cursor-pointer outline-none"
             >
               <span className="relative">
-                <span ref={captainEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                <span ref={captainEmojiRef} data-team-node="captain" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
                 <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
               </span>
               <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
@@ -1301,7 +1308,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-4 cursor-pointer outline-none"
             >
               <span className="relative">
-                <span ref={pacingEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{PACING_NODE.emoji}</span>
+                <span ref={pacingEmojiRef} data-team-node="pacing" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{PACING_NODE.emoji}</span>
                 <ActiveLed active={pacingRunning} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{PACING_NODE.name}</span>
@@ -1342,6 +1349,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           </div>
         </div>
 
+        {!topRowOnly && (
         <div className="grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12">
           {PIPELINE_AGENTS.map((agent, index) => (
             <div
@@ -1384,6 +1392,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   )
