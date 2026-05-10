@@ -144,5 +144,5 @@ EXPOSE 3000
 
 VOLUME ["/jht_home", "/jht_user"]
 
-ENTRYPOINT ["/usr/bin/tini", "--", "node", "/app/cli/bin/jht.js"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "node", "/app/cli/bin/jht.js"]
 CMD ["--help"]
