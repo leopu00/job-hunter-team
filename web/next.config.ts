@@ -25,23 +25,28 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: MONOREPO_ROOT,
+  // Pattern path-assoluti relativi al MONOREPO_ROOT: i glob `../X/**`
+  // erano relativi a CWD (web/) e funzionavano in build locale ma su
+  // Vercel CWD = MONOREPO_ROOT, quindi `../` esce dalla project root
+  // e Turbopack rifiuta con "glob navigates out of project root".
+  // Path assoluti rendono il pattern equivalente in entrambi gli env.
   outputFileTracingExcludes: {
     '*': [
-      '../cli/**',
-      '../desktop/**',
-      '../tui/**',
-      '../agents/**',
-      '../e2e/**',
-      '../telegram-bridge/**',
-      '../tests/**',
-      '../docs/**',
-      '../scripts/**',
-      '../launcher/**',
-      '../data/**',
-      '../sentinella/**',
-      '../assets/**',
-      '../.githooks/**',
-      '../node_modules/.cache/**',
+      path.join(MONOREPO_ROOT, 'cli/**'),
+      path.join(MONOREPO_ROOT, 'desktop/**'),
+      path.join(MONOREPO_ROOT, 'tui/**'),
+      path.join(MONOREPO_ROOT, 'agents/**'),
+      path.join(MONOREPO_ROOT, 'e2e/**'),
+      path.join(MONOREPO_ROOT, 'telegram-bridge/**'),
+      path.join(MONOREPO_ROOT, 'tests/**'),
+      path.join(MONOREPO_ROOT, 'docs/**'),
+      path.join(MONOREPO_ROOT, 'scripts/**'),
+      path.join(MONOREPO_ROOT, 'launcher/**'),
+      path.join(MONOREPO_ROOT, 'data/**'),
+      path.join(MONOREPO_ROOT, 'sentinella/**'),
+      path.join(MONOREPO_ROOT, 'assets/**'),
+      path.join(MONOREPO_ROOT, '.githooks/**'),
+      path.join(MONOREPO_ROOT, 'node_modules/.cache/**'),
       '**/*.map',
     ],
   },
