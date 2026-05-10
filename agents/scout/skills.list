@@ -2,8 +2,19 @@
 # One name per line. Lines starting with `#` and blank lines are ignored.
 # The launcher (start-agent.sh) reads this file at boot and copies the
 # listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# Inter-agent (peer Scouts, Analisti, Capitano)
 tmux-send
+
+# DB access (dedup, INSERT, dup recovery)
 db-query
 db-insert
 db-update
+
+# Throttle (cooldown loop, freeze)
 throttle
+
+# Scout-only operative skills
+scout-coord
+circles-and-sources
+position-insert
