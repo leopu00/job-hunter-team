@@ -113,7 +113,9 @@ export async function showSummary(prompter, params) {
   ].join('\n');
 
   await prompter.note(summary, 'Riepilogo');
-  await prompter.outro('Setup completato! Esegui jht team start per avviare il team.');
+  // L'outro finale viene emesso dal wizard chiamante (setup.js) DOPO gli step
+  // post-config (providers update / OAuth / team start). Qui non chiudiamo il
+  // flow perche' c'e' altro da chiedere.
 }
 
 /**
