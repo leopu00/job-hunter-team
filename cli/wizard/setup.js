@@ -98,15 +98,9 @@ export async function runSetupWizard(prompter) {
     baseConfig = {};
   }
 
-  // --- Setup mode ---
-  const flow = await prompter.select({
-    message: 'Modalita\' di setup',
-    options: [
-      { value: 'quickstart', label: 'QuickStart', hint: 'configurazione rapida — consigliato' },
-      { value: 'advanced', label: 'Avanzato', hint: 'configura ogni dettaglio' },
-    ],
-    initialValue: 'quickstart',
-  });
+  // Modalita' di setup: sempre "quickstart". Il path "advanced" chiedeva
+  // dettagli (secret-mode, session token) che non servono per la beta.
+  const flow = 'quickstart';
 
   // --- Config esistente ---
   if (snapshot.exists && snapshot.config) {
@@ -126,7 +120,7 @@ export async function runSetupWizard(prompter) {
     if (action === 'reset') baseConfig = {};
   }
 
-  // --- Step 2: Provider AI ---
+  // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   const providerChoice = await prompter.select({
     message: 'Provider AI',
     options: AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label, hint: p.hint })),
@@ -134,26 +128,24 @@ export async function runSetupWizard(prompter) {
   });
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 
-  // --- Auth: solo subscription ---
-  // ADR-0004: niente API key path. Tutti i beta tester usano subscription
-  // (Claude Max, Codex Plus/Pro, Kimi). Il wizard non chiede piu' "api_key vs
-  // subscription" perche' confonde e non e' supportato.
+  // --- Auth: solo subscription, nessun input richiesto ---
+  // ADR-0004: solo subscription. L'autenticazione VERA (OAuth device flow)
+  // viene fatta dal CLI provider (claude/codex/kimi) in uno step successivo
+  // del wizard. Qui non chiediamo niente: niente email, niente token, niente
+  // browser.
   const authMethod = 'subscription';
   const apiKeySecret = undefined;
-  const subscriptionConfig = await promptSubscription(prompter, selectedProvider, flow);
+  const subscriptionConfig = undefined;
 
-  // --- Modello AI ---
-  const model = await prompter.select({
-    message: 'Modello AI default',
-    options: selectedProvider.models,
-    initialValue: baseConfig.providers?.[providerChoice]?.model || selectedProvider.models[0].value,
-  });
+  // Modello: hardcoded al primo della lista del provider scelto. Il valore
+  // serve come "default globale" del config ma OGNI agente usa il suo
+  // modello (definito nel prompt agente). L'utente non deve scegliere qui.
+  const model = baseConfig.providers?.[providerChoice]?.model
+    || selectedProvider.models[0].value;
 
-  // --- Telegram (workspace e' path fisso, non chiesto) ---
-  const telegramChannel = await promptTelegram(prompter, baseConfig.channels);
-
-  // Niente health check: con subscription la verifica avviene al login OAuth
-  // del CLI provider (step successivo).
+  // Telegram: skip nel wizard base. Si configura dopo con `jht config` se
+  // serve. Per la beta vogliamo zero domande non strettamente necessarie.
+  const telegramChannel = baseConfig.channels?.telegram || undefined;
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {

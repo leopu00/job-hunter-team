@@ -74,7 +74,9 @@ export async function assembleAndSaveConfig(prompter, params) {
       providerConfig.api_key = apiKey;
     }
   }
-  if (authMethod === 'subscription') providerConfig.subscription = subscriptionConfig;
+  if (authMethod === 'subscription' && subscriptionConfig) {
+    providerConfig.subscription = subscriptionConfig;
+  }
   providerConfig.model = model;
 
   const config = {
@@ -98,15 +100,11 @@ export async function showSummary(prompter, params) {
   const { selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
           model, telegramChannel } = params;
 
-  const authDisplay = authMethod === 'api_key'
-    ? `API Key (${describeSecret(apiKeySecret)})`
-    : `Subscription (${subscriptionConfig?.email ?? 'n/a'})`;
-
+  // Riepilogo minimo: il wizard chiede solo il provider, tutto il resto
+  // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    `Auth:       ${authDisplay}`,
-    `Modello:    ${model}`,
-    `Telegram:   ${telegramChannel ? 'configurato' : 'non configurato'}`,
+    `Auth:       OAuth (lo fai nel prossimo step)`,
     '',
     `Config:     ${JHT_CONFIG_PATH}`,
     `JHT home:   ${JHT_CONFIG_DIR}`,
