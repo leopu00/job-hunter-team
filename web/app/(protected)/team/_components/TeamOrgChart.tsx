@@ -1521,9 +1521,8 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
 
         {!topRowOnly && (
         <div className={hideStopped
-          ? 'mt-24 flex flex-wrap justify-center items-start'
-          : 'grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12'}
-          style={hideStopped ? { columnGap: 200 } : undefined}>
+          ? 'mt-24 flex justify-around items-start'
+          : 'grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12'}>
           {PIPELINE_AGENTS.map((agent, index) => (
             <div
               key={agent.name}
