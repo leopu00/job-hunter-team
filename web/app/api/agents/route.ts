@@ -37,13 +37,21 @@ export async function GET() {
   const denied = await requireAuth()
   if (denied) return denied
   const active = await activeSessions()
-  const agents = AGENTS.map((agent) => ({
-    ...agent,
-    // Match anche con suffisso -N (es. SCOUT matcha SCOUT-1).
-    status: Array.from(active).some(s => s === agent.session || s.startsWith(`${agent.session}-`))
-      ? 'running'
-      : 'stopped',
-  }))
+  const agents = AGENTS.map((agent) => {
+    // Conta le istanze attive: il nome esatto della sessione oppure il
+    // suffisso `-<numero>` usato dal Capitano quando spawna più istanze
+    // (SCOUT-1, SCOUT-2). Non contiamo suffissi non-numerici come
+    // SENTINELLA-WORKER (worker accessorio, non un'istanza in più).
+    const instanceRe = new RegExp(`^${agent.session}-\\d+$`)
+    const instances = Array.from(active).filter(
+      s => s === agent.session || instanceRe.test(s),
+    ).length
+    return {
+      ...agent,
+      status: instances > 0 ? 'running' : 'stopped',
+      instances,
+    }
+  })
   return NextResponse.json({ agents })
 }
 
