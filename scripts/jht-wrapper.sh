@@ -29,6 +29,7 @@ CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
+HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then
@@ -192,6 +193,24 @@ case "$SUB" in
     require_docker
     ensure_up
     docker exec $EXEC_FLAGS "$CONTAINER" bash
+    ;;
+
+  # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
+  setup)
+    require_docker
+    require_compose_file
+    # Skip host-setup se utente ha passato --non-interactive (i flag CLI
+    # del wizard sono espliciti, niente domande possibili) o env esplicita.
+    if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
+       && ! printf '%s\n' "$@" | grep -q -- '--non-interactive'; then
+      if [ -x "$HOST_SETUP_SCRIPT" ]; then
+        bash "$HOST_SETUP_SCRIPT" || warn "host-setup.sh terminato con errore — proseguo"
+      else
+        info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
+      fi
+    fi
+    ensure_up
+    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
