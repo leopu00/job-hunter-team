@@ -119,13 +119,16 @@ ensure_up() {
 }
 
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
-exec_flags() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    printf -- '-it'
-  else
-    printf -- '-i'
-  fi
-}
+# Il check va fatto QUI nel parent shell, NON dentro $(...): la command
+# substitution chiude/reindirizza stdin+stdout del subshell, quindi
+# `[ -t 0 ]` e `[ -t 1 ]` sarebbero sempre falsi e il wrapper passerebbe
+# sempre `-i` anche su SSH interattivo. Risultato: clack/wizard riceve
+# stdin senza raw mode → exit silenzioso al primo selettore.
+if [ -t 0 ] && [ -t 1 ]; then
+  EXEC_FLAGS="-it"
+else
+  EXEC_FLAGS="-i"
+fi
 
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
@@ -188,7 +191,7 @@ case "$SUB" in
   shell)
     require_docker
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" bash
+    docker exec $EXEC_FLAGS "$CONTAINER" bash
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
@@ -196,13 +199,13 @@ case "$SUB" in
     require_docker
     require_compose_file
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" node "$NODE_ENTRY" --help
+    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" --help
     ;;
 
   *)
     require_docker
     require_compose_file
     ensure_up
-    docker exec $(exec_flags) "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;
 esac
