@@ -231,6 +231,16 @@ case "$SUB" in
         info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
       fi
     fi
+    # Re-source host.env DOPO host-setup.sh: il file viene scritto solo li',
+    # quindi il source iniziale del wrapper (top-level) lo manca al primo
+    # setup. Senza questo, JHT_HOST_TYPE arriverebbe "unknown" al wizard
+    # Node e il branch VPS-only (cloud + telegram obbligatori) non si
+    # attiverebbe. Idempotente nei run successivi.
+    if [ -f "$HOST_ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      . "$HOST_ENV_FILE"
+    fi
+    JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
     ;;

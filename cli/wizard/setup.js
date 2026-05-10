@@ -154,6 +154,40 @@ export async function runSetupWizard(prompter) {
     if (action === 'reset') baseConfig = {};
   }
 
+  // ────────────────────────────────────────────────────────────────────────
+  // STEP VPS-FIRST: prima di QUALSIASI scelta tecnica, blocca finche' non
+  // c'e' un account web + pairing. Senza account web il tester non puo'
+  // monitorare nulla dal browser, quindi il setup non ha senso.
+  // ────────────────────────────────────────────────────────────────────────
+  const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
+  if (isVps) {
+    await prompter.note(
+      'Apri il browser sul tuo computer e vai su:\n\n' +
+      '      https://jobhunterteam.ai\n\n' +
+      'Fai login con Google (o crea l\'account se non ce l\'hai).\n' +
+      'Lascia la pagina aperta — ti servira\' tra un attimo per il pairing.',
+      'Login web (obbligatorio)',
+    );
+    await prompter.note(
+      'Adesso lancio il pairing CLI ↔ web.\n\n' +
+      'Vedrai stampati un URL (jobhunterteam.ai/cli-link) e un codice.\n' +
+      'Apri l\'URL nello stesso browser dove sei loggato, digita il\n' +
+      'codice, conferma. Il wizard prosegue da solo appena il server\n' +
+      'conferma il pairing.\n\n' +
+      'Se la pagina ti chiede ancora login → torna su jobhunterteam.ai\n' +
+      'e fai login Google prima.',
+      'Pairing cloud (obbligatorio)',
+    );
+    const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
+    if (!cloudOk) {
+      await prompter.outro(
+        'Pairing cloud fallito. Controlla che il deploy web sia OK e\n' +
+        'che tu sia loggato sul browser. Rilancia: jht setup',
+      );
+      return;
+    }
+  }
+
   // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   const providerChoice = await prompter.select({
     message: 'Provider AI',
@@ -218,37 +252,13 @@ export async function runSetupWizard(prompter) {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // STEP VPS-ONLY: cloud pairing + Telegram OBBLIGATORI
-  //
-  // Su VPS (host detectato come "vps" da host-setup.sh) il tester non avra'
-  // accesso SSH dopo il setup. Userà SOLO browser dashboard + Telegram. Quindi:
-  //   - cloud login OBBLIGATORIO  → linka VPS ↔ account web del tester
-  //   - bot Telegram OBBLIGATORIO → unica via di interazione mobile
+  // STEP VPS-ONLY: Telegram bot OBBLIGATORIO
+  // Cloud pairing e' gia' stato fatto all'inizio del wizard (VPS-FIRST).
+  // Telegram va dopo providers update perche' richiede solo input utente,
+  // non risorse del container.
   // ────────────────────────────────────────────────────────────────────────
-  const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
-
   if (isVps) {
-    // --- Cloud pairing ---
-    await prompter.note(
-      'Il tester usera\' SOLO browser + Telegram (no SSH).\n' +
-      'Devi prima collegare questa VPS al suo account jobhunterteam.ai\n' +
-      'tramite il device flow.\n\n' +
-      'Tra poco vedrai un URL e un codice — apri l\'URL nel browser del\n' +
-      'tester (loggato col suo account), digita il codice, conferma.\n' +
-      'Quando il pairing e\' confermato, il wizard prosegue da solo.',
-      'Pairing cloud (obbligatorio)',
-    );
-    const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
-    if (!cloudOk) {
-      await prompter.outro(
-        'Pairing cloud fallito. Risolvi il problema (deploy web?) e rilancia: jht setup',
-      );
-      return;
-    }
-
-    // --- Telegram bot obbligatorio ---
     telegramChannel = await promptTelegramRequired(prompter, baseConfig.channels);
-
     // Aggiorno config sul disco con il telegram appena configurato.
     await assembleAndSaveConfig(prompter, {
       providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
