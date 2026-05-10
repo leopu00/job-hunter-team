@@ -42,7 +42,7 @@ export function registerSetupCommand(program) {
     .command('setup')
     .description('Wizard di configurazione iniziale')
     .option('--non-interactive', 'Esegui senza prompt interattivi')
-    .option('--provider <name>', 'Provider AI (claude|openai|minimax)', 'claude')
+    .option('--provider <name>', 'Provider AI (claude|openai|kimi)', 'claude')
     .option('--auth-method <method>', 'Metodo auth (api_key|subscription)', 'api_key')
     .option('--api-key <key>', 'API key (plaintext)')
     .option('--secret-mode <mode>', 'Come salvare la key (plaintext|env|file)', 'plaintext')
