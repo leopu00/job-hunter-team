@@ -72,6 +72,17 @@ const DOCTOR_AGENT = {
   desc: 'Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.',
 }
 
+// Database: non è un agente né un processo, è il bersaglio condiviso di
+// tutte le operazioni di scrittura/aggiornamento fatte dagli agenti
+// pipeline (Scout inserisce posizioni, Scorer aggiorna score, Critic
+// annota review, ecc.). Stilato grigio acciaio come Bridge/Pacing.
+const DB_NODE = {
+  roleId: 'database',
+  emoji: '🗄️',
+  name: 'DB',
+  desc: 'Shared database — pipeline writes land here.',
+}
+
 const PIPELINE_AGENTS = [
   { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
   { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
@@ -286,6 +297,12 @@ type Props = {
    *  frecce verso/da quei nodi non vengono renderizzate. Usato in
    *  /team/v2 per mostrare solo gli agenti attivi nelle posizioni canoniche. */
   hideStopped?: boolean
+  /** Segnale per animare un pallino agente→DB. Il parent setta un nuovo
+   *  oggetto (incrementando `key`) ogni volta che rileva una scrittura DB
+   *  da parte di `agent`; il TeamOrgChart osserva `key` e fa pushAnim
+   *  sulla freccia `db-from-<agent>`. Pattern key-bumping così oggetti
+   *  uguali ma "nuovi" triggerano comunque l'animazione. */
+  dbWriteSignal?: { agent: string; key: number } | null
 }
 
 // Renderer del payload last_report del pacing-bridge dentro al popover.
@@ -439,7 +456,7 @@ const colorFor = (roleish: string): string => {
   return AGENT_COLORS[key] ?? '#34d399'
 }
 
-export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly, hideStopped }: Props) {
+export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly, hideStopped, dbWriteSignal }: Props) {
   const desktopFlowRef = useRef<HTMLDivElement | null>(null)
   const captainNameRef = useRef<HTMLSpanElement | null>(null)
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null)
@@ -447,6 +464,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   const bridgeEmojiRef = useRef<HTMLSpanElement | null>(null)
   const pacingEmojiRef = useRef<HTMLSpanElement | null>(null)
   const sentinelEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const dbEmojiRef = useRef<HTMLSpanElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [arrowOverlay, setArrowOverlay] = useState<{
@@ -457,6 +475,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     sentinelToCaptainPath: ArrowPath | null
     captainPaths: ArrowPath[]
     chainPaths: ArrowPath[]
+    dbPaths: ArrowPath[]
   }>({
     width: 0,
     height: 0,
@@ -465,6 +484,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     sentinelToCaptainPath: null,
     captainPaths: [],
     chainPaths: [],
+    dbPaths: [],
   })
 
   // Animazione "messaggio in transito": ogni elemento qui in lista è una
@@ -766,6 +786,26 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           sentinelToCaptainPath = { id: 'sentinel-to-captain', d: `M ${sX} ${y} L ${eX} ${y}` }
         }
 
+        // Pipeline agents → DB: una freccia verticale da ogni pipeline
+        // visibile verso il nodo DB sotto. Skippa i pipeline nascosti
+        // (rect width=0). Il DB è centrato sotto la pipeline.
+        const dbPaths: ArrowPath[] = []
+        const dbNode = dbEmojiRef.current
+        if (!topRowOnly && dbNode) {
+          const dRect = dbNode.getBoundingClientRect()
+          if (dRect.width > 0) {
+            const dX = dRect.left + dRect.width / 2 - flowRect.left
+            const dY = dRect.top - flowRect.top - 6
+            agentRects.forEach((rect, index) => {
+              if (!rect) return
+              const sX = rect.left + rect.width / 2 - flowRect.left
+              const sY = rect.bottom - flowRect.top + 6
+              const id = `db-from-${PIPELINE_AGENTS[index]?.roleId ?? index}`
+              dbPaths.push({ id, d: `M ${sX} ${sY} L ${dX} ${dY}` })
+            })
+          }
+        }
+
         // Pacing → Captain: il Pacing è alla destra del Captain (col 4),
         // quindi la freccia parte dal lato sinistro del Pacing e arriva
         // al lato destro del Captain. Direzione "verso sinistra".
@@ -792,13 +832,14 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
             prev.height === height &&
             samePaths(prev.captainPaths, captainPaths) &&
             samePaths(prev.chainPaths, chainPaths) &&
+            samePaths(prev.dbPaths, dbPaths) &&
             sameOpt(prev.bridgePath, bridgePath) &&
             sameOpt(prev.pacingPath, pacingPath) &&
             sameOpt(prev.sentinelToCaptainPath, sentinelToCaptainPath)
           ) {
             return prev
           }
-          return { width, height, bridgePath, pacingPath, sentinelToCaptainPath, captainPaths, chainPaths }
+          return { width, height, bridgePath, pacingPath, sentinelToCaptainPath, captainPaths, chainPaths, dbPaths }
         })
       })
     }
@@ -810,6 +851,7 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
     if (captainNameRef.current) resizeObserver.observe(captainNameRef.current)
     if (bridgeEmojiRef.current) resizeObserver.observe(bridgeEmojiRef.current)
     if (pacingEmojiRef.current) resizeObserver.observe(pacingEmojiRef.current)
+    if (dbEmojiRef.current) resizeObserver.observe(dbEmojiRef.current)
     if (sentinelEmojiRef.current) resizeObserver.observe(sentinelEmojiRef.current)
     if (captainEmojiRef.current) resizeObserver.observe(captainEmojiRef.current)
     agentEmojiRefs.current.forEach((node) => {
@@ -836,6 +878,42 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
   useEffect(() => {
     measureRef.current?.()
   }, [pacingRunning])
+
+  // Animazione pallino agente→DB quando il parent rileva una scrittura.
+  // Reagiamo a (agent, key): la `key` numerica cambia anche se l'agente
+  // resta lo stesso, così due scritture consecutive dello stesso ruolo
+  // generano due animazioni distinte.
+  useEffect(() => {
+    if (!dbWriteSignal) return
+    const agent = dbWriteSignal.agent
+    const path = arrowOverlay.dbPaths.find((p) => p.id === `db-from-${agent}`)
+    if (!path) return
+    pushAnim(path.id, { color: colorFor(agent) })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbWriteSignal?.key])
+
+  // Re-measure quando cambia il set di nodi visibili in hideStopped:
+  // un pipeline che passa da display:none a flex ottiene un nuovo span
+  // (e quindi un nuovo bounding rect) ma il ResizeObserver è agganciato
+  // al container, non sapevamo del cambio. Senza questo, dopo aver
+  // spawnato un secondo agente operativo (es. Analyst) le frecce
+  // captain→pipeline e chain restavano quelle dello stato precedente.
+  const visibilitySig = [
+    bridgeRunning ? 1 : 0,
+    pacingRunning ? 1 : 0,
+    isActive(SENTINEL_AGENT.roleId) ? 1 : 0,
+    isActive(CAPTAIN_AGENT.roleId) ? 1 : 0,
+    ...PIPELINE_AGENTS.map((a) => (isActive(a.roleId) ? 1 : 0)),
+  ].join('')
+  useEffect(() => {
+    // RAF + microtask delay: il misurato ha bisogno che React abbia
+    // committato il nuovo layout (display:flex applicato) prima di
+    // leggere i bounding rects. Senza il delay si misurava il frame
+    // precedente.
+    const t = setTimeout(() => measureRef.current?.(), 16)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibilitySig])
 
   // Mapping convenzionale (from/to nel formato `[@X -> @Y]` di jht-tmux-send)
   // → id del path SVG renderizzato. "scrittore"/"critico" sono i nomi italiani
@@ -1078,7 +1156,8 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
           arrowOverlay.bridgePath ||
           arrowOverlay.sentinelToCaptainPath ||
           arrowOverlay.captainPaths.length > 0 ||
-          arrowOverlay.chainPaths.length > 0
+          arrowOverlay.chainPaths.length > 0 ||
+          arrowOverlay.dbPaths.length > 0
         ) && (
           <svg
             aria-hidden="true"
@@ -1173,6 +1252,24 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
                   markerStart={index === arrowOverlay.chainPaths.length - 1 ? 'url(#team-orgchart-arrowhead)' : undefined}
                   markerEnd="url(#team-orgchart-arrowhead)"
                   strokeDasharray="4 8"
+                />
+              )
+            })}
+
+            {arrowOverlay.dbPaths.map((p) => {
+              const sourceRole = p.id.replace(/^db-from-/, '')
+              if (hideStopped && !isVisible(sourceRole)) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.18)"
+                  strokeWidth="1.25"
+                  strokeLinecap="round"
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="3 6"
                 />
               )
             })}
@@ -1473,6 +1570,20 @@ export default function TeamOrgChart({ agents, onAction, actionLoading, activeRo
             </div>
           ))}
         </div>
+        )}
+
+        {/* DB node: target condiviso delle scritture pipeline. Posizionato
+            sotto la riga pipeline, centrato. Le frecce verticali da ogni
+            agent visibile arrivano qui (vedi dbPaths nel measure). */}
+        {!topRowOnly && (
+          <div className="mt-16 flex justify-center">
+            <div className="relative inline-flex select-none flex-col items-center gap-2">
+              <span className="relative">
+                <span ref={dbEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{DB_NODE.emoji}</span>
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{DB_NODE.name}</span>
+            </div>
+          </div>
         )}
       </div>
     </div>
