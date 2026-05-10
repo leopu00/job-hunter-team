@@ -331,14 +331,17 @@ download_runtime_files() {
 
   local compose_url="$RAW_BASE/docker-compose.yml"
   local wrapper_url="$RAW_BASE/scripts/jht-wrapper.sh"
+  local hostsetup_url="$RAW_BASE/scripts/host-setup.sh"
   local compose_dest="$RUNTIME_DIR/docker-compose.yml"
   local wrapper_dest="$BIN_DIR/jht"
+  local hostsetup_dest="$RUNTIME_DIR/host-setup.sh"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s %s\n" "$RUNTIME_DIR" "$BIN_DIR"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$compose_url" "$compose_dest"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$wrapper_url" "$wrapper_dest"
-    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s\n" "$wrapper_dest"
+    printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$hostsetup_url" "$hostsetup_dest"
+    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s %s\n" "$wrapper_dest" "$hostsetup_dest"
     case ":$PATH:" in
       *":$BIN_DIR:"*) PATH_READY=1 ;;
       *)              PATH_READY=0 ;;
@@ -360,6 +363,14 @@ download_runtime_files() {
   fi
   chmod +x "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
+
+  info "Scarico host-setup.sh (preflight VPS/swap)..."
+  if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_dest"; then
+    warn "Download host-setup.sh fallito ($hostsetup_url) — proseguo senza preflight"
+  else
+    chmod +x "$hostsetup_dest"
+    ok "host-setup: $hostsetup_dest"
+  fi
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
