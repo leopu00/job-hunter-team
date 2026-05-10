@@ -30,7 +30,7 @@ import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 const PROVIDER_UPDATE_ID = {
   claude: 'claude',
   openai: 'codex',
-  minimax: 'kimi',
+  kimi: 'kimi',
 };
 
 // Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
@@ -38,7 +38,7 @@ const PROVIDER_UPDATE_ID = {
 const PROVIDER_OAUTH_CMD = {
   claude: 'claude',
   openai: 'codex',
-  minimax: 'kimi',
+  kimi: 'kimi',
 };
 
 /**
