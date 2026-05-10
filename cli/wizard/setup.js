@@ -9,6 +9,7 @@
  *
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
+import { spawnSync } from 'node:child_process';
 import {
   AI_PROVIDERS,
   readConfigFileSnapshot,
@@ -23,6 +24,53 @@ import {
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
+
+// Mappa provider scelto nel wizard → ID accettato da `providers update`
+// (i providers.js usa "claude" / "codex" / "kimi" come keys).
+const PROVIDER_UPDATE_ID = {
+  claude: 'claude',
+  openai: 'codex',
+  minimax: 'kimi',
+};
+
+// Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
+// che, al primo run senza credenziali, mostra il device-flow URL.
+const PROVIDER_OAUTH_CMD = {
+  claude: 'claude',
+  openai: 'codex',
+  minimax: 'kimi',
+};
+
+/**
+ * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
+ * con stdio inherited. Ritorna true se exit code = 0.
+ */
+function runJhtSubcommand(args, label) {
+  const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.error(`[setup] ${label} fallito (exit ${result.status})`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Esegue il binario provider (es. `claude`) con stdio inherited per OAuth
+ * device-flow. Resta finche' l'utente non esce (Ctrl+C o /quit).
+ */
+function runProviderOauth(cmdName) {
+  const result = spawnSync(cmdName, [], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  // Exit code variabile: claude 2.x esce 0 su /quit, !=0 su Ctrl+C.
+  // Non blocchiamo il wizard sul exit code.
+  return result.error ? false : true;
+}
 
 /**
  * Esegue il setup wizard JHT.
@@ -181,4 +229,93 @@ export async function runSetupWizard(prompter) {
     selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
     model, telegramChannel,
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // POST-CONFIG: providers update + OAuth login + team start
+  // Tutti opzionali (l'utente puo' rispondere "no" e farli a mano dopo) ma
+  // proposti di default per arrivare a "team che gira" in un solo wizard.
+  // ────────────────────────────────────────────────────────────────────────
+
+  // --- Step 6: install/update CLI provider nel container ---
+  const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
+  if (updateProviderId) {
+    const wantInstall = await prompter.confirm({
+      message: `Installare/aggiornare il CLI di ${selectedProvider.label} ora?`,
+      initialValue: true,
+    });
+    if (wantInstall) {
+      console.log('');
+      const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
+      if (!ok) {
+        const cont = await prompter.confirm({
+          message: 'Installazione CLI fallita. Continuare comunque?',
+          initialValue: false,
+        });
+        if (!cont) {
+          await prompter.outro('Setup interrotto.');
+          return;
+        }
+      }
+    } else {
+      await prompter.note(
+        `Per installarlo dopo: jht providers update ${updateProviderId}`,
+        'Installa CLI piu\' tardi',
+      );
+    }
+  }
+
+  // --- Step 7: OAuth login provider (subscription path) ---
+  const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
+  if (authMethod === 'subscription' && oauthCmd) {
+    await prompter.note(
+      `Ora apriro' ${oauthCmd} per il login.\n\n` +
+      `Cosa fare:\n` +
+      `  1. Quando appare il menu di scelta tema/login, premi Invio sui default\n` +
+      `  2. Verra' stampato un URL — aprilo nel browser sul tuo computer\n` +
+      `  3. Fai login con il tuo account ${selectedProvider.label}\n` +
+      `  4. Copia il codice e incollalo qui nel terminale\n` +
+      `  5. Quando vedi "authenticated", esci con /quit (o Ctrl+C due volte)\n\n` +
+      `Quando ${oauthCmd} si chiude, il setup riprende da solo.`,
+      `Login ${selectedProvider.label}`,
+    );
+    const ready = await prompter.confirm({
+      message: `Pronto ad avviare ${oauthCmd} per il login?`,
+      initialValue: true,
+    });
+    if (ready) {
+      console.log('');
+      runProviderOauth(oauthCmd);
+      console.log('');
+      await prompter.note(
+        `${oauthCmd} chiuso. Il login OAuth e' salvato in ~/.jht/.${oauthCmd}/ (persistente).`,
+        'Login completato',
+      );
+    } else {
+      await prompter.note(
+        `Per fare il login dopo: jht shell, poi ${oauthCmd}`,
+        `Login ${selectedProvider.label} piu' tardi`,
+      );
+    }
+  }
+
+  // --- Step 8: avvia il team adesso? ---
+  const wantStart = await prompter.confirm({
+    message: 'Avviare il team adesso (Sentinella + Bridge + Capitano)?',
+    initialValue: true,
+  });
+  if (wantStart) {
+    console.log('');
+    runJhtSubcommand(['team', 'start'], 'team start');
+    console.log('');
+    await prompter.outro(
+      'Tutto pronto! Il team sta lavorando.\n' +
+      '  Status:  jht team status\n' +
+      '  Logs:    jht logs --tail 30\n' +
+      '  Stop:    jht team stop --all',
+    );
+  } else {
+    await prompter.outro(
+      'Setup completato. Per avviare il team: jht team start',
+    );
+  }
 }
