@@ -164,31 +164,24 @@ export async function runSetupWizard(prompter) {
   // proposti di default per arrivare a "team che gira" in un solo wizard.
   // ────────────────────────────────────────────────────────────────────────
 
-  // --- Step 6: install/update CLI provider nel container ---
+  // --- Step 6: install/update CLI provider (sempre, senza chiedere) ---
+  // Il CLI provider e' obbligatorio per oauth-login e per far girare gli
+  // agenti. Niente prompt opzionale: installiamo sempre. Se l'utente ha
+  // gia' una versione installata, npm fa upgrade idempotente.
   const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
   if (updateProviderId) {
-    const wantInstall = await prompter.confirm({
-      message: `Installare/aggiornare il CLI di ${selectedProvider.label} ora?`,
-      initialValue: true,
-    });
-    if (wantInstall) {
-      console.log('');
-      const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
-      if (!ok) {
-        const cont = await prompter.confirm({
-          message: 'Installazione CLI fallita. Continuare comunque?',
-          initialValue: false,
-        });
-        if (!cont) {
-          await prompter.outro('Setup interrotto.');
-          return;
-        }
+    console.log('');
+    console.log(`Installo il CLI di ${selectedProvider.label}...`);
+    const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
+    if (!ok) {
+      const cont = await prompter.confirm({
+        message: 'Installazione CLI fallita. Vuoi salvare comunque la config e gestirla a mano?',
+        initialValue: false,
+      });
+      if (!cont) {
+        await prompter.outro('Setup interrotto. Riprova con: jht setup');
+        return;
       }
-    } else {
-      await prompter.note(
-        `Per installarlo dopo: jht providers update ${updateProviderId}`,
-        'Installa CLI piu\' tardi',
-      );
     }
   }
 

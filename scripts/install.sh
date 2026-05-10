@@ -54,7 +54,19 @@ set -euo pipefail
 REPO_URL="${JHT_REPO_URL:-https://github.com/leopu00/job-hunter-team.git}"
 BRANCH="${JHT_BRANCH:-master}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
-BIN_DIR="${JHT_BIN_DIR:-$HOME/.local/bin}"
+
+# BIN_DIR scelta automatica:
+# - root su Linux/WSL  → /usr/local/bin (sempre nel PATH default, no profile.d)
+# - non-root o macOS   → $HOME/.local/bin (richiede /etc/profile.d o ~/.bashrc)
+# Override esplicito sempre rispettato via JHT_BIN_DIR.
+if [ -n "${JHT_BIN_DIR:-}" ]; then
+  BIN_DIR="$JHT_BIN_DIR"
+elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; then
+  BIN_DIR="/usr/local/bin"
+else
+  BIN_DIR="$HOME/.local/bin"
+fi
+
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
 MIN_NODE_MAJOR=22
