@@ -37,8 +37,10 @@ const FALLBACK_TICK_MIN = 3.0
 
 async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null }> {
   let pidStr: string
+  let pidMtimeMs: number | null = null
   try {
     pidStr = await fs.readFile(PID_FILE, 'utf-8')
+    try { pidMtimeMs = (await fs.stat(PID_FILE)).mtimeMs } catch { /* ignore */ }
   } catch {
     return { running: false, pid: null }
   }
@@ -51,11 +53,21 @@ async function isBridgeRunning(): Promise<{ running: boolean; pid: number | null
     if (cmdline.includes('sentinel-bridge.py')) return { running: true, pid }
     return { running: false, pid: null }
   } catch {
-    // /proc/<pid>/cmdline non leggibile su macOS host, ma il pidfile vive
-    // dentro $JHT_HOME montato dal container Linux dove /proc esiste. Se
-    // siamo su un host non-linux il check del cmdline va in errore: in
-    // quel caso assumiamo "running" se il pidfile esiste e parsa.
-    return { running: process.platform !== 'linux', pid }
+    // /proc/<pid>/cmdline non disponibile in dev host mode (Next sul mac
+    // che parla col container Linux): i PID nel pidfile sono dell'altro
+    // namespace. Fallback su freschezza: il bridge scrive lo state file
+    // ad ogni iterazione, quindi se è stato aggiornato di recente è
+    // vivo. Per la finestra prima del primo tick (state non ancora
+    // scritto), guardiamo il mtime del pidfile come prova che è
+    // appena partito.
+    try {
+      const stat = await fs.stat(STATE_FILE)
+      if (Date.now() - stat.mtimeMs < STATE_STALE_MS) return { running: true, pid }
+    } catch { /* state file mancante o non leggibile */ }
+    if (pidMtimeMs !== null && Date.now() - pidMtimeMs < STATE_STALE_MS) {
+      return { running: true, pid }
+    }
+    return { running: false, pid: null }
   }
 }
 
