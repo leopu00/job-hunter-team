@@ -50,7 +50,7 @@ fi
 
 # ── 3. Crea container (bind-mount) senza avviarlo, così da fixare .next ──
 log "Creo container via compose (bind-mount web/ agents/ shared/ .launcher/)"
-docker compose up --no-start jht >/dev/null
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --no-start jht >/dev/null
 
 # ── 4. Fix ownership .next volume ─────────────────────────────────────────
 # L'anonymous volume che maschera /app/web/.next parte root-owned; il
@@ -64,7 +64,7 @@ MSYS_NO_PATHCONV=1 docker run --rm --user root --entrypoint /bin/sh \
 
 # ── 5. Start container ────────────────────────────────────────────────────
 log "Avvio container jht"
-docker compose start jht >/dev/null
+docker compose -f docker-compose.yml -f docker-compose.dev.yml start jht >/dev/null
 info "Container in avvio. Next dentro parte su :3000 (baked), Assistente in background."
 
 # ── 6. Azzera env Supabase per dev host e avvia Next ──────────────────────
