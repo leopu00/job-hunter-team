@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -91,11 +91,35 @@ async function waitForReady(port, timeoutMs = 15000) {
   return false;
 }
 
+// Al boot del container nessun processo bridge sopravvive al teardown,
+// quindi pid + state file lasciati dalla sessione precedente sono per
+// definizione orfani. Li rimuoviamo prima che le API di stato li leggano:
+// senza questo, /api/bridge/status e /api/team/pacing-bridge mostrano
+// "running" + "next tick" basandosi su dati stantii, e la UI fa sembrare
+// che bridge/pacing siano partiti in automatico ancora prima dello Start.
+async function cleanupStaleBridgeState() {
+  if (!isContainer()) return;
+  const home = process.env.JHT_HOME;
+  if (!home) return;
+  const logs = join(home, 'logs');
+  const targets = [
+    'sentinel-bridge.pid',
+    'sentinel-bridge-state.json',
+    'pacing-bridge.pid',
+    'pacing-bridge-state.json',
+  ];
+  for (const name of targets) {
+    try { await unlink(join(logs, name)); } catch { /* ENOENT atteso */ }
+  }
+}
+
 async function handleDashboard(options) {
   const port = parseInt(options.port ?? String(DEFAULT_PORT), 10) || DEFAULT_PORT;
   const url = `http://localhost:${port}`;
 
   console.log(`\n  ${BOLD}JHT — Dashboard${RESET}\n`);
+
+  await cleanupStaleBridgeState();
 
   // Controlla se la porta è già in uso (dashboard già attiva)
   const alreadyRunning = await isPortOpen(port);

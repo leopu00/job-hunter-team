@@ -78,8 +78,10 @@ type PacingState = {
 
 async function isRunning(): Promise<{ running: boolean; pid: number | null }> {
   let pidStr: string
+  let pidMtimeMs: number | null = null
   try {
     pidStr = await fs.readFile(PID_FILE, 'utf-8')
+    try { pidMtimeMs = (await fs.stat(PID_FILE)).mtimeMs } catch { /* ignore */ }
   } catch {
     return { running: false, pid: null }
   }
@@ -93,8 +95,18 @@ async function isRunning(): Promise<{ running: boolean; pid: number | null }> {
     if (cmdline.includes('pacing-bridge.py')) return { running: true, pid }
     return { running: false, pid: null }
   } catch {
-    // /proc non leggibile (host macOS): se il pidfile parsa, fidiamoci.
-    return { running: process.platform !== 'linux', pid }
+    // Dev host mode (Next sul mac, processo nel container): i PID del
+    // pidfile sono di un namespace diverso. Fallback su freschezza dello
+    // state file (riscritto ad ogni tick + al boot dal pacing-bridge),
+    // con mtime del pidfile come prova della finestra pre-primo-tick.
+    try {
+      const stat = await fs.stat(STATE_FILE)
+      if (Date.now() - stat.mtimeMs < STATE_STALE_MS) return { running: true, pid }
+    } catch { /* state file mancante o non leggibile */ }
+    if (pidMtimeMs !== null && Date.now() - pidMtimeMs < STATE_STALE_MS) {
+      return { running: true, pid }
+    }
+    return { running: false, pid: null }
   }
 }
 
