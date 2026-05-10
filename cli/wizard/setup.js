@@ -134,65 +134,13 @@ export async function runSetupWizard(prompter) {
   });
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 
-  // --- Auth method ---
-  const authMethod = await prompter.select({
-    message: 'Metodo di autenticazione',
-    options: [
-      { value: 'api_key', label: 'API Key', hint: 'inserisci la tua chiave API — consigliato' },
-      { value: 'subscription', label: 'Subscription', hint: 'login con email e sessione' },
-    ],
-    initialValue: baseConfig.providers?.[providerChoice]?.auth_method || 'api_key',
-  });
-
-  // --- Step 3: Credenziali con SecretRef ---
-  let apiKeySecret;
-  let subscriptionConfig;
-
-  if (authMethod === 'api_key') {
-    // Chiedi come salvare la key (SecretRef pattern)
-    const secretMode = flow === 'advanced'
-      ? await prompter.select({
-          message: 'Come salvare la API key?',
-          options: [
-            { value: 'env', label: 'Variabile d\'ambiente', hint: 'consigliato — niente plaintext nel config' },
-            { value: 'plaintext', label: 'Nel file config', hint: 'piu\' semplice ma meno sicuro' },
-            { value: 'file', label: 'File esterno', hint: 'per Docker/secrets manager' },
-          ],
-          initialValue: 'env',
-        })
-      : 'plaintext'; // quickstart usa plaintext per semplicita'
-
-    if (secretMode === 'env') {
-      const envName = await prompter.text({
-        message: 'Nome variabile d\'ambiente',
-        initialValue: providerChoice === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerChoice.toUpperCase()}_API_KEY`,
-        placeholder: 'ANTHROPIC_API_KEY',
-      });
-      apiKeySecret = formatSecretForConfig('env', envName.trim());
-      await prompter.note(`Assicurati che ${envName.trim()} sia impostata nel tuo shell profile.`, 'Nota');
-    } else if (secretMode === 'file') {
-      const filePath = await prompter.text({
-        message: 'Path del file con la API key',
-        placeholder: '/run/secrets/anthropic-key',
-      });
-      apiKeySecret = formatSecretForConfig('file', filePath.trim());
-    } else {
-      await prompter.note(
-        `Per ottenere una API key per ${selectedProvider.label}:\n${selectedProvider.docsUrl}`,
-        'API Key',
-      );
-      const rawKey = await prompter.text({
-        message: `${selectedProvider.label} API key`,
-        placeholder: selectedProvider.keyPlaceholder,
-        validate: (value) => validateApiKey(selectedProvider, value),
-      });
-      apiKeySecret = formatSecretForConfig('plaintext', rawKey.trim());
-    }
-  }
-
-  if (authMethod === 'subscription') {
-    subscriptionConfig = await promptSubscription(prompter, selectedProvider, flow);
-  }
+  // --- Auth: solo subscription ---
+  // ADR-0004: niente API key path. Tutti i beta tester usano subscription
+  // (Claude Max, Codex Plus/Pro, Kimi). Il wizard non chiede piu' "api_key vs
+  // subscription" perche' confonde e non e' supportato.
+  const authMethod = 'subscription';
+  const apiKeySecret = undefined;
+  const subscriptionConfig = await promptSubscription(prompter, selectedProvider, flow);
 
   // --- Modello AI ---
   const model = await prompter.select({
@@ -204,20 +152,8 @@ export async function runSetupWizard(prompter) {
   // --- Telegram (workspace e' path fisso, non chiesto) ---
   const telegramChannel = await promptTelegram(prompter, baseConfig.channels);
 
-  // --- Step 5: Health check ---
-  if (authMethod === 'api_key') {
-    const healthy = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
-    if (!healthy) {
-      const cont = await prompter.confirm({
-        message: 'API key non verificata. Continuare e salvare comunque?',
-        initialValue: true,
-      });
-      if (!cont) {
-        await prompter.outro('Setup annullato.');
-        return;
-      }
-    }
-  }
+  // Niente health check: con subscription la verifica avviene al login OAuth
+  // del CLI provider (step successivo).
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
@@ -264,38 +200,29 @@ export async function runSetupWizard(prompter) {
     }
   }
 
-  // --- Step 7: OAuth login provider (subscription path) ---
+  // --- Step 7: OAuth login provider ---
+  // Il CLI provider (claude/codex/kimi) ha la sua TUI interattiva per il
+  // device-flow OAuth. Non puo' essere spawnato inline qui dentro al wizard
+  // perche' clack non rilascia bene il TTY al child. La soluzione semplice:
+  // dire all'utente di aprire un secondo terminale, fare ssh, e lanciare
+  // `jht oauth-login`. Quando ha finito, torna qui e premiamo Enter.
   const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
-  if (authMethod === 'subscription' && oauthCmd) {
+  if (oauthCmd) {
     await prompter.note(
-      `Ora apriro' ${oauthCmd} per il login.\n\n` +
-      `Cosa fare:\n` +
-      `  1. Quando appare il menu di scelta tema/login, premi Invio sui default\n` +
-      `  2. Verra' stampato un URL — aprilo nel browser sul tuo computer\n` +
-      `  3. Fai login con il tuo account ${selectedProvider.label}\n` +
-      `  4. Copia il codice e incollalo qui nel terminale\n` +
-      `  5. Quando vedi "authenticated", esci con /quit (o Ctrl+C due volte)\n\n` +
-      `Quando ${oauthCmd} si chiude, il setup riprende da solo.`,
-      `Login ${selectedProvider.label}`,
+      `Per autenticare il tuo account ${selectedProvider.label}:\n\n` +
+      `  1. Apri un NUOVO terminale sul tuo computer\n` +
+      `  2. Fai SSH al VPS (stesso comando che hai usato all'inizio)\n` +
+      `  3. Esegui:  jht oauth-login\n` +
+      `  4. Segui le istruzioni: apri l'URL nel browser, fai login,\n` +
+      `     incolla il codice, esci con /quit quando vedi "authenticated"\n` +
+      `  5. Torna qui (in questo terminale) e premi Invio per continuare\n\n` +
+      `Il login viene salvato in modo persistente — lo fai solo una volta.`,
+      `Login ${selectedProvider.label} (in altro terminale)`,
     );
-    const ready = await prompter.confirm({
-      message: `Pronto ad avviare ${oauthCmd} per il login?`,
+    await prompter.confirm({
+      message: 'Login completato? Premi Invio per continuare con l\'avvio del team',
       initialValue: true,
     });
-    if (ready) {
-      console.log('');
-      runProviderOauth(oauthCmd);
-      console.log('');
-      await prompter.note(
-        `${oauthCmd} chiuso. Il login OAuth e' salvato in ~/.jht/.${oauthCmd}/ (persistente).`,
-        'Login completato',
-      );
-    } else {
-      await prompter.note(
-        `Per fare il login dopo: jht shell, poi ${oauthCmd}`,
-        `Login ${selectedProvider.label} piu' tardi`,
-      );
-    }
   }
 
   // --- Step 8: avvia il team adesso? ---

@@ -119,34 +119,20 @@ export async function showSummary(prompter, params) {
 }
 
 /**
- * Prompt subscription: browser OAuth o manuale.
+ * Prompt subscription.
+ *
+ * Storia: avevamo due path (browser OAuth jht-internal + manuale email/token).
+ * Il browser path puntava a `claude.ai/authorize?client_id=jht-claude` che
+ * NON esiste su claude.ai (404 Page not found). Era un OAuth abbozzato mai
+ * implementato server-side. Rimosso 2026-05-10.
+ *
+ * Il login OAuth vero (device flow del CLI provider, es. `claude` di
+ * @anthropic-ai/claude-code) viene fatto in un step separato del wizard
+ * principale: l'utente apre un nuovo terminale e lancia `jht oauth-login`.
+ * Qui chiediamo solo l'email del suo account, salvata nel config per
+ * tracciabilita' (non usata per autenticarsi).
  */
 export async function promptSubscription(prompter, selectedProvider, flow) {
-  const browserAvailable = hasBrowserSupport();
-  const subMethod = await prompter.select({
-    message: 'Come vuoi effettuare il login?',
-    options: [
-      { value: 'browser', label: 'Apri browser per login',
-        hint: browserAvailable ? 'consigliato' : 'browser non disponibile (SSH?)' },
-      { value: 'manual', label: 'Inserisci email e token manualmente' },
-    ],
-    initialValue: browserAvailable ? 'browser' : 'manual',
-  });
-
-  if (subMethod === 'browser') {
-    const providerOAuth = selectedProvider.oauthUrl || `https://${selectedProvider.value}.ai/authorize`;
-    const clientId = selectedProvider.oauthClientId || `jht-${selectedProvider.value}`;
-    await prompter.note('Si aprira\' il browser per il login.', 'Login via browser');
-    const spin = prompter.progress('In attesa del login nel browser...');
-    const result = await startSubscriptionLogin({
-      authorizeUrl: providerOAuth, clientId, scopes: ['read', 'write'], prompter,
-    });
-    spin.stop(result ? 'Login completato!' : 'Login fallito.');
-    if (result) {
-      return { email: `oauth-${selectedProvider.value}`, session_token: result.code, oauth_verifier: result.verifier };
-    }
-    await prompter.note('Login via browser fallito. Inserisci i dati manualmente.', 'Fallback');
-  }
   return promptManualSubscription(prompter, flow);
 }
 
