@@ -1,0 +1,23 @@
+# Skills the Assistente consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# User communication (web UI)
+chat-web
+
+# Inter-agent (bridge to the Capitano when needed)
+tmux-send
+
+# Profile maintenance — the Assistente's daily loop
+profile-yaml
+profile-summaries
+onboarding-flow
+
+# Read-only DB lookups (e.g. show the user the state of their applications
+# if they ask). The Assistente never writes to the DB.
+db-query
+
+# rate-budget: read-only `plan` mode only — never `live`.
+# Useful only if the user asks "how is the team doing?" out of curiosity.
+rate-budget

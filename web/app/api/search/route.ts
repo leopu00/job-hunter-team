@@ -16,7 +16,7 @@ function readJsonSafe<T>(p: string): T | null {
 
 function searchAgents(q: string): SearchResult[] {
   const agents = [
-    { id: 'alfa', name: 'Alfa (Capitano)' }, { id: 'scout', name: 'Scout' },
+    { id: 'capitano', name: 'Capitano' }, { id: 'scout', name: 'Scout' },
     { id: 'analista', name: 'Analista' }, { id: 'scorer', name: 'Scorer' },
     { id: 'scrittore', name: 'Scrittore' }, { id: 'critico', name: 'Critico' },
     { id: 'sentinella', name: 'Sentinella' }, { id: 'assistente', name: 'Assistente' },

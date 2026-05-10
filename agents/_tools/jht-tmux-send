@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# jht-tmux-send — consegna atomica e VERIFICATA di un messaggio a una
+# sessione tmux. Pensato per agent-to-agent via TUI (Claude / Codex / Kimi).
+#
+# Le TUI "Ink" (Codex, Kimi, Claude Code) non registrano l'Enter se
+# arriva prima che il testo sia renderizzato nel prompt: testo e Enter
+# vanno inviati in step separati, e il submit deve arrivare DOPO che il
+# testo e' effettivamente apparso nel pane.
+#
+# Schema:
+#   1. send -l "$message"      tmux typea il testo carattere per carattere
+#   2. sleep 1                 lascia respirare il render Ink
+#   3. capture-pane            verifica che la signature sia nel pane
+#   4. se NO → retry (fino a 3 volte; la TUI potrebbe stare bootando,
+#              avere un modal aperto, o aver perso focus)
+#   5. se SI → send Enter      submit del prompt
+#
+# Uso:
+#   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
+#
+# Exit:
+#   0 → messaggio consegnato e submittato
+#   1 → argomenti mancanti
+#   2 → sessione inesistente
+#   3 → testo mai apparso nel pane dopo 3 retry (TUI irricettiva)
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "Usage: jht-tmux-send <session> <message>" >&2
+  echo "Esempio: jht-tmux-send SCOUT-1 '[@capitano -> @scout-1] [MSG] Inizia il loop.'" >&2
+  exit 1
+fi
+
+session="$1"
+shift
+# Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
+# (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
+message="$*"
+
+if ! tmux has-session -t "$session" 2>/dev/null; then
+  echo "jht-tmux-send: sessione '$session' non esiste" >&2
+  exit 2
+fi
+
+# Provider attivo: serve a sapere se la TUI di destinazione è Kimi, che
+# accoda i messaggi inviati con solo Enter mentre l'agente è in mezzo a
+# tool calls in-flight (osservato live: SCOUT-1 con 4 throttle in coda
+# non processati). Soluzione: dopo Enter mandiamo anche Ctrl-S, che in
+# Kimi forza il submit del prompt corrente. Su Claude/Codex Ctrl-S non
+# è atteso, quindi lo aggiungiamo SOLO se active_provider == "kimi".
+provider=""
+config_path="${JHT_HOME:-$HOME/.jht}/jht.config.json"
+if [ -f "$config_path" ] && command -v python3 >/dev/null 2>&1; then
+  provider=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('active_provider',''))
+except Exception:
+  pass" "$config_path" 2>/dev/null || true)
+fi
+
+# Log strutturato per la UI live: parsa il formato "[@from -> @to] [TYPE] ..."
+# e appendix una riga JSONL in $JHT_HOME/logs/messages.jsonl. Il backend
+# Next legge questo file per animare il pallino tra i nodi del team chart.
+# Fallisce silenziosamente — il logging non deve mai bloccare l'invio.
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
+import json, os, re, sys
+from datetime import datetime, timezone
+session, msg = sys.argv[1], sys.argv[2]
+# 1) formato standard agente→agente: "[@from -> @to] [TYPE] ..."
+m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+)\])?', msg)
+if m:
+    from_, to_, kind = m.group(1), m.group(2), m.group(3) or ""
+else:
+    # 2a) pacing-bridge: "[BRIDGE PACING] ..." — nodo separato dal Bridge
+    #     classico (sentinel) nel team chart. Marcato come from=pacing per
+    #     far partire il pallino dal nodo Pacing → Capitano.
+    mp = re.match(r'^\s*\[BRIDGE\s+PACING\]', msg)
+    if mp:
+        from_, to_, kind = "pacing", session.lower(), "PACING"
+    # 2b) bridge automatico: "[BRIDGE TICK|FAILURE|ALERT|INFO] ..." → la
+    #     destinazione è la session destinataria (passata come argv[1]).
+    elif (mb := re.match(r'^\s*\[BRIDGE\s+([A-Z]+)\]', msg)):
+        from_, to_, kind = "bridge", session.lower(), mb.group(1)
+    else:
+        # 3) sentinella autonoma: "[SENTINELLA] ..." o "[SENTINELLA] [TYPE] ..."
+        ms = re.match(r'^\s*\[SENTINELLA\]\s*(?:\[([A-Z]+)\])?', msg)
+        if ms:
+            from_, to_, kind = "sentinella", session.lower(), ms.group(1) or ""
+        else:
+            from_, to_, kind = "", "", ""
+log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(log_dir, exist_ok=True)
+out = {
+    "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    "session": session,
+    "from": from_.lower(),
+    "to": to_.lower(),
+    "type": kind,
+    "preview": msg[:80],
+}
+with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
+    f.write(json.dumps(out) + "\n")
+PYEOF
+fi
+
+# Signature per la verify: primi 30 char del messaggio. Substring perche'
+# le TUI wrappano righe lunghe e il messaggio nel pane puo' essere spezzato
+# su piu' righe, rendendo un match full-string impossibile.
+signature=$(printf '%s' "$message" | head -c 30)
+
+attempts=3
+for try in $(seq 1 "$attempts"); do
+  tmux send-keys -t "$session" -l "$message"
+  sleep 1
+  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+  case "$pane" in
+    *"$signature"*)
+      # Testo visibile nel prompt. Submit.
+      sleep 0.3
+      tmux send-keys -t "$session" Enter
+      # Kimi: con solo Enter il messaggio puo' restare accodato in pending
+      # input fino a fine batch di tool calls; Ctrl-S forza il submit
+      # immediato del prompt. Companycuo se la TUI ha gia' processato Enter.
+      if [ "$provider" = "kimi" ]; then
+        sleep 0.2
+        tmux send-keys -t "$session" C-s
+      fi
+      echo "jht-tmux-send: ${#message} chars to $session (try $try)"
+      exit 0
+      ;;
+  esac
+  # Testo perso. La TUI potrebbe essere ancora in boot o avere un modal
+  # aperto che ha mangiato i keystroke. Pausa e ritenta.
+  sleep 1.5
+done
+
+echo "jht-tmux-send: $session non ricettivo dopo $attempts tentativi (testo mai apparso nel pane)" >&2
+exit 3

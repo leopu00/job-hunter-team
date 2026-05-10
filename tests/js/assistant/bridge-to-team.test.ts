@@ -18,7 +18,7 @@ import { TeamBridge } from '../../../shared/assistant/bridge-to-team.js';
 const baseConfig = {
   botToken: 'tok',
   ownerChatId: '42',
-  captainSession: 'ALFA',
+  captainSession: 'CAPITANO',
   teamResponseTimeoutMs: 60000,
 };
 

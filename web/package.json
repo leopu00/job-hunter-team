@@ -1,9 +1,11 @@
 {
   "name": "web",
-  "version": "0.1.9",
+  "version": "0.1.13-dev",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:host": "JHT_SHELL_VIA=docker:jht next dev -p 3001",
+    "dev:host:3002": "JHT_SHELL_VIA=docker:jht next dev -p 3002",
     "prebuild": "node -e \"require('fs').copyFileSync('../scripts/install.sh','public/install.sh')\"",
     "build": "next build",
     "start": "next start",
@@ -15,6 +17,7 @@
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "better-sqlite3": "^12.8.0",
+    "ipaddr.js": "^2.2.0",
     "js-yaml": "^4.1.1",
     "next": "^16.2.2",
     "next-intl": "^4.9.0",
@@ -34,6 +37,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "@swc/helpers": "^0.5.17"
+    "@swc/helpers": "^0.5.17",
+    "postcss": "^8.5.10"
   }
 }

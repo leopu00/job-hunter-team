@@ -67,12 +67,12 @@ class TestCapitanoStopCodebase:
             f"BUG-01: {stop_route} non trovato — endpoint capitano/stop mancante"
 
     def test_capitano_stop_route_kills_alfa_session(self):
-        """Il file route.ts deve terminare la sessione ALFA (non ASSISTENTE)."""
+        """Il file route.ts deve terminare la sessione CAPITANO (non ASSISTENTE)."""
         stop_route = QA_WEB_ROOT / "app" / "api" / "capitano" / "stop" / "route.ts"
         if not stop_route.exists():
             pytest.skip("File non trovato — vedi test_capitano_stop_route_file_exists")
         content = stop_route.read_text()
-        assert "ALFA" in content, "BUG-01: lo stop del capitano deve killare la sessione ALFA"
+        assert "CAPITANO" in content, "BUG-01: lo stop del capitano deve killare la sessione CAPITANO"
         assert "ASSISTENTE" not in content, \
             "BUG-01: lo stop del capitano non deve riferirsi a ASSISTENTE"
 

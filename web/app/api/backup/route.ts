@@ -7,12 +7,20 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
 const BACKUP_DIR = path.join(JHT_HOME, 'backups');
 const CATALOG_PATH = path.join(BACKUP_DIR, 'catalog.json');
 const JHT_DIR = JHT_HOME;
+
+// Backup id valido: lettere/cifre/underscore/dash. Previene path traversal
+// in PATCH (`path.join(JHT_HOME, 'restored', id)`) e in DELETE (lookup
+// in catalog è già vincolato dal find ma l'archivePath potrebbe essere
+// composto altrove).
+const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 type BackupEntry = {
   id: string; createdAt: number; sizeBytes: number; sources: string[];
@@ -44,6 +52,8 @@ async function loadBackupRunner() {
 
 // GET — lista backup
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const entries = loadCatalog().sort((a, b) => b.createdAt - a.createdAt);
   const totalSize = entries.reduce((s, e) => s + e.sizeBytes, 0);
   return NextResponse.json({ backups: entries, count: entries.length, totalSize });
@@ -51,6 +61,8 @@ export async function GET() {
 
 // POST — crea backup
 export async function POST(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   try {
     const body = await req.json().catch(() => ({}));
     const sources: string[] = body.sources?.length ? body.sources : DEFAULT_SOURCES;
@@ -79,15 +91,18 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ backup: result.entry, durationMs: result.durationMs }, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'backup' });
   }
 }
 
 // PATCH — ripristina backup
 export async function PATCH(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
+  if (!ID_PATTERN.test(id)) return NextResponse.json({ error: 'id non valido' }, { status: 400 });
 
   try {
     const { restoreBackup } = await loadBackupRunner();
@@ -99,15 +114,18 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ restored: result.restoredFiles, targetDir, durationMs: result.durationMs });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'backup' });
   }
 }
 
 // DELETE — elimina backup
 export async function DELETE(req: Request) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Parametro id richiesto' }, { status: 400 });
+  if (!ID_PATTERN.test(id)) return NextResponse.json({ error: 'id non valido' }, { status: 400 });
 
   const catalog = loadCatalog();
   const entry = catalog.find(e => e.id === id);

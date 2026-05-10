@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { JHT_HOME, JHT_CONFIG_PATH } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,8 @@ function readJSON<T>(p: string): T | null {
 
 /** GET — lista variabili (SOLO nomi e metadati, mai valori) */
 export async function GET() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const vars = new Map<string, EnvVar>()
 
   // 1. Variabili note (con stato set/unset)

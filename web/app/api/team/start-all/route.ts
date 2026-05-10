@@ -1,59 +1,77 @@
 import { NextResponse } from 'next/server'
-import {
-  JHT_HOME,
-  JHT_CONFIG_PATH,
-  JHT_DB_PATH,
-  JHT_USER_DIR,
-  getAgentDir,
-} from '@/lib/jht-paths'
-import { runBash } from '@/lib/shell'
+import fs from 'node:fs/promises'
+import { runBash, runScript, toWslPath } from '@/lib/shell'
 import { requireAuth } from '@/lib/auth'
+import { JHT_CONFIG_PATH } from '@/lib/jht-paths'
 import path from 'path'
-import fs from 'fs'
 
 export const dynamic = 'force-dynamic'
 
-const TEAM = [
-  { role: 'alfa',       session: 'ALFA',        effort: 'high',   instance: null as string | null },
-  { role: 'scout',      session: 'SCOUT-1',     effort: 'high',   instance: '1' },
-  { role: 'analista',   session: 'ANALISTA-1',  effort: 'high',   instance: '1' },
-  { role: 'scorer',     session: 'SCORER-1',    effort: 'medium', instance: '1' },
-  { role: 'scrittore',  session: 'SCRITTORE-1', effort: 'high',   instance: '1' },
-  { role: 'critico',    session: 'CRITICO',     effort: 'high',   instance: null },
-  { role: 'sentinella', session: 'SENTINELLA',  effort: 'low',    instance: null },
-]
-
-function shellEscape(value: string): string {
-  return String(value).replace(/'/g, "'\\''")
+// Bootstrap minimale del team:
+//   - Capitano: il coordinatore che poi spawna gli altri agenti (scaling
+//     graduale definito nel suo prompt). start-agent.sh gli invia anche
+//     un kick-off message automatico dopo ~15s di boot del CLI. Insieme
+//     al Capitano viene spawnato anche sentinel-bridge.py — il servizio
+//     deterministico che monitora rate-limit + host e invia [BRIDGE ORDER]
+//     al Capitano quando la policy cambia (T0..T4, edge-triggered).
+// L'Assistente viene avviato dal boot dell'app Desktop (Electron →
+// container.js), duplicarlo qui non serve. Gli altri ruoli (Scout,
+// Analista, Scorer, Scrittore, Critico) vengono accesi dal Capitano
+// secondo le sue soglie.
+async function readSentinellaTickMinutes(): Promise<number> {
+  // Tick idle (default 10 min, range 1-60): il bridge usa questo come
+  // ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
+  // quando status CRITICO / host saturo / team operativo attivo.
+  try {
+    const raw = await fs.readFile(JHT_CONFIG_PATH, 'utf8')
+    const cfg = JSON.parse(raw)
+    const n = Number(cfg?.sentinella_tick_minutes)
+    if (Number.isFinite(n) && n >= 1 && n <= 60) return Math.round(n)
+  } catch { /* fallback al default */ }
+  return 10
 }
 
-const DESCRIPTIONS: Record<string, string> = {
-  alfa:       'Coordini la pipeline di ricerca lavoro del team.',
-  scout:      'Cerchi posizioni lavorative online e le inserisci nel database.',
-  analista:   'Analizzi le job description e le aziende per estrarre requisiti chiave.',
-  scorer:     'Calcoli il punteggio di match tra il profilo del candidato e le posizioni.',
-  scrittore:  'Scrivi CV personalizzati e cover letter per ogni posizione.',
-  critico:    'Revisioni la qualita dei CV e delle cover letter, fornendo feedback.',
-  sentinella: 'Monitori il sistema, token usage, rate limit e stato degli agenti.',
+type TeamAgent = {
+  role: string
+  session: string
+  instance: string | null
+  env?: Record<string, string>
+  /** Sleep in ms PRIMA di lanciare questo agente (per dare tempo al
+   *  predecessore di stabilizzarsi). 0 = parte subito. */
+  preDelayMs?: number
+  /** Se true, l'agente non è una sessione tmux (es. bridge background).
+   *  Skippa il check has-session. */
+  notATmuxSession?: boolean
 }
 
-const DISPLAY_NAMES: Record<string, string> = {
-  alfa: 'Capitano (Alfa)', scout: 'Scout', analista: 'Analista',
-  scorer: 'Scorer', scrittore: 'Scrittore', critico: 'Critico', sentinella: 'Sentinella',
+async function buildTeam(): Promise<TeamAgent[]> {
+  const tickMin = await readSentinellaTickMinutes()
+  // Sequenza V5 ordinata (rivista 2026-04-26):
+  //   1. SENTINELLA: tmux session + CLI boot + kick-off, da SOLA
+  //      (così è pronta a ricevere il primo [BRIDGE TICK])
+  //   2. BRIDGE: processo Python background, fa il primo fetch e manda
+  //      il primo tick alla SENTINELLA che è già attiva
+  //   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per
+  //      ULTIMO così quando parte il monitoring è già stabile e ha
+  //      almeno un sample fresco da consultare
+  //
+  // Pre-delay rivisti per PC lenti:
+  //   • bridge:    20s dopo sentinella  (CLI boot lento + trust dialog)
+  //   • capitano:   5s dopo bridge      (lascia che il primo fetch
+  //                                      arrivi prima del kick-off)
+  return [
+    { role: 'sentinella', session: 'SENTINELLA', instance: null },
+    { role: 'bridge',     session: 'BRIDGE',     instance: null,
+      preDelayMs: 20000, notATmuxSession: true,
+      env: { JHT_TARGET_SESSION: 'CAPITANO' } },
+    { role: 'capitano',   session: 'CAPITANO',   instance: null,
+      preDelayMs: 5000,
+      env: { JHT_TICK_INTERVAL: String(tickMin) } },
+  ]
 }
 
-function minimalClaudeMd(role: string): string {
-  return `# ${DISPLAY_NAMES[role] ?? role}
-
-Sei l'agente **${DISPLAY_NAMES[role] ?? role}** del Job Hunter Team.
-${DESCRIPTIONS[role] ?? ''}
-
-## Regole
-- Comunica in italiano
-- Lavora nella tua directory di workspace
-- Collabora con gli altri agenti del team
-`
-}
+// Quote POSIX-safe per env var passate a bash -c.
+const shellQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
 
 export async function POST() {
   const authError = await requireAuth()
@@ -61,55 +79,51 @@ export async function POST() {
 
   try {
     const repoRoot = path.resolve(process.cwd(), '..')
+    // Deleghiamo tutto a .launcher/start-agent.sh: template copy,
+    // env var, rilevamento provider (claude/kimi/codex) dal
+    // jht.config.json, creazione sessione tmux, lancio CLI, kick-off
+    // automatico per capitano e assistente, spawn bridge rate-limit
+    // al fianco del Capitano.
+    const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
+    const team = await buildTeam()
     const results: { session: string; role: string; status: 'started' | 'already_active' | 'error'; error?: string }[] = []
 
-    for (const agent of TEAM) {
-      const agentDir = getAgentDir(agent.role, agent.instance ?? undefined)
-      const claudeMd = path.join(agentDir, 'CLAUDE.md')
-      const templatePath = path.join(repoRoot, 'agents', agent.role, `${agent.role}.md`)
+    for (const agent of team) {
+      // Pre-delay opzionale: lasciato al singolo agent (es. bridge attende
+      // che capitano+sentinella siano stabili prima di partire).
+      if (agent.preDelayMs && agent.preDelayMs > 0) {
+        await new Promise((r) => setTimeout(r, agent.preDelayMs))
+      }
 
-      fs.mkdirSync(agentDir, { recursive: true })
+      // I "ruoli" che NON sono sessioni tmux (es. bridge = processo
+      // Python background) skippano il check has-session: start-agent.sh
+      // gestisce il singleton internamente.
+      if (!agent.notATmuxSession) {
+        try {
+          const { stdout } = await runBash(
+            `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`
+          )
+          if (stdout.trim() === 'EXISTS') {
+            results.push({ session: agent.session, role: agent.role, status: 'already_active' })
+            continue
+          }
+        } catch { /* sessione non esiste, procedi */ }
+      }
 
-      if (!fs.existsSync(claudeMd)) {
-        if (fs.existsSync(templatePath) && fs.statSync(templatePath).size > 0) {
-          fs.copyFileSync(templatePath, claudeMd)
+      try {
+        if (agent.env && Object.keys(agent.env).length > 0) {
+          // Passiamo env var inline prima di invocare lo script. runScript
+          // non supporta env custom, usiamo runBash con prefisso KEY=VAL.
+          const envPrefix = Object.entries(agent.env)
+            .map(([k, v]) => `${k}=${shellQuote(v)}`)
+            .join(' ')
+          const args = agent.instance ? [agent.role, agent.instance] : [agent.role]
+          const argsStr = args.map(shellQuote).join(' ')
+          await runBash(`${envPrefix} bash ${shellQuote(startAgentScript)} ${argsStr}`)
         } else {
-          fs.writeFileSync(claudeMd, minimalClaudeMd(agent.role))
+          const args = agent.instance ? [agent.role, agent.instance] : [agent.role]
+          await runScript(startAgentScript, ...args)
         }
-      }
-
-      try {
-        const { stdout } = await runBash(
-          `tmux has-session -t "${agent.session}" 2>&1 && echo "EXISTS" || echo "NEW"`
-        )
-        if (stdout.trim() === 'EXISTS') {
-          results.push({ session: agent.session, role: agent.role, status: 'already_active' })
-          continue
-        }
-      } catch {
-        // Sessione non esiste, procedi
-      }
-
-      try {
-        await runBash(`tmux new-session -d -s "${agent.session}" -c "${agentDir}"`)
-
-        const envVars: Record<string, string> = {
-          JHT_HOME,
-          JHT_USER_DIR,
-          JHT_DB: JHT_DB_PATH,
-          JHT_CONFIG: JHT_CONFIG_PATH,
-          JHT_AGENT_DIR: agentDir,
-        }
-        for (const [k, v] of Object.entries(envVars)) {
-          await runBash(`tmux send-keys -t "${agent.session}" "export ${k}='${shellEscape(v)}'" C-m`)
-        }
-
-        await runBash(
-          `tmux send-keys -t "${agent.session}" "claude --dangerously-skip-permissions --effort ${agent.effort}" C-m`
-        )
-        runBash(
-          `(sleep 4 && tmux send-keys -t "${agent.session}" Enter && sleep 3 && tmux send-keys -t "${agent.session}" Enter) &>/dev/null &`
-        ).catch(() => {})
         results.push({ session: agent.session, role: agent.role, status: 'started' })
       } catch (err: any) {
         results.push({ session: agent.session, role: agent.role, status: 'error', error: err?.message })

@@ -447,7 +447,7 @@ mod.cmd_claim({repr(job_id)}, {repr(scout_name)})
 # Agenti dal legacy ~/Repos/job-hunter/ + sentinella aggiunta da Leone
 # Fonte: ls ~/Repos/job-hunter/ + ordine CEO
 EXPECTED_AGENTS = [
-    'alfa',        # Capitano
+    'capitano',        # Capitano
     'scout',       # Scout (+ scout-1/2/3 in legacy)
     'analista',    # Analista (+ analista-1/2 in legacy)
     'scorer',      # Scorer (+ scorer-1/2/3 in legacy)
@@ -551,7 +551,7 @@ with open({repr(RATE_SENTINEL)}) as _f:
                 f"Sessione dev {dev_session} non in DEV_SESSIONS — potrebbe monitorare dev team"
 
         # Prefissi agenti JH devono essere presenti (PR #20: rinominato da JH_AGENT_SESSIONS a JH_AGENT_PREFIXES)
-        for prefix in ['ALFA', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']:
+        for prefix in ['CAPITANO', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']:
             assert prefix in mod.JH_AGENT_PREFIXES, \
                 f"Prefisso agente '{prefix}' non in JH_AGENT_PREFIXES"
 

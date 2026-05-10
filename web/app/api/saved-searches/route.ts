@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
     if (!ss.name || !ss.query) return NextResponse.json({ error: 'name e query richiesti' }, { status: 400 });
     const searches = load(); searches.push(ss); save(searches);
     return NextResponse.json({ ok: true, search: ss });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'saved-searches' }); }
 }
 
 export async function DELETE(req: Request) {
@@ -69,5 +70,5 @@ export async function DELETE(req: Request) {
     if (idx === -1) return NextResponse.json({ error: 'Non trovato' }, { status: 404 });
     searches.splice(idx, 1); save(searches);
     return NextResponse.json({ ok: true });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'saved-searches' }); }
 }

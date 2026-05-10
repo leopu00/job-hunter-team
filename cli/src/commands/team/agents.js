@@ -10,6 +10,7 @@ import {
   JHT_AGENTS_DIR,
   JHT_USER_DIR,
 } from '../../jht-paths.js';
+import { containerRunning, listContainerSessions } from '../../utils/container-proxy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -18,17 +19,19 @@ const __dirname = dirname(__filename);
 export { JHT_HOME, JHT_CONFIG_PATH, JHT_DB_PATH, JHT_AGENTS_DIR, JHT_USER_DIR };
 
 export const AGENTS = [
-  { role: 'alfa',       prefix: 'ALFA',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
+  { role: 'capitano',       prefix: 'CAPITANO',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
   { role: 'scout',      prefix: 'SCOUT',      multi: true,  effort: 'high',   desc: 'Cerca posizioni lavorative' },
   { role: 'analista',   prefix: 'ANALISTA',    multi: true,  effort: 'high',   desc: 'Analizza job description e aziende' },
   { role: 'scorer',     prefix: 'SCORER',      multi: true,  effort: 'medium', desc: 'Calcola punteggio match' },
   { role: 'scrittore',  prefix: 'SCRITTORE',   multi: true,  effort: 'high',   desc: 'Scrive CV e cover letter' },
   { role: 'critico',    prefix: 'CRITICO',     multi: false, effort: 'high',   desc: 'Revisione qualita CV' },
-  { role: 'sentinella', prefix: 'SENTINELLA',  multi: false, effort: 'low',    desc: 'Monitora token usage e rate limit' },
   { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
 ];
 
-export const DEFAULT_TEAM = ['alfa', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
+// Nota: il monitoraggio rate-limit e' gestito dal bridge Python
+// (.launcher/sentinel-bridge.py), non da un agente LLM. Il bridge viene
+// spawnato automaticamente con il Capitano da start-agent.sh.
+export const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico'];
 
 export const c = {
   green:  (s) => `\x1b[32m${s}\x1b[0m`,
@@ -48,7 +51,20 @@ export function claudeAvailable() {
   catch { return false; }
 }
 
+/**
+ * Sorgente delle sessioni tmux:
+ *   - container 'jht' up → tmux dentro container (i nomi NON hanno prefisso JHT-;
+ *     il web/start-agent.sh crea sessioni come CAPITANO, SCOUT-1, SENTINELLA)
+ *   - altrimenti → tmux host, modalita' legacy (prefix JHT-)
+ */
+export function usingContainer() {
+  return containerRunning();
+}
+
 export function getActiveSessions() {
+  if (usingContainer()) {
+    return listContainerSessions();
+  }
   try {
     const out = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf8' });
     return out.trim().split('\n').filter(Boolean);
@@ -58,8 +74,19 @@ export function getActiveSessions() {
 export function sessionName(role, instance) {
   const agent = AGENTS.find((a) => a.role === role);
   if (!agent) return null;
-  if (agent.multi && instance) return `JHT-${agent.prefix}-${instance}`;
-  return `JHT-${agent.prefix}`;
+  // Container mode: CAPITANO / SCOUT-1. Legacy host: JHT-CAPITANO / JHT-SCOUT-1.
+  const prefix = usingContainer() ? agent.prefix : `JHT-${agent.prefix}`;
+  if (agent.multi && instance) return `${prefix}-${instance}`;
+  return prefix;
+}
+
+/** Matcher universale (accetta entrambi i pattern, container e host). */
+export function isAgentSession(name, agent) {
+  const p = agent.prefix;
+  return (
+    name === p || name.startsWith(`${p}-`) ||
+    name === `JHT-${p}` || name.startsWith(`JHT-${p}-`)
+  );
 }
 
 export function isSessionActive(name) {

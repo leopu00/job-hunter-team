@@ -5,7 +5,7 @@
 
 ## Context
 
-The JHT infrastructure offers two deployment modes (see [INFRA.md](../INFRA.md)):
+The JHT infrastructure offers two deployment modes (see [INFRA.md](../internal/INFRA.md)):
 
 - **Local** — the container runs on the user's PC
 - **Cloud** — the container runs on a remote VPS

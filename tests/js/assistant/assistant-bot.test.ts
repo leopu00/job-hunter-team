@@ -108,7 +108,7 @@ describe('registerAssistantHandlers', () => {
     name: 'TestBot',
     avatar: '🤖',
     ownerChatId: '42',
-    captainSession: 'ALFA',
+    captainSession: 'CAPITANO',
     teamResponseTimeoutMs: 5000,
   };
 

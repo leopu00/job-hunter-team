@@ -1,0 +1,6 @@
+# False-positive gitleaks: stringhe in test fixture, non secret reali.
+# Verificate manualmente nel pre-launch security review (Apr 2026):
+# - tests/js/.vitest-tasks.json: 'sk-projkey123' (placeholder palese)
+# - tests/js/config/schema.test.ts: stringa label test (Debole/Scarsa/...)
+6f578deeb0f9ec7430285333a90a97f2975bc5e4:tests/js/.vitest-tasks.json:generic-api-key:1
+6d6fc187ed2f631b9faff5e7c12fa3638c76d8a3:tests/js/config/schema.test.ts:generic-api-key:43

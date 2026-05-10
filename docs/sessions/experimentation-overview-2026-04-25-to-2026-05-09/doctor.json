@@ -1,0 +1,18 @@
+{
+ "totals": {
+  "events": 1162,
+  "spawns": 59,
+  "rounds": 50,
+  "pings": 507,
+  "restarts": 6
+ },
+ "diagnoses": {
+  "alive": 480,
+  "ambiguous": 41,
+  "stallo": 3,
+  "cli_dead": 4,
+  "long_turn": 10
+ },
+ "first_ts": "2026-05-08T07:00:04Z",
+ "last_ts": "2026-05-09T10:33:36Z"
+}

@@ -1,0 +1,24 @@
+# zizmor configuration
+# https://docs.zizmor.sh/configuration/
+#
+# Rules disabilitate qui sono o (a) cambi che richiedono review
+# deliberato workflow-per-workflow, o (b) low-confidence ad alto rumore.
+# Riabilitare al prossimo audit security se la roadmap include
+# l'hardening completo dei workflow CI.
+
+rules:
+  # SHA-pinning di GitHub Actions: cambio invasivo, richiede strategia
+  # Renovate/Dependabot per non bloccare il dev. Da fare insieme al
+  # task "Pin Docker base image a SHA256" della checklist.
+  unpinned-uses:
+    disable: true
+
+  # Permessi minimali per ogni workflow: richiede review per-workflow
+  # delle GITHUB_TOKEN scopes. Da fare nel prossimo round CI hardening.
+  excessive-permissions:
+    disable: true
+
+  # `persist-credentials: false` su actions/checkout: low-confidence,
+  # spesso non necessario per le nostre pipeline locali.
+  artipacked:
+    disable: true

@@ -1,10 +1,29 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CopyButton } from '../components/CopyButton'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
+
+function BackLink() {
+  const { t } = useLandingI18n()
+  const router = useRouter()
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.push('/')
+  }
+  return (
+    <button
+      onClick={handleBack}
+      className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0"
+    >
+      {t('dl_back')}
+    </button>
+  )
+}
 
 export type PlatformId = 'mac' | 'linux' | 'windows'
 export type Arch = 'x64' | 'arm64'
@@ -28,7 +47,6 @@ export interface DownloadClientProps {
   releaseAvailable: boolean
 }
 
-type TerminalMode = 'source' | 'cli'
 type InstallMode = 'desktop' | 'terminal'
 
 function PlatformIcon({ id }: { id: PlatformId }) {
@@ -40,19 +58,12 @@ function PlatformIcon({ id }: { id: PlatformId }) {
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
 
-const SOURCE_SETUP_CMD = `git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team
-npm --prefix tui install && npm --prefix tui run build
-npm --prefix cli install
-node cli/bin/jht.js`
-
 function DownloadContent({ version, releasesUrl, primary, others, releaseAvailable }: DownloadClientProps) {
   const { t } = useLandingI18n()
   const [installMode, setInstallMode] = useState<InstallMode>('desktop')
-  const [terminalMode, setTerminalMode] = useState<TerminalMode>('cli')
   const [showOthers, setShowOthers] = useState(false)
 
-  const terminalCommand = terminalMode === 'source' ? SOURCE_SETUP_CMD : CLI_SETUP_CMD
+  const terminalCommand = CLI_SETUP_CMD
 
   return (
     <>
@@ -62,7 +73,7 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
 
           <div className="mb-12 text-center">
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-              Configura il tuo team <span className="text-[var(--color-green)]">sul tuo PC</span>
+              {t('dl_title_1')} <span className="text-[var(--color-green)]">{t('dl_title_2')}</span>
             </h1>
             <p className="text-[var(--color-muted)] text-[12px] md:text-[13px] leading-relaxed max-w-4xl mx-auto mb-2">
               {t('dl_desc')}
@@ -121,7 +132,7 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
                     }}
                     aria-expanded={showOthers}
                   >
-                    {showOthers ? '− Nascondi altre opzioni' : '+ Altre opzioni (altri OS / architetture)'}
+                    {showOthers ? t('dl_toggle_hide') : t('dl_toggle_show')}
                   </button>
 
                   {showOthers && (
@@ -135,70 +146,26 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
               )}
             </div>
           ) : (
-            <div className="border border-[var(--color-border)] bg-[var(--color-panel)] p-5 mb-8">
-              <div className="mb-4">
-                <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                  {t('dl_terminal_title')}
-                </p>
-                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-                  {t('dl_terminal_desc')}
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <button
-                  onClick={() => setTerminalMode('source')}
-                  className="px-3 py-2 text-[11px] font-semibold transition-colors text-left"
-                  style={{
-                    background: terminalMode === 'source' ? 'var(--color-card)' : 'transparent',
-                    color: terminalMode === 'source' ? 'var(--color-bright)' : 'var(--color-muted)',
-                    border: `1px solid ${terminalMode === 'source' ? 'var(--color-green)' : 'var(--color-border)'}`,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('dl_terminal_source_tab')}
-                </button>
-                <button
-                  onClick={() => setTerminalMode('cli')}
-                  className="px-3 py-2 text-[11px] font-semibold transition-colors text-left"
-                  style={{
-                    background: terminalMode === 'cli' ? 'var(--color-card)' : 'transparent',
-                    color: terminalMode === 'cli' ? 'var(--color-bright)' : 'var(--color-muted)',
-                    border: `1px solid ${terminalMode === 'cli' ? 'var(--color-green)' : 'var(--color-border)'}`,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('dl_terminal_cli_tab')}
-                </button>
-              </div>
-
+            <div className="mb-8">
               <div className="border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
-                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <div>
-                    <p className="text-[11px] font-semibold text-[var(--color-bright)]">
-                      {terminalMode === 'source' ? t('dl_terminal_source_title') : t('dl_terminal_cli_title')}
-                    </p>
-                    <p className="text-[10px] text-[var(--color-dim)] mt-1">
-                      {terminalMode === 'source' ? t('dl_terminal_source_desc') : t('dl_terminal_cli_desc')}
-                    </p>
-                  </div>
-                  <CopyButton text={terminalCommand} size="sm" className="rounded-none">Copia comando</CopyButton>
+                <div className="flex items-center justify-end px-3 py-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <CopyButton text={terminalCommand} size="sm" className="rounded-none">{t('dl_copy_cmd')}</CopyButton>
                 </div>
-
                 <pre className="px-4 py-4 overflow-x-auto text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
                   {terminalCommand}
                 </pre>
               </div>
-
-              <p className="text-[10px] text-[var(--color-dim)] leading-relaxed mt-3">
-                {terminalMode === 'source' ? t('dl_terminal_source_note') : t('dl_terminal_cli_note')}
-              </p>
+              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">macOS · Linux · WSL</p>
             </div>
           )}
 
 
+          <div className="mt-8 flex justify-center">
+            <BackLink />
+          </div>
         </div>
       </main>
+      <LandingFooter />
       <ScrollToTop />
     </>
   )
@@ -223,11 +190,10 @@ function PrimaryCta({
       >
         <div className="px-5 py-5">
           <p className="text-[13px] font-semibold text-[var(--color-white)] mb-2">
-            Nessuna release desktop pubblicata al momento
+            {t('dl_norelease_title')}
           </p>
           <p className="text-[11px] text-[var(--color-muted)] mb-4 leading-relaxed">
-            Appena viene pubblicata la prossima release, questa pagina offre il download diretto.
-            Nel frattempo puoi usare l&apos;installazione da terminale qui sotto o consultare l&apos;elenco su GitHub.
+            {t('dl_norelease_desc')}
           </p>
           <a
             href={releasesUrl}
@@ -239,7 +205,7 @@ function PrimaryCta({
               cursor: 'pointer',
             }}
           >
-            Apri GitHub Releases
+            {t('dl_open_releases')}
           </a>
         </div>
       </div>
@@ -266,10 +232,10 @@ function PrimaryCta({
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[10px] tracking-widest uppercase text-[var(--color-dim)] mb-1">
-            Rilevato: {variant.label}
+            {t('dl_detected_label')}: {variant.label}
           </div>
           <div className="text-[15px] font-bold text-[var(--color-white)] mb-1">
-            Scarica per {variant.label}
+            {t('dl_download_for')} {variant.label}
           </div>
           <div className="text-[10px] text-[var(--color-dim)] break-all">
             {variant.file}

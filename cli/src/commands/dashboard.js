@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -57,12 +57,17 @@ function startNextDev(webDir, port) {
   // delivers SIGTERM to the actual Next.js process (npm doesn't
   // forward signals reliably and we'd hit SIGKILL after the 10s
   // grace period). Bind to 0.0.0.0 so the host port-forward hits us.
+  // 'inherit' on stdout/stderr: se piping senza drain i buffer si
+  // riempiono dopo ~64KB e Next si blocca in write() silenziosamente —
+  // succedeva con le compilation error dopo il refactor onboarding,
+  // ci abbiamo girato intorno per un'ora. 'inherit' manda l'output
+  // direttamente al parent (docker logs jht lo vede).
   if (isContainer()) {
     const nextBin = join(webDir, 'node_modules', '.bin', 'next');
     const child = spawn(nextBin, ['dev', '-p', String(port), '-H', '0.0.0.0'], {
       cwd: webDir,
       detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'inherit', 'inherit'],
       env: { ...process.env, PORT: String(port), HOSTNAME: '0.0.0.0' },
     });
     return child;
@@ -70,7 +75,7 @@ function startNextDev(webDir, port) {
   const child = spawn('npm', ['run', 'dev', '--', '-p', String(port)], {
     cwd: webDir,
     detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'inherit', 'inherit'],
     env: { ...process.env, PORT: String(port) },
   });
   child.unref();
@@ -86,11 +91,35 @@ async function waitForReady(port, timeoutMs = 15000) {
   return false;
 }
 
+// Al boot del container nessun processo bridge sopravvive al teardown,
+// quindi pid + state file lasciati dalla sessione precedente sono per
+// definizione orfani. Li rimuoviamo prima che le API di stato li leggano:
+// senza questo, /api/bridge/status e /api/team/pacing-bridge mostrano
+// "running" + "next tick" basandosi su dati stantii, e la UI fa sembrare
+// che bridge/pacing siano partiti in automatico ancora prima dello Start.
+async function cleanupStaleBridgeState() {
+  if (!isContainer()) return;
+  const home = process.env.JHT_HOME;
+  if (!home) return;
+  const logs = join(home, 'logs');
+  const targets = [
+    'sentinel-bridge.pid',
+    'sentinel-bridge-state.json',
+    'pacing-bridge.pid',
+    'pacing-bridge-state.json',
+  ];
+  for (const name of targets) {
+    try { await unlink(join(logs, name)); } catch { /* ENOENT atteso */ }
+  }
+}
+
 async function handleDashboard(options) {
   const port = parseInt(options.port ?? String(DEFAULT_PORT), 10) || DEFAULT_PORT;
   const url = `http://localhost:${port}`;
 
   console.log(`\n  ${BOLD}JHT — Dashboard${RESET}\n`);
+
+  await cleanupStaleBridgeState();
 
   // Controlla se la porta è già in uso (dashboard già attiva)
   const alreadyRunning = await isPortOpen(port);
@@ -130,13 +159,8 @@ async function handleDashboard(options) {
   console.log(`  ${DIM}Avvio Next.js dev server sulla porta ${port}...${RESET}`);
   const child = startNextDev(webDir, port);
 
-  child.stderr?.on('data', (data) => {
-    const msg = data.toString().trim();
-    if (msg.includes('EADDRINUSE')) {
-      console.error(`  \x1b[31mPorta ${port} già in uso da un altro processo.\x1b[0m`);
-      console.error(`  ${DIM}Prova: jht dashboard --port ${port + 1}${RESET}\n`);
-    }
-  });
+  // stderr/stdout sono 'inherit' (vedi startNextDev), quindi errori
+  // come EADDRINUSE escono direttamente in docker logs / terminale.
 
   // Aspetta che il server sia pronto
   const ready = await waitForReady(port);
@@ -155,6 +179,25 @@ async function handleDashboard(options) {
   } else {
     console.log(`  ${YELLOW}Server avviato ma non ancora pronto (PID: ${child.pid}).${RESET}`);
     console.log(`  ${DIM}Apri manualmente: ${url}${RESET}\n`);
+  }
+
+  // Boot the assistant in the background so the first thing the user
+  // sees on /dashboard → /onboarding is the welcome chat. Only inside
+  // the container — on the host, team/start is the user-initiated
+  // entry point. Non-fatal if the script or tmux isn't there yet.
+  if (isContainer() && ready) {
+    try {
+      const root = '/app';
+      const startScript = join(root, '.launcher', 'start-agent.sh');
+      if (await fileExists(startScript)) {
+        const boot = spawn('bash', [startScript, 'assistente'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        boot.unref();
+        console.log(`  ${DIM}Assistente: avvio in background…${RESET}`);
+      }
+    } catch { /* non-fatal */ }
   }
 
   // In container PID 1 (this process) must stay alive: if we exit,

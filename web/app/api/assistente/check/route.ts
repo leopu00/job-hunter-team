@@ -63,9 +63,9 @@ export async function GET() {
     `test -f "${repoPath}/agents/assistente/assistente.md" && echo "ok"`,
     'File agents/assistente/assistente.md mancante')
 
-  await check('tpl_alfa', 'Template alfa.md',
-    `test -f "${repoPath}/agents/alfa/alfa.md" && echo "ok"`,
-    'Crea agents/alfa/alfa.md — identità del Capitano')
+  await check('tpl_alfa', 'Template capitano.md',
+    `test -f "${repoPath}/agents/capitano/capitano.md" && echo "ok"`,
+    'Crea agents/capitano/capitano.md — identità del Capitano')
 
   return NextResponse.json({ checks, workspace: JHT_USER_DIR })
 }

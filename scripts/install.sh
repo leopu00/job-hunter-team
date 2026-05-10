@@ -9,20 +9,41 @@
 # ║    # Installazione "expert mode" senza container:                        ║
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker ║
 # ║                                                                          ║
-# ║  Default: gli agenti AI girano dentro un container Docker isolato.       ║
-# ║  Solo due cartelle host vengono esposte: ~/.jht e                        ║
+# ║  Default (Docker-mode): non installa nulla sull'host se non Docker.      ║
+# ║  Scarica:                                                                ║
+# ║    - $HOME/.jht/runtime/docker-compose.yml                               ║
+# ║    - $HOME/.local/bin/jht         (wrapper bash, ~165 righe)             ║
+# ║  Il CLI Node, Python, tmux, agents girano TUTTI nel container long-      ║
+# ║  running gestito dal compose. Niente Node/Python/tmux sull'host.         ║
+# ║  Niente socket Docker dentro al container.                               ║
+# ║                                                                          ║
+# ║  Solo due cartelle host vengono esposte al container: ~/.jht e           ║
 # ║  ~/Documents/Job Hunter Team. Il resto del filesystem e' invisibile.     ║
 # ║                                                                          ║
 # ║  Opzioni (env var / flag):                                               ║
 # ║    --no-docker             Salta il container, installa nativo (expert)  ║
 # ║    --dry-run               Mostra solo le azioni che verrebbero eseguite ║
-# ║    JHT_BRANCH=dev-3        Branch da clonare (default: main)             ║
-# ║    JHT_INSTALL_DIR         Dove clonare la repo (default: $HOME/.jht/src)║
+# ║    --branch <name>         Branch sorgente per wrapper+compose           ║
+# ║                            (equivalente a JHT_BRANCH=<name>, default     ║
+# ║                            master). Esempio per testare dev-1:           ║
+# ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
+# ║    JHT_BRANCH=dev-1        Branch sorgente (env var, alternativa a       ║
+# ║                            --branch). default: master                    ║
+# ║    JHT_INSTALL_DIR         Dove clonare la repo (default: $HOME/.jht/src,║
+# ║                            usato solo da --no-docker)                    ║
+# ║    JHT_RUNTIME_DIR         Dove scaricare docker-compose.yml             ║
+# ║                            (default: $HOME/.jht/runtime)                 ║
 # ║    JHT_BIN_DIR             Dove mettere il wrapper jht (default:         ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Override immagine container (default:         ║
 # ║                            ghcr.io/leopu00/jht:latest)                   ║
+# ║    JHT_RAW_BASE            Override base URL per i download              ║
+# ║                            (default: https://raw.githubusercontent.com/  ║
+# ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
 # ║    JHT_SKIP_ONBOARD=1      Non lanciare il wizard alla fine              ║
+# ║                                                                          ║
+# ║  Riferimento design:                                                     ║
+# ║    docs/internal/2026-05-06-host-container-split.md                      ║
 # ║                                                                          ║
 # ║  Supporta: macOS (via Colima), Linux (Debian/Ubuntu/Fedora/Arch), WSL2.  ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -31,30 +52,60 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────
 REPO_URL="${JHT_REPO_URL:-https://github.com/leopu00/job-hunter-team.git}"
-BRANCH="${JHT_BRANCH:-main}"
+BRANCH="${JHT_BRANCH:-master}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
-BIN_DIR="${JHT_BIN_DIR:-$HOME/.local/bin}"
+
+# BIN_DIR scelta automatica:
+# - root su Linux/WSL  → /usr/local/bin (sempre nel PATH default, no profile.d)
+# - non-root o macOS   → $HOME/.local/bin (richiede /etc/profile.d o ~/.bashrc)
+# Override esplicito sempre rispettato via JHT_BIN_DIR.
+if [ -n "${JHT_BIN_DIR:-}" ]; then
+  BIN_DIR="$JHT_BIN_DIR"
+elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; then
+  BIN_DIR="/usr/local/bin"
+else
+  BIN_DIR="$HOME/.local/bin"
+fi
+
+RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
 MIN_NODE_MAJOR=22
 
 # ── Argomenti ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
 DRY_RUN=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-docker) USE_DOCKER=0 ;;
-    --with-docker) USE_DOCKER=1 ;;  # alias retro-compat
-    --dry-run) DRY_RUN=1 ;;
+# Position-based parser: gestisce sia flag standalone (--no-docker) sia
+# coppie key/value (--branch dev-1). Non usiamo `for arg in "$@"` perche'
+# perde il legame tra --branch e il valore successivo.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-docker) USE_DOCKER=0; shift ;;
+    --with-docker) USE_DOCKER=1; shift ;;  # alias retro-compat
+    --dry-run) DRY_RUN=1; shift ;;
+    --branch)
+      # Override esplicito della branch, equivalente a JHT_BRANCH=<name>.
+      # Utile per testare branch dev-N senza set dell'env var
+      # (BUG-INSTALL-BRANCH-MASTER-DEFAULT). Vince su JHT_BRANCH se entrambi.
+      [ -n "${2:-}" ] || { printf "%s richiede un argomento\n" "$1" >&2; exit 2; }
+      BRANCH="$2"
+      shift 2
+      ;;
+    --branch=*) BRANCH="${1#*=}"; shift ;;
     -h|--help)
       sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
-      printf "Argomento non riconosciuto: %s\n" "$arg" >&2
+      printf "Argomento non riconosciuto: %s\n" "$1" >&2
       exit 2
       ;;
   esac
 done
+
+# RAW_BASE va calcolato DOPO arg parsing perche' `--branch` puo' aver
+# sovrascritto $BRANCH. Senza, lo --branch non avrebbe effetto sui download
+# di docker-compose.yml e jht-wrapper.sh in download_runtime_files().
+RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
 
 # ── Colori ────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -93,6 +144,8 @@ header() {
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${DIM}mode:   ${RESET}${BOLD}Docker (isolato)${RESET}\n"
     printf "  ${DIM}image:  %s${RESET}\n" "$IMAGE"
+    printf "  ${DIM}branch: %s${RESET}\n" "$BRANCH"
+    printf "  ${DIM}runtime:%s${RESET}\n" "$RUNTIME_DIR"
   else
     printf "  ${DIM}mode:   ${RESET}${YELLOW}nativo (expert mode, --no-docker)${RESET}\n"
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
@@ -106,7 +159,7 @@ header() {
 }
 
 # Step counts diversi a seconda del path
-TOTAL_STEPS_DOCKER=5
+TOTAL_STEPS_DOCKER=4
 TOTAL_STEPS_NATIVE=7
 
 # ── OS Detection ──────────────────────────────────────────────────────────
@@ -200,6 +253,11 @@ install_colima_macos() {
 }
 
 install_docker_linux() {
+  # Installa Docker Engine + Docker Compose v2 plugin. Su Ubuntu 24.04
+  # `apt install docker.io` NON include il plugin compose: senza,
+  # `docker compose ...` fallisce con "unknown shorthand flag 'f'" e il
+  # wrapper jht non parte. Tracciato come gotcha durante il primo smoke
+  # VPS Hetzner del 2026-05-06 (vedi docs/internal/2026-05-06-vps-providers-research.md).
   case "$PKG" in
     apt)
       run sudo_maybe apt-get update -qq
@@ -207,11 +265,19 @@ install_docker_linux() {
         info "Installo docker.io..."
         run sudo_maybe apt-get install -y docker.io || fail "Installazione docker.io fallita"
       fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose-v2 (plugin)..."
+        run sudo_maybe apt-get install -y docker-compose-v2 || fail "Installazione docker-compose-v2 fallita"
+      fi
       ;;
     dnf)
       if ! command -v docker &>/dev/null; then
         info "Installo docker..."
         run sudo_maybe dnf install -y docker || fail "Installazione docker fallita"
+      fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose-plugin..."
+        run sudo_maybe dnf install -y docker-compose-plugin || warn "Installazione docker-compose-plugin fallita — verifica manualmente"
       fi
       ;;
     pacman)
@@ -219,9 +285,14 @@ install_docker_linux() {
         info "Installo docker..."
         run sudo_maybe pacman -Sy --noconfirm docker || fail "Installazione docker fallita"
       fi
+      if ! docker compose version &>/dev/null; then
+        info "Installo docker-compose..."
+        run sudo_maybe pacman -S --noconfirm docker-compose || warn "Installazione docker-compose fallita — verifica manualmente"
+      fi
       ;;
     *)
       command -v docker &>/dev/null || fail "Package manager sconosciuto. Installa docker manualmente o riprova con --no-docker."
+      docker compose version &>/dev/null || warn "docker compose v2 non disponibile — installa il plugin manualmente"
       ;;
   esac
   # Su Linux/WSL2 il daemon di solito non parte da solo
@@ -267,114 +338,97 @@ verify_docker_works() {
   ok "docker daemon raggiungibile"
 }
 
-pull_image() {
-  step 4 "$TOTAL_STEPS_DOCKER" "Download immagine $IMAGE"
-  if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: docker pull %s\n" "$IMAGE"
-    return 0
-  fi
-  if docker pull "$IMAGE"; then
-    ok "immagine pronta"
-  else
-    warn "Pull fallito. L'immagine non e' ancora pubblicata o c'e' un problema di rete."
-    warn "Il wrapper viene comunque installato: ri-esegui l'installer quando l'immagine sara' disponibile."
-  fi
-}
+download_runtime_files() {
+  step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
 
-write_wrapper() {
-  step 5 "$TOTAL_STEPS_DOCKER" "Wrapper jht (docker run)"
-  local wrapper="$BIN_DIR/jht"
+  local compose_url="$RAW_BASE/docker-compose.yml"
+  local wrapper_url="$RAW_BASE/scripts/jht-wrapper.sh"
+  local hostsetup_url="$RAW_BASE/scripts/host-setup.sh"
+  local compose_dest="$RUNTIME_DIR/docker-compose.yml"
+  local wrapper_dest="$BIN_DIR/jht"
+  local hostsetup_dest="$RUNTIME_DIR/host-setup.sh"
+
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s\n" "$BIN_DIR"
-    printf "  ${DIM}[dry-run]${RESET} would write wrapper: %s\n" "$wrapper"
-    printf "  ${DIM}[dry-run]${RESET} wrapper launches: docker run --rm -v \$HOME/.jht:/jht_home -v '\$HOME/Documents/Job Hunter Team':/jht_user -p 3000:3000 %s\n" "$IMAGE"
+    printf "  ${DIM}[dry-run]${RESET} would execute: mkdir -p %s %s\n" "$RUNTIME_DIR" "$BIN_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$compose_url" "$compose_dest"
+    printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$wrapper_url" "$wrapper_dest"
+    printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$hostsetup_url" "$hostsetup_dest"
+    printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s %s\n" "$wrapper_dest" "$hostsetup_dest"
     case ":$PATH:" in
       *":$BIN_DIR:"*) PATH_READY=1 ;;
       *)              PATH_READY=0 ;;
     esac
     return 0
   fi
-  mkdir -p "$BIN_DIR"
-  if [ -L "$wrapper" ] || [ -e "$wrapper" ]; then
-    rm -f "$wrapper"
+
+  mkdir -p "$RUNTIME_DIR" "$BIN_DIR"
+
+  info "Scarico docker-compose.yml..."
+  if ! curl -fsSL "$compose_url" -o "$compose_dest"; then
+    fail "Download fallito: $compose_url. Controlla connessione e branch ($BRANCH)."
   fi
+  ok "compose: $compose_dest"
 
-  cat > "$wrapper" <<WRAPPER
-#!/usr/bin/env bash
-# Job Hunter Team — wrapper container.
-# Generato da scripts/install.sh. Modifiche manuali verranno sovrascritte.
-#
-# Niente array bash, niente 'set -u': macOS imbarca bash 3.2 dove
-# l'espansione di array vuoti rompe set -u, e questo script e' troppo
-# semplice perche' valga la pena gestire le edge case.
-set -eo pipefail
-
-IMAGE="\${JHT_IMAGE:-$IMAGE}"
-JHT_HOME_HOST="\${JHT_HOME_HOST:-\$HOME/.jht}"
-JHT_USER_DIR_HOST="\${JHT_USER_DIR_HOST:-\$HOME/Documents/Job Hunter Team}"
-
-mkdir -p "\$JHT_HOME_HOST" "\$JHT_USER_DIR_HOST"
-
-# macOS: assicura che Colima sia attivo prima di lanciare docker
-if [ "\$(uname -s)" = "Darwin" ] && command -v colima >/dev/null 2>&1; then
-  if ! colima status >/dev/null 2>&1; then
-    echo "[jht] Avvio Colima..." >&2
-    colima start >/dev/null 2>&1 || {
-      echo "[jht] Impossibile avviare Colima. Esegui 'colima start' manualmente." >&2
-      exit 1
-    }
+  info "Scarico wrapper jht..."
+  if ! curl -fsSL "$wrapper_url" -o "$wrapper_dest"; then
+    fail "Download fallito: $wrapper_url. Controlla connessione e branch ($BRANCH)."
   fi
-fi
+  chmod +x "$wrapper_dest"
+  ok "wrapper: $wrapper_dest"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[jht] docker non trovato nel PATH. Reinstalla con scripts/install.sh." >&2
-  exit 1
-fi
-
-# Funzioni di supporto: emettono frammenti di flag come stringhe.
-tty_flag() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    printf -- '-it'
+  info "Scarico host-setup.sh (preflight VPS/swap)..."
+  if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_dest"; then
+    warn "Download host-setup.sh fallito ($hostsetup_url) — proseguo senza preflight"
+  else
+    chmod +x "$hostsetup_dest"
+    ok "host-setup: $hostsetup_dest"
   fi
-}
-
-env_flags() {
-  for var in ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY \\
-             CLAUDE_CODE_OAUTH_TOKEN GEMINI_API_KEY GOOGLE_API_KEY; do
-    eval "value=\\\${\$var:-}"
-    if [ -n "\$value" ]; then
-      printf -- '-e %s ' "\$var"
-    fi
-  done
-}
-
-# I \$(...) non quotati si espandono via word splitting in argomenti
-# separati: nessun array bash, nessun problema con bash 3.2.
-exec docker run --rm \\
-  \$(tty_flag) \\
-  -v "\$JHT_HOME_HOST:/jht_home" \\
-  -v "\$JHT_USER_DIR_HOST:/jht_user" \\
-  -e JHT_HOME=/jht_home \\
-  -e JHT_USER_DIR=/jht_user \\
-  -e IS_CONTAINER=1 \\
-  \$(env_flags) \\
-  -p 3000:3000 \\
-  "\$IMAGE" "\$@"
-WRAPPER
-
-  chmod +x "$wrapper"
-  ok "wrapper creato: $wrapper"
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
-      ok "$BIN_DIR e' gia' nel PATH"
+      ok "$BIN_DIR gia' nel PATH"
       PATH_READY=1
       ;;
     *)
-      warn "$BIN_DIR non e' nel PATH."
-      info "Aggiungi questa riga al tuo shell rc (~/.zshrc, ~/.bashrc):"
-      printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
-      PATH_READY=0
+      # Auto-add a una location persistente cosi' i prossimi shell login
+      # vedono `jht` senza intervento manuale (BUG-INSTALL-PATH-NOT-EXPORTED).
+      # Su Ubuntu Bash, ~/.profile contiene gia' il guard
+      # `if [ -d "$HOME/.local/bin" ]; then PATH="$HOME/.local/bin:$PATH"; fi`,
+      # ma quel guard si valuta SOLO al login successivo a quando la dir e'
+      # creata — installando JHT in una sessione gia' aperta, la dir non
+      # esisteva al login → PATH non popolato → `jht` not found.
+      # Il subshell di `curl | bash` non puo' modificare il PATH del parent,
+      # quindi serve scrivere a un file sourced dal prossimo shell.
+      local persistent_added=0
+      if [ "${EUID:-$(id -u)}" -eq 0 ] && [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
+        # System-wide (preferito su VPS root): /etc/profile.d/<file>.sh viene
+        # sourceto da /etc/profile a ogni login interactive shell.
+        printf 'export PATH="$PATH:%s"\n' "$BIN_DIR" > /etc/profile.d/jht.sh
+        chmod 644 /etc/profile.d/jht.sh
+        ok "PATH aggiunto a /etc/profile.d/jht.sh (system-wide)"
+        persistent_added=1
+      else
+        # User-level fallback: append a ~/.bashrc + ~/.zshrc se esistono e
+        # non gia' presenti. Idempotente: skip se gia' aggiunto.
+        for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+          if [ -f "$rc" ] && ! grep -q "$BIN_DIR" "$rc" 2>/dev/null; then
+            printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
+            ok "PATH aggiunto a $rc"
+            persistent_added=1
+          fi
+        done
+      fi
+      if [ "$persistent_added" -eq 0 ]; then
+        warn "Nessun shell rc scritto. Aggiungi manualmente:"
+        printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
+      fi
+      # Aggiorna anche il PATH di questa subshell cosi' i comandi che
+      # install.sh esegue dopo (es. il wizard) trovano `jht`. Il PATH del
+      # parent shell sara' aggiornato al prossimo login (via /etc/profile.d
+      # o ~/.bashrc). Mostriamo PATH_READY=1 nei "prossimi passi" perche'
+      # l'utente di solito apre una nuova shell o ri-esegue exec bash -l.
+      export PATH="$BIN_DIR:$PATH"
+      PATH_READY=1
       ;;
   esac
 }
@@ -647,19 +701,29 @@ final_message() {
     printf "  ${DIM}  ~/Documents/Job Hunter Team/  → CV, allegati, output${RESET}\n"
     printf "\n"
   fi
-  printf "  ${BOLD}Prossimo passo:${RESET} avvia il wizard di setup\n"
+  printf "  ${BOLD}Prossimi passi:${RESET}\n"
   printf "\n"
   if [ "${PATH_READY:-0}" -eq 1 ]; then
-    printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
-    printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
+    if [ "$USE_DOCKER" -eq 1 ]; then
+      printf "      ${BOLD}jht up${RESET}           ${DIM}# avvia il container (pull immagine al primo run)${RESET}\n"
+      printf "      ${BOLD}jht setup${RESET}        ${DIM}# wizard di configurazione${RESET}\n"
+    else
+      printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
+      printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
+    fi
   else
-    printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
-    printf "      ${BOLD}%s/jht dashboard${RESET}\n" "$BIN_DIR"
+    if [ "$USE_DOCKER" -eq 1 ]; then
+      printf "      ${BOLD}%s/jht up${RESET}\n" "$BIN_DIR"
+      printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
+    else
+      printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
+      printf "      ${BOLD}%s/jht dashboard${RESET}\n" "$BIN_DIR"
+    fi
   fi
   printf "\n"
   printf "  ${DIM}Per disinstallare:${RESET}\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${DIM}  rm -f %s/jht && docker rmi %s${RESET}\n" "$BIN_DIR" "$IMAGE"
+    printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
@@ -695,8 +759,7 @@ main_docker() {
   detect_system "$TOTAL_STEPS_DOCKER"
   install_container_runtime
   verify_docker_works
-  pull_image
-  write_wrapper
+  download_runtime_files
 }
 
 main_native() {

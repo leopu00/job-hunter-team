@@ -1,21 +1,21 @@
 ---
 name: Feature request
-about: Proponi una nuova funzionalità
+about: Propose a new feature
 labels: enhancement
 ---
 
-## Problema da risolvere
+## Problem to solve
 
-<!-- Qual è il problema o la limitazione attuale? -->
+<!-- What is the current problem or limitation? -->
 
-## Soluzione proposta
+## Proposed solution
 
-<!-- Descrivi la funzionalità che vorresti -->
+<!-- Describe the feature you'd like -->
 
-## Alternative considerate
+## Alternatives considered
 
-<!-- Hai valutato altri approcci? -->
+<!-- Did you evaluate other approaches? -->
 
-## Contesto aggiuntivo
+## Additional context
 
-<!-- Qualsiasi altra informazione utile (screenshot, mockup, riferimenti) -->
+<!-- Any other useful information (screenshots, mockups, references) -->

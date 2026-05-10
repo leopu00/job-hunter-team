@@ -3,6 +3,15 @@
 import Link from 'next/link'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToast } from '../../components/Toast'
+import TeamOrgChart from './_components/TeamOrgChart'
+import UsageChart from './_components/UsageChart'
+import UsageTokensChart from './_components/UsageTokensChart'
+import TokenBreakdown from './_components/TokenBreakdown'
+import TokenTypesChart from './_components/TokenTypesChart'
+import AgentTokensChart from './_components/AgentTokensChart'
+import ThrottleChart from './_components/ThrottleChart'
+import AgentActivityChart from './_components/AgentActivityChart'
+import DoctorPanel from './_components/DoctorPanel'
 
 /* ── Tipi ─────────────────────────────────────────────────────────── */
 
@@ -12,168 +21,24 @@ type AgentDef = {
   id: string
   name: string
   role: string
-  emoji: string
   color: string
-  session: string
   link: string | null
-  desc: string
 }
 
 /* ── Definizioni agenti ───────────────────────────────────────────── */
 
 const AGENTS: AgentDef[] = [
-  { id: 'alfa',       name: 'Alfa',       role: 'Capitano',   emoji: '\u{1F468}\u200D\u2708\uFE0F', color: '#ff9100', session: 'ALFA',       link: '/capitano',  desc: 'Coordinates the team and priorities' },
-  { id: 'scout',      name: 'Scout',      role: 'Scout',      emoji: '\uD83D\uDD75\uFE0F',         color: '#2196f3', session: 'SCOUT-1',    link: '/scout',     desc: 'Searches job listings' },
-  { id: 'analista',   name: 'Analista',   role: 'Analista',   emoji: '\u{1F468}\u200D\uD83D\uDD2C', color: '#00e676', session: 'ANALISTA-1', link: '/analista',  desc: 'Analyzes requirements and fit' },
-  { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     emoji: '\u{1F468}\u200D\uD83D\uDCBB', color: '#b388ff', session: 'SCORER-1',   link: '/scorer',    desc: 'Calculates match score' },
-  { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  emoji: '\u{1F468}\u200D\uD83C\uDFEB', color: '#ffd600', session: 'SCRITTORE-1', link: '/scrittore', desc: 'Generates CV and cover letter' },
-  { id: 'critico',    name: 'Critico',    role: 'Critico',    emoji: '\u{1F468}\u200D\u2696\uFE0F', color: '#f44336', session: 'CRITICO',    link: '/critico',   desc: 'Reviews documents' },
-  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', emoji: '\uD83D\uDC82',                color: '#607d8b', session: 'SENTINELLA', link: '/sentinella', desc: 'Monitors budget and rate limits' },
-  { id: 'assistente', name: 'Assistente', role: 'Assistente', emoji: '\uD83E\uDD16',                color: '#26c6da', session: 'ASSISTENTE', link: '/assistente', desc: 'AI chat for user' },
+  { id: 'capitano',   name: 'Capitano',   role: 'Capitano',   color: '#ff9100', link: '/team/capitano'  },
+  { id: 'sentinella', name: 'Sentinella', role: 'Sentinella', color: '#9c27b0', link: '/team/sentinella'},
+  { id: 'scout',      name: 'Scout',      role: 'Scout',      color: '#2196f3', link: '/team/scout'     },
+  { id: 'analista',   name: 'Analista',   role: 'Analista',   color: '#00e676', link: '/team/analista'  },
+  { id: 'scorer',     name: 'Scorer',     role: 'Scorer',     color: '#b388ff', link: '/team/scorer'    },
+  { id: 'scrittore',  name: 'Scrittore',  role: 'Scrittore',  color: '#ffd600', link: '/team/scrittore' },
+  { id: 'critico',    name: 'Critico',    role: 'Critico',    color: '#f44336', link: '/team/critico'   },
+  { id: 'assistente', name: 'Assistente', role: 'Assistente', color: '#26c6da', link: '/team/assistente'},
 ]
 
 /* ── Componenti ───────────────────────────────────────────────────── */
-
-function StatusDot({ status }: { status: AgentStatus }) {
-  const config = {
-    running: { bg: '#22c55e', shadow: '0 0 8px rgba(34,197,94,0.5)', pulse: false },
-    pending: { bg: '#f59e0b', shadow: '0 0 8px rgba(245,158,11,0.5)', pulse: true },
-    stopped: { bg: 'rgba(255,255,255,0.15)', shadow: 'none', pulse: false },
-  }
-  const c = config[status]
-  return (
-    <span
-      className={c.pulse ? 'status-pulse' : ''}
-      role="status"
-      aria-label={status === 'running' ? 'online' : status === 'pending' ? 'starting' : 'offline'}
-      style={{
-        display: 'inline-block',
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        backgroundColor: c.bg,
-        boxShadow: c.shadow,
-        transition: 'all 0.3s',
-      }}
-    />
-  )
-}
-
-function StatusLabel({ status }: { status: AgentStatus }) {
-  const labels: Record<AgentStatus, { text: string; color: string }> = {
-    running: { text: 'Online', color: '#22c55e' },
-    pending: { text: 'Starting...', color: '#f59e0b' },
-    stopped: { text: 'Offline', color: 'var(--color-dim)' },
-  }
-  const l = labels[status]
-  return (
-    <span className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: l.color }}>
-      {l.text}
-    </span>
-  )
-}
-
-function AgentCard({
-  agent,
-  status,
-  onAction,
-  actionLoading,
-}: {
-  agent: AgentDef
-  status: AgentStatus
-  onAction: (id: string, action: 'start' | 'stop') => void
-  actionLoading: string | null
-}) {
-  const isLoading = actionLoading === agent.id
-  const isRunning = status === 'running'
-
-  return (
-    <div
-      className="rounded-xl p-4 transition-all duration-150 hover:border-[var(--color-border-glow)]"
-      role="article"
-      aria-label={`${agent.name} — ${status === 'running' ? 'online' : status === 'pending' ? 'starting' : 'offline'}`}
-      style={{
-        background: 'var(--color-panel)',
-        border: `1px solid ${isRunning ? `${agent.color}33` : 'var(--color-border)'}`,
-      }}
-    >
-      {/* Header: emoji + name + status dot */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
-            style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}30` }}
-          >
-            {agent.emoji}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              {agent.link ? (
-                <Link href={agent.link} className="text-[13px] font-bold no-underline hover:underline" style={{ color: 'var(--color-white)' }}>
-                  {agent.name}
-                </Link>
-              ) : (
-                <span className="text-[13px] font-bold" style={{ color: 'var(--color-white)' }}>{agent.name}</span>
-              )}
-            </div>
-            <p className="text-[10px] font-semibold tracking-wide uppercase mt-0.5" style={{ color: agent.color }}>
-              {agent.role}
-            </p>
-          </div>
-        </div>
-        <StatusDot status={status} />
-      </div>
-
-      {/* Description */}
-      <p className="text-[11px] leading-relaxed mb-3" style={{ color: 'var(--color-muted)' }}>
-        {agent.desc}
-      </p>
-
-      {/* Status + Action */}
-      <div className="flex items-center justify-between gap-2 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <StatusLabel status={status} />
-
-        <button
-          onClick={() => onAction(agent.id, isRunning ? 'stop' : 'start')}
-          disabled={isLoading || status === 'pending'}
-          aria-label={isRunning ? `Stop ${agent.name}` : `Start ${agent.name}`}
-          className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
-          style={{
-            background: isLoading || status === 'pending'
-              ? 'var(--color-border)'
-              : isRunning
-                ? 'rgba(244,67,54,0.08)'
-                : `${agent.color}15`,
-            color: isLoading || status === 'pending'
-              ? 'var(--color-dim)'
-              : isRunning
-                ? '#f44336'
-                : agent.color,
-            border: `1px solid ${
-              isLoading || status === 'pending'
-                ? 'var(--color-border)'
-                : isRunning
-                  ? 'rgba(244,67,54,0.2)'
-                  : `${agent.color}30`
-            }`,
-            cursor: isLoading || status === 'pending' ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          {isLoading ? (
-            <span className="flex items-center gap-1.5">
-              <Spinner size={10} color="var(--color-dim)" /> Wait...
-            </span>
-          ) : isRunning ? (
-            '\u25A0 Stop'
-          ) : (
-            '\u25B6 Start'
-          )}
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function Spinner({ size = 14, color = '#ffc107' }: { size?: number; color?: string }) {
   return (
@@ -194,9 +59,15 @@ export default function TeamCompany() {
     return init
   })
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [bulkLoading, setBulkLoading] = useState<'start' | 'stop' | null>(null)
   const prevStatusesRef = useRef<Record<string, AgentStatus> | null>(null)
 
-  const activeCount = AGENTS.filter(a => statuses[a.id] === 'running').length
+  // Assistente vive sempre (lifecycle legato al container Desktop, non
+  // ai pulsanti Start/Stop all del team). Lo escludiamo dai conteggi
+  // e dalle azioni bulk altrimenti il contatore resta inchiodato a 1
+  // anche dopo uno Stop all "riuscito".
+  const TEAM_AGENTS = AGENTS.filter(a => a.id !== 'assistente')
+  const activeCount = TEAM_AGENTS.filter(a => statuses[a.id] === 'running').length
 
   /* ── Fetch status ────────────────────────────────────────────── */
 
@@ -204,32 +75,44 @@ export default function TeamCompany() {
     try {
       const res = await fetch('/api/agents')
       const data = await res.json()
-      const agentList: { id: string; status: string }[] = data.agents ?? []
 
-      setStatuses(prev => {
-        const next = { ...prev }
-        AGENTS.forEach(a => {
-          const found = agentList.find(x => x.id === a.id)
-          next[a.id] = (found?.status as AgentStatus) ?? 'stopped'
-        })
+      // Se la response NON è ok (rate-limit 429, 500 server error, auth
+      // 401), `data.agents` è undefined e il fallback `?? 'stopped'`
+      // farebbe diventare TUTTI gli agenti "stopped" → toast falsi
+      // "Agent stopped" anche se gli agenti girano benissimo. Non
+      // toccare lo stato in questo caso: la prossima chiamata che
+      // riesce ricostruisce verità.
+      if (!res.ok || !Array.isArray(data?.agents)) {
+        return
+      }
+      const agentList: { id: string; status: string }[] = data.agents
 
-        // Toast per cambi di stato
-        const prevRef = prevStatusesRef.current
-        if (prevRef) {
-          AGENTS.forEach(a => {
-            const was = prevRef[a.id]
-            const now = next[a.id]
-            if (was === now) return
-            if (was !== 'running' && now === 'running') {
-              toast(`${a.name} is online`, 'success', 3000)
-            } else if (was === 'running' && now === 'stopped') {
-              toast(`${a.name} stopped`, 'warning', 3000)
-            }
-          })
-        }
-        prevStatusesRef.current = { ...next }
-        return next
+      // Compute next fuori dall'updater: chiamare `toast()` dentro
+      // un updater di setState triggera React warning "Cannot update
+      // ToastProvider while rendering TeamCompany" perché React può
+      // rigiocare la callback durante il render. Stato + effetto
+      // esterno (toast) vanno tenuti separati.
+      const next: Record<string, AgentStatus> = {}
+      AGENTS.forEach(a => {
+        const found = agentList.find(x => x.id === a.id)
+        next[a.id] = (found?.status as AgentStatus) ?? 'stopped'
       })
+
+      const prevRef = prevStatusesRef.current
+      if (prevRef) {
+        AGENTS.forEach(a => {
+          const was = prevRef[a.id]
+          const now = next[a.id]
+          if (was === now) return
+          if (was !== 'running' && now === 'running') {
+            toast(`${a.name} is online`, 'success', 3000)
+          } else if (was === 'running' && now === 'stopped') {
+            toast(`${a.name} stopped`, 'warning', 3000)
+          }
+        })
+      }
+      prevStatusesRef.current = next
+      setStatuses(next)
     } catch { /* ignore */ }
   }, [toast])
 
@@ -269,25 +152,41 @@ export default function TeamCompany() {
   /* ── Azioni bulk ─────────────────────────────────────────────── */
 
   const startAll = async () => {
+    if (bulkLoading) return
+    setBulkLoading('start')
     setStatuses(prev => {
       const next = { ...prev }
-      AGENTS.forEach(a => { if (next[a.id] !== 'running') next[a.id] = 'pending' })
+      TEAM_AGENTS.forEach(a => { if (next[a.id] !== 'running') next[a.id] = 'pending' })
       return next
     })
     try {
-      await fetch('/api/team/start-all', { method: 'POST' })
-      setTimeout(fetchStatus, 2000)
+      const res = await fetch('/api/team/start-all', { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || (data && data.ok === false)) {
+        toast(data?.error ?? 'Team start error', 'error', 4000)
+      }
     } catch {
       toast('Team start error', 'error')
+    } finally {
+      setBulkLoading(null)
+      fetchStatus()
     }
   }
 
   const stopAll = async () => {
+    if (bulkLoading) return
+    setBulkLoading('stop')
     try {
-      await fetch('/api/team/stop-all', { method: 'POST' })
-      setTimeout(fetchStatus, 2000)
+      const res = await fetch('/api/team/stop-all', { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || (data && data.ok === false)) {
+        toast(data?.error ?? 'Team stop error', 'error', 4000)
+      }
     } catch {
       toast('Team stop error', 'error')
+    } finally {
+      setBulkLoading(null)
+      fetchStatus()
     }
   }
 
@@ -302,11 +201,6 @@ export default function TeamCompany() {
           to { transform: rotate(360deg); }
         }
         .spinner-rotate { animation: spinner-rotate 0.8s linear infinite; }
-        @keyframes status-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        .status-pulse { animation: status-pulse 1.5s ease-in-out infinite; }
       `}</style>
 
       {/* Header */}
@@ -320,64 +214,160 @@ export default function TeamCompany() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">Job Hunter Team</h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {activeCount}/{AGENTS.length} agents active
+              {activeCount}/{TEAM_AGENTS.length} agents active
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={startAll}
-              disabled={activeCount === AGENTS.length}
-              className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+            <Link
+              href="/team-pyramid"
+              className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
               style={{
-                background: activeCount === AGENTS.length ? 'var(--color-border)' : 'rgba(34,197,94,0.1)',
-                color: activeCount === AGENTS.length ? 'var(--color-dim)' : '#22c55e',
-                border: `1px solid ${activeCount === AGENTS.length ? 'var(--color-border)' : 'rgba(34,197,94,0.25)'}`,
-                cursor: activeCount === AGENTS.length ? 'default' : 'pointer',
+                background: 'transparent',
+                color: 'var(--color-muted)',
+                border: '1px dashed var(--color-border)',
                 fontFamily: 'inherit',
               }}
+              title="Vai alla pagina Team Pyramid (work in progress)"
             >
-              {activeCount === AGENTS.length ? '\u2713 All active' : '\u25B6 Start all'}
+              🔺 pyramid
+            </Link>
+            <Link
+              href="/team/v2"
+              className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
+              style={{
+                background: 'transparent',
+                color: 'var(--color-muted)',
+                border: '1px dashed var(--color-border)',
+                fontFamily: 'inherit',
+              }}
+              title="Vai alla pagina Team v2 (work in progress)"
+            >
+              v2 →
+            </Link>
+            <button
+              onClick={startAll}
+              disabled={activeCount === TEAM_AGENTS.length || bulkLoading !== null}
+              className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+              style={{
+                background: activeCount === TEAM_AGENTS.length || bulkLoading !== null ? 'var(--color-border)' : 'rgba(34,197,94,0.1)',
+                color: activeCount === TEAM_AGENTS.length || bulkLoading !== null ? 'var(--color-dim)' : '#22c55e',
+                border: `1px solid ${activeCount === TEAM_AGENTS.length || bulkLoading !== null ? 'var(--color-border)' : 'rgba(34,197,94,0.25)'}`,
+                cursor: activeCount === TEAM_AGENTS.length || bulkLoading !== null ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+                minWidth: 110,
+              }}
+            >
+              {bulkLoading === 'start' ? (
+                <span className="inline-flex items-center gap-1.5"><Spinner size={11} color="var(--color-dim)" /> Starting...</span>
+              ) : activeCount === TEAM_AGENTS.length ? (
+                '\u2713 Active'
+              ) : (
+                '\u25B6 Start'
+              )}
             </button>
             {activeCount > 0 && (
               <button
                 onClick={stopAll}
+                disabled={bulkLoading !== null}
                 className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
                 style={{
-                  background: 'rgba(244,67,54,0.08)',
-                  color: '#f44336',
-                  border: '1px solid rgba(244,67,54,0.2)',
-                  cursor: 'pointer',
+                  background: bulkLoading !== null ? 'var(--color-border)' : 'rgba(244,67,54,0.08)',
+                  color: bulkLoading !== null ? 'var(--color-dim)' : '#f44336',
+                  border: `1px solid ${bulkLoading !== null ? 'var(--color-border)' : 'rgba(244,67,54,0.2)'}`,
+                  cursor: bulkLoading !== null ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
+                  minWidth: 110,
                 }}
               >
-                {'\u25A0'} Stop all
+                {bulkLoading === 'stop' ? (
+                  <span className="inline-flex items-center gap-1.5"><Spinner size={11} color="var(--color-dim)" /> Stopping...</span>
+                ) : (
+                  <>{'\u25A0'} Stop</>
+                )}
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Agent Grid */}
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
-      >
-        {AGENTS.map((agent, i) => (
-          <div key={agent.id} style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}>
-            <AgentCard
-              agent={agent}
-              status={statuses[agent.id] ?? 'stopped'}
-              onAction={handleAction}
-              actionLoading={actionLoading}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Org chart */}
+      <section className="py-10">
+        <div className="mx-auto w-full max-w-[1080px]">
+          <TeamOrgChart
+            agents={Object.fromEntries(AGENTS.map(a => [a.id, {
+              status: statuses[a.id] ?? 'stopped',
+              color: a.color,
+              link: a.link,
+              role: a.role,
+            }]))}
+            onAction={handleAction}
+            actionLoading={actionLoading}
+          />
+        </div>
+      </section>
+
+      {/* Rate budget chart */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <UsageChart />
+        </div>
+      </section>
+
+      {/* Token per agente */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <AgentTokensChart />
+        </div>
+      </section>
+
+      {/* Throttle per agente */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <ThrottleChart />
+        </div>
+      </section>
+
+      {/* Attività agenti — rate + throttle combinati */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <AgentActivityChart />
+        </div>
+      </section>
+
+      {/* 🩺 Dottore — health-check ogni 30min, ping/diagnosi/restart */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <DoctorPanel />
+        </div>
+      </section>
+
+      {/* Rate budget + cumulativo token (gemello del primo grafico, con
+           sovrapposizione dei kT del team sull'asse Y destro per validare
+           la correlazione visivamente). Max-width più ampio per dare aria. */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <UsageTokensChart />
+        </div>
+      </section>
+
+      {/* Distribuzione consumo token per agente — pie + widget media. */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <TokenBreakdown />
+        </div>
+      </section>
+
+      {/* Composizione consumo per tipo di token (input/output/cache). */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <TokenTypesChart />
+        </div>
+      </section>
 
       {/* Footer hint */}
-      <div className="mt-8 pt-4 border-t border-[var(--color-border)] text-center">
+      <div className="mt-6 pt-4 border-t border-[var(--color-border)] text-center">
         <p className="text-[10px] text-[var(--color-dim)]">
-          Auto refresh every 5s &middot; Click a name for details
+          Auto refresh every 5s &middot; Click an agent emoji for details
         </p>
       </div>
     </div>

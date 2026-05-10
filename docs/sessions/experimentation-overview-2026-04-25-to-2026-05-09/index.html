@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>🧪 JHT — sperimentazione 15 giorni · 25 apr → 9 mag 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0b0f17;
+    --card: #131a26;
+    --card-hi: #1a2030;
+    --border: #1f2a3d;
+    --fg: #e6edf6;
+    --bright: #ffffff;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --good: #22c55e;
+    --warn: #facc15;
+    --bad: #ef4444;
+    --kimi: #fb923c;
+    --claude: #a78bfa;
+    --codex: #5eead4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    font-size: 14px; line-height: 1.5;
+  }
+  h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
+  h2 { margin: 32px 0 14px; font-size: 18px; font-weight: 600; color: var(--accent); }
+  h3 { margin: 18px 0 8px; font-size: 14px; font-weight: 600; }
+  .subtitle { color: var(--muted); margin: 0 0 22px; font-size: 13px; line-height: 1.7; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 18px;
+  }
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px; margin-bottom: 18px;
+  }
+  .kpi {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .kpi .lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .kpi .val { font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--bright); }
+  .kpi .sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .kpi.kimi { border-left: 3px solid var(--kimi); }
+  .kpi.codex { border-left: 3px solid var(--codex); }
+  .kpi.claude { border-left: 3px solid var(--claude); }
+  .chart-wrap { position: relative; width: 100%; margin-top: 8px; }
+  .chart-wrap .canvas-host { position: relative; width: 100%; height: 380px; overflow: visible; }
+  .chart-wrap.tall .canvas-host { height: 480px; }
+  .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .toolbar button {
+    background: var(--card-hi); border: 1px solid var(--border);
+    color: var(--fg); padding: 4px 10px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .toolbar button:hover { border-color: var(--accent); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .narrative {
+    color: var(--muted); font-size: 12px; line-height: 1.7;
+    background: #0a0e15; border-left: 3px solid var(--accent);
+    padding: 10px 14px; margin: 10px 0 0; border-radius: 0 6px 6px 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td {
+    border-bottom: 1px solid var(--border); padding: 8px 10px; text-align: left;
+  }
+  table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.good { background: rgba(34,197,94,0.15); color: var(--good); }
+  .pill.warn { background: rgba(250,204,21,0.15); color: var(--warn); }
+  .pill.bad { background: rgba(239,68,68,0.15); color: var(--bad); }
+  .pill.kimi { background: rgba(251,146,60,0.15); color: var(--kimi); }
+  .pill.codex { background: rgba(94,234,212,0.15); color: var(--codex); }
+  .pill.claude { background: rgba(167,139,250,0.15); color: var(--claude); }
+  code { background: #0a0e15; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .funnel-bar {
+    height: 32px; border-radius: 6px; display: flex; align-items: center;
+    padding: 0 12px; color: var(--bright); font-weight: 600; font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .lessons li { padding: 6px 0; }
+  .takeaway-good { color: var(--good); }
+  .takeaway-warn { color: var(--warn); }
+  .takeaway-bad { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<h1>🧪 Sperimentazione JHT — 15 giorni</h1>
+<p class="subtitle">
+  Dal <strong>25 aprile</strong> al <strong>9 maggio 2026</strong>: una settimana di test con
+  <span class="pill kimi">🟠 Kimi K2</span> fino all'esaurimento weekly,
+  un brief test <span class="pill claude">🟣 Claude Opus</span>,
+  e una settimana di test con <span class="pill codex">🟢 Codex GPT-5.5</span> di nuovo fino all'esaurimento weekly.
+  Tutti i dati raccolti dal sentinel-bridge, dottore-actions, jobs.db, bridge-mailbox.
+</p>
+
+<div class="kpi-row" id="kpis-top"></div>
+
+<h2>📋 Output del team — pipeline produttiva</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>🔍 Posizioni trovate per giorno</h3>
+    <div class="chart-wrap"><div class="canvas-host"><canvas id="positions-day"></canvas></div></div>
+    <div class="narrative">
+      Il <strong>scout-1</strong> domina (302 positions su 379 = 80%). Picchi a 67 il 26 apr (test Kimi inteso),
+      48 il 2 mag, 82 l'8 mag (Codex multi-finestra). Giorni a 0 = team idle (pause manuali tra test).
+    </div>
+  </div>
+  <div class="card">
+    <h3>✍️ Applications scritte per giorno</h3>
+    <div class="chart-wrap"><div class="canvas-host"><canvas id="apps-day"></canvas></div></div>
+    <div class="narrative">
+      244 applications totali. Picco a 63 l'8 mag (W2 Codex saturata al 100%).
+      75 application senza <code>written_at</code> (legacy/migrazione DB).
+    </div>
+  </div>
+</div>
+
+<h2>🪟 Finestre rate-limit attraversate (5h ciascuna)</h2>
+<div class="card">
+  <div class="toolbar">
+    <button onclick="zoomChart('windows', 1.2)">➕</button>
+    <button onclick="zoomChart('windows', 0.83)">➖</button>
+    <button onclick="resetChart('windows')">⟲ Reset</button>
+    <span style="color:var(--muted); font-size:11px;">click sulla legenda per filtrare per provider</span>
+  </div>
+  <div class="chart-wrap tall"><div class="canvas-host"><canvas id="windows"></canvas></div></div>
+  <div class="narrative">
+    <strong>Asse X</strong>: progressione cronologica delle finestre. <strong>Asse Y</strong>: peak usage % della finestra.
+    <strong>Banda viola</strong>: target 90-95% (zona ottimale di sfruttamento del rate budget).
+    <strong>Sopra la banda</strong>: overshoot/saturazione (rate-limited prima del reset).
+    <strong>Sotto la banda</strong>: undershoot, capacità sprecata.
+  </div>
+</div>
+
+<h2>📊 Distribuzione punteggi · score per posizione + voti critici</h2>
+<div class="grid-2">
+  <div class="card">
+    <h3>🎯 Score totale (288 positions valutate)</h3>
+    <div class="chart-wrap"><div class="canvas-host"><canvas id="score-dist"></canvas></div></div>
+    <div class="narrative">
+      <strong>33 a 80+</strong> = top match. <strong>76 a 70-79</strong> = molto rilevanti.
+      <strong>74 a 60-69</strong> = buoni. <strong>67 a 50-59</strong> = soglia minima per scrittore.
+      Solo <strong>3 sotto 30</strong> = scout filtra bene.
+    </div>
+  </div>
+  <div class="card">
+    <h3>📝 Voto critico finale (244 applications)</h3>
+    <div class="chart-wrap"><div class="canvas-host"><canvas id="critic-dist"></canvas></div></div>
+    <div class="narrative">
+      Il critic-loop ha promosso 9 a <strong>8+</strong> (top eccellenza), 68 a <strong>7-7.9</strong>,
+      e bocciato 27 con voto <strong>&lt;5</strong> (status excluded).
+      <strong>1 application = ready</strong>, <strong>29 = approved</strong>, <strong>214 ancora draft</strong>.
+    </div>
+  </div>
+</div>
+
+<h2>🤖 Pipeline funnel — dal scout al ready</h2>
+<div class="card">
+  <div id="funnel"></div>
+  <div class="narrative">
+    <strong>156 escluse</strong> al filtro scout (status=excluded prima del scoring).
+    <strong>91 senza score</strong> (88 sono excluded, scorer non li tocca).
+    <strong>67 hanno passato il critic gate</strong> (5+ voto), di cui solo <strong>30 approved/ready</strong>.
+    Il bottleneck reale del flusso è il <strong>critic→approved</strong>: 214 application restano draft per
+    settimane perché il loop scrittore↔critico non chiude.
+  </div>
+</div>
+
+<h2>🔢 Token consumati per agente · 15 giorni totali</h2>
+<div class="card">
+  <div class="toolbar">
+    <button onclick="zoomChart('agents', 1.2)">➕</button>
+    <button onclick="zoomChart('agents', 0.83)">➖</button>
+    <button onclick="resetChart('agents')">⟲ Reset</button>
+  </div>
+  <div class="chart-wrap tall"><div class="canvas-host"><canvas id="agents"></canvas></div></div>
+  <div class="narrative">
+    Pendenza ripida = velocità di consumo alta. Plateau orizzontali = pause/silenzi.
+    <strong>164.8 MT totali</strong> in 14 giorni. Top consumer: critico (17%), scrittore-1 (17%), scout-1 (13%).
+    Il critic-loop drena il 30%+ del budget (<code>critico</code> + multipli <code>CRITICO-S2/S3</code>).
+    Il <strong>🩺 dottore</strong> consuma solo 2.3% nonostante giri ogni 30min.
+  </div>
+</div>
+
+<h2>📬 Bridge mailbox — fallback delivery</h2>
+<div class="card">
+  <div id="mailbox-summary"></div>
+  <div class="narrative">
+    Il bridge appende ogni verdetto a JSONL, indipendentemente dal successo della consegna tmux.
+    Quando capitano è in turno lungo (<code>jht-tmux-send rc=3</code>), il verdetto resta nel mailbox e
+    capitano lo recupera con <code>bridge_mailbox.py drain</code> a inizio turno.
+    Dato osservato: <strong>33%+ dei verdetti</strong> sarebbero stati persi senza questo fix.
+  </div>
+</div>
+
+<h2>🩺 Dottore — health-check ogni 30 min (deployato 8 mag 07:00)</h2>
+<div class="card">
+  <div id="doctor-summary"></div>
+  <div class="narrative">
+    Watchdog mai morto in 27+ ore. Ogni dottore: spawna, pinga ogni agente attivo, diagnosi
+    (alive/long_turn/stallo/cli_dead/ambiguous), eventuale restart con context recovery, poi self-destruct.
+    <strong>480 diagnosi alive</strong> = 95% del team sempre vivo. <strong>6 restart</strong> totali.
+  </div>
+</div>
+
+<h2>🎯 Esiti chiave · cosa è andato bene, cosa no</h2>
+<div class="card">
+  <h3>✅ Cosa ha funzionato</h3>
+  <ul class="lessons">
+    <li class="takeaway-good">✅ <strong>Scouting consistente</strong>: 379 positions in 15 giorni (~25/giorno medi), scout-1 tira fuori 302 da solo.</li>
+    <li class="takeaway-good">✅ <strong>Filtro qualità score</strong>: solo 3 positions sotto 30, segno che il filtro scout funziona prima del scorer.</li>
+    <li class="takeaway-good">✅ <strong>Saturazione finestre quando funziona</strong>: 4 finestre hanno toccato 100%, 1 al 96% (la "perfetta" del 4 mag): il termostato sa portare il team al limite.</li>
+    <li class="takeaway-good">✅ <strong>Multi-provider</strong>: il sistema ha lavorato con Kimi, Claude, Codex senza modifiche profonde — patch incrementali per Codex (token-by-agent, team-tokens-by-type, pacing-bridge).</li>
+    <li class="takeaway-good">✅ <strong>Bridge mailbox</strong>: recupero del 33% dei verdetti che sarebbero stati persi su rc=3.</li>
+    <li class="takeaway-good">✅ <strong>Dottore stabile</strong>: 50 cicli health-check completati senza un crash del watchdog.</li>
+  </ul>
+
+  <h3>⚠️ Cosa è andato male</h3>
+  <ul class="lessons">
+    <li class="takeaway-warn">⚠️ <strong>Oscillazione del control loop</strong>: 7 finestre Codex su 14 sotto 70% (W3=57, W4=61, W5=62, W6=50). Capitano applica throttle/release in modo binario.</li>
+    <li class="takeaway-warn">⚠️ <strong>Bottleneck critic→approved</strong>: 214 application restano draft. Il loop 3-round scrittore↔critico non chiude.</li>
+    <li class="takeaway-warn">⚠️ <strong>Capitano busy = bridge muto</strong>: rc=3 in 33% dei tick prima del fix mailbox. Capitano in turno lungo = verdetti persi.</li>
+    <li class="takeaway-warn">⚠️ <strong>Quantizzazione Codex</strong>: usage% reportato come integer al sorgente, bridge skip frequenti per delta=0.</li>
+    <li class="takeaway-warn">⚠️ <strong>Spawn cieco</strong>: capitano spawnava sempre scout su PIPELINE STALLED. Fix data-driven deployato 9 mag 02:00.</li>
+  </ul>
+
+  <h3>❌ Cosa è andato pesantemente male</h3>
+  <ul class="lessons">
+    <li class="takeaway-bad">❌ <strong>Weekly limit hit due volte</strong>: prima Kimi (5 mag), poi Codex (9 mag). 4 giorni di stop forzato per ciascun reset weekly.</li>
+    <li class="takeaway-bad">❌ <strong>0 companies</strong> (??): il flusso analista non ha mai popolato la tabella companies, eppure 88 positions risultano "unscored" e in realtà sono status=excluded. Bug schema/migration?</li>
+    <li class="takeaway-bad">❌ <strong>Solo 1 application = ready</strong>: dopo 244 application scritte e 30 approved, una sola è arrivata a ready. Gating troppo stringente? Critic falsamente rigido?</li>
+  </ul>
+
+  <h3>🔧 Cosa cambiare nelle prossime 2 settimane</h3>
+  <ul class="lessons">
+    <li class="takeaway-warn">🔧 <strong>Critic gate troppo conservativo</strong>: rivedere le soglie di critic_score, magari 5.5 invece di 5.</li>
+    <li class="takeaway-warn">🔧 <strong>Provider rotation</strong>: alternare Kimi/Codex automaticamente quando uno hits weekly.</li>
+    <li class="takeaway-warn">🔧 <strong>Auto-promotion 40-49</strong>: 19 positions in quel range ancora non promosse — capitano dovrebbe farlo by default.</li>
+    <li class="takeaway-warn">🔧 <strong>Damping più aggressivo</strong>: ridurre frac_pct cap da 25% a 15% per smorzare oscillazione.</li>
+    <li class="takeaway-warn">🔧 <strong>Companies table</strong>: investigare perché è vuota mentre positions hanno company_id assegnato.</li>
+  </ul>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script>
+const charts = {}
+
+const PROVIDER_COLORS = {
+  kimi: '#fb923c',
+  claude: '#a78bfa',
+  openai: '#5eead4',
+  '?': '#94a3b8',
+}
+
+async function loadAll() {
+  const [windows, db, byAgent, doctor, mailbox] = await Promise.all([
+    fetch('windows.json').then(r => r.json()),
+    fetch('db.json').then(r => r.json()),
+    fetch('by-agent.json').then(r => r.json()),
+    fetch('doctor.json').then(r => r.json()),
+    fetch('mailbox.json').then(r => r.json()),
+  ])
+  return { windows, db, byAgent, doctor, mailbox }
+}
+
+function buildKpis(data) {
+  const wins = data.windows
+  const byProv = {}
+  for (const w of wins) byProv[w.provider] = (byProv[w.provider] || 0) + 1
+  const peakAvg = wins.reduce((a,w)=>a+parseFloat(w.peak), 0) / wins.length
+  const peak100 = wins.filter(w => parseFloat(w.peak) >= 95).length
+  const peakUnder70 = wins.filter(w => parseFloat(w.peak) < 70).length
+  const totalKt = Object.values(data.byAgent.totals_kt).reduce((a,b)=>a+b, 0)
+  const cards = [
+    { lbl: '📅 giorni di sperimentazione', val: '15', sub: '25 apr → 9 mag 2026' },
+    { lbl: '🪟 finestre rate-budget', val: wins.length, sub: `kimi:${byProv.kimi||0} claude:${byProv.claude||0} openai:${byProv.openai||0}` },
+    { lbl: '🔍 positions trovate', val: data.db.totals.positions, sub: `${data.db.by_scout[0][1]} da scout-1` },
+    { lbl: '📊 scoring fatto', val: data.db.totals.scores, sub: `${data.db.totals.positions - data.db.totals.scores} unscored` },
+    { lbl: '✍️ applications scritte', val: data.db.totals.applications, sub: 'di cui 30 approved/ready' },
+    { lbl: '🔢 token totali team', val: (totalKt/1000).toFixed(0) + ' MT', sub: '15 giorni · 17 agenti' },
+    { lbl: '🎯 peak medio finestre', val: peakAvg.toFixed(0) + '%', sub: `${peak100} ≥95% · ${peakUnder70} <70%` },
+    { lbl: '🩺 round dottore', val: data.doctor.totals.rounds, sub: `${data.doctor.totals.pings} ping · ${data.doctor.totals.restarts} restart` },
+  ]
+  document.getElementById('kpis-top').innerHTML = cards.map(c => `
+    <div class="kpi"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>
+  `).join('')
+}
+
+function buildPositionsDay(data) {
+  const ctx = document.getElementById('positions-day').getContext('2d')
+  const rows = data.db.positions_per_day.filter(r => r[0])
+  charts.positionsDay = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r[0]),
+      datasets: [{ label: 'positions trovate', data: rows.map(r => r[1]), backgroundColor: '#38bdf8' }],
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e6edf6' } } },
+      scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+                y: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } } },
+    },
+  })
+}
+
+function buildAppsDay(data) {
+  const ctx = document.getElementById('apps-day').getContext('2d')
+  const rows = data.db.applications_per_day.filter(r => r[0])
+  charts.appsDay = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r[0]),
+      datasets: [{ label: 'applications scritte', data: rows.map(r => r[1]), backgroundColor: '#22c55e' }],
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e6edf6' } } },
+      scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+                y: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } } },
+    },
+  })
+}
+
+function buildWindowsChart(data) {
+  const ctx = document.getElementById('windows').getContext('2d')
+  // Group windows by provider
+  const provs = ['kimi', 'claude', 'openai']
+  const datasets = provs.map(p => ({
+    label: '🟠 Kimi K2'.replace('Kimi K2', p === 'kimi' ? 'Kimi K2' : p === 'claude' ? 'Claude' : p === 'openai' ? 'Codex GPT-5.5' : '?').replace('🟠', p === 'kimi' ? '🟠' : p === 'claude' ? '🟣' : p === 'openai' ? '🟢' : '⚪'),
+    data: data.windows.map(w => w.provider === p ? { x: new Date(w.open_ts), y: parseFloat(w.peak), _w: w } : null).filter(Boolean),
+    backgroundColor: PROVIDER_COLORS[p],
+    borderColor: PROVIDER_COLORS[p],
+    pointRadius: 7, pointHoverRadius: 11,
+    showLine: false,
+  }))
+  // Add target band
+  const minTs = Math.min(...data.windows.map(w => new Date(w.open_ts).getTime()))
+  const maxTs = Math.max(...data.windows.map(w => new Date(w.close_ts).getTime()))
+  datasets.push({
+    label: 'target band 90-95%',
+    data: [{x: minTs, y: 92}, {x: maxTs, y: 92}],
+    borderColor: '#a78bfa', borderDash: [4,4], pointRadius: 0, borderWidth: 1.5, fill: false,
+  })
+
+  charts.windows = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#e6edf6' } },
+        tooltip: {
+          callbacks: {
+            label: item => {
+              const w = item.raw._w
+              if (!w) return item.dataset.label
+              return `${w.provider} ${w.session_id.slice(-9)} · peak=${w.peak}% · dur=${w.duration_min}m`
+            },
+          },
+        },
+        zoom: { zoom: { wheel:{enabled:false}, pinch:{enabled:false}, mode:'xy' }, pan:{enabled:false} },
+      },
+      scales: {
+        x: { type: 'time', ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+        y: { min: 0, max: 105, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: '#1f2a3d' } },
+      },
+    },
+  })
+}
+
+function buildScoreDist(data) {
+  const ctx = document.getElementById('score-dist').getContext('2d')
+  const rows = data.db.score_dist
+  const colors = { '80+': '#22c55e', '70-79': '#84cc16', '60-69': '#facc15', '50-59': '#fb923c', '40-49': '#f97316', '30-39': '#ef4444', '<30': '#dc2626' }
+  charts.scoreDist = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: rows.map(r => r[0]),
+      datasets: [{ label: 'positions', data: rows.map(r => r[1]),
+        backgroundColor: rows.map(r => colors[r[0]] || '#94a3b8') }] },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+                y: { ticks: { color: '#94a3b8' } } },
+    },
+  })
+}
+
+function buildCriticDist(data) {
+  const ctx = document.getElementById('critic-dist').getContext('2d')
+  const rows = data.db.critic_dist
+  const colors = { '8+': '#22c55e', '7-7.9': '#84cc16', '6-6.9': '#facc15', '5-5.9': '#fb923c', '<5': '#ef4444', null: '#94a3b8', 'null': '#94a3b8' }
+  charts.criticDist = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: rows.map(r => r[0]),
+      datasets: [{ label: 'applications', data: rows.map(r => r[1]),
+        backgroundColor: rows.map(r => colors[r[0]] || '#94a3b8') }] },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+                y: { ticks: { color: '#94a3b8' } } },
+    },
+  })
+}
+
+function buildFunnel(data) {
+  const stages = [
+    { lbl: '🔍 trovate', n: data.db.totals.positions, color: '#38bdf8' },
+    { lbl: '🚫 escluse al filtro', n: data.db.positions_per_status.find(r=>r[0]==='excluded')?.[1] || 0, color: '#94a3b8' },
+    { lbl: '📊 scored', n: data.db.totals.scores, color: '#a78bfa' },
+    { lbl: '✍️ application written', n: data.db.totals.applications, color: '#fb923c' },
+    { lbl: '✅ critic ≥5 (passed)', n: data.db.critic_dist.filter(r => ['8+','7-7.9','6-6.9','5-5.9'].includes(r[0])).reduce((a,r)=>a+r[1],0), color: '#facc15' },
+    { lbl: '🎉 approved + ready', n: (data.db.applications_per_status.find(r=>r[0]==='approved')?.[1] || 0) + (data.db.applications_per_status.find(r=>r[0]==='ready')?.[1] || 0), color: '#22c55e' },
+  ]
+  const max = Math.max(...stages.map(s => s.n))
+  document.getElementById('funnel').innerHTML = stages.map(s => `
+    <div class="funnel-bar" style="width: ${(s.n/max*100).toFixed(0)}%; background: ${s.color};">
+      ${s.lbl} · ${s.n}
+    </div>
+  `).join('')
+}
+
+function buildAgents(data) {
+  const ctx = document.getElementById('agents').getContext('2d')
+  const palette = ['#38bdf8','#fb923c','#a78bfa','#22c55e','#f472b6','#facc15','#60a5fa','#34d399','#f87171','#c084fc','#94a3b8','#5eead4','#fde047','#fb7185','#a3e635']
+  const sortedAgents = [...data.byAgent.agents].sort((a,b) => data.byAgent.totals_kt[b] - data.byAgent.totals_kt[a]).slice(0, 12)
+  const datasets = sortedAgents.map((a, i) => ({
+    label: `${a} (${data.byAgent.totals_kt[a].toFixed(0)} kT)`,
+    data: data.byAgent.series.map(row => ({ x: new Date(row.ts), y: row[a] || 0 })),
+    borderColor: a === 'dottore' ? '#f472b6' : palette[i % palette.length],
+    backgroundColor: 'transparent',
+    tension: 0.15, pointRadius: 0, borderWidth: a === 'dottore' ? 3 : 2,
+    borderDash: a === 'dottore' ? [4,2] : undefined,
+  }))
+  charts.agents = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+      plugins: {
+        legend: { labels: { color: '#e6edf6', font: { size: 11 } } },
+        tooltip: { callbacks: { title: items => new Date(items[0].parsed.x).toISOString().slice(0,16).replace('T',' '),
+                                 label: item => item.dataset.label.split(' (')[0] + ' = ' + item.parsed.y.toFixed(0) + ' kT' } },
+        zoom: { zoom: { wheel:{enabled:false}, pinch:{enabled:false}, mode:'xy' }, pan:{enabled:false} },
+      },
+      scales: {
+        x: { type: 'time', ticks: { color: '#94a3b8' }, grid: { color: '#1f2a3d' } },
+        y: { ticks: { color: '#94a3b8', callback: v => v.toFixed(0) + ' kT' }, grid: { color: '#1f2a3d' } },
+      },
+    },
+  })
+}
+
+function buildMailboxSummary(data) {
+  const m = data.mailbox
+  const dropRate = m.total > 0 ? ((m.recovered/m.total)*100).toFixed(0) : 0
+  document.getElementById('mailbox-summary').innerHTML = `
+    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+      <span class="pill">total: ${m.total}</span>
+      <span class="pill good">✓ tmux delivered: ${m.delivered}</span>
+      <span class="pill warn">✗ recuperati via mailbox: ${m.recovered} (${dropRate}%)</span>
+      ${Object.entries(m.kinds).map(([k,v]) => `<span class="pill">${k}: ${v}</span>`).join('')}
+    </div>
+    <div style="color:var(--muted); font-size:11px;">
+      attivo dal ${(m.first_ts||'').slice(0,16).replace('T',' ')} al ${(m.last_ts||'').slice(0,16).replace('T',' ')}
+    </div>`
+}
+
+function buildDoctorSummary(data) {
+  const d = data.doctor
+  document.getElementById('doctor-summary').innerHTML = `
+    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+      <span class="pill">🩺 spawns: ${d.totals.spawns}</span>
+      <span class="pill">✅ rounds: ${d.totals.rounds}</span>
+      <span class="pill">📨 ping: ${d.totals.pings}</span>
+      <span class="pill ${d.totals.restarts > 0 ? 'warn' : 'good'}">🔄 restart: ${d.totals.restarts}</span>
+    </div>
+    <table>
+      <thead><tr><th>diagnosi</th><th>conteggio</th><th>%</th></tr></thead>
+      <tbody>
+        ${(() => {
+          const entries = Object.entries(d.diagnoses).sort((a,b) => b[1]-a[1])
+          const total = entries.reduce((s,e) => s+e[1], 0)
+          const colors = { alive: 'good', long_turn: 'warn', stallo: 'bad', cli_dead: 'bad', ambiguous: 'warn' }
+          return entries.map(([k,v]) => `<tr><td><span class="pill ${colors[k]||''}">${k}</span></td><td>${v}</td><td>${(v/total*100).toFixed(0)}%</td></tr>`).join('')
+        })()}
+      </tbody>
+    </table>
+    <div style="color:var(--muted); font-size:11px; margin-top:8px;">
+      attivo dal ${(d.first_ts||'').slice(0,16).replace('T',' ')} al ${(d.last_ts||'').slice(0,16).replace('T',' ')}
+    </div>`
+}
+
+function zoomChart(name, factor) { if (charts[name]) charts[name].zoom(factor) }
+function resetChart(name) { if (charts[name]) charts[name].resetZoom() }
+
+(async () => {
+  const data = await loadAll()
+  buildKpis(data)
+  buildPositionsDay(data)
+  buildAppsDay(data)
+  buildWindowsChart(data)
+  buildScoreDist(data)
+  buildCriticDist(data)
+  buildFunnel(data)
+  buildAgents(data)
+  buildMailboxSummary(data)
+  buildDoctorSummary(data)
+})()
+</script>
+</body>
+</html>

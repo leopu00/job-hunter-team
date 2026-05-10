@@ -1,34 +1,34 @@
 ---
 name: Bug report
-about: Segnala un problema
+about: Report a problem
 labels: bug
 ---
 
-## Descrizione
+## Description
 
-<!-- Descrivi il bug in modo chiaro e conciso -->
+<!-- Describe the bug clearly and concisely -->
 
-## Come riprodurlo
+## How to reproduce
 
 1.
 2.
 3.
 
-## Comportamento atteso
+## Expected behavior
 
-<!-- Cosa dovrebbe succedere? -->
+<!-- What should happen? -->
 
-## Comportamento ottenuto
+## Actual behavior
 
-<!-- Cosa succede invece? -->
+<!-- What happens instead? -->
 
-## Ambiente
+## Environment
 
 - OS:
 - Node.js:
-- Browser (se frontend):
-- Versione / commit:
+- Browser (if frontend):
+- JHT version / commit:
 
-## Log / Screenshot
+## Logs / Screenshots
 
-<!-- Incolla eventuali messaggi di errore o screenshot -->
+<!-- Paste any error messages or screenshots -->

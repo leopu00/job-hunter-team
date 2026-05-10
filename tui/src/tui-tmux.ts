@@ -73,7 +73,7 @@ type AgentConfig = {
 };
 
 const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  alfa:       { sessionPrefix: "ALFA",       effort: "high",   type: "single" },
+  capitano:       { sessionPrefix: "CAPITANO",       effort: "high",   type: "single" },
   scout:      { sessionPrefix: "SCOUT",      effort: "high",   type: "multi" },
   analista:   { sessionPrefix: "ANALISTA",   effort: "high",   type: "multi" },
   scorer:     { sessionPrefix: "SCORER",     effort: "medium", type: "multi" },

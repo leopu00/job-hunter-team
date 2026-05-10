@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runBash } from '@/lib/shell'
+import { runBash, runScript, toWslPath } from '@/lib/shell'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { execSync } from 'node:child_process'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
+import { safeResolveUnder } from '@/lib/fs-safety'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,13 +17,13 @@ const TASKS_PATH  = path.join(JHT_DIR, 'tasks', 'tasks.json')
 
 // Mappa role-id → info agente
 const AGENTS_BY_ID: Record<string, { name: string; session: string; effort: string }> = {
-  alfa:       { name: 'Alfa (Capitano)',  session: 'ALFA',        effort: 'high' },
+  capitano:       { name: 'Capitano',  session: 'CAPITANO',        effort: 'high' },
+  sentinella: { name: 'Sentinella',      session: 'SENTINELLA',  effort: 'medium' },
   scout:      { name: 'Scout',           session: 'SCOUT-1',     effort: 'high' },
   analista:   { name: 'Analista',        session: 'ANALISTA-1',  effort: 'high' },
   scorer:     { name: 'Scorer',          session: 'SCORER-1',    effort: 'medium' },
   scrittore:  { name: 'Scrittore',       session: 'SCRITTORE-1', effort: 'high' },
   critico:    { name: 'Critico',         session: 'CRITICO',     effort: 'high' },
-  sentinella: { name: 'Sentinella',      session: 'SENTINELLA',  effort: 'low' },
   assistente: { name: 'Assistente',      session: 'ASSISTENTE',  effort: 'high' },
 }
 
@@ -54,8 +56,11 @@ function loadAgentConfig(agentId: string): Record<string, unknown> | null {
 function loadAgentLogs(agentId: string, tail: number): { ts: string; level: string; msg: string }[] {
   const agentDir = path.join(AGENTS_DIR, agentId)
   for (const name of ['agent.log', 'log.jsonl', 'events.jsonl']) {
-    const logPath = path.join(agentDir, name)
-    if (!fs.existsSync(logPath)) continue
+    const candidate = path.join(agentDir, name)
+    // agentId arriva grezzo da `resolved?.id ?? id` (URL param), quindi
+    // `..` o symlink in AGENTS_DIR potrebbero far uscire dalla base.
+    const logPath = safeResolveUnder(AGENTS_DIR, candidate)
+    if (!logPath) continue
     try {
       return fs.readFileSync(logPath, 'utf-8').trim().split('\n').slice(-tail).map(line => {
         try { const p = JSON.parse(line); return { ts: p.ts ?? p.timestamp ?? '', level: p.level ?? 'info', msg: p.msg ?? p.message ?? line } }
@@ -76,6 +81,8 @@ function loadAgentTasks(agentId: string): Record<string, unknown>[] {
 type RouteCtx = { params: Promise<{ id: string }> }
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const resolved = resolve(id)
   const tail = parseInt(req.nextUrl.searchParams.get('logs') ?? '100', 10) || 100
@@ -84,20 +91,23 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const logs = loadAgentLogs(resolved?.id ?? id, Math.min(tail, 500))
   const tasks = loadAgentTasks(resolved?.id ?? id)
   const agentDir = path.join(AGENTS_DIR, resolved?.id ?? id)
+  const hasDir = safeResolveUnder(AGENTS_DIR, agentDir) !== null
   return NextResponse.json({
     id: resolved?.id ?? id, name: resolved?.info.name ?? config?.name ?? id,
     session: resolved?.info.session ?? null, status,
-    hasDir: fs.existsSync(agentDir), config: config ?? {}, logs, tasks,
+    hasDir, config: config ?? {}, logs, tasks,
     taskCount: tasks.length, logCount: logs.length,
   })
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const body = await req.json().catch(() => ({})) as { action?: string; workspaceDir?: string }
   const resolved = resolve(id)
   if (!resolved) return NextResponse.json({ ok: false, error: 'Agente sconosciuto' }, { status: 400 })
-  const { session, effort } = resolved.info
+  const { session } = resolved.info
   const action = body.action
 
   if (action === 'stop') {
@@ -107,11 +117,20 @@ export async function POST(req: Request, ctx: RouteCtx) {
   }
   if (action === 'start') {
     if (isTmuxRunning(session)) return NextResponse.json({ ok: true, status: 'already_active' })
-    const dir = body.workspaceDir ?? process.cwd()
-    await runBash(`tmux new-session -d -s "${session}" -c "${dir}"`)
-    await runBash(`tmux send-keys -t "${session}" "claude --dangerously-skip-permissions --effort ${effort}" C-m`)
-    runBash(`(sleep 4 && tmux send-keys -t "${session}" Enter && sleep 3 && tmux send-keys -t "${session}" Enter) &>/dev/null &`).catch(() => {})
-    return NextResponse.json({ ok: true, status: 'started' })
+    // Deleghiamo a .launcher/start-agent.sh: template copy, env var,
+    // rilevamento provider (claude/kimi/codex) dal jht.config.json,
+    // creazione sessione tmux, lancio CLI. Instance ricavata dal
+    // suffisso `-N` della session (SCOUT-1 → instance '1').
+    const repoRoot = path.resolve(process.cwd(), '..')
+    const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
+    const instanceMatch = session.match(/-(\d+)$/)
+    const args = instanceMatch ? [resolved.id, instanceMatch[1]] : [resolved.id]
+    try {
+      await runScript(startAgentScript, ...args)
+      return NextResponse.json({ ok: true, status: 'started' })
+    } catch (err: any) {
+      return NextResponse.json({ ok: false, error: err?.message ?? 'Avvio fallito' }, { status: 500 })
+    }
   }
   return NextResponse.json({ ok: false, error: 'Azione non valida' }, { status: 400 })
 }

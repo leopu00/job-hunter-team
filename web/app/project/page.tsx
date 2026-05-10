@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
+import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
 
 const T = {
@@ -29,11 +30,25 @@ const T = {
     repo_cta: 'Repository',
     story_title: 'History and goal',
     story_body_1:
-      'Job Hunter Team started as an open source project to automate job hunting through a pipeline of specialized AI agents, running locally and controlled by the user.',
+      'Job Hunter Team started as an open source project to automate job hunting through a pipeline of specialized AI agents, running locally inside a Docker container and controlled by the user.',
     story_body_2:
-      'The goal is to build a tool accessible to everyone: those who prefer simplicity can download the desktop launcher and use the web interface, while technical users can clone the repository or use the TUI for advanced control.',
+      'The goal is to build a tool accessible to everyone: those who prefer simplicity download the desktop launcher that handles the container for you, while technical users can clone the repository and work with the CLI/TUI directly.',
     story_body_3:
-      'The project is entirely free with no hidden costs: if you use an external AI provider you only pay for your usage, but you can also use local models for free. Developer contributions are welcome to improve together a tool that uses artificial intelligence in favor of workers, not against them.'
+      'The software is free and open source: JHT never bills you. You only pay the subscription of the AI provider you choose (Claude Code, Codex or Kimi) using the account you already have. Developer contributions are welcome to improve together a tool that puts AI on the side of workers, not against them.'
+  },
+  hu: {
+    title: 'Projekt áttekintése',
+    subtitle: 'Egy AI ügynök csapat, amely állást keres neked.',
+    back: '← Vissza',
+    open_source: 'nyílt forráskód',
+    repo_cta: 'Repository',
+    story_title: 'Történet és cél',
+    story_body_1:
+      'A Job Hunter Team nyílt forráskódú projektként indult, hogy specializált AI ügynökök csővezetékével automatizálja az álláskeresést. A rendszer helyben, egy Docker konténeren belül fut, és a felhasználó irányítja.',
+    story_body_2:
+      'A cél egy mindenki számára hozzáférhető eszköz építése: aki az egyszerűséget kedveli, letölti az asztali launchert, amely a konténert helyetted kezeli; a műszaki felhasználók klónozhatják a repository-t és közvetlenül dolgozhatnak a CLI/TUI felülettel.',
+    story_body_3:
+      'A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak a választott AI szolgáltató (Claude Code, Codex vagy Kimi) előfizetését fizeted, a már meglévő fiókoddal. A fejlesztői közreműködéseket szívesen fogadjuk, hogy együtt jobbítsunk egy olyan eszközt, amely a dolgozók oldalára állítja az AI-t, nem pedig ellenük.'
   },
 } as const
 
@@ -68,22 +83,16 @@ function BackLink({ label }: { label: string }) {
 
 function CompanyContent() {
   const { lang } = useLandingI18n()
-  const t = T[lang as 'it' | 'en'] ?? T.it
+  const t = T[lang] ?? T.en
 
+  // The WebCompany JSON-LD that used to live here was a duplicate of the one
+  // emitted by `project/layout.tsx` (server component) with the same
+  // schema.org @type and isPartOf. The layout's nonce-tagged version is
+  // the canonical one under the strict CSP; this client component cannot
+  // read the nonce, so the duplicate is removed rather than leaving a
+  // CSP-violating tag on the page.
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'WebCompany',
-            name: t.title,
-            description: t.subtitle,
-            isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: 'https://jobhunterteam.ai' },
-          }),
-        }}
-      />
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
         <div className="text-center mb-12">
@@ -119,6 +128,7 @@ function CompanyContent() {
           <BackLink label={t.back} />
         </div>
       </main>
+      <LandingFooter />
       <ScrollToTop />
     </>
   )

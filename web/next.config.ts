@@ -7,29 +7,19 @@ const CWD = process.cwd()
 const MONOREPO_ROOT =
   CWD.endsWith(`${path.sep}web`) || CWD.endsWith('/web') ? path.dirname(CWD) : CWD
 
-const isDevelopment = process.env.NODE_ENV === 'development'
-
+// Static security headers. The Content-Security-Policy header is *not*
+// here: it carries a per-request nonce and is therefore set by
+// `web/middleware.ts`, which runs on every HTML response.
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com",
-      "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co",
-      "frame-src 'none'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
-  },
+  // microphone=(self) permette al nostro origin di richiedere
+  // l'accesso via navigator.mediaDevices.getUserMedia (serve per il
+  // bottone "detta a voce" nell'onboarding). Camera e geolocation
+  // restano disabilitate: nessuna pagina le usa al momento.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
 ]
 
 const nextConfig: NextConfig = {
@@ -55,9 +45,15 @@ const nextConfig: NextConfig = {
       '**/*.map',
     ],
   },
-  turbopack: {
-    root: MONOREPO_ROOT,
-  },
+  // Turbopack root: lasciamo sempre cwd (web/). Usare MONOREPO_ROOT scatena
+  // un loop nel resolver di @tailwindcss/postcss che spawna worker che non
+  // muoiono (leak RAM lineare → freeze Mac, vedi crash 25/04). Per il
+  // file-tracing del build resta outputFileTracingRoot sopra; quello vale
+  // per `next build --output=standalone` e non tocca il dev server.
+  turbopack: {},
+  // Sposta il devtools indicator a bottom-right per liberare bottom-left
+  // ai widget custom dell'app (es. ProfileAssistantFab).
+  devIndicators: { position: 'bottom-right' },
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   images: {

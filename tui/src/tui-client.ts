@@ -201,7 +201,7 @@ export function createTuiClient(
   };
 
   const listAgents: JhtChatClient["listAgents"] = async () => {
-    const roles = ["scout", "analista", "assistente", "critico", "scorer", "scrittore", "sentinella", "alfa"];
+    const roles = ["scout", "analista", "assistente", "critico", "scorer", "scrittore", "sentinella", "capitano"];
     return roles.map<JhtAgent>(r => ({ id: r, name: r, role: r, status: "idle" }));
   };
 

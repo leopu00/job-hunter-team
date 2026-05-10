@@ -3,6 +3,7 @@
  * Modulo shared/monitoring non ancora disponibile — restituisce dati stub.
  */
 import { NextResponse } from 'next/server';
+import { sanitizedError } from '@/lib/error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: 'type deve essere heartbeat o threshold' }, { status: 400 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'monitoring' });
   }
 }

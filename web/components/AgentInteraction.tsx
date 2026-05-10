@@ -2,6 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useDevMode } from './SettingsMenu'
 
 type AgentSession = { session: string; active: boolean }
 type Mode = 'chat' | 'terminal'
@@ -27,6 +28,12 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   const [sending, setSending] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const devMode = useDevMode()
+
+  // Se il dev mode si spegne mentre si è sul tab terminale, torna su chat.
+  useEffect(() => {
+    if (!devMode && mode === 'terminal') setMode('chat')
+  }, [devMode, mode])
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<HTMLDivElement>(null)
@@ -84,7 +91,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
 
   useEffect(() => {
     if (activeSession) fetchTerminal()
-    const id = setInterval(fetchTerminal, 3000)
+    // 1500ms (era 3000): refresh piu' "live" del pane tmux. Lo stick-to-
+    // bottom condizionale (vedi termAtBottomRef sotto) impedisce che il
+    // refresh frequente diventi fastidioso quando l'utente legge in
+    // mezzo — non scrolla finche' non e' in fondo per scelta.
+    const id = setInterval(fetchTerminal, 1500)
     return () => clearInterval(id)
   }, [activeSession, fetchTerminal])
 
@@ -98,9 +109,24 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     prevMsgCountRef.current = messages.length
   }, [messages])
 
-  // Scroll terminale
+  // Scroll terminale: stick-to-bottom condizionale.
+  // Bug fix 2026-04-25: prima ogni nuovo output sparava scroll a bottom,
+  // anche se l'utente stava leggendo in mezzo → la posizione saltava ad
+  // ogni tick. Ora teniamo un flag aggiornato dall'onScroll handler:
+  //  - utente in fondo (entro 50px) ⇒ auto-scroll su nuovo output
+  //  - utente scrollato in alto       ⇒ NO auto-scroll, lascia leggere
+  //  - utente torna in fondo a mano   ⇒ il flag torna true, auto-scroll riprende
+  const termAtBottomRef = useRef(true)
+  const handleTermScroll = useCallback(() => {
+    const el = termRef.current
+    if (!el) return
+    const slack = 50  // px di tolleranza per evitare flicker su rounding
+    termAtBottomRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - slack
+  }, [])
   useEffect(() => {
-    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
+    if (termRef.current && termAtBottomRef.current) {
+      termRef.current.scrollTop = termRef.current.scrollHeight
+    }
   }, [output])
 
   const handleSend = async () => {
@@ -155,15 +181,17 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                 }}>
                 chat
               </button>
-              <button
-                onClick={() => setMode('terminal')}
-                className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
-                style={{
-                  color: mode === 'terminal' ? color : 'var(--color-dim)',
-                  background: mode === 'terminal' ? `${color}15` : 'transparent',
-                }}>
-                terminale
-              </button>
+              {devMode && (
+                <button
+                  onClick={() => setMode('terminal')}
+                  className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
+                  style={{
+                    color: mode === 'terminal' ? color : 'var(--color-dim)',
+                    background: mode === 'terminal' ? `${color}15` : 'transparent',
+                  }}>
+                  terminale
+                </button>
+              )}
             </div>
             {/* Selettore sessione se > 1 */}
             {sessions.length > 1 && (
@@ -187,6 +215,14 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                 disabled={sending}
                 className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                 pulisci
+              </button>
+            )}
+            {activeSession && (
+              <button onClick={async () => {
+                  await fetch(`/api/team/terminal/open?session=${encodeURIComponent(activeSession)}`, { method: 'POST' })
+                }}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
+                {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
               </button>
             )}
             <button onClick={() => setChatFullscreen(v => !v)}
@@ -249,6 +285,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
         ) : (
           /* Terminale raw */
           <div ref={termRef}
+            onScroll={handleTermScroll}
             className="px-4 py-4 font-mono text-[11px] leading-relaxed overflow-auto"
             style={{
               height: chatFullscreen ? undefined : '45vh',

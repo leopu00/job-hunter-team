@@ -7,6 +7,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -114,7 +115,7 @@ export async function POST() {
       rolledBack: result.rolledBack,
     }, { status: result.ok ? 200 : 500 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'migrations' });
   }
 }
 
@@ -143,6 +144,6 @@ export async function PATCH(req: Request) {
       })),
     }, { status: result.ok ? 200 : 500 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return sanitizedError(err, { scope: 'migrations' });
   }
 }

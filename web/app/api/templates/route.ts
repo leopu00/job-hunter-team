@@ -119,7 +119,7 @@ const SAMPLE_TEMPLATES: TemplateDetail[] = [
 
 /** GET — lista template: ?name=xxx&category=xxx */
 export async function GET(req: NextRequest) {
-  let templates = loadTemplates(getTemplatesDir())
+  const templates = loadTemplates(getTemplatesDir())
   // no sample fallback — empty until user creates templates
 
   const name = req.nextUrl.searchParams.get('name')

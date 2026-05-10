@@ -15,7 +15,7 @@ const ITEM_DEFS: ItemDef[] = [
   { id: 'crescita',     labelKey: 'gs_crescita_label',     detailKey: 'gs_crescita_detail',     catKey: 'cat_pages',  href: '/crescita' },
   { id: 'profile',      labelKey: 'gs_profile_label',      detailKey: 'gs_profile_detail',      catKey: 'cat_pages',  href: '/profile' },
   { id: 'team',         labelKey: 'gs_team_label',         detailKey: 'gs_team_detail',         catKey: 'cat_pages',  href: '/team' },
-  { id: 'assistente',   labelKey: 'gs_assistente_label',   detailKey: 'gs_assistente_detail',   catKey: 'cat_pages',  href: '/assistente' },
+  { id: 'assistente',   labelKey: 'gs_assistente_label',   detailKey: 'gs_assistente_detail',   catKey: 'cat_pages',  href: '/team/assistente' },
   { id: 'agents',       labelKey: 'gs_agents_label',       detailKey: 'gs_agents_detail',       catKey: 'cat_pages',  href: '/agents' },
   { id: 'tasks',        labelKey: 'gs_tasks_label',        detailKey: 'gs_tasks_detail',        catKey: 'cat_pages',  href: '/tasks' },
   { id: 'sessions',     labelKey: 'gs_sessions_label',     detailKey: 'gs_sessions_detail',     catKey: 'cat_pages',  href: '/sessions' },

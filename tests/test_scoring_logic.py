@@ -311,7 +311,7 @@ class TestCriticClassification:
 class TestScoreSubcategoryConstraints:
     """
     Verifica che le sottocategorie rispettino i massimi della pipeline.
-    Soglie da shared/docs:
+    Soglie da agents/_manual:
       stack_match: max 40
       remote_fit: max 25
       salary_fit: max 20

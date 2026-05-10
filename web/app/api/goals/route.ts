@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
     goals.push(goal);
     save(goals);
     return NextResponse.json({ goal });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'goals' }); }
 }
 
 export async function PUT(req: Request) {
@@ -82,5 +83,5 @@ export async function PUT(req: Request) {
     goal.status = computeStatus(goal);
     save(goals);
     return NextResponse.json({ goal });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'goals' }); }
 }

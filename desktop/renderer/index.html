@@ -1,115 +1,625 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JHT Desktop</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="topbar__brand">JHT Desktop</div>
-      <div class="topbar__alpha">Alpha · in fase di test</div>
-    </header>
-
     <main class="wizard" id="wizard">
-      <!-- Step 1: welcome -->
-      <section class="step" id="step-welcome" data-step="welcome">
-        <h1 class="step__title">Job Hunter Team</h1>
-        <p class="step__lead">
-          Un team di agenti AI che cercano lavoro al posto tuo, analizzano le
-          offerte e scrivono CV e lettere di presentazione.
-        </p>
-        <p class="step__hint">
-          Prima di avviare il team controlliamo che tutto sia pronto sul tuo
-          computer. Dura un minuto.
-        </p>
+      <!-- Step 0: language -->
+      <section class="step step--centered" id="step-language" data-step="language">
+        <h1 class="step__title" data-i18n="lang.title">Choose your language</h1>
+        <p class="step__lead" data-i18n="lang.lead">Interface language for the launcher.</p>
+        <div class="lang-select" id="lang-select">
+          <button
+            type="button"
+            class="lang-select__toggle"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="flag" data-lang-flag></span>
+            <span class="lang-select__label" data-lang-label></span>
+          </button>
+          <ul class="lang-select__menu" role="listbox" hidden></ul>
+        </div>
         <div class="step__actions">
-          <button class="btn btn--primary" id="btn-welcome-continue">
-            Continua
+          <button class="btn btn--primary" id="btn-language-continue" data-i18n="lang.continue">
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 1: welcome -->
+      <section class="step step--centered" id="step-welcome" data-step="welcome" hidden>
+        <div class="step__emoji" aria-hidden="true">🎯</div>
+        <h1 class="step__title" data-i18n="welcome.title">Job Hunter Team</h1>
+        <p class="step__lead" data-i18n="welcome.lead">
+          AI agents that help you land a job: match offers to your profile, tailor CVs and mentor your next move.
+        </p>
+        <p class="step__hint" data-i18n="welcome.hint" data-i18n-platform="true">
+          First we check your computer is ready.
+        </p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-welcome-back" data-i18n="welcome.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-welcome-continue" data-i18n="welcome.continue">
+            Continue
           </button>
         </div>
       </section>
 
       <!-- Step 2: setup / checklist -->
-      <section class="step" id="step-setup" data-step="setup" hidden>
-        <h1 class="step__title">Setup</h1>
-        <p class="step__lead">
-          Per far girare il team in modo isolato serve <strong>Docker</strong>,
-          gratuito. Controlliamo se è già sul tuo computer.
+      <section class="step step--centered" id="step-setup" data-step="setup" hidden>
+        <h1 class="step__title" data-i18n="setup.title">Setup</h1>
+        <p class="step__lead" id="setup-lead" data-i18n="setup.lead" data-i18n-html="true">
+          To run the team in isolation we need <strong>Docker</strong>, free. Let's check if it's already on your computer.
         </p>
 
         <div class="dep-card" id="docker-card">
           <div class="dep-card__header">
-            <span class="dep-card__icon" id="docker-icon">…</span>
-            <span class="dep-card__name">Docker</span>
-            <span class="dep-card__badge" id="docker-badge">verifica…</span>
-          </div>
-          <p class="dep-card__hint" id="docker-hint">
-            Controllo in corso…
-          </p>
-          <div class="dep-card__stats" id="docker-stats" hidden>
-            <div class="stat">
-              <span class="stat__label">Peso installazione</span>
-              <span class="stat__value" id="docker-required">—</span>
+            <img class="dep-card__icon" src="./assets/docker.svg" alt="Docker" width="28" height="28" />
+            <div class="dep-card__title">
+              <span class="dep-card__name" id="docker-name">Docker</span>
+              <span class="dep-card__subtitle" id="docker-subtitle"></span>
             </div>
-            <div class="stat">
-              <span class="stat__label">Libero sul tuo PC</span>
-              <span class="stat__value" id="docker-free">—</span>
-            </div>
+            <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
-          <div class="dep-card__actions" id="docker-actions">
-            <!-- populated by renderer -->
-          </div>
+
+          <ol class="install-steps" id="docker-steps" hidden style="display: none">
+            <li class="install-step" id="step-homebrew" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.homebrew">Homebrew</span>
+              <span class="install-step__hint" id="step-homebrew-hint"></span>
+            </li>
+            <li class="install-step" id="step-colima" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.colima">Colima + Docker CLI</span>
+              <span class="install-step__hint" id="step-colima-hint"></span>
+            </li>
+            <li class="install-step" id="step-daemon" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="docker.step.daemon">Runtime attivo</span>
+              <span class="install-step__hint" id="step-daemon-hint"></span>
+            </li>
+          </ol>
+
+          <div class="dep-card__actions" id="docker-actions"></div>
+
+          <pre class="install-log" id="docker-install-log" hidden></pre>
         </div>
 
+        <div class="dep-list" id="extra-deps"></div>
+
+        <!-- Windows-only unified requirements panel: replaces docker-card +
+             extra-deps cards above with a single 3-row checklist for
+             Docker / WSL / Git, and surfaces the "Install everything"
+             button below the list (not buried inside Docker's card). -->
+        <div class="dep-card" id="win-requirements" hidden style="display: none">
+          <div class="dep-card__header">
+            <span class="dep-card__name" data-i18n="winReq.title">Required tools</span>
+          </div>
+          <ol class="install-steps">
+            <li class="install-step" id="win-step-docker" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.docker">Docker Desktop</span>
+              <span class="install-step__action" id="win-step-docker-action"></span>
+            </li>
+            <li class="install-step" id="win-step-wsl" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.wsl">WSL2 + Ubuntu</span>
+              <span class="install-step__action"></span>
+            </li>
+            <li class="install-step" id="win-step-git" data-state="pending">
+              <span class="install-step__icon"></span>
+              <span class="install-step__label" data-i18n="winReq.git">Git</span>
+              <span class="install-step__action"></span>
+            </li>
+          </ol>
+        </div>
+        <div id="win-install-actions" hidden style="display: none; margin-top: 14px; text-align: center">
+          <button class="btn btn--primary" id="btn-win-install-everything" data-i18n="docker.action.installEverything">
+            Install everything
+          </button>
+        </div>
+        <pre id="win-install-log" class="install-log" hidden style="display: none"></pre>
+
         <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-setup-back">Indietro</button>
-          <button class="btn btn--primary" id="btn-setup-continue" disabled>
-            Avanti
+          <button class="btn btn--ghost" id="btn-setup-back" data-i18n="setup.back">Back</button>
+          <button class="btn btn--primary" id="btn-setup-continue" disabled data-i18n="setup.continue">
+            Next
           </button>
         </div>
       </section>
 
-      <!-- Step 3: ready -->
-      <section class="step" id="step-ready" data-step="ready" hidden>
-        <h1 class="step__title">Tutto pronto</h1>
-        <p class="step__lead">
-          Docker è installato e attivo. Puoi avviare il team.
+      <!-- Step 2b: container prep -->
+      <section class="step step--centered" id="step-container" data-step="container" hidden>
+        <div class="step__emoji" aria-hidden="true">🏗️</div>
+        <h1 class="step__title" data-i18n="container.title">Preparing container</h1>
+        <p class="step__lead" data-i18n="container.lead">
+          Downloading the JHT container image (~1 GB). This runs once.
         </p>
-        <p class="step__hint" id="ready-hint">
-          Al primo avvio il launcher scarica il codice del team (~60 MB) nella
-          tua cartella utente.
+
+        <div class="container-progress" id="container-progress">
+          <div class="progress-bar" id="container-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
+          </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="container-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="container-message" data-i18n="container.status.pulling">
+              Pulling image from the registry…
+            </span>
+          </div>
+          <pre class="container-progress__log" id="container-log"></pre>
+        </div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-container-back" data-i18n="container.back">Back</button>
+          <button class="btn btn--primary" id="btn-container-retry" hidden data-i18n="container.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-container-continue" disabled data-i18n="container.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c0: subscription notice (why subscriptions, not API keys) -->
+      <section class="step step--centered" id="step-subscription-notice" data-step="subscription-notice" hidden>
+        <div class="team-lineup" aria-hidden="true">
+          <div class="team-lineup__top">
+            <span class="team-lineup__slot" style="grid-column: 2">
+              <span class="team-lineup__emoji">💂</span>
+              <span class="team-lineup__name">Sentinel</span>
+            </span>
+            <span class="team-lineup__slot team-lineup__slot--raised" style="grid-column: 3">
+              <span class="team-lineup__emoji">👨‍✈️</span>
+              <span class="team-lineup__name">Captain</span>
+            </span>
+          </div>
+          <div class="team-lineup__pipeline">
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">🕵️</span>
+              <span class="team-lineup__name">Scout</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍🔬</span>
+              <span class="team-lineup__name">Analyst</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍💻</span>
+              <span class="team-lineup__name">Scorer</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍🏫</span>
+              <span class="team-lineup__name">Writer</span>
+            </span>
+            <span class="team-lineup__slot">
+              <span class="team-lineup__emoji">👨‍⚖️</span>
+              <span class="team-lineup__name">Critic</span>
+            </span>
+          </div>
+        </div>
+        <h1 class="step__title" data-i18n="subscription.title">Subscriptions, not API keys</h1>
+        <p class="step__lead" data-i18n="subscription.lead">
+          The team keeps many AI agents running in parallel, around the clock. API keys bill per token and would cost hundreds per day. A flat subscription keeps your spend predictable.
         </p>
-        <div class="step__actions">
-          <button class="btn btn--primary btn--large" id="btn-start-team">
-            Avvia Job Hunter Team
+        <p class="step__hint" data-i18n="subscription.dedicatedHint" data-i18n-html="true">
+          <strong>Strongly recommended:</strong> use a subscription dedicated to the team — not the one you already use for work or personal tasks. A shared account drains the same weekly quota twice.
+        </p>
+
+        <div class="cost-compare">
+          <div class="cost-compare__col cost-compare__col--api">
+            <span class="cost-compare__label" data-i18n="subscription.compare.api">Pay-per-token (API)</span>
+            <span class="cost-compare__price">$1,000–$2,500<span class="cost-compare__per">/mo</span></span>
+            <span class="cost-compare__hint" data-i18n="subscription.compare.apiHint">~200–400M tokens/mo (Sonnet 4.6 mix)</span>
+          </div>
+          <div class="cost-compare__vs" aria-hidden="true">vs</div>
+          <div class="cost-compare__col cost-compare__col--sub">
+            <span class="cost-compare__label" data-i18n="subscription.compare.sub">Claude Max 20× subscription</span>
+            <span class="cost-compare__price">$200<span class="cost-compare__per">/mo</span></span>
+            <span class="cost-compare__hint" data-i18n="subscription.compare.subHint">same usage, fixed cost</span>
+          </div>
+        </div>
+        <p class="cost-compare__footnote" data-i18n="subscription.compare.footnote">
+          Estimate from Anthropic's public API pricing ($3/M input · $15/M output for Sonnet 4.6) and fully-saturated 5-hour windows against the Max 20× weekly cap. Actual savings depend on your input/output mix.
+        </p>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-subscription-back" data-i18n="subscription.back">Back</button>
+          <button class="btn btn--primary" id="btn-subscription-continue" data-i18n="subscription.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c1: model benchmark comparison (before provider pick) -->
+      <section class="step step--centered" id="step-model-compare" data-step="model-compare" hidden>
+        <h1 class="step__title" data-i18n="modelCompare.title">How the models compare</h1>
+        <p class="step__lead" data-i18n="modelCompare.lead">
+          Five variants that matter: Claude in two tiers (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex at two reasoning efforts (GPT-5.3 high vs xhigh), and Kimi Code — which has no thinking mode, so it's shown as a single bar.
+        </p>
+        <div class="model-charts" id="model-charts"></div>
+        <p class="step__hint model-compare__footnote" data-i18n="modelCompare.footnote" data-i18n-html="true">
+          Sources: SWE-bench Verified leaderboard, Artificial Analysis throughput data, vendor API pricing (April 2026). Kimi Code intelligence is estimated from K2.5 — K2.6 Preview numbers aren't published yet.
+        </p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-model-compare-back" data-i18n="modelCompare.back">Back</button>
+          <button class="btn btn--primary" id="btn-model-compare-continue" data-i18n="modelCompare.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2c: provider choice -->
+      <section class="step step--centered" id="step-provider-choose" data-step="provider-choose" hidden>
+        <h1 class="step__title" data-i18n="provider.title">Choose AI providers</h1>
+        <p class="step__lead" data-i18n="provider.lead">
+          Pick one or more CLIs. The team runs on subscriptions, not API keys.
+        </p>
+        <div class="provider-options" id="provider-options"></div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-continue" disabled data-i18n="provider.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2d: provider install -->
+      <section class="step step--centered" id="step-provider-install" data-step="provider-install" hidden>
+        <div class="step__emoji" aria-hidden="true">📦</div>
+        <h1 class="step__title" data-i18n="provider.installTitle">Installing CLI</h1>
+        <p class="step__lead" data-i18n="provider.installLead">
+          Installing the selected CLI into the container. Runs once.
+        </p>
+
+        <div class="container-progress" id="provider-progress">
+          <div class="progress-bar" id="provider-bar" data-state="busy">
+            <div class="progress-bar__fill"></div>
+          </div>
+          <div class="container-progress__status">
+            <span class="status-icon" id="provider-icon" data-state="busy"></span>
+            <span class="container-progress__message" id="provider-message"></span>
+          </div>
+          <pre class="container-progress__log" id="provider-log"></pre>
+        </div>
+
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-provider-install-back" data-i18n="provider.back">Back</button>
+          <button class="btn btn--primary" id="btn-provider-install-retry" hidden data-i18n="provider.retry">Retry</button>
+          <button class="btn btn--primary" id="btn-provider-install-continue" disabled data-i18n="provider.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2e: provider login -->
+      <section class="step step--centered" id="step-provider-login" data-step="provider-login" hidden>
+        <div class="step__emoji" aria-hidden="true">🔑</div>
+        <h1 class="step__title" data-i18n="login.title">Sign in to your providers</h1>
+        <p class="step__lead" data-i18n="login.lead">
+          Each CLI needs your active subscription. Open Login to sign in inside the app.
+        </p>
+        <div class="auth-list" id="auth-list"></div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-login-back" data-i18n="login.back">Back</button>
+          <button class="btn btn--primary" id="btn-login-continue" disabled data-i18n="login.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 3: ready / summary -->
+      <section class="step step--centered" id="step-ready" data-step="ready" hidden>
+        <div class="step__emoji" aria-hidden="true">🚀</div>
+        <h1 class="step__title" data-i18n="ready.title">All set</h1>
+        <p class="step__lead" data-i18n="ready.lead">Everything is configured. You can start the team.</p>
+        <ul class="summary-list" id="summary-list"></ul>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-ready-manage-login" data-i18n="ready.manageLogin">
+            Manage login
+          </button>
+          <button class="btn btn--primary btn--large" id="btn-start-team" data-i18n="ready.start">
+            Start Job Hunter Team
+          </button>
+        </div>
+        <!-- Dev-mode shortcut: usa la stessa config di provider/credenziali
+             gia' validata dal flow normale, ma lancia il runtime via
+             `docker compose up` (bind-mount di web/agents/shared/.launcher)
+             + Next sull'host su :3001 con hot-reload. Visibile solo se
+             Electron gira dal sorgente (app.isPackaged=false). -->
+        <div class="step__actions step__actions--centered" id="dev-mode-actions" hidden style="margin-top: 12px;">
+          <button class="btn btn--ghost btn--small" id="btn-dev-mode">
+            🛠 Start Dev Mode (:3001, bind-mount)
           </button>
         </div>
       </section>
 
       <!-- Step 4: running -->
-      <section class="step" id="step-running" data-step="running" hidden>
-        <h1 class="step__title" id="running-title">Team in esecuzione</h1>
-        <p class="step__lead" id="running-lead">
-          Il runtime è partito. Apri la dashboard nel browser per iniziare.
+      <section class="step step--centered" id="step-running" data-step="running" hidden>
+        <div class="step__emoji" aria-hidden="true">🏁</div>
+        <h1 class="step__title" id="running-title" data-i18n="running.title">Team running</h1>
+        <p class="step__lead" id="running-lead" data-i18n="running.leadRunning">
+          The runtime is up. Open the dashboard in your browser to get started.
         </p>
         <div class="running-info" id="running-info"></div>
         <div class="step__actions">
-          <button class="btn btn--primary" id="btn-open-browser">
-            Apri dashboard
+          <button class="btn btn--primary" id="btn-open-browser" data-i18n="running.openBrowser">
+            Open dashboard
           </button>
-          <button class="btn btn--ghost" id="btn-stop-team">
-            Ferma team
+          <button class="btn btn--ghost" id="btn-stop-team" data-i18n="running.stop">
+            Stop team
           </button>
         </div>
         <details class="advanced">
-          <summary>Dettagli tecnici</summary>
+          <summary data-i18n="running.advanced">Technical details</summary>
           <pre class="advanced__log" id="advanced-log"></pre>
         </details>
       </section>
     </main>
 
+    <!-- Home: post-setup dashboard. Mostrata quando Docker + container image +
+         provider + auth sono tutti OK. Il wizard sopra resta attivo solo al
+         primo avvio o se una precondizione decade (es. logout). -->
+    <div class="home" id="home" hidden>
+      <aside class="home__sidebar">
+        <div class="home__brand">
+          <span class="home__brand-mark">🎯</span>
+          <span class="home__brand-name">JHT Desktop</span>
+        </div>
+        <nav class="home__nav" role="tablist">
+          <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+            <span class="home__nav-icon">🚀</span>
+            <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="provider" role="tab">
+            <span class="home__nav-icon">🧠</span>
+            <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="docker" role="tab">
+            <span class="home__nav-icon">🐳</span>
+            <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="language" role="tab">
+            <span class="home__nav-icon">🌐</span>
+            <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+            <span class="home__nav-icon">⚙️</span>
+            <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+          </button>
+        </nav>
+      </aside>
+
+      <section class="home__content">
+        <!-- Team: avvio/stop runtime + dashboard -->
+        <div class="home__panel is-active" data-section="team">
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.team.title">Job Hunter Team</h1>
+            <p class="home__subtitle" id="home-team-subtitle" data-i18n="home.team.subtitleStopped">
+              Il team è fermo. Avvialo per lanciare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__status">
+              <span class="home__status-dot" id="home-team-dot" data-state="stopped"></span>
+              <span class="home__status-label" id="home-team-status" data-i18n="home.team.statusStopped">
+                Fermo
+              </span>
+            </div>
+            <div class="home__team-info" id="home-team-info" hidden></div>
+            <div class="home__notice home__notice--warn" id="home-team-docker-warning" hidden>
+              <span class="home__notice-icon" aria-hidden="true">⚠️</span>
+              <div class="home__notice-body">
+                <div class="home__notice-title" id="home-team-docker-warning-title" data-i18n="home.team.dockerWarning.title">
+                  Docker non è in esecuzione
+                </div>
+                <div class="home__notice-text" id="home-team-docker-warning-text"></div>
+              </div>
+              <button class="btn btn--ghost" id="home-team-docker-action" hidden></button>
+            </div>
+            <div class="home__actions">
+              <button class="btn btn--primary btn--large" id="home-btn-start" data-i18n="home.team.start">
+                Avvia team
+              </button>
+              <button class="btn btn--primary" id="home-btn-open" hidden data-i18n="home.team.openDashboard">
+                Apri dashboard
+              </button>
+              <button class="btn btn--ghost" id="home-btn-stop" hidden data-i18n="home.team.stop">
+                Ferma team
+              </button>
+            </div>
+            <details class="advanced" id="home-team-advanced" hidden>
+              <summary data-i18n="home.team.advanced">Dettagli tecnici</summary>
+              <pre class="advanced__log" id="home-team-log"></pre>
+            </details>
+          </div>
+        </div>
+
+        <!-- Provider: vendor + plan + login -->
+        <div class="home__panel" data-section="provider" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.provider.title">Provider AI</h1>
+            <p class="home__subtitle" data-i18n="home.provider.subtitle">
+              CLI selezionato, piano di sottoscrizione e stato del login.
+            </p>
+          </header>
+          <div class="home__card" id="home-provider-card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.current">Provider attuale</span>
+              <span class="home__row-value" id="home-provider-name">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.plan">Piano</span>
+              <span class="home__row-value" id="home-provider-plan">—</span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.provider.authStatus">Stato login</span>
+              <span class="home__row-value" id="home-provider-auth">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-provider-login" data-i18n="home.provider.manageLogin">
+                Gestisci login
+              </button>
+              <button class="btn btn--ghost" id="home-btn-provider-change" data-i18n="home.provider.change">
+                Cambia provider
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Docker: runtime + azioni -->
+        <div class="home__panel" data-section="docker" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.docker.title">Docker</h1>
+            <p class="home__subtitle" data-i18n="home.docker.subtitle">
+              Runtime container usato per isolare gli agenti.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.runtimeTitle">🐳 Runtime Docker</div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.state">Stato</span>
+              <span class="home__row-value" id="home-docker-state">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-docker-refresh" data-i18n="home.docker.refresh">
+                Ricontrolla
+              </button>
+              <button class="btn btn--ghost" id="home-btn-docker-open" hidden data-i18n="home.docker.openDesktop">
+                Apri Docker Desktop
+              </button>
+            </div>
+          </div>
+          <div class="home__card">
+            <div class="home__card-title" data-i18n="home.docker.imageTitle">📦 Container JHT</div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.docker.image">Immagine</span>
+              <span class="home__row-value" id="home-docker-image">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-name-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageName">Nome</span>
+              <span class="home__row-value" id="home-docker-image-name">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-version-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageVersion">Versione</span>
+              <span class="home__row-value" id="home-docker-image-version">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-created-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageCreated">Data</span>
+              <span class="home__row-value" id="home-docker-image-created">—</span>
+            </div>
+            <div class="home__row" id="home-docker-image-size-row" hidden>
+              <span class="home__row-label" data-i18n="home.docker.imageSize">Dimensione</span>
+              <span class="home__row-value" id="home-docker-image-size">—</span>
+            </div>
+            <a href="#" class="home__card-link" id="home-docker-image-releases" data-i18n="home.docker.imageReleases">
+              Vedi tutte le release →
+            </a>
+          </div>
+        </div>
+
+        <!-- Lingua -->
+        <div class="home__panel" data-section="language" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.language.title">Lingua</h1>
+            <p class="home__subtitle" data-i18n="home.language.subtitle">
+              Lingua dell'interfaccia del launcher.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="lang-select" id="home-lang-select">
+              <button
+                type="button"
+                class="lang-select__toggle"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span class="flag" data-lang-flag></span>
+                <span class="lang-select__label" data-lang-label></span>
+              </button>
+              <ul class="lang-select__menu" role="listbox" hidden></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Avanzate: reset setup -->
+        <div class="home__panel" data-section="advanced" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.advanced.title">Avanzate</h1>
+            <p class="home__subtitle" data-i18n="home.advanced.subtitle">
+              Strumenti per diagnostica e manutenzione.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.wizardLabel">Ripeti il setup</span>
+              <span class="home__row-hint" data-i18n="home.advanced.wizardHint">
+                Rilancia il wizard iniziale (scelta provider, login, verifica Docker).
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--ghost" id="home-btn-reopen-wizard" data-i18n="home.advanced.reopenWizard">
+                Riapri wizard
+              </button>
+            </div>
+          </div>
+
+          <!-- Dev mode: visibile solo se Electron gira da sorgente (probe
+               via launcher:dev-is-available). Avvia il container con
+               bind-mount + Next sull'host su :3001 con hot reload. -->
+          <div class="home__card" id="home-dev-card" hidden>
+            <div class="home__row home__row--stacked">
+              <span class="home__row-label" data-i18n="home.advanced.devLabel">Modalità sviluppatore</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devHint">
+                Avvia il runtime con bind-mount di web/agents/.launcher e Next sull'host su :3001 con hot reload. Usa il provider già configurato.
+              </span>
+            </div>
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.advanced.devStatus">Stato</span>
+              <span class="home__row-value" id="home-dev-status">—</span>
+            </div>
+            <div class="home__actions home__actions--inline">
+              <button class="btn btn--primary" id="home-btn-dev-start" data-i18n="home.advanced.devStart">
+                Avvia in dev mode (:3001)
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-open" data-i18n="home.advanced.devOpen">
+                Apri :3001
+              </button>
+              <button class="btn btn--ghost" id="home-btn-dev-stop" hidden data-i18n="home.advanced.devStop">
+                Ferma dev mode
+              </button>
+            </div>
+
+            <!-- Dev secondario: avvia un Next dev su altra porta + worktree a scelta. -->
+            <div class="home__row" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--color-dim-border, #2a2a2a);">
+              <span class="home__row-label" data-i18n="home.advanced.devAddLabel">Dev su altra porta</span>
+              <span class="home__row-hint" data-i18n="home.advanced.devAddHint">
+                Lancia un secondo Next dev su un worktree a scelta. Riusa il container :3001, max 2 secondari oltre al primario. .next del worktree viene ricreato per evitare loop SWC.
+              </span>
+            </div>
+            <div class="home__actions home__actions--inline" style="gap: 0.5rem; flex-wrap: wrap;">
+              <select id="home-dev-add-worktree" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; min-width: 280px;">
+                <option value="">— scegli worktree —</option>
+              </select>
+              <input type="number" id="home-dev-add-port" min="3000" max="9999" value="3002" style="padding: 0.4rem 0.6rem; background: #111; color: #ddd; border: 1px solid #333; border-radius: 4px; font-family: inherit; width: 90px;" />
+              <button class="btn btn--primary" id="home-btn-dev-add-start" data-i18n="home.advanced.devAddStart">Avvia secondario</button>
+            </div>
+            <div id="home-dev-add-active" style="margin-top: 0.5rem; font-size: 0.85em; color: var(--color-dim, #888);"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Terminal modal: reusable xterm host for CLI login sessions. -->
+    <div class="terminal-modal" id="terminal-modal" hidden>
+      <div class="terminal-modal__panel">
+        <div class="terminal-modal__header">
+          <span class="terminal-modal__title" id="terminal-modal-title">Login</span>
+          <div class="terminal-modal__actions">
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-open-url" hidden data-i18n="login.action.openUrl">Open URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-copy-url" hidden data-i18n="login.action.copyUrl">Copy URL</button>
+            <button type="button" class="btn btn--ghost btn--compact" id="terminal-modal-paste" data-i18n="login.action.paste">Paste</button>
+            <button type="button" class="btn btn--primary btn--compact" id="terminal-modal-done" data-i18n="login.action.done">I'm done</button>
+            <button type="button" class="terminal-modal__close" id="terminal-modal-close" aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div class="terminal-modal__body" id="terminal-modal-body"></div>
+      </div>
+    </div>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
     <script src="./renderer.js"></script>
   </body>
 </html>

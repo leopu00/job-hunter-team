@@ -1,15 +1,12 @@
 import { readdir, rm, stat, access } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { JHT_HOME } from '../jht-paths.js';
-
-const JHT_DIR   = JHT_HOME;
-const CACHE_DIR = join(JHT_DIR, 'cache');
+import { JHT_HOME, JHT_CACHE_DIR } from '../jht-paths.js';
 
 const CACHE_DIRS = [
-  { name: 'cache',    path: CACHE_DIR },
-  { name: 'tmp',      path: join(JHT_DIR, 'tmp') },
-  { name: 'logs',     path: join(JHT_DIR, 'logs') },
+  { name: '.cache',   path: JHT_CACHE_DIR },
+  { name: 'tmp',      path: join(JHT_HOME, 'tmp') },
+  { name: 'logs',     path: join(JHT_HOME, 'logs') },
 ];
 
 async function fileExists(p) {
@@ -42,10 +39,11 @@ function fmtSize(bytes) {
 
 async function handleCache(action) {
   if (!action || action === 'stats') return await cacheStats();
+  if (action === 'prune') return await cachePrune();
   if (action === 'clear') return await cacheClear();
 
   console.error(`  Azione non valida: ${action}`);
-  console.error('  Azioni: stats, clear');
+  console.error('  Azioni: stats, prune, clear');
   process.exitCode = 1;
 }
 
@@ -90,9 +88,303 @@ async function cacheClear() {
   console.log(`\n  ${cleared} file rimossi in totale.\n`);
 }
 
+// Soglie e safety per il prune dei log Codex SQLite. Codex ha già una
+// retention interna di 10 giorni (PR openai/codex#13781) ma viene
+// applicata SOLO quando il CLI gira; se l'utente non usa Codex per
+// settimane il file cresce indefinitamente. Noi lo pruniamo on-demand
+// qui sotto soglia + sopra mtime di sicurezza.
+const CODEX_LOGS_DB = join(JHT_HOME, '.codex', 'logs_2.sqlite');
+const CODEX_LOGS_THRESHOLD_BYTES = 50 * 1024 * 1024; // sotto i 50 MB non vale il rischio
+const CODEX_LOGS_RETENTION_DAYS = 10;                 // allinea con la policy interna di Codex
+const CODEX_LOGS_IDLE_SECONDS = 3600;                 // mtime > 1h fa = nessuno sta scrivendo
+
+// Cache ephemeral di Codex: si rigenerano automaticamente al prossimo
+// run del CLI. Sicuri da rimuovere quando Codex non sta lavorando.
+//   .tmp/plugins              — cache sync di plugin remoti (~20 MB)
+//   cache/                     — cache HTTP/risposte Codex
+//   models_cache.json          — elenco modelli (si rigenera al boot)
+const CODEX_EPHEMERAL_PATHS = [
+  { name: '.codex/.tmp/plugins',      path: join(JHT_HOME, '.codex', '.tmp', 'plugins') },
+  { name: '.codex/cache',             path: join(JHT_HOME, '.codex', 'cache') },
+  { name: '.codex/models_cache.json', path: join(JHT_HOME, '.codex', 'models_cache.json') },
+];
+
+async function cachePrune() {
+  console.log('\n  JHT — Cache Prune\n');
+  await pruneUvCache();
+  console.log('');
+  await pruneUvTools();
+  console.log('');
+  await pruneNpmCache();
+  console.log('');
+  // Snapshot dell'idle di Codex PRIMA dei suoi prune step. Senza questo,
+  // il VACUUM del logs DB nel primo step bumpa la mtime e fa fallire la
+  // safety gate del secondo step (codex ephemeral) anche quando in
+  // realtà Codex non era attivo all'ingresso.
+  const codexIdle = await codexIdleSeconds();
+  await pruneCodexLogs(codexIdle);
+  console.log('');
+  await pruneCodexEphemeral(codexIdle);
+  console.log('');
+}
+
+async function codexIdleSeconds() {
+  if (!(await fileExists(CODEX_LOGS_DB))) return Infinity;
+  const s = await stat(CODEX_LOGS_DB);
+  return (Date.now() - s.mtimeMs) / 1000;
+}
+
+// Prune ($JHT_HOME/.cache/uv) — chiama `uv cache prune` con UV_CACHE_DIR
+// puntato alla cache JHT. Safe: rimuove solo entry irraggiungibili (no
+// wheel attivi). Non tocca ms-playwright (gestito dal Dockerfile via
+// PLAYWRIGHT_BROWSERS_PATH=/opt/playwright) né claude-cli-nodejs (cresce
+// linearmente coi cwd, gestito a parte).
+async function pruneUvCache() {
+  const uvCacheDir = join(JHT_CACHE_DIR, 'uv');
+  if (!(await fileExists(uvCacheDir))) {
+    console.log(`  uv cache: ${uvCacheDir} non esiste — niente da fare.`);
+    return;
+  }
+
+  const before = await dirSize(uvCacheDir);
+  console.log(`  uv cache: ${fmtSize(before.bytes)} (${before.files} file) prima del prune`);
+
+  const r = spawnSync('uv', ['cache', 'prune'], {
+    env: { ...process.env, UV_CACHE_DIR: uvCacheDir },
+    encoding: 'utf-8',
+  });
+
+  if (r.error) {
+    if (r.error.code === 'ENOENT') {
+      console.error('  ✗ uv non trovato nel PATH. Skip prune.');
+      console.error('    (Installa uv: https://docs.astral.sh/uv/getting-started/installation/)');
+    } else {
+      console.error(`  ✗ uv cache prune fallito: ${r.error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (r.status !== 0) {
+    console.error(`  ✗ uv cache prune exit ${r.status}: ${r.stderr || r.stdout}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // uv stampa "Removed N files (X.XMiB)" — la lasciamo passare.
+  if (r.stdout) process.stdout.write(`  ${r.stdout.trim().split('\n').join('\n  ')}\n`);
+
+  const after = await dirSize(uvCacheDir);
+  const freed = before.bytes - after.bytes;
+  console.log(`  uv cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il prune`);
+  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Dedup ($JHT_HOME/.local/share/uv/tools) — uv tool installa ogni CLI in
+// una cartella autonoma sotto share/uv/tools/. Non c'e' rotation built-in
+// per le installazioni vecchie quando un tool viene reinstallato con un
+// suffisso (es. `kimi-cli`, `kimi-cli-old`, `kimi-cli-bak`). Senza questo
+// step, su un team che gira settimane ogni reinstall lascia un fossile
+// (kimi-cli pesa 230 MB ed e' indispensabile per il provider Kimi — non
+// si tocca; ma se riapparisse `kimi-cli-old` accanto, va via).
+//
+// Strategia conservativa: per ogni "famiglia" (raggruppata per nome base
+// — il primo segmento prima di un suffisso `-old|-bak|-vN.N.N|-N`)
+// teniamo la sotto-cartella con mtime piu' recente, rimuoviamo le altre
+// con `rm -rf` (uv tool dir e' autonoma, niente symlink esterni). Se il
+// gruppo ha 1 sola entry, no-op.
+const UV_TOOLS_DIR = join(JHT_HOME, '.local', 'share', 'uv', 'tools');
+const UV_TOOL_SUFFIX_RE = /-(old|bak|backup|prev|previous|v?\d+(\.\d+)*)$/i;
+
+async function pruneUvTools() {
+  if (!(await fileExists(UV_TOOLS_DIR))) {
+    console.log(`  uv tools: ${UV_TOOLS_DIR} non esiste — niente da fare.`);
+    return;
+  }
+  const entries = await readdir(UV_TOOLS_DIR, { withFileTypes: true });
+  const dirs = entries.filter(e => e.isDirectory());
+  if (dirs.length === 0) {
+    console.log('  uv tools: nessun tool installato.');
+    return;
+  }
+
+  // Raggruppa per "famiglia": kimi-cli e kimi-cli-old → stessa famiglia.
+  const families = new Map();
+  for (const d of dirs) {
+    const base = d.name.replace(UV_TOOL_SUFFIX_RE, '');
+    if (!families.has(base)) families.set(base, []);
+    const full = join(UV_TOOLS_DIR, d.name);
+    const s = await stat(full);
+    families.get(base).push({ name: d.name, path: full, mtimeMs: s.mtimeMs });
+  }
+
+  let kept = 0, removed = 0, freed = 0;
+  for (const [base, members] of families) {
+    if (members.length === 1) {
+      kept++;
+      continue;
+    }
+    // tieni la piu' recente, butta il resto
+    members.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const keep = members[0];
+    const drop = members.slice(1);
+    console.log(`  ${base}: ${members.length} versioni — tengo "${keep.name}", rimuovo: ${drop.map(d => d.name).join(', ')}`);
+    for (const d of drop) {
+      const sz = await dirSize(d.path);
+      try {
+        await rm(d.path, { recursive: true, force: true });
+        freed += sz.bytes;
+        removed++;
+      } catch (err) {
+        console.error(`  ✗ rm ${d.path}: ${err.message}`);
+      }
+    }
+    kept++;
+  }
+
+  if (removed === 0) {
+    console.log(`  uv tools: ${kept} tool, nessuna versione duplicata — niente da fare.`);
+  } else {
+    console.log(`  uv tools: ${kept} tool tenuti, ${removed} fossili rimossi, ${fmtSize(freed)} liberati.`);
+  }
+}
+
+// Prune ($JHT_HOME/.npm) — chiama `npm cache verify` con npm_config_cache
+// puntato alla cache JHT. Verify è la modalità ufficiale e sicura: GC dei
+// blob non più referenziati, riparazione di entry corrotte, dedup. Non
+// rompe install in corso (usa lock interni di cacache). Non tocca
+// .npm-global/lib/node_modules (binary nativi installati globalmente).
+async function pruneNpmCache() {
+  const npmCacheDir = join(JHT_HOME, '.npm');
+  if (!(await fileExists(npmCacheDir))) {
+    console.log(`  npm cache: ${npmCacheDir} non esiste — niente da fare.`);
+    return;
+  }
+
+  const before = await dirSize(npmCacheDir);
+  console.log(`  npm cache: ${fmtSize(before.bytes)} (${before.files} file) prima del verify`);
+
+  const r = spawnSync('npm', ['cache', 'verify'], {
+    env: { ...process.env, npm_config_cache: npmCacheDir },
+    encoding: 'utf-8',
+    timeout: 180_000,
+  });
+
+  if (r.error) {
+    if (r.error.code === 'ENOENT') {
+      console.error('  ✗ npm non trovato nel PATH. Skip prune.');
+    } else {
+      console.error(`  ✗ npm cache verify fallito: ${r.error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (r.status !== 0) {
+    console.error(`  ✗ npm cache verify exit ${r.status}: ${r.stderr || r.stdout}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const after = await dirSize(npmCacheDir);
+  const freed = before.bytes - after.bytes;
+  console.log(`  npm cache: ${fmtSize(after.bytes)} (${after.files} file) dopo il verify`);
+  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Prune ($JHT_HOME/.codex/logs_2.sqlite) — DELETE righe più vecchie di 10
+// giorni + VACUUM. Si attiva SOLO sopra 50 MB e SOLO se nessuno scrive
+// al file da almeno 1 ora (proxy: mtime). Codex usa WAL, quindi
+// modificare il DB mentre il CLI gira può causare lock contention o
+// readers che vedono stato incoerente — la mtime check è la safety.
+async function pruneCodexLogs(idleSecondsArg) {
+  if (!(await fileExists(CODEX_LOGS_DB))) {
+    console.log('  codex logs: file non presente, skip.');
+    return;
+  }
+
+  const s = await stat(CODEX_LOGS_DB);
+  if (s.size < CODEX_LOGS_THRESHOLD_BYTES) {
+    console.log(`  codex logs: ${fmtSize(s.size)} (< soglia ${fmtSize(CODEX_LOGS_THRESHOLD_BYTES)}) — skip.`);
+    return;
+  }
+
+  const idleSeconds = idleSecondsArg ?? (Date.now() - s.mtimeMs) / 1000;
+  if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
+    const idleMin = Math.round(idleSeconds / 60);
+    console.log(`  codex logs: ${fmtSize(s.size)} ma scritto ${idleMin}min fa (Codex potrebbe essere attivo) — skip per safety.`);
+    return;
+  }
+
+  const idleHours = Math.round(idleSeconds / 3600);
+  console.log(`  codex logs: ${fmtSize(s.size)} prima del prune (idle ${idleHours}h)`);
+
+  // DELETE + VACUUM in una sola invocazione sqlite3. VACUUM rilascia le
+  // free pages al filesystem; senza, il file resta della stessa
+  // dimensione anche dopo il DELETE.
+  const sql = `DELETE FROM logs WHERE ts < unixepoch('now', '-${CODEX_LOGS_RETENTION_DAYS} days'); VACUUM;`;
+  const r = spawnSync('sqlite3', [CODEX_LOGS_DB, sql], {
+    encoding: 'utf-8',
+    timeout: 120_000, // VACUUM su 200 MB può prendere ~30s, doppio per safety
+  });
+
+  if (r.error) {
+    if (r.error.code === 'ENOENT') {
+      console.error('  ✗ sqlite3 non trovato nel PATH. Skip codex logs prune.');
+    } else {
+      console.error(`  ✗ codex logs prune fallito: ${r.error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (r.status !== 0) {
+    console.error(`  ✗ sqlite3 exit ${r.status}: ${r.stderr || r.stdout}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const after = await stat(CODEX_LOGS_DB);
+  const freed = s.size - after.size;
+  console.log(`  codex logs: ${fmtSize(after.size)} dopo il prune`);
+  console.log(`  liberati: ${fmtSize(freed > 0 ? freed : 0)}`);
+}
+
+// Rimuove le cache ephemeral di Codex (rigenerabili). Stessa safety
+// gate del prune dei log: se logs_2.sqlite è stato toccato nell'ultima
+// ora, presumiamo che Codex sia attivo e saltiamo. Un .tmp/ rimosso
+// mentre Codex ci sta scrivendo causerebbe errori del sync di plugin.
+async function pruneCodexEphemeral(idleSecondsArg) {
+  const idleSeconds = idleSecondsArg ?? (await codexIdleSeconds());
+  if (idleSeconds < CODEX_LOGS_IDLE_SECONDS) {
+    const idleMin = Math.round(idleSeconds / 60);
+    console.log(`  codex ephemeral: skip per safety (Codex toccato ${idleMin}min fa)`);
+    return;
+  }
+
+  let totalFreed = 0;
+  let touched = 0;
+  for (const e of CODEX_EPHEMERAL_PATHS) {
+    if (!(await fileExists(e.path))) continue;
+    try {
+      const st = await stat(e.path);
+      const size = st.isDirectory() ? (await dirSize(e.path)).bytes : st.size;
+      await rm(e.path, { recursive: true, force: true });
+      totalFreed += size;
+      touched++;
+      console.log(`  ✓ ${e.name}: ${fmtSize(size)} rimosso`);
+    } catch (err) {
+      console.error(`  ✗ ${e.name}: ${err.message}`);
+    }
+  }
+
+  if (touched === 0) {
+    console.log('  codex ephemeral: niente da pulire.');
+  } else {
+    console.log(`  codex ephemeral: ${fmtSize(totalFreed)} liberati totali`);
+  }
+}
+
 export function registerCacheCommand(program) {
   program
     .command('cache [action]')
-    .description('Gestione cache (azioni: stats, clear)')
+    .description('Gestione cache JHT (azioni: stats, prune, clear)')
     .action(handleCache);
 }

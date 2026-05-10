@@ -1,40 +1,68 @@
 {
   "name": "jht-desktop",
-  "version": "0.1.12",
+  "version": "0.1.13-dev",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
     "name": "Leone Emanuele Puglisi",
-    "email": "beta-user@example.com"
+    "email": "info@jobhunterteam.ai"
   },
   "homepage": "https://jobhunterteam.ai",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
-    "test": "node --test runtime.test.js dependencies.test.js payload.test.js disk-space.test.js docker-installer/manifest.test.js docker-installer/check.test.js docker-installer/download-url.test.js",
+    "dev": "electron . --enable-logging",
+    "test": "node --test runtime.test.js dependencies.test.js deps.test.js payload.test.js disk-space.test.js container-prep.test.js provider-install.test.js provider-store.test.js provider-auth.test.js docker-installer/manifest.test.js docker-installer/check.test.js docker-installer/download-url.test.js docker-installer/install.test.js win-installer/install.test.js",
     "dist": "electron-builder",
     "dist:mac": "npm run dist -- --mac dmg",
     "dist:win": "npm run dist -- --win nsis --x64 --arm64",
     "dist:linux": "npm run dist -- --linux AppImage deb"
   },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.12",
+    "@lydell/node-pty-win32-arm64": "^1.2.0-beta.12",
+    "@lydell/node-pty-win32-x64": "^1.2.0-beta.12",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^5.5.0"
+  },
   "devDependencies": {
-    "electron": "^37.2.6",
+    "electron": "^41.3.0",
     "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "ai.jobhunterteam.desktop",
     "productName": "JHT Desktop",
+    "npmRebuild": false,
+    "afterSign": "./build/after-sign.js",
     "files": [
       "main.js",
       "preload.js",
       "runtime.js",
       "container.js",
+      "container-prep.js",
       "dependencies.js",
+      "deps.js",
       "payload.js",
       "disk-space.js",
+      "provider-install.js",
+      "provider-store.js",
+      "provider-auth.js",
+      "terminal.js",
       "docker-installer/**/*.js",
-      "!docker-installer/**/*.test.js",
+      "win-installer/**/*.js",
+      "!**/*.test.js",
+      "node_modules/@xterm/xterm/lib/**/*",
+      "node_modules/@xterm/xterm/css/**/*",
+      "node_modules/@xterm/addon-fit/lib/**/*",
+      "node_modules/@xterm/addon-web-links/lib/**/*",
+      "node_modules/@lydell/node-pty/**/*",
+      "node_modules/@lydell/node-pty-win32-x64/**/*",
+      "node_modules/@lydell/node-pty-win32-arm64/**/*",
+      "node_modules/@lydell/node-pty-darwin-x64/**/*",
+      "node_modules/@lydell/node-pty-darwin-arm64/**/*",
+      "node_modules/@lydell/node-pty-linux-x64/**/*",
+      "node_modules/@lydell/node-pty-linux-arm64/**/*",
       "renderer/**/*"
     ],
     "directories": {
@@ -75,7 +103,7 @@
     "linux": {
       "artifactName": "job-hunter-team-${version}-linux.${ext}",
       "icon": "assets/icon.png",
-      "maintainer": "Leone Emanuele Puglisi <beta-user@example.com>",
+      "maintainer": "Leone Emanuele Puglisi <info@jobhunterteam.ai>",
       "target": [
         "AppImage",
         "deb"

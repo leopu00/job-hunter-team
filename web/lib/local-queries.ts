@@ -53,6 +53,98 @@ export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithSco
   return rows.map(r => mapPosition(r))
 }
 
+// Posizioni ordinate per ULTIMA azione qualsiasi: insert dello Scout
+// (found_at), check dell'Analista (last_checked), score dello Scorer
+// (scored_at), o cambio di stato di Scrittore/Critico/User
+// (status_changed_at, popolato dal trigger SQLite installato sul DB).
+// Restituisce anche `last_action_at` e `last_action_by` (l'agente che
+// ha causato l'ultima modifica), così la UI può mostrare il feed in
+// tempo reale e attribuire l'evento.
+export function getRecentlyTouchedPositionsLocal(ws: string, limit = 15): (PositionWithScore & { last_action_at: string; last_action_by: string; last_action_actor: string; voto: number | null })[] {
+  const db = getDb(ws)
+  // last_action_by: ruolo (scout, analista, scorer, scrittore, critico, user)
+  // last_action_actor: identificativo dell'istanza concreta dove
+  // disponibile (scout-1 da found_by, scorer-1 da scored_by); per gli
+  // altri ruoli ricade sul nome del role perché lo schema attuale non
+  // registra l'attore di analista/writer/critic/user.
+  // voto: critic_score dalla applications (review del critico, 0-10).
+  const rows = db.prepare(`
+    SELECT p.*, s.total_score as score, s.scored_at as scored_at, s.scored_by as scored_by,
+           a.critic_score as voto,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01'),
+             COALESCE(p.status_changed_at, '1970-01-01')
+           ) AS last_action_at,
+           CASE
+             WHEN COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(s.scored_at, '1970-01-01')
+              AND COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(p.last_checked, '1970-01-01')
+              AND COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND p.status_changed_at IS NOT NULL THEN
+                CASE p.status
+                  WHEN 'checked'  THEN 'analista'
+                  WHEN 'excluded' THEN 'analista'
+                  WHEN 'scored'   THEN 'scorer'
+                  WHEN 'writing'  THEN 'scrittore'
+                  WHEN 'review'   THEN 'scrittore'
+                  WHEN 'ready'    THEN 'critico'
+                  WHEN 'applied'  THEN 'user'
+                  WHEN 'response' THEN 'user'
+                  ELSE 'scout'
+                END
+             WHEN COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.last_checked, '1970-01-01')
+              AND COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND s.scored_at IS NOT NULL THEN 'scorer'
+             WHEN COALESCE(p.last_checked, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND p.last_checked IS NOT NULL THEN 'analista'
+             ELSE 'scout'
+           END AS last_action_by,
+           CASE
+             -- Quando il MAX viene da status_changed_at, usiamo last_actor
+             -- (popolato da db_update.py con JHT_AGENT_NAME → es. 'scrittore-1',
+             -- 'critico-s2'). Fallback al ruolo dedotto dallo status corrente
+             -- se last_actor è ancora NULL (righe pre-migrazione).
+             WHEN COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(s.scored_at, '1970-01-01')
+              AND COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(p.last_checked, '1970-01-01')
+              AND COALESCE(p.status_changed_at, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND p.status_changed_at IS NOT NULL THEN
+                COALESCE(p.last_actor,
+                  CASE p.status
+                    WHEN 'checked'  THEN 'analista'
+                    WHEN 'excluded' THEN 'analista'
+                    WHEN 'scored'   THEN COALESCE(s.scored_by, 'scorer')
+                    WHEN 'writing'  THEN 'scrittore'
+                    WHEN 'review'   THEN 'scrittore'
+                    WHEN 'ready'    THEN 'critico'
+                    WHEN 'applied'  THEN 'user'
+                    WHEN 'response' THEN 'user'
+                    ELSE COALESCE(p.found_by, 'scout')
+                  END)
+             WHEN COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.last_checked, '1970-01-01')
+              AND COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND s.scored_at IS NOT NULL THEN COALESCE(s.scored_by, 'scorer')
+             WHEN COALESCE(p.last_checked, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND p.last_checked IS NOT NULL THEN COALESCE(p.last_actor, 'analista')
+             ELSE COALESCE(p.found_by, 'scout')
+           END AS last_action_actor
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
+    WHERE p.status != 'excluded'
+    ORDER BY last_action_at DESC
+    LIMIT ?
+  `).all(limit) as any[]
+
+  return rows.map(r => ({
+    ...mapPosition(r),
+    last_action_at: r.last_action_at,
+    last_action_by: r.last_action_by,
+    last_action_actor: r.last_action_actor,
+    voto: typeof r.voto === 'number' ? r.voto : null,
+  }))
+}
+
 // ── All positions with optional filters ────────────────────────────
 export function getPositionsLocal(ws: string, opts?: {
   status?: string; minScore?: number; maxScore?: number; noScore?: boolean

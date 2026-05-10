@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
+import { getNonce } from '@/lib/csp'
 
 export const metadata: Metadata = {
   title: 'Download',
@@ -17,7 +18,8 @@ export const metadata: Metadata = {
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
 
-function DownloadJsonLd() {
+async function DownloadJsonLd() {
+  const nonce = await getNonce()
   const data = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -31,7 +33,7 @@ function DownloadJsonLd() {
     license: 'https://opensource.org/licenses/MIT',
     isAccessibleForFree: true,
   }
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  return <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
 }
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {

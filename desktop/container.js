@@ -88,29 +88,68 @@ function ensureHostPaths() {
   return { jhtHome, jhtUser }
 }
 
-function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--no-browser'] }) {
+const DEFAULT_CONTAINER_NAME = 'jht'
+
+function buildDockerArgs({
+  port,
+  image = DEFAULT_IMAGE,
+  cmd = ['dashboard', '--no-browser'],
+  name = DEFAULT_CONTAINER_NAME,
+}) {
   const { jhtHome, jhtUser } = ensureHostPaths()
   const args = [
     'run',
     '--rm',
+    '--name',
+    name,
     '-v',
     `${jhtHome}:/jht_home`,
     '-v',
     `${jhtUser}:/jht_user`,
+  ]
+
+  // Dev overlay: if JHT_DEV_WEB_DIR points at an existing directory on
+  // the host, bind-mount it over /app/web so the Next.js dev server
+  // inside the container picks up live edits to the web/ source tree
+  // (HMR works in ~1s instead of rebuilding the image). The anonymous
+  // volume for node_modules keeps the container's linux-arm64 binaries
+  // from being shadowed by the host's darwin-arm64 ones. Opt-in only.
+  const devWebDir = process.env.JHT_DEV_WEB_DIR
+  if (devWebDir && fs.existsSync(devWebDir)) {
+    args.push('-v', `${devWebDir}:/app/web`)
+    args.push('-v', '/app/web/node_modules')
+  }
+
+  // Dev overlay: if JHT_DEV_REPO_DIR points at the repo root on the host,
+  // bind-mount .launcher/ and agents/ so edits to tmux boot scripts and
+  // agent system prompts are picked up without rebuilding the image.
+  // Temporary — remove once the image pipeline is locked for end-users.
+  const devRepoDir = process.env.JHT_DEV_REPO_DIR
+  if (devRepoDir && fs.existsSync(devRepoDir)) {
+    const launcherDir = path.join(devRepoDir, '.launcher')
+    const agentsDir = path.join(devRepoDir, 'agents')
+    const cliDir = path.join(devRepoDir, 'cli')
+    if (fs.existsSync(launcherDir)) args.push('-v', `${launcherDir}:/app/.launcher`)
+    if (fs.existsSync(agentsDir)) args.push('-v', `${agentsDir}:/app/agents`)
+    if (fs.existsSync(path.join(cliDir, 'bin', 'jht.js'))) {
+      args.push('-v', `${cliDir}:/app/cli`)
+      args.push('-v', '/app/cli/node_modules')
+    }
+  }
+
+  args.push(
     '-e',
     'JHT_HOME=/jht_home',
     '-e',
     'JHT_USER_DIR=/jht_user',
     '-e',
     'IS_CONTAINER=1',
-  ]
+  )
   for (const key of [
     'ANTHROPIC_API_KEY',
     'OPENAI_API_KEY',
     'MOONSHOT_API_KEY',
     'CLAUDE_CODE_OAUTH_TOKEN',
-    'GEMINI_API_KEY',
-    'GOOGLE_API_KEY',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ]) {
@@ -126,10 +165,26 @@ function buildDockerArgs({ port, image = DEFAULT_IMAGE, cmd = ['dashboard', '--n
   return args
 }
 
-function buildDockerSpawnSpec({ port }) {
+function removeContainerIfExists(name = DEFAULT_CONTAINER_NAME) {
+  try {
+    execFileSync('docker', ['rm', '-f', name], {
+      stdio: 'ignore',
+      timeout: 5000,
+      windowsHide: true,
+    })
+  } catch {
+    // Container did not exist — nothing to clean up.
+  }
+}
+
+function buildDockerSpawnSpec({ port, name = DEFAULT_CONTAINER_NAME }) {
+  // Docker refuses `run --name jht` if another container is already
+  // using that name (e.g., leftover from a crashed session). Clean up
+  // any stale container with the same name before spawning.
+  removeContainerIfExists(name)
   return {
     command: 'docker',
-    args: buildDockerArgs({ port }),
+    args: buildDockerArgs({ port, name }),
     options: {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -139,12 +194,15 @@ function buildDockerSpawnSpec({ port }) {
 
 module.exports = {
   DEFAULT_IMAGE,
+  DEFAULT_CONTAINER_NAME,
   shouldUseContainer,
   isDockerAvailable,
   colimaInstalled,
   colimaRunning,
+  startColima,
   ensureContainerRuntime,
   ensureHostPaths,
   buildDockerArgs,
   buildDockerSpawnSpec,
+  removeContainerIfExists,
 }

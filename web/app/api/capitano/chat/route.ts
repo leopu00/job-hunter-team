@@ -8,7 +8,7 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 
 function getChatFile(): string {
-  return path.join(getAgentDir('alfa'), 'chat.jsonl')
+  return path.join(getAgentDir('capitano'), 'chat.jsonl')
 }
 
 /** GET — leggi messaggi */
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
     // Invia via tmux con prefisso protocollo chat
     const safe = text.trim().replace(/'/g, "'\\''").replace(/\$/g, '\\$').replace(/`/g, '\\`')
-    await runBash(`tmux send-keys -t ALFA -- '[@utente -> @capitano] [CHAT] ${safe}'`)
-    await runBash(`tmux send-keys -t ALFA Enter`)
+    await runBash(`tmux send-keys -t CAPITANO -- '[@utente -> @capitano] [CHAT] ${safe}'`)
+    await runBash(`tmux send-keys -t CAPITANO Enter`)
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {

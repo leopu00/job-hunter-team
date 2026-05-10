@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -47,5 +48,5 @@ export async function POST(req: Request) {
     const data: ResumeData = { personal: body.personal ?? {}, experience: body.experience ?? [], education: body.education ?? [], skills: body.skills ?? [], languages: body.languages ?? [], updatedAt: Date.now() };
     saveResume(data);
     return NextResponse.json({ ok: true, updatedAt: data.updatedAt });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'resume' }); }
 }

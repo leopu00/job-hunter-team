@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getDashboardStats, getRecentPositions, getScoreDistribution, getSourceDistribution } from '@/lib/queries'
 import { isSupabaseConfigured } from '@/lib/workspace'
@@ -9,6 +10,7 @@ import type { PositionWithScore } from '@/lib/types'
 import { getServerLocale } from '@/lib/server-locale'
 import { getDashboardT } from '@/lib/dashboard-i18n'
 import { createClient } from '@/lib/supabase/server'
+import { isLocalRequestFromHeaders } from '@/lib/auth'
 import CloudDownloadLanding from '@/app/components/CloudDownloadLanding'
 
 const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
@@ -43,11 +45,21 @@ export default async function DashboardCompany() {
   const locale = getServerLocale()
   const t = getDashboardT(locale)
 
+  // Localhost bypass: when the request comes from the user's own
+  // machine (desktop launcher opens /dashboard directly on
+  // http://localhost:3000), treat it as local mode regardless of
+  // whether Supabase env is baked in. Otherwise the Supabase auth
+  // path sends unauthenticated local users into the cloud login,
+  // which is nonsense for the desktop flow.
+  const hdrs = await headers()
+  const localRequest = isLocalRequestFromHeaders(hdrs)
+  const useCloudAuth = isSupabaseConfigured && !localRequest
+
   // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
   // non ha sincronizzato un profilo dal suo localhost, mostra la landing
   // "scarica l'app" invece di una dashboard vuota con CTA che non portano
   // da nessuna parte.
-  if (isSupabaseConfigured) {
+  if (useCloudAuth) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
@@ -61,9 +73,9 @@ export default async function DashboardCompany() {
       }
     }
   } else {
-    // Local mode: se non esiste un profilo valido in ~/.jht/profile/,
-    // canalizza l'utente verso l'onboarding split-screen (form live +
-    // assistente) invece di mostrare una dashboard vuota.
+    // Local mode (or localhost bypass): se non esiste un profilo
+    // valido in ~/.jht/profile/, canalizza l'utente verso l'onboarding
+    // split-screen invece di una dashboard vuota.
     if (readWorkspaceProfile() === null) redirect('/onboarding')
   }
 
@@ -89,7 +101,7 @@ export default async function DashboardCompany() {
   try {
     const { stdout } = await runBash('tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""')
     const sessions = stdout.trim().split('\n').filter(Boolean)
-    const JH_PREFIXES = ['ALFA', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']
+    const JH_PREFIXES = ['CAPITANO', 'SCOUT', 'ANALISTA', 'SCORER', 'SCRITTORE', 'CRITICO', 'SENTINELLA']
     teamActive = sessions.some(s =>
       JH_PREFIXES.some(p => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`))
     )
@@ -221,7 +233,7 @@ export default async function DashboardCompany() {
 
             {/* Assistant — optional helper */}
             <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
-              <Link href="/assistente" className="group flex items-center gap-3 no-underline">
+              <Link href="/team/assistente" className="group flex items-center gap-3 no-underline">
                 <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
                   {t.help_text}
                 </span>

@@ -1,0 +1,20 @@
+# Skills the Scrittore consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# Inter-agent (peer Scrittori, Critico, Capitano)
+tmux-send
+
+# DB access (queue + claim + application UPSERT)
+db-query
+db-insert
+db-update
+
+# Throttle (cooldown, freeze, polling during critic-loop)
+throttle
+
+# Scrittore-only operative skills
+application-flow
+cv-structure
+critic-loop

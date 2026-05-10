@@ -27,7 +27,7 @@ function shellEscape(value) {
 
 // ── Definizione agenti ──────────────────────────────────────────────────────
 const AGENTS = [
-  { role: 'alfa',       prefix: 'ALFA',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
+  { role: 'capitano',       prefix: 'CAPITANO',       multi: false, effort: 'high',   desc: 'Coordinatore pipeline Job Hunter' },
   { role: 'scout',      prefix: 'SCOUT',      multi: true,  effort: 'high',   desc: 'Cerca posizioni lavorative' },
   { role: 'analista',   prefix: 'ANALISTA',    multi: true,  effort: 'high',   desc: 'Analizza job description e aziende' },
   { role: 'scorer',     prefix: 'SCORER',      multi: true,  effort: 'medium', desc: 'Calcola punteggio match' },
@@ -37,7 +37,7 @@ const AGENTS = [
   { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
 ];
 
-const DEFAULT_TEAM = ['alfa', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
+const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico', 'sentinella'];
 
 // ── Colori terminale ────────────────────────────────────────────────────────
 const c = {

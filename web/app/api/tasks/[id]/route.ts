@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +59,8 @@ type RouteCtx = { params: Promise<{ id: string }> }
 
 /** GET /api/tasks/[id] — dettaglio task con timeline e eventi */
 export async function GET(_req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   const task = loadTask(id)
   if (!task) return NextResponse.json({ ok: false, error: 'Task non trovato' }, { status: 404 })
@@ -71,6 +74,8 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
 
 /** PATCH /api/tasks/[id] — aggiorna stato task */
 export async function PATCH(req: NextRequest, ctx: RouteCtx) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const { id } = await ctx.params
   let body: { status?: TaskStatus; progressSummary?: string } = {}
   try { body = await req.json() } catch { /* ignore */ }

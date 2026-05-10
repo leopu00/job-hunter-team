@@ -4,6 +4,7 @@ import path from 'path'
 import os from 'os'
 import { randomUUID } from 'crypto'
 import { JHT_HOME } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,8 @@ function save(store: ActivityStore) {
 
 /** GET — lista attività: ?action=apply&entity=job&days=7 */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const sp = req.nextUrl.searchParams
   const action = sp.get('action') as ActionType | null
   const entity = sp.get('entity') as EntityType | null
@@ -79,6 +82,8 @@ export async function GET(req: NextRequest) {
 
 /** POST — registra attività */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   let body: Partial<Activity> = {}
   try { body = await req.json() } catch { /* ignore */ }
   if (!body.action || !body.entity || !body.entityName?.trim()) {
@@ -96,6 +101,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — clear history: ?all=true oppure ?id=xxx */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth()
+  if (denied) return denied
   const all = req.nextUrl.searchParams.get('all')
   const id = req.nextUrl.searchParams.get('id')
   const store = load()

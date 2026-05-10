@@ -11,6 +11,23 @@ export const JHT_CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json')
 export const JHT_DB_PATH = path.join(JHT_HOME, 'jobs.db')
 export const JHT_PROFILE_DIR = path.join(JHT_HOME, 'profile')
 export const JHT_PROFILE_YAML = path.join(JHT_PROFILE_DIR, 'candidate_profile.yml')
+// File flag che l'assistente crea quando ritiene il profilo sufficiente per
+// passare alla dashboard. Il frontend abilita il bottone solo se esiste.
+// Formato: qualsiasi contenuto (tipicamente un timestamp). Basta la presenza.
+export const JHT_PROFILE_READY_FLAG = path.join(JHT_PROFILE_DIR, 'ready.flag')
+// Directory dei riassunti discorsivi (Markdown) scritti dall'assistente.
+// Complementari al YAML: l'YAML sono i dati strutturati, gli MD sono i
+// paragrafi leggibili dall'utente. Il frontend li mostra sotto il profilo
+// per dare una vista "narrativa" (about, preferenze, obiettivi, …) invece
+// di soli dati grezzi (tag skill, anni, ecc.).
+export const JHT_PROFILE_SUMMARIES_DIR = path.join(JHT_PROFILE_DIR, 'summaries')
+// Archivio dei documenti originali del candidato (CV, lettere di
+// presentazione, certificati, portfolio). L'assistente sposta qui i file
+// dalla drop-zone `$JHT_USER_DIR/allegati` dopo averne valutato la
+// pertinenza: solo documenti che parlano della persona, non la locandina
+// del cinema caricata per sbaglio. Gli scrittori CV a valle possono
+// rileggere questi file se l'estrazione automatica ha perso dettagli.
+export const JHT_PROFILE_SOURCES_DIR = path.join(JHT_PROFILE_DIR, 'sources')
 export const JHT_PROVIDER_CONFIG_PATH = path.join(JHT_PROFILE_DIR, 'jht.config.json')
 export const JHT_AGENTS_DIR = path.join(JHT_HOME, 'agents')
 export const JHT_LOGS_DIR = path.join(JHT_HOME, 'logs')

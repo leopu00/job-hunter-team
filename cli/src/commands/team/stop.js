@@ -3,11 +3,18 @@ import { execSync } from 'node:child_process';
 import {
   AGENTS, c, tmuxAvailable, getActiveSessions,
   isSessionActive, sessionName, parseAgentArg,
+  usingContainer, isAgentSession,
 } from './agents.js';
+import { execInContainer } from '../../utils/container-proxy.js';
 
-export function stopAction(agentArg, options) {
-  if (!tmuxAvailable()) {
-    console.error(c.red('Errore: tmux non trovato.'));
+// Sessioni considerate 'core' — non le killiamo con 'stop --all' per
+// non spegnere la chat utente. Coerente con /api/team/stop-all della
+// web UI che preserva ASSISTENTE.
+const KEEP_ALIVE_ON_STOP_ALL = new Set(['ASSISTENTE']);
+
+export function stopAction(agentArg, options = {}) {
+  if (!usingContainer() && !tmuxAvailable()) {
+    console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
     process.exit(1);
   }
 
@@ -16,7 +23,7 @@ export function stopAction(agentArg, options) {
 
   if (options.all || !agentArg) {
     targets = sessions.filter((s) =>
-      AGENTS.some((a) => s === `JHT-${a.prefix}` || s.startsWith(`JHT-${a.prefix}-`))
+      AGENTS.some((a) => isAgentSession(s, a)) && !KEEP_ALIVE_ON_STOP_ALL.has(s)
     );
     if (targets.length === 0) {
       console.log(c.yellow('Nessun agente attivo da fermare.'));
@@ -38,25 +45,39 @@ export function stopAction(agentArg, options) {
   }
 
   console.log('');
-  console.log(c.bold('Fermo agenti...'));
+  const where = usingContainer() ? c.dim('(container jht)') : c.dim('(host)');
+  console.log(`${c.bold('Fermo agenti...')} ${where}`);
   console.log('');
 
   let stopped = 0;
   for (const s of targets.sort()) {
-    try {
-      execSync(`tmux send-keys -t "${s}" "/exit" C-m`, { stdio: 'ignore' });
-    } catch { /* sessione gia chiusa */ }
-
-    try {
-      execSync(`sleep 1 && tmux kill-session -t "${s}"`, { stdio: 'ignore' });
-      console.log(`  ${c.green('✓')} ${s} fermato`);
-      stopped++;
-    } catch {
-      console.log(`  ${c.yellow('⚠')} ${s} — non trovato (gia chiuso?)`);
+    if (usingContainer()) {
+      const r = execInContainer(`tmux kill-session -t '${s.replace(/'/g, "'\\''")}' 2>&1`);
+      if (r.code === 0) {
+        console.log(`  ${c.green('✓')} ${s} fermato`);
+        stopped++;
+      } else {
+        console.log(`  ${c.yellow('⚠')} ${s} — ${(r.stderr || r.stdout || 'non trovato').split('\n')[0]}`);
+      }
+    } else {
+      // Host legacy: prova un /exit pulito, poi kill-session
+      try {
+        execSync(`tmux send-keys -t "${s}" "/exit" C-m`, { stdio: 'ignore' });
+      } catch { /* gia chiusa */ }
+      try {
+        execSync(`sleep 1 && tmux kill-session -t "${s}"`, { stdio: 'ignore' });
+        console.log(`  ${c.green('✓')} ${s} fermato`);
+        stopped++;
+      } catch {
+        console.log(`  ${c.yellow('⚠')} ${s} — non trovato (gia chiuso?)`);
+      }
     }
   }
 
   console.log('');
   console.log(`${c.green(stopped + ' agenti fermati')}`);
+  if (options.all && sessions.some((s) => KEEP_ALIVE_ON_STOP_ALL.has(s))) {
+    console.log(c.dim('  ASSISTENTE preservato (usa: jht team stop assistente per chiuderlo)'));
+  }
   console.log('');
 }

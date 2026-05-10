@@ -1,17 +1,8 @@
 export const MARKETING_ROUTE_PREFIXES = [
   '/',
-  '/about',
-  '/changelog',
-  '/demo',
-  '/docs',
   '/download',
-  '/faq',
-  '/guide',
-  '/pricing',
   '/privacy',
   '/project',
-  '/reports',
-  '/stats',
   '/terms',
 ] as const
 

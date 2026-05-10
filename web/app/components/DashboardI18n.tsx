@@ -529,7 +529,7 @@ type DashboardI18nCtx = {
 }
 
 const DashboardI18nContext = createContext<DashboardI18nCtx>({
-  locale: 'it',
+  locale: 'en',
   t: (key) => key,
 })
 
@@ -540,7 +540,7 @@ export function useDashboardT() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function DashboardI18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<DashboardLocale>('it')
+  const [locale, setLocale] = useState<DashboardLocale>('en')
 
   const fetchLocale = useCallback(async () => {
     const res = await fetch('/api/i18n?t=' + Date.now()).catch(() => null)

@@ -2,21 +2,30 @@
 # .launcher/start-agent.sh — Avvia un singolo agente del Job Hunter Team
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
-# Ruoli: alfa, scout, analista, scorer, scrittore, critico, sentinella, assistente
+# Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente
 # Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1)
 # Mode: default|fast (default se omesso)
 #
 # Il template CLAUDE.md viene copiato da agents/<ruolo>/<ruolo>.md nel workspace.
 set -euo pipefail
 
+# PATH robusto: senza questo, quando un agente Codex/Claude chiama
+# `bash /app/.launcher/start-agent.sh scout 1` da dentro la sua TUI, il
+# sub-shell eredita il PATH minimale della shell login (/usr/local/bin:
+# /usr/bin:/bin:...) — manca /jht_home/.npm-global/bin dove vivono
+# codex/claude/kimi, e lo script esce con "codex: command not found".
+# Esportiamo esplicitamente sempre i path dei CLI qui.
+export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
+source "$DEV_TEAM_DIR/tui-helpers.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
   echo ""
   echo "Ruoli disponibili:"
-  echo "  alfa        → ALFA         (Coordinatore pipeline Job Hunter)"
+  echo "  capitano        → CAPITANO         (Coordinatore pipeline Job Hunter)"
   echo "  scout       → SCOUT-N      (Cerca posizioni lavorative)"
   echo "  analista    → ANALISTA-N   (Analizza job description e aziende)"
   echo "  scorer      → SCORER-N     (Calcola punteggio match)"
@@ -26,7 +35,7 @@ if [ -z "${1:-}" ]; then
   echo "  assistente  → ASSISTENTE   (Aiuta l'utente a navigare la piattaforma)"
   echo ""
   echo "Esempi:"
-  echo "  $0 alfa              → avvia ALFA"
+  echo "  $0 capitano              → avvia CAPITANO"
   echo "  $0 scout 1           → avvia SCOUT-1"
   echo "  $0 scrittore 2 fast  → avvia SCRITTORE-2 in modalità fast"
   echo "  $0 assistente        → avvia ASSISTENTE"
@@ -37,17 +46,142 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
-# Mappa ruolo → prefisso sessione | effort
+# ── Worker sentinel (fallback /usage per bridge) ─────────────────────
+# Short-circuit per un ruolo speciale "worker": spawna una sessione
+# SENTINELLA-WORKER con un claude CLI idle, da interrogare col comando
+# /usage quando l'HTTP /api/oauth/usage di Anthropic e' 429. Non e' un
+# agente del team: niente template, niente profile sync, niente kickoff,
+# niente bridge. Singleton: se gia' viva, exit 0 senza errori.
+if [ "$ROLE" = "worker" ]; then
+  WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
+  if tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
+    echo "✓ $WORKER_SESSION gia' attivo"
+    exit 0
+  fi
+  : "${JHT_HOME:=/jht_home}"
+  tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
+  tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
+  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
+  tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
+  # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
+  # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
+  # con default "1. No, exit" → blind Enter killa claude. Fix: capture-pane,
+  # se vede il warning manda Down + Enter (sceglie "2. Yes, I accept").
+  # Vedi BACKLOG [BUG-CLAUDE-TRUST-PROMPT].
+  setsid sh -c "
+    _i=0
+    while [ \$_i -lt 6 ]; do
+      sleep 2
+      _pane=\$(tmux capture-pane -t '$WORKER_SESSION' -p -S -40 2>/dev/null)
+      if echo \"\$_pane\" | grep -q 'Bypass Permissions mode'; then
+        tmux send-keys -t '$WORKER_SESSION' Down
+        sleep 1
+        tmux send-keys -t '$WORKER_SESSION' Enter
+        exit 0
+      fi
+      if echo \"\$_pane\" | grep -qE 'trust (the files|this folder|this directory)'; then
+        tmux send-keys -t '$WORKER_SESSION' Enter
+        exit 0
+      fi
+      _i=\$((_i + 1))
+    done
+    tmux send-keys -t '$WORKER_SESSION' Enter
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
+  exit 0
+fi
+
+# ── Bridge sentinel (V5: ruolo dedicato, non più appiccicato al capitano) ──
+# Short-circuit per "bridge": spawna il sentinel-bridge.py in background.
+# Non è una sessione tmux, è un processo Python detached. Singleton: killa
+# eventuali bridge preesistenti prima di spawnarne uno nuovo (bug storico:
+# ogni restart del Capitano accumulava un bridge in più).
+#
+# Lanciato dopo che CAPITANO e SENTINELLA sono già partiti e stabili, così
+# il primo [BRIDGE TICK] arriva alla SENTINELLA che è già pronta a riceverlo.
+if [ "$ROLE" = "bridge" ]; then
+  BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
+  if [ ! -f "$BRIDGE_SCRIPT" ]; then
+    echo "✗ $BRIDGE_SCRIPT non trovato — bridge NON partito"
+    exit 1
+  fi
+  # Kill bridge preesistenti via /proc/*/cmdline (pkill non è installato
+  # nell'immagine busybox slim). Matching su 'sentinel-bridge.py' copre
+  # setsid wrapper + python + eventuali figli.
+  for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  setsid sh -c "
+    JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+      python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/sentinel-bridge.log)"
+
+  # Pacing bridge — tick orario al CAPITANO sul ritmo del team. Stesso
+  # pattern del sentinel-bridge: setsid + singleton tramite kill via
+  # /proc/*/cmdline + log su /tmp. Indipendente dal sentinel-bridge:
+  # legge sentinel-data.jsonl (scritto dal sentinel-bridge) + token logs
+  # locali, calcola Δusage / vel_team / vel_target / %/h per agente, e
+  # manda un [BRIDGE PACING] al Capitano allineato a :00,:15,:30,:45 UTC.
+  PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
+  if [ -f "$PACING_SCRIPT" ]; then
+    for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill "$_pid" 2>/dev/null || true
+    done
+    sleep 1
+    # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
+    # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
+    # le env vars del parent. Setting PATH a single-quoted lo aveva
+    # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
+    setsid sh -c "
+      JHT_PACING_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ pacing-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/pacing-bridge.log)"
+  else
+    echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
+  fi
+
+  exit 0
+fi
+
+# Mappa ruolo → prefisso sessione | effort | model
+# model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
+#   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
+#   completo, passato come --model al CLI claude. Per codex/kimi il
+#   model override non e' ancora cablato (aggiungere quando serve).
+#
+# Scelta modelli:
+#   - Assistente: Sonnet high — chat conversazionale con utente,
+#     non serve reasoning pesante ma serve reattivita'; Sonnet costa
+#     meno di Opus e un effort high compensa il gap di capability
+#   - Tutti gli altri: default del provider (Opus su claude), effort per
+#     ruolo calibrato (coordinatori/spawn high, scorer medium)
+#
+# Nota: il ruolo "sentinella" e' stato reintrodotto come watchdog leggero
+# (2026-04-25). Il monitoraggio principale del rate-limit resta del
+# bridge deterministico (.launcher/sentinel-bridge.py); la sentinella LLM
+# e' un livello di sicurezza sopra che interviene quando il bridge fallisce
+# o serve un check fresco indipendente. Vedi agents/sentinella/sentinella.md
+# per il loop e le regole. Una sola istanza, polling 10 min, sonnet.
 get_agent_info() {
   case "$1" in
-    alfa)       echo "ALFA|high" ;;
-    scout)      echo "SCOUT|high" ;;
-    analista)   echo "ANALISTA|high" ;;
-    scorer)     echo "SCORER|medium" ;;
-    scrittore)  echo "SCRITTORE|high" ;;
-    critico)    echo "CRITICO|high" ;;
-    sentinella) echo "SENTINELLA|low" ;;
-    assistente) echo "ASSISTENTE|medium" ;;
+    # Opus high — task con reasoning pesante:
+    # Capitano (coordinatore team), Scrittore (creative writing CV),
+    # Critico (review di qualita' richiede nuance).
+    capitano)   echo "CAPITANO|high|" ;;
+    scrittore)  echo "SCRITTORE|high|" ;;
+    critico)    echo "CRITICO|high|" ;;
+    # Sonnet high — task I/O-bound, parsing, matching:
+    # piu' veloce, costa meno, effort high compensa.
+    scout)      echo "SCOUT|high|sonnet" ;;
+    analista)   echo "ANALISTA|high|sonnet" ;;
+    scorer)     echo "SCORER|high|sonnet" ;;
+    assistente) echo "ASSISTENTE|high|sonnet" ;;
+    # Sonnet (no high) — watchdog: logica if-then semplice, non serve
+    # reasoning profondo. Riduce il costo del polling 10-min sostenuto.
+    sentinella) echo "SENTINELLA|medium|sonnet" ;;
     *)          echo "" ;;
   esac
 }
@@ -56,14 +190,14 @@ AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: alfa, scout, analista, scorer, scrittore, critico, sentinella, assistente"
+  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente"
   exit 1
 fi
 
-IFS='|' read -r session_prefix effort <<< "$AGENT_INFO"
+IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "alfa" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
   # Agenti singoli — nessun numero
   SESSION="$session_prefix"
 else
@@ -85,7 +219,16 @@ fi
 # e capire se usare api_key (env var) o subscription (sessione CLI esistente).
 # Default: claude subscription (comportamento pre-multi-provider).
 
-JHT_CONFIG_FILE="${HOME}/.jht/jht.config.json"
+# In the JHT container HOME is overridden to /jht_home (the bind-mount
+# that matches the host's ~/.jht), so the provider config lives at
+# ${HOME}/jht.config.json — not ${HOME}/.jht/jht.config.json. On the
+# host the same file is at ~/.jht/jht.config.json. Honour JHT_HOME
+# when set (container path), fall back to ~/.jht for host runs.
+if [ -n "${JHT_HOME:-}" ] && [ -f "${JHT_HOME}/jht.config.json" ]; then
+  JHT_CONFIG_FILE="${JHT_HOME}/jht.config.json"
+else
+  JHT_CONFIG_FILE="${HOME}/.jht/jht.config.json"
+fi
 
 extract_provider_info() {
   local cfg="$1"
@@ -134,20 +277,36 @@ case "$PROVIDER" in
   ""|anthropic|claude)
     CLI_BIN="claude"
     CLI_ARGS="--dangerously-skip-permissions --effort $effort"
+    # Override modello per ruoli con model_override settato (es.
+    # sentinella/assistente su sonnet). Default account Claude = opus.
+    if [ -n "$model_override" ]; then
+      CLI_ARGS="$CLI_ARGS --model $model_override"
+    fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="ANTHROPIC_API_KEY='${API_KEY}' "
     fi
     ;;
   openai)
     CLI_BIN="codex"
-    CLI_ARGS=""
+    # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
+    # salta sia approval che sandbox FS, così l'agente può scrivere
+    # chat.jsonl, creare la profile dir, ecc. senza bloccarsi sul
+    # prompt di approval (equivalente di claude --dangerously-skip-permissions).
+    # -c model_reasoning_effort=<effort> applica il livello di reasoning
+    # per ruolo (default del config.toml e' "medium"): capitano/scout/
+    # analista/scrittore/critico vanno su "high", scorer/assistente
+    # restano "medium". Codex non ha un --effort flag; si passa via -c.
+    CLI_ARGS="--yolo -c model_reasoning_effort=$effort"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi
     ;;
   kimi|moonshot)
     CLI_BIN="kimi"
-    CLI_ARGS=""
+    # --yolo auto-approves every shell command so the agent can write
+    # chat.jsonl, create the profile dir, etc. without blocking on the
+    # approval prompt (equivalent of Claude's --dangerously-skip-permissions).
+    CLI_ARGS="--yolo"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
@@ -173,32 +332,175 @@ if ! command -v tmux &>/dev/null; then
   exit 1
 fi
 
-# ── Cartelle JHT ─────────────────────────────────────────────────────────────
-mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
-mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
+# ── Soppressione auto-update interattivo di kimi ─────────────────────────────
+# Kimi CLI mostra un blocking gate TUI "kimi-cli update available" con default
+# Enter = "Upgrade now" che esegue `uv tool upgrade kimi-cli` e poi sys.exit.
+# Stessa dinamica di codex: il nostro Enter auto-accept (anche dopo verify)
+# trigga l'update che su NTFS/WSL2 bind-mount fallisce, kimi esce → sessione
+# cade sulla shell. Il binario espone una env var ufficiale: settandola il
+# gate viene saltato interamente. Applicata per tutti gli agenti (l'env var
+# è innocua anche quando kimi non è il provider attivo).
+export KIMI_CLI_NO_AUTO_UPDATE=1
 
-# Directory di lavoro dell'agente nella zona nascosta
-if [ "$ROLE" = "alfa" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
-else
-  AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
-fi
-mkdir -p "$AGENT_DIR"
-
-# ── CLAUDE.md per l'agente ────────────────────────────────────────────────────
-CLAUDE_DEST="$AGENT_DIR/CLAUDE.md"
-TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
-
-if [ ! -f "$CLAUDE_DEST" ]; then
-  if [ -f "$TEMPLATE" ]; then
-    cp "$TEMPLATE" "$CLAUDE_DEST"
-    echo "  → CLAUDE.md creato da template ($ROLE.md)"
-  else
-    echo "Errore: template $TEMPLATE non trovato e CLAUDE.md non esiste in $AGENT_DIR."
-    echo "Crea agents/$ROLE/$ROLE.md nel repo oppure $CLAUDE_DEST manualmente."
-    exit 1
+# ── Soppressione auto-update interattivo di codex ────────────────────────────
+# Codex mostra un prompt TUI "Update now / Skip / Skip until next version"
+# quando rileva una versione più recente, con "Update now" selezionato di
+# default. Gli auto-Enter che mandiamo per chiudere il trust-dialog finiscono
+# sul prompt update, codex lancia `npm install -g @openai/codex` che fallisce
+# con EACCES durante il rename() atomico su bind-mount NTFS/WSL2 (rename di
+# @openai/codex mentre il binario è in uso non è supportato), exit 243 →
+# sessione tmux torna al prompt shell, agente risulta "online" ma morto.
+#
+# Fix: settiamo dismissed_version = latest_version in $JHT_HOME/.codex/
+# version.json prima del launch. Chiave confermata guardando le stringhe del
+# binario Rust (dismissed_version accanto a latest_version/last_checked_at).
+if [ "$CLI_BIN" = "codex" ]; then
+  CODEX_VERSION_FILE="${JHT_HOME:-/jht_home}/.codex/version.json"
+  if [ -f "$CODEX_VERSION_FILE" ] && command -v python3 &>/dev/null; then
+    python3 - "$CODEX_VERSION_FILE" <<'PYEOF' || true
+import json, sys
+p = sys.argv[1]
+try:
+    with open(p) as f:
+        data = json.load(f)
+    latest = data.get("latest_version")
+    if latest and data.get("dismissed_version") != latest:
+        data["dismissed_version"] = latest
+        with open(p, "w") as f:
+            json.dump(data, f)
+except Exception:
+    pass
+PYEOF
   fi
 fi
+
+# ── Cartelle JHT ─────────────────────────────────────────────────────────────
+mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
+mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
+
+# Directory di lavoro dell'agente nella zona nascosta
+if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
+  AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
+  AGENT_NAME="$ROLE"
+else
+  AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
+  AGENT_NAME="${ROLE}-${INSTANCE}"
+fi
+mkdir -p "$AGENT_DIR"
+# Workspace layout (RULE-T12): agents must use these subdirs instead of
+# scattering files at the root of $AGENT_DIR. tools/ holds helper
+# scripts the agent wrote for itself; tmp/ holds throwaway intermediate
+# scratch (downloaded JDs, draft buffers, …) and is wiped by the agent
+# at boot for files older than 7 days.
+mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"
+
+# ── File d'identità per l'agente ──────────────────────────────────────────────
+# Convenzione per provider:
+#   - Claude Code legge CLAUDE.md
+#   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
+# Il contenuto è identico, cambia solo il nome del file.
+case "$PROVIDER" in
+  ""|anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
+  *)                   IDENTITY_FILE="AGENTS.md" ;;
+esac
+IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
+
+# Risoluzione locale del template d'identità.
+# Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
+# Locale letto da $JHT_HOME/i18n-prefs.json; default 'en' (allineato a
+# DEFAULT_LOCALE in shared/i18n/types.ts). Il fallback è silenzioso perché
+# durante la transizione molti override per-locale non esisteranno ancora.
+# Vedi docs/internal/2026-05-06-agent-prompts-i18n.md per il design completo.
+USER_LOCALE="en"
+PREFS_FILE="${JHT_HOME:-$HOME/.jht}/i18n-prefs.json"
+if [ -f "$PREFS_FILE" ] && command -v jq >/dev/null 2>&1; then
+  USER_LOCALE="$(jq -r '.locale // "en"' "$PREFS_FILE" 2>/dev/null || echo en)"
+  # Company 140 guard: se jq ritorna stringa vuota o null, ricadi su 'en'.
+  [ -z "$USER_LOCALE" ] || [ "$USER_LOCALE" = "null" ] && USER_LOCALE="en"
+fi
+
+LOCALIZED_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.$USER_LOCALE.md"
+BASELINE_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
+if [ -f "$LOCALIZED_TEMPLATE" ]; then
+  TEMPLATE="$LOCALIZED_TEMPLATE"
+else
+  TEMPLATE="$BASELINE_TEMPLATE"
+fi
+
+if [ ! -f "$TEMPLATE" ] && [ ! -f "$IDENTITY_DEST" ]; then
+  echo "Errore: template $TEMPLATE non trovato e $IDENTITY_FILE non esiste in $AGENT_DIR."
+  echo "Crea agents/$ROLE/$ROLE.md (baseline) o agents/$ROLE/$ROLE.$USER_LOCALE.md, oppure $IDENTITY_DEST manualmente."
+  exit 1
+fi
+# Copia il template se il file runtime non esiste o differisce dal repo.
+# Confronto sul contenuto (cmp), non su mtime: se l'mtime del runtime
+# diventa più recente del template (es. spawn precedenti scritti in
+# ordine fuori-fase, o tocchi accidentali), un check "-nt" si rompe per
+# sempre — il repo non vince più anche quando il prompt è cambiato.
+# Il repo è single source of truth: se il contenuto diverge, il template
+# vince sempre.
+if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$IDENTITY_DEST"; }; then
+  cp "$TEMPLATE" "$IDENTITY_DEST"
+  echo "  → $IDENTITY_FILE sincronizzato da template ($(basename "$TEMPLATE"))"
+fi
+
+# ── Skill distribution ──────────────────────────────────────────────────────
+# Per-agent skill discovery: each agent only sees the skills it actually
+# uses. The shared library lives at agents/_skills/; the manifest at
+# agents/<role>/skills.list declares which ones the agent consumes.
+# Private skills under agents/<role>/_skills/ are always copied (no
+# manifest needed — they are role-specific by definition).
+#
+# Claude Code reads .claude/skills/ in the cwd; Codex/Kimi read
+# .agents/skills/ — we populate both so the agent works regardless of
+# which CLI start-agent.sh selects via PROVIDER. Each spawn rewrites
+# the workspace skill folders so a manifest change between spawns is
+# picked up cleanly.
+SKILLS_LIB="$REPO_ROOT/agents/_skills"
+SKILL_MANIFEST="$REPO_ROOT/agents/$ROLE/skills.list"
+PRIVATE_SKILLS_DIR="$REPO_ROOT/agents/$ROLE/_skills"
+CLAUDE_SKILLS_DIR="$AGENT_DIR/.claude/skills"
+AGENTS_SKILLS_DIR="$AGENT_DIR/.agents/skills"
+
+rm -rf "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
+mkdir -p "$CLAUDE_SKILLS_DIR" "$AGENTS_SKILLS_DIR"
+
+_copy_skill() {
+  local src="$1"
+  local name="$2"
+  cp -R "$src" "$CLAUDE_SKILLS_DIR/$name"
+  cp -R "$src" "$AGENTS_SKILLS_DIR/$name"
+}
+
+_skills_count=0
+if [ -f "$SKILL_MANIFEST" ]; then
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    # Strip comments and surrounding whitespace
+    _name="${_line%%#*}"
+    _name="$(echo "$_name" | tr -d '[:space:]')"
+    [ -z "$_name" ] && continue
+    _src="$SKILLS_LIB/$_name"
+    if [ ! -d "$_src" ]; then
+      echo "  ⚠ skill '$_name' listed in $SKILL_MANIFEST but not found at $_src" >&2
+      continue
+    fi
+    _copy_skill "$_src" "$_name"
+    _skills_count=$((_skills_count + 1))
+  done < "$SKILL_MANIFEST"
+fi
+
+if [ -d "$PRIVATE_SKILLS_DIR" ]; then
+  for _skill in "$PRIVATE_SKILLS_DIR"/*/; do
+    [ -d "$_skill" ] || continue
+    _name="$(basename "$_skill")"
+    [ "$_name" = "_lib" ] && continue
+    _copy_skill "$_skill" "$_name"
+    _skills_count=$((_skills_count + 1))
+  done
+fi
+
+echo "  → $_skills_count skill(s) distribuite in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
+unset _line _name _src _skill _skills_count
 
 # ── Avvia agente ─────────────────────────────────────────────────────────────
 if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -210,17 +512,51 @@ fi
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
 
 send_env_vars() {
+  # Inside the JHT container a fresh tmux bash resets HOME to the OS
+  # default (/home/jht, from /etc/passwd) — but the CLI credential
+  # files live under /jht_home (the bind-mounted ~/.jht from the
+  # host). Without this override, kimi/claude/codex would report
+  # "not logged in" even when the user authed successfully.
+  #
+  # Nota: esportiamo SEMPRE HOME (senza il guard `$JHT_HOME != $HOME`
+  # che prima saltava il send-keys quando il caller aveva già HOME
+  # settato a $JHT_HOME). Motivo: quando il Capitano — che gira dentro
+  # una tmux dove HOME è già /jht_home — invoca start-agent.sh per
+  # spawnare un agente figlio, la nuova tmux parte con una bash fresca
+  # che legge /etc/passwd → HOME torna a /home/jht. Senza l'export,
+  # kimi/claude del nuovo agente cercano le credenziali nel posto
+  # sbagliato e chiedono di rifare il login device.
+  if [ -d "${JHT_HOME:-}" ]; then
+    tmux send-keys -t "$SESSION" "export HOME='$JHT_HOME'" C-m
+  fi
+  # Propagate our PATH into the tmux pane: a fresh interactive bash
+  # re-reads /etc/profile and ~/.bashrc which can clobber the PATH
+  # that docker's ENV set (e.g. /jht_home/.npm-global/bin where kimi
+  # lives after uv tool install). Re-exporting here guarantees the
+  # CLI binary resolves.
+  # Prepend /app/agents/_tools: contiene wrapper come `jht-send` che
+  # gli agenti usano per interagire con l'UI web senza toccare JSON/shell
+  # quoting a mano. Da lì scriviamo chat.jsonl in modo sicuro.
+  AGENT_TOOLS_DIR="/app/agents/_tools"
+  tmux send-keys -t "$SESSION" "export PATH='${AGENT_TOOLS_DIR}:$PATH'" C-m
+  # KIMI_CLI_NO_AUTO_UPDATE disabilita il blocking gate di kimi. Lo
+  # esportiamo sempre (anche quando il provider non è kimi) perché è
+  # innocuo se il binario non lo legge.
+  tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
   tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
   tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
+  tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
 }
 
-# Rileva se siamo in WSL — Claude CLI è un binario Windows, va lanciato via PowerShell
-if grep -qi microsoft /proc/version 2>/dev/null; then
+# Rileva se siamo in WSL nativo (non dentro un container Docker Desktop, che
+# condivide il kernel WSL2 ma non ha wslpath/powershell.exe): in WSL la CLI
+# Claude è un binario Windows e va lanciata via PowerShell.
+if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
-  tmux new-session -d -s "$SESSION" powershell.exe
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe
   sleep 2
   tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
@@ -229,20 +565,126 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
   tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
+  tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
   sleep 8
   tmux send-keys -t "$SESSION" Enter
 else
-  tmux new-session -d -s "$SESSION" -c "$AGENT_DIR"
+  # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
+  # 80x24 quando la sessione è detached, e capture-pane restituisce output
+  # troncato a 80 colonne — leggibilità terribile nella webUI. 220x50 dà
+  # margine per dashboard / task lists del CLI senza esagerare con i byte
+  # da leggere a ogni tick.
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
-  # Auto-accept workspace trust dialog (Enter in background dopo qualche secondo)
-  # L'Enter extra e' innocuo se la CLI e' gia' partita (input vuoto = ignorato)
-  (sleep 4 && tmux send-keys -t "$SESSION" Enter && sleep 3 && tmux send-keys -t "$SESSION" Enter) &>/dev/null &
+  # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
+  # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
+  # con default "1. No, exit" → blind Enter killa claude → CAPITANO/SENTINELLA
+  # diventano fantasmi (sessione tmux esiste ma LLM exited). Vedi BACKLOG
+  # [BUG-CLAUDE-TRUST-PROMPT]. Fix: capture-pane, se trova il warning manda
+  # Down + sleep 1s + Enter (sceglie "2. Yes, I accept"); se trova il classico
+  # folder-trust dialog manda Enter (default "Yes"); fallback Enter dopo 12s.
+  # setsid scollega dalla sessione/process-group di chi ha chiamato
+  # start-agent.sh: senza, quando start-agent.sh esce il suo caller
+  # (Node.js del backend web) manda SIGTERM al process group e ammazza
+  # la subshell prima che lo sleep finisca.
+  setsid sh -c '
+    _sess="'"$SESSION"'"
+    _i=0
+    while [ $_i -lt 6 ]; do
+      sleep 2
+      _pane=$(tmux capture-pane -t "$_sess" -p -S -40 2>/dev/null)
+      if echo "$_pane" | grep -q "Bypass Permissions mode"; then
+        tmux send-keys -t "$_sess" Down
+        sleep 1
+        tmux send-keys -t "$_sess" Enter
+        exit 0
+      fi
+      if echo "$_pane" | grep -qE "trust (the files|this folder|this directory)"; then
+        tmux send-keys -t "$_sess" Enter
+        exit 0
+      fi
+      _i=$((_i + 1))
+    done
+    tmux send-keys -t "$_sess" Enter
+  ' >/dev/null 2>&1 < /dev/null &
 fi
 
 echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
+
+# ── Kick-off Capitano / Assistente ──────────────────────────────────────────
+# Dopo start-agent.sh il CLI e' bootato ma l'agente sta fermo in attesa di
+# input. Il Capitano riceve l'ordine di avvio pipeline; l'Assistente riceve
+# il prompt di presentazione CV-first.
+#
+# Detection di readiness: tui_wait_ready (idle-diff) — cerca un pane che
+# rimane identico per 3s, invariante universale cross-provider (Claude /
+# Codex / Kimi). Non dipende da marker hardcoded nei banner, che cambiano
+# tra release (es. codex 0.124 ha aggiunto il banner "Tip: GPT-5.5...").
+#
+# Send: tui_send_verified — dopo il send -l del testo, capture-pane e
+# verifica che la signature sia presente PRIMA di spingere Enter. Con 3
+# retry recuperiamo i casi in cui la TUI non era davvero ricettiva.
+#
+# setsid: scolleghiamo dal process-group di start-agent.sh cosi' il parent
+# puo' uscire senza killare il sub-shell del kick-off.
+
+_kickoff() {
+  local sess="$1"
+  local msg="$2"
+  # Esportiamo via env var invece di interpolare nella stringa sh -c:
+  # i messaggi contengono apostrofi e caratteri speciali che rompono
+  # il quoting sh nested. Env var e' trasparente a qualsiasi charset.
+  #
+  # Log su /tmp/kickoff-<session>.log per troubleshooting: vediamo se
+  # il child ha davvero eseguito, se wait_ready e' terminato, se send
+  # e' andato a buon fine. Log idempotente, viene sovrascritto ogni
+  # volta (conta solo l'ultimo kickoff).
+  JHT_KICKOFF_SESS="$sess" JHT_KICKOFF_MSG="$msg" JHT_KICKOFF_LOG="/tmp/kickoff-$sess.log" \
+  setsid sh -c '
+    exec >"$JHT_KICKOFF_LOG" 2>&1
+    echo "[$(date +%H:%M:%S)] kickoff start for $JHT_KICKOFF_SESS"
+    . /app/.launcher/tui-helpers.sh
+    echo "[$(date +%H:%M:%S)] waiting for ready..."
+    if tui_wait_ready "$JHT_KICKOFF_SESS"; then
+      echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
+      if tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"; then
+        echo "[$(date +%H:%M:%S)] SENT OK"
+      else
+        echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)"
+      fi
+    else
+      echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
+    fi
+  ' </dev/null &
+}
+
+if [ "$ROLE" = "capitano" ]; then
+  _msg="[@utente -> @capitano] [MSG] Avvio. Esegui il boot e parti."
+  _kickoff "$SESSION" "$_msg"
+
+  # Nota V5: il sentinel-bridge.py NON viene più spawnato qui. È un ruolo
+  # separato (`start-agent.sh bridge`) lanciato esplicitamente da
+  # /api/team/start-all dopo che CAPITANO e SENTINELLA sono già attivi,
+  # per garantire che il primo [BRIDGE TICK] arrivi alla SENTINELLA quando
+  # è già pronta a riceverlo. Il SENTINELLA-WORKER (Claude TUI fallback)
+  # è creato lazy dalla skill check_usage.py quando serve.
+fi
+
+if [ "$ROLE" = "assistente" ]; then
+  _msg="[@utente -> @assistente] [CHAT] (avvio) Presentati come da prompt."
+  _kickoff "$SESSION" "$_msg"
+fi
+
+if [ "$ROLE" = "sentinella" ]; then
+  # La Sentinella e' un watchdog LLM: senza kick-off resta idle nel CLI.
+  # Tutto il protocollo sta nel suo prompt (agents/sentinella/sentinella.md).
+  _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
+  _kickoff "$SESSION" "$_msg"
+fi
+

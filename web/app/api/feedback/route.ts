@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createClient } from '../../../lib/supabase/server';
 import { isSupabaseConfigured } from '../../../lib/workspace';
+import { sanitizedError } from '@/lib/error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,5 +143,5 @@ export async function POST(req: Request) {
     items.push(fb);
     saveLocal(items);
     return NextResponse.json({ feedback: fb });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'feedback' }); }
 }

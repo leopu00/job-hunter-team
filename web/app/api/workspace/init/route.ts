@@ -10,10 +10,13 @@ import {
   JHT_USER_UPLOADS_DIR,
   JHT_USER_OUTPUT_DIR,
 } from '@/lib/jht-paths'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
+  const denied = await requireAuth()
+  if (denied) return denied
   const created = { home: false, userDir: false, db: false }
 
   try {

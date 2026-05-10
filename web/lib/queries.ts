@@ -1,5 +1,7 @@
+// fresh
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import type {
   DashboardStats,
@@ -12,10 +14,16 @@ import type {
   Application,
 } from '@/lib/types'
 
-// Helper: get workspace or null
+// Source of truth = origine della request:
+//   - host=localhost (Mac dell'utente, JHT Desktop o browser locale) → SQLite
+//   - host pubblico (deploy Vercel) → Supabase
+// Vale per tutte le query (dashboard, positions, applications, scores...).
+// In local mode il banner cloud-sync e il filtro synced/unsynced funzionano
+// perché vediamo TUTTE le row locali e usiamo Supabase come overlay (non
+// come fonte). In cloud puro Supabase è l'unica fonte.
 async function ws(): Promise<string | null> {
-  if (isSupabaseConfigured) return null
-  return getWorkspacePath()
+  if (await isLocalRequest()) return getWorkspacePath()
+  return null
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
@@ -43,6 +51,22 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ready: counts['ready'] ?? 0, applied: counts['applied'] ?? 0, excluded: counts['excluded'] ?? 0,
     response: counts['response'] ?? 0,
   }
+}
+
+// ── Posizioni ordinate per ULTIMA azione qualsiasi ────────────────
+export type RecentlyTouchedPosition = PositionWithScore & {
+  last_action_at: string
+  last_action_by: string
+  last_action_actor: string
+  voto: number | null
+}
+
+export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyTouchedPosition[]> {
+  const w = await ws()
+  if (w) { try { return local.getRecentlyTouchedPositionsLocal(w, limit) } catch { return [] } }
+  // Cloud (Supabase): per ora fallback alla "trovate di recente" classico.
+  // Quando avremo necessità reale, questa branch farà UNION dei timestamp.
+  return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>
 }
 
 // ── Recent positions with scores ───────────────────────────────────

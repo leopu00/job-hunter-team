@@ -21,7 +21,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "data" / "scout_coordination.db"
+# Prima $JHT_HOME/data/ (bind-mount ~/.jht persistente, fuori repo), poi
+# fallback relativo per esecuzioni ad-hoc fuori container. Stesso schema di
+# _db.py per jobs.db — senza l'env-resolve le scritture finivano in
+# /app/shared/data/ bind-mount del repo, leak del .db in git.
+_jht_home = os.environ.get("JHT_HOME")
+_data_dir = Path(_jht_home) / "data" if _jht_home else Path(__file__).parent.parent / "data"
+DB_PATH = _data_dir / "scout_coordination.db"
 
 
 def get_db():

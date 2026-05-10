@@ -97,7 +97,7 @@ describe("loadBootstrapFiles", () => {
   it("carica tutti i file bootstrap presenti", () => {
     const dir = join(testDir, "bootstrap-test");
     ensureTemplates(dir);
-    writeFileSync(join(dir, "AGENTS.md"), "# Agenti\n- alfa");
+    writeFileSync(join(dir, "AGENTS.md"), "# Agenti\n- capitano");
     writeFileSync(join(dir, "TOOLS.md"), "# Tools\n- read");
     const files = loadBootstrapFiles(dir);
     const names = files.map((f) => f.name);
@@ -138,7 +138,7 @@ describe("loadAgentMemory", () => {
     // Scrivi un'identity compilata
     writeFileSync(join(dir, "IDENTITY.md"), [
       "# IDENTITY.md",
-      "- **Name:** Alfa",
+      "- **Name:** Capitano",
       "- **Emoji:** 🤖",
       "- **Creature:** AI coordinator",
       "- **Vibe:** sharp and focused",
@@ -147,7 +147,7 @@ describe("loadAgentMemory", () => {
     const ctx = loadAgentMemory({ workspaceDir: dir });
     assert.equal(ctx.workspaceDir, dir);
     assert.ok(ctx.identity);
-    assert.equal(ctx.identity.name, "Alfa");
+    assert.equal(ctx.identity.name, "Capitano");
     assert.equal(ctx.identity.emoji, "🤖");
     assert.ok(ctx.soul);
     assert.ok(ctx.soul.raw.length > 0);

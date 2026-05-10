@@ -16,7 +16,7 @@ const AGENTS: AgentDef[] = [
   { id: "scorer", label: "Scorer", emoji: "R" },
   { id: "scrittore", label: "Scrittore", emoji: "W" },
   { id: "sentinella", label: "Sentinella", emoji: "T" },
-  { id: "alfa", label: "Alfa", emoji: "*" },
+  { id: "capitano", label: "Capitano", emoji: "*" },
 ];
 
 export class TeamPanel extends Container {

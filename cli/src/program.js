@@ -25,10 +25,14 @@ import { registerUpgradeCommand } from './commands/upgrade.js';
 import { registerDashboardCommand } from './commands/dashboard.js';
 import { registerContextCommand } from './commands/context.js';
 import { registerSecretsCommand } from './commands/secrets.js';
+import { registerKeyringCommand } from './commands/keyring.js';
 import { registerHooksCommand } from './commands/hooks.js';
 import { registerReportCommand } from './commands/report.js';
 import { registerWebhooksCommand } from './commands/webhooks.js';
 import { registerCloudCommand } from './commands/cloud.js';
+import { registerSentinellaCommand } from './commands/sentinella.js';
+import { registerContainerCommand } from './commands/container.js';
+import { registerPositionsCommand } from './commands/positions.js';
 
 export function buildProgram() {
   const program = new Command();
@@ -63,10 +67,14 @@ export function buildProgram() {
   registerDashboardCommand(program);
   registerContextCommand(program);
   registerSecretsCommand(program);
+  registerKeyringCommand(program);
   registerHooksCommand(program);
   registerReportCommand(program);
   registerWebhooksCommand(program);
   registerCloudCommand(program);
+  registerSentinellaCommand(program);
+  registerContainerCommand(program);
+  registerPositionsCommand(program);
 
   return program;
 }

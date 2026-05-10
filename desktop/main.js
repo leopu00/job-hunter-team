@@ -1,10 +1,93 @@
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { spawn } = require('node:child_process')
+const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+
+// macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
+// that excludes /opt/homebrew/bin and /usr/local/bin. Every spawn/execFile
+// we make (docker, colima, brew, git, ...) would then fail with ENOENT
+// even though the binaries are installed. Patch the main process PATH
+// once at boot so every child inherits the right PATH. Done here (not in
+// each module) so third-party dependencies that shell out internally
+// also work.
+if (process.platform === 'darwin') {
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin']
+  const current = process.env.PATH || ''
+  const parts = current.split(':').filter(Boolean)
+  for (const dir of extra.reverse()) {
+    if (!parts.includes(dir)) parts.unshift(dir)
+  }
+  process.env.PATH = parts.join(':')
+}
+
+// Dev convenience: when running unpackaged (npm run dev) with a sibling
+// web/ checkout, auto-enable the live bind mount so edits to /web show
+// up in the container instantly via Next HMR. Temporary — remove once
+// we lock the image pipeline for end-users.
+// Disabled on Windows: NTFS→WSL2 bind mounts don't grant write access to
+// the container `jht` user, so Turbopack crashes with EPERM on .next/*.
+// Opt-in manually by setting JHT_DEV_WEB_DIR / JHT_DEV_REPO_DIR.
+if (!app.isPackaged && process.platform !== 'win32' && !('JHT_DEV_WEB_DIR' in process.env)) {
+  const siblingWeb = path.resolve(__dirname, '..', 'web')
+  if (require('node:fs').existsSync(path.join(siblingWeb, 'package.json'))) {
+    process.env.JHT_DEV_WEB_DIR = siblingWeb
+  }
+}
+if (!app.isPackaged && process.platform !== 'win32' && !('JHT_DEV_REPO_DIR' in process.env)) {
+  const repoRoot = path.resolve(__dirname, '..')
+  if (require('node:fs').existsSync(path.join(repoRoot, '.launcher', 'start-agent.sh'))) {
+    process.env.JHT_DEV_REPO_DIR = repoRoot
+  }
+}
 const { createRuntimeManager } = require('./runtime')
 const containerRuntime = require('./container')
 const payload = require('./payload')
 const dockerInstaller = require('./docker-installer')
+const winInstaller = require('./win-installer/install')
+const deps = require('./deps')
+const containerPrep = require('./container-prep')
+const providerInstall = require('./provider-install')
+const providerStore = require('./provider-store')
+const providerAuth = require('./provider-auth')
+const terminal = require('./terminal')
 const { freeBytes, formatBytes } = require('./disk-space')
+
+function getBindHomeDir() {
+  return path.join(require('node:os').homedir(), '.jht')
+}
+
+// Map desktop-side provider id → the active_provider value that
+// .launcher/start-agent.sh (running inside the container) expects.
+// Codex is "openai" in that config because the start-agent script
+// dispatches on the vendor, not the product name.
+const DESKTOP_TO_LAUNCHER_PROVIDER = {
+  claude: 'claude',
+  codex: 'openai',
+  kimi: 'kimi',
+}
+
+// Export the user's chosen provider/plan to ~/.jht/jht.config.json so
+// the agent-boot script inside the container can pick the right CLI
+// and load the right identity file (CLAUDE.md for Claude, AGENTS.md
+// for Codex / Kimi). Written right before `docker run` on Start Team.
+function syncJhtConfig() {
+  const selection = providerStore.readSelection(require('electron').app.getPath('userData'))
+  if (!selection?.provider) return false
+  const activeProvider = DESKTOP_TO_LAUNCHER_PROVIDER[selection.provider] || selection.provider
+  const config = {
+    active_provider: activeProvider,
+    plan: selection.plan ?? null,
+    providers: {
+      [activeProvider]: { auth_method: 'subscription' },
+    },
+  }
+  const bindHomeDir = getBindHomeDir()
+  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
+  require('node:fs').writeFileSync(
+    path.join(bindHomeDir, 'jht.config.json'),
+    JSON.stringify(config, null, 2) + '\n',
+  )
+  return true
+}
 
 let mainWindow = null
 let runtime = null
@@ -12,10 +95,10 @@ let payloadDir = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 460,
-    height: 700,
-    minWidth: 420,
-    minHeight: 600,
+    width: 1120,
+    height: 760,
+    minWidth: 880,
+    minHeight: 620,
     autoHideMenuBar: true,
     title: 'JHT Desktop',
     backgroundColor: '#0d1411',
@@ -27,6 +110,30 @@ function createWindow() {
   })
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'))
+
+  // Dev: apri DevTools detached per vedere i log del renderer fianco
+  // alla finestra. Solo da sorgente, mai in build packaged.
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+
+  // Force every link/URL open to go through the host's default browser
+  // via shell.openExternal. Without this, Electron would happily spawn
+  // a nested BrowserWindow for things like window.open(...) — which
+  // would not carry the user's existing session cookies (e.g. Google
+  // OAuth) and force them to log in again.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url).catch(() => {})
+    }
+    return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL() && /^https?:\/\//i.test(url)) {
+      event.preventDefault()
+      shell.openExternal(url).catch(() => {})
+    }
+  })
 }
 
 function broadcastPayloadLog(message) {
@@ -35,17 +142,66 @@ function broadcastPayloadLog(message) {
   }
 }
 
-async function openRuntimeInBrowser() {
-  const status = await runtime.getStatus()
-  const launchableStatus = status.mode === 'running' || status.mode === 'external'
-    ? status
-    : await runtime.startRuntime({ port: status.port })
+function broadcastContainerLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:container-log', String(message))
+  }
+}
 
-  if (launchableStatus.running) {
-    await shell.openExternal(launchableStatus.url)
+function broadcastProviderLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:provider-log', String(message))
+  }
+}
+
+function broadcastInstallLog(message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:install-log', String(message))
+  }
+}
+
+function broadcastInstallStage(stage, status) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:install-stage', { stage, status })
+  }
+}
+
+// Se il runtime è in fase 'warming' (Next boota + Turbopack pre-compila
+// le pagine chiave) aspettiamo il completamento prima di aprire il
+// browser. Così l'utente arriva su una pagina pronta, invece di trovarsi
+// 404 o pagine bianche che si materializzano dopo 5-15s.
+async function waitForWarmUpDone(maxWaitMs = 75000) {
+  const started = Date.now()
+  while (Date.now() - started < maxWaitMs) {
+    const s = await runtime.getStatus()
+    if (s.mode === 'running' || s.mode === 'external') return s
+    if (s.mode === 'error' || s.mode === 'stopped') return s
+    // Propaga il progress alla UI Electron così l'utente vede "Preparazione 2/5…"
+    if (mainWindow && !mainWindow.isDestroyed() && s.warmingProgress) {
+      mainWindow.webContents.send('launcher:warming-progress', s.warmingProgress)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return runtime.getStatus()
+}
+
+async function openRuntimeInBrowser() {
+  let status = await runtime.getStatus()
+  if (status.mode !== 'running' && status.mode !== 'external') {
+    status = await runtime.startRuntime({ port: status.port })
+  }
+  // `startRuntime` ora blocca fino a 'running' ma se il runtime era già
+  // in avvio (gestito altrove) il nostro status potrebbe essere
+  // 'warming'. In quel caso attendiamo il completamento.
+  if (status.mode === 'warming') {
+    status = await waitForWarmUpDone()
   }
 
-  return launchableStatus
+  if (status.running && (status.mode === 'running' || status.mode === 'external')) {
+    await shell.openExternal(status.url)
+  }
+
+  return status
 }
 
 app.whenReady().then(() => {
@@ -78,13 +234,313 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
   ipcMain.handle('launcher:start', async (_event, options) => {
-    const status = await runtime.startRuntime(options)
-    if (status.running) {
-      shell.openExternal(status.url).catch(() => {})
+    try {
+      syncJhtConfig()
+    } catch (error) {
+      // Non-fatal: the agent-boot script has a Claude-subscription
+      // fallback, so a missing or partial config just means the user
+      // drops into the default provider.
+      broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
     }
+    const status = await runtime.startRuntime(options)
     return status
   })
   ipcMain.handle('launcher:stop', () => runtime.stopRuntime())
+
+  // Probe: il pulsante dev mode e' abilitato solo se il renderer vede
+  // app.isPackaged=false (Electron in dev dalla sorgente). In prod
+  // il bottone viene nascosto perche' scripts/dev-up.sh non esiste
+  // nell'app installata.
+  ipcMain.handle('dev:is-available', () => ({ available: !app.isPackaged }))
+
+  // Dev mode one-shot: skippa il flow installer normale, fa partire
+  // il container via docker compose (con bind-mount di .launcher/,
+  // agents/, shared/, web/) e Next sull'host su :3001, poi apre il
+  // browser sulla porta dev. Disponibile solo quando Electron gira
+  // dal sorgente (app.isPackaged=false): in prod la repo non e'
+  // accessibile per eseguire lo script.
+  ipcMain.handle('dev:launch', async () => {
+    if (app.isPackaged) {
+      return { ok: false, error: 'Dev mode disponibile solo da sorgente (npm run desktop:dev)' }
+    }
+    // Sincronizza il provider scelto nel wizard → jht.config.json.
+    // Senza questo, Dev Mode riusa il config di una sessione precedente
+    // e il provider dal wizard viene ignorato (bug osservato: utente
+    // seleziona Claude nel wizard, vede partire Kimi perche' il config
+    // aveva ancora active_provider=kimi da una run passata). La versione
+    // standard del bottone 'Start Team' gia' lo faceva.
+    try {
+      syncJhtConfig()
+    } catch (error) {
+      console.error('[dev:launch] syncJhtConfig failed:', error)
+      // non-fatal: il dev-up.sh proseguirà con il config esistente;
+      // se e' incompatibile start-agent.sh ti dira' cosa manca.
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-up.sh')
+    // Su Windows passiamo esplicitamente per git-bash (Electron non
+    // eredita il PATH di quello che hai aperto; bash.exe via PATH non
+    // e' garantito). Su mac/linux basta 'bash'.
+    const bashCmd =
+      process.platform === 'win32'
+        ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+        : 'bash'
+    // Redirige stdout/stderr di dev-up.sh su file, altrimenti gli errori
+    // del compose (es. container zombie, image mancante, docker daemon
+    // down) sono invisibili e il bottone resta in "Avvio…" finche'
+    // waitForReady scade.
+    const fs = require('node:fs')
+    const logDir = path.join(repoRoot, '.dev-logs')
+    const logPath = path.join(logDir, 'dev-up.log')
+    fs.mkdirSync(logDir, { recursive: true })
+    const logFd = fs.openSync(logPath, 'a')
+    try {
+      const child = spawn(bashCmd, [script], {
+        cwd: repoRoot,
+        detached: true,
+        stdio: ['ignore', logFd, logFd],
+        env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+      })
+      child.unref()
+    } catch (error) {
+      fs.closeSync(logFd)
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      fs.closeSync(logFd)
+    }
+    // Il dev-up.sh dura ~20-30s (recreate container + fix chown + start
+    // Next). Aspettiamo in background che :3001 risponda e ritorniamo
+    // il flag `ready` al renderer. NON apriamo piu' il browser
+    // automaticamente (rimosso 2026-04-25 su richiesta utente: forzava
+    // Chrome che non e' il browser scelto). L'utente apre da solo o usa
+    // il bottone dedicato `home-btn-dev-open` nella card Avanzate.
+    const waitForReady = async () => {
+      const { request } = require('node:http')
+      const deadline = Date.now() + 60_000
+      while (Date.now() < deadline) {
+        const alive = await new Promise(resolve => {
+          const req = request('http://localhost:3001/', { method: 'HEAD', timeout: 2000 }, res => {
+            resolve(res.statusCode != null && res.statusCode < 500)
+          })
+          req.on('error', () => resolve(false))
+          req.on('timeout', () => { req.destroy(); resolve(false) })
+          req.end()
+        })
+        if (alive) return true
+        await new Promise(r => setTimeout(r, 2000))
+      }
+      return false
+    }
+    const ready = await waitForReady()
+    return { ok: true, ready, logPath }
+  })
+  // Dev mode probe: una HEAD su localhost:3001 dice se il Next host
+  // (lanciato da dev-up.sh) è attualmente attivo. Renderer lo usa per
+  // mostrare il badge running/stopped nella card Avanzate.
+  ipcMain.handle('dev:probe', async () => {
+    const { request } = require('node:http')
+    const alive = await new Promise((resolve) => {
+      const req = request('http://localhost:3001/', { method: 'HEAD', timeout: 1500 }, (res) => {
+        resolve(res.statusCode != null && res.statusCode < 500)
+      })
+      req.on('error', () => resolve(false))
+      req.on('timeout', () => { req.destroy(); resolve(false) })
+      req.end()
+    })
+    return { running: alive }
+  })
+
+  // Dev mode stop: lancia scripts/dev-down.sh in foreground, raccoglie
+  // l'exit code. dev-down.sh ferma sia il container `jht` sia il Next
+  // sull'host (kill -TERM dei processi `next dev -p 3001`).
+  ipcMain.handle('dev:stop', async () => {
+    if (app.isPackaged) {
+      return { ok: false, error: 'Dev mode disponibile solo da sorgente' }
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-down.sh')
+    const bashCmd =
+      process.platform === 'win32'
+        ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+        : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stderr = ''
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          if (code === 0) resolve({ ok: true })
+          else resolve({ ok: false, error: stderr.trim() || `dev-down.sh exit ${code}` })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  // ── Dev mode SECONDARIO (porta != 3001, su qualsiasi worktree) ──────────
+  // Permette di affiancare al dev primario un secondo Next dev che riusa
+  // il container `jht` condiviso. Vedi scripts/dev-up-additional.sh.
+  // In-memory store dei dev secondari attivi: chiave = porta.
+  const additionalDevs = new Map() // port -> { pid, worktree, startedAt, logPath }
+  const MAX_ADDITIONAL = 2 // Mac M3 18 GB regge max 2 secondari + primario
+
+  ipcMain.handle('dev-additional:list-worktrees', async () => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    return new Promise((resolve) => {
+      try {
+        const child = spawn('git', ['worktree', 'list', '--porcelain'], {
+          cwd: path.resolve(__dirname, '..'),
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (d) => { stdout += d.toString() })
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          if (code !== 0) {
+            resolve({ ok: false, error: stderr.trim() || `git worktree exit ${code}` })
+            return
+          }
+          // Parse porcelain: blocchi separati da riga vuota, ogni blocco ha
+          // `worktree <path>`, `HEAD <sha>`, `branch <ref>`.
+          const worktrees = []
+          for (const block of stdout.split(/\n\n/)) {
+            const lines = block.split('\n').filter(Boolean)
+            const wt = {}
+            for (const line of lines) {
+              const [key, ...rest] = line.split(' ')
+              wt[key] = rest.join(' ')
+            }
+            if (wt.worktree) {
+              worktrees.push({
+                path: wt.worktree,
+                branch: (wt.branch || '').replace('refs/heads/', '') || '(detached)',
+              })
+            }
+          }
+          resolve({ ok: true, worktrees })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:launch', async (_event, args) => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    const { worktree, port } = args || {}
+    if (typeof worktree !== 'string' || !worktree) {
+      return { ok: false, error: 'worktree mancante' }
+    }
+    const portNum = Number(port)
+    if (!Number.isInteger(portNum) || portNum < 3000 || portNum > 9999 || portNum === 3001) {
+      return { ok: false, error: 'porta deve essere 3000-9999, diversa da 3001' }
+    }
+    if (additionalDevs.has(portNum)) {
+      return { ok: false, error: `dev secondario già attivo su :${portNum}` }
+    }
+    if (additionalDevs.size >= MAX_ADDITIONAL) {
+      return { ok: false, error: `max ${MAX_ADDITIONAL} dev secondari (Mac M3 18 GB), ferma uno prima` }
+    }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-up-additional.sh')
+    const bashCmd = process.platform === 'win32'
+      ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+      : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script, worktree, String(portNum)], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stdout = ''
+        let stderr = ''
+        child.stdout?.on('data', (d) => { stdout += d.toString() })
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          // Parse `KEY=VALUE` lines (anche su exit code != 0 — exit 6 = not ready
+          // ma PID è valido, lo vogliamo tracciare comunque).
+          const out = {}
+          for (const line of stdout.split('\n')) {
+            const m = line.match(/^([A-Z_]+)=(.+)$/)
+            if (m) out[m[1]] = m[2]
+          }
+          if (out.PID) {
+            additionalDevs.set(portNum, {
+              pid: Number(out.PID),
+              worktree,
+              startedAt: Date.now(),
+              logPath: out.LOG || null,
+              url: out.URL || `http://localhost:${portNum}`,
+            })
+          }
+          if (code === 0) {
+            resolve({ ok: true, ready: out.READY === '1', ...out, port: portNum })
+          } else {
+            resolve({
+              ok: false,
+              error: stderr.trim() || `dev-up-additional.sh exit ${code}`,
+              partial: out,
+              port: portNum,
+            })
+          }
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:stop', async (_event, args) => {
+    if (app.isPackaged) return { ok: false, error: 'Solo da sorgente' }
+    const portNum = Number(args?.port)
+    if (!Number.isInteger(portNum)) return { ok: false, error: 'porta mancante' }
+    const repoRoot = path.resolve(__dirname, '..')
+    const script = path.join(repoRoot, 'scripts', 'dev-down-additional.sh')
+    const bashCmd = process.platform === 'win32'
+      ? (process.env.JHT_BASH || 'C:\\Program Files\\Git\\bin\\bash.exe')
+      : 'bash'
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(bashCmd, [script, String(portNum)], {
+          cwd: repoRoot,
+          env: { ...process.env, MSYS_NO_PATHCONV: '1' },
+        })
+        let stderr = ''
+        child.stderr?.on('data', (d) => { stderr += d.toString() })
+        child.on('error', (err) => resolve({ ok: false, error: err.message }))
+        child.on('exit', (code) => {
+          additionalDevs.delete(portNum)
+          if (code === 0) resolve({ ok: true })
+          else resolve({ ok: false, error: stderr.trim() || `dev-down-additional.sh exit ${code}` })
+        })
+      } catch (error) {
+        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+  })
+
+  ipcMain.handle('dev-additional:list-active', async () => {
+    const list = []
+    for (const [port, info] of additionalDevs) {
+      // Verifica liveness: se il PID è morto, ripulisci.
+      let alive = false
+      try { alive = process.kill(info.pid, 0) || true } catch { alive = false }
+      if (!alive) {
+        additionalDevs.delete(port)
+        continue
+      }
+      list.push({ port, ...info, uptimeMs: Date.now() - info.startedAt })
+    }
+    return { ok: true, active: list, max: MAX_ADDITIONAL }
+  })
+
   ipcMain.handle('launcher:open-external', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       return { ok: false, error: 'invalid-url' }
@@ -110,11 +566,18 @@ app.whenReady().then(() => {
     } catch {
       // Preview can show "unknown" if the disk probe fails.
     }
+    let steps = null
+    try {
+      steps = await dockerInstaller.inspectInstallSteps({ platform: process.platform })
+    } catch {
+      // Leave steps null on failure; renderer falls back to the generic view.
+    }
     return {
       platform: process.platform,
       arch: process.arch,
       strategy,
       check,
+      steps,
       disk: {
         freeBytes: free,
         freeHuman,
@@ -130,6 +593,65 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('setup:open-brew-homepage', async () => {
+    try {
+      await shell.openExternal('https://brew.sh')
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('setup:install-docker', async () => {
+    try {
+      const result = await dockerInstaller.installDocker({
+        platform: process.platform,
+        onLog: broadcastInstallLog,
+        onStage: broadcastInstallStage,
+      })
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastInstallLog(`Errore: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  // Windows-only: one-click install of WSL2 + Docker Desktop behind a
+  // single UAC prompt. Reuses the install-log broadcast channel so the
+  // renderer can show live progress in the same panel.
+  ipcMain.handle('setup:install-windows-stack', async () => {
+    try {
+      return await winInstaller.installWindowsStack({
+        platform: process.platform,
+        onLog: broadcastInstallLog,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastInstallLog(`Errore: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  // Triggers a full OS reboot. Used at the end of the Windows install
+  // flow so WSL2 kernel + Docker engine come up clean on next boot.
+  ipcMain.handle('setup:reboot', async () => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'unsupported-platform' }
+    }
+    const { spawn } = require('node:child_process')
+    try {
+      spawn('shutdown.exe', ['/r', '/t', '0'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      }).unref()
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle('setup:open-docker-download-page', async () => {
     const url = dockerInstaller.downloadUrlFor()
     if (!url) return { ok: false, error: 'unsupported-platform' }
@@ -138,6 +660,234 @@ app.whenReady().then(() => {
       return { ok: true, url }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('setup:get-extra-deps', async () => {
+    try {
+      return await deps.inspectExtraDeps()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { deps: [], allRequiredOk: false, error: message }
+    }
+  })
+
+  ipcMain.handle('setup:ensure-container', async () => {
+    try {
+      if (!payload.isPayloadPresent(payloadDir)) {
+        broadcastContainerLog('Fetching payload (compose file + Dockerfile)…')
+        const result = await payload.ensurePayload({
+          payloadDir,
+          updateIfPresent: false,
+          logger: broadcastContainerLog,
+        })
+        if (!result) {
+          return { ok: false, stage: 'payload', error: 'payload missing after ensure' }
+        }
+      }
+      return await containerPrep.ensureContainerImage({
+        payloadDir,
+        onLog: broadcastContainerLog,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastContainerLog(`Error: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  ipcMain.handle('setup:get-status', async () => {
+    const docker = await dockerInstaller.checkDocker()
+    const extra = await deps.inspectExtraDeps()
+    const image = containerPrep.inspectImage()
+    const saved = providerStore.readProviders(app.getPath('userData'))
+    const { installed } = providerInstall.inspectInstalledProviders()
+    const bindHomeDir = getBindHomeDir()
+    // Auth only matters for providers the user currently picks (saved).
+    // Binaries in the bind-mount from previous runs are ignored — the
+    // user deselected them, they shouldn't resurface at login.
+    const relevant = saved.filter((id) => installed.includes(id))
+    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
+    return {
+      docker,
+      extra,
+      image,
+      providers: {
+        saved,
+        installed,
+        pending: saved.filter((id) => !installed.includes(id)),
+        auth,
+        authed: auth.filter((a) => a.authed).map((a) => a.id),
+        unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
+      },
+    }
+  })
+
+  ipcMain.handle('setup:get-auth-states', () => {
+    const saved = providerStore.readProviders(app.getPath('userData'))
+    const installed = providerInstall.inspectInstalledProviders().installed
+    const relevant = saved.filter((id) => installed.includes(id))
+    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir: getBindHomeDir() })
+    return { auth, installed: relevant }
+  })
+
+  ipcMain.handle('setup:logout-provider', (_event, providerId) => {
+    if (typeof providerId !== 'string' || !providerId) {
+      return { ok: false, error: 'providerId required' }
+    }
+    try {
+      return providerAuth.logoutProvider(providerId, { bindHomeDir: getBindHomeDir() })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  const loginContainerNames = new Map()
+
+  ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
+    const meta = providerInstall.PROVIDERS[providerId]
+    if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
+    if (!payload.isPayloadPresent(payloadDir)) {
+      return { ok: false, error: 'payload not present — run container prep first' }
+    }
+    // Predictable container name so we can docker-kill the orphan
+    // if the user closes the modal before the CLI exits cleanly.
+    const containerName = `jht-login-${providerId}-${Date.now()}`
+    // Append loginArgs (e.g. --yolo for kimi) so the first-run trust
+    // dialog is auto-accepted and the approval lands in the CLI's
+    // config on disk. Later launches — including the background
+    // assistant boot — will skip straight past it.
+    const loginArgs = Array.isArray(meta.loginArgs) ? meta.loginArgs : []
+    const id = terminal.spawnSession({
+      command: 'docker',
+      args: [
+        'compose', 'run', '--rm', '--no-deps',
+        '-it',
+        '--name', containerName,
+        '-e', 'HOME=/jht_home',
+        '--entrypoint', meta.binary,
+        'jht',
+        ...loginArgs,
+      ],
+      cwd: payloadDir,
+      env: containerPrep.dockerEnv(),
+      onData: (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:data:${id}`, data)
+        }
+      },
+      onExit: (exit) => {
+        loginContainerNames.delete(id)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:exit:${id}`, exit)
+        }
+      },
+    })
+    loginContainerNames.set(id, containerName)
+    return { ok: true, sessionId: id }
+  })
+
+  ipcMain.on('terminal:write', (_event, { sessionId, data }) => {
+    terminal.write(sessionId, data)
+  })
+
+  ipcMain.on('terminal:resize', (_event, { sessionId, cols, rows }) => {
+    terminal.resize(sessionId, cols, rows)
+  })
+
+  ipcMain.handle('terminal:kill', (_event, sessionId) => {
+    const containerName = loginContainerNames.get(sessionId)
+    terminal.kill(sessionId)
+    loginContainerNames.delete(sessionId)
+    if (containerName) {
+      const { spawn } = require('node:child_process')
+      // Best-effort: remove the ephemeral container. --rm would clean
+      // it up if the CLI exited normally, but closing the modal
+      // early leaves it running.
+      try {
+        spawn('docker', ['rm', '-f', containerName], {
+          stdio: 'ignore',
+          windowsHide: true,
+          detached: true,
+        }).unref()
+      } catch { /* ignore */ }
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('clipboard:read', () => clipboard.readText())
+  ipcMain.handle('clipboard:write', (_event, text) => {
+    if (typeof text === 'string') clipboard.writeText(text)
+    return { ok: true }
+  })
+
+  ipcMain.handle('setup:install-providers', async (_event, providerIds) => {
+    try {
+      if (!payload.isPayloadPresent(payloadDir)) {
+        return { ok: false, stage: 'payload', error: 'payload not present — run container prep first' }
+      }
+      const result = await providerInstall.installProviders({
+        providerIds: Array.isArray(providerIds) ? providerIds : [],
+        payloadDir,
+        onLog: broadcastProviderLog,
+      })
+      if (result.ok) {
+        providerStore.writeProviders(app.getPath('userData'), providerIds)
+      }
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      broadcastProviderLog(`Error: ${message}`)
+      return { ok: false, stage: 'exception', error: message }
+    }
+  })
+
+  ipcMain.handle('setup:get-providers', () => {
+    return { providers: providerStore.readProviders(app.getPath('userData')) }
+  })
+
+  // New single-select API used by the redesigned provider picker:
+  // one provider, one plan tier. The plan value is purely
+  // informational — the sentinel reads it later to size context
+  // windows against the account's actual quota.
+  ipcMain.handle('setup:get-selection', () => {
+    return providerStore.readSelection(app.getPath('userData'))
+  })
+
+  ipcMain.handle('setup:save-selection', (_event, { provider, plan } = {}) => {
+    try {
+      return {
+        ok: true,
+        selection: providerStore.writeSelection(app.getPath('userData'), { provider, plan }),
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('setup:open-docker-desktop', async () => {
+    const desktopPath = dockerInstaller.dockerDesktopPath()
+    if (!desktopPath) return { ok: false, error: 'docker-desktop-not-found' }
+    try {
+      const result = await shell.openPath(desktopPath)
+      if (result) return { ok: false, error: result }
+      return { ok: true, path: desktopPath }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  // Mac path al "Open Docker Desktop": qui non esiste un .app da aprire,
+  // il runtime è Colima e va acceso da CLI. `colima start` è sincrono e
+  // può durare ~30-60s la prima volta — il renderer disabilita il
+  // bottone per la durata.
+  ipcMain.handle('setup:start-colima', async () => {
+    try {
+      containerRuntime.startColima()
+      return { ok: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: message }
     }
   })
 
@@ -152,6 +902,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   if (runtime) runtime.stopRuntime().catch(() => {})
+  terminal.killAll()
 })
 
 app.on('window-all-closed', () => {

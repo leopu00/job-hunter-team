@@ -3,12 +3,29 @@ import fs from 'fs'
 import type { CandidateProfile } from './types'
 import { JHT_PROFILE_YAML } from './jht-paths'
 
-export function readProfile(_workspacePath?: string): CandidateProfile | null {
+/**
+ * `CORE_SCHEMA` esclude tutti i tag YAML estesi (es. `!!js/function`,
+ * `!!js/regexp`) lasciando solo str/int/float/bool/null/seq/map. Senza
+ * questa restrizione un attaccante che riesce a scrivere su
+ * `~/.jht/profile/candidate_profile.yml` potrebbe materializzare
+ * oggetti arbitrari al parse-time.
+ */
+const SAFE_YAML = { schema: yaml.CORE_SCHEMA } as const
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function loadProfileYaml(): Record<string, unknown> | null {
   if (!fs.existsSync(JHT_PROFILE_YAML)) return null
+  const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8'), SAFE_YAML)
+  return isPlainObject(raw) ? raw : null
+}
+
+export function readProfile(_workspacePath?: string): CandidateProfile | null {
   try {
-    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
-    if (!raw) return null
-    return mapYamlToProfile(raw)
+    const raw = loadProfileYaml()
+    return raw ? mapYamlToProfile(raw) : null
   } catch {
     return null
   }
@@ -19,17 +36,40 @@ export function readProfile(_workspacePath?: string): CandidateProfile | null {
  * Restituisce null se mancante, vuoto, o con placeholder del template.
  */
 export function readWorkspaceProfile(_workspacePath?: string): CandidateProfile | null {
-  if (!fs.existsSync(JHT_PROFILE_YAML)) return null
   try {
-    const raw = yaml.load(fs.readFileSync(JHT_PROFILE_YAML, 'utf8')) as any
+    const raw = loadProfileYaml()
     if (!raw) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null
     if (profile.name === 'Nome Cognome' || profile.email === 'nome.cognome@example.com') return null
     return profile
-  } catch {
+  } catch (err) {
+    console.error(`[profile-reader] failed to parse ${JHT_PROFILE_YAML}:`, err instanceof Error ? err.message : err)
     return null
   }
+}
+
+/**
+ * Gate di completezza: un profilo è considerato "pronto per la dashboard"
+ * solo quando contiene identità base + almeno 2 skill, 1 lingua, 1 esperienza
+ * lavorativa e 1 titolo di studio. Stessa logica usata dal client in
+ * onboarding/page.tsx (canProceed). Se cambi una, cambia anche l'altra.
+ */
+export function isProfileComplete(profile: CandidateProfile | null): boolean {
+  if (!profile) return false
+  const hasCore = Boolean(
+    profile.name
+    && profile.target_role
+    && profile.location
+    && profile.experience_years != null
+    && (profile.positioning?.contacts?.email || profile.email),
+  )
+  if (!hasCore) return false
+  const skills = Object.values(profile.skills ?? {}).flat().filter(Boolean)
+  const languages = profile.languages ?? []
+  const experience = profile.positioning?.experience ?? []
+  const education = profile.positioning?.education ?? []
+  return skills.length >= 2 && languages.length >= 1 && experience.length >= 1 && education.length >= 1
 }
 
 function mapYamlToProfile(raw: any): CandidateProfile {
@@ -54,8 +94,21 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       }))
     : null
 
-  // Location preferences
+  // Preferenze di lavoro (nuovo campo standard `preferences`) con retrocompat
+  // verso vecchi campi usati dall'agente prima che lo schema venisse fissato:
+  // `work_location`, `flexible`, `location_preferences`, `relocation`.
+  const rawPrefs = raw.preferences ?? {}
   const rawLoc = raw.location_preferences ?? []
+  const legacyWorkMode = raw.work_location ?? rawPrefs.work_mode ?? null
+  const work_mode: string | null = legacyWorkMode
+    ?? (Array.isArray(rawLoc) && rawLoc.length > 0
+      ? (typeof rawLoc[0] === 'string' ? rawLoc[0] : rawLoc[0]?.type ?? null)
+      : null)
+  const work_mode_flexibility: string | null = rawPrefs.work_mode_flexibility
+    ?? (raw.flexible === true ? 'flessibile su altre modalità' : null)
+  const relocation: string | boolean | null = rawPrefs.relocation ?? raw.relocation ?? null
+  const salary_annual_eur: string | null = rawPrefs.salary_annual_eur ?? null
+
   const location_preferences = Array.isArray(rawLoc)
     ? rawLoc.map((l: any) => {
         if (typeof l === 'string') return { type: l }
@@ -110,6 +163,18 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       career_goals: candidate.career_goals,
       aspirations: candidate.aspirations,
       free_notes: candidate.free_notes ?? (typeof raw.notes === 'string' ? raw.notes : raw.notes ? Object.entries(raw.notes).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined),
+      preferences: (work_mode || work_mode_flexibility || relocation != null || salary_annual_eur) ? {
+        work_mode,
+        work_mode_flexibility,
+        relocation,
+        salary_annual_eur,
+      } : undefined,
+      // Dict aperto per dettagli specifici del settore (cucina, sanità,
+      // legale, edile, …). L'assistente popola le chiavi che ha senso per
+      // la persona; il frontend le rende come lista key/value generica.
+      sector_details: raw.sector_details && typeof raw.sector_details === 'object'
+        ? raw.sector_details as Record<string, string | number | boolean | string[] | null>
+        : undefined,
     },
     created_at: '',
     updated_at: '',

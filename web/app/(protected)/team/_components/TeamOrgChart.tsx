@@ -1,0 +1,1590 @@
+'use client'
+
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+
+type AgentStatus = 'running' | 'stopped' | 'pending'
+
+type AgentMeta = {
+  status: AgentStatus
+  color: string
+  link?: string | null
+  role?: string
+  /** Numero di istanze attive per questo ruolo (1 = singola, >1 = multiple,
+   *  es. quando il Capitano spawna SCOUT-1 + SCOUT-2). Quando >1 il nodo
+   *  mostra un piccolo badge con il count. */
+  instances?: number
+}
+
+// roleId: id lato API (cli/web). name: label mostrato nel chart (EN).
+const CAPTAIN_AGENT = {
+  roleId: 'capitano',
+  emoji: '\u{1F468}\u200D\u2708\uFE0F',
+  name: 'Captain',
+  desc: 'Coordinates the team and assigns operational priorities.',
+}
+
+// Sentinel: agente di sicurezza che presidia il monitoring usage. Non
+// fa parte della pipeline operativa (scout → critic), siede di lato al
+// Captain con un proprio canale di osservazione del rate-limit.
+const SENTINEL_AGENT = {
+  roleId: 'sentinella',
+  emoji: '💂',
+  name: 'Sentinel',
+  desc: 'Monitors usage and rate-limit health, alerts the Captain on degradations.',
+}
+
+// Bridge: strumento elettronico (non agente LLM) che ogni 5 min interroga
+// il provider via API/rollout JSONL e notifica la Sentinella con un tick
+// fresco. Appare nel grafo perché spedisce messaggi (BRIDGE TICK / BRIDGE
+// FAILURE) e l'utente vuole vederli scorrere lungo la freccia. Comunica
+// SOLO con la Sentinella — niente canale diretto con il Captain.
+const BRIDGE_NODE = {
+  roleId: 'bridge',
+  emoji: '📡',
+  name: 'Bridge',
+  desc: 'Electronic probe — every 5 min reads usage from the provider and ticks the Sentinel.',
+}
+
+// Pacing Bridge: secondo strumento elettronico, simmetrico al Bridge ma
+// dal lato del Capitano. Ogni 15 min calcola Δusage / vel team / vel
+// target / %/h per agente e manda un [BRIDGE PACING] direttamente al
+// Capitano (NON alla Sentinella). Cliccando il nodo si apre un popover
+// con l'ultimo report dettagliato (agenti, kT, ratio, verdetto).
+// Niente start/stop dalla UI: gira sempre col team (lifecycle del
+// container, vedi .launcher/start-agent.sh ramo "bridge").
+const PACING_NODE = {
+  roleId: 'pacing',
+  emoji: '⏱️',
+  name: 'Pacing',
+  desc: 'Tick every 15 min — sends pacing report to the Captain (per-agent %/h, target speed, verdict).',
+}
+
+// Dottore: agente health-check spawnato ogni 30 min dal watchdog. Pinga
+// ogni agente, diagnostica stallo/CLI morta, e riavvia chi serve. Si
+// auto-distrugge a fine giro. Le sue azioni sono in
+// /jht_home/logs/dottore-actions.jsonl, lette da /api/dottore/actions
+// per mostrare un timeline live nella pagina /team (DoctorPanel).
+const DOCTOR_AGENT = {
+  roleId: 'dottore',
+  emoji: '🩺',
+  name: 'Doctor',
+  desc: 'Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.',
+}
+
+// Database: non è un agente né un processo, è il bersaglio condiviso di
+// tutte le operazioni di scrittura/aggiornamento fatte dagli agenti
+// pipeline (Scout inserisce posizioni, Scorer aggiorna score, Critic
+// annota review, ecc.). Stilato grigio acciaio come Bridge/Pacing.
+const DB_NODE = {
+  roleId: 'database',
+  emoji: '🗄️',
+  name: 'DB',
+  desc: 'Shared database — pipeline writes land here.',
+}
+
+const PIPELINE_AGENTS = [
+  { roleId: 'scout',     emoji: '\uD83D\uDD75\uFE0F',            name: 'Scout',   desc: 'Searches for new opportunities on job channels.' },
+  { roleId: 'analista',  emoji: '\u{1F468}\u200D\uD83D\uDD2C',   name: 'Analyst', desc: 'Reads requirements and evaluates fit with profile.' },
+  { roleId: 'scorer',    emoji: '\u{1F468}\u200D\uD83D\uDCBB',   name: 'Scorer',  desc: 'Calculates priority and match score of offers.' },
+  { roleId: 'scrittore', emoji: '\u{1F468}\u200D\uD83C\uDFEB',   name: 'Writer',  desc: 'Prepares tailored CV and cover letter.' },
+  { roleId: 'critico',   emoji: '\u{1F468}\u200D\u2696\uFE0F',   name: 'Critic',  desc: 'Reviews materials and flags what needs correction.' },
+]
+
+// Badge "×N" mostrato sui nodi che rappresentano un ruolo con più istanze
+// attive (es. 2 SCOUT, 2 ANALISTA). Posizionato in alto a sinistra
+// dell'emoji, simmetrico al LED running che sta in alto a destra.
+function InstanceBadge({ count }: { count: number }) {
+  if (count <= 1) return null
+  return (
+    <span
+      aria-label={`${count} instances`}
+      style={{
+        position: 'absolute',
+        bottom: -4,
+        right: -12,
+        minWidth: 16,
+        height: 16,
+        padding: '0 4px',
+        borderRadius: 8,
+        background: 'rgba(34,197,94,0.85)',
+        color: '#000',
+        fontSize: 10,
+        lineHeight: '16px',
+        fontWeight: 700,
+        textAlign: 'center',
+        border: '1px solid rgba(34,197,94,0.5)',
+        fontFamily: 'inherit',
+        zIndex: 2,
+      }}
+    >
+      ×{count}
+    </span>
+  )
+}
+
+function ActiveLed({ active }: { active: boolean }) {
+  if (!active) return null
+  return (
+    <span
+      aria-label="online"
+      className="team-orgchart-led"
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: -8,
+        width: 5,
+        height: 5,
+        borderRadius: '50%',
+        background: '#22c55e',
+        boxShadow: '0 0 5px rgba(34,197,94,0.7)',
+      }}
+    />
+  )
+}
+
+function MiniSpinner({ size = 11, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="orgchart-spin" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AgentPopover({
+  roleId,
+  emoji,
+  name,
+  desc,
+  meta,
+  loading,
+  onAction,
+  onClose,
+  placement,
+  extraContent,
+  wide,
+}: {
+  extraContent?: React.ReactNode
+  roleId: string
+  emoji: string
+  name: string
+  desc: string
+  meta?: AgentMeta
+  loading: boolean
+  onAction?: (id: string, action: 'start' | 'stop') => void
+  onClose: () => void
+  placement: 'above' | 'below'
+  /** Larghezza extra per popover con extraContent denso (es. Pacing report). */
+  wide?: boolean
+}) {
+  const status: AgentStatus = meta?.status ?? 'stopped'
+  const color = meta?.color ?? '#ffc107'
+  const isRunning = status === 'running'
+  const isPending = status === 'pending'
+  const disabled = loading || isPending
+
+  const statusText = isRunning ? 'Online' : isPending ? 'Starting...' : 'Offline'
+  const statusColor = isRunning ? '#22c55e' : isPending ? '#f59e0b' : 'var(--color-dim)'
+
+  const posStyle: React.CSSProperties = placement === 'above'
+    ? { bottom: '100%', marginBottom: 12 }
+    : { top: '100%', marginTop: 12 }
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-label={`${name} details`}
+      className={`absolute left-1/2 z-30 ${wide ? 'w-80' : 'w-64'} -translate-x-1/2 rounded-xl p-3.5 shadow-2xl`}
+      style={{
+        ...posStyle,
+        background: 'var(--color-panel)',
+        border: `1px solid ${color}40`,
+        boxShadow: `0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px ${color}15`,
+        animation: 'orgchart-pop 0.15s ease-out',
+      }}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-2 right-2 text-[var(--color-dim)] hover:text-[var(--color-bright)]"
+        style={{ fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 2 }}
+      >
+        ×
+      </button>
+
+      <div className="flex items-center gap-2.5 mb-2">
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
+          style={{ background: `${color}15`, border: `1px solid ${color}30` }}
+        >
+          {emoji}
+        </div>
+        <div className="min-w-0">
+          {meta?.link ? (
+            <Link href={meta.link} className="text-[12px] font-bold no-underline hover:underline" style={{ color: 'var(--color-white)' }}>
+              {name}
+            </Link>
+          ) : (
+            <div className="text-[12px] font-bold" style={{ color: 'var(--color-white)' }}>{name}</div>
+          )}
+          <div className="text-[9px] font-semibold tracking-wide uppercase mt-0.5" style={{ color }}>
+            {meta?.role ?? name}
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10.5px] leading-relaxed mb-3" style={{ color: 'var(--color-muted)' }}>
+        {desc}
+      </p>
+
+      {extraContent && (
+        <div className="mb-3">{extraContent}</div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 pt-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase" style={{ color: statusColor }}>
+          <span
+            style={{
+              display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+              background: isRunning ? '#22c55e' : isPending ? '#f59e0b' : 'rgba(255,255,255,0.2)',
+              boxShadow: isRunning ? '0 0 6px rgba(34,197,94,0.5)' : isPending ? '0 0 6px rgba(245,158,11,0.5)' : 'none',
+            }}
+          />
+          {statusText}
+        </span>
+
+        {onAction && (
+          <button
+            onClick={() => onAction(roleId, isRunning ? 'stop' : 'start')}
+            disabled={disabled}
+            aria-label={isRunning ? `Stop ${name}` : `Start ${name}`}
+            className="px-3 py-1.5 rounded-lg text-[10.5px] font-semibold transition-all"
+            style={{
+              background: disabled ? 'var(--color-border)' : isRunning ? 'rgba(244,67,54,0.08)' : `${color}15`,
+              color: disabled ? 'var(--color-dim)' : isRunning ? '#f44336' : color,
+              border: `1px solid ${disabled ? 'var(--color-border)' : isRunning ? 'rgba(244,67,54,0.2)' : `${color}30`}`,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {loading ? (
+              <span className="inline-flex items-center gap-1"><MiniSpinner size={10} /> Wait...</span>
+            ) : isRunning ? (
+              '\u25A0 Stop'
+            ) : (
+              '\u25B6 Start'
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type Props = {
+  agents?: Record<string, AgentMeta>
+  onAction?: (id: string, action: 'start' | 'stop') => void
+  actionLoading?: string | null
+  /** Backwards-compat: se `agents` non è fornito, usa activeRoles per i LED. */
+  activeRoles?: Set<string>
+  /** v2 placeholder: rendi solo la riga superiore (Bridge, Sentinel, Captain,
+   *  Pacing) e relative frecce. Usato dalla pagina /team/v2 in costruzione. */
+  topRowOnly?: boolean
+  /** Quando true, i nodi non running diventano `visibility: hidden` (lo
+   *  spazio nel grid resta riservato così le frecce non si spostano) e le
+   *  frecce verso/da quei nodi non vengono renderizzate. Usato in
+   *  /team/v2 per mostrare solo gli agenti attivi nelle posizioni canoniche. */
+  hideStopped?: boolean
+  /** Segnale per animare un pallino agente→DB. Il parent setta un nuovo
+   *  oggetto (incrementando `key`) ogni volta che rileva una scrittura DB
+   *  da parte di `agent`; il TeamOrgChart osserva `key` e fa pushAnim
+   *  sulla freccia `db-from-<agent>`. Pattern key-bumping così oggetti
+   *  uguali ma "nuovi" triggerano comunque l'animazione. */
+  dbWriteSignal?: { agent: string; key: number } | null
+}
+
+// Renderer del payload last_report del pacing-bridge dentro al popover.
+// Compatto: una macro-row (vel team / target / verdetto) e una tabellina
+// per agente con kT consumati nella finestra, ratio in kT per 1%, e %/h
+// risultante. Stesso shape dell'API /api/team/pacing-bridge.
+function PacingReport({
+  report,
+}: {
+  report: {
+    ok: boolean
+    ts: string
+    effective_window_min: number
+    n_samples: number
+    usage_now: number | null
+    proj: number | null
+    h_to_reset: number | null
+    delta_usage: number
+    team_kt: number
+    ratio_kt_per_pct: number
+    vel_team: number
+    vel_target: number | null
+    target_band_center: number
+    agents: Array<{ name: string; kt: number; pct_per_h: number; share: number; events?: number; cadence_per_min?: number }>
+    skipped: string[]
+    verdict: { kind: 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'; delta: number | null; frac_pct: number | null }
+    error?: string
+    hint?: string
+  } | null
+}) {
+  if (!report) {
+    return (
+      <div className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Nessun tick ricevuto ancora. Il bridge esegue il primo calcolo al
+        prossimo quarto d'ora pieno (:00 / :15 / :30 / :45 UTC).
+      </div>
+    )
+  }
+  if (!report.ok) {
+    return (
+      <div className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Tick saltato: <span className="font-mono">{report.error ?? 'unknown'}</span>
+        {report.hint && <div className="opacity-75 mt-1">{report.hint}</div>}
+      </div>
+    )
+  }
+  const verdictColor =
+    report.verdict.kind === 'SFORO' ? '#ef4444'
+    : report.verdict.kind === 'MARGINE' ? '#22c55e'
+    : report.verdict.kind === 'ALLINEATO' ? '#94a3b8'
+    : '#94a3b8'
+  const verdictLabel =
+    report.verdict.kind === 'SFORO'
+      ? `SFORO +${report.verdict.delta?.toFixed(2)}%/h → riduci ${report.verdict.frac_pct?.toFixed(0)}%`
+      : report.verdict.kind === 'MARGINE'
+        ? `MARGINE −${report.verdict.delta?.toFixed(2)}%/h → puoi salire ${report.verdict.frac_pct?.toFixed(0)}%`
+        : report.verdict.kind === 'ALLINEATO'
+          ? 'ALLINEATO al target'
+          : 'target N/D'
+  const tsLocal = (() => {
+    try {
+      return new Date(report.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return report.ts
+    }
+  })()
+  return (
+    <div className="text-[10px] leading-tight" style={{ color: 'var(--color-muted)' }}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono opacity-70">tick {tsLocal}</span>
+        <span className="font-mono opacity-70">{report.effective_window_min.toFixed(1)}m · {report.n_samples} samples</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-2">
+        <div>usage <span className="font-mono">{report.usage_now}%</span></div>
+        <div>proj <span className="font-mono">{report.proj}%</span></div>
+        <div>vel team <span className="font-mono">{report.vel_team.toFixed(2)}%/h</span></div>
+        <div>vel target <span className="font-mono">{report.vel_target?.toFixed(2) ?? '—'}%/h</span></div>
+        <div>Δusage <span className="font-mono">{report.delta_usage.toFixed(2)}%</span></div>
+        <div>ratio <span className="font-mono">{report.ratio_kt_per_pct.toFixed(1)} kT/%</span></div>
+      </div>
+      <div className="font-semibold uppercase tracking-wide text-[9px] mb-1" style={{ color: 'var(--color-bright)' }}>
+        per agente
+      </div>
+      {report.agents.length === 0 ? (
+        <div className="opacity-60">nessuno sopra soglia</div>
+      ) : (
+        <table className="w-full font-mono text-[9.5px]">
+          <thead>
+            <tr style={{ color: 'var(--color-dim)' }}>
+              <th className="text-left font-normal pb-0.5">agente</th>
+              <th className="text-right font-normal pb-0.5">kT/{report.effective_window_min.toFixed(0)}m</th>
+              <th className="text-right font-normal pb-0.5">%/h</th>
+              <th className="text-right font-normal pb-0.5">share</th>
+              <th
+                className="text-right font-normal pb-0.5"
+                title="Checkpoint per minuto (eventi loggati da jht-throttle nella finestra). Serve al Capitano per calibrare la durata in config: throttle_eff = cadenza × durata_sec / 60"
+              >
+                chk/min
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.agents.map((a) => (
+              <tr key={a.name}>
+                <td className="py-0.5" style={{ color: 'var(--color-bright)' }}>{a.name}</td>
+                <td className="text-right py-0.5">{a.kt.toFixed(1)}</td>
+                <td className="text-right py-0.5">{a.pct_per_h.toFixed(2)}</td>
+                <td className="text-right py-0.5 opacity-70">{a.share.toFixed(0)}%</td>
+                <td className="text-right py-0.5 opacity-70">
+                  {a.cadence_per_min != null ? a.cadence_per_min.toFixed(2) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {report.skipped.length > 0 && (
+        <div className="mt-1.5 text-[9px] opacity-60">
+          sotto soglia: {report.skipped.join(', ')}
+        </div>
+      )}
+      <div
+        className="mt-2 pt-1.5 text-[10px] font-semibold"
+        style={{ color: verdictColor, borderTop: '1px solid var(--color-border)' }}
+      >
+        {verdictLabel}
+      </div>
+    </div>
+  )
+}
+
+type ArrowPath = { id: string; d: string }
+
+// Colori per il pallino del messaggio: stesso codice usato dal parent
+// team/page.tsx per le card agenti, così il pallino "ha la voce" del
+// mittente. Bridge è grigio acciaio (strumento elettronico, non agente).
+const AGENT_COLORS: Record<string, string> = {
+  bridge:     '#94a3b8',
+  pacing:     '#22d3ee',
+  sentinella: '#9c27b0',
+  capitano:   '#ff9100',
+  scout:      '#2196f3',
+  analista:   '#00e676',
+  scorer:     '#b388ff',
+  scrittore:  '#ffd600',
+  critico:    '#f44336',
+  assistente: '#26c6da',
+}
+const colorFor = (roleish: string): string => {
+  const key = roleish.toLowerCase().split('-')[0]
+  return AGENT_COLORS[key] ?? '#34d399'
+}
+
+export default function TeamOrgChart({ agents, onAction, actionLoading, activeRoles, topRowOnly, hideStopped, dbWriteSignal }: Props) {
+  const desktopFlowRef = useRef<HTMLDivElement | null>(null)
+  const captainNameRef = useRef<HTMLSpanElement | null>(null)
+  const captainEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const agentEmojiRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const bridgeEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const pacingEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const sentinelEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const dbEmojiRef = useRef<HTMLSpanElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [arrowOverlay, setArrowOverlay] = useState<{
+    width: number
+    height: number
+    bridgePath: ArrowPath | null
+    pacingPath: ArrowPath | null
+    sentinelToCaptainPath: ArrowPath | null
+    captainPaths: ArrowPath[]
+    chainPaths: ArrowPath[]
+    dbPaths: ArrowPath[]
+  }>({
+    width: 0,
+    height: 0,
+    bridgePath: null,
+    pacingPath: null,
+    sentinelToCaptainPath: null,
+    captainPaths: [],
+    chainPaths: [],
+    dbPaths: [],
+  })
+
+  // Animazione "messaggio in transito": ogni elemento qui in lista è una
+  // pallina che parte dal source di un path e percorre la freccia fino al
+  // dest. Il rendering aggiunge un <circle> con <animateMotion> agganciato
+  // al <path id={pathId}>; quando l'animazione finisce, l'elemento viene
+  // rimosso da questa lista. Per ora alimentato da un demo cyclic interno
+  // (vedi useEffect più sotto); in futuro si collegherà ai messaggi reali
+  // tra agenti.
+  // `queued` + `destRole`: se il destinatario è in throttle attivo, il
+  // pallino non arriva al nodo. Animation con keyPoints="0;0.85" + fill=
+  // "freeze" → si ferma all'85% del path. Quando il throttle scade,
+  // l'anim viene rimossa e sostituita da un'altra "completion" sul
+  // tratto 0.85→1 (vedi useEffect più sotto).
+  const [messageAnims, setMessageAnims] = useState<{
+    key: number
+    pathId: string
+    reverse?: boolean
+    durationMs: number
+    color: string
+    queued?: boolean
+    completion?: boolean
+    destRole?: string
+  }[]>([])
+  const animKeyRef = useRef(0)
+
+  // Stato della coda per role (aggregato across instances). Popolato
+  // dal polling di /api/team/queue. throttleUntil = max ts attivo tra
+  // le istanze del role; queued = somma. Se nessuna istanza è in
+  // throttle, l'entry sparisce.
+  const [queueState, setQueueState] = useState<Record<string, { queued: number; throttleUntil: number }>>({})
+  const queueStateRef = useRef(queueState)
+  useEffect(() => { queueStateRef.current = queueState }, [queueState])
+  // Velocità del pallino in px/sec — costante a prescindere dalla lunghezza
+  // del path (così Bridge→Sentinel breve e Captain→Scout lungo hanno la
+  // stessa "velocità apparente"). 200 px/s è un compromesso: il path più
+  // breve (~200px Bridge→Sentinel) ci mette ~1s, il più lungo (~530px
+  // Captain→Scout) ~2.6s.
+  const PX_PER_SEC = 200
+  const MIN_DURATION_MS = 600
+
+  // Helper: aggiunge un'animazione su pathId calcolando la durata in base
+  // alla lunghezza reale del path SVG (getTotalLength). Il color è quello
+  // del mittente — il pallino "ha la voce" dell'agente che parla.
+  // Se `destRole` è passato e quell'agente è in throttle, l'animation viene
+  // accorciata all'85% del path con fill=freeze: il pallino si ferma davanti
+  // al nodo destinatario fino a fine pausa.
+  const pushAnim = (pathId: string, opts?: { reverse?: boolean; color?: string; destRole?: string }) => {
+    const pathEl = typeof document !== 'undefined'
+      ? (document.getElementById(pathId) as unknown as SVGPathElement | null)
+      : null
+    const length = pathEl?.getTotalLength?.() ?? 0
+    const durationMs = Math.max(MIN_DURATION_MS, Math.round((length / PX_PER_SEC) * 1000))
+    const key = ++animKeyRef.current
+    const color = opts?.color ?? '#34d399'
+    const destRole = opts?.destRole
+    const isQueued = !!destRole && !!queueStateRef.current[destRole]
+    setMessageAnims((prev) => [...prev, { key, pathId, reverse: opts?.reverse, durationMs, color, queued: isQueued, destRole }])
+    if (!isQueued) {
+      // Animation completa: rimossa dopo dur + buffer.
+      setTimeout(() => {
+        setMessageAnims((prev) => prev.filter((a) => a.key !== key))
+      }, durationMs + 800)
+    }
+    // Se `isQueued`, l'animazione resta freezata finché il watcher
+    // (useEffect su queueState) non la sblocca emettendo una completion.
+  }
+  // Per evitare di richiamare beginElement() su un <animateMotion> già
+  // avviato (succede quando React ri-rendera il map e il ref callback
+  // riceve di nuovo lo stesso elemento → SMIL riavvia l'animation a metà
+  // strada). WeakSet così i nodi rimossi dal DOM vengono garbage-collected.
+  const startedAnimsRef = useRef<WeakSet<SVGAnimateMotionElement>>(new WeakSet())
+  const beginAnim = (el: SVGAnimateMotionElement | null) => {
+    if (!el) return
+    if (startedAnimsRef.current.has(el)) return
+    startedAnimsRef.current.add(el)
+    // requestAnimationFrame: dare al browser un frame per registrare il
+    // nuovo nodo SMIL e risolvere <mpath href> prima del trigger.
+    requestAnimationFrame(() => {
+      try { el.beginElement() } catch { /* SMIL non supportato → noop */ }
+    })
+  }
+
+  // Countdown al prossimo Bridge tick. Calcolato da bridgeNextTickAt che
+  // arriva dal backend (= lastTickAt nel JSONL + 5min, l'intervallo reale
+  // del bridge Python).
+  const [bridgeCountdown, setBridgeCountdown] = useState<number | null>(null)
+  // Stato del process Python sentinel-bridge.py (sì/no via /api/bridge/status).
+  // Quando il bridge è giù, niente LED, niente countdown, niente animazione
+  // demo Bridge→Sentinella. La freccia resta disegnata ma più tenue.
+  const [bridgeRunning, setBridgeRunning] = useState<boolean>(false)
+  const [bridgePending, setBridgePending] = useState<boolean>(false)
+  // Fonte di verità sul timing: il backend legge il sample più recente
+  // con source=bridge dal JSONL e ne deriva nextTickAt = lastTickAt + 5min.
+  // Niente più timer locale che vede "5 min" finti.
+  const [bridgeLastTickAt, setBridgeLastTickAt] = useState<string | null>(null)
+  const [bridgeNextTickAt, setBridgeNextTickAt] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const r = await fetch('/api/bridge/status', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as { running: boolean; lastTickAt: string | null; nextTickAt: string | null }
+        if (!cancelled) {
+          setBridgeRunning(!!j.running)
+          setBridgeLastTickAt(j.lastTickAt ?? null)
+          setBridgeNextTickAt(j.nextTickAt ?? null)
+        }
+      } catch { /* ignore */ }
+    }
+    check()
+    const interval = setInterval(check, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  const handleBridgeAction = async (_id: string, action: 'start' | 'stop') => {
+    setBridgePending(true)
+    try {
+      await fetch(`/api/bridge/${action}`, { method: 'POST' })
+      // Refresh status subito dopo il toggle (il polling 3s ci penserebbe ma
+      // così l'utente vede il LED reagire immediatamente).
+      const r = await fetch('/api/bridge/status', { cache: 'no-store' })
+      if (r.ok) {
+        const j = await r.json() as { running: boolean }
+        setBridgeRunning(!!j.running)
+      }
+    } catch { /* ignore */ } finally {
+      setBridgePending(false)
+    }
+  }
+
+  // Pacing bridge: stato + ultimo report. Polling /api/team/pacing-bridge
+  // ogni 3s come fa il sentinel-bridge. Niente start/stop dalla UI.
+  type PacingAgentRow = { name: string; kt: number; kt_per_h: number; pct_per_h: number; share: number; events?: number; cadence_per_min?: number }
+  type PacingVerdictKind = 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'
+  type PacingReport = {
+    ok: boolean
+    ts: string
+    window_min: number
+    effective_window_min: number
+    n_samples: number
+    usage_now: number | null
+    proj: number | null
+    reset_at: string | null
+    h_to_reset: number | null
+    delta_usage: number
+    team_kt: number
+    ratio_kt_per_pct: number
+    vel_team: number
+    vel_target: number | null
+    target_band_center: number
+    agents: PacingAgentRow[]
+    skipped: string[]
+    verdict: { kind: PacingVerdictKind; delta: number | null; frac_pct: number | null }
+    error?: string
+    hint?: string
+  }
+  const [pacingRunning, setPacingRunning] = useState<boolean>(false)
+  const [pacingLastTickAt, setPacingLastTickAt] = useState<string | null>(null)
+  const [pacingNextTickAt, setPacingNextTickAt] = useState<string | null>(null)
+  const [pacingCountdown, setPacingCountdown] = useState<number | null>(null)
+  const [pacingLastReport, setPacingLastReport] = useState<PacingReport | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const r = await fetch('/api/team/pacing-bridge', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as {
+          running: boolean
+          lastTickAt: string | null
+          nextTickAt: string | null
+          lastReport: PacingReport | null
+        }
+        if (cancelled) return
+        setPacingRunning(!!j.running)
+        setPacingLastTickAt(j.lastTickAt ?? null)
+        setPacingNextTickAt(j.nextTickAt ?? null)
+        setPacingLastReport(j.lastReport ?? null)
+      } catch { /* ignore */ }
+    }
+    check()
+    const interval = setInterval(check, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  const isActive = (roleId: string) => {
+    if (agents) return agents[roleId]?.status === 'running'
+    return activeRoles?.has(roleId) ?? false
+  }
+
+  // In hideStopped mode un nodo è "visibile" se è davvero attivo. Bridge
+  // e Pacing hanno il loro stato dedicato (process Python, non in
+  // /api/agents), gli altri usano isActive.
+  const isVisible = (roleId: string): boolean => {
+    if (!hideStopped) return true
+    if (roleId === BRIDGE_NODE.roleId) return bridgeRunning
+    if (roleId === PACING_NODE.roleId) return pacingRunning
+    return isActive(roleId)
+  }
+
+  // Close popover on outside click or Esc
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null) }
+    const onClick = (e: MouseEvent) => {
+      const root = containerRef.current
+      if (root && !root.contains(e.target as Node)) setSelected(null)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onClick)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onClick)
+    }
+  }, [selected])
+
+  useEffect(() => {
+    let frame = 0
+
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const flow = desktopFlowRef.current
+        const captainName = captainNameRef.current
+        if (!flow || !captainName) return
+
+        const flowRect = flow.getBoundingClientRect()
+        const captainRect = captainName.getBoundingClientRect()
+        const startX = captainRect.left + captainRect.width / 2 - flowRect.left
+        const startY = captainRect.bottom - flowRect.top + 6
+
+        // In topRowOnly i nodi pipeline non sono renderizzati: niente
+        // captainPaths né chainPaths. Non saltiamo l'intero useEffect
+        // perché ci servono comunque bridgePath / sentinelToCaptainPath /
+        // pacingPath calcolati sotto. In hideStopped i nodi non running
+        // hanno display:none → rect.width=0: trattiamoli come null per
+        // non disegnare frecce verso il punto (0,0).
+        const captainPaths: ArrowPath[] = topRowOnly ? [] : agentEmojiRefs.current
+          .map((node, index) => {
+            if (!node || index === 4) return null
+            const rect = node.getBoundingClientRect()
+            if (rect.width === 0) return null
+            const endX = rect.left + rect.width / 2 - flowRect.left
+            const endY = rect.top - flowRect.top - 6
+            const id = `captain-to-${PIPELINE_AGENTS[index]?.roleId ?? index}`
+            return { id, d: `M ${startX} ${startY} L ${endX} ${endY}` }
+          })
+          .filter((p): p is ArrowPath => p !== null)
+
+        const agentRects = topRowOnly ? [] : agentEmojiRefs.current
+          .map((node) => {
+            if (!node) return null
+            const rect = node.getBoundingClientRect()
+            return rect.width === 0 ? null : rect
+          })
+
+        const chainPaths: ArrowPath[] = []
+        for (let i = 0; i < agentRects.length - 1; i++) {
+          const rect = agentRects[i]
+          const nextRect = agentRects[i + 1]
+          if (!rect || !nextRect) continue
+          const sX = rect.right - flowRect.left + 6
+          const eX = nextRect.left - flowRect.left - 6
+          const y = rect.top + rect.height / 2 - flowRect.top
+          const id = `chain-${PIPELINE_AGENTS[i].roleId}-to-${PIPELINE_AGENTS[i + 1].roleId}`
+          chainPaths.push({ id, d: `M ${sX} ${y} L ${eX} ${y}` })
+        }
+
+        // Bridge → Sentinel: orizzontale top-row. Bridge in col 1, Sentinel
+        // in col 2; partiamo dal lato destro del Bridge e arriviamo al lato
+        // sinistro della Sentinel. Lo y è preso dal center del Bridge per
+        // restare allineato anche se le emoji hanno altezze leggermente
+        // diverse (📡 vs 💂).
+        let bridgePath: ArrowPath | null = null
+        const bridgeNode = bridgeEmojiRef.current
+        const sentinelNode = sentinelEmojiRef.current
+        const captainEmojiNode = captainEmojiRef.current
+        if (bridgeNode && sentinelNode) {
+          const bRect = bridgeNode.getBoundingClientRect()
+          const sRect = sentinelNode.getBoundingClientRect()
+          const sX = bRect.right - flowRect.left + 6
+          const eX = sRect.left - flowRect.left - 6
+          const y = bRect.top + bRect.height / 2 - flowRect.top
+          bridgePath = { id: 'bridge-to-sentinel', d: `M ${sX} ${y} L ${eX} ${y}` }
+        }
+
+        // Sentinel → Captain: orizzontale top-row, stessa riga del Bridge.
+        // La Sentinella alerta il Capitano quando il filtro decide che vale
+        // la pena disturbarlo (proj > 105% o usage >= 90%, vedi suo prompt).
+        let sentinelToCaptainPath: ArrowPath | null = null
+        if (sentinelNode && captainEmojiNode) {
+          const sRect = sentinelNode.getBoundingClientRect()
+          const cRect = captainEmojiNode.getBoundingClientRect()
+          const sX = sRect.right - flowRect.left + 6
+          const eX = cRect.left - flowRect.left - 6
+          const y = sRect.top + sRect.height / 2 - flowRect.top
+          sentinelToCaptainPath = { id: 'sentinel-to-captain', d: `M ${sX} ${y} L ${eX} ${y}` }
+        }
+
+        // Pipeline agents → DB: una freccia verticale da ogni pipeline
+        // visibile verso il nodo DB sotto. Skippa i pipeline nascosti
+        // (rect width=0). Il DB è centrato sotto la pipeline.
+        const dbPaths: ArrowPath[] = []
+        const dbNode = dbEmojiRef.current
+        if (!topRowOnly && dbNode) {
+          const dRect = dbNode.getBoundingClientRect()
+          if (dRect.width > 0) {
+            const dX = dRect.left + dRect.width / 2 - flowRect.left
+            const dY = dRect.top - flowRect.top - 6
+            agentRects.forEach((rect, index) => {
+              if (!rect) return
+              const sX = rect.left + rect.width / 2 - flowRect.left
+              const sY = rect.bottom - flowRect.top + 6
+              const id = `db-from-${PIPELINE_AGENTS[index]?.roleId ?? index}`
+              dbPaths.push({ id, d: `M ${sX} ${sY} L ${dX} ${dY}` })
+            })
+          }
+        }
+
+        // Pacing → Captain: il Pacing è alla destra del Captain (col 4),
+        // quindi la freccia parte dal lato sinistro del Pacing e arriva
+        // al lato destro del Captain. Direzione "verso sinistra".
+        let pacingPath: ArrowPath | null = null
+        const pacingNode = pacingEmojiRef.current
+        if (pacingNode && captainEmojiNode) {
+          const pRect = pacingNode.getBoundingClientRect()
+          const cRect = captainEmojiNode.getBoundingClientRect()
+          const sX = pRect.left - flowRect.left - 6
+          const eX = cRect.right - flowRect.left + 6
+          const y = pRect.top + pRect.height / 2 - flowRect.top
+          pacingPath = { id: 'pacing-to-captain', d: `M ${sX} ${y} L ${eX} ${y}` }
+        }
+
+        setArrowOverlay((prev) => {
+          const width = Math.round(flowRect.width)
+          const height = Math.round(flowRect.height)
+          const samePaths = (a: ArrowPath[], b: ArrowPath[]) =>
+            a.length === b.length && a.every((p, i) => p.id === b[i].id && p.d === b[i].d)
+          const sameOpt = (a: ArrowPath | null, b: ArrowPath | null) =>
+            (a === null && b === null) || (a !== null && b !== null && a.id === b.id && a.d === b.d)
+          if (
+            prev.width === width &&
+            prev.height === height &&
+            samePaths(prev.captainPaths, captainPaths) &&
+            samePaths(prev.chainPaths, chainPaths) &&
+            samePaths(prev.dbPaths, dbPaths) &&
+            sameOpt(prev.bridgePath, bridgePath) &&
+            sameOpt(prev.pacingPath, pacingPath) &&
+            sameOpt(prev.sentinelToCaptainPath, sentinelToCaptainPath)
+          ) {
+            return prev
+          }
+          return { width, height, bridgePath, pacingPath, sentinelToCaptainPath, captainPaths, chainPaths, dbPaths }
+        })
+      })
+    }
+
+    measure()
+
+    const resizeObserver = new ResizeObserver(measure)
+    if (desktopFlowRef.current) resizeObserver.observe(desktopFlowRef.current)
+    if (captainNameRef.current) resizeObserver.observe(captainNameRef.current)
+    if (bridgeEmojiRef.current) resizeObserver.observe(bridgeEmojiRef.current)
+    if (pacingEmojiRef.current) resizeObserver.observe(pacingEmojiRef.current)
+    if (dbEmojiRef.current) resizeObserver.observe(dbEmojiRef.current)
+    if (sentinelEmojiRef.current) resizeObserver.observe(sentinelEmojiRef.current)
+    if (captainEmojiRef.current) resizeObserver.observe(captainEmojiRef.current)
+    agentEmojiRefs.current.forEach((node) => {
+      if (node) resizeObserver.observe(node)
+    })
+
+    window.addEventListener('resize', measure)
+    measureRef.current = measure
+
+    return () => {
+      cancelAnimationFrame(frame)
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', measure)
+      measureRef.current = null
+    }
+  }, [topRowOnly])
+
+  // Re-measure forzato quando lo stato del Pacing arriva (polling async).
+  // Senza questo, dopo un HMR di Next o un mount con polling lento, la
+  // measure mount-time poteva girare con pacingEmojiRef ancora null, e il
+  // path pacing-to-captain restava null finché qualcuno non ridimensionava
+  // la finestra. Ora basta che pacingRunning passi true e re-misuriamo.
+  const measureRef = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    measureRef.current?.()
+  }, [pacingRunning])
+
+  // Animazione pallino agente→DB quando il parent rileva una scrittura.
+  // Reagiamo a (agent, key): la `key` numerica cambia anche se l'agente
+  // resta lo stesso, così due scritture consecutive dello stesso ruolo
+  // generano due animazioni distinte.
+  useEffect(() => {
+    if (!dbWriteSignal) return
+    const agent = dbWriteSignal.agent
+    const path = arrowOverlay.dbPaths.find((p) => p.id === `db-from-${agent}`)
+    if (!path) return
+    pushAnim(path.id, { color: colorFor(agent) })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbWriteSignal?.key])
+
+  // Re-measure quando cambia il set di nodi visibili in hideStopped:
+  // un pipeline che passa da display:none a flex ottiene un nuovo span
+  // (e quindi un nuovo bounding rect) ma il ResizeObserver è agganciato
+  // al container, non sapevamo del cambio. Senza questo, dopo aver
+  // spawnato un secondo agente operativo (es. Analyst) le frecce
+  // captain→pipeline e chain restavano quelle dello stato precedente.
+  const visibilitySig = [
+    bridgeRunning ? 1 : 0,
+    pacingRunning ? 1 : 0,
+    isActive(SENTINEL_AGENT.roleId) ? 1 : 0,
+    isActive(CAPTAIN_AGENT.roleId) ? 1 : 0,
+    ...PIPELINE_AGENTS.map((a) => (isActive(a.roleId) ? 1 : 0)),
+  ].join('')
+  useEffect(() => {
+    // RAF + microtask delay: il misurato ha bisogno che React abbia
+    // committato il nuovo layout (display:flex applicato) prima di
+    // leggere i bounding rects. Senza il delay si misurava il frame
+    // precedente.
+    const t = setTimeout(() => measureRef.current?.(), 16)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibilitySig])
+
+  // Mapping convenzionale (from/to nel formato `[@X -> @Y]` di jht-tmux-send)
+  // → id del path SVG renderizzato. "scrittore"/"critico" sono i nomi italiani
+  // usati dagli agenti, gli id dei path seguono PIPELINE_AGENTS.
+  const messageRouteToPathId = (from: string, to: string): { id: string; reverse?: boolean } | null => {
+    const f = from.toLowerCase().split('-')[0]   // "scout-1" → "scout"
+    const t = to.toLowerCase().split('-')[0]
+    if (f === 'bridge'    && t === 'sentinella') return arrowOverlay.bridgePath ? { id: arrowOverlay.bridgePath.id } : null
+    if (f === 'pacing'    && t === 'capitano')   return arrowOverlay.pacingPath ? { id: arrowOverlay.pacingPath.id } : null
+    if (f === 'sentinella'&& t === 'capitano')   return arrowOverlay.sentinelToCaptainPath ? { id: arrowOverlay.sentinelToCaptainPath.id } : null
+    if (t === 'sentinella'&& f === 'capitano')   return arrowOverlay.sentinelToCaptainPath ? { id: arrowOverlay.sentinelToCaptainPath.id, reverse: true } : null
+    if (f === 'capitano') {
+      const p = arrowOverlay.captainPaths.find((x) => x.id === `captain-to-${t}`)
+      return p ? { id: p.id } : null
+    }
+    // Risposta agente → capitano: stessa freccia di captain-to-X percorsa al contrario
+    if (t === 'capitano') {
+      const p = arrowOverlay.captainPaths.find((x) => x.id === `captain-to-${f}`)
+      if (p) return { id: p.id, reverse: true }
+    }
+    // Chain pipeline: cerca match diretto X-to-Y o reverse Y-to-X
+    const direct = arrowOverlay.chainPaths.find((x) => x.id === `chain-${f}-to-${t}`)
+    if (direct) return { id: direct.id }
+    const rev = arrowOverlay.chainPaths.find((x) => x.id === `chain-${t}-to-${f}`)
+    if (rev) return { id: rev.id, reverse: true }
+    return null
+  }
+
+  // Polling dei messaggi tra agenti: ogni 800ms chiede a /api/team/messages
+  // gli eventi più recenti. Per ogni messaggio nuovo, se la coppia from/to
+  // ha un path renderizzato, aggiungiamo un'animazione in coda. È il canale
+  // che alimenta i pallini sulle frecce reali (post-demo).
+  useEffect(() => {
+    let cancelled = false
+    let cursor: string | null = null
+    const poll = async () => {
+      try {
+        const url = cursor ? `/api/team/messages?since=${encodeURIComponent(cursor)}` : '/api/team/messages'
+        const r = await fetch(url, { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as { messages: Array<{ ts: string; from: string; to: string }>; cursor: string | null }
+        if (cancelled) return
+        // Primo poll (cursor null): adottiamo cursor senza animare la storia
+        if (cursor === null) {
+          cursor = j.cursor
+          return
+        }
+        cursor = j.cursor ?? cursor
+        for (const m of j.messages) {
+          const route = messageRouteToPathId(m.from, m.to)
+          if (!route) continue
+          const destRole = m.to.toLowerCase().split('-')[0]
+          pushAnim(route.id, { reverse: route.reverse, color: colorFor(m.from), destRole })
+        }
+      } catch { /* network blip → retry next tick */ }
+    }
+    poll()
+    // 1500ms (era 800): l'animazione delle frecce non risente
+    // visivamente del raddoppio (un messaggio passa in ~2s sulla
+    // freccia comunque). Riduce req/min su /api/team/messages da
+    // ~75 a ~40, dando margine al rate limit per gli altri poll
+    // della pagina /team (chart, status, sentinella, ecc.).
+    const interval = setInterval(poll, 1500)
+    return () => { cancelled = true; clearInterval(interval) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrowOverlay.bridgePath, arrowOverlay.pacingPath, arrowOverlay.sentinelToCaptainPath, arrowOverlay.captainPaths, arrowOverlay.chainPaths])
+
+  // Polling /api/team/queue ogni 2.5s. Aggrega per role: se più istanze
+  // dello stesso role sono in throttle, prendiamo throttleUntil massimo
+  // e somma di queued (l'UI vede UN unico stato per role, e basta UNA
+  // istanza throttled per fermare i pallini diretti a quel ruolo).
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/team/queue', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json() as { agents: Array<{ agent: string; queued: number; throttleUntil: string | null }> }
+        if (cancelled) return
+        const next: Record<string, { queued: number; throttleUntil: number }> = {}
+        for (const a of j.agents) {
+          const role = a.agent.toLowerCase().split('-')[0]
+          const untilMs = a.throttleUntil ? Date.parse(a.throttleUntil) : 0
+          // Skippiamo agenti senza throttle attivo: niente da rappresentare.
+          if (untilMs <= Date.now()) continue
+          const cur = next[role]
+          next[role] = {
+            queued: (cur?.queued ?? 0) + a.queued,
+            throttleUntil: Math.max(cur?.throttleUntil ?? 0, untilMs),
+          }
+        }
+        setQueueState(next)
+      } catch { /* ignore */ }
+    }
+    poll()
+    const interval = setInterval(poll, 2500)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  // Watcher: quando il throttle di un role scade (l'entry esce da
+  // queueState), tutti i pallini queued con destRole = quel role
+  // devono completare il tragitto. Li rimuoviamo dallo state e
+  // aggiungiamo una "completion" sul tratto 0.85→1.
+  const prevQueueRolesRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const currRoles = new Set(Object.keys(queueState))
+    const released: string[] = []
+    for (const role of prevQueueRolesRef.current) {
+      if (!currRoles.has(role)) released.push(role)
+    }
+    prevQueueRolesRef.current = currRoles
+    if (released.length === 0) return
+
+    // Per ogni anim queued con destRole rilasciato → spawn completion.
+    setMessageAnims((prev) => {
+      const survivors: typeof prev = []
+      const toComplete: typeof prev = []
+      for (const a of prev) {
+        if (a.queued && a.destRole && released.includes(a.destRole)) {
+          toComplete.push(a)
+        } else {
+          survivors.push(a)
+        }
+      }
+      if (toComplete.length === 0) return prev
+      const completionAnims = toComplete.map((a) => {
+        const key = ++animKeyRef.current
+        // Tratto residuo 0.85→1 = 15% del path. Durata proporzionale.
+        const compDur = Math.max(300, Math.round(a.durationMs * 0.15))
+        // Cleanup pianificato: dopo compDur + buffer rimuoviamo l'anim.
+        setTimeout(() => {
+          setMessageAnims((prev) => prev.filter((x) => x.key !== key))
+        }, compDur + 600)
+        return {
+          key,
+          pathId: a.pathId,
+          reverse: a.reverse,
+          durationMs: compDur,
+          color: a.color,
+          completion: true,
+          destRole: a.destRole,
+        }
+      })
+      return [...survivors, ...completionAnims]
+    })
+  }, [queueState])
+
+  // Demo Bridge → Sentinella: ogni 15s spawn un pallino sulla freccia
+  // Bridge→Sentinel per simulare il [BRIDGE TICK] che il bridge Python
+  // manda alla Sentinella ogni 5 min.
+  // Quando il backend riporta un nuovo lastTickAt (= il bridge Python ha
+  // appena scritto un sample fresh nel JSONL), animiamo il pallino
+  // Bridge→Sentinel UNA volta. Il timing è quello reale del bridge,
+  // niente più simulazione locale ogni N secondi.
+  useEffect(() => {
+    if (!bridgeRunning) return
+    if (!arrowOverlay.bridgePath) return
+    if (!bridgeLastTickAt) return
+    pushAnim(arrowOverlay.bridgePath.id, { color: colorFor('bridge') })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridgeLastTickAt, bridgeRunning, arrowOverlay.bridgePath])
+
+  // Countdown ticker: usa nextTickAt REALE dal backend. Cambia ogni 250ms
+  // così la cifra in UI cambia esattamente al secondo. Quando nextTickAt
+  // arriva, il countdown va a 0 finché il backend non riporta il nuovo
+  // lastTickAt (= sample fresh) e il next slitta di +5min.
+  useEffect(() => {
+    if (!bridgeRunning || !bridgeNextTickAt) {
+      setBridgeCountdown(null)
+      return
+    }
+    const targetMs = new Date(bridgeNextTickAt).getTime()
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
+      setBridgeCountdown(remaining)
+    }
+    tick()
+    const interval = setInterval(tick, 250)
+    return () => clearInterval(interval)
+  }, [bridgeNextTickAt, bridgeRunning])
+
+  // Pacing: pallino animato Pacing→Captain ogni volta che arriva un nuovo
+  // tick (lastTickAt cambia). Stesso pattern del Bridge→Sentinel.
+  useEffect(() => {
+    if (!pacingRunning) return
+    if (!arrowOverlay.pacingPath) return
+    if (!pacingLastTickAt) return
+    pushAnim(arrowOverlay.pacingPath.id, { color: colorFor('pacing'), destRole: 'capitano' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacingLastTickAt, pacingRunning, arrowOverlay.pacingPath])
+
+  // Pacing countdown ticker (analogo a quello del Bridge).
+  useEffect(() => {
+    if (!pacingRunning || !pacingNextTickAt) {
+      setPacingCountdown(null)
+      return
+    }
+    const targetMs = new Date(pacingNextTickAt).getTime()
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
+      setPacingCountdown(remaining)
+    }
+    tick()
+    const interval = setInterval(tick, 250)
+    return () => clearInterval(interval)
+  }, [pacingNextTickAt, pacingRunning])
+
+  const toggle = (id: string) => setSelected(prev => (prev === id ? null : id))
+
+  return (
+    <div className="hidden md:block" ref={containerRef}>
+      <style>{`
+        @keyframes team-orgchart-pulse {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.35; }
+        }
+        .team-orgchart-led {
+          animation: team-orgchart-pulse 3s ease-in-out infinite;
+        }
+        @keyframes orgchart-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        .orgchart-spin { animation: orgchart-spin 0.8s linear infinite; }
+        @keyframes orgchart-pop {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes team-msg-queued-pulse {
+          0%, 100% { opacity: 0.28; }
+          50%      { opacity: 0.55; }
+        }
+        .team-msg-queued-pulse {
+          animation: team-msg-queued-pulse 1.6s ease-in-out infinite;
+        }
+      `}</style>
+
+      <div ref={desktopFlowRef} className="relative mx-auto w-full max-w-[1080px]">
+        {arrowOverlay.width > 0 && arrowOverlay.height > 0 && (
+          arrowOverlay.bridgePath ||
+          arrowOverlay.sentinelToCaptainPath ||
+          arrowOverlay.captainPaths.length > 0 ||
+          arrowOverlay.chainPaths.length > 0 ||
+          arrowOverlay.dbPaths.length > 0
+        ) && (
+          <svg
+            aria-hidden="true"
+            viewBox={`0 0 ${arrowOverlay.width} ${arrowOverlay.height}`}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+          >
+            <defs>
+              <marker
+                id="team-orgchart-arrowhead"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                markerUnits="userSpaceOnUse"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
+              </marker>
+            </defs>
+
+            {arrowOverlay.bridgePath && isVisible(BRIDGE_NODE.roleId) && isVisible(SENTINEL_AGENT.roleId) && (
+              <path
+                id={arrowOverlay.bridgePath.id}
+                d={arrowOverlay.bridgePath.d}
+                fill="none"
+                stroke={bridgeRunning ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'}
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                markerEnd="url(#team-orgchart-arrowhead)"
+                strokeDasharray="4 8"
+              />
+            )}
+
+            {arrowOverlay.pacingPath && isVisible(PACING_NODE.roleId) && isVisible(CAPTAIN_AGENT.roleId) && (
+              <path
+                id={arrowOverlay.pacingPath.id}
+                d={arrowOverlay.pacingPath.d}
+                fill="none"
+                stroke={pacingRunning ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'}
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                markerEnd="url(#team-orgchart-arrowhead)"
+                strokeDasharray="4 8"
+              />
+            )}
+
+            {arrowOverlay.sentinelToCaptainPath && isVisible(SENTINEL_AGENT.roleId) && isVisible(CAPTAIN_AGENT.roleId) && (
+              <path
+                id={arrowOverlay.sentinelToCaptainPath.id}
+                d={arrowOverlay.sentinelToCaptainPath.d}
+                fill="none"
+                stroke="rgba(255,255,255,0.28)"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                markerEnd="url(#team-orgchart-arrowhead)"
+                strokeDasharray="4 8"
+              />
+            )}
+
+            {arrowOverlay.captainPaths.map((p) => {
+              const targetRole = p.id.replace(/^captain-to-/, '')
+              if (hideStopped && (!isVisible(CAPTAIN_AGENT.roleId) || !isVisible(targetRole))) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.28)"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  markerStart="url(#team-orgchart-arrowhead)"
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="4 8"
+                />
+              )
+            })}
+
+            {arrowOverlay.chainPaths.map((p, index) => {
+              const m = p.id.match(/^chain-(.+)-to-(.+)$/)
+              if (hideStopped && m && (!isVisible(m[1]) || !isVisible(m[2]))) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeWidth="1.35"
+                  strokeLinecap="round"
+                  markerStart={index === arrowOverlay.chainPaths.length - 1 ? 'url(#team-orgchart-arrowhead)' : undefined}
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="4 8"
+                />
+              )
+            })}
+
+            {arrowOverlay.dbPaths.map((p) => {
+              const sourceRole = p.id.replace(/^db-from-/, '')
+              if (hideStopped && !isVisible(sourceRole)) return null
+              return (
+                <path
+                  key={p.id}
+                  id={p.id}
+                  d={p.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.18)"
+                  strokeWidth="1.25"
+                  strokeLinecap="round"
+                  markerEnd="url(#team-orgchart-arrowhead)"
+                  strokeDasharray="3 6"
+                />
+              )
+            })}
+
+            {/* Pallini messaggio in transito: ogni elemento di messageAnims
+                renderizza un <circle> che percorre il path id-referenziato
+                via <animateMotion><mpath/></animateMotion>. Halo morbido
+                per far percepire il movimento anche quando passa veloce. */}
+            {/* SMIL begin="0s" = 0s dopo il document load, NON dal mount.
+                Per animazioni create dinamicamente DOPO il page load (es. il
+                tick 2 a +15s), SMIL le considererebbe già finite ("begin era
+                15s fa, sei in ritardo, salta alla fine"). Soluzione: begin=
+                "indefinite" + beginElement() chiamato dal callback ref nel
+                momento in cui l'elemento entra nel DOM. */}
+            {messageAnims.map(({ key, pathId, reverse, durationMs, color, queued, completion }) => {
+              // keyPoints + keyTimes mappano il "frame normalizzato" (0..1
+              // del path) al "tempo normalizzato" (0..1 della durata).
+              // - normale: 0→1 (o 1→0 reverse).
+              // - queued: 0→0.85 (si ferma davanti al nodo). fill=freeze
+              //   tiene il pallino fermo all'85% finché il throttle non
+              //   scade e il watcher emette una "completion".
+              // - completion: 0.85→1 (riprende e termina) — anche per
+              //   reverse (1→0.15) per coprire il tratto "vicino al nodo".
+              const kp = completion
+                ? (reverse ? '0.15;0' : '0.85;1')
+                : queued
+                  ? (reverse ? '1;0.15' : '0;0.85')
+                  : (reverse ? '1;0' : null) // null = lascio default SMIL (0;1)
+              const motionProps = kp ? { keyPoints: kp, keyTimes: '0;1' } : {}
+              return (
+                <g key={key}>
+                  {/* Halo: stesso colore del mittente, opacità bassa per
+                      leggerlo anche su sfondo scuro. Quando in queue (freeze
+                      a 0.85), pulsa per dare il senso di "in attesa". */}
+                  <circle cx="0" cy="0" r="9" fill={color} opacity="0.28" className={queued ? 'team-msg-queued-pulse' : undefined}>
+                    <animateMotion
+                      ref={beginAnim}
+                      dur={`${durationMs}ms`}
+                      begin="indefinite"
+                      repeatCount="1"
+                      fill="freeze"
+                      calcMode="linear"
+                      {...motionProps}
+                    >
+                      <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
+                    </animateMotion>
+                  </circle>
+                  {/* Pallino centrale: colore pieno del mittente. */}
+                  <circle cx="0" cy="0" r="3.4" fill={color}>
+                    <animateMotion
+                      ref={beginAnim}
+                      dur={`${durationMs}ms`}
+                      begin="indefinite"
+                      repeatCount="1"
+                      fill="freeze"
+                      calcMode="linear"
+                      {...motionProps}
+                    >
+                      <mpath href={`#${pathId}`} xlinkHref={`#${pathId}`} />
+                    </animateMotion>
+                  </circle>
+                </g>
+              )
+            })}
+          </svg>
+        )}
+
+        {/* Top row: Bridge (col 1) → Sentinel (col 2) → Captain centrato
+            (col 3). Bridge è uno strumento elettronico, non un agente: non
+            ha un canale verso il Captain, comunica solo con la Sentinella.
+            La Sentinella resta laterale al Captain perché osserva, non
+            comanda. */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-[1080px] grid grid-cols-5 justify-items-center items-end">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(BRIDGE_NODE.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(BRIDGE_NODE.roleId) } }}
+              aria-expanded={selected === BRIDGE_NODE.roleId}
+              aria-label={`${BRIDGE_NODE.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-1 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(BRIDGE_NODE.roleId) ? { visibility: 'hidden' } : undefined}
+            >
+              <span className="relative">
+                <span ref={bridgeEmojiRef} data-team-node="bridge" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{BRIDGE_NODE.emoji}</span>
+                {/* LED acceso se il bridge sta tickando (cioè se il countdown
+                    è inizializzato). Per ora è legato al demo cyclic locale
+                    — quando collegheremo il vero stato del process Python
+                    bastera' sostituire la condizione con il flag dal backend. */}
+                <ActiveLed active={bridgeRunning} />
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{BRIDGE_NODE.name}</span>
+              {/* Countdown in absolute così non altera l'altezza del nodo
+                  Bridge — altrimenti `items-end` del grid top-row solleverebbe
+                  l'emoji per allineare i fondi, sfasando la freccia. */}
+              {bridgeRunning && bridgeCountdown !== null && (() => {
+                const m = Math.floor(bridgeCountdown / 60)
+                const s = bridgeCountdown % 60
+                const label = m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
+                return (
+                  <span
+                    className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
+                    style={{ color: 'var(--color-dim)' }}
+                    aria-label={`Next bridge tick in ${bridgeCountdown} seconds`}
+                  >
+                    next tick {label}
+                  </span>
+                )
+              })()}
+
+              {selected === BRIDGE_NODE.roleId && (
+                <AgentPopover
+                  roleId={BRIDGE_NODE.roleId}
+                  emoji={BRIDGE_NODE.emoji}
+                  name={BRIDGE_NODE.name}
+                  desc={BRIDGE_NODE.desc}
+                  meta={{
+                    status: bridgeRunning ? 'running' : 'stopped',
+                    color: AGENT_COLORS.bridge,
+                    role: 'Bridge',
+                  }}
+                  loading={bridgePending}
+                  onAction={handleBridgeAction}
+                  onClose={() => setSelected(null)}
+                  placement="below"
+                />
+              )}
+            </div>
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(SENTINEL_AGENT.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(SENTINEL_AGENT.roleId) } }}
+              aria-expanded={selected === SENTINEL_AGENT.roleId}
+              aria-label={`${SENTINEL_AGENT.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-2 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(SENTINEL_AGENT.roleId) ? { visibility: 'hidden' } : undefined}
+            >
+              <span className="relative">
+                <span ref={sentinelEmojiRef} data-team-node="sentinel" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{SENTINEL_AGENT.emoji}</span>
+                <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} />
+                <InstanceBadge count={agents?.[SENTINEL_AGENT.roleId]?.instances ?? 0} />
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{SENTINEL_AGENT.name}</span>
+
+              {selected === SENTINEL_AGENT.roleId && (
+                <AgentPopover
+                  roleId={SENTINEL_AGENT.roleId}
+                  emoji={SENTINEL_AGENT.emoji}
+                  name={SENTINEL_AGENT.name}
+                  desc={SENTINEL_AGENT.desc}
+                  meta={agents?.[SENTINEL_AGENT.roleId]}
+                  loading={actionLoading === SENTINEL_AGENT.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="below"
+                />
+              )}
+            </div>
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(CAPTAIN_AGENT.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(CAPTAIN_AGENT.roleId) } }}
+              aria-expanded={selected === CAPTAIN_AGENT.roleId}
+              aria-label={`${CAPTAIN_AGENT.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-3 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(CAPTAIN_AGENT.roleId) ? { visibility: 'hidden' } : undefined}
+            >
+              <span className="relative">
+                <span ref={captainEmojiRef} data-team-node="captain" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{CAPTAIN_AGENT.emoji}</span>
+                <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
+                <InstanceBadge count={agents?.[CAPTAIN_AGENT.roleId]?.instances ?? 0} />
+              </span>
+              <span ref={captainNameRef} className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{CAPTAIN_AGENT.name}</span>
+
+              {selected === CAPTAIN_AGENT.roleId && (
+                <AgentPopover
+                  roleId={CAPTAIN_AGENT.roleId}
+                  emoji={CAPTAIN_AGENT.emoji}
+                  name={CAPTAIN_AGENT.name}
+                  desc={CAPTAIN_AGENT.desc}
+                  meta={agents?.[CAPTAIN_AGENT.roleId]}
+                  loading={actionLoading === CAPTAIN_AGENT.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="below"
+                />
+              )}
+            </div>
+
+            {/* Pacing Bridge — col 4, simmetrico al Bridge (col 1).
+                Niente start/stop: gira col team. Click → popover con
+                ultimo report dettagliato. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(PACING_NODE.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(PACING_NODE.roleId) } }}
+              aria-expanded={selected === PACING_NODE.roleId}
+              aria-label={`${PACING_NODE.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-4 cursor-pointer outline-none"
+              style={hideStopped && !isVisible(PACING_NODE.roleId) ? { visibility: 'hidden' } : undefined}
+            >
+              <span className="relative">
+                <span ref={pacingEmojiRef} data-team-node="pacing" className="text-2xl md:text-3xl leading-none" aria-hidden="true">{PACING_NODE.emoji}</span>
+                <ActiveLed active={pacingRunning} />
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{PACING_NODE.name}</span>
+              {pacingRunning && pacingCountdown !== null && (() => {
+                const m = Math.floor(pacingCountdown / 60)
+                const s = pacingCountdown % 60
+                const label = m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
+                return (
+                  <span
+                    className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
+                    style={{ color: 'var(--color-dim)' }}
+                    aria-label={`Next pacing tick in ${pacingCountdown} seconds`}
+                  >
+                    next tick {label}
+                  </span>
+                )
+              })()}
+
+              {selected === PACING_NODE.roleId && (
+                <AgentPopover
+                  roleId={PACING_NODE.roleId}
+                  emoji={PACING_NODE.emoji}
+                  name={PACING_NODE.name}
+                  desc={PACING_NODE.desc}
+                  meta={{
+                    status: pacingRunning ? 'running' : 'stopped',
+                    color: AGENT_COLORS.pacing,
+                    role: 'Pacing Bridge',
+                  }}
+                  loading={false}
+                  onClose={() => setSelected(null)}
+                  placement="below"
+                  wide
+                  extraContent={<PacingReport report={pacingLastReport} />}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {!topRowOnly && (
+        <div className={hideStopped
+          ? 'mt-24 flex justify-around items-start'
+          : 'grid grid-cols-5 justify-items-center items-start mt-24 gap-x-12'}>
+          {PIPELINE_AGENTS.map((agent, index) => (
+            <div
+              key={agent.name}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggle(agent.roleId) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(agent.roleId) } }}
+              aria-expanded={selected === agent.roleId}
+              aria-label={`${agent.name} details`}
+              className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px] cursor-pointer outline-none"
+              // In hideStopped + flex layout, gli agenti non running spariscono
+              // dal flusso (display:none) così quelli rimasti si centrano da
+              // soli; nel layout grid normale non serve nascondere niente.
+              style={hideStopped && !isVisible(agent.roleId) ? { display: 'none' } : undefined}
+            >
+              <span className="relative">
+                <span
+                  ref={(node) => {
+                    agentEmojiRefs.current[index] = node
+                  }}
+                  className="text-2xl md:text-3xl leading-none"
+                  aria-hidden="true"
+                >
+                  {agent.emoji}
+                </span>
+                <ActiveLed active={isActive(agent.roleId)} />
+                <InstanceBadge count={agents?.[agent.roleId]?.instances ?? 0} />
+              </span>
+              <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">{agent.name}</span>
+
+              {selected === agent.roleId && (
+                <AgentPopover
+                  roleId={agent.roleId}
+                  emoji={agent.emoji}
+                  name={agent.name}
+                  desc={agent.desc}
+                  meta={agents?.[agent.roleId]}
+                  loading={actionLoading === agent.roleId}
+                  onAction={onAction}
+                  onClose={() => setSelected(null)}
+                  placement="above"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        )}
+
+        {/* DB node: target condiviso delle scritture pipeline. Posizionato
+            sotto la riga pipeline, centrato. Le frecce verticali da ogni
+            agent visibile arrivano qui (vedi dbPaths nel measure). */}
+        {!topRowOnly && (
+          <div className="mt-16 flex justify-center">
+            <div className="relative inline-flex select-none flex-col items-center gap-2">
+              <span className="relative">
+                <span ref={dbEmojiRef} className="text-2xl md:text-3xl leading-none" aria-hidden="true">{DB_NODE.emoji}</span>
+              </span>
+              <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">{DB_NODE.name}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

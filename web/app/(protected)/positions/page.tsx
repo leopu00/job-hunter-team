@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { getPositions } from '@/lib/queries'
 import type { PositionWithScore, PositionStatus } from '@/lib/types'
+import { createClient } from '@/lib/supabase/server'
+import CloudSyncStatusBanner from '@/app/components/CloudSyncStatusBanner'
 
 const STATUS_COLORS: Record<string, string> = {
   new:      'var(--color-muted)',
@@ -30,12 +32,16 @@ function scoreBg(s?: number) {
   return 'var(--color-red)'
 }
 
-function formatSalary(min: number | null, max: number | null, currency?: string | null) {
-  if (!min && !max) return null
-  const c = currency ?? 'EUR'
-  if (min && max) return `${c} ${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}K`
-  if (min) return `${c} ${(min / 1000).toFixed(0)}K+`
-  return null
+function formatFoundAt(ts: string | null | undefined) {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return '—'
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  if (sameDay) {
+    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  }
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 // ── Tier config (dal legacy) ──────────────────────────────────────
@@ -48,18 +54,27 @@ const TIERS = [
 ] as const
 
 interface CompanyProps {
-  searchParams: Promise<{ status?: string; remote?: string; tier?: string }>
+  searchParams: Promise<{ status?: string; remote?: string; tier?: string; sync?: string }>
 }
+
+const SYNC_FILTERS = [
+  { val: 'all',      label: 'Tutti' },
+  { val: 'synced',   label: '☁ Sincronizzate' },
+  { val: 'unsynced', label: 'Da sincronizzare' },
+] as const
+type SyncFilter = typeof SYNC_FILTERS[number]['val']
 
 export default async function PositionsCompany({ searchParams }: CompanyProps) {
   const params = await searchParams
   const statusFilter = params.status ?? 'all'
   const remoteFilter = params.remote ?? 'all'
   const tierFilter   = params.tier ?? 'all'
+  const syncFilter: SyncFilter =
+    params.sync === 'synced' || params.sync === 'unsynced' ? params.sync : 'all'
 
   const tier = TIERS.find(t => t.val === tierFilter) ?? TIERS[0]
 
-  const positions = await getPositions({
+  const allPositions = await getPositions({
     status:     statusFilter !== 'all' ? statusFilter : undefined,
     remoteType: remoteFilter !== 'all' ? remoteFilter : undefined,
     minScore:   tier.min,
@@ -68,8 +83,49 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
     limit: 600,
   })
 
+  // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
+  // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
+  // ma la lista funziona comunque.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let syncedIds = new Set<number>()
+  if (user) {
+    const { data } = await supabase
+      .from('positions')
+      .select('legacy_id')
+      .eq('user_id', user.id)
+      .not('legacy_id', 'is', null)
+    syncedIds = new Set((data ?? []).map((r: { legacy_id: number | null }) => r.legacy_id).filter((x: number | null): x is number => typeof x === 'number'))
+  }
+
+  // Applica filtro sync dopo aver caricato syncedIds. Una position senza
+  // legacy_id non può essere sincronizzata → cade in "unsynced".
+  const positions = syncFilter === 'all'
+    ? allPositions
+    : allPositions.filter((p) => {
+        const isSynced = p.legacy_id != null && syncedIds.has(p.legacy_id)
+        return syncFilter === 'synced' ? isSynced : !isSynced
+      })
+
+  // Helper per costruire URL preservando filtri attivi.
+  const buildHref = (overrides: Partial<Record<'status' | 'remote' | 'tier' | 'sync', string>>) => {
+    const merged: Record<string, string> = {}
+    if (statusFilter !== 'all') merged.status = statusFilter
+    if (remoteFilter !== 'all') merged.remote = remoteFilter
+    if (tierFilter !== 'all') merged.tier = tierFilter
+    if (syncFilter !== 'all') merged.sync = syncFilter
+    Object.assign(merged, overrides)
+    // Rimuovi chiavi con valore 'all' (default → URL pulito)
+    for (const k of Object.keys(merged)) if (merged[k] === 'all') delete merged[k]
+    const qs = new URLSearchParams(merged).toString()
+    return qs ? `/positions?${qs}` : '/positions'
+  }
+
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>
+
+      {/* Banner stato cloud-sync (compatto, nascosto se non loggato). */}
+      <CloudSyncStatusBanner />
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
@@ -88,6 +144,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
           {statusFilter !== 'all' && ` · status: ${statusFilter}`}
           {remoteFilter !== 'all' && ` · ${remoteFilter.replace('_', ' ')}`}
           {tierFilter !== 'all' && ` · ${tier.label}`}
+          {syncFilter !== 'all' && ` · ${SYNC_FILTERS.find(s => s.val === syncFilter)?.label}`}
         </p>
       </div>
 
@@ -98,7 +155,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
           {TIERS.map(t => (
             <FilterChip
               key={t.val}
-              href={`/positions?${statusFilter !== 'all' ? `status=${statusFilter}&` : ''}${remoteFilter !== 'all' ? `remote=${remoteFilter}&` : ''}${t.val !== 'all' ? `tier=${t.val}` : ''}`}
+              href={buildHref({ tier: t.val })}
               label={t.label}
               active={tierFilter === t.val}
               color={t.color}
@@ -107,15 +164,33 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
         </span>
       </div>
 
+      {/* ── Sync filter (mostra solo se utente loggato — sennò info inutile) ── */}
+      {user && (
+        <div className="mb-5">
+          <span className="text-[9.5px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] mr-3">Cloud sync</span>
+          <span className="inline-flex flex-wrap gap-1.5">
+            {SYNC_FILTERS.map(s => (
+              <FilterChip
+                key={s.val}
+                href={buildHref({ sync: s.val })}
+                label={s.label}
+                active={syncFilter === s.val}
+                color={s.val === 'synced' ? 'var(--color-green)' : s.val === 'unsynced' ? 'var(--color-yellow, #d4a85a)' : undefined}
+              />
+            ))}
+          </span>
+        </div>
+      )}
+
       {/* ── Filters ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 mb-6">
         {/* Status filter */}
         <div className="flex flex-wrap gap-1">
-          <FilterChip href={`/positions?${tierFilter !== 'all' ? `tier=${tierFilter}&` : ''}${remoteFilter !== 'all' ? `remote=${remoteFilter}` : ''}`} label="Tutti" active={statusFilter === 'all'} />
+          <FilterChip href={buildHref({ status: 'all' })} label="Tutti" active={statusFilter === 'all'} />
           {ALL_STATUSES.map(s => (
             <FilterChip
               key={s}
-              href={`/positions?status=${s}${remoteFilter !== 'all' ? `&remote=${remoteFilter}` : ''}${tierFilter !== 'all' ? `&tier=${tierFilter}` : ''}`}
+              href={buildHref({ status: s })}
               label={s}
               active={statusFilter === s}
               color={STATUS_COLORS[s]}
@@ -133,7 +208,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
           ].map(({ val, label }) => (
             <FilterChip
               key={val}
-              href={`/positions?${statusFilter !== 'all' ? `status=${statusFilter}&` : ''}remote=${val}${tierFilter !== 'all' ? `&tier=${tierFilter}` : ''}`}
+              href={buildHref({ remote: val })}
               label={label}
               active={remoteFilter === val}
             />
@@ -146,7 +221,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
         <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }} aria-label="Lista posizioni">
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {['ID', 'Titolo', 'Azienda', 'Location', 'Company', 'Stipendio', 'Score', 'Stato'].map(h => (
+              {['ID', 'Titolo', 'Azienda', 'Fonte', 'Location', 'Score', 'Rilevata', 'Stato'].map(h => (
                 <th
                   key={h}
                   scope="col"
@@ -175,7 +250,18 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
                 }}
               >
                 <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                  {p.legacy_id ? `JHT-${String(p.legacy_id).padStart(3, '0')}` : p.id.slice(0, 8)}
+                  <span className="inline-flex items-center gap-1.5">
+                    {p.legacy_id ? `JHT-${String(p.legacy_id).padStart(3, '0')}` : p.id.slice(0, 8)}
+                    {p.legacy_id != null && syncedIds.has(p.legacy_id) && (
+                      <span
+                        title="Sincronizzato sul cloud"
+                        aria-label="Sincronizzato sul cloud"
+                        style={{ color: 'var(--color-green)', fontSize: '11px', lineHeight: 1 }}
+                      >
+                        ☁
+                      </span>
+                    )}
+                  </span>
                 </td>
                 <td className="px-4 py-3 font-medium max-w-[220px]">
                   <Link
@@ -188,24 +274,11 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
                 <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate" title={p.company}>
                   {p.company}
                 </td>
+                <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                  {p.source ?? '—'}
+                </td>
                 <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
                   {p.location ?? '—'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <span className="text-[10px]" style={{
-                    color: p.remote_type === 'full_remote'
-                      ? 'var(--color-green)'
-                      : p.remote_type === 'hybrid'
-                      ? 'var(--color-yellow)'
-                      : p.remote_type === 'onsite'
-                      ? 'var(--color-red)'
-                      : 'var(--color-dim)',
-                  }}>
-                    {p.remote_type?.replace('_', ' ') ?? '—'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                  {formatSalary(p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency) ?? '—'}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2 justify-end">
@@ -219,6 +292,9 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
                       />
                     </div>
                   </div>
+                </td>
+                <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                  {formatFoundAt(p.found_at)}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -274,3 +350,4 @@ function FilterChip({
     </Link>
   )
 }
+// Thu Apr 23 09:14:05 UTC 2026

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { JHT_HOME } from '@/lib/jht-paths'
+import { sanitizedError } from '@/lib/error-response'
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     reminders.push(reminder);
     save(reminders);
     return NextResponse.json({ reminder });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'reminders' }); }
 }
 
 export async function PUT(req: Request) {
@@ -73,5 +74,5 @@ export async function PUT(req: Request) {
     rem.status = status;
     save(reminders);
     return NextResponse.json({ reminder: rem });
-  } catch (err) { return NextResponse.json({ error: String(err) }, { status: 500 }); }
+  } catch (err) { return sanitizedError(err, { scope: 'reminders' }); }
 }

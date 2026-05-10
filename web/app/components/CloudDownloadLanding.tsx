@@ -41,7 +41,7 @@ export default function CloudDownloadLanding({ userEmail }: CloudDownloadLanding
             Scarica Job Hunter Team
           </Link>
           <Link
-            href="/guide"
+            href="/project"
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-[12px] font-bold tracking-wide no-underline transition-colors"
             style={{ background: 'var(--color-card)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
           >
@@ -56,8 +56,8 @@ export default function CloudDownloadLanding({ userEmail }: CloudDownloadLanding
         </div>
 
         <p className="text-[9px] text-[var(--color-dim)] mt-10 leading-relaxed">
-          Nessun token è a nostro carico: l&apos;assistente usa la chiave API o l&apos;abbonamento del provider AI
-          (Claude, Codex/OpenAI, Kimi) che hai già.
+          Nessun token è a nostro carico: l&apos;assistente usa l&apos;abbonamento del provider AI
+          (Claude Code, Codex, Kimi) che hai già.
         </p>
       </div>
     </div>

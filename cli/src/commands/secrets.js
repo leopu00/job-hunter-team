@@ -1,12 +1,20 @@
 import { readFile, writeFile, readdir, mkdir, access, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, scryptSync } from 'node:crypto';
 import { JHT_HOME } from '../jht-paths.js';
 
 const JHT_DIR   = JHT_HOME;
 const CREDS_DIR = join(JHT_DIR, 'credentials');
 const KEY_ENV   = 'JHT_SECRET_KEY';
+
+// AES-256-GCM con KDF PBKDF2 (allineato a shared/credentials/crypto.ts)
+const ALGORITHM = 'aes-256-gcm';
+const KEY_LENGTH = 32;
+const IV_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
+const SALT_LENGTH = 32;
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_DIGEST = 'sha512';
 
 const GREEN  = '\x1b[32m';
 const RED    = '\x1b[31m';
@@ -18,21 +26,54 @@ async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
-function getEncryptionKey() {
-  const passphrase = process.env[KEY_ENV];
-  if (!passphrase) return null;
-  return scryptSync(passphrase, 'jht-salt', 32);
+function getPassphrase() {
+  return process.env[KEY_ENV] ?? null;
 }
 
-function encrypt(text, key) {
-  const iv = randomBytes(16);
-  const cipher = createCipheriv('aes-256-cbc', key, iv);
+/** Cifra `text` con AES-256-GCM. Salt random per file, derivazione PBKDF2. */
+function encryptGCM(text, passphrase) {
+  const salt = randomBytes(SALT_LENGTH);
+  const key = pbkdf2Sync(passphrase, salt, PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST);
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   const encrypted = Buffer.concat([cipher.update(text, 'utf-8'), cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
+  const authTag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    version: 1,
+    algorithm: ALGORITHM,
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+    data: encrypted.toString('hex'),
+  });
 }
 
-function decrypt(data, key) {
+/** Decifra un payload GCM serializzato come JSON. Lancia se auth tag invalido. */
+function decryptGCM(payloadJson, passphrase) {
+  const payload = JSON.parse(payloadJson);
+  if (payload.version !== 1 || payload.algorithm !== ALGORITHM) {
+    throw new Error(`Formato non supportato: v${payload.version} ${payload.algorithm}`);
+  }
+  const salt = Buffer.from(payload.salt, 'hex');
+  const iv = Buffer.from(payload.iv, 'hex');
+  const authTag = Buffer.from(payload.authTag, 'hex');
+  const ciphertext = Buffer.from(payload.data, 'hex');
+  const key = pbkdf2Sync(passphrase, salt, PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST);
+  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+}
+
+/**
+ * Decifra il vecchio formato CBC `iv:ciphertext` con scrypt+salt-fisso.
+ * Mantenuto solo per migration silenziosa: nessun nuovo file viene
+ * scritto in CBC.
+ */
+function decryptLegacyCBC(data, passphrase) {
+  const key = scryptSync(passphrase, 'jht-salt', 32);
   const [ivHex, encHex] = data.split(':');
+  if (!ivHex || !encHex) throw new Error('Payload CBC malformato');
   const iv = Buffer.from(ivHex, 'hex');
   const encrypted = Buffer.from(encHex, 'hex');
   const decipher = createDecipheriv('aes-256-cbc', key, iv);
@@ -77,18 +118,22 @@ async function setSecret(options) {
     return;
   }
 
-  await mkdir(CREDS_DIR, { recursive: true });
-  const key = getEncryptionKey();
+  await mkdir(CREDS_DIR, { recursive: true, mode: 0o700 });
+  const passphrase = getPassphrase();
 
-  if (key) {
-    const encrypted = encrypt(options.value, key);
-    await writeFile(join(CREDS_DIR, `${options.name}.enc`), encrypted, 'utf-8');
-    console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (cifrato).\n`);
-  } else {
-    await writeFile(join(CREDS_DIR, `${options.name}.json`), JSON.stringify({ value: options.value, createdAt: new Date().toISOString() }, null, 2), 'utf-8');
-    console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (plaintext).`);
-    console.log(`  ${DIM}Imposta ${KEY_ENV} per cifratura AES-256.${RESET}\n`);
+  if (!passphrase) {
+    console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} non impostata.${RESET}`);
+    console.error(`  ${DIM}I secret devono essere cifrati a riposo. Imposta una passphrase:${RESET}`);
+    console.error(`    ${BOLD}export ${KEY_ENV}="<passphrase robusta>"${RESET}`);
+    console.error(`  ${DIM}Salvala anche nel tuo shell rc (~/.bashrc, ~/.zshrc) per persistenza,${RESET}`);
+    console.error(`  ${DIM}o in un OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);
+    process.exitCode = 1;
+    return;
   }
+
+  const encrypted = encryptGCM(options.value, passphrase);
+  await writeFile(join(CREDS_DIR, `${options.name}.enc`), encrypted, { encoding: 'utf-8', mode: 0o600 });
+  console.log(`\n  ${GREEN}✓${RESET}  Secret "${options.name}" salvato (AES-256-GCM).\n`);
 }
 
 async function getSecret(options) {
@@ -98,13 +143,41 @@ async function getSecret(options) {
   const jsonPath = join(CREDS_DIR, `${options.name}.json`);
 
   if (await fileExists(encPath)) {
-    const key = getEncryptionKey();
-    if (!key) { console.error(`  Secret cifrato — imposta ${KEY_ENV} per decifrare.`); process.exitCode = 1; return; }
+    const passphrase = getPassphrase();
+    if (!passphrase) {
+      console.error(`  Secret cifrato — imposta ${KEY_ENV} per decifrare.`);
+      process.exitCode = 1;
+      return;
+    }
+    const raw = (await readFile(encPath, 'utf-8')).trim();
+    let value;
+    let migrated = false;
     try {
-      const data = await readFile(encPath, 'utf-8');
-      const value = decrypt(data.trim(), key);
-      console.log(value);
-    } catch { console.error('  Errore decifratura — chiave errata?'); process.exitCode = 1; }
+      value = decryptGCM(raw, passphrase);
+    } catch (gcmErr) {
+      // Fallback: file in formato CBC legacy (`iv:ciphertext`).
+      // Lo decifriamo con scrypt+salt-fisso e lo ri-scriviamo in
+      // GCM, cosi' al prossimo accesso e' gia' nel formato moderno.
+      try {
+        value = decryptLegacyCBC(raw, passphrase);
+        migrated = true;
+      } catch {
+        console.error('  Errore decifratura — chiave errata?');
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    if (migrated) {
+      try {
+        const reEncrypted = encryptGCM(value, passphrase);
+        await writeFile(encPath, reEncrypted, { encoding: 'utf-8', mode: 0o600 });
+      } catch {
+        // best-effort: se il rewrite fallisce, mostriamo comunque il
+        // valore. Il file resta in CBC, alla prossima get ci riprovera'.
+      }
+    }
+    console.log(value);
   } else if (await fileExists(jsonPath)) {
     const data = JSON.parse(await readFile(jsonPath, 'utf-8'));
     console.log(data.value ?? JSON.stringify(data));

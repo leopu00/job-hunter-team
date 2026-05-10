@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { JHT_LOGS_DIR } from "../paths.js";
 import { formatTimestampLong, formatConsoleLine } from "./formatter.js";
+import { redactString, redactObject } from "./redact.js";
 
 // ── TYPES ───────────────────────────────────────────────────
 
@@ -61,7 +62,10 @@ function formatDate(date: Date): string {
 }
 
 function rollingLogPath(logDir: string): string {
-  return path.join(logDir, `${LOG_PREFIX}-${formatDate(new Date())}${LOG_SUFFIX}`);
+  return path.join(
+    logDir,
+    `${LOG_PREFIX}-${formatDate(new Date())}${LOG_SUFFIX}`,
+  );
 }
 
 function pruneOldLogs(logDir: string): void {
@@ -72,10 +76,15 @@ function pruneOldLogs(logDir: string): void {
       if (!entry.isFile() || !entry.name.startsWith(`${LOG_PREFIX}-`)) continue;
       const fullPath = path.join(logDir, entry.name);
       try {
-        if (fs.statSync(fullPath).mtimeMs < cutoff) fs.rmSync(fullPath, { force: true });
-      } catch { /* ignore */ }
+        if (fs.statSync(fullPath).mtimeMs < cutoff)
+          fs.rmSync(fullPath, { force: true });
+      } catch {
+        /* ignore */
+      }
     }
-  } catch { /* ignore missing dir */ }
+  } catch {
+    /* ignore missing dir */
+  }
 }
 
 // ── FILE WRITER ─────────────────────────────────────────────
@@ -88,7 +97,11 @@ function appendToFile(filePath: string, line: string, maxBytes: number): void {
   try {
     if (filePath !== currentFilePath) {
       currentFilePath = filePath;
-      try { currentFileBytes = fs.statSync(filePath).size; } catch { currentFileBytes = 0; }
+      try {
+        currentFileBytes = fs.statSync(filePath).size;
+      } catch {
+        currentFileBytes = 0;
+      }
       sizeCapWarned = false;
     }
     const bytes = Buffer.byteLength(line, "utf8");
@@ -101,7 +114,9 @@ function appendToFile(filePath: string, line: string, maxBytes: number): void {
     }
     fs.appendFileSync(filePath, line, "utf8");
     currentFileBytes += bytes;
-  } catch { /* mai bloccare su errori di logging */ }
+  } catch {
+    /* mai bloccare su errori di logging */
+  }
 }
 
 // ── LOGGER CLASS ────────────────────────────────────────────
@@ -133,17 +148,38 @@ export class Logger {
     });
   }
 
-  debug(message: string, data?: Record<string, unknown>) { this.log("debug", message, data); }
-  info(message: string, data?: Record<string, unknown>) { this.log("info", message, data); }
-  warn(message: string, data?: Record<string, unknown>) { this.log("warn", message, data); }
-  error(message: string, data?: Record<string, unknown>) { this.log("error", message, data); }
+  debug(message: string, data?: Record<string, unknown>) {
+    this.log("debug", message, data);
+  }
+  info(message: string, data?: Record<string, unknown>) {
+    this.log("info", message, data);
+  }
+  warn(message: string, data?: Record<string, unknown>) {
+    this.log("warn", message, data);
+  }
+  error(message: string, data?: Record<string, unknown>) {
+    this.log("error", message, data);
+  }
 
-  private log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
+  private log(
+    level: LogLevel,
+    message: string,
+    data?: Record<string, unknown>,
+  ): void {
     const now = new Date();
+
+    // Redaction: messaggio scansionato per pattern (Bearer, JWT, hex
+    // 32+, ecc.); data deep-cloned con i campi sensibili mascherati.
+    // Logger e' il bottleneck unico per file+console, quindi un singolo
+    // punto qui copre tutti i call site.
+    const safeMessage = redactString(message);
+    const safeData = data
+      ? (redactObject(data) as Record<string, unknown>)
+      : undefined;
 
     // Console output
     if (LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[this.consoleLevel]) {
-      const line = formatConsoleLine(level, this.subsystem, message, now);
+      const line = formatConsoleLine(level, this.subsystem, safeMessage, now);
       if (level === "error") {
         process.stderr.write(line + "\n");
       } else {
@@ -163,10 +199,14 @@ export class Logger {
         time: formatTimestampLong(now),
         level,
         subsystem: this.subsystem,
-        message,
-        ...(data ? { data } : {}),
+        message: safeMessage,
+        ...(safeData ? { data: safeData } : {}),
       };
-      appendToFile(rollingLogPath(this.logDir), JSON.stringify(entry) + "\n", this.maxFileBytes);
+      appendToFile(
+        rollingLogPath(this.logDir),
+        JSON.stringify(entry) + "\n",
+        this.maxFileBytes,
+      );
     }
   }
 }
