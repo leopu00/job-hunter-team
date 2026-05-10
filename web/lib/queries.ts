@@ -57,6 +57,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export type RecentlyTouchedPosition = PositionWithScore & {
   last_action_at: string
   last_action_by: string
+  last_action_actor: string
+  voto: number | null
 }
 
 export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyTouchedPosition[]> {
