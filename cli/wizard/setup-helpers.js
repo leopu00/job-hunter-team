@@ -38,15 +38,15 @@ export const AI_PROVIDERS = [
     ],
   },
   {
-    value: 'minimax',
-    label: 'MiniMax',
-    hint: 'alternativa economica',
-    keyPrefix: '',
-    keyPlaceholder: 'eyJ...',
-    docsUrl: 'https://www.minimax.io',
+    value: 'kimi',
+    label: 'Kimi K2 (Moonshot)',
+    hint: 'subscription Moonshot — alternativa economica',
+    keyPrefix: 'sk-',
+    keyPlaceholder: 'sk-...',
+    docsUrl: 'https://platform.moonshot.ai',
     models: [
-      { value: 'minimax-01', label: 'MiniMax-01', hint: 'modello principale' },
-      { value: 'abab6.5s', label: 'ABAB 6.5s', hint: 'economico' },
+      { value: 'kimi-k2-0905-preview', label: 'Kimi K2 (preview)', hint: 'modello principale' },
+      { value: 'kimi-k2-turbo-preview', label: 'Kimi K2 turbo', hint: 'piu\' veloce' },
     ],
   },
 ];
@@ -71,7 +71,7 @@ export function readConfigFileSnapshot() {
  */
 export function validateConfigBeforeWrite(config) {
   const errors = [];
-  const validProviders = ['claude', 'openai', 'minimax'];
+  const validProviders = ['claude', 'openai', 'kimi'];
 
   if (typeof config.version !== 'number' || config.version < 1) {
     errors.push('version deve essere un numero positivo');
