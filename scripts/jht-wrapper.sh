@@ -195,6 +195,18 @@ case "$SUB" in
     docker exec $EXEC_FLAGS "$CONTAINER" bash
     ;;
 
+  # ── OAuth login: lancia il CLI del provider (claude/codex/kimi) per il
+  # device-flow OAuth. Comando dedicato perche' va eseguito in un terminale
+  # separato durante il setup wizard (clack non rilascia bene il TTY).
+  # Per ora hardcode "claude" come provider beta. TODO: leggere active_provider
+  # da ~/.jht/jht.config.json e mappare claude/codex/kimi.
+  oauth-login|claude-login)
+    require_docker
+    require_compose_file
+    ensure_up
+    docker exec $EXEC_FLAGS "$CONTAINER" claude
+    ;;
+
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
   setup)
     require_docker
