@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { isMarketingRoute } from '../marketing-routes'
 
 const APP_CHROME_HIDDEN_PREFIXES = [
-  '/dashboard', '/profile', '/team',
+  '/dashboard', '/profile', '/team', '/team-pyramid',
   '/applications', '/positions', '/ready', '/risposte', '/crescita', '/setup', '/onboarding',
 ]
 
