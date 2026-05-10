@@ -53,6 +53,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }
 }
 
+// ── Posizioni ordinate per ULTIMA azione qualsiasi ────────────────
+export type RecentlyTouchedPosition = PositionWithScore & {
+  last_action_at: string
+  last_action_by: string
+}
+
+export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyTouchedPosition[]> {
+  const w = await ws()
+  if (w) { try { return local.getRecentlyTouchedPositionsLocal(w, limit) } catch { return [] } }
+  // Cloud (Supabase): per ora fallback alla "trovate di recente" classico.
+  // Quando avremo necessità reale, questa branch farà UNION dei timestamp.
+  return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>
+}
+
 // ── Recent positions with scores ───────────────────────────────────
 export async function getRecentPositions(limit = 15): Promise<PositionWithScore[]> {
   const w = await ws()

@@ -53,6 +53,41 @@ export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithSco
   return rows.map(r => mapPosition(r))
 }
 
+// Posizioni ordinate per ULTIMA azione qualsiasi (insert dello scout,
+// last_checked dell'analista, score dello scorer). Restituisce anche
+// `last_action_at` e `last_action_by` così la UI può mostrare
+// l'evento più fresco e attribuirlo all'agente che l'ha causato.
+export function getRecentlyTouchedPositionsLocal(ws: string, limit = 15): (PositionWithScore & { last_action_at: string; last_action_by: string })[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.*, s.total_score as score, s.scored_at as scored_at,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01')
+           ) AS last_action_at,
+           CASE
+             WHEN COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.last_checked, '1970-01-01')
+              AND COALESCE(s.scored_at, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND s.scored_at IS NOT NULL THEN 'scorer'
+             WHEN COALESCE(p.last_checked, '1970-01-01') >= COALESCE(p.found_at, '1970-01-01')
+              AND p.last_checked IS NOT NULL THEN 'analista'
+             ELSE 'scout'
+           END AS last_action_by
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+    ORDER BY last_action_at DESC
+    LIMIT ?
+  `).all(limit) as any[]
+
+  return rows.map(r => ({
+    ...mapPosition(r),
+    last_action_at: r.last_action_at,
+    last_action_by: r.last_action_by,
+  }))
+}
+
 // ── All positions with optional filters ────────────────────────────
 export function getPositionsLocal(ws: string, opts?: {
   status?: string; minScore?: number; maxScore?: number; noScore?: boolean
