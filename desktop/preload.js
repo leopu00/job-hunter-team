@@ -100,6 +100,16 @@ contextBridge.exposeInMainWorld('authApi', {
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
 })
 
+contextBridge.exposeInMainWorld('syncApi', {
+  getStatus: () => ipcRenderer.invoke('sync:get-status'),
+  setup: (args) => ipcRenderer.invoke('sync:setup', args),
+  unlock: (args) => ipcRenderer.invoke('sync:unlock', args),
+  lock: () => ipcRenderer.invoke('sync:lock'),
+  push: (args) => ipcRenderer.invoke('sync:push', args),
+  pull: (args) => ipcRenderer.invoke('sync:pull', args),
+  disable: (args) => ipcRenderer.invoke('sync:disable', args),
+})
+
 contextBridge.exposeInMainWorld('terminalApi', {
   start: (opts) => ipcRenderer.invoke('terminal:start', opts),
   write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
