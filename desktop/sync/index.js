@@ -3,6 +3,34 @@
 // and uses the user's authenticated session to upsert/select against
 // the `encrypted_user_blobs` table (migration 009).
 //
+// WHY A PASSPHRASE ON TOP OF GOOGLE/GITHUB LOGIN?
+//
+// The OAuth login authenticates the user to Supabase: it proves "I'm
+// Leone, I have a row in auth.users, give me access to my own
+// records" (enforced by RLS on user_id). It does NOT encrypt anything
+// — Supabase ops, anyone who dumps the DB, or a Postgres replica
+// reader sees every column in plaintext.
+//
+// The passphrase changes that: it's used client-side (in this process,
+// never sent to the server) to derive a 32-byte AES key. The launcher
+// encrypts the payload before upsert; Supabase only ever stores the
+// ciphertext + iv + auth_tag + salt. This is the "zero-knowledge"
+// model used by 1Password / Bitwarden / Signal / ProtonMail: the
+// server admin literally cannot read your data, even with full DB
+// access. The trade-off is brutal: lose the passphrase and the data
+// is gone forever — there's no recovery path by design (if there
+// were, the server admin could use the same path).
+//
+// For the current MVP payload (provider id + plan id, e.g. "claude /
+// max20") the passphrase is arguably overkill: leaking that "user X
+// uses Claude Max 20×" is uncomfortable but not catastrophic. The
+// encryption is here because the planned payload extension —
+// JHT-DESKTOP-SYNC original spec — covers high-value secrets:
+// Tailscale auth-key (opens the user's VPN), VPS IP+region, and
+// other VPS metadata. Those MUST be encrypted client-side; leaking
+// a tailnet auth-key from a DB dump would be a real incident. We
+// ship the envelope now so we don't have to migrate later.
+//
 // State machine, per blob_type:
 //   disabled  -> no salt+verify in keychain
 //   locked    -> salt+verify present, no in-memory key
