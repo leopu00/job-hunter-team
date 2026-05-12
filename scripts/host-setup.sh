@@ -35,6 +35,52 @@ if [ "${JHT_SKIP_HOST_SETUP:-0}" = "1" ]; then
   exit 0
 fi
 
+# ── Language picker (first prompt) ───────────────────────────────────────
+# Default English (allineato con la regola lang_picker_default_english
+# del desktop): la grande maggioranza degli utenti non e' italiana, ed
+# e' la lingua naturale di un setup terminale.
+# Persistiamo in ~/.jht/host.env come JHT_LANG=en|it cosi' il wizard Node
+# e i prossimi run di host-setup hanno il valore pronto. Il pre-fill
+# evita di richiedere la scelta a ogni invocazione.
+JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
+HOST_ENV_PATH="$JHT_HOME_HOST/host.env"
+JHT_LANG_DEFAULT=en
+if [ -f "$HOST_ENV_PATH" ]; then
+  # shellcheck disable=SC1090
+  EXISTING_LANG=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_LANG:-}")
+  if [ -n "$EXISTING_LANG" ]; then
+    JHT_LANG_DEFAULT="$EXISTING_LANG"
+  fi
+fi
+JHT_LANG="$JHT_LANG_DEFAULT"
+if [ -t 0 ]; then
+  printf "\n${CYAN}━━━ Setup host (preflight) ━━━${RESET}\n\n"
+  printf "Choose your language / Scegli la lingua:\n\n"
+  if [ "$JHT_LANG_DEFAULT" = "it" ]; then
+    printf "  1) ${BOLD}English${RESET}\n"
+    printf "  2) ${BOLD}Italiano${RESET}\n\n"
+    printf "Choice / Scelta [2]: "
+  else
+    printf "  1) ${BOLD}English${RESET}\n"
+    printf "  2) ${BOLD}Italiano${RESET}\n\n"
+    printf "Choice / Scelta [1]: "
+  fi
+  read -r LANG_CHOICE
+  case "$LANG_CHOICE" in
+    1) JHT_LANG=en ;;
+    2) JHT_LANG=it ;;
+    "") : ;;  # accept default already in JHT_LANG
+    *) warn "Invalid / non valido — uso default ($JHT_LANG)" ;;
+  esac
+fi
+ok "Language / Lingua: $JHT_LANG"
+
+# Persist subito cosi' se host-setup viene interrotto/relaunchato la
+# scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
+# JHT_HOST_TYPE allo stesso file.
+mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
+printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+
 # ── Detect VPS ───────────────────────────────────────────────────────────
 # Heuristica: linux + (root OR no display) + (no battery OR cloud-init present)
 # Niente euristica e' al 100%: chiediamo sempre conferma all'utente.
@@ -104,9 +150,14 @@ fi
 
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
 # Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
-JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
+# Riscriviamo l'intero file mantenendo JHT_LANG (gia' scritto sopra in
+# questo stesso script) per non perderlo. Se in futuro si aggiungono
+# altre chiavi, usare un piccolo helper di merge invece di sovrascrivere.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
-printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE" > "$JHT_HOME_HOST/host.env"
+{
+  printf 'JHT_LANG=%s\n' "$JHT_LANG"
+  printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
+} > "$HOST_ENV_PATH"
 
 if [ "$HOST_TYPE" = "local" ]; then
   ok "Host: computer locale — nessuna configurazione swap richiesta"
