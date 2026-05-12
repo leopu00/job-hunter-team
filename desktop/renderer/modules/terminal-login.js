@@ -1,8 +1,8 @@
-import { state, dom } from './state.js'
+import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
 import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS } from './constants.js'
-import { showStep } from './state.js'
 import { camelId } from './docker-card.js'
+import { enterReady } from './wizard-flow.js'
 
 // -------- Step: provider login (tmux/subscription auth) --------
 
