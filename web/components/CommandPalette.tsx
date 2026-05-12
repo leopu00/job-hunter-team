@@ -13,22 +13,21 @@ export const useCommandPalette = () => useContext(CommandPaletteContext)
 type Cmd = { id: string; label: string; detail: string; category: string; href?: string; action?: () => void }
 
 const STATIC_COMMANDS: Cmd[] = [
-  { id: 'overview',     label: 'Overview',         detail: 'Dashboard principale',             category: 'Pagine',  href: '/overview' },
-  { id: 'agents',       label: 'Agenti',           detail: 'Lista e stato agenti',              category: 'Pagine',  href: '/agents' },
-  { id: 'sessions',     label: 'Sessioni',         detail: 'Conversazioni e chat replay',       category: 'Pagine',  href: '/sessions' },
-  { id: 'analytics',    label: 'Analytics',        detail: 'Token, costi, latenza p95',         category: 'Pagine',  href: '/analytics' },
-  { id: 'health',       label: 'Health Check',     detail: 'Stato 7 moduli con semafori',       category: 'Pagine',  href: '/health' },
-  { id: 'settings',     label: 'Impostazioni',     detail: 'Provider AI, Telegram, cron',       category: 'Pagine',  href: '/settings' },
-  { id: 'credentials',  label: 'Credenziali',      detail: 'API key e OAuth cifrati AES-256',   category: 'Pagine',  href: '/credentials' },
-  { id: 'plugins',      label: 'Plugin',           detail: 'Gestione plugin attivi/disabilitati', category: 'Pagine', href: '/plugins' },
-  { id: 'logs',         label: 'Logs',             detail: 'Log strutturati con filtri',        category: 'Pagine',  href: '/logs' },
-  { id: 'memory',       label: 'Memory',           detail: 'SOUL / IDENTITY / MEMORY agenti',  category: 'Pagine',  href: '/memory' },
-  { id: 'queue',        label: 'Job Queue',        detail: 'Task in coda e dead-letter',        category: 'Pagine',  href: '/queue' },
-  { id: 'events',       label: 'Events SSE',       detail: 'Stream eventi real-time',           category: 'Pagine',  href: '/events' },
-  { id: 'cron',         label: 'Cron Company',        detail: 'Task schedulati',                   category: 'Pagine',  href: '/cron' },
-  { id: 'export',       label: 'Export',           detail: 'Esporta sessioni, task, analytics', category: 'Azioni',  href: '/export' },
-  { id: 'import',       label: 'Import',           detail: 'Importa dati con validazione',      category: 'Azioni',  href: '/import' },
-  { id: 'backup',       label: 'Backup',           detail: 'Crea e ripristina backup',          category: 'Azioni',  href: '/backup' },
+  { id: 'dashboard',    label: 'Dashboard',        detail: 'Vista riepilogativa lavoro in corso', category: 'Pagine',  href: '/dashboard' },
+  { id: 'positions',    label: 'Offerte',          detail: 'Job trovati dagli agenti',            category: 'Pagine',  href: '/positions' },
+  { id: 'applications', label: 'Candidature',      detail: 'Candidature inviate o in lavorazione', category: 'Pagine',  href: '/applications' },
+  { id: 'ready',        label: 'Pronte all\'invio', detail: 'CV+CL generati, pronte da spedire',   category: 'Pagine',  href: '/ready' },
+  { id: 'risposte',     label: 'Risposte',         detail: 'Risposte ricevute dalle aziende',     category: 'Pagine',  href: '/risposte' },
+  { id: 'crescita',     label: 'Crescita',         detail: 'Analytics personale + trend',         category: 'Pagine',  href: '/crescita' },
+  { id: 'reports',      label: 'Report',           detail: 'Report periodici sul team',           category: 'Pagine',  href: '/reports' },
+  { id: 'team',         label: 'Team',             detail: 'Stato agenti AI + chat',              category: 'Pagine',  href: '/team' },
+  { id: 'profile',      label: 'Profilo',          detail: 'Candidato e dati personali',          category: 'Pagine',  href: '/profile' },
+  { id: 'settings',     label: 'Impostazioni',     detail: 'Provider AI, Telegram, cron',         category: 'Config',  href: '/settings' },
+  { id: 'providers',    label: 'Provider LLM',     detail: 'Claude / Kimi / Codex',               category: 'Config',  href: '/providers' },
+  { id: 'credentials',  label: 'Credenziali',      detail: 'API key e OAuth',                     category: 'Config',  href: '/credentials' },
+  { id: 'cron',         label: 'Cron Company',        detail: 'Task schedulati',                     category: 'Config',  href: '/cron' },
+  { id: 'cloud-sync',   label: 'Cloud sync',       detail: 'Sync dati locale → cloud',            category: 'Config',  href: '/settings/cloud-sync' },
+  { id: 'cli-link',     label: 'Collega CLI/VPS',  detail: 'Pairing browser-based',               category: 'Config',  href: '/cli-link' },
 ]
 
 const CATEGORY_COLORS: Record<string, string> = {
