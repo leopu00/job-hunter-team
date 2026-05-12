@@ -148,7 +148,7 @@ Reports lacking a reproducible PoC or that fail to demonstrate a boundary bypass
 - Optional cloud-sync: Supabase. Region selection and GDPR posture are documented for maintainers in the internal compliance notes (not in public docs).
 
 ### Outbound
-- LLM API: requests to `api.anthropic.com`, `api.openai.com`, `api.minimax.chat` authenticated with the user's API key.
+- LLM API: requests to `api.anthropic.com`, `api.openai.com`, `api.moonshot.cn` authenticated with the user's API key.
 - Cloud-sync: Supabase URL configured by the user.
 - Job scout: fetch toward job-board sites (LinkedIn, Greenhouse, Lever, etc.) — SSRF policy applied.
 

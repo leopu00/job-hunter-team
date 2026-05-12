@@ -419,7 +419,7 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 ### 🧱 Shared modules
 
 - `config/` — Zod schema, centralized I/O.
-- `llm/` — factory for Claude, OpenAI, MiniMax.
+- `llm/` — factory for Claude, OpenAI, Kimi.
 - `sessions/` — registry with JSON persistence.
 - `hooks/` — source precedence, frontmatter loader.
 - `events/` — typed pub/sub event bus.

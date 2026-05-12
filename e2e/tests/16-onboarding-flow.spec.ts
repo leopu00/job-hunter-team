@@ -36,13 +36,13 @@ test.describe('Onboarding — Setup Wizard Web', () => {
     await expect(page.getByRole('heading', { name: /Job Hunter Team/i })).toBeVisible();
   });
 
-  test('step modello: provider Claude, OpenAI e MiniMax visibili', async ({ page }) => {
+  test('step modello: provider Claude, OpenAI e Kimi visibili', async ({ page }) => {
     await goToModelStep(page);
     const provider = page.getByLabel('Provider AI');
     await expect(provider.locator('option')).toHaveCount(3);
     await expect(provider.locator('option').nth(0)).toHaveText(/Anthropic Claude/i);
     await expect(provider.locator('option').nth(1)).toHaveText(/OpenAI/i);
-    await expect(provider.locator('option').nth(2)).toHaveText(/MiniMax/i);
+    await expect(provider.locator('option').nth(2)).toHaveText(/Kimi/i);
   });
 
   test('selezione Claude — avanza allo step auth', async ({ page }) => {

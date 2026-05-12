@@ -141,7 +141,7 @@ describe("Types — costanti e set provider", () => {
   it("ENV_VAR_MAP mappa tutti i provider API key", () => {
     expect(ENV_VAR_MAP.claude).toBe("ANTHROPIC_API_KEY");
     expect(ENV_VAR_MAP.openai).toBe("OPENAI_API_KEY");
-    expect(ENV_VAR_MAP.minimax).toBe("MINIMAX_API_KEY");
+    expect(ENV_VAR_MAP.kimi).toBe("MOONSHOT_API_KEY");
   });
 
   it("ALL_PROVIDERS contiene API key + OAuth", () => {

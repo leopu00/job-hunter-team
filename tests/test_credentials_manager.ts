@@ -21,7 +21,7 @@ before(() => {
   // Rimuovi env var che influenzano i test
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.OPENAI_API_KEY;
-  delete process.env.MINIMAX_API_KEY;
+  delete process.env.MOONSHOT_API_KEY;
   delete process.env.JHT_CREDENTIALS_KEY;
 });
 
@@ -78,10 +78,10 @@ describe("storage: deleteCredential", () => {
 describe("storage: listStoredProviders", () => {
   it("elenca i provider salvati", async () => {
     const { writeCredential, listStoredProviders } = await import("../shared/credentials/storage.js");
-    const cred = { type: "api_key" as const, provider: "minimax" as const, apiKey: "mm-key", savedAt: Date.now() };
-    writeCredential("minimax", cred);
+    const cred = { type: "api_key" as const, provider: "kimi" as const, apiKey: "mm-key", savedAt: Date.now() };
+    writeCredential("kimi", cred);
     const list = listStoredProviders();
-    assert.ok(list.includes("minimax"));
+    assert.ok(list.includes("kimi"));
   });
 });
 
@@ -120,13 +120,13 @@ describe("manager: saveApiKey + resolveApiKey", () => {
 
   it("file-first: file ha precedenza su env", async () => {
     const { saveApiKey, resolveApiKey } = await import("../shared/credentials/manager.js");
-    saveApiKey("minimax", "mm-file-key");
-    process.env.MINIMAX_API_KEY = "mm-env-key";
-    const result = resolveApiKey("minimax", "file-first");
+    saveApiKey("kimi", "mm-file-key");
+    process.env.MOONSHOT_API_KEY = "mm-env-key";
+    const result = resolveApiKey("kimi", "file-first");
     assert.ok(result);
     assert.equal((result.credential as any).apiKey, "mm-file-key");
     assert.equal(result.source, "file");
-    delete process.env.MINIMAX_API_KEY;
+    delete process.env.MOONSHOT_API_KEY;
   });
 
   it("lancia errore per provider non supportato", async () => {
