@@ -94,6 +94,12 @@ contextBridge.exposeInMainWorld('clipboardApi', {
   write: (text) => ipcRenderer.invoke('clipboard:write', text),
 })
 
+contextBridge.exposeInMainWorld('authApi', {
+  getStatus: () => ipcRenderer.invoke('auth:get-status'),
+  signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
+  signOut: () => ipcRenderer.invoke('auth:sign-out'),
+})
+
 contextBridge.exposeInMainWorld('terminalApi', {
   start: (opts) => ipcRenderer.invoke('terminal:start', opts),
   write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
