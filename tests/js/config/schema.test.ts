@@ -45,9 +45,9 @@ describe('AIProviderSchema', () => {
     expect(r.success).toBe(true);
   });
 
-  it('accetta minimax con subscription', () => {
+  it('accetta kimi con subscription', () => {
     const r = AIProviderSchema.safeParse({
-      name: 'minimax',
+      name: 'kimi',
       auth_method: 'subscription',
       subscription: { email: 'u@m.com' },
     });
@@ -61,7 +61,7 @@ describe('AIProviderSchema', () => {
   });
 
   it('rifiuta subscription mancante quando auth_method = subscription', () => {
-    const r = AIProviderSchema.safeParse({ name: 'minimax', auth_method: 'subscription' });
+    const r = AIProviderSchema.safeParse({ name: 'kimi', auth_method: 'subscription' });
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].path).toContain('subscription');
   });
@@ -105,13 +105,13 @@ const validOpenAIConfig = {
   workspace: '/tmp/test-jht',
 };
 
-const validMinimaxConfig = {
-  active_provider: 'minimax',
+const validKimiConfig = {
+  active_provider: 'kimi',
   providers: {
-    minimax: {
-      name: 'minimax',
+    kimi: {
+      name: 'kimi',
       auth_method: 'subscription',
-      subscription: { email: 'user@minimax.com' },
+      subscription: { email: 'user@kimi.com' },
     },
   },
   channels: {},
@@ -130,8 +130,8 @@ describe('validateConfig — config valide', () => {
     expect(r.success).toBe(true);
   });
 
-  it('valida config MiniMax con subscription', () => {
-    const r = validateConfig(validMinimaxConfig);
+  it('valida config Kimi con subscription', () => {
+    const r = validateConfig(validKimiConfig);
     expect(r.success).toBe(true);
   });
 
@@ -179,10 +179,10 @@ describe('validateConfig — errori schema', () => {
 
   it('rifiuta subscription con email non valida', () => {
     const r = validateConfig({
-      active_provider: 'minimax',
+      active_provider: 'kimi',
       providers: {
-        minimax: {
-          name: 'minimax',
+        kimi: {
+          name: 'kimi',
           auth_method: 'subscription',
           subscription: { email: 'bad-email' },
         },

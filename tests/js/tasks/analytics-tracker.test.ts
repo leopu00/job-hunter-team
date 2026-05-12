@@ -61,8 +61,8 @@ describe("getModelCost / setModelCost", () => {
   });
 
   it("permette di aggiungere costi custom", () => {
-    setModelCost("minimax", "custom-model", { input: 2, output: 8 });
-    expect(getModelCost("minimax", "custom-model")).toEqual({ input: 2, output: 8 });
+    setModelCost("kimi", "custom-model", { input: 2, output: 8 });
+    expect(getModelCost("kimi", "custom-model")).toEqual({ input: 2, output: 8 });
   });
 });
 

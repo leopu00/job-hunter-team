@@ -85,7 +85,7 @@ describe("queue + analytics integrazione", () => {
 
     queue.registerHandler("metered", async () => {
       recordCall({
-        provider: "minimax", model: "minimax-01",
+        provider: "kimi", model: "kimi-k2-0905-preview",
         tokens: { input: 200, output: 100 }, latencyMs: 80,
       });
     });
@@ -96,7 +96,7 @@ describe("queue + analytics integrazione", () => {
     const succeeded = events.filter((e) => e.kind === "succeeded");
     expect(succeeded).toHaveLength(1);
     expect(getEntryCount()).toBe(1);
-    expect(getEntries()[0].provider).toBe("minimax");
+    expect(getEntries()[0].provider).toBe("kimi");
   });
 
   it("dead letter job registra errore analytics", async () => {

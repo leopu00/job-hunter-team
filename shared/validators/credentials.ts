@@ -18,7 +18,7 @@ import {
 
 // ── Enum provider ──────────────────────────────────────────────────────────
 
-const API_KEY_PROVIDERS = ["claude", "openai", "minimax"] as const;
+const API_KEY_PROVIDERS = ["claude", "openai", "kimi"] as const;
 const OAUTH_PROVIDERS = ["chatgpt_pro", "claude_max"] as const;
 const ALL_PROVIDERS = [...API_KEY_PROVIDERS, ...OAUTH_PROVIDERS] as const;
 

@@ -16,7 +16,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('validateApiKey', () => {
   const claude = AI_PROVIDERS.find((p) => p.value === 'claude');
-  const minimax = AI_PROVIDERS.find((p) => p.value === 'minimax');
+  const kimi = AI_PROVIDERS.find((p) => p.value === 'kimi');
 
   it('rifiuta valore vuoto', () => {
     expect(validateApiKey(claude, '')).toMatch(/vuota/);
@@ -34,8 +34,8 @@ describe('validateApiKey', () => {
     expect(validateApiKey(claude, 'sk-ant-apikey1234567')).toBeUndefined();
   });
 
-  it('accetta qualsiasi chiave per MiniMax (no prefisso)', () => {
-    expect(validateApiKey(minimax, 'eyJsomeLongToken1234')).toBeUndefined();
+  it('accetta qualsiasi chiave per Kimi (no prefisso)', () => {
+    expect(validateApiKey(kimi, 'eyJsomeLongToken1234')).toBeUndefined();
   });
 });
 

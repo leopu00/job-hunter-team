@@ -2,7 +2,7 @@
  * Provider Retry Runners
  *
  * Factory per retry runner specifici per provider API
- * (Claude, OpenAI, Minimax). Gestisce 429, timeout,
+ * (Claude, OpenAI, Kimi). Gestisce 429, timeout,
  * retry-after header e predicati custom.
  */
 

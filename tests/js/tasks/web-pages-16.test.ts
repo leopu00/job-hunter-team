@@ -59,7 +59,7 @@ describe("Analytics API", () => {
     expect(src).toMatch(/export async function GET\b/);
     expect(src).toMatch(/export async function POST\b/);
     expect(src).toContain("type ProviderName");
-    for (const p of ["claude", "openai", "minimax"]) expect(src).toContain(`'${p}'`);
+    for (const p of ["claude", "openai", "kimi"]) expect(src).toContain(`'${p}'`);
     expect(src).toContain("type TokenUsage"); expect(src).toContain("type UsageEntry");
   });
 

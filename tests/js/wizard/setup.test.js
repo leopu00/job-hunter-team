@@ -112,22 +112,22 @@ describe('runSetupWizard — OpenAI api_key', () => {
   });
 });
 
-// --- Flusso MiniMax subscription ---
+// --- Flusso Kimi subscription ---
 
-describe('runSetupWizard — MiniMax subscription', () => {
-  it('salva config MiniMax con email', async () => {
+describe('runSetupWizard — Kimi subscription', () => {
+  it('salva config Kimi con email', async () => {
     const prompter = createMockPrompter({
-      selects: ['quickstart', 'minimax', 'subscription', 'minimax-01'],
-      texts: ['user@minimax.com'],
+      selects: ['quickstart', 'kimi', 'subscription', 'kimi-k2-0905-preview'],
+      texts: ['user@kimi.com'],
       confirms: [false], // no session token (quickstart), no telegram
     });
 
     await runSetupWizard(prompter);
 
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.active_provider).toBe('minimax');
-    expect(savedConfig.providers.minimax.auth_method).toBe('subscription');
-    expect(savedConfig.providers.minimax.subscription.email).toBe('user@minimax.com');
+    expect(savedConfig.active_provider).toBe('kimi');
+    expect(savedConfig.providers.kimi.auth_method).toBe('subscription');
+    expect(savedConfig.providers.kimi.subscription.email).toBe('user@kimi.com');
   });
 });
 

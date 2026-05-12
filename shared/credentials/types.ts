@@ -6,7 +6,7 @@
  */
 
 /** Provider supportati per API key diretta */
-export type ApiKeyProvider = "claude" | "openai" | "minimax";
+export type ApiKeyProvider = "claude" | "openai" | "kimi";
 
 /** Provider supportati per subscription OAuth */
 export type OAuthProvider = "chatgpt_pro" | "claude_max";
@@ -63,12 +63,12 @@ export type EncryptedPayload = {
 export const ENV_VAR_MAP: Record<ApiKeyProvider, string> = {
   claude: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
-  minimax: "MINIMAX_API_KEY",
+  kimi: "MOONSHOT_API_KEY",
 };
 
 /** Set provider API key */
 export const API_KEY_PROVIDERS = new Set<ApiKeyProvider>([
-  "claude", "openai", "minimax",
+  "claude", "openai", "kimi",
 ]);
 
 /** Set provider OAuth */
