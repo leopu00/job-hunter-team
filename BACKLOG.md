@@ -862,13 +862,16 @@ All 5 tasks from 04-22 have been implemented:
 - **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
 - **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
 
-### 🟡 [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch persiste in produzione (post-fix dev-4)
+### ✅ [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch — FIXED 2026-05-12
 
-- **Sintomo:** browser su `http://localhost:3000/?login=true` (via SSH tunnel da VPS) mostra console error "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties": server-rendered nonce `nonce="ULcGU/..."` vs client `nonce=""`.
-- **Stato:** il fix originale di [BUG-CSP-JSONLD-LANDING] (commit `e48eebee` su dev-4, mergato in master 2026-05-06) era pensato per separare server/client component, ma l'hydration mismatch persiste. Probabilmente `JsonLd.tsx` legge il nonce solo server-side ma il client React tenta hydration con `nonce=""` (default).
-- **Scoperto:** primo bring-up VPS del 2026-05-06 (l'utente ha aperto il browser sul tunnel e visto il warning React).
-- **Fix proposto:** verificare se il bug e' specifico al tunnel/dev mode o anche su prod (`https://jobhunterteam.ai`). Se cosmetico-only e l'app funziona, demote a 🟢. Investigare se Server Component `<JsonLd />` viene re-renderizzato come Client Component da qualche `'use client'` esterno.
-- **Priorita':** media — non blocca login/funzionalita', ma rumore nel console log + warning React fastidioso per dev e per chi apre browser console.
+- **Root cause:** React rimuove l'attributo `nonce` dal DOM dopo l'hydration come misura anti-XSS (così non può essere riusato da script iniettati). Server-rendered HTML ha `nonce="X"`, client React post-hydration vede `nonce=""` → hydration mismatch warning. Il pattern era corretto (Server Component async + `getNonce()`), il warning era effetto collaterale noto di React.
+- **Fix applicato:** `suppressHydrationWarning` sui 4 `<script>` con nonce (escape hatch ufficiale React per scenari server-client legittimamente diversi):
+  - `web/app/components/landing/JsonLd.tsx` (2 script — software + website schema)
+  - `web/app/components/BreadcrumbJsonLd.tsx`
+  - `web/app/download/layout.tsx`
+  - `web/app/project/layout.tsx`
+  - (`web/app/layout.tsx` line 93 aveva già il fix dal commit precedente)
+- **Verifica:** dev server `localhost:3001`, browser console pulita su `/`. Il rich snippet JSON-LD resta presente nel DOM con il nonce server-side corretto.
 
 ### ✅ [BUG-CSP-JSONLD-LANDING] JSON-LD landing senza nonce in produzione — FIXED 2026-05-06 (riapertura come V2)
 
