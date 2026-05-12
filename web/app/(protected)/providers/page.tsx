@@ -29,7 +29,6 @@ const PROVIDER_ICONS: Record<string, string> = {
   claude: '🟠',
   openai: '🟢',
   kimi: '🌙',
-  kimi: '🔵',
 }
 
 function ProviderCard({ provider, onUpdated }: { provider: ProviderInfo; onUpdated: () => void }) {
