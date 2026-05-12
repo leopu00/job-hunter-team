@@ -40,6 +40,10 @@ services:
       # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
       # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
       - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
+      # JHT_LANG (en|it) — scelto dall'utente al primo run del wizard.
+      # I componenti che hanno bisogno della lingua (wizard, futuri
+      # messaggi degli agenti, dashboard intelligence) leggono questa.
+      - JHT_LANG=${JHT_LANG:-en}
       # IS_CONTAINER=1 abilita il passthrough in cli/src/utils/container-proxy.js:
       # le funzioni che oggi farebbero `docker exec jht ...` eseguono
       # comandi locali (siamo gia' nel posto giusto). Vedi
