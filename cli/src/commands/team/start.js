@@ -28,25 +28,29 @@ function readSentinellaTickMinutes() {
 }
 
 // Bootstrap container del team — replica `/api/team/start-all` (web UI).
-// Sequenza V6 ordinata (rivista 2026-05-12, VPS-friendly):
-//   0. ASSISTENTE: tmux session + CLI boot + welcome Telegram. PER PRIMO
-//      cosi' l'utente riceve subito un messaggio "Ciao, mandami il CV"
-//      via Telegram (canale primario su VPS dove non c'e' dashboard
-//      desktop). Idempotente: se gia' attivo (boot Desktop), skippa.
-//   1. SENTINELLA: tmux session + CLI boot + kick-off, parte dopo
-//      l'Assistente cosi' e' pronta a ricevere il primo [BRIDGE TICK].
-//   2. BRIDGE: processo Python background (sentinel-bridge.py +
-//      pacing-bridge.py spawned da start-agent.sh quando role=bridge).
-//      Pre-delay 20s per dare tempo al CLI Sentinella di stabilizzarsi.
-//   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per ULTIMO
-//      cosi' quando parte il monitoring e' gia' stabile e ha almeno un
-//      sample fresco. Pre-delay 5s.
-// Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li
-// scala il Capitano secondo le sue soglie, leggendo lo stato Bridge.
+// Sequenza V7 (rivista 2026-05-12, Telegram-inbound):
+//   0. ASSISTENTE: tmux + CLI boot + welcome Telegram (idempotente). Per
+//      PRIMO cosi' l'utente riceve subito un messaggio "Ciao, mandami il
+//      CV" sul telefono (canale primario su VPS headless).
+//   1. TG-BRIDGE: long-poll Bot API → tmux ASSISTENTE. Pre-delay 5s per
+//      dare tempo all'Assistente di bootare la TUI prima che arrivino i
+//      primi inbound.
+//   2. SENTINELLA: tmux + CLI boot + kick-off, pronta a ricevere il primo
+//      [BRIDGE TICK] dal sentinel-bridge.
+//   3. BRIDGE (sentinel + pacing): processo Python background. Pre-delay
+//      20s per stabilizzazione CLI Sentinella.
+//   4. CAPITANO: tmux + CLI boot + kick-off, lanciato per ULTIMO cosi'
+//      quando parte il monitoring e' gia' stabile. Pre-delay 5s.
+// Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li scala
+// il Capitano secondo le sue soglie, leggendo lo stato Bridge.
 function buildContainerBootstrap() {
   const tickMin = readSentinellaTickMinutes();
   return [
     { role: 'assistente', session: 'ASSISTENTE' },
+    {
+      role: 'tg-bridge', session: 'TG-BRIDGE', notATmuxSession: true,
+      preDelayMs: 5000, env: { JHT_TG_TARGET_SESSION: 'ASSISTENTE' },
+    },
     { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000 },
     {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
@@ -72,7 +76,7 @@ async function startActionContainer(agentArg, options = {}) {
 
   console.log('');
   console.log(c.bold('Avvio agenti nel container jht...'));
-  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + SENTINELLA + BRIDGE + CAPITANO' : ''}`));
+  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + CAPITANO' : ''}`));
   console.log('');
 
   let started = 0;

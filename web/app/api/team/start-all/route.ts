@@ -49,25 +49,25 @@ type TeamAgent = {
 
 async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
-  // Sequenza V6 ordinata (rivista 2026-05-12, VPS-friendly):
+  // Sequenza V7 (rivista 2026-05-12, Telegram-inbound):
   //   0. ASSISTENTE: per primo, cosi' manda subito il welcome Telegram
-  //      all'utente (canale primario su VPS headless). Idempotente: se
-  //      gia' attivo (Desktop l'ha avviato) lo step e' un no-op.
-  //   1. SENTINELLA: tmux session + CLI boot + kick-off, parte dopo
-  //      l'Assistente cosi' e' pronta a ricevere il primo [BRIDGE TICK].
-  //   2. BRIDGE: processo Python background, fa il primo fetch e manda
-  //      il primo tick alla SENTINELLA che è già attiva
-  //   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per
-  //      ULTIMO così quando parte il monitoring è già stabile e ha
-  //      almeno un sample fresco da consultare
+  //      (canale primario su VPS headless).
+  //   1. TG-BRIDGE: long-poll Bot API → tmux ASSISTENTE. Background.
+  //   2. SENTINELLA: pronta a ricevere il primo [BRIDGE TICK].
+  //   3. BRIDGE (sentinel + pacing): processo Python background.
+  //   4. CAPITANO: per ultimo, monitoring gia' stabile.
   //
   // Pre-delay rivisti per PC lenti:
-  //   • sentinella: 3s dopo assistente  (CLI boot iniziale)
-  //   • bridge:    20s dopo sentinella  (CLI boot lento + trust dialog)
-  //   • capitano:   5s dopo bridge      (lascia che il primo fetch
+  //   • tg-bridge:   5s dopo assistente (TUI assistente in boot)
+  //   • sentinella:  3s dopo tg-bridge  (CLI boot iniziale)
+  //   • bridge:     20s dopo sentinella (CLI boot lento + trust dialog)
+  //   • capitano:    5s dopo bridge     (lascia che il primo fetch
   //                                      arrivi prima del kick-off)
   return [
     { role: 'assistente', session: 'ASSISTENTE', instance: null },
+    { role: 'tg-bridge',  session: 'TG-BRIDGE',  instance: null,
+      preDelayMs: 5000, notATmuxSession: true,
+      env: { JHT_TG_TARGET_SESSION: 'ASSISTENTE' } },
     { role: 'sentinella', session: 'SENTINELLA', instance: null,
       preDelayMs: 3000 },
     { role: 'bridge',     session: 'BRIDGE',     instance: null,
