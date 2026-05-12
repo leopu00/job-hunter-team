@@ -33,7 +33,7 @@ async function DownloadJsonLd() {
     license: 'https://opensource.org/licenses/MIT',
     isAccessibleForFree: true,
   }
-  return <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  return <script nonce={nonce} type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
 }
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {
