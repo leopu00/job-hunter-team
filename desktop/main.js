@@ -49,6 +49,8 @@ const providerInstall = require('./provider-install')
 const providerStore = require('./provider-store')
 const providerAuth = require('./provider-auth')
 const terminal = require('./terminal')
+const auth = require('./auth')
+const sync = require('./sync')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -552,6 +554,28 @@ app.whenReady().then(() => {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   })
+
+  // -------- Auth (Supabase OAuth via loopback PKCE) --------
+  ipcMain.handle('auth:get-status', () => auth.getStatus())
+  ipcMain.handle('auth:sign-in', (_event, provider) => {
+    if (typeof provider !== 'string' || !auth.SUPPORTED_PROVIDERS.has(provider)) {
+      return { ok: false, error: 'invalid-provider' }
+    }
+    return auth.signIn(provider)
+  })
+  ipcMain.handle('auth:sign-out', async () => {
+    sync.clearAllKeys()
+    return auth.signOut()
+  })
+
+  // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
+  ipcMain.handle('sync:get-status', () => sync.getStatus())
+  ipcMain.handle('sync:setup', (_event, args = {}) => sync.setup(args))
+  ipcMain.handle('sync:unlock', (_event, args = {}) => sync.unlock(args))
+  ipcMain.handle('sync:lock', () => sync.lock())
+  ipcMain.handle('sync:push', (_event, args = {}) => sync.push(args))
+  ipcMain.handle('sync:pull', (_event, args = {}) => sync.pull(args))
+  ipcMain.handle('sync:disable', (_event, args = {}) => sync.disable(args))
 
   // Setup wizard — Docker status + download page + disk space preview.
   ipcMain.handle('setup:get-docker-status', async () => {
