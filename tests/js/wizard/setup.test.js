@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock node:fs e setup-helpers per evitare scritture reali
+// Mock node:fs e setup-helpers per evitare scritture reali.
 vi.mock('node:fs');
 vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => {
   const original = await importOriginal();
@@ -50,23 +50,27 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fs.existsSync).mockReturnValue(true);
   vi.mocked(readConfigFileSnapshot).mockReturnValue({ exists: false, config: null });
+  // Test env non ha JHT_HOST_TYPE → wizard salta lo step VPS-FIRST e
+  // lo step Telegram-required. L'unico select e' il provider.
+  delete process.env.JHT_HOST_TYPE;
 });
 
-// --- Flusso quickstart Claude + api_key ---
+// Note di design (post-refactor 2026-05):
+// - Il wizard e' "quickstart" hardcoded (ADR-0004 → niente prompt setup-mode).
+// - auth_method = 'subscription' hardcoded (niente prompt api_key/subscription).
+// - Il modello e' il primo della lista del provider scelto (niente prompt modello).
+// - Telegram inline solo se JHT_HOST_TYPE=vps (in test e' undefined).
+// - Post-save: providers update via spawnSync(jht). In test l'eseguibile
+//   non esiste → fallisce → wizard chiede confirm "salva comunque?". I test
+//   passano `confirms: [false]` per uscire pulito dopo writeConfigFile.
 
-describe('runSetupWizard — Claude api_key quickstart', () => {
-  it('completa wizard e salva config Claude', async () => {
+// --- Flow base: nuovo config, un provider per volta ---
+
+describe('runSetupWizard — provider Claude (subscription)', () => {
+  it('salva config Claude con auth subscription', async () => {
     const prompter = createMockPrompter({
-      selects: [
-        'quickstart',   // modalità setup
-        'claude',       // provider AI
-        'api_key',      // auth method
-        'claude-sonnet-4-6', // modello
-      ],
-      texts: [
-        'sk-ant-apikey1234567', // API key
-      ],
-      confirms: [false], // no telegram
+      selects: ['claude'],
+      confirms: [false], // exit dopo providers update fail
     });
 
     await runSetupWizard(prompter);
@@ -74,16 +78,15 @@ describe('runSetupWizard — Claude api_key quickstart', () => {
     expect(writeConfigFile).toHaveBeenCalledOnce();
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
     expect(savedConfig.active_provider).toBe('claude');
-    expect(savedConfig.providers.claude.auth_method).toBe('api_key');
-    expect(savedConfig.providers.claude.api_key).toBe('sk-ant-apikey1234567');
+    expect(savedConfig.providers.claude.auth_method).toBe('subscription');
+    expect(savedConfig.providers.claude.name).toBe('claude');
     expect(savedConfig.providers.claude.model).toBe('claude-sonnet-4-6');
     expect(savedConfig.version).toBe(1);
   });
 
   it('chiama intro e outro del prompter', async () => {
     const prompter = createMockPrompter({
-      selects: ['quickstart', 'openai', 'api_key', 'gpt-4o'],
-      texts: ['sk-proj-apikey1234567'],
+      selects: ['claude'],
       confirms: [false],
     });
 
@@ -94,13 +97,10 @@ describe('runSetupWizard — Claude api_key quickstart', () => {
   });
 });
 
-// --- Flusso OpenAI api_key ---
-
-describe('runSetupWizard — OpenAI api_key', () => {
-  it('salva config OpenAI correttamente', async () => {
+describe('runSetupWizard — provider OpenAI (subscription)', () => {
+  it('salva config OpenAI con auth subscription', async () => {
     const prompter = createMockPrompter({
-      selects: ['quickstart', 'openai', 'api_key', 'gpt-4o'],
-      texts: ['sk-proj-openaikey123456'],
+      selects: ['openai'],
       confirms: [false],
     });
 
@@ -108,18 +108,16 @@ describe('runSetupWizard — OpenAI api_key', () => {
 
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
     expect(savedConfig.active_provider).toBe('openai');
-    expect(savedConfig.providers.openai.api_key).toBe('sk-proj-openaikey123456');
+    expect(savedConfig.providers.openai.auth_method).toBe('subscription');
+    expect(savedConfig.providers.openai.model).toBe('gpt-4o');
   });
 });
 
-// --- Flusso Kimi subscription ---
-
-describe('runSetupWizard — Kimi subscription', () => {
-  it('salva config Kimi con email', async () => {
+describe('runSetupWizard — provider Kimi (subscription)', () => {
+  it('salva config Kimi con auth subscription', async () => {
     const prompter = createMockPrompter({
-      selects: ['quickstart', 'kimi', 'subscription', 'kimi-k2-0905-preview'],
-      texts: ['user@kimi.com'],
-      confirms: [false], // no session token (quickstart), no telegram
+      selects: ['kimi'],
+      confirms: [false],
     });
 
     await runSetupWizard(prompter);
@@ -127,52 +125,34 @@ describe('runSetupWizard — Kimi subscription', () => {
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
     expect(savedConfig.active_provider).toBe('kimi');
     expect(savedConfig.providers.kimi.auth_method).toBe('subscription');
-    expect(savedConfig.providers.kimi.subscription.email).toBe('user@kimi.com');
+    expect(savedConfig.providers.kimi.model).toBe('kimi-k2-0905-preview');
   });
 });
 
-// --- Telegram configurato ---
-
-describe('runSetupWizard — con Telegram', () => {
-  it('include canale telegram se configurato', async () => {
-    const prompter = createMockPrompter({
-      selects: ['quickstart', 'claude', 'api_key', 'claude-sonnet-4-6'],
-      texts: [
-        'sk-ant-apikey1234567', // API key Claude
-        '123456789:ABCdefGHIjklMNO', // bot token
-        '987654321', // chat ID
-      ],
-      confirms: [true], // sì telegram
-    });
-
-    await runSetupWizard(prompter);
-
-    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.channels.telegram).toBeDefined();
-    expect(savedConfig.channels.telegram.bot_token).toBe('123456789:ABCdefGHIjklMNO');
-    expect(savedConfig.channels.telegram.chat_id).toBe('987654321');
-  });
-});
-
-// --- Config esistente: mantieni ---
+// --- Config esistente ---
 
 describe('runSetupWizard — config esistente', () => {
+  const existingConfig = {
+    active_provider: 'claude',
+    providers: {
+      claude: {
+        name: 'claude',
+        auth_method: 'subscription',
+        model: 'claude-sonnet-4-6',
+      },
+    },
+    channels: {},
+    workspace: '/tmp/test-jht',
+  };
+
   it('non salva se utente sceglie "mantieni"', async () => {
     vi.mocked(readConfigFileSnapshot).mockReturnValue({
       exists: true,
-      config: {
-        active_provider: 'claude',
-        providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-old' } },
-        channels: {},
-        workspace: '/tmp/test-jht',
-      },
+      config: existingConfig,
     });
 
     const prompter = createMockPrompter({
-      selects: [
-        'quickstart',   // modalità
-        'keep',         // gestione config esistente
-      ],
+      selects: ['keep'],
     });
 
     await runSetupWizard(prompter);
@@ -184,17 +164,11 @@ describe('runSetupWizard — config esistente', () => {
   it('ricomincia da zero se utente sceglie "reset"', async () => {
     vi.mocked(readConfigFileSnapshot).mockReturnValue({
       exists: true,
-      config: {
-        active_provider: 'claude',
-        providers: { claude: { name: 'claude', auth_method: 'api_key', api_key: 'sk-ant-old' } },
-        channels: {},
-        workspace: '/tmp/test-jht',
-      },
+      config: existingConfig,
     });
 
     const prompter = createMockPrompter({
-      selects: ['quickstart', 'reset', 'claude', 'api_key', 'claude-sonnet-4-6'],
-      texts: ['sk-ant-newkey123456'],
+      selects: ['reset', 'kimi'],
       confirms: [false],
     });
 
@@ -202,6 +176,27 @@ describe('runSetupWizard — config esistente', () => {
 
     expect(writeConfigFile).toHaveBeenCalledOnce();
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.providers.claude.api_key).toBe('sk-ant-newkey123456');
+    expect(savedConfig.active_provider).toBe('kimi');
+    expect(savedConfig.providers.kimi.auth_method).toBe('subscription');
+  });
+
+  it('preserva providers esistenti se utente sceglie "modify"', async () => {
+    vi.mocked(readConfigFileSnapshot).mockReturnValue({
+      exists: true,
+      config: existingConfig,
+    });
+
+    const prompter = createMockPrompter({
+      selects: ['modify', 'openai'],
+      confirms: [false],
+    });
+
+    await runSetupWizard(prompter);
+
+    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
+    expect(savedConfig.active_provider).toBe('openai');
+    // claude pre-esistente preservato
+    expect(savedConfig.providers.claude).toBeDefined();
+    expect(savedConfig.providers.openai).toBeDefined();
   });
 });
