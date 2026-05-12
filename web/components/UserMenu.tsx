@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -78,9 +79,41 @@ export default function UserMenu({ avatarUrl, fullName, email }: UserMenuProps) 
               {email}
             </div>
           </div>
+          <Link
+            href="/profile"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+          >
+            Profilo
+          </Link>
+          <Link
+            href="/settings"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+          >
+            Impostazioni
+          </Link>
+          <Link
+            href="/export"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+          >
+            Esporta dati
+          </Link>
+          <Link
+            href="/backup"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+          >
+            Backup
+          </Link>
           <button
             onClick={handleLogout}
-            className="w-full text-left px-4 py-2.5 text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-card)] transition-colors cursor-pointer"
+            className="w-full text-left px-4 py-2.5 text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-card)] transition-colors cursor-pointer border-t border-[var(--color-border)] mt-1"
           >
             logout
           </button>
