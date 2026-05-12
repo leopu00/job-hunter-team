@@ -7,7 +7,7 @@
 
 // --- Provider AI ---
 
-export type AIProviderName = "claude" | "openai" | "minimax";
+export type AIProviderName = "claude" | "openai" | "kimi";
 
 export type AuthMethod = "api_key" | "subscription";
 
@@ -20,7 +20,7 @@ export interface AIProviderConfig {
   api_key_ref?: import("./secret-ref").SecretRef;
   /** Obbligatorio se auth_method = "subscription" */
   subscription?: SubscriptionConfig;
-  /** Modello da usare (es. "claude-opus-4-6", "gpt-4o", "minimax-01") */
+  /** Modello da usare (es. "claude-opus-4-6", "gpt-4o", "kimi-k2-0905-preview") */
   model?: string;
 }
 

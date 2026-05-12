@@ -1,4 +1,4 @@
-"""Test mock per i provider concreti (Claude, OpenAI, Minimax)."""
+"""Test mock per i provider concreti (Claude, OpenAI, Kimi)."""
 
 import sys
 import os
@@ -98,15 +98,15 @@ def test_openai_provider_complete():
     assert result.provider == "openai"
 
 
-# ── PROVIDER MINIMAX — MOCK ─────────────────────────────────
+# ── PROVIDER KIMI — MOCK ─────────────────────────────────
 
 
-def test_minimax_provider_complete():
-    from shared.llm.providers.minimax_provider import MinimaxProvider
+def test_kimi_provider_complete():
+    from shared.llm.providers.kimi_provider import KimiProvider
     from shared.llm.base import CompletionResponse
 
     mock_json = {
-        "choices": [{"message": {"content": "Ciao da Minimax!"}, "finish_reason": "stop"}],
+        "choices": [{"message": {"content": "Ciao da Kimi!"}, "finish_reason": "stop"}],
         "model": "abab6.5-chat",
         "usage": {"prompt_tokens": 5, "completion_tokens": 3},
     }
@@ -115,19 +115,19 @@ def test_minimax_provider_complete():
     mock_resp.json.return_value = mock_json
     mock_resp.raise_for_status = MagicMock()
 
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}):
-        with patch("shared.llm.providers.minimax_provider.requests.post", return_value=mock_resp):
-            provider = MinimaxProvider()
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}):
+        with patch("shared.llm.providers.kimi_provider.requests.post", return_value=mock_resp):
+            provider = KimiProvider()
             result = provider.complete("test")
 
     assert isinstance(result, CompletionResponse)
-    assert result.content == "Ciao da Minimax!"
-    assert result.provider == "minimax"
+    assert result.content == "Ciao da Kimi!"
+    assert result.provider == "kimi"
     assert result.usage["input_tokens"] == 5
 
 
-def test_minimax_provider_error_response():
-    from shared.llm.providers.minimax_provider import MinimaxProvider
+def test_kimi_provider_error_response():
+    from shared.llm.providers.kimi_provider import KimiProvider
     from shared.llm.base import ProviderError
 
     mock_json = {"error": {"message": "Rate limit exceeded"}}
@@ -135,8 +135,8 @@ def test_minimax_provider_error_response():
     mock_resp.json.return_value = mock_json
     mock_resp.raise_for_status = MagicMock()
 
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}):
-        with patch("shared.llm.providers.minimax_provider.requests.post", return_value=mock_resp):
-            provider = MinimaxProvider()
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}):
+        with patch("shared.llm.providers.kimi_provider.requests.post", return_value=mock_resp):
+            provider = KimiProvider()
             with pytest.raises(ProviderError, match="Rate limit"):
                 provider.complete("test")

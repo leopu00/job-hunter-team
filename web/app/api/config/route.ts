@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 const CONFIG_DIR  = JHT_HOME
 const CONFIG_PATH = path.join(CONFIG_DIR, 'jht.config.json')
-const PROVIDERS   = ['anthropic', 'claude', 'openai', 'kimi', 'minimax'] as const
+const PROVIDERS   = ['anthropic', 'claude', 'openai', 'kimi', 'kimi'] as const
 
 type ValidationIssue = { path: string; message: string }
 

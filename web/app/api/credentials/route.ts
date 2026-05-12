@@ -9,17 +9,17 @@ export const dynamic = 'force-dynamic'
 
 const CREDS_DIR = path.join(JHT_HOME, 'credentials')
 
-const API_KEY_PROVIDERS = ['claude', 'openai', 'minimax'] as const
+const API_KEY_PROVIDERS = ['claude', 'openai', 'kimi'] as const
 const OAUTH_PROVIDERS = ['chatgpt_pro', 'claude_max'] as const
 const ALL_PROVIDERS = [...API_KEY_PROVIDERS, ...OAUTH_PROVIDERS] as const
 type Provider = (typeof ALL_PROVIDERS)[number]
 
 const ENV_VAR_MAP: Record<string, string> = {
-  claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', minimax: 'MINIMAX_API_KEY',
+  claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', kimi: 'MOONSHOT_API_KEY',
 }
 
 const KEY_PREFIXES: Record<string, string> = {
-  claude: 'sk-ant-', openai: 'sk-', minimax: 'mm-',
+  claude: 'sk-ant-', openai: 'sk-', kimi: 'mm-',
 }
 
 function isValidProvider(p: string): p is Provider {

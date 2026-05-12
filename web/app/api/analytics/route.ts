@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 const ANALYTICS_PATH = path.join(JHT_HOME, 'analytics', 'analytics.json')
 
-type ProviderName = 'claude' | 'openai' | 'minimax'
+type ProviderName = 'claude' | 'openai' | 'kimi'
 type TokenUsage = { input: number; output: number; cacheRead?: number; cacheWrite?: number; total: number }
 type UsageEntry = {
   id: string; provider: ProviderName; model: string; tokens: TokenUsage

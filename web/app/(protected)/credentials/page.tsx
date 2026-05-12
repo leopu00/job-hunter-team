@@ -9,7 +9,7 @@ type ProviderInfo = {
 }
 
 const LABELS: Record<string, string> = {
-  claude: 'Claude (Anthropic)', openai: 'OpenAI', minimax: 'MiniMax',
+  claude: 'Claude (Anthropic)', openai: 'OpenAI', kimi: 'Kimi',
   chatgpt_pro: 'ChatGPT Pro', claude_max: 'Claude Max',
 }
 

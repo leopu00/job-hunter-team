@@ -90,7 +90,7 @@ describe("Schema — multi-provider e refine", () => {
 
   it("rifiuta active_provider senza config nei providers", () => {
     const r = validateConfig({
-      active_provider: "minimax",
+      active_provider: "kimi",
       providers: {
         claude: { name: "claude", auth_method: "api_key", api_key: "sk-c" },
       },
@@ -151,14 +151,14 @@ describe("redactConfig — struttura completa", () => {
   it("maschera session_token in subscription", () => {
     const cfg = {
       providers: {
-        minimax: {
-          name: "minimax", auth_method: "subscription",
+        kimi: {
+          name: "kimi", auth_method: "subscription",
           subscription: { email: "u@m.com", session_token: "tok-supersecret" },
         },
       },
     };
     const r = redactConfig(cfg);
-    const sub = (r.providers as any).minimax.subscription;
+    const sub = (r.providers as any).kimi.subscription;
     expect(sub.session_token).toBe("tok-****");
     expect(sub.email).toBe("u@m.com");
   });
