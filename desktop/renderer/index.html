@@ -370,6 +370,10 @@
             <span class="home__nav-icon">🐳</span>
             <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="account" role="tab">
+            <span class="home__nav-icon">👤</span>
+            <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="language" role="tab">
             <span class="home__nav-icon">🌐</span>
             <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
@@ -509,6 +513,135 @@
           </div>
         </div>
 
+        <!-- Account: OAuth Supabase sign-in (Guest vs Signed-in) -->
+        <div class="home__panel" data-section="account" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.account.title">Account</h1>
+            <p class="home__subtitle" data-i18n="home.account.subtitle">
+              Sign in to enable cloud sync and multi-device recovery.
+            </p>
+          </header>
+
+          <!-- Guest state -->
+          <div class="home__card" id="home-account-guest" hidden>
+            <p class="home__card-text" data-i18n="home.account.guestHint">
+              You're using JHT in Guest mode. Your config stays on this machine only.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--primary" id="home-account-signin-google">
+                <span data-i18n="home.account.signinGoogle">Sign in with Google</span>
+              </button>
+              <button type="button" class="btn btn--ghost" id="home-account-signin-github">
+                <span data-i18n="home.account.signinGitHub">Sign in with GitHub</span>
+              </button>
+            </div>
+            <p class="home__card-hint" id="home-account-error" hidden></p>
+          </div>
+
+          <!-- Signed-in state -->
+          <div class="home__card" id="home-account-signedin" hidden>
+            <div class="home__account-identity">
+              <span class="home__account-email" id="home-account-email"></span>
+              <span class="home__account-provider" id="home-account-provider"></span>
+            </div>
+            <p class="home__card-text" data-i18n="home.account.signedinHint">
+              Cloud sync and multi-device recovery are enabled for this account.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--ghost" id="home-account-signout">
+                <span data-i18n="home.account.signout">Sign out</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cloud sync sub-card (visible only when signed-in) -->
+          <div class="home__card home__card--sub" id="home-sync-card" hidden>
+            <h2 class="home__card-title" data-i18n="home.sync.title">Cloud sync</h2>
+            <p class="home__card-text" id="home-sync-subtitle"></p>
+
+            <!-- State: disabled (no setup on this device) -->
+            <div id="home-sync-disabled" hidden>
+              <p class="home__card-text" data-i18n="home.sync.disabledHint">
+                Set a passphrase to encrypt your launcher config before it's uploaded. The passphrase never leaves this device.
+              </p>
+              <details class="home__sync-why">
+                <summary data-i18n="home.sync.whySummary">Why a passphrase if I'm already signed in?</summary>
+                <p data-i18n="home.sync.whyBody">
+                  Sign-in proves who you are; the passphrase encrypts the data before it leaves your computer. Without it, server admins (and anyone who dumps the database) can read your synced data. With it, only this device can. Trade-off: if you lose the passphrase, the cloud data is unrecoverable by design.
+                </p>
+              </details>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseLabel">Passphrase</span>
+                <input type="password" id="home-sync-setup-passphrase" autocomplete="new-password" minlength="8" />
+              </label>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseConfirmLabel">Confirm passphrase</span>
+                <input type="password" id="home-sync-setup-passphrase-confirm" autocomplete="new-password" minlength="8" />
+              </label>
+              <p class="home__card-hint home__sync-warning" data-i18n="home.sync.passphraseWarning">
+                Save it in your password manager NOW. If you lose it, your cloud data cannot be recovered.
+              </p>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-setup-btn">
+                  <span data-i18n="home.sync.setupBtn">Enable cloud sync</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-setup-error" hidden></p>
+            </div>
+
+            <!-- State: locked (setup done but key not in memory) -->
+            <div id="home-sync-locked" hidden>
+              <p class="home__card-text" data-i18n="home.sync.lockedHint">
+                Cloud sync is set up on this device. Enter your passphrase to unlock it.
+              </p>
+              <label class="home__sync-field">
+                <span data-i18n="home.sync.passphraseLabel">Passphrase</span>
+                <input type="password" id="home-sync-unlock-passphrase" autocomplete="current-password" />
+              </label>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-unlock-btn">
+                  <span data-i18n="home.sync.unlockBtn">Unlock</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-reset-btn">
+                  <span data-i18n="home.sync.resetBtn">Forgot passphrase — reset</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-unlock-error" hidden></p>
+            </div>
+
+            <!-- State: unlocked -->
+            <div id="home-sync-unlocked" hidden>
+              <p class="home__card-text" data-i18n="home.sync.unlockedHint">
+                Cloud sync is active. Push your current config to the cloud, or pull the latest version from another device.
+              </p>
+              <p class="home__sync-meta" id="home-sync-meta"></p>
+              <div class="home__card-actions">
+                <button type="button" class="btn btn--primary" id="home-sync-push-btn">
+                  <span data-i18n="home.sync.pushBtn">Push to cloud</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-pull-btn">
+                  <span data-i18n="home.sync.pullBtn">Pull from cloud</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-lock-btn">
+                  <span data-i18n="home.sync.lockBtn">Lock</span>
+                </button>
+                <button type="button" class="btn btn--ghost" id="home-sync-disable-btn">
+                  <span data-i18n="home.sync.disableBtn">Disable sync</span>
+                </button>
+              </div>
+              <p class="home__card-hint" id="home-sync-action-error" hidden></p>
+              <p class="home__card-hint home__sync-success" id="home-sync-action-success" hidden></p>
+            </div>
+          </div>
+
+          <!-- Busy state -->
+          <div class="home__card" id="home-account-busy" hidden>
+            <p class="home__card-text" id="home-account-busy-message" data-i18n="home.account.busy">
+              Opening browser for sign-in…
+            </p>
+          </div>
+        </div>
+
         <!-- Lingua -->
         <div class="home__panel" data-section="language" hidden>
           <header class="home__header">
@@ -620,6 +753,6 @@
 
     <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
     <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
-    <script src="./renderer.js"></script>
+    <script type="module" src="./renderer.js"></script>
   </body>
 </html>

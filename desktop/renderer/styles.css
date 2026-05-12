@@ -1498,6 +1498,8 @@ body { display: flex; flex-direction: column; }
   gap: 18px;
 }
 
+.home__card[hidden] { display: none; }
+
 .home__card + .home__card { margin-top: 16px; }
 
 .home__card-link {
@@ -1682,3 +1684,113 @@ body { display: flex; flex-direction: column; }
 }
 
 .home__content .lang-select { max-width: 280px; }
+
+.home__card-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.home__card-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger, #dc3545);
+}
+
+.home__card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.home__account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.home__account-email {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.home__account-provider {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.home__card--sub {
+  margin-top: 16px;
+}
+
+.home__card-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.home__sync-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.home__sync-field input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #2a2f4d);
+  background: var(--color-input-bg, #0f1430);
+  color: var(--color-text, #e6e9f2);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.home__sync-field input:focus {
+  outline: none;
+  border-color: var(--color-accent, #6f7eff);
+}
+
+.home__sync-warning {
+  color: var(--color-warning, #f5a524);
+  font-weight: 500;
+}
+
+.home__sync-success {
+  color: var(--color-success, #2eb872);
+}
+
+.home__sync-meta {
+  margin: 6px 0 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.home__sync-why {
+  margin: 6px 0 14px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.home__sync-why summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.home__sync-why summary:hover { opacity: 0.85; }
+
+.home__sync-why p {
+  margin: 8px 0 0;
+}
