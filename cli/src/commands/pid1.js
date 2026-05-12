@@ -1,20 +1,21 @@
 /**
- * `jht pid1` — container PID 1 dispatcher.
+ * `jht pid1` — container PID 1 dispatcher con hot-reload del cloud daemon.
  *
  * Pensato come CMD del docker-compose: in base a JHT_HOST_TYPE decide
  * cosa far girare nel container.
  *
- *   vps + cloud paired → spawn DUAL: cloud daemon + dashboard
+ *   vps + cloud paired → dashboard + cloud daemon
  *                        ↳ daemon pusha dati a jobhunterteam.ai ogni 30s
  *                        ↳ dashboard resta su 127.0.0.1:3000 cosi' l'utente
  *                          puo' accedervi via SSH tunnel
- *                          (`ssh -L 3000:localhost:3000 root@vps`) per
- *                          uploadare CV, vedere log live, ecc.
- *                          Lo scambio dati col cloud non passa dalla
- *                          dashboard, ma dal daemon — la dashboard e' solo
- *                          la UI di controllo locale.
+ *                          (`ssh -L 3000:localhost:3000 root@vps`)
  *
- *   vps senza cloud    → solo dashboard (fallback per onboarding wizard)
+ *   vps senza cloud    → solo dashboard, finche' non appare cloud.json:
+ *                        un watcher su $JHT_HOME/cloud.json fa partire il
+ *                        daemon non appena il pairing viene completato dal
+ *                        wizard, SENZA richiedere `jht down && jht up`.
+ *                        Idem in caso di unpairing (`jht cloud disable`):
+ *                        kill del daemon, dashboard intatta.
  *
  *   local              → solo dashboard (default storico)
  *
@@ -26,9 +27,13 @@
 
 import { readFile, access } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { watch } from 'node:fs';
+import { dirname } from 'node:path';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
-const HOST_ENV_PATH = '/jht_home/host.env';
+const JHT_HOME = '/jht_home';
+const HOST_ENV_PATH = `${JHT_HOME}/host.env`;
+const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -52,7 +57,7 @@ async function readHostType() {
  */
 async function isCloudConfigured() {
   try {
-    const content = await readFile('/jht_home/cloud.json', 'utf-8');
+    const content = await readFile(CLOUD_JSON_PATH, 'utf-8');
     const cfg = JSON.parse(content);
     return cfg?.enabled === true && typeof cfg?.token === 'string';
   } catch {
@@ -86,73 +91,126 @@ function spawnLabeled(label, cmd, args) {
   return child;
 }
 
+function pid1Log(msg) {
+  console.log(`[pid1] ${msg}`);
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
-  const cloudPaired = await isCloudConfigured();
 
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
 
-  // Decide quali processi spawnare. Sempre almeno uno → PID 1 alive.
-  const children = [];
+  // ── Dashboard: lifetime = container, parte sempre.
+  pid1Log(isVps ? 'mode: VPS' : 'mode: local');
+  pid1Log('starting dashboard (127.0.0.1:3000)');
+  const dashboardChild = spawnLabeled('dashboard', process.execPath, dashCmd);
 
-  if (isVps && cloudPaired) {
-    // Dual mode: daemon (push verso cloud) + dashboard (UI locale via tunnel).
-    console.log('[pid1] mode: VPS dual (cloud daemon + local dashboard)');
-    console.log('[pid1] dashboard accessibile via SSH tunnel: ssh -L 3000:localhost:3000 root@<vps>');
-    children.push({ label: 'daemon', child: spawnLabeled('daemon', process.execPath, daemonCmd) });
-    children.push({ label: 'dashboard', child: spawnLabeled('dashboard', process.execPath, dashCmd) });
-  } else if (isVps && !cloudPaired) {
-    // VPS senza pairing: solo dashboard (l'utente sta facendo il wizard).
-    // Dopo il pairing un `jht down && jht up` switchera' a dual mode.
-    console.log('[pid1] mode: VPS (pre-pairing fallback → dashboard only)');
-    console.log('[pid1] dopo il pairing del wizard, esegui: jht down && jht up');
-    children.push({ label: 'dashboard', child: spawn(process.execPath, dashCmd, { stdio: 'inherit' }) });
-  } else {
-    // Local: solo dashboard (comportamento storico).
-    console.log('[pid1] mode: local (dashboard)');
-    children.push({ label: 'dashboard', child: spawn(process.execPath, dashCmd, { stdio: 'inherit' }) });
+  // ── Daemon: opzionale, hot-reloadable su cambio cloud.json.
+  let daemonChild = null;
+  let daemonRespawnTimer = null;
+  let shuttingDown = false;
+
+  const startDaemon = () => {
+    if (daemonChild && !daemonChild.killed) return;  // gia' attivo
+    pid1Log('starting cloud daemon (push ogni 30s verso jobhunterteam.ai)');
+    daemonChild = spawnLabeled('daemon', process.execPath, daemonCmd);
+    daemonChild.on('exit', (code, signal) => {
+      const exitedChild = daemonChild;
+      daemonChild = null;
+      if (shuttingDown) return;
+      pid1Log(`cloud daemon exited (code=${code} signal=${signal})`);
+      // Auto-restart se cloud e' ancora configurato (crash recovery).
+      // Debounce 5s per evitare crash-loop tight.
+      if (daemonRespawnTimer) clearTimeout(daemonRespawnTimer);
+      daemonRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('daemon respawn dopo crash');
+          startDaemon();
+        }
+      }, 5000);
+      void exitedChild;  // shut lint up
+    });
+  };
+
+  const stopDaemon = (reason) => {
+    if (daemonRespawnTimer) {
+      clearTimeout(daemonRespawnTimer);
+      daemonRespawnTimer = null;
+    }
+    if (daemonChild && !daemonChild.killed) {
+      pid1Log(`stopping cloud daemon (${reason})`);
+      daemonChild.kill('SIGTERM');
+    }
+  };
+
+  // Stato iniziale del cloud: se gia' paired, daemon parte subito.
+  if (isVps && await isCloudConfigured()) {
+    startDaemon();
+  } else if (isVps) {
+    pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
 
-  // Forward SIGTERM/SIGINT a tutti i child per uno shutdown pulito
-  // (docker stop manda SIGTERM, 10s grace, poi SIGKILL).
-  let shuttingDown = false;
+  // ── Watcher su cloud.json: hot-reload del daemon al pairing/unpairing.
+  // Solo su VPS — su local non ha senso (non c'e' un wizard di pairing).
+  if (isVps) {
+    let lastConfigured = await isCloudConfigured();
+    // fs.watch su directory: piu' robusto di fs.watch su file inesistente,
+    // dato che cloud.json viene creato DOPO il pairing (file mancante al
+    // boot). Filtra eventi sul solo cloud.json.
+    let watcher = null;
+    try {
+      watcher = watch(dirname(CLOUD_JSON_PATH), { persistent: true }, async (eventType, filename) => {
+        if (filename !== 'cloud.json') return;
+        // Debounce: piu' eventi rename/change ravvicinati sul write.
+        await new Promise((r) => setTimeout(r, 250));
+        const nowConfigured = await isCloudConfigured();
+        if (nowConfigured === lastConfigured) return;
+        lastConfigured = nowConfigured;
+        if (nowConfigured) {
+          pid1Log('cloud.json rilevato: avvio cloud daemon');
+          startDaemon();
+        } else {
+          stopDaemon('cloud.json rimosso o disabilitato');
+        }
+      });
+    } catch (err) {
+      pid1Log(`watch fallito (${err.message}) — daemon hot-reload disabilitato`);
+    }
+    // Cleanup watcher allo shutdown
+    process.on('exit', () => { if (watcher) watcher.close(); });
+  }
+
+  // ── Shutdown forwarding: docker stop manda SIGTERM, 10s grace.
   const forwardSignal = (sig) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    for (const { child } of children) {
-      if (child && !child.killed) child.kill(sig);
-    }
+    pid1Log(`shutdown (${sig}): killing children`);
+    if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
+    if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
   process.on('SIGINT', () => forwardSignal('SIGINT'));
 
-  // Quando un child muore in dual mode, killiamo l'altro e usciamo con
-  // l'exit code del primo morto. Senza questo, daemon che crasha lascia
-  // dashboard zombie (e viceversa) finche' docker stop non interviene.
-  let exited = false;
-  const onChildExit = (label) => (code, signal) => {
-    if (exited) return;
-    exited = true;
-    console.log(`[pid1] child '${label}' uscito (code=${code}, signal=${signal})`);
-    // Killa eventuali sibling
-    for (const c of children) {
-      if (c.label !== label && c.child && !c.child.killed) c.child.kill('SIGTERM');
-    }
+  // ── Dashboard exit = container exit. Se la dashboard crasha, l'utente
+  // non puo' piu' interagire — meglio uscire e farsi restartare da docker.
+  dashboardChild.on('exit', (code, signal) => {
+    if (shuttingDown) return;
+    pid1Log(`dashboard exited (code=${code} signal=${signal}) — exit pid1`);
+    shuttingDown = true;
+    if (daemonChild && !daemonChild.killed) daemonChild.kill('SIGTERM');
     if (signal) {
       process.exit(128 + (signal === 'SIGTERM' ? 15 : signal === 'SIGINT' ? 2 : 0));
     }
     process.exit(code ?? 0);
-  };
-  for (const { label, child } of children) {
-    child.on('exit', onChildExit(label));
-  }
+  });
 }
 
 export function registerPid1Command(program) {
   program
     .command('pid1')
-    .description('Container entrypoint: dual dashboard+daemon (vps paired) o solo dashboard (local)')
+    .description('Container entrypoint: dashboard (sempre) + cloud daemon (auto-start su VPS quando cloud.json appare)')
     .action(dispatch);
 }
