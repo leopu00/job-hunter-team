@@ -25,7 +25,7 @@ export interface AssistantConfig {
 export const DEFAULT_ASSISTANT_CONFIG: Omit<AssistantConfig, "botToken" | "ownerChatId"> = {
   name: "Assistente JHT",
   avatar: "🤖",
-  captainSession: "ALFA",
+  captainSession: "CAPITANO",
   teamResponseTimeoutMs: 5 * 60 * 1000,
 };
 
