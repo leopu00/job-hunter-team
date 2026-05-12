@@ -677,8 +677,50 @@ if [ "$ROLE" = "capitano" ]; then
 fi
 
 if [ "$ROLE" = "assistente" ]; then
-  _msg="[@utente -> @assistente] [CHAT] (avvio) Presentati come da prompt."
+  # Su VPS l'utente non ha dashboard aperta: il primo contatto e' via
+  # Telegram. L'Assistente, al primo boot, manda un welcome al chat_id
+  # del config e marca $JHT_HOME/profile/welcomed.flag per non rispammare
+  # ai boot successivi. Vedi skill `telegram-send` per il wrapper CLI.
+  _welcome_flag="${JHT_HOME:-/jht_home}/profile/welcomed.flag"
+  _welcome_dir="${JHT_HOME:-/jht_home}/profile"
+  _msg=$(printf '%s\n' \
+    "[@system -> @assistente] [BOOT] Avvio Assistente." \
+    "" \
+    "Protocollo welcome — idempotente:" \
+    "" \
+    "1. Se ${_welcome_flag} esiste, NON fare nulla — sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa." \
+    "" \
+    "2. Altrimenti: manda un welcome via il comando shell jht-telegram-send — skill telegram-send — al chat_id configurato. Tono amichevole, in italiano. Presentati come Assistente del Job Hunter Team, chiedi all'utente di mandare il suo CV o documenti utili — PDF/DOC va benissimo — come allegato su Telegram, spiega in due righe che da li' costruirai il profilo per il team. Una sola sequenza coerente di messaggi, breve." \
+    "" \
+    "3. Quando il send ritorna ok, esegui: mkdir -p ${_welcome_dir} && touch ${_welcome_flag}" \
+    "" \
+    "4. Resta in attesa di nuovi messaggi: web [CHAT] o Telegram [TG]."
+  )
   _kickoff "$SESSION" "$_msg"
+
+  # Watchdog: se entro 90s il welcomed.flag non e' apparso, re-inietta
+  # il prompt. Max 3 retry, totale ~4.5 min. Coprire i casi in cui il CLI
+  # era ancora in boot, un trust dialog aveva intercettato il primo send,
+  # o l'Assistente era impegnato in un'altra azione e ha perso il prompt.
+  JHT_WELCOME_SESS="$SESSION" JHT_WELCOME_FLAG="$_welcome_flag" JHT_WELCOME_MSG="$_msg" JHT_WELCOME_LOG="/tmp/welcome-watchdog.log" \
+  setsid sh -c '
+    exec >"$JHT_WELCOME_LOG" 2>&1
+    echo "[$(date +%H:%M:%S)] welcome watchdog start (flag=$JHT_WELCOME_FLAG)"
+    . /app/.launcher/tui-helpers.sh
+    for retry in 1 2 3; do
+      sleep 90
+      if [ -f "$JHT_WELCOME_FLAG" ]; then
+        echo "[$(date +%H:%M:%S)] welcome flag rilevato dopo retry=$retry-1, watchdog exit"
+        exit 0
+      fi
+      echo "[$(date +%H:%M:%S)] flag mancante (retry $retry/3): re-injection"
+      tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" || \
+        echo "[$(date +%H:%M:%S)] tui_send_verified fallito"
+    done
+    if [ ! -f "$JHT_WELCOME_FLAG" ]; then
+      echo "[$(date +%H:%M:%S)] watchdog give up: 3 retry esauriti, welcome non confermato"
+    fi
+  ' </dev/null &
 fi
 
 if [ "$ROLE" = "sentinella" ]; then
