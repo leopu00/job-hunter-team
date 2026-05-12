@@ -133,8 +133,13 @@ export async function proxy(request: NextRequest) {
   // (protected) lo legge per redirigere a /onboarding quando il
   // profilo non è completo. Va propagato a tutte le NextResponse.next()
   // chiamate in questa funzione clonando le request headers.
+  // `x-search` espone anche la query string: il layout la usa per
+  // costruire un `returnTo` completo quando l'utente non e' loggato,
+  // cosi' che deep-link come /cli-link?code=ABCD-1234 sopravvivano al
+  // roundtrip di login.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-pathname', pathname)
+  requestHeaders.set('x-search', request.nextUrl.search)
 
   // CSP nonce: generated per request, exposed to RSCs via x-nonce header
   // and applied to the final response's Content-Security-Policy.
@@ -155,12 +160,25 @@ export async function proxy(request: NextRequest) {
   // Browser cross-origin POST/PUT/PATCH/DELETE → 403. Pattern OpenClaw
   // browserMutationGuardMiddleware. CLI/curl (no Origin/Referer)
   // continuano a funzionare; SOP + Origin in allowlist coprono i browser.
+  //
+  // `hostOrigin` viene dedotto dai forwarded headers per accettare
+  // automaticamente same-origin POST sul dominio prod (es. jobhunterteam.ai)
+  // senza dover settare JHT_PUBLIC_ORIGIN — il browser presenta Origin
+  // == server host, quindi non è CSRF per definizione.
   if (isApi) {
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const rawHost = request.headers.get('host')?.trim()
+    const proto = forwardedProto || request.nextUrl.protocol.replace(':', '')
+    const host = forwardedHost || rawHost
+    const hostOrigin = host ? `${proto}://${host}` : null
+
     const reject = shouldRejectBrowserMutation({
       method: request.method,
       origin: request.headers.get('origin'),
       referer: request.headers.get('referer'),
       secFetchSite: request.headers.get('sec-fetch-site'),
+      hostOrigin,
     })
     if (reject) {
       const res = NextResponse.json(
@@ -249,7 +267,12 @@ export async function proxy(request: NextRequest) {
     // Supabase è opzionale in locale, "Continua senza" in /onboarding/cloud
     // deve poter accedere a /dashboard senza account.
     if (isProtected && !user && !localRequest) {
-      return NextResponse.redirect(new URL('/?login=true', request.url))
+      const returnTo = pathname + request.nextUrl.search
+      const loginUrl = new URL('/?login=true', request.url)
+      if (returnTo && returnTo !== '/') {
+        loginUrl.searchParams.set('returnTo', returnTo)
+      }
+      return NextResponse.redirect(loginUrl)
     }
 
     // Landing page sempre accessibile — nessun redirect da / a /dashboard
