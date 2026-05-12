@@ -28,9 +28,13 @@ function readSentinellaTickMinutes() {
 }
 
 // Bootstrap container del team — replica `/api/team/start-all` (web UI).
-// Sequenza V5 ordinata (rivista 2026-04-26):
-//   1. SENTINELLA: tmux session + CLI boot + kick-off, da SOLA (cosi' e'
-//      pronta a ricevere il primo [BRIDGE TICK])
+// Sequenza V6 ordinata (rivista 2026-05-12, VPS-friendly):
+//   0. ASSISTENTE: tmux session + CLI boot + welcome Telegram. PER PRIMO
+//      cosi' l'utente riceve subito un messaggio "Ciao, mandami il CV"
+//      via Telegram (canale primario su VPS dove non c'e' dashboard
+//      desktop). Idempotente: se gia' attivo (boot Desktop), skippa.
+//   1. SENTINELLA: tmux session + CLI boot + kick-off, parte dopo
+//      l'Assistente cosi' e' pronta a ricevere il primo [BRIDGE TICK].
 //   2. BRIDGE: processo Python background (sentinel-bridge.py +
 //      pacing-bridge.py spawned da start-agent.sh quando role=bridge).
 //      Pre-delay 20s per dare tempo al CLI Sentinella di stabilizzarsi.
@@ -42,7 +46,8 @@ function readSentinellaTickMinutes() {
 function buildContainerBootstrap() {
   const tickMin = readSentinellaTickMinutes();
   return [
-    { role: 'sentinella', session: 'SENTINELLA' },
+    { role: 'assistente', session: 'ASSISTENTE' },
+    { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000 },
     {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
       preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' },
@@ -67,7 +72,7 @@ async function startActionContainer(agentArg, options = {}) {
 
   console.log('');
   console.log(c.bold('Avvio agenti nel container jht...'));
-  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: SENTINELLA + BRIDGE + CAPITANO' : ''}`));
+  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + SENTINELLA + BRIDGE + CAPITANO' : ''}`));
   console.log('');
 
   let started = 0;
