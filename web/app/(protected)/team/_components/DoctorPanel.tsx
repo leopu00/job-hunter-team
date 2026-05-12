@@ -41,7 +41,10 @@ type Resp = {
   ok: boolean
   events: DoctorEvent[]
   rounds: Round[]
-  counts: { total: number; pings: number; restarts: number; rounds_complete: number }
+  // counts e' opzionale: in alcuni branch del backend (es. ENOENT del
+  // file dottore-actions.jsonl) puo' mancare. Il client usa ?? 0 per
+  // degradare graceful invece di crashare con "reading 'pings'".
+  counts?: { total: number; pings: number; restarts: number; rounds_complete: number }
 }
 
 const EVENT_ICON: Record<string, string> = {
@@ -127,9 +130,9 @@ export default function DoctorPanel() {
         </div>
         {data && (
           <div className="flex gap-2 text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
-            <span>📨 {data.counts.pings} ping</span>
-            <span>🔄 {data.counts.restarts} restart</span>
-            <span>✅ {data.counts.rounds_complete} round</span>
+            <span>📨 {data.counts?.pings ?? 0} ping</span>
+            <span>🔄 {data.counts?.restarts ?? 0} restart</span>
+            <span>✅ {data.counts?.rounds_complete ?? 0} round</span>
           </div>
         )}
       </header>

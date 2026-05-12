@@ -41,10 +41,12 @@ if [ -f "$HOST_ENV_FILE" ]; then
   . "$HOST_ENV_FILE"
 fi
 JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
-# Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}`
-# substitution per passare il valore al container. Senza export resta
-# variabile di shell e compose non la vede.
+JHT_LANG="${JHT_LANG:-en}"
+# Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}` /
+# `${JHT_LANG:-}` substitution per passare i valori al container. Senza
+# export restano variabili di shell e compose non le vede.
 export JHT_HOST_TYPE
+export JHT_LANG
 
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then
