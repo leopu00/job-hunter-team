@@ -17,6 +17,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0002](./0002-three-supported-agent-clis.md) | Support exactly three agent CLIs: Claude Code, Codex, Kimi | Accepted |
 | [0003](./0003-single-writer-team.md) | Team runs in one location at a time (VPS xor PC) | Accepted |
 | [0004](./0004-subscription-only-no-api-keys.md) | Subscription-only: no pay-per-use API keys | Accepted |
+| [0005](./0005-provider-risk-and-mitigation.md) | Provider risk and mitigation | Accepted |
 
 ## When to add an ADR
 
