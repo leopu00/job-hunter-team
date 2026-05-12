@@ -536,6 +536,30 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
+# ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
+# Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se
+# ESISTONO ENTRAMBI $JHT_HOME/.claude/.credentials.json E $JHT_HOME/.claude.json.
+# `jht oauth-login` scrive solo credentials.json — .claude.json viene scritto
+# da claude TUI al primo boot effettivo. Quindi il PRIMO agente del bootstrap
+# cade su "Select login method" e premendo "1" fa un nuovo OAuth (ignorando
+# le credentials esistenti). Fix: prima di lanciare il claude TUI, se
+# .claude.json manca, lo creiamo via warmup con `claude -p "ok"` (modalita'
+# one-shot non-TUI, usa credentials.json e popola .claude.json all'avvio).
+# Skippato se gia' popolato (es. agenti successivi al primo).
+if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
+  _claude_json="$JHT_HOME/.claude.json"
+  if [ ! -s "$_claude_json" ] && [ -s "$JHT_HOME/.claude/.credentials.json" ]; then
+    echo "  → warmup ~/.claude.json (mancante, popolo via claude -p)"
+    HOME="$JHT_HOME" timeout 30 claude --dangerously-skip-permissions -p "ok" \
+      >/dev/null 2>&1 || true
+    if [ -s "$_claude_json" ]; then
+      echo "  ✓ .claude.json popolato ($(wc -c <"$_claude_json") byte)"
+    else
+      echo "  ⚠ warmup non ha popolato .claude.json — l'agente potrebbe cadere su Select login method"
+    fi
+  fi
+fi
+
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
 
 send_env_vars() {
