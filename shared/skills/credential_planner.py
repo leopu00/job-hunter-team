@@ -14,7 +14,7 @@ CredentialInputPath = str  # es. "claude.api_key", "openai.api_key"
 ENV_VAR_MAP = {
     "claude": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
-    "minimax": "MINIMAX_API_KEY",
+    "kimi": "MOONSHOT_API_KEY",
 }
 
 CredentialPrecedence = str  # "env-first" | "file-first"

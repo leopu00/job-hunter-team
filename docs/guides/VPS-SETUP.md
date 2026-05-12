@@ -187,7 +187,7 @@ Per Kimi:
 
 ```bash
 jht setup --non-interactive \
-  --provider minimax \
+  --provider kimi \
   --auth-method subscription \
   --subscription-email tu@example.com \
   --skip-health

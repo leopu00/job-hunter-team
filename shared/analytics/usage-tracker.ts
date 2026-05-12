@@ -27,7 +27,7 @@ const MODEL_COSTS: Record<string, ModelCost> = {
   "openai:gpt-4o":             { input: 2.5, output: 10, cacheRead: 1.25 },
   "openai:gpt-4o-mini":        { input: 0.15, output: 0.6, cacheRead: 0.075 },
   "openai:o3":                 { input: 10, output: 40, cacheRead: 2.5 },
-  "minimax:minimax-01":        { input: 1, output: 5 },
+  "kimi:kimi-k2-0905-preview":        { input: 1, output: 5 },
 };
 
 export function getModelCost(provider: ProviderName, model: string): ModelCost | undefined {

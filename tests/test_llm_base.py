@@ -52,8 +52,8 @@ def test_normalize_provider_id_aliases():
     assert normalize_provider_id("SONNET") == "claude"
     assert normalize_provider_id("gpt") == "openai"
     assert normalize_provider_id("chatgpt") == "openai"
-    assert normalize_provider_id("minimax") == "minimax"
-    assert normalize_provider_id("abab") == "minimax"
+    assert normalize_provider_id("kimi") == "kimi"
+    assert normalize_provider_id("abab") == "kimi"
 
 
 def test_normalize_provider_id_unknown():
@@ -89,15 +89,15 @@ def test_get_provider_openai_missing_key():
                 get_provider("openai")
 
 
-def test_get_provider_minimax_missing_key():
+def test_get_provider_kimi_missing_key():
     from shared.llm.base import ProviderError
     from shared.llm.factory import get_provider
 
     with patch.dict(os.environ, {}, clear=True):
-        env = {k: v for k, v in os.environ.items() if k != "MINIMAX_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k != "MOONSHOT_API_KEY"}
         with patch.dict(os.environ, env, clear=True):
             with pytest.raises(ProviderError):
-                get_provider("minimax")
+                get_provider("kimi")
 
 
 # ── FACTORY — DEFAULT PROVIDER ──────────────────────────────
@@ -106,26 +106,26 @@ def test_get_provider_minimax_missing_key():
 def test_get_default_provider_from_env():
     from shared.llm.factory import get_default_provider
 
-    with patch.dict(os.environ, {"JHT_LLM_PROVIDER": "minimax", "MINIMAX_API_KEY": "test-key"}):
+    with patch.dict(os.environ, {"JHT_LLM_PROVIDER": "kimi", "MOONSHOT_API_KEY": "test-key"}):
         provider = get_default_provider()
-        assert provider.provider_id == "minimax"
+        assert provider.provider_id == "kimi"
 
 
 def test_get_default_provider_from_config():
     from shared.llm.factory import get_default_provider
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump({"active_provider": "minimax"}, f)
+        json.dump({"active_provider": "kimi"}, f)
         f.flush()
         config_path = f.name
 
     try:
-        with patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}, clear=False):
+        with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}, clear=False):
             env_clean = {k: v for k, v in os.environ.items() if k != "JHT_LLM_PROVIDER"}
             with patch.dict(os.environ, env_clean, clear=True):
-                with patch("shared.llm.factory._read_config_provider", return_value="minimax"):
+                with patch("shared.llm.factory._read_config_provider", return_value="kimi"):
                     provider = get_default_provider()
-                    assert provider.provider_id == "minimax"
+                    assert provider.provider_id == "kimi"
     finally:
         os.unlink(config_path)
 
@@ -140,7 +140,7 @@ def test_list_available_providers_structure():
         result = list_available_providers()
         assert len(result) == 3
         ids = {r["provider_id"] for r in result}
-        assert ids == {"claude", "openai", "minimax"}
+        assert ids == {"claude", "openai", "kimi"}
         for r in result:
             assert "available" in r
             assert "error" in r

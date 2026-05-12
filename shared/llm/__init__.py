@@ -1,4 +1,4 @@
-"""Provider abstraction layer — interfaccia unificata per Claude, OpenAI, Minimax.
+"""Provider abstraction layer — interfaccia unificata per Claude, OpenAI, Kimi.
 
 Usa credential_manager per la risoluzione delle API key.
 
