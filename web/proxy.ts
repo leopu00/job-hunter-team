@@ -155,12 +155,25 @@ export async function proxy(request: NextRequest) {
   // Browser cross-origin POST/PUT/PATCH/DELETE → 403. Pattern OpenClaw
   // browserMutationGuardMiddleware. CLI/curl (no Origin/Referer)
   // continuano a funzionare; SOP + Origin in allowlist coprono i browser.
+  //
+  // `hostOrigin` viene dedotto dai forwarded headers per accettare
+  // automaticamente same-origin POST sul dominio prod (es. jobhunterteam.ai)
+  // senza dover settare JHT_PUBLIC_ORIGIN — il browser presenta Origin
+  // == server host, quindi non è CSRF per definizione.
   if (isApi) {
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const rawHost = request.headers.get('host')?.trim()
+    const proto = forwardedProto || request.nextUrl.protocol.replace(':', '')
+    const host = forwardedHost || rawHost
+    const hostOrigin = host ? `${proto}://${host}` : null
+
     const reject = shouldRejectBrowserMutation({
       method: request.method,
       origin: request.headers.get('origin'),
       referer: request.headers.get('referer'),
       secFetchSite: request.headers.get('sec-fetch-site'),
+      hostOrigin,
     })
     if (reject) {
       const res = NextResponse.json(
