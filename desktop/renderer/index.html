@@ -564,6 +564,12 @@
               <p class="home__card-text" data-i18n="home.sync.disabledHint">
                 Set a passphrase to encrypt your launcher config before it's uploaded. The passphrase never leaves this device.
               </p>
+              <details class="home__sync-why">
+                <summary data-i18n="home.sync.whySummary">Why a passphrase if I'm already signed in?</summary>
+                <p data-i18n="home.sync.whyBody">
+                  Sign-in proves who you are; the passphrase encrypts the data before it leaves your computer. Without it, server admins (and anyone who dumps the database) can read your synced data. With it, only this device can. Trade-off: if you lose the passphrase, the cloud data is unrecoverable by design.
+                </p>
+              </details>
               <label class="home__sync-field">
                 <span data-i18n="home.sync.passphraseLabel">Passphrase</span>
                 <input type="password" id="home-sync-setup-passphrase" autocomplete="new-password" minlength="8" />
