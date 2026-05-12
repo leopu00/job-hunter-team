@@ -8,16 +8,19 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 
 // Bootstrap minimale del team:
+//   - Assistente: prima del resto, cosi' puo' mandare il welcome via
+//     Telegram all'utente appena finisce il wizard di setup. Su Desktop
+//     l'Assistente viene gia' avviato da Electron → container.js, e in
+//     quel caso questo step e' un no-op (sessione gia' attiva, skip).
+//     Su VPS headless invece e' qui che parte.
 //   - Capitano: il coordinatore che poi spawna gli altri agenti (scaling
 //     graduale definito nel suo prompt). start-agent.sh gli invia anche
 //     un kick-off message automatico dopo ~15s di boot del CLI. Insieme
 //     al Capitano viene spawnato anche sentinel-bridge.py — il servizio
 //     deterministico che monitora rate-limit + host e invia [BRIDGE ORDER]
 //     al Capitano quando la policy cambia (T0..T4, edge-triggered).
-// L'Assistente viene avviato dal boot dell'app Desktop (Electron →
-// container.js), duplicarlo qui non serve. Gli altri ruoli (Scout,
-// Analista, Scorer, Scrittore, Critico) vengono accesi dal Capitano
-// secondo le sue soglie.
+// Gli altri ruoli (Scout, Analista, Scorer, Scrittore, Critico) vengono
+// accesi dal Capitano secondo le sue soglie.
 async function readSentinellaTickMinutes(): Promise<number> {
   // Tick idle (default 10 min, range 1-60): il bridge usa questo come
   // ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
@@ -46,9 +49,12 @@ type TeamAgent = {
 
 async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
-  // Sequenza V5 ordinata (rivista 2026-04-26):
-  //   1. SENTINELLA: tmux session + CLI boot + kick-off, da SOLA
-  //      (così è pronta a ricevere il primo [BRIDGE TICK])
+  // Sequenza V6 ordinata (rivista 2026-05-12, VPS-friendly):
+  //   0. ASSISTENTE: per primo, cosi' manda subito il welcome Telegram
+  //      all'utente (canale primario su VPS headless). Idempotente: se
+  //      gia' attivo (Desktop l'ha avviato) lo step e' un no-op.
+  //   1. SENTINELLA: tmux session + CLI boot + kick-off, parte dopo
+  //      l'Assistente cosi' e' pronta a ricevere il primo [BRIDGE TICK].
   //   2. BRIDGE: processo Python background, fa il primo fetch e manda
   //      il primo tick alla SENTINELLA che è già attiva
   //   3. CAPITANO: tmux session + CLI boot + kick-off, lanciato per
@@ -56,11 +62,14 @@ async function buildTeam(): Promise<TeamAgent[]> {
   //      almeno un sample fresco da consultare
   //
   // Pre-delay rivisti per PC lenti:
+  //   • sentinella: 3s dopo assistente  (CLI boot iniziale)
   //   • bridge:    20s dopo sentinella  (CLI boot lento + trust dialog)
   //   • capitano:   5s dopo bridge      (lascia che il primo fetch
   //                                      arrivi prima del kick-off)
   return [
-    { role: 'sentinella', session: 'SENTINELLA', instance: null },
+    { role: 'assistente', session: 'ASSISTENTE', instance: null },
+    { role: 'sentinella', session: 'SENTINELLA', instance: null,
+      preDelayMs: 3000 },
     { role: 'bridge',     session: 'BRIDGE',     instance: null,
       preDelayMs: 20000, notATmuxSession: true,
       env: { JHT_TARGET_SESSION: 'CAPITANO' } },

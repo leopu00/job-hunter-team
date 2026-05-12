@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# jht-telegram-send — invia un messaggio al chat Telegram dell'utente.
+#
+# Risolve token + chat_id da:
+#   1. ENV: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+#   2. credenziali: $JHT_HOME/credentials/telegram_bot.json (.token)
+#   3. config:      $JHT_HOME/jht.config.json (channels.telegram.{bot_token,chat_id})
+#
+# Uso:
+#   jht-telegram-send "<testo>"                # plain text
+#   jht-telegram-send --html "<b>ciao</b>"     # HTML parse_mode
+#   jht-telegram-send --chat-id 123 "<testo>"  # override esplicito chat_id
+#
+# Exit:
+#   0 → consegnato (HTTP 200, ok:true)
+#   1 → argomenti mancanti
+#   2 → token assente
+#   3 → chat_id assente
+#   4 → errore di rete o HTTP non-200
+#   5 → Bot API ha risposto ok:false
+
+set -euo pipefail
+
+parse_mode=""
+chat_id_override=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --html)
+      parse_mode="HTML"; shift ;;
+    --markdown)
+      parse_mode="MarkdownV2"; shift ;;
+    --chat-id)
+      chat_id_override="${2:-}"; shift 2 ;;
+    --)
+      shift; break ;;
+    -*)
+      echo "jht-telegram-send: flag sconosciuto: $1" >&2
+      exit 1 ;;
+    *)
+      break ;;
+  esac
+done
+
+if [ $# -lt 1 ]; then
+  echo "Usage: jht-telegram-send [--html|--markdown] [--chat-id <id>] <text>" >&2
+  exit 1
+fi
+
+text="$*"
+jht_home="${JHT_HOME:-$HOME/.jht}"
+config_path="$jht_home/jht.config.json"
+creds_path="$jht_home/credentials/telegram_bot.json"
+
+# ── Risoluzione token ─────────────────────────────────────────────────
+token="${TELEGRAM_BOT_TOKEN:-}"
+if [ -z "$token" ] && [ -f "$creds_path" ]; then
+  token=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('token',''))
+except Exception:
+  pass" "$creds_path" 2>/dev/null || true)
+fi
+if [ -z "$token" ] && [ -f "$config_path" ]; then
+  token=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('bot_token',''))
+except Exception:
+  pass" "$config_path" 2>/dev/null || true)
+fi
+
+if [ -z "$token" ]; then
+  echo "jht-telegram-send: token Telegram non trovato (env TELEGRAM_BOT_TOKEN, $creds_path, o config)" >&2
+  exit 2
+fi
+
+# ── Risoluzione chat_id ────────────────────────────────────────────────
+chat_id="$chat_id_override"
+[ -z "$chat_id" ] && chat_id="${TELEGRAM_CHAT_ID:-}"
+if [ -z "$chat_id" ] && [ -f "$config_path" ]; then
+  chat_id=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('chat_id',''))
+except Exception:
+  pass" "$config_path" 2>/dev/null || true)
+fi
+
+if [ -z "$chat_id" ]; then
+  echo "jht-telegram-send: chat_id non trovato (env TELEGRAM_CHAT_ID, --chat-id, o $config_path)" >&2
+  exit 3
+fi
+
+# ── Chunking 4096 (limite Bot API) ─────────────────────────────────────
+# Telegram chiude su 4096 caratteri/messaggio. Spezziamo su newline quando
+# possibile, altrimenti taglio secco. La gestione corretta dei multibyte
+# UTF-8 sarebbe Python; per ora awk + cut byte-safe.
+MAX_LEN=4000
+
+send_one() {
+  local body="$1"
+  local http_code
+  local response_file
+  response_file=$(mktemp)
+
+  # form-encoded: text supporta newline letterali via --data-urlencode
+  local args=(
+    --silent --show-error
+    --max-time 20
+    --output "$response_file"
+    --write-out '%{http_code}'
+    --data-urlencode "chat_id=$chat_id"
+    --data-urlencode "text=$body"
+  )
+  if [ -n "$parse_mode" ]; then
+    args+=( --data-urlencode "parse_mode=$parse_mode" )
+  fi
+
+  http_code=$(curl "${args[@]}" "https://api.telegram.org/bot${token}/sendMessage" || echo "000")
+
+  local resp
+  resp=$(cat "$response_file" 2>/dev/null || true)
+  rm -f "$response_file"
+
+  if [ "$http_code" != "200" ]; then
+    echo "jht-telegram-send: HTTP $http_code — $resp" >&2
+    return 4
+  fi
+
+  local ok
+  ok=$(python3 -c "import json,sys
+try:
+  print(json.loads(sys.argv[1]).get('ok'))
+except Exception:
+  print('False')" "$resp" 2>/dev/null || echo "False")
+
+  if [ "$ok" != "True" ]; then
+    echo "jht-telegram-send: Bot API ok=false — $resp" >&2
+    return 5
+  fi
+
+  return 0
+}
+
+# Split semplice su newline rispettando MAX_LEN.
+python3 - "$text" "$MAX_LEN" <<'PYEOF' | while IFS= read -r -d '' chunk; do
+import sys
+text, max_len = sys.argv[1], int(sys.argv[2])
+def chunks(s, n):
+    out = []
+    while len(s) > n:
+        cut = s.rfind('\n', 0, n)
+        if cut <= 0:
+            cut = s.rfind(' ', 0, n)
+        if cut <= 0:
+            cut = n
+        out.append(s[:cut])
+        s = s[cut:].lstrip()
+    if s:
+        out.append(s)
+    return out
+for c in chunks(text, max_len):
+    sys.stdout.write(c + '\0')
+PYEOF
+  send_one "$chunk" || exit $?
+done
+
+echo "jht-telegram-send: ok (${#text} chars to chat $chat_id)"
+exit 0
