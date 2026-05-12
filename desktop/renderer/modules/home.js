@@ -11,7 +11,7 @@ import {
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'provider', 'docker', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'language', 'advanced']
 
 const homeDom = {
   root: document.getElementById('home'),
@@ -58,6 +58,16 @@ const homeDom = {
   devAddPort: document.getElementById('home-dev-add-port'),
   btnDevAddStart: document.getElementById('home-btn-dev-add-start'),
   devAddActive: document.getElementById('home-dev-add-active'),
+  accountGuest: document.getElementById('home-account-guest'),
+  accountSignedIn: document.getElementById('home-account-signedin'),
+  accountBusy: document.getElementById('home-account-busy'),
+  accountBusyMessage: document.getElementById('home-account-busy-message'),
+  accountEmail: document.getElementById('home-account-email'),
+  accountProvider: document.getElementById('home-account-provider'),
+  accountError: document.getElementById('home-account-error'),
+  btnAccountSigninGoogle: document.getElementById('home-account-signin-google'),
+  btnAccountSigninGithub: document.getElementById('home-account-signin-github'),
+  btnAccountSignout: document.getElementById('home-account-signout'),
 }
 
 // Wizard appears only on first launch. The discriminator is "has the
@@ -136,7 +146,86 @@ async function refreshHomeAll() {
     refreshHomeTeam().catch(() => {}),
     refreshHomeProvider().catch(() => {}),
     refreshHomeDocker().catch(() => {}),
+    refreshHomeAccount().catch(() => {}),
   ])
+}
+
+function setAccountState(name, { message } = {}) {
+  // Mutually-exclusive cards inside the account panel: guest | signedin
+  // | busy. We toggle hidden rather than swapping innerHTML so the
+  // [data-i18n] inside survives applyTranslations re-runs.
+  homeDom.accountGuest.hidden = name !== 'guest'
+  homeDom.accountSignedIn.hidden = name !== 'signedin'
+  homeDom.accountBusy.hidden = name !== 'busy'
+  if (name === 'busy' && message && homeDom.accountBusyMessage) {
+    homeDom.accountBusyMessage.textContent = message
+  }
+  if (name !== 'guest' && homeDom.accountError) {
+    homeDom.accountError.hidden = true
+    homeDom.accountError.textContent = ''
+  }
+}
+
+async function refreshHomeAccount() {
+  if (!window.authApi?.getStatus) return
+  try {
+    const status = await window.authApi.getStatus()
+    if (status?.signedIn && status.user) {
+      homeDom.accountEmail.textContent = status.user.email || status.user.name || status.user.id
+      homeDom.accountProvider.textContent = status.user.provider
+        ? `via ${status.user.provider}`
+        : ''
+      setAccountState('signedin')
+    } else {
+      setAccountState('guest')
+    }
+  } catch {
+    setAccountState('guest')
+  }
+}
+
+async function startSignIn(provider) {
+  if (!window.authApi?.signIn) return
+  setAccountState('busy', { message: t('home.account.busy') })
+  try {
+    const res = await window.authApi.signIn(provider)
+    if (!res?.ok) {
+      setAccountState('guest')
+      if (homeDom.accountError) {
+        homeDom.accountError.textContent = res?.error
+          ? t('home.account.error', { msg: res.error })
+          : t('home.account.errorGeneric')
+        homeDom.accountError.hidden = false
+      }
+      return
+    }
+    await refreshHomeAccount()
+  } catch (err) {
+    setAccountState('guest')
+    if (homeDom.accountError) {
+      homeDom.accountError.textContent = t('home.account.error', { msg: err.message || err })
+      homeDom.accountError.hidden = false
+    }
+  }
+}
+
+async function signOut() {
+  if (!window.authApi?.signOut) return
+  try {
+    await window.authApi.signOut()
+  } finally {
+    await refreshHomeAccount()
+  }
+}
+
+if (homeDom.btnAccountSigninGoogle) {
+  homeDom.btnAccountSigninGoogle.addEventListener('click', () => startSignIn('google'))
+}
+if (homeDom.btnAccountSigninGithub) {
+  homeDom.btnAccountSigninGithub.addEventListener('click', () => startSignIn('github'))
+}
+if (homeDom.btnAccountSignout) {
+  homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
 function renderHomeTeamStatus(status) {
