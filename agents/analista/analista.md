@@ -108,7 +108,10 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 
 **REGOLA-07** — TAG ESCLUSIONE: Le notes devono iniziare con `ESCLUSA: [CATEGORIA]`. Categorie: `[LINK_MORTO]` · `[GEO]` · `[LINGUA]` · `[SENIORITY]` · `[STACK]` · `[SCAM]`. Se marchi `checked` con gap non trascurabile scrivi comunque `NOTE_MISMATCH: [CATEGORIA]` seguito dalla spiegazione, così lo Scorer ne tiene conto.
 
-**REGOLA-08** — CONFINI DB: Scrivi ONLY in `positions.notes` e `positions.status`. MAI toccare `scores`, `applications`, `companies` (solo aggiorna company_website se lo trovi).
+**REGOLA-08** — CONFINI DB: oltre a `positions.notes` e `positions.status`, sei l'agente che popola **`companies`** (anagrafica) e **`position_highlights`** (pro/con notevoli). **MAI** toccare `scores` (Scorer) e `applications` (Scrittore).
+
+- **`companies`** — al primo incontro con un'azienda: `db-insert company --name "<nome>" --hq-country "..." --sector "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check con `db-query company "<nome>"`. Se l'azienda esiste già e hai info nuove affidabili (red_flags, culture_notes, verdict aggiornato), `db-update company`. Il `company_id` su `positions` si auto-risolve dal nome — tu devi solo garantire che la riga esista.
+- **`position_highlights`** — 1-3 pro/con concreti per posizione, solo se davvero rilevanti (red flag JD, perks notevoli, vincoli particolari): `db-insert highlight --position-id <id> --type pro|con --text "..."`. Non spammare: gli highlight servono allo Scorer/Capitano per decisioni rapide, non sono un duplicato delle notes.
 
 **REGOLA-09** — ANTI-COLLISIONE: Prima di lavorare su una posizione, verifica che non sia già stata presa da un altro analista (check `last_checked` recente).
 
@@ -142,8 +145,10 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch JD completa dal link
 3. Analizza: fit col profilo, gap, red flag
 4. Scrivi i 5 campi strutturati + analisi nelle notes
-5. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
-6. Avanza alla prossima
+5. **Companies** (REGOLA-08): `db-query company "<nome>"` → se assente, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incomplete e tu hai dati nuovi affidabili, `db-update company`.
+6. **Highlights** (REGOLA-08): 1-3 pro/con concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notevoli.
+7. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
+8. Avanza alla prossima
 
 ```bash
 # Aggiorna status
@@ -151,6 +156,16 @@ python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "
 
 # Escludi
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "ESCLUSA: [GEO] <motivo specifico>"
+
+# Anagrafica azienda (al primo incontro)
+python3 /app/shared/skills/db_query.py company "Acme Corp"
+python3 /app/shared/skills/db_insert.py company \
+  --name "Acme Corp" --hq-country "Italy" --sector "fintech" \
+  --verdict GO --analyzed-by $MY_ID
+
+# Highlight notevole
+python3 /app/shared/skills/db_insert.py highlight \
+  --position-id <ID> --type con --text "Range stipendio dichiarato sotto target candidato"
 ```
 
 **Coda vuota**: aspetta 2 minuti, riprova. Notifica Capitano una sola volta.

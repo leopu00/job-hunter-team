@@ -64,18 +64,20 @@ function describeCurrentCompany(pathname?: string): string {
 
   const sections: Array<[string, string]> = [
     ['/setup', 'Configurazione iniziale dei provider AI e delle API key.'],
-    ['/guide', 'Guida rapida al funzionamento della piattaforma.'],
-    ['/docs', 'Documentazione generale.'],
+    ['/onboarding', 'Onboarding guidato al primo uso della piattaforma.'],
     ['/dashboard', 'Vista riepilogativa del lavoro in corso.'],
-    ['/overview', 'Panoramica sintetica delle sezioni principali.'],
     ['/profile', 'Profilo candidato e dati personali/professionali.'],
-    ['/jobs', 'Elenco offerte di lavoro.'],
+    ['/positions', 'Elenco offerte di lavoro trovate dagli agenti.'],
     ['/applications', 'Tracciamento candidature inviate.'],
-    ['/agents', 'Vista degli agenti AI disponibili.'],
-    ['/credentials', 'Gestione credenziali e provider.'],
+    ['/ready', 'Candidature pronte all\'invio (CV+CL generati).'],
+    ['/risposte', 'Risposte ricevute dalle aziende.'],
+    ['/crescita', 'Analytics personale e crescita nel tempo.'],
+    ['/reports', 'Report periodici.'],
+    ['/team', 'Vista degli agenti AI del team.'],
+    ['/providers', 'Provider LLM configurati (Claude / Kimi / Codex).'],
+    ['/credentials', 'Gestione credenziali e API key.'],
     ['/secrets', 'Secrets e token salvati localmente.'],
-    ['/assistant', 'Assistente operativo interno della piattaforma.'],
-    ['/ai-assistant', 'Pagina dedicata alla chat di onboarding.'],
+    ['/settings', 'Impostazioni generali e cloud sync.'],
   ]
 
   for (const [prefix, description] of sections) {
@@ -91,7 +93,7 @@ export function buildAssistantSystemPrompt(pathname?: string): string {
     'Aiuti utenti nuovi a capire cosa fa la piattaforma, come orientarsi e quale prossimo passo eseguire.',
     "Rispondi nella lingua dell'utente; se non e chiara, usa italiano.",
     "Mantieni le risposte brevi, pratiche e orientate all'azione.",
-    'Quando utile, cita percorsi reali della web app come /setup, /guide, /docs, /dashboard, /profile, /jobs, /applications, /agents, /credentials e /secrets.',
+    'Quando utile, cita percorsi reali della web app come /setup, /dashboard, /profile, /positions, /applications, /ready, /risposte, /team, /providers, /credentials e /secrets.',
     'Non inventare feature, prezzi, integrazioni o stati che non conosci.',
     "Se l'utente chiede qualcosa fuori contesto, chiarisci il limite e reindirizza alla sezione piu adatta della piattaforma.",
     'Contesto prodotto:',
