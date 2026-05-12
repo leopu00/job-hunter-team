@@ -1,8 +1,9 @@
-# Database Schema — jobs.db (V3)
+# Database Schema — jobs.db (V4)
 
-**Aggiornato**: 2026-05-06
-**Schema version**: `PRAGMA user_version = 3`
-**Cambio rispetto a V2**: aggiunto `CHECK` constraint su `positions.status` (vedi tabella positions sotto). Migrazione retroattiva automatica via `_migrate_v2_to_v3()` in `shared/skills/_db.py`.
+**Aggiornato**: 2026-05-12
+**Schema version**: `PRAGMA user_version = 4`
+**Cambio rispetto a V3**: aggiunte colonne `created_at` e `updated_at` uniformi su tutte le 5 tabelle, con `DEFAULT CURRENT_TIMESTAMP` (DB freschi) e trigger `touch_updated_at` (AFTER UPDATE) che mantiene `updated_at` aggiornato automaticamente ad ogni UPDATE. I campi domain (`scored_at`, `applied_at`, `written_at`, `analyzed_at`, `found_at`, `last_checked`) restano per event semantics. Migrazione retroattiva automatica via `_migrate_v3_to_v4()` in `shared/skills/_db.py`: ALTER TABLE ADD COLUMN (senza DEFAULT — limite SQLite) + UPDATE delle righe esistenti con i domain `*_at` come fallback (es. `created_at = COALESCE(found_at, CURRENT_TIMESTAMP)`).
+**Cambio V2→V3**: aggiunto `CHECK` constraint su `positions.status`. Migrazione via `_migrate_v2_to_v3()`.
 **Path**: `$JHT_HOME/jobs.db` (canonical) — fallback `shared/data/jobs.db` per uso fuori container
 **Skill scripts**: `shared/skills/`
 
@@ -27,6 +28,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | analyzed_by | TEXT | | Chi l'ha analizzata (analista-1, etc.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando analizzata |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
+| updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
 ### positions
 | Colonna | Tipo | Default | Note |
@@ -54,6 +57,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | status | TEXT | new | new → checked → scored → writing → ready → applied → response · `excluded` da qualsiasi step. **V3: vincolato da `CHECK` constraint** — i valori non in questa lista vengono rigettati con `IntegrityError`. |
 | notes | TEXT | | Note libere |
 | last_checked | TIMESTAMP | | Ultima verifica link/JD |
+| created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
+| updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
 ### position_highlights
 | Colonna | Tipo | Default | Note |
@@ -62,6 +67,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | position_id | INTEGER FK NOT NULL | | Link a positions(id) |
 | type | TEXT NOT NULL | | pro, con |
 | text | TEXT NOT NULL | | Testo del pro/contro |
+| created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
+| updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
 ### scores
 | Colonna | Tipo | Default | Note |
@@ -78,6 +85,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | notes | TEXT | | Note scorer |
 | scored_by | TEXT | | Chi ha dato il punteggio |
 | scored_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando scored |
+| created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
+| updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
 ### applications
 | Colonna | Tipo | Default | Note |
@@ -104,6 +113,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | interview_round | INTEGER | NULL | Fase colloquio (1, 2, 3...) |
 | cv_drive_id | TEXT | | Google Drive file ID del CV PDF |
 | cl_drive_id | TEXT | | Google Drive file ID della CL PDF |
+| created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
+| updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
 ---
 
