@@ -58,13 +58,21 @@ async function signIn(provider) {
     try {
       const client = getClient()
       server = await startCallbackServer()
+      // Per-provider authorize options. Google supports prompt=
+      // select_account so the user can pick which Google account
+      // when their browser has multiple sessions open. GitHub does
+      // not support prompt at all — passing it makes the consent
+      // screen reject with 400, so we omit it for github.
+      const authorizeOptions = {
+        redirectTo: server.redirectUri,
+        skipBrowserRedirect: true,
+      }
+      if (provider === 'google') {
+        authorizeOptions.queryParams = { prompt: 'select_account' }
+      }
       const { data, error } = await client.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: server.redirectUri,
-          skipBrowserRedirect: true,
-          queryParams: { prompt: 'select_account' },
-        },
+        options: authorizeOptions,
       })
       if (error || !data?.url) {
         throw new Error(error?.message || 'Supabase did not return an authorize URL')
