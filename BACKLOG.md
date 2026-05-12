@@ -882,9 +882,10 @@ All 5 tasks from 04-22 have been implemented:
 - **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
 - **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
-### 🔴 [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/`
+### ✅ [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/` — FIXED 2026-05-06 (commit `8c85bf27`)
 
-- **🚨 PRIORITÀ MASSIMA: blocca QUALSIASI deploy production via Vercel.** Master è 783 commit avanti rispetto a `production` ma il build fallisce sulla CI Vercel ufficiale (Linux infra). Production ferma alla v0.1.12 (19 giorni fa).
+- **Fix applicato — Strategia 4 (copia `shared/net/*` in `web/lib/net/`):** dopo aver fallito 1-3 (transpilePackages, no-extension, experimental.externalDir), si è copiato i 4 file production-grade di `shared/net/` dentro `web/lib/net/`. `web/` era l'unico consumer cross-package; nessuna regressione su altri package. `shared/net/*` invariato come ref OpenClaw + per futuri consumer node ESM (`cli/`, `tui/`). `web/lib/ssrf.ts` ora punta a `./net/ssrf` (relative dentro `web/`). Verifica: `vercel deploy` → ✅ Compiled in 29.8s, 112/112 static pages.
+- **Storico:** PRIORITÀ MASSIMA — bloccava QUALSIASI deploy production via Vercel. Master era 783 commit avanti rispetto a `production` ma il build falliva sulla CI Vercel ufficiale (Linux infra). Production ferma alla v0.1.12 per 19 giorni.
 - **File coinvolti:** `web/lib/ssrf.ts` (entry point), poi cascata in `shared/net/ssrf.ts` (+ `./ip.js`, `./hostname.js`, `./string-coerce.js`). Pattern sistemico: **127 file in `shared/` usano `.js` extension** (convenzione ESM TypeScript corretta per node runtime).
 - **Errore Vercel (verificato 2026-05-06 con `vercel deploy`):**
   ```
