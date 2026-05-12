@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { JetBrains_Mono } from 'next/font/google'
 import './globals.css'
-import Sidebar from './components/sidebar'
 import MainContent from './components/main-content'
 import { ThemeProvider } from './theme-provider'
 import { ToastProvider } from './components/Toast'
@@ -109,7 +108,6 @@ export default async function RootLayout({
                 <GlobalSearch />
                 {/* FloatingChat nascosto temporaneamente - feature non implementata */}
                 {/* <FloatingChat /> */}
-                <Sidebar />
                 <MainContent>
                   {children}
                 </MainContent>
