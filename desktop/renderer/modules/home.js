@@ -68,6 +68,26 @@ const homeDom = {
   btnAccountSigninGoogle: document.getElementById('home-account-signin-google'),
   btnAccountSigninGithub: document.getElementById('home-account-signin-github'),
   btnAccountSignout: document.getElementById('home-account-signout'),
+  syncCard: document.getElementById('home-sync-card'),
+  syncSubtitle: document.getElementById('home-sync-subtitle'),
+  syncDisabled: document.getElementById('home-sync-disabled'),
+  syncLocked: document.getElementById('home-sync-locked'),
+  syncUnlocked: document.getElementById('home-sync-unlocked'),
+  syncSetupPassphrase: document.getElementById('home-sync-setup-passphrase'),
+  syncSetupPassphraseConfirm: document.getElementById('home-sync-setup-passphrase-confirm'),
+  btnSyncSetup: document.getElementById('home-sync-setup-btn'),
+  syncSetupError: document.getElementById('home-sync-setup-error'),
+  syncUnlockPassphrase: document.getElementById('home-sync-unlock-passphrase'),
+  btnSyncUnlock: document.getElementById('home-sync-unlock-btn'),
+  btnSyncReset: document.getElementById('home-sync-reset-btn'),
+  syncUnlockError: document.getElementById('home-sync-unlock-error'),
+  syncMeta: document.getElementById('home-sync-meta'),
+  btnSyncPush: document.getElementById('home-sync-push-btn'),
+  btnSyncPull: document.getElementById('home-sync-pull-btn'),
+  btnSyncLock: document.getElementById('home-sync-lock-btn'),
+  btnSyncDisable: document.getElementById('home-sync-disable-btn'),
+  syncActionError: document.getElementById('home-sync-action-error'),
+  syncActionSuccess: document.getElementById('home-sync-action-success'),
 }
 
 // Wizard appears only on first launch. The discriminator is "has the
@@ -176,13 +196,208 @@ async function refreshHomeAccount() {
         ? `via ${status.user.provider}`
         : ''
       setAccountState('signedin')
+      if (homeDom.syncCard) homeDom.syncCard.hidden = false
+      await refreshHomeSync()
     } else {
       setAccountState('guest')
+      if (homeDom.syncCard) homeDom.syncCard.hidden = true
     }
   } catch {
     setAccountState('guest')
+    if (homeDom.syncCard) homeDom.syncCard.hidden = true
   }
 }
+
+function setSyncState(name) {
+  if (homeDom.syncDisabled) homeDom.syncDisabled.hidden = name !== 'disabled'
+  if (homeDom.syncLocked) homeDom.syncLocked.hidden = name !== 'locked'
+  if (homeDom.syncUnlocked) homeDom.syncUnlocked.hidden = name !== 'unlocked'
+  // Clear stale messages when switching state.
+  for (const el of [homeDom.syncSetupError, homeDom.syncUnlockError, homeDom.syncActionError, homeDom.syncActionSuccess]) {
+    if (el) { el.hidden = true; el.textContent = '' }
+  }
+}
+
+function formatSyncMeta(status) {
+  const fmt = (iso) => {
+    if (!iso) return null
+    try {
+      return new Date(iso).toLocaleString(getCurrentLang() || undefined, {
+        year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      })
+    } catch { return iso }
+  }
+  const parts = []
+  if (status.lastLocalSyncAt) {
+    parts.push(t('home.sync.metaLastSync', { ts: fmt(status.lastLocalSyncAt) }))
+  } else {
+    parts.push(t('home.sync.metaNeverSynced'))
+  }
+  if (status.cloudExists && status.cloudUpdatedAt) {
+    parts.push(t('home.sync.metaCloudUpdated', { ts: fmt(status.cloudUpdatedAt) }))
+  } else if (!status.cloudExists) {
+    parts.push(t('home.sync.metaNoCloudData'))
+  }
+  return parts.join(' · ')
+}
+
+async function refreshHomeSync() {
+  if (!window.syncApi?.getStatus || !homeDom.syncCard) return
+  try {
+    const status = await window.syncApi.getStatus()
+    if (!status?.ok) {
+      setSyncState('disabled')
+      return
+    }
+    if (!status.enabled) {
+      setSyncState('disabled')
+      return
+    }
+    if (!status.unlocked) {
+      setSyncState('locked')
+      return
+    }
+    if (homeDom.syncMeta) homeDom.syncMeta.textContent = formatSyncMeta(status)
+    setSyncState('unlocked')
+  } catch {
+    setSyncState('disabled')
+  }
+}
+
+function showSyncError(el, msg) {
+  if (!el) return
+  el.textContent = msg
+  el.hidden = false
+}
+
+function showSyncSuccess(msg) {
+  if (!homeDom.syncActionSuccess) return
+  homeDom.syncActionSuccess.textContent = msg
+  homeDom.syncActionSuccess.hidden = false
+  setTimeout(() => {
+    if (homeDom.syncActionSuccess) homeDom.syncActionSuccess.hidden = true
+  }, 4000)
+}
+
+// Collect the minimal launcher state we round-trip through the cloud.
+// Intentionally NOT included: auth tokens, CLI credentials, anything
+// in `~/.jht/credentials/` — those live in the OS keychain by design
+// (ADR 0004) and must not leave the device.
+async function collectSyncPayload() {
+  const payload = { version: 1, savedAt: new Date().toISOString() }
+  try {
+    const selection = await window.setupApi.getSelection()
+    payload.providerSelection = selection || null
+  } catch {
+    payload.providerSelection = null
+  }
+  return payload
+}
+
+async function applySyncPayload(data) {
+  if (!data?.providerSelection) return
+  try {
+    await window.setupApi.saveSelection(data.providerSelection)
+  } catch {
+    // best-effort apply; user will see the meta updated but config not applied.
+  }
+}
+
+async function onSyncSetup() {
+  const p1 = homeDom.syncSetupPassphrase?.value || ''
+  const p2 = homeDom.syncSetupPassphraseConfirm?.value || ''
+  if (p1.length < 8) {
+    showSyncError(homeDom.syncSetupError, t('home.sync.errorTooShort'))
+    return
+  }
+  if (p1 !== p2) {
+    showSyncError(homeDom.syncSetupError, t('home.sync.errorMismatch'))
+    return
+  }
+  const res = await window.syncApi.setup({ passphrase: p1 })
+  if (!res?.ok) {
+    showSyncError(homeDom.syncSetupError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  if (homeDom.syncSetupPassphrase) homeDom.syncSetupPassphrase.value = ''
+  if (homeDom.syncSetupPassphraseConfirm) homeDom.syncSetupPassphraseConfirm.value = ''
+  // Immediate first push of current state so the cloud has something
+  // to pull on the next device.
+  const payload = await collectSyncPayload()
+  const pushRes = await window.syncApi.push({ data: payload })
+  if (!pushRes?.ok) {
+    showSyncError(homeDom.syncSetupError, pushRes?.error || t('home.sync.errorGeneric'))
+  }
+  await refreshHomeSync()
+}
+
+async function onSyncUnlock() {
+  const p = homeDom.syncUnlockPassphrase?.value || ''
+  if (!p) {
+    showSyncError(homeDom.syncUnlockError, t('home.sync.errorEmpty'))
+    return
+  }
+  const res = await window.syncApi.unlock({ passphrase: p })
+  if (!res?.ok) {
+    showSyncError(homeDom.syncUnlockError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  if (homeDom.syncUnlockPassphrase) homeDom.syncUnlockPassphrase.value = ''
+  await refreshHomeSync()
+}
+
+async function onSyncReset() {
+  const res = await window.syncApi.disable({ wipeCloud: false })
+  if (!res?.ok) {
+    showSyncError(homeDom.syncUnlockError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  await refreshHomeSync()
+}
+
+async function onSyncPush() {
+  const payload = await collectSyncPayload()
+  const res = await window.syncApi.push({ data: payload })
+  if (!res?.ok) {
+    showSyncError(homeDom.syncActionError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  showSyncSuccess(t('home.sync.pushedOk'))
+  await refreshHomeSync()
+}
+
+async function onSyncPull() {
+  const res = await window.syncApi.pull()
+  if (!res?.ok) {
+    showSyncError(homeDom.syncActionError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  await applySyncPayload(res.data)
+  showSyncSuccess(t('home.sync.pulledOk'))
+  await refreshHomeSync()
+}
+
+async function onSyncLock() {
+  await window.syncApi.lock()
+  await refreshHomeSync()
+}
+
+async function onSyncDisable() {
+  const res = await window.syncApi.disable({ wipeCloud: true })
+  if (!res?.ok) {
+    showSyncError(homeDom.syncActionError, res?.error || t('home.sync.errorGeneric'))
+    return
+  }
+  await refreshHomeSync()
+}
+
+if (homeDom.btnSyncSetup) homeDom.btnSyncSetup.addEventListener('click', onSyncSetup)
+if (homeDom.btnSyncUnlock) homeDom.btnSyncUnlock.addEventListener('click', onSyncUnlock)
+if (homeDom.btnSyncReset) homeDom.btnSyncReset.addEventListener('click', onSyncReset)
+if (homeDom.btnSyncPush) homeDom.btnSyncPush.addEventListener('click', onSyncPush)
+if (homeDom.btnSyncPull) homeDom.btnSyncPull.addEventListener('click', onSyncPull)
+if (homeDom.btnSyncLock) homeDom.btnSyncLock.addEventListener('click', onSyncLock)
+if (homeDom.btnSyncDisable) homeDom.btnSyncDisable.addEventListener('click', onSyncDisable)
 
 async function startSignIn(provider) {
   if (!window.authApi?.signIn) return
