@@ -40,10 +40,16 @@ export default async function JsonLd() {
     },
   }
 
+  // React rimuove l'attributo `nonce` dal DOM dopo l'hydration come
+  // misura anti-XSS (così non può essere riusato da script iniettati).
+  // Questo causa un hydration mismatch: server invia nonce="X", client
+  // dopo hydration vede nonce="". `suppressHydrationWarning` è l'escape
+  // hatch ufficiale React per questo scenario legittimo.
+  // Vedi BUG-CSP-JSONLD-LANDING-V2 in BACKLOG.md.
   return (
     <>
-      <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(software) }} />
-      <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website) }} />
+      <script nonce={nonce} type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(software) }} />
+      <script nonce={nonce} type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(website) }} />
     </>
   )
 }
