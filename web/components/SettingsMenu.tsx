@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
 const DEV_MODE_KEY = 'jht-dev-mode'
@@ -107,9 +108,51 @@ export default function SettingsMenu() {
             </span>
             <Toggle on={devMode} />
           </button>
+
+          <SectionHeader>Configurazione</SectionHeader>
+          <MenuLink href="/providers" onClick={() => setOpen(false)}>Provider LLM</MenuLink>
+          <MenuLink href="/credentials" onClick={() => setOpen(false)}>Credenziali</MenuLink>
+          <MenuLink href="/rate-limiter" onClick={() => setOpen(false)}>Rate Limiter</MenuLink>
+          <MenuLink href="/secrets" onClick={() => setOpen(false)}>Secret</MenuLink>
+
+          <SectionHeader>Notifiche</SectionHeader>
+          <MenuLink href="/notifications" onClick={() => setOpen(false)}>Preferenze notifiche</MenuLink>
+          <MenuLink href="/channels" onClick={() => setOpen(false)}>Canali</MenuLink>
+          <MenuLink href="/integrations" onClick={() => setOpen(false)}>Integrazioni</MenuLink>
+
+          <SectionHeader>Sistema</SectionHeader>
+          <MenuLink href="/cron" onClick={() => setOpen(false)}>Cron jobs</MenuLink>
+          <MenuLink href="/setup" onClick={() => setOpen(false)}>Setup wizard</MenuLink>
+          <MenuLink href="/settings/cloud-sync" onClick={() => setOpen(false)}>Cloud sync</MenuLink>
+          <MenuLink href="/cli-link" onClick={() => setOpen(false)}>Collega CLI / VPS</MenuLink>
         </div>
       )}
     </div>
+  )
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="px-3 pt-3 pb-1 text-[9px] font-semibold tracking-widest uppercase"
+      style={{ color: 'var(--color-dim)', borderTop: '1px solid var(--color-border)' }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function MenuLink({ href, onClick, children }: { href: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      role="menuitem"
+      className="block px-3 py-1.5 text-[11px] hover:bg-[var(--color-card)] transition-colors no-underline"
+      style={{ color: 'var(--color-muted)' }}
+    >
+      {children}
+    </Link>
   )
 }
 
