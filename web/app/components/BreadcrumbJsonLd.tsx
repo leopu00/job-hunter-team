@@ -24,6 +24,7 @@ export default async function BreadcrumbJsonLd({ items }: { items: Crumb[] }) {
     <script
       nonce={nonce}
       type="application/ld+json"
+      suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
   )
