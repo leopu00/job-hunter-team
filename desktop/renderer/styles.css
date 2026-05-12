@@ -1682,3 +1682,43 @@ body { display: flex; flex-direction: column; }
 }
 
 .home__content .lang-select { max-width: 280px; }
+
+.home__card-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.home__card-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger, #dc3545);
+}
+
+.home__card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.home__account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.home__account-email {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.home__account-provider {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

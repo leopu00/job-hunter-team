@@ -370,6 +370,10 @@
             <span class="home__nav-icon">🐳</span>
             <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="account" role="tab">
+            <span class="home__nav-icon">👤</span>
+            <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="language" role="tab">
             <span class="home__nav-icon">🌐</span>
             <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
@@ -506,6 +510,55 @@
             <a href="#" class="home__card-link" id="home-docker-image-releases" data-i18n="home.docker.imageReleases">
               Vedi tutte le release →
             </a>
+          </div>
+        </div>
+
+        <!-- Account: OAuth Supabase sign-in (Guest vs Signed-in) -->
+        <div class="home__panel" data-section="account" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.account.title">Account</h1>
+            <p class="home__subtitle" data-i18n="home.account.subtitle">
+              Sign in to enable cloud sync and multi-device recovery.
+            </p>
+          </header>
+
+          <!-- Guest state -->
+          <div class="home__card" id="home-account-guest" hidden>
+            <p class="home__card-text" data-i18n="home.account.guestHint">
+              You're using JHT in Guest mode. Your config stays on this machine only.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--primary" id="home-account-signin-google">
+                <span data-i18n="home.account.signinGoogle">Sign in with Google</span>
+              </button>
+              <button type="button" class="btn btn--ghost" id="home-account-signin-github">
+                <span data-i18n="home.account.signinGitHub">Sign in with GitHub</span>
+              </button>
+            </div>
+            <p class="home__card-hint" id="home-account-error" hidden></p>
+          </div>
+
+          <!-- Signed-in state -->
+          <div class="home__card" id="home-account-signedin" hidden>
+            <div class="home__account-identity">
+              <span class="home__account-email" id="home-account-email"></span>
+              <span class="home__account-provider" id="home-account-provider"></span>
+            </div>
+            <p class="home__card-text" data-i18n="home.account.signedinHint">
+              Cloud sync and multi-device recovery are enabled for this account.
+            </p>
+            <div class="home__card-actions">
+              <button type="button" class="btn btn--ghost" id="home-account-signout">
+                <span data-i18n="home.account.signout">Sign out</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Busy state -->
+          <div class="home__card" id="home-account-busy" hidden>
+            <p class="home__card-text" id="home-account-busy-message" data-i18n="home.account.busy">
+              Opening browser for sign-in…
+            </p>
           </div>
         </div>
 
