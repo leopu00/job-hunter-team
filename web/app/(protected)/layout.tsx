@@ -20,6 +20,7 @@ export default async function ProtectedLayout({
   const hdrs = await headers()
   const localRequest = isLocalRequestFromHeaders(hdrs)
   const pathname = hdrs.get('x-pathname') ?? ''
+  const search = hdrs.get('x-search') ?? ''
 
   // Onboarding gate: finché il profilo locale non è completo l'utente
   // può stare solo su /onboarding. Qualsiasi altra route del gruppo
@@ -39,7 +40,17 @@ export default async function ProtectedLayout({
   if (isSupabaseConfigured && !localRequest) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/')
+    if (!user) {
+      // Preserva l'URL originale (path + query) come `returnTo` per
+      // far ripartire la pagina target dopo il login OAuth. Senza
+      // questo, deep-link come `/cli-link?code=ABCD-1234` perdono il
+      // codice e l'utente atterra sulla landing senza modale login.
+      const returnTo = pathname ? pathname + search : ''
+      if (returnTo && returnTo !== '/') {
+        redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`)
+      }
+      redirect('/?login=true')
+    }
 
     return (
       <div style={{ position: 'relative', zIndex: 1 }}>
