@@ -1,6 +1,6 @@
-"""Provider Minimax — wrapper API REST (OpenAI-compatible).
+"""Provider Kimi — wrapper API REST (OpenAI-compatible).
 
-Minimax espone un'API compatibile con il formato OpenAI chat completions.
+Kimi espone un'API compatibile con il formato OpenAI chat completions.
 Modelli: abab6.5-chat, abab5.5-chat.
 Richiede: pip install requests
 """
@@ -12,13 +12,13 @@ import requests
 
 from shared.llm.base import CompletionResponse, LLMProvider, ModelInfo, ProviderError
 
-MINIMAX_BASE_URL = "https://api.minimax.chat/v1"
+MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 
 MODELS = [
     ModelInfo(
         id="abab6.5-chat",
-        name="Minimax ABAB 6.5",
-        provider="minimax",
+        name="Kimi ABAB 6.5",
+        provider="kimi",
         context_window=245_760,
         max_output_tokens=16_384,
         supports_vision=False,
@@ -26,8 +26,8 @@ MODELS = [
     ),
     ModelInfo(
         id="abab5.5-chat",
-        name="Minimax ABAB 5.5",
-        provider="minimax",
+        name="Kimi ABAB 5.5",
+        provider="kimi",
         context_window=16_384,
         max_output_tokens=4_096,
         supports_vision=False,
@@ -42,29 +42,29 @@ def _resolve_key() -> str:
     """Risolve API key: credential_manager (Gus) -> env var fallback."""
     try:
         from shared.skills.credential_manager import resolve_api_key
-        key = resolve_api_key("minimax")
+        key = resolve_api_key("kimi")
         if key:
             return key
     except ImportError:
         pass
-    key = os.environ.get("MINIMAX_API_KEY", "").strip()
+    key = os.environ.get("MOONSHOT_API_KEY", "").strip()
     if not key:
         raise ProviderError(
-            "MINIMAX_API_KEY non configurata. "
+            "MOONSHOT_API_KEY non configurata. "
             "Imposta la variabile d'ambiente o usa credential_manager.",
-            provider="minimax",
+            provider="kimi",
         )
     return key
 
 
-class MinimaxProvider(LLMProvider):
-    """Provider per Minimax via API REST OpenAI-compatible."""
+class KimiProvider(LLMProvider):
+    """Provider per Kimi via API REST OpenAI-compatible."""
 
-    provider_id = "minimax"
+    provider_id = "kimi"
 
     def __init__(self):
         self._api_key = _resolve_key()
-        self._base_url = os.environ.get("MINIMAX_BASE_URL", MINIMAX_BASE_URL).rstrip("/")
+        self._base_url = os.environ.get("MOONSHOT_BASE_URL", MOONSHOT_BASE_URL).rstrip("/")
 
     def _headers(self) -> dict:
         return {
@@ -104,12 +104,12 @@ class MinimaxProvider(LLMProvider):
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as e:
-            raise ProviderError(str(e), provider="minimax") from e
+            raise ProviderError(str(e), provider="kimi") from e
 
         if "error" in data:
             raise ProviderError(
                 data["error"].get("message", str(data["error"])),
-                provider="minimax",
+                provider="kimi",
             )
 
         choice = data["choices"][0]
@@ -118,7 +118,7 @@ class MinimaxProvider(LLMProvider):
         return CompletionResponse(
             content=choice["message"]["content"],
             model=data.get("model", model),
-            provider="minimax",
+            provider="kimi",
             usage={
                 "input_tokens": usage_data.get("prompt_tokens", 0),
                 "output_tokens": usage_data.get("completion_tokens", 0),
@@ -174,7 +174,7 @@ class MinimaxProvider(LLMProvider):
                 if text:
                     yield text
         except requests.RequestException as e:
-            raise ProviderError(str(e), provider="minimax") from e
+            raise ProviderError(str(e), provider="kimi") from e
 
     def list_models(self) -> list[ModelInfo]:
         return list(MODELS)

@@ -20,14 +20,14 @@ PROVIDER_ALIASES = {
     "gpt": "openai",
     "gpt4": "openai",
     "chatgpt": "openai",
-    "minimax": "minimax",
-    "abab": "minimax",
+    "kimi": "kimi",
+    "abab": "kimi",
 }
 
 PROVIDER_REGISTRY = {
     "claude": "shared.llm.providers.anthropic_provider.AnthropicProvider",
     "openai": "shared.llm.providers.openai_provider.OpenAIProvider",
-    "minimax": "shared.llm.providers.minimax_provider.MinimaxProvider",
+    "kimi": "shared.llm.providers.kimi_provider.KimiProvider",
 }
 
 
@@ -72,7 +72,7 @@ def get_provider(name: Optional[str] = None) -> LLMProvider:
     """Istanzia un provider LLM per nome.
 
     Args:
-        name: nome del provider (claude, openai, minimax) o alias.
+        name: nome del provider (claude, openai, kimi) o alias.
               Se None, usa get_default_provider().
 
     Returns:

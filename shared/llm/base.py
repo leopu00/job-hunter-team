@@ -1,6 +1,6 @@
 """Interfaccia astratta per i provider LLM.
 
-Definisce il contratto che ogni provider (Claude, OpenAI, Minimax) deve rispettare.
+Definisce il contratto che ogni provider (Claude, OpenAI, Kimi) deve rispettare.
 """
 
 from abc import ABC, abstractmethod

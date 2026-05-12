@@ -6,10 +6,10 @@ import { Card, NavButtons } from './ui'
 const STEPS = ['prereq', 'model', 'apikey', 'health'] as const
 type Step = (typeof STEPS)[number]
 const LABELS: Record<Step, string> = { prereq: 'Prerequisiti', model: 'Modello', apikey: 'API Key', health: 'Health' }
-const PROVIDERS = [{ v: 'claude', l: 'Anthropic Claude' }, { v: 'openai', l: 'OpenAI' }, { v: 'minimax', l: 'MiniMax' }]
+const PROVIDERS = [{ v: 'claude', l: 'Anthropic Claude' }, { v: 'openai', l: 'OpenAI' }, { v: 'kimi', l: 'Kimi' }]
 const MODELS: Record<string, string[]> = {
   claude: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-  openai: ['gpt-4o', 'gpt-4o-mini'], minimax: ['abab6.5s-chat'],
+  openai: ['gpt-4o', 'gpt-4o-mini'], kimi: ['abab6.5s-chat'],
 }
 
 interface Check { label: string; ok: boolean; hint?: string }

@@ -30,7 +30,7 @@ const DEFAULT_WINDOW: WindowConfig = { maxRequests: 60, windowMs: 60_000 }
 const KNOWN_PROVIDERS: Array<{ id: string; label: string; window: WindowConfig }> = [
   { id: 'claude',  label: 'Claude (Anthropic)', window: { maxRequests: 50, windowMs: 60_000 } },
   { id: 'openai',  label: 'OpenAI',             window: { maxRequests: 60, windowMs: 60_000 } },
-  { id: 'minimax', label: 'Minimax',            window: { maxRequests: 40, windowMs: 60_000 } },
+  { id: 'kimi', label: 'Kimi',            window: { maxRequests: 40, windowMs: 60_000 } },
 ]
 
 function loadConfig(): JhtConfig {
