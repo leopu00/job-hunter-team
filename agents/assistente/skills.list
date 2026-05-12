@@ -6,6 +6,9 @@
 # User communication (web UI)
 chat-web
 
+# User communication (Telegram outbound — phone-side interface)
+telegram-send
+
 # Inter-agent (bridge to the Capitano when needed)
 tmux-send
 
