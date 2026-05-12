@@ -33,13 +33,18 @@ HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 
 # Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
 # Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
-# pairing, telegram) sul path VPS.
+# pairing, telegram) sul path VPS, e il dispatcher pid1 del container
+# lo usa per scegliere tra dashboard locale e cloud sync daemon.
 HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
 if [ -f "$HOST_ENV_FILE" ]; then
   # shellcheck disable=SC1090
   . "$HOST_ENV_FILE"
 fi
 JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
+# Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}`
+# substitution per passare il valore al container. Senza export resta
+# variabile di shell e compose non la vede.
+export JHT_HOST_TYPE
 
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then

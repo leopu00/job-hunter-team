@@ -19,9 +19,16 @@ services:
     # Utile per testare immagini di branch dev prima del merge a master.
     image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}
     container_name: jht
-    # Override del CMD Dockerfile (--help): avvia la dashboard web
-    # (Next.js su :3000 + infra) e resta in foreground come PID 1.
-    command: ["dashboard", "--no-browser"]
+    # Override del CMD Dockerfile (--help): entry point `pid1` che
+    # in base a JHT_HOST_TYPE dispatch tra:
+    #   - vps  + cloud paired → `cloud daemon` (push loop verso prod)
+    #   - vps  no cloud       → `dashboard --no-browser` (fallback per onboarding)
+    #   - local               → `dashboard --no-browser` (default storico)
+    # Su VPS la dashboard locale e' inutile (porta 3000 bindata a
+    # 127.0.0.1, irraggiungibile dall'utente). Il daemon push spinge
+    # i dati su jobhunterteam.ai dove l'utente li vede via browser.
+    # Vedi cli/src/commands/pid1.js per dettagli.
+    command: ["pid1"]
     environment:
       # HOME points at the bind-mounted /jht_home so CLI credential
       # files (~/.claude, ~/.codex, ~/.kimi) land on the host disk
@@ -29,6 +36,10 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
+      # JHT_HOST_TYPE letto da pid1 dispatcher. Default `local` per
+      # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
+      # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
+      - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
       # IS_CONTAINER=1 abilita il passthrough in cli/src/utils/container-proxy.js:
       # le funzioni che oggi farebbero `docker exec jht ...` eseguono
       # comandi locali (siamo gia' nel posto giusto). Vedi
