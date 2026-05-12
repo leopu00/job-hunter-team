@@ -29,7 +29,7 @@ async function CompanyJsonLd() {
     isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: SITE_URL },
   }
 
-  return <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  return <script nonce={nonce} type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
 }
 
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
