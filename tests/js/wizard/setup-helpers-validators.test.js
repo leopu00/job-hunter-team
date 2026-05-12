@@ -34,8 +34,12 @@ describe('validateApiKey', () => {
     expect(validateApiKey(claude, 'sk-ant-apikey1234567')).toBeUndefined();
   });
 
-  it('accetta qualsiasi chiave per Kimi (no prefisso)', () => {
-    expect(validateApiKey(kimi, 'eyJsomeLongToken1234')).toBeUndefined();
+  it('rifiuta chiave con prefisso errato per Kimi (richiesto sk-)', () => {
+    expect(validateApiKey(kimi, 'eyJsomeLongToken1234')).toMatch(/sk-/);
+  });
+
+  it('accetta chiave Kimi con prefisso sk-', () => {
+    expect(validateApiKey(kimi, 'sk-kimi-apikey1234567')).toBeUndefined();
   });
 });
 
