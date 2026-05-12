@@ -782,13 +782,12 @@ All 5 tasks from 04-22 have been implemented:
 - **Validato 2026-05-10:** VPS Hetzner CPX22 vergine, image `ghcr.io/leopu00/jht:dev1` con override entrypoint `tini -g`. Banner + step Node + selettore con `● QuickStart / ○ Avanzato`. ↓ → `● Avanzato`. ↑ → `● QuickStart`. Selezione live, marker ●/○ alternano correttamente. Da ribuildare image `:dev1` + retest senza override.
 - **Storia diagnostica:** prima ipotesi (docker exec) era data dal contesto del primo test (era allora `docker exec`). Refactor wrapper da exec → run ha lasciato il bug invariato perche' la causa vera era un livello sotto.
 
-### 🟢 [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato
+### ✅ [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato — FIXED 2026-05-12
 
-- **File:** `cli/src/commands/doctor.js:19`
-- **Stato:** `cmdVersion(cmd)` usa `${cmd} --version` per tutti i binari, ma `tmux 3.3a` non riconosce `--version` (vuole `-V` maiuscolo) e ritorna usage + status 1. Risultato: doctor segnala "tmux: non trovato" anche su install validi (sia host con tmux apt-installato sia dentro al container JHT che ha `/usr/bin/tmux 3.3a` baked).
+- **File:** `cli/src/commands/doctor.js:18`
+- **Causa:** `cmdVersion(cmd)` usava `${cmd} --version` per tutti i binari, ma `tmux` vuole `-V` maiuscolo e su `--version` ritorna usage + exit 1 → doctor diceva "tmux: non trovato" su install validi.
+- **Fix applicato:** mappa `VERSION_FLAGS = { tmux: '-V' }` con default `--version`, fallback su qualsiasi binario diverso da tmux. Smoke test locale: `tmux 3.6` ora ritornato correttamente.
 - **Scoperto durante:** spike host/container split del 2026-05-06.
-- **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
-- **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
 ### ✅ [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accettava il "Bypass Permissions" prompt di Claude Code 2.1+ — FIXED 2026-05-08 (commit `7106ef6e`)
 
