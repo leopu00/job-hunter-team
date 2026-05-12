@@ -9,7 +9,11 @@ vi.mock("next/server", () => {
 });
 
 const WEB = path.resolve(__dirname, "../../../web");
-function read(rel: string) { return fs.readFileSync(path.join(WEB, rel), "utf-8"); }
+function read(rel: string) {
+  const direct = path.join(WEB, rel);
+  const fullPath = fs.existsSync(direct) ? direct : path.join(WEB, "(protected)", rel);
+  return fs.readFileSync(fullPath, "utf-8");
+}
 function req(url: string, init?: RequestInit) { return new Request(url, init); }
 
 /* ── API: contacts ── */

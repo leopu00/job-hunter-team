@@ -128,7 +128,7 @@ describe("pagine batch 5 — rendering e struttura", () => {
   ];
   for (const p of pages) {
     it(`/${p.route}: 'use client', heading "${p.heading}", fetch ${p.fetch}`, () => {
-      const content = fs.readFileSync(path.join(WEB, p.file), "utf-8");
+      const content = fs.readFileSync(fs.existsSync(path.join(WEB, p.file)) ? path.join(WEB, p.file) : path.join(WEB, "(protected)", p.file), "utf-8");
       expect(content).toContain("use client");
       expect(content).toContain(p.heading);
       expect(content).toContain(p.fetch);

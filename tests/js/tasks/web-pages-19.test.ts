@@ -5,7 +5,9 @@ import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
 function readSrc(rel: string) {
-  const raw = fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+  const direct = path.join(WEB, rel);
+  const fullPath = fs.existsSync(direct) ? direct : path.join(WEB, "(protected)", rel);
+  const raw = fs.readFileSync(fullPath, "utf-8").replace(/\r\n/g, "\n");
   const singleQuoted = raw.replace(/"/g, "'");
   const squashed = singleQuoted.replace(/\s+/g, " ").trim();
   return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
