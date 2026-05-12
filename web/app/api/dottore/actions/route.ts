@@ -77,8 +77,13 @@ export async function GET(req: Request) {
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ENOENT') {
+      // Manteniamo lo stesso schema del response "happy path" anche
+      // quando non c'e' ancora un log: il client (DoctorPanel) accede
+      // a data.counts.pings senza optional-chaining e crashava con
+      // "Cannot read properties of undefined (reading 'pings')".
       return NextResponse.json({
         ok: true, events: [], rounds: [],
+        counts: { total: 0, pings: 0, restarts: 0, rounds_complete: 0 },
         note: 'no actions yet',
       })
     }
