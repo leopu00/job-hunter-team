@@ -9,9 +9,9 @@
 // for a session via supabase.auth.exchangeCodeForSession, and stores
 // the session via the keyring storage adapter.
 
-const { shell } = require('electron')
 const { getClient } = require('./supabase-client')
 const { startCallbackServer } = require('./callback-server')
+const { openInChosenBrowser } = require('./browser-picker')
 
 const SUPPORTED_PROVIDERS = new Set(['google', 'github'])
 
@@ -77,10 +77,15 @@ async function signIn(provider) {
       if (error || !data?.url) {
         throw new Error(error?.message || 'Supabase did not return an authorize URL')
       }
-      // Open the authorize URL in the user's default browser. We use
-      // shell.openExternal (Electron) instead of opener libs so the
-      // default browser is honored even if it's not Chromium.
-      await shell.openExternal(data.url)
+      // Ask the user which installed browser should receive the
+      // authorize URL. The pre-flight dialog avoids the "auto-logged
+      // into the wrong account" surprise that happens when the
+      // default browser already has a session for another Google
+      // account.
+      await openInChosenBrowser(data.url, {
+        title: 'Sign in with ' + (PROVIDER_LABEL[provider] || provider),
+        message: `Con quale browser vuoi aprire il login ${PROVIDER_LABEL[provider] || provider}?`,
+      })
       const { code } = await server.waitForCallback()
       const { data: exchangeData, error: exchangeError } =
         await client.auth.exchangeCodeForSession(code)
