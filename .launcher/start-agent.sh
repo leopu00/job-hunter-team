@@ -146,6 +146,33 @@ if [ "$ROLE" = "bridge" ]; then
   exit 0
 fi
 
+# ── Telegram inbound bridge (long-poll → tmux ASSISTENTE) ──────────────
+# Short-circuit per "tg-bridge": spawna tg-bridge.py in background. Stesso
+# pattern del sentinel-bridge (setsid + singleton via /proc cmdline).
+# Lanciato dopo che ASSISTENTE e' partito, cosi' i primi messaggi arrivati
+# trovano gia' una sessione tmux pronta a ricevere.
+if [ "$ROLE" = "tg-bridge" ]; then
+  TG_SCRIPT="/app/.launcher/tg-bridge.py"
+  if [ ! -f "$TG_SCRIPT" ]; then
+    echo "✗ $TG_SCRIPT non trovato — tg-bridge NON partito"
+    exit 1
+  fi
+  for _pid in $(grep -l tg-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  # JHT_TG_TARGET_SESSION = sessione tmux destinataria (default ASSISTENTE).
+  # JHT_TG_OFFSET_RESET=1 → al primo poll skippa il backlog (utile in fresh
+  # install per non rifare replay di vecchi /start dell'utente).
+  setsid sh -c "
+    JHT_TG_TARGET_SESSION='${JHT_TG_TARGET_SESSION:-ASSISTENTE}' \
+    JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
+      python3 -u $TG_SCRIPT >> /tmp/tg-bridge.log 2>&1
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ tg-bridge partito (target=${JHT_TG_TARGET_SESSION:-ASSISTENTE}, log /tmp/tg-bridge.log)"
+  exit 0
+fi
+
 # Mappa ruolo → prefisso sessione | effort | model
 # model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
 #   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
@@ -585,15 +612,23 @@ else
   # diventano fantasmi (sessione tmux esiste ma LLM exited). Vedi BACKLOG
   # [BUG-CLAUDE-TRUST-PROMPT]. Fix: capture-pane, se trova il warning manda
   # Down + sleep 1s + Enter (sceglie "2. Yes, I accept"); se trova il classico
-  # folder-trust dialog manda Enter (default "Yes"); fallback Enter dopo 12s.
+  # folder-trust dialog manda Enter (default "Yes"); se trova "Select login
+  # method" (capita quando il primo claude lanciato non ha ~/.claude.json
+  # pre-esistente — bug 2026-05-12) manda Enter (default "1. Claude account
+  # with subscription"); fallback Enter dopo timeout finale.
   # setsid scollega dalla sessione/process-group di chi ha chiamato
   # start-agent.sh: senza, quando start-agent.sh esce il suo caller
   # (Node.js del backend web) manda SIGTERM al process group e ammazza
   # la subshell prima che lo sleep finisca.
+  #
+  # Loop: 60 iterazioni × 2s = 120s totali. Il dialog appare 5-30s dopo il
+  # CLI start; 120s copre anche partenze lente (rete, immagine grossa).
+  # Exit immediato appena uno dei pattern matcha → no overhead a regime.
   setsid sh -c '
     _sess="'"$SESSION"'"
     _i=0
-    while [ $_i -lt 6 ]; do
+    _login_handled=0
+    while [ $_i -lt 60 ]; do
       sleep 2
       _pane=$(tmux capture-pane -t "$_sess" -p -S -40 2>/dev/null)
       if echo "$_pane" | grep -q "Bypass Permissions mode"; then
@@ -605,6 +640,16 @@ else
       if echo "$_pane" | grep -qE "trust (the files|this folder|this directory)"; then
         tmux send-keys -t "$_sess" Enter
         exit 0
+      fi
+      # Select login method: primo claude lanciato in container fresh con
+      # .credentials.json ma SENZA .claude.json popolato cade qui. Default
+      # = "1. Claude account with subscription", Enter conferma. Subito
+      # dopo claude mostra Bypass Permissions, gestito dal ramo sopra al
+      # giro successivo. Niente exit qui: restiamo in loop per il prossimo.
+      if [ "$_login_handled" = "0" ] && echo "$_pane" | grep -q "Select login method"; then
+        tmux send-keys -t "$_sess" Enter
+        _login_handled=1
+        sleep 2
       fi
       _i=$((_i + 1))
     done
