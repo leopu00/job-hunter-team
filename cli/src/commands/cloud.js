@@ -392,6 +392,67 @@ async function handleDisable() {
   }
 }
 
+/**
+ * Daemon di sync: loop infinito che chiama handlePush() ogni N secondi
+ * (default 30). Pensato come PID 1 del container su VPS, dove la dashboard
+ * Next.js locale e' inutile (bindata a 127.0.0.1) e l'utente vuole vedere
+ * i dati direttamente su jobhunterteam.ai.
+ *
+ * Termina su SIGTERM/SIGINT (docker stop manda SIGTERM → uscita pulita
+ * entro il grace period di 10s).
+ *
+ * Se cloud sync non e' abilitato, esce con errore: il chiamante (pid1
+ * dispatcher) si occupa di degradare gracefully a dashboard.
+ */
+async function handleDaemon(options) {
+  const intervalSec = Math.max(5, parseInt(options.interval ?? '30', 10) || 30);
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    console.error(pc.red('Cloud sync non abilitato: il daemon non puo\' girare.'));
+    console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login') + pc.dim(' (pairing browser)'));
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(pc.dim(`Cloud sync daemon: push ogni ${intervalSec}s verso ${config.base_url}`));
+
+  let running = true;
+  const shutdown = (sig) => {
+    if (!running) return;
+    running = false;
+    console.log(pc.dim(`\nRicevuto ${sig}, esco dal loop...`));
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Push iniziale immediato: se il container era spento per un po' e gli
+  // agenti hanno scritto offline, il primo tick deve flushare subito.
+  while (running) {
+    try {
+      // Reset di process.exitCode tra un tick e l'altro: handlePush lo
+      // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
+      // il loop al prossimo intervallo.
+      const prev = process.exitCode;
+      process.exitCode = 0;
+      await handlePush({});
+      if (process.exitCode === 1) {
+        // Errore di push: log gia' fatto da handlePush, continuiamo.
+      }
+      process.exitCode = prev;
+    } catch (err) {
+      console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+    }
+    if (!running) break;
+    // Sleep interrompibile: spezziamo in chunk da 1s cosi' SIGTERM ferma
+    // entro 1s invece di aspettare l'intero intervalSec.
+    for (let i = 0; i < intervalSec && running; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  console.log(pc.dim('Daemon terminato.'));
+}
+
 export function registerCloudCommand(program) {
   const cloud = program
     .command('cloud')
@@ -429,4 +490,14 @@ export function registerCloudCommand(program) {
     .command('disable')
     .description('Rimuove il token dalla macchina locale (non revoca lato server)')
     .action(handleDisable);
+
+  // `daemon` e' pensato come PID 1 del container su VPS: ciclo push
+  // periodico finche' non riceve SIGTERM da docker stop. Cosi' i dati
+  // scritti dagli agenti appaiono su jobhunterteam.ai senza che l'utente
+  // lanci nulla a mano. Latency: <interval> secondi (default 30s).
+  cloud
+    .command('daemon')
+    .description('Loop di push continuo (usato come PID 1 del container su VPS)')
+    .option('--interval <sec>', 'Secondi tra un push e il successivo', '30')
+    .action(handleDaemon);
 }
