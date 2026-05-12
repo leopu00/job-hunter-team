@@ -60,10 +60,12 @@ describe('AIProviderSchema', () => {
     expect(r.error?.issues[0].path).toContain('api_key');
   });
 
-  it('rifiuta subscription mancante quando auth_method = subscription', () => {
+  it('accetta subscription mancante quando auth_method = subscription (auth e\' OAuth CLI)', () => {
+    // Il blocco "subscription" non e' piu' obbligatorio: l'auth e' OAuth
+    // device-flow del CLI provider, che salva il token in ~/.claude/ etc.
+    // dentro al container, non nel jht.config.json.
     const r = AIProviderSchema.safeParse({ name: 'kimi', auth_method: 'subscription' });
-    expect(r.success).toBe(false);
-    expect(r.error?.issues[0].path).toContain('subscription');
+    expect(r.success).toBe(true);
   });
 
   it('rifiuta provider name non valido', () => {
