@@ -37,14 +37,19 @@ def get_db() -> sqlite3.Connection:
 
 
 def ensure_schema(conn: sqlite3.Connection):
-    """Crea le tabelle se non esistono (schema V3).
+    """Crea le tabelle se non esistono (schema V4).
 
-    La migrazione retroattiva v2→v3 (CHECK su positions.status) viene
-    eseguita PRIMA del CREATE TABLE IF NOT EXISTS, così i CREATE TRIGGER
-    IF NOT EXISTS più sotto ricreano i trigger anti-'now' che il DROP
-    TABLE della migrazione butta via insieme ai loro vincoli.
+    Le migrazioni retroattive vengono eseguite PRIMA del CREATE TABLE
+    IF NOT EXISTS, così i CREATE TRIGGER IF NOT EXISTS più sotto
+    ricreano i trigger anti-'now' che il DROP TABLE della migrazione v2→v3
+    butta via insieme ai loro vincoli.
+
+    Storia:
+    - v2→v3: CHECK su `positions.status`.
+    - v3→v4: `created_at`/`updated_at` uniformi su tutte le 5 tabelle.
     """
     _migrate_v2_to_v3(conn)
+    _migrate_v3_to_v4(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +63,9 @@ def ensure_schema(conn: sqlite3.Connection):
         culture_notes TEXT,
         analyzed_by TEXT,
         analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        verdict TEXT
+        verdict TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS positions (
@@ -87,6 +94,8 @@ def ensure_schema(conn: sqlite3.Connection):
         )),
         notes TEXT,
         last_checked TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id)
     );
 
@@ -95,6 +104,8 @@ def ensure_schema(conn: sqlite3.Connection):
         position_id INTEGER NOT NULL,
         type TEXT NOT NULL,
         text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
@@ -111,6 +122,8 @@ def ensure_schema(conn: sqlite3.Connection):
         notes TEXT,
         scored_by TEXT,
         scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
@@ -137,6 +150,8 @@ def ensure_schema(conn: sqlite3.Connection):
         interview_round INTEGER DEFAULT NULL,
         cv_drive_id TEXT,
         cl_drive_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
@@ -216,8 +231,104 @@ def ensure_schema(conn: sqlite3.Connection):
         'TIMESTAMP NON VALIDO: hai passato la stringa "now" in UPDATE companies. USA: db_update.py company oppure datetime("now","localtime") in SQL inline.'
       );
     END;
+
+    -- Timestamp uniformi (V4). Per ogni tabella due trigger:
+    --   - touch_updated_at: AFTER UPDATE → setta updated_at = CURRENT_TIMESTAMP.
+    --     La WHEN-clause `NEW.updated_at IS OLD.updated_at` evita la
+    --     ricorsione infinita: quando il trigger stesso fa UPDATE, NEW
+    --     differisce da OLD e il trigger non rientra.
+    --   - default_created_at: AFTER INSERT → popola created_at/updated_at
+    --     se NULL. Necessario per i DB migrati v3→v4 dove ALTER TABLE ADD
+    --     COLUMN non puo' avere DEFAULT CURRENT_TIMESTAMP (limite SQLite,
+    --     vedi `_migrate_v3_to_v4`). Su DB freschi il DEFAULT del CREATE
+    --     TABLE riempe gia' i valori e il trigger e' no-op.
+
+    CREATE TRIGGER IF NOT EXISTS companies_touch_updated_at
+    AFTER UPDATE ON companies FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE companies SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS companies_default_created_at
+    AFTER INSERT ON companies FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE companies
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS positions_touch_updated_at
+    AFTER UPDATE ON positions FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE positions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS positions_default_created_at
+    AFTER INSERT ON positions FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE positions
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS position_highlights_touch_updated_at
+    AFTER UPDATE ON position_highlights FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE position_highlights SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS position_highlights_default_created_at
+    AFTER INSERT ON position_highlights FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE position_highlights
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS scores_touch_updated_at
+    AFTER UPDATE ON scores FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE scores SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS scores_default_created_at
+    AFTER INSERT ON scores FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE scores
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS applications_touch_updated_at
+    AFTER UPDATE ON applications FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS applications_default_created_at
+    AFTER INSERT ON applications FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE applications
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
     """)
-    conn.execute("PRAGMA user_version = 3")
+    conn.execute("PRAGMA user_version = 4")
     conn.commit()
 
 
@@ -289,6 +400,57 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
         CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     """)
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row['name'] == column for row in rows)
+
+
+def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
+    """Aggiunge `created_at`/`updated_at` uniformi a tutte le 5 tabelle.
+
+    SQLite vieta `ALTER TABLE ADD COLUMN ... DEFAULT CURRENT_TIMESTAMP`
+    (default deve essere costante), quindi:
+      1. ADD COLUMN senza DEFAULT,
+      2. UPDATE delle righe esistenti con CURRENT_TIMESTAMP (o un domain
+         field se piu' informativo: found_at, analyzed_at, scored_at,
+         written_at/applied_at),
+      3. il DEFAULT vero e proprio resta nel CREATE TABLE per i DB
+         freschi; i trigger `*_default_created_at` (AFTER INSERT) coprono
+         eventuali insert sul DB migrato che non passano la colonna.
+
+    Idempotente: guard via `PRAGMA table_info`. Eseguita solo se
+    `user_version` e' esattamente 3 (DB gia' su V3). I DB freschi
+    (user_version=0) saltano questa e finiscono a V4 direttamente
+    via il CREATE TABLE in `ensure_schema`.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] != 3:
+        return
+
+    fallback_fields = {
+        'positions':            'found_at',
+        'companies':            'analyzed_at',
+        'scores':               'scored_at',
+        'applications':         'COALESCE(written_at, applied_at)',
+        'position_highlights':  None,  # nessun domain field utile
+    }
+
+    for table, fallback in fallback_fields.items():
+        if not _column_exists(conn, table, 'created_at'):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN created_at TIMESTAMP")
+        if not _column_exists(conn, table, 'updated_at'):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN updated_at TIMESTAMP")
+
+        created_expr = (
+            f"COALESCE({fallback}, CURRENT_TIMESTAMP)" if fallback else "CURRENT_TIMESTAMP"
+        )
+        conn.execute(
+            f"UPDATE {table} SET created_at = {created_expr} WHERE created_at IS NULL"
+        )
+        conn.execute(
+            f"UPDATE {table} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"
+        )
 
 
 def resolve_company_id(conn: sqlite3.Connection, company_name: str):
