@@ -17,7 +17,7 @@ export const SubscriptionSchema = z.object({
 
 export const AIProviderSchema = z
   .object({
-    name: z.enum(["claude", "openai", "minimax"]),
+    name: z.enum(["claude", "openai", "kimi"]),
     auth_method: z.enum(["api_key", "subscription"]),
     api_key: z.string().optional(),
     subscription: SubscriptionSchema.optional(),
@@ -50,11 +50,11 @@ export const ChannelsSchema = z.object({
 export const JHTConfigSchema = z
   .object({
     version: z.number().int().positive().default(1),
-    active_provider: z.enum(["claude", "openai", "minimax"]),
+    active_provider: z.enum(["claude", "openai", "kimi"]),
     providers: z.object({
       claude: AIProviderSchema.optional(),
       openai: AIProviderSchema.optional(),
-      minimax: AIProviderSchema.optional(),
+      kimi: AIProviderSchema.optional(),
     }),
     channels: ChannelsSchema.default({}),
     workspace: z.string().min(1, "workspace obbligatorio"),

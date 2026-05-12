@@ -75,8 +75,8 @@ describe('validateConfigBeforeWrite', () => {
   it('rifiuta subscription mancante per auth_method subscription', () => {
     const r = validateConfigBeforeWrite({
       ...validCfg,
-      active_provider: 'minimax',
-      providers: { minimax: { name: 'minimax', auth_method: 'subscription' } },
+      active_provider: 'kimi',
+      providers: { kimi: { name: 'kimi', auth_method: 'subscription' } },
     });
     expect(r.success).toBe(false);
   });

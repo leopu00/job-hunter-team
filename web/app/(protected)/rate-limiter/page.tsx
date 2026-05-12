@@ -8,7 +8,7 @@ type WindowConfig = { maxRequests: number; windowMs: number }
 type ProviderLimit = { id: string; label: string; window: WindowConfig; retry: RetryConfig; backoffSteps: number[] }
 type RateLimiterData = { globalWindow: WindowConfig; providers: ProviderLimit[]; defaults: { window: WindowConfig; retry: RetryConfig }; configLoaded: boolean; ts: number }
 
-const PROVIDER_ICONS: Record<string, string> = { claude: '🟠', openai: '🟢', minimax: '🔵' }
+const PROVIDER_ICONS: Record<string, string> = { claude: '🟠', openai: '🟢', kimi: '🔵' }
 
 function fmt(ms: number) {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(0)}m`
