@@ -2,6 +2,16 @@
 # One name per line. Lines starting with `#` and blank lines are ignored.
 # The launcher (start-agent.sh) reads this file at boot and copies the
 # listed skills into the agent's ~/.claude/skills/ runtime workspace.
-# Note: db-query is read-only — the Maestro never writes to the DB.
+
+# User communication (web UI)
+chat-web
+
+# Inter-agent (rare — escalation to Capitano if needed)
 tmux-send
+
+# DB access — the Maestro is read-only, never writes
 db-query
+
+# Maestro-only operative skills
+mentor-patterns
+mentor-output
