@@ -1,10 +1,48 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
+const PROFILE_DIR = join(JHT_HOME, 'profile');
+const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
+const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
+
+/**
+ * Legge il candidate_profile.yml come stringa raw. Lato cloud
+ * /api/cloud-sync/push lo parsa con js-yaml e fa upsert su
+ * candidate_profiles. Limitiamo a 64 KB: un profilo realistico sta
+ * ben sotto, file piu' grandi sono probabilmente garbage/binari.
+ */
+function readProfilePayload() {
+  if (!existsSync(PROFILE_YAML_PATH)) return null;
+  let yamlRaw;
+  try {
+    yamlRaw = readFileSync(PROFILE_YAML_PATH, 'utf-8');
+  } catch { return null; }
+  if (!yamlRaw || yamlRaw.length > 64 * 1024) return null;
+
+  // Summaries: 4 markdown discorsivi (about, preferences, goals, strengths).
+  // Li passiamo come oggetto { name: content } per upsert su tabella
+  // future-friendly. Limite 32 KB/file.
+  const summaries = {};
+  if (existsSync(PROFILE_SUMMARIES_DIR)) {
+    try {
+      for (const file of readdirSync(PROFILE_SUMMARIES_DIR)) {
+        if (!file.endsWith('.md')) continue;
+        const full = join(PROFILE_SUMMARIES_DIR, file);
+        const content = readFileSync(full, 'utf-8');
+        if (content.length <= 32 * 1024) {
+          summaries[file.replace(/\.md$/, '')] = content;
+        }
+      }
+    } catch { /* directory unreadable, skip */ }
+  }
+
+  return { yaml: yamlRaw, summaries };
+}
 
 async function loadCloudConfig() {
   try {
@@ -275,10 +313,16 @@ async function handlePush(options) {
     return;
   }
 
+  // Profile YAML: e' indipendente dal DB (esiste appena l'Assistente
+  // raccoglie il primo dato dall'utente). Lo leggiamo SEMPRE, anche se
+  // jobs.db non esiste ancora: senza questo la dashboard cloud resta
+  // vuota fino al primo job trovato dallo Scout, deludendo l'utente che
+  // si aspetta di vedere il proprio profilo subito dopo l'onboarding.
+  const profilePayload = readProfilePayload();
+
   const dbPath = options.db || JHT_DB_PATH;
-  try {
-    await stat(dbPath);
-  } catch {
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists && !profilePayload) {
     console.error(pc.red(`Database non trovato: ${dbPath}`));
     console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
     process.exitCode = 1;
@@ -297,45 +341,50 @@ async function handlePush(options) {
   let positions = [];
   let scores = [];
   let applications = [];
-  try {
-    const db = new DatabaseSync(dbPath, { readOnly: true });
-    positions = readSqliteTable(db, 'positions', [
-      'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
-      'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
-      'deadline', 'last_checked',
-      'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
-      'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
-      'salary_estimated_source',
-    ]);
-    scores = readSqliteTable(db, 'scores', [
-      'position_id', 'total_score', 'experience_fit', 'salary_fit',
-      'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
-      'scored_by', 'scored_at',
-    ]);
-    applications = readSqliteTable(db, 'applications', [
-      'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
-      'status', 'critic_score', 'critic_verdict', 'critic_notes',
-      'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
-      'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
-      'cv_drive_id', 'cl_drive_id',
-    ]);
-    db.close();
-  } catch (err) {
-    console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
-    process.exitCode = 1;
-    return;
+  if (dbExists) {
+    try {
+      const db = new DatabaseSync(dbPath, { readOnly: true });
+      positions = readSqliteTable(db, 'positions', [
+        'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
+        'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
+        'deadline', 'last_checked',
+        'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
+        'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
+        'salary_estimated_source',
+      ]);
+      scores = readSqliteTable(db, 'scores', [
+        'position_id', 'total_score', 'experience_fit', 'salary_fit',
+        'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
+        'scored_by', 'scored_at',
+      ]);
+      applications = readSqliteTable(db, 'applications', [
+        'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
+        'status', 'critic_score', 'critic_verdict', 'critic_notes',
+        'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
+        'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
+        'cv_drive_id', 'cl_drive_id',
+      ]);
+      db.close();
+    } catch (err) {
+      console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
+      process.exitCode = 1;
+      return;
+    }
   }
 
+  const profileChunks = profilePayload
+    ? `, profile (${profilePayload.yaml.length}B yaml + ${Object.keys(profilePayload.summaries).length} summaries)`
+    : '';
   console.log(
     pc.dim(
-      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications`
+      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${profileChunks}`
     )
   );
   if (options.dryRun) {
     console.log(pc.yellow('--dry-run: nulla viene pushato.'));
     return;
   }
-  if (positions.length === 0 && scores.length === 0 && applications.length === 0) {
+  if (positions.length === 0 && scores.length === 0 && applications.length === 0 && !profilePayload) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
   }
@@ -349,7 +398,10 @@ async function handlePush(options) {
         Authorization: `Bearer ${config.token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ positions, scores, applications }),
+      body: JSON.stringify({
+        positions, scores, applications,
+        ...(profilePayload ? { profile: profilePayload } : {}),
+      }),
     });
   } catch (err) {
     console.error(pc.red(`Errore di rete: ${err.message}`));
