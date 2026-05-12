@@ -54,6 +54,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 | 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
 | 👨‍⚖️ | **Critic** | Blind review in 3 mandatory rounds before submission |
 | 👨‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
+| 🩺 | **Dottore** | One-shot health-check — auto-respawned every ~30 min, detects stuck agents and restarts them with context |
 | 🧙‍♂️ | **Maestro** *(planned)* | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
 
 ## Architecture
@@ -65,6 +66,8 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
                🧙‍♂️ Maestro       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
                (career coach)    (platform copilot)        │       (event-driven)         (usage clock)
                 [planned]                                  │
+                                                           │              🩺 Dottore ··health-check·· ▲
+                                                           │              (one-shot, ~30 min loop)    │
                                                            ▼
                                        ┌──────┬──────┬──────┐
                                        ▼      ▼      ▼      ▼
@@ -147,7 +150,7 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 ## Status
 
-- ✅ **Done** — 8-agent team (Captain + Sentinel + 4-stage pipeline + Critic + Assistant), monitored by 📡 Bridge; CLI (33 commands) + TUI + web dashboard (112 pages wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 180+ test files; subscription tested end-to-end on Claude Max x20 for weeks
+- ✅ **Done** — 9-agent team (Captain + Sentinel + 4-stage pipeline + Critic + Assistant + Dottore), monitored by 📡 Bridge; CLI (34 commands) + TUI + web dashboard (115 pages wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 150+ test files; subscription tested end-to-end on Claude Max x20 for weeks
 - 🔨 **In progress** — Kimi €40 calibration (target mass-market tier) · Desktop installer onboarding polish · Sentinel token-consumption optimization
 - ⏭️ **Next** — 🧙‍♂️ Maestro agent (career coach) · Weekly-window monitoring · User-defined work hours · Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
 
