@@ -28,7 +28,7 @@ function normalizeProviderId(value: string | undefined): string | null {
   const normalized = (value ?? '').trim().toLowerCase()
   if (!normalized) return null
   if (normalized === 'claude') return 'anthropic'
-  if (normalized === 'anthropic' || normalized === 'openai' || normalized === 'kimi' || normalized === 'minimax') return normalized
+  if (normalized === 'anthropic' || normalized === 'openai' || normalized === 'kimi' || normalized === 'kimi') return normalized
   return null
 }
 
@@ -52,10 +52,10 @@ const KNOWN_PROVIDERS = [
     envKey: 'MOONSHOT_API_KEY',
   },
   {
-    id: 'minimax',
-    label: 'Minimax',
+    id: 'kimi',
+    label: 'Kimi',
     models: ['abab6.5s-chat', 'abab5.5-chat'],
-    envKey: 'MINIMAX_API_KEY',
+    envKey: 'MOONSHOT_API_KEY',
   },
 ]
 

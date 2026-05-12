@@ -72,13 +72,16 @@ describe('validateConfigBeforeWrite', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rifiuta subscription mancante per auth_method subscription', () => {
+  it('accetta auth_method subscription senza blocco subscription esplicito', () => {
+    // Il blocco "subscription" non e' piu' obbligatorio: l'auth e' OAuth
+    // device-flow del CLI provider (Claude / Codex / Kimi), che salva il
+    // token in ~/.claude/ etc. dentro al container, non nel jht.config.json.
     const r = validateConfigBeforeWrite({
       ...validCfg,
-      active_provider: 'minimax',
-      providers: { minimax: { name: 'minimax', auth_method: 'subscription' } },
+      active_provider: 'kimi',
+      providers: { kimi: { name: 'kimi', auth_method: 'subscription' } },
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
   });
 
   it('accetta config senza workspace (path JHT fissi)', () => {

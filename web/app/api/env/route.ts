@@ -23,7 +23,7 @@ export interface EnvVar {
 const ENV_PATTERNS: Array<{ pattern: RegExp; category: EnvCategory }> = [
   { pattern: /^ANTHROPIC_/,   category: 'AI Provider' },
   { pattern: /^OPENAI_/,      category: 'AI Provider' },
-  { pattern: /^MINIMAX_/,     category: 'AI Provider' },
+  { pattern: /^MOONSHOT_/,     category: 'AI Provider' },
   { pattern: /^TELEGRAM_/,    category: 'Telegram'    },
   { pattern: /^BOT_TOKEN/,    category: 'Telegram'    },
   { pattern: /^DATABASE_/,    category: 'Database'    },
@@ -38,8 +38,8 @@ const ENV_PATTERNS: Array<{ pattern: RegExp; category: EnvCategory }> = [
 const KNOWN_ENV: Array<{ name: string; category: EnvCategory }> = [
   { name: 'ANTHROPIC_API_KEY',    category: 'AI Provider' },
   { name: 'OPENAI_API_KEY',       category: 'AI Provider' },
-  { name: 'MINIMAX_API_KEY',      category: 'AI Provider' },
-  { name: 'MINIMAX_Company_ID',     category: 'AI Provider' },
+  { name: 'MOONSHOT_API_KEY',      category: 'AI Provider' },
+  { name: 'MOONSHOT_Company_ID',     category: 'AI Provider' },
   { name: 'TELEGRAM_BOT_TOKEN',   category: 'Telegram'    },
   { name: 'TELEGRAM_CHAT_ID',     category: 'Telegram'    },
   { name: 'JHT_HOME',             category: 'Sistema'     },

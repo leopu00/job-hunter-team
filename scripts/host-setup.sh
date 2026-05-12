@@ -76,22 +76,27 @@ printf "Rilevato: %b\n" "$DETECTED_LABEL"
 
 # ── Conferma utente ──────────────────────────────────────────────────────
 # Bash read; se stdin non e' TTY (es. curl|bash) usa il default detected.
+# Niente finta-checkbox `[V]`/`[ ]`: era ambigua (sembrava interattiva).
+# Il default va tra parentesi quadre nel prompt, premere Invio lo accetta.
 HOST_TYPE="$DETECTED"
 if [ -t 0 ]; then
-  printf "\n%s\n" "Dove stai eseguendo JHT?"
   if [ "$DETECTED" = "vps" ]; then
-    printf "  [%b] 1) Server remoto / VPS    (rilevato)\n" "${BOLD}V${RESET}"
-    printf "  [ ] 2) Computer locale\n"
-    printf "Scelta [1]: "
+    DEFAULT_NUM=2
   else
-    printf "  [ ] 1) Server remoto / VPS\n"
-    printf "  [%b] 2) Computer locale       (rilevato)\n" "${BOLD}V${RESET}"
-    printf "Scelta [2]: "
+    DEFAULT_NUM=1
   fi
+  printf "\n%s\n\n" "Dove stai eseguendo JHT?"
+  printf "  1) ${BOLD}Computer locale${RESET}\n"
+  printf "     ${DIM}Stai usando JHT sul tuo PC, accessibile solo da te in rete locale.${RESET}\n"
+  printf "     ${DIM}La dashboard web si apre automaticamente.${RESET}\n\n"
+  printf "  2) ${BOLD}Server remoto / VPS${RESET}\n"
+  printf "     ${DIM}JHT gira su un server cloud raggiungibile via IP pubblico.${RESET}\n"
+  printf "     ${DIM}Servono passi extra per esporre la dashboard in sicurezza.${RESET}\n\n"
+  printf "Scelta [%d]: " "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
-    1) HOST_TYPE="vps" ;;
-    2) HOST_TYPE="local" ;;
+    1) HOST_TYPE="local" ;;
+    2) HOST_TYPE="vps" ;;
     "") HOST_TYPE="$DETECTED" ;;
     *) warn "Scelta non valida — uso default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
   esac
@@ -136,19 +141,19 @@ fi
 SWAP_SIZE_GB=2
 SWAP_FILE=/swapfile
 
-printf "\n%bConsiglio:%b configurare %dGB di swap.\n" "${YELLOW}" "${RESET}" "$SWAP_SIZE_GB"
-printf "%s\n" "Motivo: con ${RAM_GB} GB RAM e gli 8 agenti del team, picchi puntuali"
-printf "%s\n" "possono superare la RAM. Senza swap, il kernel killa i processi (OOM)"
-printf "%s\n" "fermando il team. La swap previene questo (anche se piu' lenta della RAM)."
+# Versione sintetica: 1 riga di motivo (era 4 — l'utente accetta sempre).
+printf "\n${DIM}Con %d GB di RAM il team puo' andare in OOM sotto carico.${RESET}\n" "$RAM_GB"
+printf "Configuro %d GB di swap in %s? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
 
 DO_SWAP=1
 if [ -t 0 ]; then
-  printf "\nConfigurare %dGB swap (%s)? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
   read -r ANSWER
   case "$ANSWER" in
     n|N|no|NO) DO_SWAP=0 ;;
     *)         DO_SWAP=1 ;;
   esac
+else
+  printf "${DIM}(stdin non interattivo, applico default Y)${RESET}\n"
 fi
 
 if [ "$DO_SWAP" = "0" ]; then

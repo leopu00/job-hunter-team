@@ -1,4 +1,4 @@
-export type ProviderName = 'claude' | 'openai' | 'minimax'
+export type ProviderName = 'claude' | 'openai' | 'kimi'
 export type AuthMethod = 'api_key' | 'subscription'
 
 export interface ModelOption {
@@ -45,14 +45,14 @@ export const PROVIDERS: ProviderDef[] = [
     ],
   },
   {
-    value: 'minimax',
-    label: 'MiniMax',
+    value: 'kimi',
+    label: 'Kimi',
     hint: 'alternativa economica',
     keyPrefix: '',
     keyPlaceholder: 'eyJ...',
     authMethods: ['api_key', 'subscription'],
     models: [
-      { value: 'minimax-01', label: 'MiniMax-01',  hint: 'modello principale' },
+      { value: 'kimi-k2-0905-preview', label: 'Kimi-01',  hint: 'modello principale' },
       { value: 'abab6.5s',   label: 'ABAB 6.5s',   hint: 'economico' },
     ],
   },

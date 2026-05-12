@@ -11,13 +11,14 @@ import { LandingFooter } from './LandingCTA'
 type Props = {
   wantsLogin: boolean
   authError: boolean
+  returnTo: string | null
 }
 
-export default function LandingClient({ wantsLogin, authError }: Props) {
+export default function LandingClient({ wantsLogin, authError, returnTo }: Props) {
   return (
     <LandingI18nProvider>
       {wantsLogin ? (
-        <LoginCompany authError={authError} />
+        <LoginCompany authError={authError} returnTo={returnTo} />
       ) : (
         <>
           <main style={{ position: 'relative', zIndex: 1 }}>
@@ -31,7 +32,17 @@ export default function LandingClient({ wantsLogin, authError }: Props) {
   )
 }
 
-function LoginCompany({ authError }: { authError: boolean }) {
+// Costruisce l'URL di callback OAuth includendo `next` quando c'e'
+// un returnTo da preservare. `web/app/auth/callback/route.ts` legge
+// `next` e fa il redirect finale verso la pagina originale (es.
+// /cli-link?code=ABCD-1234) invece del default /dashboard.
+function buildCallbackUrl(base: string, returnTo: string | null): string {
+  const callback = new URL('/auth/callback', base)
+  if (returnTo) callback.searchParams.set('next', returnTo)
+  return callback.toString()
+}
+
+function LoginCompany({ authError, returnTo }: { authError: boolean; returnTo: string | null }) {
   const [configError, setConfigError] = useState(false)
 
   const handleGoogleLogin = async () => {
@@ -42,7 +53,7 @@ function LoginCompany({ authError }: { authError: boolean }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${redirectBase}/auth/callback`,
+        redirectTo: buildCallbackUrl(redirectBase, returnTo),
         queryParams: { prompt: 'select_account' },
       },
     })
@@ -58,7 +69,7 @@ function LoginCompany({ authError }: { authError: boolean }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
-        redirectTo: `${redirectBase}/auth/callback`,
+        redirectTo: buildCallbackUrl(redirectBase, returnTo),
       },
     })
 

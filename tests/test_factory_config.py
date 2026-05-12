@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
     ("gpt", "openai"),
     ("gpt4", "openai"),
     ("chatgpt", "openai"),
-    ("minimax", "minimax"),
-    ("abab", "minimax"),
+    ("kimi", "kimi"),
+    ("abab", "kimi"),
 ])
 def test_normalize_alias(alias, expected):
     from shared.llm.factory import normalize_provider_id
@@ -37,7 +37,7 @@ def test_normalize_case_insensitive():
     from shared.llm.factory import normalize_provider_id
     assert normalize_provider_id("CLAUDE") == "claude"
     assert normalize_provider_id("OpenAI") == "openai"
-    assert normalize_provider_id("MiniMax") == "minimax"
+    assert normalize_provider_id("Kimi") == "kimi"
 
 
 def test_normalize_strips_whitespace():
@@ -60,7 +60,7 @@ def test_read_config_provider_from_file():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "jht.config.json"
-        config_path.write_text(json.dumps({"active_provider": "minimax"}))
+        config_path.write_text(json.dumps({"active_provider": "kimi"}))
 
         with patch("shared.llm.factory.os.path.isfile", side_effect=lambda p: p == str(config_path)):
             with patch("builtins.open", side_effect=lambda p, *a, **kw: open(config_path, *a, **kw)):
@@ -100,10 +100,10 @@ def test_default_provider_env_takes_priority_over_config():
     """JHT_LLM_PROVIDER env ha precedenza sul config file."""
     from shared.llm.factory import get_default_provider
 
-    with patch.dict(os.environ, {"JHT_LLM_PROVIDER": "minimax", "MINIMAX_API_KEY": "test"}):
+    with patch.dict(os.environ, {"JHT_LLM_PROVIDER": "kimi", "MOONSHOT_API_KEY": "test"}):
         with patch("shared.llm.factory._read_config_provider", return_value="openai"):
             provider = get_default_provider()
-            assert provider.provider_id == "minimax"
+            assert provider.provider_id == "kimi"
 
 
 def test_default_provider_config_used_when_no_env():
@@ -112,10 +112,10 @@ def test_default_provider_config_used_when_no_env():
 
     env_without_provider = {k: v for k, v in os.environ.items() if k != "JHT_LLM_PROVIDER"}
     with patch.dict(os.environ, env_without_provider, clear=True):
-        with patch("shared.llm.factory._read_config_provider", return_value="minimax"):
-            with patch.dict(os.environ, {"MINIMAX_API_KEY": "test"}):
+        with patch("shared.llm.factory._read_config_provider", return_value="kimi"):
+            with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test"}):
                 provider = get_default_provider()
-                assert provider.provider_id == "minimax"
+                assert provider.provider_id == "kimi"
 
 
 def test_default_provider_fallback_to_claude_when_no_env_no_config():
@@ -154,14 +154,14 @@ def test_get_provider_returns_correct_type_openai():
         assert provider.provider_id == "openai"
 
 
-def test_get_provider_returns_correct_type_minimax():
+def test_get_provider_returns_correct_type_kimi():
     from shared.llm.factory import get_provider
-    from shared.llm.providers.minimax_provider import MinimaxProvider
+    from shared.llm.providers.kimi_provider import KimiProvider
 
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}):
-        provider = get_provider("minimax")
-        assert isinstance(provider, MinimaxProvider)
-        assert provider.provider_id == "minimax"
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}):
+        provider = get_provider("kimi")
+        assert isinstance(provider, KimiProvider)
+        assert provider.provider_id == "kimi"
 
 
 # ── API KEY STORAGE — SOLO VARIABILI D'AMBIENTE ──────────────────────────────

@@ -14,8 +14,8 @@
       "api_key": "sk-xxxxx",
       "model": "gpt-4o"
     },
-    "minimax": {
-      "name": "minimax",
+    "kimi": {
+      "name": "kimi",
       "auth_method": "subscription",
       "subscription": {
         "email": "user@example.com"

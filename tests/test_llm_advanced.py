@@ -73,10 +73,10 @@ def test_get_default_model_openai():
             assert "gpt" in p.get_default_model()
 
 
-def test_get_default_model_minimax():
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key"}):
-        from shared.llm.providers.minimax_provider import MinimaxProvider
-        p = MinimaxProvider()
+def test_get_default_model_kimi():
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}):
+        from shared.llm.providers.kimi_provider import KimiProvider
+        p = KimiProvider()
         assert "abab" in p.get_default_model()
 
 
@@ -183,26 +183,26 @@ def test_openai_list_models():
     assert any(m.id == "gpt-4o" for m in models)
 
 
-# ── MINIMAX — error wrapping API ────────────────────────────────
+# ── KIMI — error wrapping API ────────────────────────────────
 
 
-def test_minimax_complete_http_error():
-    from shared.llm.providers.minimax_provider import MinimaxProvider
+def test_kimi_complete_http_error():
+    from shared.llm.providers.kimi_provider import KimiProvider
     import requests
 
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test"}):
-        with patch("shared.llm.providers.minimax_provider.requests.post",
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test"}):
+        with patch("shared.llm.providers.kimi_provider.requests.post",
                     side_effect=requests.ConnectionError("DNS resolve failed")):
-            p = MinimaxProvider()
+            p = KimiProvider()
             with pytest.raises(ProviderError, match="DNS resolve failed"):
                 p.complete("test")
 
 
-def test_minimax_list_models():
-    from shared.llm.providers.minimax_provider import MinimaxProvider
+def test_kimi_list_models():
+    from shared.llm.providers.kimi_provider import KimiProvider
 
-    with patch.dict(os.environ, {"MINIMAX_API_KEY": "test"}):
-        p = MinimaxProvider()
+    with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test"}):
+        p = KimiProvider()
         models = p.list_models()
     assert len(models) == 2
     assert any(m.id == "abab6.5-chat" for m in models)

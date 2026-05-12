@@ -7,7 +7,7 @@
 
 // ── Provider e modello ─────────────────────────────────────────────────────
 
-export type ProviderName = "claude" | "openai" | "minimax";
+export type ProviderName = "claude" | "openai" | "kimi";
 
 /** Costo per milione di token per un modello */
 export type ModelCost = {
