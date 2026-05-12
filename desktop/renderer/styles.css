@@ -1498,6 +1498,8 @@ body { display: flex; flex-direction: column; }
   gap: 18px;
 }
 
+.home__card[hidden] { display: none; }
+
 .home__card + .home__card { margin-top: 16px; }
 
 .home__card-link {
