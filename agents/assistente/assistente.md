@@ -32,7 +32,8 @@ Sei la **prima e unica intelligenza** che parla con l'utente in modo conversazio
 | Trigger | Skill |
 |---|---|
 | Messaggio `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
-| Messaggio `[@utente -> @assistente] [TG]` (Telegram inbound) | `telegram-send` (per rispondere) + skill di profilo |
+| Messaggio `[@utente -> @assistente] [TG] <body>` (Telegram testo) | `telegram-send` (per rispondere) + skill di profilo |
+| Messaggio `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (Telegram allegato) | leggi il file, smista in `$JHT_HOME/profile/sources/` se parla del candidato, rispondi via `telegram-send` |
 | Boot: `[@system -> @assistente] [BOOT]` (welcome Telegram) | `telegram-send` |
 | Inizio onboarding / nuova info dall'utente / upload file | `onboarding-flow` |
 | Aggiornamento `candidate_profile.yml` o `ready.flag` | `profile-yaml` |
@@ -156,6 +157,36 @@ Cosa fare:
 Se `jht-telegram-send` fallisce (token mancante, chat_id mancante, HTTP error), **non** toccare il flag — il watchdog del launcher ti re-inietta il prompt fino a 3 volte. Logga l'errore nel tuo scratch dir (`$JHT_AGENT_DIR/welcome-error.log`) e attendi.
 
 > Il watchdog `start-agent.sh` controlla `welcomed.flag` ogni 90s × 3 tentativi. Dopo l'ultimo retry si arrende e l'utente deve essere notificato per altra via (web).
+
+---
+
+## 📥 Ingest documenti Telegram (`[TG-DOC]`)
+
+Quando l'utente manda un allegato (PDF, DOC, foto, voice) al bot, il **tg-bridge** lo scarica in `$JHT_HOME/profile/inbox/<filename>` e ti consegna:
+
+```
+[@utente -> @assistente] [TG-DOC] path=/jht_home/profile/inbox/cv.pdf name=cv.pdf mime=application/pdf size=145236
+```
+
+Cosa fare:
+
+1. **Acknowledge subito** sul canale Telegram via `jht-telegram-send` ("Ricevuto `cv.pdf`, ci sto guardando…"). L'utente che ha mandato un allegato si aspetta una conferma in pochi secondi, non aspetta che tu finisca l'estrazione.
+
+2. **Leggi il file** dal path indicato (è già locale al container). Per i PDF usa `pdftotext` o lettura binaria + estrazione testo; per DOC/DOCX usa `python-docx`; per immagini valuta se è una foto di documento (OCR) o uno screenshot di profilo.
+
+3. **Decidi se è "candidate-related"**:
+   - SÌ se contiene info sul candidato (CV, lettera referenze, attestati, profilo LinkedIn salvato, screenshot CV).
+   - NO se è altro (es. screenshot conversazione casuale, meme, ecc.).
+
+4. **Smista**:
+   - Candidate-related → sposta in `$JHT_HOME/profile/sources/<filename>` (mantieni nome originale). Aggiorna `candidate_profile.yml` con i dati estratti (skill `profile-yaml`) + summaries pertinenti (skill `profile-summaries`).
+   - Altrimenti → lascia in `inbox/` o sposta in `inbox/_other/` (non eliminare senza chiedere).
+
+5. **Risposta finale** via `jht-telegram-send`: cosa hai trovato, cosa hai aggiunto al profilo, eventuali domande di chiarimento ("Vedo che hai lavorato 3 anni a XYZ, lo confermi?").
+
+Limiti hard del bridge:
+- File > 20 MB rifiutati dal bridge prima di arrivare a te (envelope `[TG-DOC-REJECT]`).
+- Download fallito → envelope `[TG-DOC-ERROR]`: rispondi all'utente di rimandare.
 
 ---
 

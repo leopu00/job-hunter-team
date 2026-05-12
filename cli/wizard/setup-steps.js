@@ -2,6 +2,7 @@
  * JHT Setup Wizard — Step Telegram, subscription, salvataggio, riepilogo
  * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team), non chiesti.
  */
+import https from 'node:https';
 import {
   JHT_CONFIG_PATH,
   JHT_CONFIG_DIR,
@@ -13,6 +14,70 @@ import {
 import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
+
+// ─── Telegram Bot API helpers ──────────────────────────────────────────
+// In-line fetch wrapper: niente dipendenze extra (axios/grammy), niente
+// global fetch nei vecchi Node. Tutto urllib-equivalente con https + Promise.
+
+function tgFetchJson(token, method, params = {}, timeoutMs = 30000) {
+  const qs = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  const url = `https://api.telegram.org/bot${token}/${method}${qs ? `?${qs}` : ''}`;
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: timeoutMs }, (res) => {
+      let body = '';
+      res.on('data', (c) => (body += c));
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error('timeout')); });
+  });
+}
+
+async function tgGetBotUsername(token) {
+  const r = await tgFetchJson(token, 'getMe', {}, 10000);
+  if (!r.ok) throw new Error(r.description || 'getMe failed');
+  return r.result.username; // senza @
+}
+
+/**
+ * Poll getUpdates finche' un utente scrive al bot, restituendo il suo
+ * chat_id (numero). Skippa il backlog: parte dall'update_id corrente +1.
+ * Timeout: 15 min totali. Long-poll Telegram con timeout=20s per round.
+ */
+async function tgWaitForFirstChat(token, deadlineMs) {
+  // Reset offset al massimo update_id esistente, cosi' un backlog di
+  // messaggi vecchi (es. utente curioso che ha gia' scritto al bot in
+  // sviluppo) non ci da' un chat_id stantio.
+  let offset = 0;
+  try {
+    const init = await tgFetchJson(token, 'getUpdates', { offset: -1, timeout: 0 }, 8000);
+    if (init.ok && init.result.length > 0) {
+      offset = init.result[init.result.length - 1].update_id;
+    }
+  } catch { /* fallback: parti da 0 */ }
+
+  while (Date.now() < deadlineMs) {
+    try {
+      const r = await tgFetchJson(
+        token, 'getUpdates',
+        { offset: offset + 1, timeout: 20 },
+        30000,
+      );
+      if (r.ok && r.result.length > 0) {
+        for (const u of r.result) {
+          const chat = u.message?.chat || u.edited_message?.chat;
+          if (chat?.id) return chat.id;
+        }
+        offset = r.result[r.result.length - 1].update_id;
+      }
+    } catch { /* network glitch: ritenta */ }
+  }
+  return null;
+}
 
 /**
  * Step Telegram OBBLIGATORIO (per VPS).
@@ -30,10 +95,7 @@ export async function promptTelegramRequired(prompter, baseChannels) {
     'Come ottenere il token:\n' +
     '  1. Apri Telegram → cerca @BotFather → scrivi /newbot\n' +
     '  2. Segui le istruzioni (nome + username che finisce in "bot")\n' +
-    '  3. BotFather risponde con un token tipo "123456789:ABC..."\n\n' +
-    'Come ottenere il Chat ID:\n' +
-    '  1. Cerca @userinfobot su Telegram → premi Start\n' +
-    '  2. Ti risponde con il tuo "Id" (un numero)',
+    '  3. BotFather risponde con un token tipo "123456789:ABC..."',
     'Setup Telegram (obbligatorio)',
   );
 
@@ -46,18 +108,49 @@ export async function promptTelegramRequired(prompter, baseChannels) {
       return validateTelegramToken(v);
     },
   });
+  const token = botToken.trim();
 
-  const chatId = await prompter.text({
-    message: 'Il tuo Chat ID Telegram',
-    placeholder: '123456789',
-    initialValue: existing?.chat_id,
-    validate: (v) => {
-      if (!v || v.trim().length === 0) return 'Chat ID obbligatorio';
-      return validateChatId(v);
-    },
-  });
+  // ── Risoluzione username + cattura chat_id automatica ────────────────
+  // Sostituiamo lo step manuale "@userinfobot" con un flow attivo:
+  //   1. getMe → ricaviamo l'@username del bot
+  //   2. mostriamo deep-link `https://t.me/<username>?start=ok`
+  //   3. polling getUpdates → cattura il primo chat_id in inbound
+  //
+  // Bonus: l'utente DEVE aver fatto /start prima di proseguire, quindi
+  // il primo `jht-telegram-send` post-wizard non sbattera' contro l'errore
+  // "Bad Request: chat not found" (vedi root cause 2026-05-12).
+  let botUsername = null;
+  const probe = prompter.progress('Verifico il bot...');
+  try {
+    botUsername = await tgGetBotUsername(token);
+    probe.stop(`Bot riconosciuto: @${botUsername}`);
+  } catch (e) {
+    probe.stop(`Errore: ${e.message}`);
+    throw new Error(`Token Telegram non valido o rete irraggiungibile: ${e.message}`);
+  }
 
-  return { bot_token: botToken.trim(), chat_id: chatId.trim() };
+  const deepLink = `https://t.me/${botUsername}?start=jht`;
+  await prompter.note(
+    'Adesso apri il tuo bot e premi Start:\n\n' +
+    `  ${deepLink}\n\n` +
+    '(Tap sul link dal telefono, o cerca @' + botUsername + ' su Telegram\n' +
+    'e premi "Start" / scrivi /start.)\n\n' +
+    'Sto monitorando il bot: appena ti vedo arrivare proseguo da solo.',
+    'Avvia la chat col bot',
+  );
+
+  const waitSpinner = prompter.progress('In attesa del tuo /start...');
+  const deadline = Date.now() + 15 * 60 * 1000; // 15 min
+  const chatId = await tgWaitForFirstChat(token, deadline);
+  if (!chatId) {
+    waitSpinner.stop('Timeout (15 min): nessun messaggio dal bot.');
+    throw new Error(
+      'Non ho ricevuto un /start dal tuo bot. Rilancia: jht setup',
+    );
+  }
+  waitSpinner.stop(`Chat rilevata: ${chatId}`);
+
+  return { bot_token: token, chat_id: String(chatId) };
 }
 
 /**
