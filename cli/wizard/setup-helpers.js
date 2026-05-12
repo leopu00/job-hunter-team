@@ -37,7 +37,7 @@ export const AI_PROVIDERS = [
   },
   {
     value: 'kimi',
-    label: 'Moonshot',
+    label: 'Kimi',
     keyPrefix: 'sk-',
     keyPlaceholder: 'sk-...',
     docsUrl: 'https://platform.moonshot.ai',
