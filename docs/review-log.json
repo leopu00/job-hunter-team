@@ -372,7 +372,7 @@
     },
     {
       "path": "agents/dottore/dottore.md",
-      "description": "",
+      "description": "🩺 Dottore — health-check + manutenzione one-shot (~30 min, watchdog)",
       "last_review": null
     },
     {
@@ -418,6 +418,81 @@
     {
       "path": "docs/sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md",
       "description": "",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/application-flow/SKILL.md",
+      "description": "Gates DB Scrittore (anti-rewriting + claim) + path $JHT_USER_DIR + housekeeping",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/bridge-mailbox/SKILL.md",
+      "description": "Drain mailbox bridge a inizio turno (recupera tick persi via tmux rc=3)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/bridge-pacing/SKILL.md",
+      "description": "Formula calibrazione throttle 15-min: durata = (f/100)·60/c con esempi",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/cache-prune/SKILL.md",
+      "description": "Reclaim cache uv + codex sqlite ~24h (Dottore-only, manutenzione)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/chat-web/SKILL.md",
+      "description": "Risposta utente da web UI via jht-send + --partial (Capitano + Assistente)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/critic-loop/SKILL.md",
+      "description": "3 round Critico autonomi provider-aware (Scrittore-only)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/cv-structure/SKILL.md",
+      "description": "6 sezioni CV canoniche, verbi action, tono per company type",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/liveness-check/SKILL.md",
+      "description": "Diagnosi 10 pattern + respawn con contesto (zombie detection per Dottore)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/onboarding-flow/SKILL.md",
+      "description": "Protocollo conversazionale onboarding + checklist blocco/ricca + upload file",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/pipeline-triage/SKILL.md",
+      "description": "Scaling data-driven via db_query stats — chi spawnare/spegnere",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/profile-summaries/SKILL.md",
+      "description": "I 4 MD discorsivi about/preferences/goals/strengths in prima persona",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/profile-yaml/SKILL.md",
+      "description": "Gestione candidate_profile.yml live + validazione + ready.flag",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/py-tools-audit/SKILL.md",
+      "description": "Audit ~weekly pacchetti Python in 2 round Dottore con state file",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/sentinel-orders/SKILL.md",
+      "description": "Tabella throttle 0-4 + tutti i tipi ordine Sentinella + warning timeout N+30",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/spawn-agent/SKILL.md",
+      "description": "Spawn agente via start-agent.sh + kick-off + verifica boot (Capitano-only)",
       "last_review": null
     }
   ]
