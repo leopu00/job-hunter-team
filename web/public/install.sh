@@ -142,10 +142,10 @@ header() {
   printf "${BOLD}╚══════════════════════════════════════════╝${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${DIM}mode:   ${RESET}${BOLD}Docker (isolato)${RESET}\n"
-    printf "  ${DIM}image:  %s${RESET}\n" "$IMAGE"
-    printf "  ${DIM}branch: %s${RESET}\n" "$BRANCH"
-    printf "  ${DIM}runtime:%s${RESET}\n" "$RUNTIME_DIR"
+    printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolato)${RESET}\n"
+    printf "  ${DIM}image:   %s${RESET}\n" "$IMAGE"
+    printf "  ${DIM}branch:  %s${RESET}\n" "$BRANCH"
+    printf "  ${DIM}runtime: %s${RESET}\n" "$RUNTIME_DIR"
   else
     printf "  ${DIM}mode:   ${RESET}${YELLOW}nativo (expert mode, --no-docker)${RESET}\n"
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
@@ -303,8 +303,10 @@ install_docker_linux() {
   if [ "$OS" = "wsl" ]; then
     run sudo_maybe service docker start 2>/dev/null || true
   fi
-  # Aggiungi utente al gruppo docker per evitare sudo (richiede logout)
-  if ! groups 2>/dev/null | grep -q '\bdocker\b'; then
+  # Aggiungi utente al gruppo docker per evitare sudo (richiede logout).
+  # Salto per root: root usa docker senza re-login e il warning sarebbe
+  # solo rumore. Comune su VPS dove l'install gira come root.
+  if [ "$(id -u)" -ne 0 ] && ! groups 2>/dev/null | grep -q '\bdocker\b'; then
     run sudo_maybe usermod -aG docker "$USER" 2>/dev/null || true
     warn "Sei stato aggiunto al gruppo 'docker'. Esci e rientra (o 'newgrp docker') per usarlo senza sudo."
   fi
@@ -679,6 +681,19 @@ link_bin_native() {
 }
 
 # ── Finale ────────────────────────────────────────────────────────────────
+
+# Vero se maybe_onboard() puo' lanciare il wizard subito (TTY disponibile
+# direttamente o riapribile da /dev/tty). Usato da final_message per
+# decidere se stampare "Prossimi passi: jht setup" (sarebbe rumore se il
+# wizard sta per partire da solo nelle prossime righe).
+will_auto_onboard() {
+  [ "$DRY_RUN" -eq 1 ] && return 1
+  [ "${JHT_SKIP_ONBOARD:-0}" = "1" ] && return 1
+  [ -t 0 ] && return 0
+  [ -r /dev/tty ] && return 0
+  return 1
+}
+
 final_message() {
   printf "\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
@@ -701,32 +716,39 @@ final_message() {
     printf "  ${DIM}  ~/Documents/Job Hunter Team/  → CV, allegati, output${RESET}\n"
     printf "\n"
   fi
-  printf "  ${BOLD}Prossimi passi:${RESET}\n"
-  printf "\n"
-  if [ "${PATH_READY:-0}" -eq 1 ]; then
-    if [ "$USE_DOCKER" -eq 1 ]; then
-      printf "      ${BOLD}jht up${RESET}           ${DIM}# avvia il container (pull immagine al primo run)${RESET}\n"
-      printf "      ${BOLD}jht setup${RESET}        ${DIM}# wizard di configurazione${RESET}\n"
+
+  # Mostra "Prossimi passi" solo quando il wizard NON parte da solo
+  # (es. CI senza TTY, JHT_SKIP_ONBOARD=1). Quando parte, il wizard
+  # prende il sopravvento subito sotto e queste righe sarebbero noise.
+  if ! will_auto_onboard; then
+    printf "  ${BOLD}Prossimi passi:${RESET}\n"
+    printf "\n"
+    if [ "${PATH_READY:-0}" -eq 1 ]; then
+      if [ "$USE_DOCKER" -eq 1 ]; then
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# wizard di configurazione (avvia anche il container)${RESET}\n"
+      else
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
+        printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
+      fi
     else
-      printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
-      printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
+      if [ "$USE_DOCKER" -eq 1 ]; then
+        printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
+      else
+        printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
+        printf "      ${BOLD}%s/jht dashboard${RESET}\n" "$BIN_DIR"
+      fi
     fi
-  else
-    if [ "$USE_DOCKER" -eq 1 ]; then
-      printf "      ${BOLD}%s/jht up${RESET}\n" "$BIN_DIR"
-      printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
-    else
-      printf "      ${BOLD}%s/jht setup${RESET}\n" "$BIN_DIR"
-      printf "      ${BOLD}%s/jht dashboard${RESET}\n" "$BIN_DIR"
-    fi
+    printf "\n"
   fi
-  printf "\n"
-  printf "  ${DIM}Per disinstallare:${RESET}\n"
+
+  printf "  ${DIM}Per disinstallare (mantiene i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team):${RESET}\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
+  printf "  ${DIM}Per cancellare anche dati (config, db, CV, output):${RESET}\n"
+  printf "  ${DIM}  rm -rf %s/.jht \"%s/Documents/Job Hunter Team\"${RESET}\n" "$HOME" "$HOME"
   printf "\n"
 }
 
@@ -738,20 +760,29 @@ maybe_onboard() {
   if [ "${JHT_SKIP_ONBOARD:-0}" = "1" ]; then
     return 0
   fi
-  if [ ! -t 0 ] || [ ! -t 1 ]; then
-    info "Stdin/stdout non e' un terminale interattivo: salto il wizard."
-    info "Esegui manualmente: jht"
-    return 0
+
+  # `curl | bash` connette stdin al pipe, quindi `-t 0` e' falso e
+  # `read` non puo' parlare con l'utente. Riapriamo stdin dal
+  # terminale controllante (/dev/tty) cosi' il wizard puo' leggere
+  # input: pattern di rustup, nvm, oh-my-zsh.
+  # Senza questo escape hatch, dopo `curl | bash` l'installer
+  # stampava "Stdin non e' un terminale interattivo: salto il
+  # wizard" e l'utente doveva ricordarsi di rilanciare `jht setup`.
+  if [ ! -t 0 ]; then
+    if [ -r /dev/tty ]; then
+      exec </dev/tty
+    else
+      info "Nessun terminale interattivo (no /dev/tty): salto il wizard."
+      info "Esegui manualmente: jht setup"
+      return 0
+    fi
   fi
-  printf "\n${BOLD}Vuoi avviare il setup wizard adesso? [Y/n]${RESET} "
-  read -r answer || answer=""
-  case "$answer" in
-    n|N|no|NO) info "Wizard saltato. Esegui 'jht setup' quando sei pronto." ;;
-    *)
-      export PATH="$BIN_DIR:$PATH"
-      jht setup || warn "Il wizard e' uscito con errore. Rilancialo con 'jht setup'."
-      ;;
-  esac
+
+  # Niente prompt "Vuoi avviare il setup?": al primo run e' sempre la
+  # prossima azione corretta. Chi vuole skippare usa JHT_SKIP_ONBOARD=1.
+  export PATH="$BIN_DIR:$PATH"
+  printf "\n"
+  jht setup || warn "Il wizard e' uscito con errore. Rilancialo con 'jht setup'."
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────
