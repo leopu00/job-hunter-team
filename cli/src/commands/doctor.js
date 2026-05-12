@@ -15,8 +15,11 @@ async function fileExists(p) {
   try { await access(p); return true } catch { return false }
 }
 
+const VERSION_FLAGS = { tmux: '-V' }
+
 function cmdVersion(cmd) {
-  try { return execSync(`${cmd} --version 2>/dev/null`, { encoding: 'utf-8', stdio: 'pipe' }).trim().split('\n')[0] }
+  const flag = VERSION_FLAGS[cmd] ?? '--version'
+  try { return execSync(`${cmd} ${flag} 2>/dev/null`, { encoding: 'utf-8', stdio: 'pipe' }).trim().split('\n')[0] }
   catch { return null }
 }
 
