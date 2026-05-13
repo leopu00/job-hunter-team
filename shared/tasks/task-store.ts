@@ -64,7 +64,10 @@ export function hasStoredTasks(): boolean {
   return existsSync(storeFilePath);
 }
 
-export function saveTasksToPath(filePath: string, tasks: TaskRecord[]): boolean {
+export function saveTasksToPath(
+  filePath: string,
+  tasks: TaskRecord[],
+): boolean {
   const snapshot: TaskStoreSnapshot = {
     version: 1,
     updatedAt: Date.now(),

@@ -1,35 +1,35 @@
-import type { Metadata } from 'next'
-import { headers } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { isSupabaseConfigured } from '@/lib/workspace'
-import { readWorkspaceProfile, isProfileComplete } from '@/lib/profile-reader'
-import { isLocalRequestFromHeaders } from '@/lib/auth'
-import Navbar from '@/components/NavbarChrome'
-import MainChrome from '@/components/MainChrome'
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/workspace";
+import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
+import { isLocalRequestFromHeaders } from "@/lib/auth";
+import Navbar from "@/components/NavbarChrome";
+import MainChrome from "@/components/MainChrome";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
-}
+};
 
 export default async function ProtectedLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const hdrs = await headers()
-  const localRequest = isLocalRequestFromHeaders(hdrs)
-  const pathname = hdrs.get('x-pathname') ?? ''
-  const search = hdrs.get('x-search') ?? ''
+  const hdrs = await headers();
+  const localRequest = isLocalRequestFromHeaders(hdrs);
+  const pathname = hdrs.get("x-pathname") ?? "";
+  const search = hdrs.get("x-search") ?? "";
 
   // Onboarding gate: finché il profilo locale non è completo l'utente
   // può stare solo su /onboarding. Qualsiasi altra route del gruppo
   // protetto lo rispedisce indietro, così non può saltare il setup
   // cambiando l'URL a mano. Il check gira solo in local mode, dove
   // readWorkspaceProfile() ha senso (in cloud il profilo è su Supabase).
-  if (localRequest && pathname && !pathname.startsWith('/onboarding')) {
+  if (localRequest && pathname && !pathname.startsWith("/onboarding")) {
     if (!isProfileComplete(readWorkspaceProfile())) {
-      redirect('/onboarding')
+      redirect("/onboarding");
     }
   }
 
@@ -38,22 +38,24 @@ export default async function ProtectedLayout({
   // web app has Supabase credentials baked in, since /dashboard is
   // opened directly from the JHT Desktop launcher.
   if (isSupabaseConfigured && !localRequest) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       // Preserva l'URL originale (path + query) come `returnTo` per
       // far ripartire la pagina target dopo il login OAuth. Senza
       // questo, deep-link come `/cli-link?code=ABCD-1234` perdono il
       // codice e l'utente atterra sulla landing senza modale login.
-      const returnTo = pathname ? pathname + search : ''
-      if (returnTo && returnTo !== '/') {
-        redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`)
+      const returnTo = pathname ? pathname + search : "";
+      if (returnTo && returnTo !== "/") {
+        redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`);
       }
-      redirect('/?login=true')
+      redirect("/?login=true");
     }
 
     return (
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar user={user} />
         <div className="flex items-stretch">
           <div className="flex-1 min-w-0">
@@ -66,12 +68,12 @@ export default async function ProtectedLayout({
           <div id="protected-side-panel" className="contents" />
         </div>
       </div>
-    )
+    );
   }
 
   // Local mode OR localhost request with cloud config: no auth.
   return (
-    <div style={{ position: 'relative', zIndex: 1 }}>
+    <div style={{ position: "relative", zIndex: 1 }}>
       <Navbar user={null} />
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
@@ -80,5 +82,5 @@ export default async function ProtectedLayout({
         <div id="protected-side-panel" className="contents" />
       </div>
     </div>
-  )
+  );
 }

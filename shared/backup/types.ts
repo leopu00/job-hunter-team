@@ -45,7 +45,7 @@ export interface BackupConfig {
 }
 
 export const DEFAULT_BACKUP_CONFIG: BackupConfig = {
-  backupDir: '',  // risolto a runtime (~/.jht/backups)
+  backupDir: "", // risolto a runtime (~/.jht/backups)
   sources: [],
   retention: { maxCount: 10, maxAgeDays: 30 },
   compress: true,

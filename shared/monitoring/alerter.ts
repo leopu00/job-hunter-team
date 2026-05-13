@@ -1,7 +1,7 @@
 /**
  * Monitoring — Alerter: soglie, valutazione, alert attivi
  */
-import type { AlertThreshold, AlertEvent, SystemMetrics } from './types.js';
+import type { AlertThreshold, AlertEvent, SystemMetrics } from "./types.js";
 
 const thresholds = new Map<string, AlertThreshold>();
 const activeAlerts = new Map<string, AlertEvent>();
@@ -27,15 +27,18 @@ export function checkThresholds(metrics: SystemMetrics): AlertEvent[] {
   const triggered: AlertEvent[] = [];
 
   for (const t of thresholds.values()) {
-    if (t.metric === 'heartbeat') continue;
+    if (t.metric === "heartbeat") continue;
     const current = metrics[t.metric] as number;
     const fired = evaluate(current, t.operator, t.value);
 
     if (fired) {
       const event: AlertEvent = {
-        thresholdId: t.id, metric: t.metric,
-        currentValue: current, thresholdValue: t.value,
-        operator: t.operator, description: t.description,
+        thresholdId: t.id,
+        metric: t.metric,
+        currentValue: current,
+        thresholdValue: t.value,
+        operator: t.operator,
+        description: t.description,
         triggeredAt: Date.now(),
       };
       activeAlerts.set(t.id, event);
@@ -49,14 +52,20 @@ export function checkThresholds(metrics: SystemMetrics): AlertEvent[] {
 }
 
 /** Valuta alert heartbeat (chiamare con tempo dall'ultimo heartbeat in ms) */
-export function checkHeartbeatAlert(agentId: string, elapsedMs: number): AlertEvent | null {
+export function checkHeartbeatAlert(
+  agentId: string,
+  elapsedMs: number,
+): AlertEvent | null {
   for (const t of thresholds.values()) {
-    if (t.metric !== 'heartbeat') continue;
+    if (t.metric !== "heartbeat") continue;
     if (evaluate(elapsedMs, t.operator, t.value)) {
       const event: AlertEvent = {
-        thresholdId: t.id, metric: `heartbeat:${agentId}`,
-        currentValue: elapsedMs, thresholdValue: t.value,
-        operator: t.operator, description: `${t.description} (${agentId})`,
+        thresholdId: t.id,
+        metric: `heartbeat:${agentId}`,
+        currentValue: elapsedMs,
+        thresholdValue: t.value,
+        operator: t.operator,
+        description: `${t.description} (${agentId})`,
         triggeredAt: Date.now(),
       };
       activeAlerts.set(`${t.id}:${agentId}`, event);
@@ -88,8 +97,8 @@ export function resetAlerter(): void {
 }
 
 function evaluate(current: number, op: string, threshold: number): boolean {
-  if (op === 'gt') return current > threshold;
-  if (op === 'lt') return current < threshold;
-  if (op === 'eq') return current === threshold;
+  if (op === "gt") return current > threshold;
+  if (op === "lt") return current < threshold;
+  if (op === "eq") return current === threshold;
   return false;
 }

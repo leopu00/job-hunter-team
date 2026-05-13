@@ -4,23 +4,42 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  registerHook, unregisterHook, clearAllHooks,
-  hasListeners, getRegisteredEvents, getHandlerCount,
-  triggerHook, createHookEvent, resolveHookEntries, filterEligibleHooks,
+  registerHook,
+  unregisterHook,
+  clearAllHooks,
+  hasListeners,
+  getRegisteredEvents,
+  getHandlerCount,
+  triggerHook,
+  createHookEvent,
+  resolveHookEntries,
+  filterEligibleHooks,
 } from "./registry.js";
 import { HOOK_SOURCE_PRECEDENCE } from "./types.js";
 import type { HookEntry, HookSource } from "./types.js";
 
-function mockEntry(name: string, source: HookSource, enabled = true): HookEntry {
+function mockEntry(
+  name: string,
+  source: HookSource,
+  enabled = true,
+): HookEntry {
   return {
-    hook: { name, description: `Hook ${name}`, source, baseDir: "/tmp", handlerPath: "/tmp/h.js" },
+    hook: {
+      name,
+      description: `Hook ${name}`,
+      source,
+      baseDir: "/tmp",
+      handlerPath: "/tmp/h.js",
+    },
     metadata: { events: ["test:action"] },
     enabled,
   };
 }
 
 describe("Hook Registry", () => {
-  beforeEach(() => { clearAllHooks(); });
+  beforeEach(() => {
+    clearAllHooks();
+  });
 
   it("registerHook e unregisterHook", () => {
     registerHook("command", "h1", async () => {});
@@ -53,7 +72,10 @@ describe("Hook Registry", () => {
   it("getRegisteredEvents elenca tutti gli eventi", () => {
     registerHook("command", "h1", async () => {});
     registerHook("session:start", "h2", async () => {});
-    assert.deepEqual(getRegisteredEvents().sort(), ["command", "session:start"]);
+    assert.deepEqual(getRegisteredEvents().sort(), [
+      "command",
+      "session:start",
+    ]);
   });
 
   it("getHandlerCount conta totale e per evento", () => {
@@ -67,16 +89,24 @@ describe("Hook Registry", () => {
 
   it("triggerHook esegue handler generici e specifici", async () => {
     const calls: string[] = [];
-    registerHook("message", "generic", async () => { calls.push("generic"); });
-    registerHook("message:received", "specific", async () => { calls.push("specific"); });
+    registerHook("message", "generic", async () => {
+      calls.push("generic");
+    });
+    registerHook("message:received", "specific", async () => {
+      calls.push("specific");
+    });
     await triggerHook(createHookEvent("message", "received"));
     assert.deepEqual(calls, ["generic", "specific"]);
   });
 
   it("triggerHook cattura errori senza bloccare", async () => {
     const calls: string[] = [];
-    registerHook("command", "bad", async () => { throw new Error("boom"); });
-    registerHook("command", "good", async () => { calls.push("ok"); });
+    registerHook("command", "bad", async () => {
+      throw new Error("boom");
+    });
+    registerHook("command", "good", async () => {
+      calls.push("ok");
+    });
     await triggerHook(createHookEvent("command", "run"));
     assert.deepEqual(calls, ["ok"]);
   });
@@ -96,9 +126,15 @@ describe("Hook Registry", () => {
 
   it("handler multipli sullo stesso evento", async () => {
     const order: number[] = [];
-    registerHook("command", "first", async () => { order.push(1); });
-    registerHook("command", "second", async () => { order.push(2); });
-    registerHook("command", "third", async () => { order.push(3); });
+    registerHook("command", "first", async () => {
+      order.push(1);
+    });
+    registerHook("command", "second", async () => {
+      order.push(2);
+    });
+    registerHook("command", "third", async () => {
+      order.push(3);
+    });
     await triggerHook(createHookEvent("command", "exec"));
     assert.deepEqual(order, [1, 2, 3]);
   });
@@ -118,7 +154,10 @@ describe("Hook Resolution", () => {
   });
 
   it("filterEligibleHooks filtra per enabled", () => {
-    const entries = [mockEntry("h1", "bundled", true), mockEntry("h2", "bundled", false)];
+    const entries = [
+      mockEntry("h1", "bundled", true),
+      mockEntry("h2", "bundled", false),
+    ];
     assert.equal(filterEligibleHooks(entries).length, 1);
   });
 
@@ -129,7 +168,9 @@ describe("Hook Resolution", () => {
 
   it("filterEligibleHooks rispetta config per-hook disabled", () => {
     const entries = [mockEntry("h1", "bundled"), mockEntry("h2", "bundled")];
-    const eligible = filterEligibleHooks(entries, { entries: { h1: { enabled: false } } });
+    const eligible = filterEligibleHooks(entries, {
+      entries: { h1: { enabled: false } },
+    });
     assert.equal(eligible.length, 1);
     assert.equal(eligible[0].hook.name, "h2");
   });

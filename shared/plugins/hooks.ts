@@ -25,7 +25,9 @@ export class HookRunner {
   }
 
   /** Registra un hook per un plugin */
-  register<K extends PluginHookName>(registration: PluginHookRegistration<K>): void {
+  register<K extends PluginHookName>(
+    registration: PluginHookRegistration<K>,
+  ): void {
     const list = this.hooks.get(registration.hook) ?? [];
     list.push(registration as PluginHookRegistration);
     list.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
@@ -107,7 +109,10 @@ export class HookRunner {
 // ── FACTORY ────────────────────────────────────────────────
 
 /** Crea un HookRunner e registra gli hook da un registry di plugin */
-export function createHookRunner(registry: PluginRegistry, logger?: PluginLogger): HookRunner {
+export function createHookRunner(
+  registry: PluginRegistry,
+  logger?: PluginLogger,
+): HookRunner {
   const runner = new HookRunner(logger);
 
   for (const record of registry.getActive()) {

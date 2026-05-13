@@ -1,6 +1,10 @@
 export default function AgentLoading() {
   return (
-    <div aria-busy="true" aria-label="Loading scout" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div
+      aria-busy="true"
+      aria-label="Loading scout"
+      style={{ animation: "fade-in 0.2s ease both" }}
+    >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-4 w-32 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
         <div className="mt-4 flex items-start gap-5">
@@ -15,12 +19,15 @@ export default function AgentLoading() {
         <div className="h-10 w-28 rounded-lg bg-[var(--color-border)] animate-pulse" />
         <div className="h-10 w-36 rounded-lg bg-[var(--color-border)] animate-pulse" />
       </div>
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4" style={{ height: '40vh' }}>
+      <div
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4"
+        style={{ height: "40vh" }}
+      >
         <div className="h-2.5 w-full rounded bg-[var(--color-border)] mb-3 animate-pulse" />
         <div className="h-2.5 w-3/4 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
         <div className="h-2.5 w-5/6 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
         <div className="h-2.5 w-2/3 rounded bg-[var(--color-border)] animate-pulse" />
       </div>
     </div>
-  )
+  );
 }

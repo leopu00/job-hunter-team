@@ -105,7 +105,12 @@ export type AgentUsage = {
 
 // --- Event ---
 
-export type AgentEventType = "turn_start" | "turn_end" | "tool_call" | "tool_result" | "error";
+export type AgentEventType =
+  | "turn_start"
+  | "turn_end"
+  | "tool_call"
+  | "tool_result"
+  | "error";
 
 export type AgentEvent = {
   type: AgentEventType;

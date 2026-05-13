@@ -78,23 +78,33 @@ describe("hasListeners", () => {
 describe("triggerHook", () => {
   it("esegue handler registrati per tipo", async () => {
     const calls: string[] = [];
-    registerHook("command", "cmd-hook", () => { calls.push("executed"); });
+    registerHook("command", "cmd-hook", () => {
+      calls.push("executed");
+    });
     await triggerHook(createHookEvent("command", "run"));
     assert.deepEqual(calls, ["executed"]);
   });
 
   it("esegue handler generici + specifici in ordine", async () => {
     const order: number[] = [];
-    registerHook("agent", "generic", () => { order.push(1); });
-    registerHook("agent:deploy", "specific", () => { order.push(2); });
+    registerHook("agent", "generic", () => {
+      order.push(1);
+    });
+    registerHook("agent:deploy", "specific", () => {
+      order.push(2);
+    });
     await triggerHook(createHookEvent("agent", "deploy"));
     assert.deepEqual(order, [1, 2]);
   });
 
   it("cattura errori senza bloccare gli altri handler", async () => {
     const results: string[] = [];
-    registerHook("session", "bad", () => { throw new Error("boom"); });
-    registerHook("session", "good", () => { results.push("ok"); });
+    registerHook("session", "bad", () => {
+      throw new Error("boom");
+    });
+    registerHook("session", "good", () => {
+      results.push("ok");
+    });
     await triggerHook(createHookEvent("session", "start"));
     assert.deepEqual(results, ["ok"]);
   });
@@ -169,7 +179,13 @@ describe("filterEligibleHooks", () => {
 
 function makeEntry(name: string, source: HookSource): HookEntry {
   return {
-    hook: { name, description: "", source, baseDir: "/tmp", handlerPath: "/tmp/h.js" },
+    hook: {
+      name,
+      description: "",
+      source,
+      baseDir: "/tmp",
+      handlerPath: "/tmp/h.js",
+    },
     metadata: { events: [`agent:${name}`] },
     enabled: true,
   };

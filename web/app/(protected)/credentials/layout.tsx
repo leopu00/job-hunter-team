@@ -1,9 +1,13 @@
-import type { Metadata } from 'next'
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'Credenziali',
-}
+  title: "Credenziali",
+};
 
-export default function CredentialsLayout({ children }: { children: React.ReactNode }) {
-  return children
+export default function CredentialsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return children;
 }

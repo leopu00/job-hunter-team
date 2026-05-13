@@ -5,10 +5,24 @@
  * restrittivi (0600). Gestisce salt PBKDF2 e key derivation.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { JHT_CREDENTIALS_DIR } from "../paths.js";
-import { decrypt, deriveKey, encrypt, generateSalt, isValidPayload } from "./crypto.js";
+import {
+  decrypt,
+  deriveKey,
+  encrypt,
+  generateSalt,
+  isValidPayload,
+} from "./crypto.js";
 import { resolveJhtPassphrase } from "./passphrase.js";
 import type { Credential, EncryptedPayload } from "./types.js";
 
@@ -57,7 +71,10 @@ function credentialPath(provider: string): string {
 /**
  * Salva una credenziale criptata su disco.
  */
-export function writeCredential(provider: string, credential: Credential): void {
+export function writeCredential(
+  provider: string,
+  credential: Credential,
+): void {
   ensureDir();
   const passphrase = resolvePassphrase();
   const key = resolveMasterKey(passphrase);

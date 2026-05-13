@@ -28,12 +28,12 @@ export type BootstrapFile = {
 
 /** Nomi dei file di bootstrap riconosciuti */
 export type BootstrapFileName =
-  | 'SOUL.md'
-  | 'IDENTITY.md'
-  | 'MEMORY.md'
-  | 'AGENTS.md'
-  | 'USER.md'
-  | 'TOOLS.md';
+  | "SOUL.md"
+  | "IDENTITY.md"
+  | "MEMORY.md"
+  | "AGENTS.md"
+  | "USER.md"
+  | "TOOLS.md";
 
 /** Risultato del caricamento completo della memoria agente */
 export type AgentMemoryContext = {

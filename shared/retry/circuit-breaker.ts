@@ -7,7 +7,11 @@
  * - half-open: lascia passare tentativi limitati per verificare ripristino
  */
 
-import type { CircuitBreakerConfig, CircuitBreakerStatus, CircuitState } from "./types.js";
+import type {
+  CircuitBreakerConfig,
+  CircuitBreakerStatus,
+  CircuitState,
+} from "./types.js";
 import { DEFAULT_CIRCUIT_CONFIG } from "./types.js";
 
 export class CircuitBreakerOpenError extends Error {
@@ -69,7 +73,10 @@ export class CircuitBreaker {
 
     if (this.state === "half-open") {
       this.open();
-    } else if (this.state === "closed" && this.failures >= this.config.failureThreshold) {
+    } else if (
+      this.state === "closed" &&
+      this.failures >= this.config.failureThreshold
+    ) {
       this.open();
     }
   }

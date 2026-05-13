@@ -24,16 +24,20 @@ export type RetryInfo = {
 
 /** Calcola il delay con backoff esponenziale e jitter */
 export function computeBackoff(policy: RetryPolicy, attempt: number): number {
-  const base = policy.initialDelayMs * policy.factor ** Math.max(attempt - 1, 0);
+  const base =
+    policy.initialDelayMs * policy.factor ** Math.max(attempt - 1, 0);
   const jitter = base * policy.jitter * Math.random();
   return Math.min(policy.maxDelayMs, Math.round(base + jitter));
 }
 
 /** Risolve una retry policy completa da opzioni parziali */
-export function resolveRetryPolicy(overrides?: Partial<RetryPolicy>): RetryPolicy {
+export function resolveRetryPolicy(
+  overrides?: Partial<RetryPolicy>,
+): RetryPolicy {
   return {
     maxAttempts: overrides?.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts,
-    initialDelayMs: overrides?.initialDelayMs ?? DEFAULT_RETRY_POLICY.initialDelayMs,
+    initialDelayMs:
+      overrides?.initialDelayMs ?? DEFAULT_RETRY_POLICY.initialDelayMs,
     maxDelayMs: overrides?.maxDelayMs ?? DEFAULT_RETRY_POLICY.maxDelayMs,
     factor: overrides?.factor ?? DEFAULT_RETRY_POLICY.factor,
     jitter: overrides?.jitter ?? DEFAULT_RETRY_POLICY.jitter,
@@ -56,9 +60,8 @@ export async function retryAsync<T>(
   fn: () => Promise<T>,
   options?: RetryOptions | number,
 ): Promise<T> {
-  const opts: RetryOptions = typeof options === "number"
-    ? { maxAttempts: options }
-    : options ?? {};
+  const opts: RetryOptions =
+    typeof options === "number" ? { maxAttempts: options } : (options ?? {});
 
   const policy = resolveRetryPolicy(opts);
   const shouldRetry = opts.shouldRetry ?? (() => true);

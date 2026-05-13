@@ -4,9 +4,9 @@
  * Registro per context engine. Permette di registrare implementazioni
  * custom (es. con vector DB) e risolvere quella attiva.
  */
-import type { ContextEngine, ContextEngineInfo } from './types.js';
-import { assembleContext, systemSection, historySection } from './assembler.js';
-import { compactContext, type SummarizeFn } from './compactor.js';
+import type { ContextEngine, ContextEngineInfo } from "./types.js";
+import { assembleContext, systemSection, historySection } from "./assembler.js";
+import { compactContext, type SummarizeFn } from "./compactor.js";
 
 // --- Factory type ---
 
@@ -20,9 +20,9 @@ export type ContextEngineFactory = () => ContextEngine | Promise<ContextEngine>;
  */
 export class DefaultContextEngine implements ContextEngine {
   readonly info: ContextEngineInfo = {
-    id: 'default',
-    name: 'JHT Default Context Engine',
-    version: '1.0.0',
+    id: "default",
+    name: "JHT Default Context Engine",
+    version: "1.0.0",
   };
 
   #summarizeFn?: SummarizeFn;
@@ -31,14 +31,14 @@ export class DefaultContextEngine implements ContextEngine {
     this.#summarizeFn = opts?.summarizeFn;
   }
 
-  async assemble(params: Parameters<ContextEngine['assemble']>[0]) {
+  async assemble(params: Parameters<ContextEngine["assemble"]>[0]) {
     return assembleContext({
       sections: params.sections,
       tokenBudget: params.tokenBudget,
     });
   }
 
-  async compact(params: Parameters<ContextEngine['compact']>[0]) {
+  async compact(params: Parameters<ContextEngine["compact"]>[0]) {
     return compactContext({
       messages: params.messages,
       tokenBudget: params.tokenBudget,
@@ -66,7 +66,9 @@ export function registerContextEngine(
   return { ok: true };
 }
 
-export function getContextEngineFactory(id: string): ContextEngineFactory | undefined {
+export function getContextEngineFactory(
+  id: string,
+): ContextEngineFactory | undefined {
   return engines.get(id)?.factory;
 }
 
@@ -87,15 +89,15 @@ export async function resolveContextEngine(
   engineId?: string,
 ): Promise<ContextEngine> {
   // Assicura che il default sia sempre disponibile
-  if (!engines.has('default')) {
-    registerContextEngine('default', () => new DefaultContextEngine());
+  if (!engines.has("default")) {
+    registerContextEngine("default", () => new DefaultContextEngine());
   }
 
-  const id = engineId?.trim() || 'default';
+  const id = engineId?.trim() || "default";
   const entry = engines.get(id);
   if (!entry) {
     throw new Error(
-      `Context engine "${id}" non registrato. Disponibili: ${listContextEngineIds().join(', ') || '(nessuno)'}`,
+      `Context engine "${id}" non registrato. Disponibili: ${listContextEngineIds().join(", ") || "(nessuno)"}`,
     );
   }
 

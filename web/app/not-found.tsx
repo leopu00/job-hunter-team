@@ -1,42 +1,83 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function NotFound() {
-  const pathname = usePathname()
+  const pathname = usePathname();
   return (
-    <div className="min-h-screen flex items-center justify-center px-5" style={{ position: 'relative', zIndex: 1, animation: 'fade-in 0.35s ease both' }}>
+    <div
+      className="min-h-screen flex items-center justify-center px-5"
+      style={{
+        position: "relative",
+        zIndex: 1,
+        animation: "fade-in 0.35s ease both",
+      }}
+    >
       <div className="text-center max-w-md">
-
         {/* Error code */}
         <div className="mb-6">
-          <h1 className="text-[120px] font-bold leading-none tracking-tighter" style={{ color: 'var(--color-border)', fontVariantNumeric: 'tabular-nums' }}>
+          <h1
+            className="text-[120px] font-bold leading-none tracking-tighter"
+            style={{
+              color: "var(--color-border)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
             404
           </h1>
           <div className="mt-[-16px] flex items-center justify-center gap-2">
-            <div className="w-2 h-2 rounded-full" aria-hidden="true" style={{ background: 'var(--color-red)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'var(--color-red)' }}>page not found</span>
+            <div
+              className="w-2 h-2 rounded-full"
+              aria-hidden="true"
+              style={{
+                background: "var(--color-red)",
+                animation: "pulse-dot 2s ease-in-out infinite",
+              }}
+            />
+            <span
+              className="text-[10px] font-semibold tracking-[0.2em] uppercase"
+              style={{ color: "var(--color-red)" }}
+            >
+              page not found
+            </span>
           </div>
         </div>
 
         {/* Message */}
-        <p className="text-[13px] mb-8 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        <p
+          className="text-[13px] mb-8 leading-relaxed"
+          style={{ color: "var(--color-muted)" }}
+        >
           The requested resource does not exist or has been moved.
         </p>
 
         {/* Actions */}
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Link href="/dashboard"
+          <Link
+            href="/dashboard"
             className="px-5 py-2.5 rounded-lg text-[12px] font-bold no-underline transition-all"
-            style={{ background: 'var(--color-green)', color: '#000' }}>
+            style={{ background: "var(--color-green)", color: "#000" }}
+          >
             Dashboard
           </Link>
-          <button onClick={() => window.history.back()}
+          <button
+            onClick={() => window.history.back()}
             className="px-5 py-2.5 rounded-lg text-[12px] font-semibold cursor-pointer transition-all"
-            style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-muted)'; e.currentTarget.style.color = 'var(--color-bright)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-muted)' }}>
+            style={{
+              border: "1px solid var(--color-border)",
+              color: "var(--color-muted)",
+              background: "transparent",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--color-muted)";
+              e.currentTarget.style.color = "var(--color-bright)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--color-border)";
+              e.currentTarget.style.color = "var(--color-muted)";
+            }}
+          >
             ← back
           </button>
         </div>
@@ -45,10 +86,13 @@ export default function NotFound() {
              hydration mismatch (window.location.pathname è undefined
              sul server → stringa vuota → il client poi mostra il path
              reale e React protesta). */}
-        <p className="mt-8 text-[9px] font-mono" style={{ color: 'var(--color-dim)' }}>
+        <p
+          className="mt-8 text-[9px] font-mono"
+          style={{ color: "var(--color-dim)" }}
+        >
           {pathname}
         </p>
       </div>
     </div>
-  )
+  );
 }
