@@ -392,7 +392,7 @@ Out of the pipeline. Runs continuously alongside it.
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
-- **🧙‍♂️ Mentor** — `tier: expert`, planned. Future career coach: analyzes profile/results gap, produces an action plan. Folder: `agents/maestro/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, planned. Future career coach: analyzes profile/results gap, produces an action plan. Folder: `agents/mentor/`.
 
 ---
 

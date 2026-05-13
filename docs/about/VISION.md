@@ -26,24 +26,24 @@ The goal is the *opposite* of "enterprise productivity software". Closer to: a D
 | 👨‍🏫 | **Writer** | The craftsman. Cares about the comma. |
 | 👨‍⚖️ | **Critic** | The blind reviewer. Doesn't know who wrote what. |
 | 👨‍💼 | **Assistant** | The copilot. Walks you through the platform. |
-| 🧙‍♂️ | **Maestro** *(future)* | The career coach. Sees the bigger picture. |
+| 🧙‍♂️ | **Mentor** *(future)* | The career coach. Sees the bigger picture. |
 
 This is not flavor text. The system prompts of each agent are written in voice. The UI reflects that voice. Telegram messages reflect that voice.
 
-### 🧙‍♂️ The Maestro — the missing piece
+### 🧙‍♂️ The Mentor — the missing piece
 
-Among the planned agents, **the Maestro is the most important one we haven't built yet.**
+Among the planned agents, **the Mentor is the most important one we haven't built yet.**
 
-The other agents execute a pipeline — find, verify, score, write, review. The Maestro looks *outside* the pipeline:
+The other agents execute a pipeline — find, verify, score, write, review. The Mentor looks *outside* the pipeline:
 
 - Where is the user trying to go in their career?
 - What did the Scorer's last batch reveal about the gap between the user's profile and the market?
 - Which skills should the user invest in this month?
 - Are the user's goals still aligned with what the market is paying for?
 
-The Maestro is the only agent that has the right to tell the user *"stop applying for X, go learn Y first"*. It is the meta-layer that keeps the team useful as the world changes.
+The Mentor is the only agent that has the right to tell the user *"stop applying for X, go learn Y first"*. It is the meta-layer that keeps the team useful as the world changes.
 
-See [`agents/maestro/maestro.md`](../agents/maestro/maestro.md) for the spec.
+See [`agents/mentor/mentor.md`](../agents/mentor/mentor.md) for the spec.
 
 ### 👨‍💼 The Assistant — the copilot
 
@@ -66,7 +66,7 @@ Every feature decision passes through these questions:
 
 1. Does it make the agents feel more like a team and less like a config file?
 2. Does it bring the platform closer to a non-technical user being able to use it?
-3. Does it move us toward the Maestro being possible?
+3. Does it move us toward the Mentor being possible?
 4. Does it lower the cost-per-result?
 
 If the answer is no on all four, the feature waits.

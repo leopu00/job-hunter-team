@@ -1,6 +1,6 @@
 ---
 name: mentor-patterns
-description: The five patterns the Mentor (Maestro) hunts in the records to decide WHEN to speak. Silence is the default; only a real, recurring pattern earns a word. This skill gives the canonical detection method for each pattern (DB query + threshold) so the Mentor never speaks from a single data point. Read-only — never writes to the DB. Owned by the Maestro.
+description: The five patterns the Mentor hunts in the records to decide WHEN to speak. Silence is the default; only a real, recurring pattern earns a word. This skill gives the canonical detection method for each pattern (DB query + threshold) so the Mentor never speaks from a single data point. Read-only — never writes to the DB. Owned by the Mentor.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(grep *), Bash(awk *)
 ---
 
@@ -163,12 +163,12 @@ If you have nothing pattern-grade to say, **say nothing**. Silence is an answer.
 - ❌ Speaking after detecting a single hit (1 position with `Docker` requirement) — sample too small, comes across as flailing.
 - ❌ Aggregating across the whole DB (e.g. last 6 months) — old positions distort current market signal. Stick to last 30 days unless explicitly comparing trends.
 - ❌ Using the round `experience_years` field for Pattern B/C reasoning — compute REAL years from `candidate.experience[].years` (same rule as the Analista).
-- ❌ Speaking from web data without a record-based pattern first — the records are the trigger, the web is the verification (see `WebSearch` / `WebFetch` confirm-step in `maestro.md`).
+- ❌ Speaking from web data without a record-based pattern first — the records are the trigger, the web is the verification (see `WebSearch` / `WebFetch` confirm-step in `mentor.md`).
 - ❌ Doomsaying ("this leads nowhere") OR cheerleading ("you can do it!") — both violate the Mentor's voice. Numbers, then a question. See `mentor-output` skill.
 
 ## See also
 
 - `mentor-output` — HOW to phrase the message once a pattern is confirmed.
 - `db-query` — wrapper internals.
-- `agents/maestro/maestro.md` — orchestrator prompt + cadence.
+- `agents/mentor/mentor.md` — orchestrator prompt + cadence.
 - `agents/_team/team-rules.md` T10 — profile is read-only, also for the Mentor.
