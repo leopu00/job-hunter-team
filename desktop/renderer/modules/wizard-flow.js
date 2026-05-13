@@ -408,7 +408,23 @@ async function onVpsConnect() {
     setVpsStatus('vps.status.installing', { ip }, 'info')
     const res = await window.vpsApi.runInstall({ ip })
     if (!res?.ok) {
-      log.error('vps.connect.failed', { ip, err: res?.error, exitCode: res?.exitCode })
+      log.error('vps.connect.failed', {
+        ip,
+        err: res?.error,
+        exitCode: res?.exitCode,
+        kind: res?.kind,
+        phase: res?.phase,
+      })
+      // Errore actionable: il backend ora ritorna {error, hint, kind, phase}
+      // quando ha categorizzato il fallimento (pre-flight SSH). Stampiamo
+      // sia titolo che hint nel pannello log cosi' l'utente capisce subito
+      // cosa fare senza dover scavare nei log.
+      const lines = []
+      if (res?.error) lines.push(`Errore: ${res.error}`)
+      if (res?.hint) lines.push(`Suggerimento: ${res.hint}`)
+      if (lines.length && dom.vpsInstallLog) {
+        dom.vpsInstallLog.textContent += '\n' + lines.join('\n') + '\n'
+      }
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       state.vps.installed = false
     } else {
