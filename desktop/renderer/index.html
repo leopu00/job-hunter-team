@@ -52,6 +52,78 @@
         </div>
       </section>
 
+      <!-- Step: choose where the team lives (local vs VPS).
+           Drives wizard branching downstream. -->
+      <section class="step step--centered" id="step-location" data-step="location" hidden>
+        <div class="step__emoji" aria-hidden="true">🌍</div>
+        <h1 class="step__title" data-i18n="location.title">Where will the team live?</h1>
+        <p class="step__lead" data-i18n="location.lead">
+          JHT runs in a container. Pick where that container lives — you can change it later by reinstalling.
+        </p>
+        <div class="location-cards">
+          <button type="button" class="location-card" id="location-card-local" data-location="local">
+            <span class="location-card__icon" aria-hidden="true">💻</span>
+            <span class="location-card__title" data-i18n="location.local.title">This computer</span>
+            <span class="location-card__body" data-i18n="location.local.body">
+              Free. The team runs on this PC. Closes when you shut down.
+            </span>
+            <span class="location-card__badge" data-i18n="location.local.badge">Recommended for the beta</span>
+          </button>
+          <button type="button" class="location-card" id="location-card-vps" data-location="vps">
+            <span class="location-card__icon" aria-hidden="true">☁️</span>
+            <span class="location-card__title" data-i18n="location.vps.title">VPS (Hetzner)</span>
+            <span class="location-card__body" data-i18n="location.vps.body">
+              Always on, ~€6/mo. We will provision it from the desktop app (coming next).
+            </span>
+            <span class="location-card__badge location-card__badge--soon" data-i18n="location.vps.badge">Coming soon</span>
+          </button>
+        </div>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-location-back" data-i18n="location.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-location-continue" data-i18n="location.continue" disabled>
+            Continue
+          </button>
+        </div>
+      </section>
+
+      <!-- Step: Supabase OAuth.
+           Local path: opt-in (skip button visible).
+           VPS path: required (skip hidden, continue disabled until signed in). -->
+      <section class="step step--centered" id="step-supabase-login" data-step="supabase-login" hidden>
+        <div class="step__emoji" aria-hidden="true">☁️</div>
+        <h1 class="step__title" data-i18n="supabase.title">Cloud account</h1>
+        <p class="step__lead" id="supabase-hint" data-i18n="supabase.lead.local">
+          Optional: sign in to sync your dashboard across devices. You can enable it later from settings.
+        </p>
+        <div class="supabase-actions">
+          <button type="button" class="btn btn--secondary" id="btn-supabase-google" data-i18n="supabase.google">
+            Continue with Google
+          </button>
+          <button type="button" class="btn btn--secondary" id="btn-supabase-github" data-i18n="supabase.github">
+            Continue with GitHub
+          </button>
+        </div>
+        <p class="step__hint" id="supabase-status" hidden></p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-supabase-back" data-i18n="supabase.back">
+            Back
+          </button>
+          <div class="step__actions-group">
+            <button class="btn btn--ghost" id="btn-supabase-skip" data-i18n="supabase.skip" hidden>
+              Skip for now
+            </button>
+            <button class="btn btn--ghost" id="btn-supabase-signout" data-i18n="supabase.signOut" hidden>
+              Sign out
+            </button>
+            <button class="btn btn--primary" id="btn-supabase-continue" data-i18n="supabase.continue" disabled>
+              Continue
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- Step 2: setup / checklist -->
       <section class="step step--centered" id="step-setup" data-step="setup" hidden>
         <h1 class="step__title" data-i18n="setup.title">Setup</h1>
