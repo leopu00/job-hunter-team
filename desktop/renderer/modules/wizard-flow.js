@@ -452,18 +452,11 @@ if (dom.btnVpsBack) dom.btnVpsBack.addEventListener('click', () => enterSupabase
 if (dom.btnVpsContinue) {
   dom.btnVpsContinue.addEventListener('click', () => {
     if (!state.vps.installed) return
-    // VPS mode: il container sulla VPS ha gia' install.sh + pairing
-    // token. Il provider CLI vive DENTRO il container remoto (non sul
-    // Mac), il login OAuth e' deferred al primo accesso web dashboard.
-    // Quindi saltiamo subscription notice + model compare + provider
-    // choose/install/login (tutti pensati per il container locale) e
-    // andiamo direttamente al Ready summary. Vedi docs/internal/
-    // onboarding-flow.md § "Path 2 VPS".
-    if (state.location === LOCATION_VPS) {
-      log.info('vps.continue.skip-to-ready', { reason: 'VPS mode — install/login lato container remoto' })
-      enterReady()
-      return
-    }
+    // VPS mode passa per gli stessi step del Local: subscription notice +
+    // model compare + provider choose/install/login. Il backend (main.js
+    // + provider-install.js) e' SSH-aware: l'install gira sul container
+    // REMOTO (docker exec via ssh), non sul Mac. Vedi T2 protocol-vps-
+    // refactor (docs/internal/onboarding-flow.md § "Path 2 VPS").
     showStep(STEP_SUBSCRIPTION_NOTICE)
   })
 }
@@ -847,9 +840,16 @@ async function startProviderInstall() {
   const firstName = providerLabel(ids[0]) || ids[0]
   dom.providerMessage.textContent = t('provider.installStatus.running', { name: firstName })
 
-  log.info('provider-install.start', { providers: ids })
+  // VPS mode: il backend instrada l'install via SSH al container REMOTO.
+  // Local mode: omettiamo host/vpsIp, il main.js handler resta sul path
+  // back-compat (docker compose run --rm jht ...).
+  const installArgs = state.location === LOCATION_VPS
+    ? { providerIds: ids, host: 'vps', vpsIp: state.vps?.ip || null }
+    : { providerIds: ids }
+
+  log.info('provider-install.start', { providers: ids, host: installArgs.host || 'local' })
   try {
-    const result = await window.setupApi.installProviders(ids)
+    const result = await window.setupApi.installProviders(installArgs)
     log.info('provider-install.result', {
       ok: result?.ok,
       failedAt: result?.failedAt,
