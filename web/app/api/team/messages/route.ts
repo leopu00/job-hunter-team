@@ -5,7 +5,7 @@ import os from 'os'
 
 export const dynamic = 'force-dynamic'
 
-// Log strutturato dei messaggi tra agenti, scritto da agents/_tools/jht-tmux-send.
+// Log strutturato dei messaggi tra agenti, scritto da agents/_skills/tmux-send/jht-tmux-send.
 // Ogni riga JSONL: { ts, session, from, to, type, preview }.
 const LOG_PATH = path.join(
   process.env.JHT_HOME || path.join(os.homedir(), '.jht'),
