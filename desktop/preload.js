@@ -100,6 +100,15 @@ contextBridge.exposeInMainWorld('authApi', {
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
 })
 
+// Lightweight key/value store backed by JSON in app.getPath('userData').
+// Used by the onboarding wizard to persist the `location` choice so a
+// relaunch resumes on the right branch. Not a general settings API —
+// keep it small and renderer-only.
+contextBridge.exposeInMainWorld('prefsApi', {
+  get: (key) => ipcRenderer.invoke('prefs:get', key),
+  set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+})
+
 contextBridge.exposeInMainWorld('syncApi', {
   getStatus: () => ipcRenderer.invoke('sync:get-status'),
   setup: (args) => ipcRenderer.invoke('sync:setup', args),
