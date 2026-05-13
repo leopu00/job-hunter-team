@@ -67,6 +67,15 @@ export const TRANSLATIONS = {
       'Optional: sign in to sync your dashboard across devices. You can enable it later from settings.',
     'supabase.lead.vps':
       'Required to pair this app with your VPS. Sign in with Google or GitHub.',
+    // -- Telegram 3-bot tokens step (T4, only on VPS path) --
+    'telegram.title': 'Telegram bots',
+    'telegram.lead':
+      'Three dedicated bots — one per user-facing agent. Create them on @BotFather and paste each token here.',
+    'telegram.role.assistente': 'Profile onboarding · document drop-zone',
+    'telegram.role.capitano': 'Team direction · ready-position notifications',
+    'telegram.role.mentor': 'Growth coach · strategic positioning',
+    'telegram.back': 'Back',
+    'telegram.continue': 'Continue',
     'supabase.google': 'Continue with Google',
     'supabase.github': 'Continue with GitHub',
     'supabase.signedInAs': 'Signed in as {name}',
@@ -436,6 +445,15 @@ export const TRANSLATIONS = {
       'Opzionale: accedi per sincronizzare la dashboard tra più dispositivi. Puoi abilitarlo dopo dalle impostazioni.',
     'supabase.lead.vps':
       'Obbligatorio per accoppiare questa app alla tua VPS. Accedi con Google o GitHub.',
+    // -- Step bot Telegram (T4, solo path VPS) --
+    'telegram.title': 'Bot Telegram',
+    'telegram.lead':
+      'Tre bot dedicati — uno per ciascun agente che parla con te. Creali su @BotFather e incolla qui ogni token.',
+    'telegram.role.assistente': 'Onboarding profilo · drop-zone documenti',
+    'telegram.role.capitano': 'Direzione del team · notifiche posizioni pronte',
+    'telegram.role.mentor': 'Mentore di crescita · posizionamento strategico',
+    'telegram.back': 'Indietro',
+    'telegram.continue': 'Continua',
     'supabase.google': 'Accedi con Google',
     'supabase.github': 'Accedi con GitHub',
     'supabase.signedInAs': 'Connesso come {name}',
@@ -805,6 +823,15 @@ export const TRANSLATIONS = {
       'Opcionális: jelentkezz be, hogy szinkronizáld a vezérlőpultot több eszközön. Később is engedélyezheted a beállításokból.',
     'supabase.lead.vps':
       'Kötelező, hogy összepárosítsd ezt az alkalmazást a VPS-eddel. Lépj be Google vagy GitHub fiókkal.',
+    // -- Telegram 3-bot tokens lépés (T4, csak VPS úton) --
+    'telegram.title': 'Telegram botok',
+    'telegram.lead':
+      'Három dedikált bot — egy minden felhasználói ügynöknek. Hozd létre őket @BotFather-en és illeszd be a tokeneket.',
+    'telegram.role.assistente': 'Profil onboarding · dokumentum drop-zone',
+    'telegram.role.capitano': 'Csapat irányítás · kész pozíció értesítések',
+    'telegram.role.mentor': 'Növekedési coach · stratégiai pozicionálás',
+    'telegram.back': 'Vissza',
+    'telegram.continue': 'Tovább',
     'supabase.google': 'Belépés Google-lel',
     'supabase.github': 'Belépés GitHubbal',
     'supabase.signedInAs': 'Bejelentkezve mint {name}',
