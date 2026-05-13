@@ -1,0 +1,136 @@
+# Onboarding flow JHT
+
+**Data**: 2026-05-13
+**Stato**: design lock — sequenza ufficiale di onboarding utente.
+
+> Cross-cutting tra `bot-telegram.md` (tutti 3 obbligatori), `vps.md` (path VPS), e `[JHT-DESKTOP-LOGIN]`/`[JHT-DESKTOP-SYNC]` (sync Supabase). Doc dedicato perché tocca tutti e tre.
+
+---
+
+## 🛤️ Tre path di onboarding
+
+### Path 1 — Desktop app + Local PC
+
+Per utente non-tech che vuole tutto sul proprio PC.
+
+### Path 2 — Desktop app + VPS Hetzner
+
+Per chi vuole il team sempre on, indipendente dal PC personale.
+
+### Path 3 — CLI guidato da AI agent (no desktop)
+
+Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il setup via `jht` CLI. **Desktop app non serve** in questo path.
+
+---
+
+## 📋 Sequenza canonica (desktop app)
+
+```
+1. 🏁  Splash + privacy notice
+
+2. 🌍  Scelta location               ←── prima cosa, prima dei token
+       ├─ Local PC
+       └─ VPS Hetzner
+
+3. ☁️  Login Supabase
+       ├─ Local PC: opt-in (toggle anytime da settings)
+       │            → abilita sync dashboard cloud + multi-device
+       └─ VPS:      OBBLIGATORIO (serve per cloud sync + pairing)
+
+4. 🤖  Telegram bot — 3 token BotFather
+       (Assistente + Capitano + Mentor, tutti obbligatori)
+
+5. 🐳  Docker/Colima check
+       ├─ Local PC: install Docker Desktop → eventuale riavvio PC
+       └─ VPS:      skip (Docker arriva via install.sh sulla VPS)
+
+6. 🖥️  VPS provisioning              ←── solo path VPS
+       ├─ Wizard mostra step Hetzner inline
+       ├─ App genera SSH keypair locale (no passphrase)
+       ├─ Utente: copia pubkey → Hetzner → crea VPS → paste IP nell'app
+       ├─ App: ssh → curl install.sh → host pronto
+       └─ Reclaim "ho già la VPS": paste IP, app verifica match SSH key
+
+7. 🔑  Provider AI login              ←── ULTIMO, sul host finale
+       ├─ Container parte sul host scelto (locale o VPS)
+       ├─ App apre terminal embedded → docker exec sul container
+       ├─ Utente fa login interattivo (Claude/Codex/Kimi)
+       └─ Token salvato direttamente sul host scelto
+       (Già implementato in dev1, [JHT-DESKTOP-LOGIN] — da ottimizzare)
+
+8. ✅  First team start
+```
+
+---
+
+## 🤔 Perché questa sequenza
+
+### Location PRIMA dei token (non viceversa)
+
+Il provider AI login richiede il container già acceso → richiede location già scelta. Se generassimo il token in container locale "per poi spostarlo" su VPS, sarebbe **anti-pattern**:
+- Refresh token e OS keychain binding sono fragili al trasferimento
+- A volte invalidano la sessione e l'utente deve rifare il login
+- Genera complessità di stato (token "in transit")
+
+Generare il token direttamente sul host finale = zero migrazione, zero stato intermedio.
+
+**Costo accettato**: l'utente che cambia idea dopo (es. da Local a VPS) deve rifare il setup. È un'azione consapevole, non un click accidentale.
+
+### Sync separato dal path
+
+Il vincolo "VPS → sync obbligatorio" deriva da una necessità tecnica (cloud sync per pairing/recovery), non da una scelta di prodotto. In Local mode il sync è **puramente UX** (vuoi vedere la dashboard anche da altri device?), quindi:
+- Opt-in durante onboarding (mostra valore: "dashboard sincronizzata cloud, accesso da telefono/altro PC")
+- Toggle accessibile **sempre** da settings, non solo in onboarding
+- L'utente Local può abilitare/disabilitare quando vuole senza riconfigurare il team
+
+### AI-agent path solo CLI
+
+Doppio canale di guida (AI agent + desktop app) confonde. Chi usa un AI agent personale sta già operando da terminale: aggiungere una GUI è dissonante. Path 3 = il classico `jht` CLI driven da AI agent senza nessuna integrazione desktop.
+
+---
+
+## 🔄 Toggle sync post-onboarding
+
+L'utente Local PC che dopo X giorni vuole abilitare sync:
+
+```
+Settings → Cloud sync → "Abilita sync con il cloud"
+                       └─ Login Supabase Google/GitHub
+                       └─ App pulisce dati locali sensibili (config solo) → push cifrato
+                       └─ Dashboard ora raggiungibile anche da web
+```
+
+Funziona anche al contrario (disable sync, dati restano solo locali).
+
+---
+
+## 🌐 Path 3: AI-agent CLI flow (no desktop)
+
+L'utente:
+1. Installa Docker/Colima sulla sua macchina
+2. Lancia il suo AI agent (Claude Code, OpenClaw, Codex, ecc.) sul progetto
+3. Chiede "setup JHT for me"
+4. L'AI agent usa `jht` CLI per:
+   - Scegliere location (chiede all'utente)
+   - Configurare Telegram bot (chiede i 3 token; spiega come crearli su BotFather)
+   - Eventualmente provvedere VPS Hetzner (chiede API token, gestisce SSH)
+   - Lanciare wizard `jht setup` per provider login (interattivo)
+5. Team avviato
+
+**Garanzia di equivalenza**: stesso identico backend del Path 1/2. Il `jht` CLI è la "verità", la desktop app è una GUI sopra.
+
+---
+
+## ❓ Decisioni residue
+
+1. **Toggle sync nel Path 2 (VPS)**: una volta abilitato è disabilitabile o no? Probabilmente no (rompe pairing) — da confermare.
+2. **Reclaim VPS senza desktop**: se l'utente cambia PC, perde la SSH key locale. Path: nuovo PC → desktop app → login Supabase → "ho già una VPS, qual è l'IP?" → app re-genera SSH key locale → la inietta via Hetzner API → verifica accesso. Da implementare in `[JHT-DESKTOP-RECLAIM]`.
+
+---
+
+## 🔗 Riferimenti
+
+- `docs/internal/bot-telegram.md` — decisione Telegram 3 bot obbligatori (2026-05-13 rev2)
+- `docs/internal/vps.md` — design VPS (provisioning, providers, install UX)
+- `docs/internal/2026-05-12-open-questions-bot-and-vps-setup.md` — Tema B: 3 path VPS setup (B1/B2/B3)
+- `BACKLOG.md` — `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`, `[JHT-DESKTOP-RECLAIM]`, `[JHT-VPS-FRIENDLY]`
