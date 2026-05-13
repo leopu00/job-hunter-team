@@ -57,6 +57,50 @@ function getBindHomeDir() {
   return path.join(require('node:os').homedir(), '.jht')
 }
 
+// Renderer preferences store. Lives in app.getPath('userData') so it
+// survives uninstall/upgrade (see feedback_no_user_data_wipe.md) and
+// does not couple to ~/.jht, which may not exist yet at onboarding
+// time. Single JSON file keyed by short strings; reads return null if
+// missing or unreadable. Atomic-ish writes via temp-rename to avoid a
+// half-written file if the process is killed mid-write.
+function getPrefsPath() {
+  return path.join(app.getPath('userData'), 'preferences.json')
+}
+
+function readPrefsFile() {
+  const fs = require('node:fs')
+  try {
+    const raw = fs.readFileSync(getPrefsPath(), 'utf8')
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function readPref(key) {
+  if (typeof key !== 'string' || !key) return null
+  const data = readPrefsFile()
+  return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null
+}
+
+function writePref(key, value) {
+  if (typeof key !== 'string' || !key) return { ok: false, error: 'invalid-key' }
+  const fs = require('node:fs')
+  const data = readPrefsFile()
+  data[key] = value
+  const target = getPrefsPath()
+  const tmp = `${target}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8')
+    fs.renameSync(tmp, target)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
+}
+
 // Map desktop-side provider id → the active_provider value that
 // .launcher/start-agent.sh (running inside the container) expects.
 // Codex is "openai" in that config because the start-agent script
@@ -567,6 +611,14 @@ app.whenReady().then(() => {
     sync.clearAllKeys()
     return auth.signOut()
   })
+
+  // -------- Renderer preferences (small key/value store) --------
+  // JSON file in userData. Used today for the onboarding `location`
+  // choice (local vs VPS) so a relaunch resumes on the right wizard
+  // branch. Renderer-only state — nothing in here ends up in ~/.jht
+  // or gets read by the CLI / container.
+  ipcMain.handle('prefs:get', (_event, key) => readPref(key))
+  ipcMain.handle('prefs:set', (_event, key, value) => writePref(key, value))
 
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
   ipcMain.handle('sync:get-status', () => sync.getStatus())
