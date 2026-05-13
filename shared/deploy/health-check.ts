@@ -74,10 +74,15 @@ async function checkHttp(
 
 function checkTmuxSession(sessionPattern: string): boolean {
   try {
-    const output = execSync("tmux list-sessions -F '#{session_name}' 2>/dev/null || true", {
-      encoding: "utf8",
-    });
-    return output.split("\n").some((line) => line.trim().includes(sessionPattern));
+    const output = execSync(
+      "tmux list-sessions -F '#{session_name}' 2>/dev/null || true",
+      {
+        encoding: "utf8",
+      },
+    );
+    return output
+      .split("\n")
+      .some((line) => line.trim().includes(sessionPattern));
   } catch {
     return false;
   }
@@ -94,7 +99,9 @@ function checkTelegram(): ServiceHealth {
   };
 }
 
-export async function checkAll(opts?: { timeoutMs?: number }): Promise<HealthReport> {
+export async function checkAll(opts?: {
+  timeoutMs?: number;
+}): Promise<HealthReport> {
   const start = Date.now();
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -121,7 +128,9 @@ export async function checkAll(opts?: { timeoutMs?: number }): Promise<HealthRep
 function formatReport(report: HealthReport): void {
   const icon = (ok: boolean) => (ok ? "✓" : "✗");
   const ts = new Date(report.ts).toISOString();
-  console.log(`\n[health] ${ts} — ${report.ok ? "OK" : "DEGRADED"} (${report.durationMs}ms)\n`);
+  console.log(
+    `\n[health] ${ts} — ${report.ok ? "OK" : "DEGRADED"} (${report.durationMs}ms)\n`,
+  );
   for (const svc of report.services) {
     const timing = svc.ms != null ? ` ${svc.ms}ms` : "";
     const http = svc.httpStatus != null ? ` HTTP ${svc.httpStatus}` : "";

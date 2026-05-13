@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
-import { promises as fs } from 'fs'
-import path from 'path'
-import os from 'os'
+import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
+import os from "os";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 // Stato del pacing-bridge (`.launcher/pacing-bridge.py`).
 // Pattern identico a /api/bridge/status: il processo Python scrive
@@ -16,111 +16,118 @@ export const dynamic = 'force-dynamic'
 // UI mostra il nodo come pending. Non vogliamo replicare la logica del
 // bridge in TS — il file di stato è la sola source of truth.
 
-const JHT_HOME = process.env.JHT_HOME || path.join(os.homedir(), '.jht')
-const PID_FILE = path.join(JHT_HOME, 'logs', 'pacing-bridge.pid')
-const STATE_FILE = path.join(JHT_HOME, 'logs', 'pacing-bridge-state.json')
+const JHT_HOME = process.env.JHT_HOME || path.join(os.homedir(), ".jht");
+const PID_FILE = path.join(JHT_HOME, "logs", "pacing-bridge.pid");
+const STATE_FILE = path.join(JHT_HOME, "logs", "pacing-bridge-state.json");
 
 // Lo stato è scritto a ogni tick (default 15 min) + al boot. 30 min di
 // staleness lasciano comodo margine per un tick mancato senza far
 // passare il bridge per "down".
-const STATE_STALE_MS = 30 * 60_000
+const STATE_STALE_MS = 30 * 60_000;
 
 type PacingAgent = {
-  name: string
-  kt: number
-  kt_per_h: number
-  pct_per_h: number
-  share: number
-}
+  name: string;
+  kt: number;
+  kt_per_h: number;
+  pct_per_h: number;
+  share: number;
+};
 
 type PacingVerdict = {
-  kind: 'SFORO' | 'MARGINE' | 'ALLINEATO' | 'ND'
-  delta: number | null
-  frac_pct: number | null
-}
+  kind: "SFORO" | "MARGINE" | "ALLINEATO" | "ND";
+  delta: number | null;
+  frac_pct: number | null;
+};
 
 type PacingReport = {
-  ok: boolean
-  ts: string
-  window_min: number
-  effective_window_min: number
-  n_samples: number
-  usage_now: number | null
-  proj: number | null
-  reset_at: string | null
-  h_to_reset: number | null
-  delta_usage: number
-  team_kt: number
-  ratio_kt_per_pct: number
-  vel_team: number
-  vel_target: number | null
-  target_band_center: number
-  agents: PacingAgent[]
-  skipped: string[]
-  verdict: PacingVerdict
+  ok: boolean;
+  ts: string;
+  window_min: number;
+  effective_window_min: number;
+  n_samples: number;
+  usage_now: number | null;
+  proj: number | null;
+  reset_at: string | null;
+  h_to_reset: number | null;
+  delta_usage: number;
+  team_kt: number;
+  ratio_kt_per_pct: number;
+  vel_team: number;
+  vel_target: number | null;
+  target_band_center: number;
+  agents: PacingAgent[];
+  skipped: string[];
+  verdict: PacingVerdict;
   // Campi presenti solo quando ok=false:
-  error?: string
-  hint?: string
-}
+  error?: string;
+  hint?: string;
+};
 
 type PacingState = {
-  version?: number
-  pid?: number
-  updated_at?: string
-  next_tick_at?: string
-  tick_interval_min?: number
-  target_band_center?: number
-  target_session?: string
-  last_tick_at?: string | null
-  last_report?: PacingReport | null
-  last_message?: string | null
-}
+  version?: number;
+  pid?: number;
+  updated_at?: string;
+  next_tick_at?: string;
+  tick_interval_min?: number;
+  target_band_center?: number;
+  target_session?: string;
+  last_tick_at?: string | null;
+  last_report?: PacingReport | null;
+  last_message?: string | null;
+};
 
 async function isRunning(): Promise<{ running: boolean; pid: number | null }> {
-  let pidStr: string
-  let pidMtimeMs: number | null = null
+  let pidStr: string;
+  let pidMtimeMs: number | null = null;
   try {
-    pidStr = await fs.readFile(PID_FILE, 'utf-8')
-    try { pidMtimeMs = (await fs.stat(PID_FILE)).mtimeMs } catch { /* ignore */ }
+    pidStr = await fs.readFile(PID_FILE, "utf-8");
+    try {
+      pidMtimeMs = (await fs.stat(PID_FILE)).mtimeMs;
+    } catch {
+      /* ignore */
+    }
   } catch {
-    return { running: false, pid: null }
+    return { running: false, pid: null };
   }
-  const pid = Number.parseInt(pidStr.trim(), 10)
-  if (!Number.isFinite(pid) || pid <= 0) return { running: false, pid: null }
+  const pid = Number.parseInt(pidStr.trim(), 10);
+  if (!Number.isFinite(pid) || pid <= 0) return { running: false, pid: null };
 
   // Stesso check dell'altro bridge: filtriamo pid riciclati guardando
   // il cmdline (disponibile in /proc su Linux container).
   try {
-    const cmdline = await fs.readFile(`/proc/${pid}/cmdline`, 'utf-8')
-    if (cmdline.includes('pacing-bridge.py')) return { running: true, pid }
-    return { running: false, pid: null }
+    const cmdline = await fs.readFile(`/proc/${pid}/cmdline`, "utf-8");
+    if (cmdline.includes("pacing-bridge.py")) return { running: true, pid };
+    return { running: false, pid: null };
   } catch {
     // Dev host mode (Next sul mac, processo nel container): i PID del
     // pidfile sono di un namespace diverso. Fallback su freschezza dello
     // state file (riscritto ad ogni tick + al boot dal pacing-bridge),
     // con mtime del pidfile come prova della finestra pre-primo-tick.
     try {
-      const stat = await fs.stat(STATE_FILE)
-      if (Date.now() - stat.mtimeMs < STATE_STALE_MS) return { running: true, pid }
-    } catch { /* state file mancante o non leggibile */ }
-    if (pidMtimeMs !== null && Date.now() - pidMtimeMs < STATE_STALE_MS) {
-      return { running: true, pid }
+      const stat = await fs.stat(STATE_FILE);
+      if (Date.now() - stat.mtimeMs < STATE_STALE_MS)
+        return { running: true, pid };
+    } catch {
+      /* state file mancante o non leggibile */
     }
-    return { running: false, pid: null }
+    if (pidMtimeMs !== null && Date.now() - pidMtimeMs < STATE_STALE_MS) {
+      return { running: true, pid };
+    }
+    return { running: false, pid: null };
   }
 }
 
 async function readState(): Promise<PacingState | null> {
   try {
-    const raw = await fs.readFile(STATE_FILE, 'utf-8')
-    return JSON.parse(raw) as PacingState
+    const raw = await fs.readFile(STATE_FILE, "utf-8");
+    return JSON.parse(raw) as PacingState;
   } catch {
-    return null
+    return null;
   }
 }
 
 export async function GET() {
-  const [status, state] = await Promise.all([isRunning(), readState()])
+  const [status, state] = await Promise.all([isRunning(), readState()]);
 
   if (!state) {
     return NextResponse.json({
@@ -131,13 +138,13 @@ export async function GET() {
       targetBandCenter: null,
       lastReport: null,
       lastMessage: null,
-      source: 'no-state-file',
-    })
+      source: "no-state-file",
+    });
   }
 
-  const updatedAt = state.updated_at ? Date.parse(state.updated_at) : NaN
+  const updatedAt = state.updated_at ? Date.parse(state.updated_at) : NaN;
   const fresh =
-    Number.isFinite(updatedAt) && Date.now() - updatedAt < STATE_STALE_MS
+    Number.isFinite(updatedAt) && Date.now() - updatedAt < STATE_STALE_MS;
 
   return NextResponse.json({
     ...status,
@@ -150,6 +157,6 @@ export async function GET() {
     lastMessage: state.last_message ?? null,
     updatedAt: state.updated_at ?? null,
     stale: !fresh,
-    source: 'state-file',
-  })
+    source: "state-file",
+  });
 }

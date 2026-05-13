@@ -49,7 +49,10 @@ function dim(text: string): string {
 
 // ── LEVEL FORMATTERS ────────────────────────────────────────
 
-const LEVEL_STYLES: Record<string, { color: Color; label: string; bold: boolean }> = {
+const LEVEL_STYLES: Record<
+  string,
+  { color: Color; label: string; bold: boolean }
+> = {
   debug: { color: "gray", label: "DBG", bold: false },
   info: { color: "blue", label: "INF", bold: false },
   warn: { color: "yellow", label: "WRN", bold: true },
@@ -99,7 +102,7 @@ export function formatConsoleLine(
   level: string,
   subsystem: string,
   message: string,
-  date?: Date
+  date?: Date,
 ): string {
   const ts = formatTimestamp(date ?? new Date());
   const lvl = formatLevel(level);

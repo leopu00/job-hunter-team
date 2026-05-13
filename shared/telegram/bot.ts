@@ -33,10 +33,8 @@ export function createBot(config: TelegramBotConfig): Bot {
     sequentialize((ctx: Context) => {
       const chatId = ctx.chat?.id;
       const threadId = ctx.message?.message_thread_id;
-      return chatId
-        ? getSequentialKey(String(chatId), threadId)
-        : undefined;
-    })
+      return chatId ? getSequentialKey(String(chatId), threadId) : undefined;
+    }),
   );
 
   // Error handler globale
@@ -87,7 +85,7 @@ function extractInboundMessage(ctx: Context): InboundMessage | null {
 export function registerMessageHandler(
   bot: Bot,
   config: TelegramBotConfig,
-  onMessage: InboundHandler
+  onMessage: InboundHandler,
 ): void {
   bot.on("message", async (ctx) => {
     const inbound = extractInboundMessage(ctx);

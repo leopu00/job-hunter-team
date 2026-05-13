@@ -88,9 +88,21 @@ describe("assembleContext", () => {
 
   it("rispetta ordine di priorita'", () => {
     const sections: ContextSection[] = [
-      { id: "low", priority: "low", messages: [{ role: "system", content: "low" }] },
-      { id: "req", priority: "required", messages: [{ role: "system", content: "req" }] },
-      { id: "high", priority: "high", messages: [{ role: "user", content: "high" }] },
+      {
+        id: "low",
+        priority: "low",
+        messages: [{ role: "system", content: "low" }],
+      },
+      {
+        id: "req",
+        priority: "required",
+        messages: [{ role: "system", content: "req" }],
+      },
+      {
+        id: "high",
+        priority: "high",
+        messages: [{ role: "user", content: "high" }],
+      },
     ];
     const result = assembleContext({ sections, tokenBudget: 10000 });
     assert.equal(result.messages[0].content, "req");
@@ -99,7 +111,11 @@ describe("assembleContext", () => {
   it("scarta sezioni low quando il budget e' stretto", () => {
     const sections: ContextSection[] = [
       systemSection("x".repeat(200)),
-      { id: "extra", priority: "low", messages: [{ role: "system", content: "x".repeat(400) }] },
+      {
+        id: "extra",
+        priority: "low",
+        messages: [{ role: "system", content: "x".repeat(400) }],
+      },
     ];
     const result = assembleContext({ sections, tokenBudget: 60 });
     assert.ok(result.droppedSections.includes("extra"));
@@ -115,7 +131,9 @@ describe("assembleContext", () => {
       tokenBudget: 100,
     });
     assert.ok(result.messages.length < 20);
-    assert.ok(result.messages[result.messages.length - 1].content.includes("msg-19"));
+    assert.ok(
+      result.messages[result.messages.length - 1].content.includes("msg-19"),
+    );
   });
 });
 
@@ -136,7 +154,11 @@ describe("compactContext", () => {
         content: `Messaggio numero ${i} con testo aggiuntivo per riempire`,
       })),
     ];
-    const result = await compactContext({ messages: msgs, tokenBudget: 100, force: true });
+    const result = await compactContext({
+      messages: msgs,
+      tokenBudget: 100,
+      force: true,
+    });
     assert.equal(result.compacted, true);
     assert.ok(result.summary);
     assert.ok(result.tokensAfter <= result.tokensBefore);
@@ -171,8 +193,17 @@ describe("ContextEngine registry", () => {
     const id = "test-engine-" + Date.now();
     registerContextEngine(id, () => ({
       info: { id, name: "Test" },
-      async assemble() { return { messages: [], estimatedTokens: 0, includedSections: [], droppedSections: [] }; },
-      async compact() { return { ok: true, compacted: false, tokensBefore: 0, tokensAfter: 0 }; },
+      async assemble() {
+        return {
+          messages: [],
+          estimatedTokens: 0,
+          includedSections: [],
+          droppedSections: [],
+        };
+      },
+      async compact() {
+        return { ok: true, compacted: false, tokensBefore: 0, tokensAfter: 0 };
+      },
     }));
     const engine = await resolveContextEngine(id);
     assert.equal(engine.info.id, id);
@@ -180,7 +211,10 @@ describe("ContextEngine registry", () => {
   });
 
   it("lancia errore per engine inesistente", async () => {
-    await assert.rejects(() => resolveContextEngine("nonexistent-xyz"), /non registrato/);
+    await assert.rejects(
+      () => resolveContextEngine("nonexistent-xyz"),
+      /non registrato/,
+    );
   });
 
   it("listContextEngineIds elenca gli ID registrati", () => {

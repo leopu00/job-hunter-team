@@ -47,11 +47,7 @@ export {
   JHT_CONFIG_PATH,
 } from "./io";
 
-export {
-  resolveSecret,
-  createSecretRef,
-  describeSecret,
-} from "./secret-ref";
+export { resolveSecret, createSecretRef, describeSecret } from "./secret-ref";
 export type {
   SecretRef,
   SecretPlaintext,

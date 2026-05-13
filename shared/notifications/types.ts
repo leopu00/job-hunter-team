@@ -4,10 +4,10 @@
  * Supporta notifiche su desktop, telegram e web push.
  */
 
-export const NOTIFICATION_CHANNELS = ['desktop', 'telegram', 'web'] as const;
+export const NOTIFICATION_CHANNELS = ["desktop", "telegram", "web"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
-export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type NotificationPriority = "low" | "normal" | "high" | "urgent";
 
 export interface Notification {
   id: string;
@@ -37,7 +37,7 @@ export interface NotificationAdapter {
   send(notification: Notification): Promise<NotificationResult>;
 }
 
-export type SubscriptionMode = 'persistent' | 'once';
+export type SubscriptionMode = "persistent" | "once";
 
 export interface NotificationSubscription {
   id: string;
@@ -50,9 +50,9 @@ export interface NotificationSubscription {
 }
 
 export type NotificationEventType =
-  | 'notification.sent'
-  | 'notification.failed'
-  | 'notification.broadcast';
+  | "notification.sent"
+  | "notification.failed"
+  | "notification.broadcast";
 
 export interface NotificationEvent {
   type: NotificationEventType;
@@ -73,5 +73,5 @@ export interface NotificationsConfig {
 
 export const DEFAULT_NOTIFICATIONS_CONFIG: NotificationsConfig = {
   enabled: true,
-  channels: ['desktop', 'telegram', 'web'],
+  channels: ["desktop", "telegram", "web"],
 };

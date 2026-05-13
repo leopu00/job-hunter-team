@@ -72,14 +72,22 @@ describe("isBlockedHostnameOrIp — RFC2544 benchmark policy", () => {
 
   it("still blocks unrelated IPs even with RFC2544 allowance", () => {
     assert.equal(
-      isBlockedHostnameOrIp("198.51.100.1", { allowRfc2544BenchmarkRange: true }),
+      isBlockedHostnameOrIp("198.51.100.1", {
+        allowRfc2544BenchmarkRange: true,
+      }),
       true,
     );
   });
 });
 
 describe("isPrivateIpAddress — legacy IPv4 literals fail-closed", () => {
-  for (const literal of ["0177.0.0.1", "8.8.2056", "127.1", "2130706433", "0x7f000001"]) {
+  for (const literal of [
+    "0177.0.0.1",
+    "8.8.2056",
+    "127.1",
+    "2130706433",
+    "0x7f000001",
+  ]) {
     it(`blocks ${literal}`, () => {
       assert.equal(isPrivateIpAddress(literal), true);
     });
@@ -126,7 +134,8 @@ describe("validateUrl — hostname / IP literal blocking", () => {
       assert.throws(
         () => validateUrl(url),
         (err: unknown) =>
-          err instanceof SsrFBlockedError && /private|special-use|hostname/.test(err.message),
+          err instanceof SsrFBlockedError &&
+          /private|special-use|hostname/.test(err.message),
       );
     });
   }
@@ -140,27 +149,38 @@ describe("validateUrl — hostname / IP literal blocking", () => {
 describe("validateUrl — hostnameAllowlist", () => {
   it("allows hostname matching exact pattern", () => {
     assert.doesNotThrow(() =>
-      validateUrl("https://api.example.com/x", { hostnameAllowlist: ["api.example.com"] }),
+      validateUrl("https://api.example.com/x", {
+        hostnameAllowlist: ["api.example.com"],
+      }),
     );
   });
 
   it("allows hostname matching wildcard pattern", () => {
     assert.doesNotThrow(() =>
-      validateUrl("https://api.example.com/x", { hostnameAllowlist: ["*.example.com"] }),
+      validateUrl("https://api.example.com/x", {
+        hostnameAllowlist: ["*.example.com"],
+      }),
     );
   });
 
   it("rejects hostname not in allowlist", () => {
     assert.throws(
-      () => validateUrl("https://evil.com/x", { hostnameAllowlist: ["*.example.com"] }),
-      (err: unknown) => err instanceof SsrFBlockedError && /allowlist/.test(err.message),
+      () =>
+        validateUrl("https://evil.com/x", {
+          hostnameAllowlist: ["*.example.com"],
+        }),
+      (err: unknown) =>
+        err instanceof SsrFBlockedError && /allowlist/.test(err.message),
     );
   });
 
   it("rejects bare domain when only wildcard pattern is set", () => {
     // *.example.com does NOT match example.com itself
     assert.throws(
-      () => validateUrl("https://example.com/x", { hostnameAllowlist: ["*.example.com"] }),
+      () =>
+        validateUrl("https://example.com/x", {
+          hostnameAllowlist: ["*.example.com"],
+        }),
       (err: unknown) => err instanceof SsrFBlockedError,
     );
   });
@@ -179,8 +199,12 @@ describe("validateUrl — allowedHostnames", () => {
   // the global allowPrivateNetwork escape hatch.
   it("allows a named loopback hostname while still blocking other private IPs", () => {
     const policy = { allowedHostnames: ["localhost", "127.0.0.1", "::1"] };
-    assert.doesNotThrow(() => validateUrl("http://localhost:18789/status", policy));
-    assert.doesNotThrow(() => validateUrl("http://127.0.0.1:18789/status", policy));
+    assert.doesNotThrow(() =>
+      validateUrl("http://localhost:18789/status", policy),
+    );
+    assert.doesNotThrow(() =>
+      validateUrl("http://127.0.0.1:18789/status", policy),
+    );
     assert.doesNotThrow(() => validateUrl("http://[::1]:18789/status", policy));
 
     assert.throws(
@@ -198,13 +222,20 @@ describe("validateUrl — allowedHostnames", () => {
 // resolveAndAssertPublicHostname (mocked DNS)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type MockLookup = (hostname: string, opts?: { all?: boolean }) => Promise<unknown>;
+type MockLookup = (
+  hostname: string,
+  opts?: { all?: boolean },
+) => Promise<unknown>;
 
-function staticLookup(map: Record<string, Array<{ address: string; family: 4 | 6 }>>): MockLookup {
+function staticLookup(
+  map: Record<string, Array<{ address: string; family: 4 | 6 }>>,
+): MockLookup {
   return async (hostname, _opts) => {
     const entries = map[hostname];
     if (!entries) {
-      throw Object.assign(new Error(`mock: no record for ${hostname}`), { code: "ENOTFOUND" });
+      throw Object.assign(new Error(`mock: no record for ${hostname}`), {
+        code: "ENOTFOUND",
+      });
     }
     return entries;
   };
@@ -214,21 +245,28 @@ describe("resolveAndAssertPublicHostname", () => {
   it("returns resolved addresses for a public hostname", async () => {
     const lookupFn = staticLookup({
       "example.com": [{ address: "93.184.216.34", family: 4 }],
-    }) as unknown as Parameters<typeof resolveAndAssertPublicHostname>[1]["lookupFn"];
+    }) as unknown as Parameters<
+      typeof resolveAndAssertPublicHostname
+    >[1]["lookupFn"];
 
-    const addresses = await resolveAndAssertPublicHostname("example.com", { lookupFn });
+    const addresses = await resolveAndAssertPublicHostname("example.com", {
+      lookupFn,
+    });
     assert.deepEqual(addresses, ["93.184.216.34"]);
   });
 
   it("blocks when DNS resolves to a private IP (rebinding defence)", async () => {
     const lookupFn = staticLookup({
       "evil.example.com": [{ address: "169.254.169.254", family: 4 }],
-    }) as unknown as Parameters<typeof resolveAndAssertPublicHostname>[1]["lookupFn"];
+    }) as unknown as Parameters<
+      typeof resolveAndAssertPublicHostname
+    >[1]["lookupFn"];
 
     await assert.rejects(
       () => resolveAndAssertPublicHostname("evil.example.com", { lookupFn }),
       (err: unknown) =>
-        err instanceof SsrFBlockedError && /resolves to private|special-use/.test(err.message),
+        err instanceof SsrFBlockedError &&
+        /resolves to private|special-use/.test(err.message),
     );
   });
 
@@ -238,7 +276,9 @@ describe("resolveAndAssertPublicHostname", () => {
         { address: "8.8.8.8", family: 4 },
         { address: "10.0.0.1", family: 4 },
       ],
-    }) as unknown as Parameters<typeof resolveAndAssertPublicHostname>[1]["lookupFn"];
+    }) as unknown as Parameters<
+      typeof resolveAndAssertPublicHostname
+    >[1]["lookupFn"];
 
     await assert.rejects(
       () => resolveAndAssertPublicHostname("mixed.example.com", { lookupFn }),
@@ -252,7 +292,11 @@ describe("resolveAndAssertPublicHostname", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function recordingFetch(
-  responses: Array<{ url: string; status: number; headers?: Record<string, string> }>,
+  responses: Array<{
+    url: string;
+    status: number;
+    headers?: Record<string, string>;
+  }>,
 ): {
   fetchImpl: NonNullable<Parameters<typeof safeFetch>[2]>["fetchImpl"];
   calls: string[];
@@ -265,7 +309,9 @@ function recordingFetch(
       calls.push(String(input));
       const next = responses[i++];
       if (!next) {
-        throw new Error(`mock fetch exhausted at call ${calls.length}: ${input}`);
+        throw new Error(
+          `mock fetch exhausted at call ${calls.length}: ${input}`,
+        );
       }
       const headers = new Headers(next.headers ?? {});
       return new Response(null, { status: next.status, headers });
@@ -273,7 +319,9 @@ function recordingFetch(
   };
 }
 
-function publicLookup(): NonNullable<Parameters<typeof safeFetch>[2]>["lookupFn"] {
+function publicLookup(): NonNullable<
+  Parameters<typeof safeFetch>[2]
+>["lookupFn"] {
   return staticLookup({
     "example.com": [{ address: "93.184.216.34", family: 4 }],
     "other.example.com": [{ address: "93.184.216.35", family: 4 }],
@@ -332,7 +380,11 @@ describe("safeFetch — redirect handling", () => {
 
   it("rejects redirect loops", async () => {
     const { fetchImpl } = recordingFetch([
-      { url: "/a", status: 302, headers: { location: "https://example.com/a" } },
+      {
+        url: "/a",
+        status: 302,
+        headers: { location: "https://example.com/a" },
+      },
     ]);
     await assert.rejects(
       () =>
@@ -377,7 +429,8 @@ describe("safeFetch — redirect handling", () => {
           lookupFn: publicLookup(),
         }),
       (err: unknown) =>
-        err instanceof SsrFBlockedError && /resolves to private|special-use/.test(err.message),
+        err instanceof SsrFBlockedError &&
+        /resolves to private|special-use/.test(err.message),
     );
   });
 
@@ -395,7 +448,8 @@ describe("safeFetch — redirect handling", () => {
           fetchImpl,
           lookupFn: publicLookup(),
         }),
-      (err: unknown) => err instanceof SsrFBlockedError && /scheme/.test(err.message),
+      (err: unknown) =>
+        err instanceof SsrFBlockedError && /scheme/.test(err.message),
     );
   });
 });
@@ -408,7 +462,8 @@ describe("safeFetch — initial URL validation", () => {
           fetchImpl: () => Promise.reject(new Error("should not be called")),
           lookupFn: publicLookup(),
         }),
-      (err: unknown) => err instanceof SsrFBlockedError && /scheme/.test(err.message),
+      (err: unknown) =>
+        err instanceof SsrFBlockedError && /scheme/.test(err.message),
     );
   });
 

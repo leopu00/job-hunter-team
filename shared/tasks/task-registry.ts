@@ -23,14 +23,25 @@ const tasks = new Map<string, TaskRecord>();
 const taskIdsByOwnerKey = new Map<string, Set<string>>();
 const taskIdsByAgentId = new Map<string, Set<string>>();
 
-function addToIndex(index: Map<string, Set<string>>, key: string | undefined, taskId: string) {
+function addToIndex(
+  index: Map<string, Set<string>>,
+  key: string | undefined,
+  taskId: string,
+) {
   if (!key) return;
   let set = index.get(key);
-  if (!set) { set = new Set(); index.set(key, set); }
+  if (!set) {
+    set = new Set();
+    index.set(key, set);
+  }
   set.add(taskId);
 }
 
-function removeFromIndex(index: Map<string, Set<string>>, key: string | undefined, taskId: string) {
+function removeFromIndex(
+  index: Map<string, Set<string>>,
+  key: string | undefined,
+  taskId: string,
+) {
   if (!key) return;
   const set = index.get(key);
   if (!set) return;
@@ -93,13 +104,19 @@ export function listTasks(): TaskRecord[] {
 export function listTasksByOwner(ownerKey: string): TaskRecord[] {
   const ids = taskIdsByOwnerKey.get(ownerKey);
   if (!ids) return [];
-  return [...ids].map((id) => tasks.get(id)!).filter(Boolean).map((r) => ({ ...r }));
+  return [...ids]
+    .map((id) => tasks.get(id)!)
+    .filter(Boolean)
+    .map((r) => ({ ...r }));
 }
 
 export function listTasksByAgent(agentId: string): TaskRecord[] {
   const ids = taskIdsByAgentId.get(agentId);
   if (!ids) return [];
-  return [...ids].map((id) => tasks.get(id)!).filter(Boolean).map((r) => ({ ...r }));
+  return [...ids]
+    .map((id) => tasks.get(id)!)
+    .filter(Boolean)
+    .map((r) => ({ ...r }));
 }
 
 export type UpdateTaskParams = {
@@ -110,7 +127,10 @@ export type UpdateTaskParams = {
   error?: string;
 };
 
-export function updateTask(taskId: string, params: UpdateTaskParams): TaskRecord | undefined {
+export function updateTask(
+  taskId: string,
+  params: UpdateTaskParams,
+): TaskRecord | undefined {
   const record = tasks.get(taskId);
   if (!record) return undefined;
 
@@ -125,9 +145,12 @@ export function updateTask(taskId: string, params: UpdateTaskParams): TaskRecord
       record.endedAt = now;
     }
   }
-  if (params.progressSummary !== undefined) record.progressSummary = params.progressSummary;
-  if (params.terminalSummary !== undefined) record.terminalSummary = params.terminalSummary;
-  if (params.terminalOutcome !== undefined) record.terminalOutcome = params.terminalOutcome;
+  if (params.progressSummary !== undefined)
+    record.progressSummary = params.progressSummary;
+  if (params.terminalSummary !== undefined)
+    record.terminalSummary = params.terminalSummary;
+  if (params.terminalOutcome !== undefined)
+    record.terminalOutcome = params.terminalOutcome;
   if (params.error !== undefined) record.error = params.error;
 
   return { ...record };
@@ -148,7 +171,15 @@ export function deleteTask(taskId: string): boolean {
 }
 
 function emptyStatusCounts(): TaskStatusCounts {
-  return { queued: 0, running: 0, succeeded: 0, failed: 0, timed_out: 0, cancelled: 0, lost: 0 };
+  return {
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    timed_out: 0,
+    cancelled: 0,
+    lost: 0,
+  };
 }
 
 function emptyRuntimeCounts(): TaskRuntimeCounts {
@@ -157,7 +188,10 @@ function emptyRuntimeCounts(): TaskRuntimeCounts {
 
 export function getRegistrySummary(): TaskRegistrySummary {
   const summary: TaskRegistrySummary = {
-    total: 0, active: 0, terminal: 0, failures: 0,
+    total: 0,
+    active: 0,
+    terminal: 0,
+    failures: 0,
     byStatus: emptyStatusCounts(),
     byRuntime: emptyRuntimeCounts(),
   };
@@ -167,7 +201,11 @@ export function getRegistrySummary(): TaskRegistrySummary {
     summary.byRuntime[task.runtime]++;
     if (isActiveStatus(task.status)) summary.active++;
     else summary.terminal++;
-    if (task.status === "failed" || task.status === "timed_out" || task.status === "lost") {
+    if (
+      task.status === "failed" ||
+      task.status === "timed_out" ||
+      task.status === "lost"
+    ) {
       summary.failures++;
     }
   }

@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server'
-import { runBash } from '@/lib/shell'
+import { NextResponse } from "next/server";
+import { runBash } from "@/lib/shell";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 // Sessioni che NON fermiamo con "Stop team" (sopravvivono al ciclo).
 // ASSISTENTE è la chat utente, deve stare sempre attiva; viene spenta solo
 // chiudendo il container dall'app Desktop.
-const KEEP_ALIVE = new Set(['ASSISTENTE'])
+const KEEP_ALIVE = new Set(["ASSISTENTE"]);
 
 export async function POST() {
   try {
@@ -15,21 +15,27 @@ export async function POST() {
     // Prima c'era una lista hardcoded che mancava questi casi e lasciava
     // processi zombie. Killiamo anche il sentinel-bridge.py se gira, cosi'
     // al prossimo Avvia team non si accavallano piu' bridge.
-    const { stdout } = await runBash(`tmux ls -F '#{session_name}' 2>/dev/null || true`)
+    const { stdout } = await runBash(
+      `tmux ls -F '#{session_name}' 2>/dev/null || true`,
+    );
     const sessions = stdout
-      .split('\n')
-      .map(s => s.trim())
+      .split("\n")
+      .map((s) => s.trim())
       .filter(Boolean)
-      .filter(s => !KEEP_ALIVE.has(s))
+      .filter((s) => !KEEP_ALIVE.has(s));
 
-    const results: { session: string; status: 'killed' | 'error'; error?: string }[] = []
+    const results: {
+      session: string;
+      status: "killed" | "error";
+      error?: string;
+    }[] = [];
 
     for (const session of sessions) {
       try {
-        await runBash(`tmux kill-session -t "${session}" 2>&1`)
-        results.push({ session, status: 'killed' })
+        await runBash(`tmux kill-session -t "${session}" 2>&1`);
+        results.push({ session, status: "killed" });
       } catch (err: any) {
-        results.push({ session, status: 'error', error: err?.message })
+        results.push({ session, status: "error", error: err?.message });
       }
     }
 
@@ -39,18 +45,20 @@ export async function POST() {
     // su una sessione morta, e al prossimo Start team partirebbe un secondo
     // bridge in parallelo (duplicati nel sentinel-data.jsonl).
     try {
-      await runBash(`pkill -f sentinel-bridge.py 2>&1 || true`)
-    } catch { /* ignore */ }
+      await runBash(`pkill -f sentinel-bridge.py 2>&1 || true`);
+    } catch {
+      /* ignore */
+    }
 
     return NextResponse.json({
       ok: true,
       results,
       kept_alive: Array.from(KEEP_ALIVE),
-    })
+    });
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Stop team fallito' },
-      { status: 500 }
-    )
+      { ok: false, error: err?.message ?? "Stop team fallito" },
+      { status: 500 },
+    );
   }
 }

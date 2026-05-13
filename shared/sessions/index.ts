@@ -14,8 +14,13 @@ export type {
   InputProvenanceKind,
   SessionStoreFile,
   ParsedSessionLabel,
-} from './types.js';
-export { SESSION_ID_RE, looksLikeSessionId, parseSessionLabel, SESSION_LABEL_MAX_LENGTH } from './types.js';
+} from "./types.js";
+export {
+  SESSION_ID_RE,
+  looksLikeSessionId,
+  parseSessionLabel,
+  SESSION_LABEL_MAX_LENGTH,
+} from "./types.js";
 
 // Logica sessione
 export {
@@ -30,8 +35,8 @@ export {
   emitSessionCompanycycle,
   onSessionTranscript,
   emitSessionTranscript,
-} from './session.js';
-export type { CreateSessionParams, SessionPatch } from './session.js';
+} from "./session.js";
+export type { CreateSessionParams, SessionPatch } from "./session.js";
 
 // Store
 export {
@@ -45,7 +50,7 @@ export {
   removeSessionFromStore,
   addSessionToStore,
   pruneEndedSessions,
-} from './store.js';
+} from "./store.js";
 
 // Registry
-export { SessionRegistry } from './registry.js';
+export { SessionRegistry } from "./registry.js";

@@ -1,43 +1,57 @@
-import type { Metadata } from 'next'
-import BreadcrumbJsonLd from '../components/BreadcrumbJsonLd'
-import { getNonce } from '@/lib/csp'
+import type { Metadata } from "next";
+import BreadcrumbJsonLd from "../components/BreadcrumbJsonLd";
+import { getNonce } from "@/lib/csp";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobhunterteam.ai'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jobhunterteam.ai";
 
 export const metadata: Metadata = {
-  title: 'Progetto',
-  description: 'Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.',
+  title: "Progetto",
+  description:
+    "Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.",
   openGraph: {
-    title: 'Progetto | Job Hunter Team',
-    description: 'Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.',
+    title: "Progetto | Job Hunter Team",
+    description:
+      "Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.",
   },
   twitter: {
-    card: 'summary',
-    title: 'Progetto | Job Hunter Team',
-    description: 'Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.',
+    card: "summary",
+    title: "Progetto | Job Hunter Team",
+    description:
+      "Panoramica pubblica del progetto Job Hunter Team: obiettivo, repository, stack e architettura open source.",
   },
-}
+};
 
 async function CompanyJsonLd() {
-  const nonce = await getNonce()
+  const nonce = await getNonce();
   const data = {
-    '@context': 'https://schema.org',
-    '@type': 'WebCompany',
-    name: 'Progetto - Job Hunter Team',
-    description: 'Panoramica pubblica del progetto Job Hunter Team.',
+    "@context": "https://schema.org",
+    "@type": "WebCompany",
+    name: "Progetto - Job Hunter Team",
+    description: "Panoramica pubblica del progetto Job Hunter Team.",
     url: `${SITE_URL}/project`,
-    isPartOf: { '@type': 'WebSite', name: 'Job Hunter Team', url: SITE_URL },
-  }
+    isPartOf: { "@type": "WebSite", name: "Job Hunter Team", url: SITE_URL },
+  };
 
-  return <script nonce={nonce} type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+  return (
+    <script
+      nonce={nonce}
+      type="application/ld+json"
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
 }
 
-export default function CompanyLayout({ children }: { children: React.ReactNode }) {
+export default function CompanyLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <>
-      <BreadcrumbJsonLd items={[{ name: 'Progetto', path: '/project' }]} />
+      <BreadcrumbJsonLd items={[{ name: "Progetto", path: "/project" }]} />
       <CompanyJsonLd />
       {children}
     </>
-  )
+  );
 }

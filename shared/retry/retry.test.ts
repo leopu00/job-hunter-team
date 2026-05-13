@@ -1,9 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  CircuitBreaker,
-  CircuitBreakerOpenError,
-} from "./circuit-breaker.js";
+import { CircuitBreaker, CircuitBreakerOpenError } from "./circuit-breaker.js";
 import {
   retryAsync,
   resolveRetryConfig,
@@ -40,7 +37,10 @@ describe("CircuitBreaker", () => {
   });
 
   it("lancia CircuitBreakerOpenError quando aperto", async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 60_000 });
+    const cb = new CircuitBreaker({
+      failureThreshold: 1,
+      resetTimeoutMs: 60_000,
+    });
     cb.onFailure();
     await assert.rejects(
       () => cb.execute(() => Promise.resolve("ok")),
@@ -58,7 +58,11 @@ describe("CircuitBreaker", () => {
   });
 
   it("chiude dopo halfOpenSuccesses in half-open", async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 10, halfOpenSuccesses: 2 });
+    const cb = new CircuitBreaker({
+      failureThreshold: 1,
+      resetTimeoutMs: 10,
+      halfOpenSuccesses: 2,
+    });
     cb.onFailure();
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(cb.getStatus().state, "half-open");
@@ -86,7 +90,9 @@ describe("CircuitBreaker", () => {
 
   it("execute() registra il fallimento e rilancia", async () => {
     const cb = new CircuitBreaker({ failureThreshold: 5 });
-    await assert.rejects(() => cb.execute(() => Promise.reject(new Error("boom"))));
+    await assert.rejects(() =>
+      cb.execute(() => Promise.reject(new Error("boom"))),
+    );
     assert.equal(cb.getStatus().failures, 1);
   });
 
@@ -110,17 +116,26 @@ describe("retryAsync (retry module)", () => {
 
   it("ritenta e riesce", async () => {
     let calls = 0;
-    const result = await retryAsync(() => {
-      calls++;
-      if (calls < 3) throw new Error("fail");
-      return Promise.resolve("ok");
-    }, { attempts: 3, minDelayMs: 1, maxDelayMs: 1 });
+    const result = await retryAsync(
+      () => {
+        calls++;
+        if (calls < 3) throw new Error("fail");
+        return Promise.resolve("ok");
+      },
+      { attempts: 3, minDelayMs: 1, maxDelayMs: 1 },
+    );
     assert.equal(result, "ok");
   });
 
   it("lancia dopo tentativi esauriti", async () => {
     await assert.rejects(
-      () => retryAsync(() => { throw new Error("nope"); }, { attempts: 2, minDelayMs: 1, maxDelayMs: 1 }),
+      () =>
+        retryAsync(
+          () => {
+            throw new Error("nope");
+          },
+          { attempts: 2, minDelayMs: 1, maxDelayMs: 1 },
+        ),
       { message: "nope" },
     );
   });
@@ -162,7 +177,9 @@ describe("defaults", () => {
   it("DEFAULT_RETRY_CONFIG ha valori ragionevoli", () => {
     assert.equal(DEFAULT_RETRY_CONFIG.attempts, 3);
     assert.equal(DEFAULT_RETRY_CONFIG.minDelayMs, 300);
-    assert.ok(DEFAULT_RETRY_CONFIG.maxDelayMs >= DEFAULT_RETRY_CONFIG.minDelayMs);
+    assert.ok(
+      DEFAULT_RETRY_CONFIG.maxDelayMs >= DEFAULT_RETRY_CONFIG.minDelayMs,
+    );
   });
 
   it("DEFAULT_CIRCUIT_CONFIG ha valori ragionevoli", () => {

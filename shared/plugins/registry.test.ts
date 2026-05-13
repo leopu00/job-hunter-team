@@ -126,7 +126,10 @@ describe("RegistryBuilder", () => {
   it("isPluginEnabled rispetta deny list", () => {
     const builder = new RegistryBuilder();
     builder.addDiscovered(makeManifest("blocked"), "/tmp");
-    const config: PluginsConfig = { ...DEFAULT_PLUGINS_CONFIG, deny: ["blocked"] };
+    const config: PluginsConfig = {
+      ...DEFAULT_PLUGINS_CONFIG,
+      deny: ["blocked"],
+    };
     assert.equal(builder.isPluginEnabled("blocked", config), false);
   });
 
@@ -134,7 +137,10 @@ describe("RegistryBuilder", () => {
     const builder = new RegistryBuilder();
     builder.addDiscovered(makeManifest("allowed"), "/tmp");
     builder.addDiscovered(makeManifest("other"), "/tmp");
-    const config: PluginsConfig = { ...DEFAULT_PLUGINS_CONFIG, allow: ["allowed"] };
+    const config: PluginsConfig = {
+      ...DEFAULT_PLUGINS_CONFIG,
+      allow: ["allowed"],
+    };
     assert.equal(builder.isPluginEnabled("allowed", config), true);
     assert.equal(builder.isPluginEnabled("other", config), false);
   });
@@ -172,7 +178,11 @@ function makeManifest(id: string): PluginManifest {
   return { id, name: `Plugin ${id}`, version: "1.0.0", enabledByDefault: true };
 }
 
-function makeRecord(id: string, status = "discovered" as any, kind?: string): PluginRecord {
+function makeRecord(
+  id: string,
+  status = "discovered" as any,
+  kind?: string,
+): PluginRecord {
   const manifest = makeManifest(id);
   if (kind) manifest.kind = kind as any;
   return { id, manifest, status, rootDir: `/tmp/${id}` };

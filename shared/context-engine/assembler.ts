@@ -10,8 +10,8 @@ import type {
   ContextMessage,
   AssembleResult,
   SectionPriority,
-} from './types.js';
-import { estimateSectionTokens, estimateMessageTokens } from './types.js';
+} from "./types.js";
+import { estimateSectionTokens, estimateMessageTokens } from "./types.js";
 
 const PRIORITY_ORDER: Record<SectionPriority, number> = {
   required: 0,
@@ -78,7 +78,7 @@ export function assembleContext(params: {
     const remainingBudget = tokenBudget - totalTokens;
 
     // Sezioni required: includi sempre (tronca se necessario)
-    if (section.priority === 'required') {
+    if (section.priority === "required") {
       const budget = Math.min(sectionMax, remainingBudget);
       const messages =
         sectionTokens <= budget
@@ -137,31 +137,37 @@ export function assembleContext(params: {
 
 export function systemSection(content: string): ContextSection {
   return {
-    id: 'system',
-    priority: 'required',
-    messages: [{ role: 'system', content }],
+    id: "system",
+    priority: "required",
+    messages: [{ role: "system", content }],
   };
 }
 
 export function memorySection(memories: string[]): ContextSection {
-  if (memories.length === 0) return { id: 'memory', priority: 'high', messages: [] };
+  if (memories.length === 0)
+    return { id: "memory", priority: "high", messages: [] };
   return {
-    id: 'memory',
-    priority: 'high',
-    messages: [{ role: 'system', content: `Memoria rilevante:\n${memories.join('\n')}` }],
+    id: "memory",
+    priority: "high",
+    messages: [
+      { role: "system", content: `Memoria rilevante:\n${memories.join("\n")}` },
+    ],
   };
 }
 
-export function toolsSection(tools: Array<{ name: string; description: string }>): ContextSection {
-  if (tools.length === 0) return { id: 'tools', priority: 'medium', messages: [] };
-  const desc = tools.map((t) => `- ${t.name}: ${t.description}`).join('\n');
+export function toolsSection(
+  tools: Array<{ name: string; description: string }>,
+): ContextSection {
+  if (tools.length === 0)
+    return { id: "tools", priority: "medium", messages: [] };
+  const desc = tools.map((t) => `- ${t.name}: ${t.description}`).join("\n");
   return {
-    id: 'tools',
-    priority: 'medium',
-    messages: [{ role: 'system', content: `Tool disponibili:\n${desc}` }],
+    id: "tools",
+    priority: "medium",
+    messages: [{ role: "system", content: `Tool disponibili:\n${desc}` }],
   };
 }
 
 export function historySection(messages: ContextMessage[]): ContextSection {
-  return { id: 'history', priority: 'high', messages };
+  return { id: "history", priority: "high", messages };
 }

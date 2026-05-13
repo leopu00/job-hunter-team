@@ -1,6 +1,10 @@
 export default function DashboardLoading() {
   return (
-    <div aria-busy="true" aria-label="Loading dashboard" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div
+      aria-busy="true"
+      aria-label="Loading dashboard"
+      style={{ animation: "fade-in 0.2s ease both" }}
+    >
       {/* Header skeleton */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-4 w-24 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
@@ -11,7 +15,10 @@ export default function DashboardLoading() {
       {/* KPI cards skeleton */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div
+            key={i}
+            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
+          >
             <div className="h-2.5 w-20 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
             <div className="h-8 w-14 rounded bg-[var(--color-border)] animate-pulse" />
           </div>
@@ -34,7 +41,10 @@ export default function DashboardLoading() {
       <div className="h-3 w-36 rounded bg-[var(--color-border)] mb-4 animate-pulse" />
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-4">
+          <div
+            key={i}
+            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 flex items-center gap-4"
+          >
             <div className="w-2 h-2 rounded-full bg-[var(--color-border)] animate-pulse" />
             <div className="flex-1">
               <div className="h-3.5 w-48 rounded bg-[var(--color-border)] mb-2 animate-pulse" />
@@ -45,5 +55,5 @@ export default function DashboardLoading() {
         ))}
       </div>
     </div>
-  )
+  );
 }

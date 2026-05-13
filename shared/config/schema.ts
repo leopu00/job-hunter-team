@@ -28,12 +28,15 @@ export const AIProviderSchema = z
       if (p.auth_method === "api_key") return !!p.api_key;
       return true;
     },
-    { message: "api_key obbligatoria quando auth_method = 'api_key'", path: ["api_key"] }
+    {
+      message: "api_key obbligatoria quando auth_method = 'api_key'",
+      path: ["api_key"],
+    },
   );
-  // Niente refine su subscription: per auth_method = "subscription" l'auth
-  // viene fatta dal CLI provider (claude/codex/kimi) via OAuth device flow.
-  // I token vivono fuori dal config (~/.claude/, ecc), quindi 'subscription'
-  // qui e' opzionale e per lo piu' vuoto.
+// Niente refine su subscription: per auth_method = "subscription" l'auth
+// viene fatta dal CLI provider (claude/codex/kimi) via OAuth device flow.
+// I token vivono fuori dal config (~/.claude/, ecc), quindi 'subscription'
+// qui e' opzionale e per lo piu' vuoto.
 
 // Singolo bot Telegram (decisione 2026-05-13 rev2): un bot per agente
 // user-facing → 3 bot obbligatori (assistente, capitano, mentor).
@@ -102,9 +105,10 @@ export const JHTConfigSchema = z
       return !!cfg.providers[activeKey];
     },
     {
-      message: "Il provider attivo deve avere una configurazione in 'providers'",
+      message:
+        "Il provider attivo deve avere una configurazione in 'providers'",
       path: ["active_provider"],
-    }
+    },
   );
 
 // --- Tipi derivati dallo schema ---

@@ -7,7 +7,12 @@
 
 // --- Hook Event ---
 
-export type HookEventType = "command" | "session" | "agent" | "message" | "gateway";
+export type HookEventType =
+  | "command"
+  | "session"
+  | "agent"
+  | "message"
+  | "gateway";
 
 export type HookEvent = {
   type: HookEventType;

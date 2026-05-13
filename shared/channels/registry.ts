@@ -4,7 +4,12 @@
  * Registro centralizzato per tutti i canali. Permette di registrare,
  * recuperare, e inviare messaggi broadcast a tutti i canali attivi.
  */
-import type { Channel, ChannelId, ChannelMessage, MessageHandler } from './channel.js';
+import type {
+  Channel,
+  ChannelId,
+  ChannelMessage,
+  MessageHandler,
+} from "./channel.js";
 
 export class ChannelRegistry {
   #channels: Map<ChannelId, Channel> = new Map();
@@ -52,7 +57,10 @@ export class ChannelRegistry {
    * Connette tutti i canali registrati.
    * Ritorna un report con successi e errori.
    */
-  async connectAll(): Promise<{ connected: ChannelId[]; errors: Array<{ id: ChannelId; error: string }> }> {
+  async connectAll(): Promise<{
+    connected: ChannelId[];
+    errors: Array<{ id: ChannelId; error: string }>;
+  }> {
     const connected: ChannelId[] = [];
     const errors: Array<{ id: ChannelId; error: string }> = [];
 
@@ -84,7 +92,10 @@ export class ChannelRegistry {
    */
   async sendTo(
     id: ChannelId,
-    params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+    params: Omit<
+      ChannelMessage,
+      "id" | "channelId" | "direction" | "timestamp"
+    >,
   ): Promise<ChannelMessage | null> {
     const channel = this.#channels.get(id);
     if (!channel?.connected) return null;
@@ -96,7 +107,10 @@ export class ChannelRegistry {
    * Ritorna i messaggi inviati con successo.
    */
   async broadcast(
-    params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+    params: Omit<
+      ChannelMessage,
+      "id" | "channelId" | "direction" | "timestamp"
+    >,
   ): Promise<ChannelMessage[]> {
     const results: ChannelMessage[] = [];
     for (const channel of this.listConnected()) {

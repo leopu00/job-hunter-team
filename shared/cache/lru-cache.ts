@@ -1,8 +1,14 @@
 /**
  * Cache — LRU con TTL e invalidazione
  */
-import type { CacheEntry, CacheConfig, CacheStats, CacheSetOptions, EvictReason } from './types.js';
-import { DEFAULT_CACHE_CONFIG } from './types.js';
+import type {
+  CacheEntry,
+  CacheConfig,
+  CacheStats,
+  CacheSetOptions,
+  EvictReason,
+} from "./types.js";
+import { DEFAULT_CACHE_CONFIG } from "./types.js";
 
 export class LRUCache<T = unknown> {
   private entries = new Map<string, CacheEntry<T>>();
@@ -57,7 +63,7 @@ export class LRUCache<T = unknown> {
 
     // Controlla TTL
     if (entry.expiresAt > 0 && Date.now() > entry.expiresAt) {
-      this.remove(key, 'expired');
+      this.remove(key, "expired");
       this.totalMisses++;
       return undefined;
     }
@@ -77,7 +83,7 @@ export class LRUCache<T = unknown> {
     const entry = this.entries.get(key);
     if (!entry) return false;
     if (entry.expiresAt > 0 && Date.now() > entry.expiresAt) {
-      this.remove(key, 'expired');
+      this.remove(key, "expired");
       return false;
     }
     return true;
@@ -85,7 +91,7 @@ export class LRUCache<T = unknown> {
 
   /** Rimuove una entry per chiave. */
   delete(key: string): boolean {
-    return this.remove(key, 'manual');
+    return this.remove(key, "manual");
   }
 
   /** Invalida tutte le chiavi che matchano un prefisso. */
@@ -93,7 +99,7 @@ export class LRUCache<T = unknown> {
     let count = 0;
     for (const key of [...this.entries.keys()]) {
       if (key.startsWith(prefix)) {
-        this.remove(key, 'manual');
+        this.remove(key, "manual");
         count++;
       }
     }
@@ -105,7 +111,7 @@ export class LRUCache<T = unknown> {
     let count = 0;
     for (const key of [...this.entries.keys()]) {
       if (pattern.test(key)) {
-        this.remove(key, 'manual');
+        this.remove(key, "manual");
         count++;
       }
     }
@@ -118,7 +124,7 @@ export class LRUCache<T = unknown> {
     let count = 0;
     for (const [key, entry] of this.entries) {
       if (entry.expiresAt > 0 && now > entry.expiresAt) {
-        this.remove(key, 'expired');
+        this.remove(key, "expired");
         count++;
       }
     }
@@ -129,7 +135,7 @@ export class LRUCache<T = unknown> {
   clear(): void {
     if (this.onEvict) {
       for (const key of this.entries.keys()) {
-        this.onEvict(key, 'clear');
+        this.onEvict(key, "clear");
       }
     }
     this.entries.clear();
@@ -179,7 +185,7 @@ export class LRUCache<T = unknown> {
     // Map mantiene ordine di inserimento — il primo e' il meno recente
     const oldest = this.entries.keys().next().value;
     if (oldest !== undefined) {
-      this.remove(oldest, 'lru');
+      this.remove(oldest, "lru");
     }
   }
 }

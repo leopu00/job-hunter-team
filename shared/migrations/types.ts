@@ -18,7 +18,7 @@ export interface Migration {
 export interface MigrationResult {
   version: string;
   description: string;
-  direction: 'up' | 'down';
+  direction: "up" | "down";
   success: boolean;
   error?: string;
   durationMs: number;
@@ -51,8 +51,8 @@ export interface MigrationConfig {
 }
 
 export const DEFAULT_MIGRATION_CONFIG: Required<MigrationConfig> = {
-  statePath: '',  // risolto a runtime
-  initialVersion: '0.0.0',
+  statePath: "", // risolto a runtime
+  initialVersion: "0.0.0",
   backup: true,
 };
 

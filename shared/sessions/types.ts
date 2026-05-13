@@ -4,11 +4,12 @@
  * Una sessione rappresenta una conversazione tra utente e agenti
  * attraverso un canale specifico (web, CLI, Telegram).
  */
-import type { ChannelId } from '../channels/channel.js';
+import type { ChannelId } from "../channels/channel.js";
 
 // --- Session ID ---
 
-export const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function looksLikeSessionId(value: string): boolean {
   return SESSION_ID_RE.test(value.trim());
@@ -16,9 +17,9 @@ export function looksLikeSessionId(value: string): boolean {
 
 // --- Session State ---
 
-export type SessionState = 'active' | 'paused' | 'ended';
+export type SessionState = "active" | "paused" | "ended";
 
-export type SessionChatType = 'direct' | 'group' | 'channel';
+export type SessionChatType = "direct" | "group" | "channel";
 
 // --- Session Entry ---
 
@@ -59,22 +60,30 @@ export type ParsedSessionLabel =
   | { ok: false; error: string };
 
 export function parseSessionLabel(raw: unknown): ParsedSessionLabel {
-  if (typeof raw !== 'string') {
-    return { ok: false, error: 'label deve essere una stringa' };
+  if (typeof raw !== "string") {
+    return { ok: false, error: "label deve essere una stringa" };
   }
   const trimmed = raw.trim();
   if (!trimmed) {
-    return { ok: false, error: 'label vuota' };
+    return { ok: false, error: "label vuota" };
   }
   if (trimmed.length > SESSION_LABEL_MAX_LENGTH) {
-    return { ok: false, error: `label troppo lunga (max ${SESSION_LABEL_MAX_LENGTH})` };
+    return {
+      ok: false,
+      error: `label troppo lunga (max ${SESSION_LABEL_MAX_LENGTH})`,
+    };
   }
   return { ok: true, label: trimmed };
 }
 
 // --- Companycycle Events ---
 
-export type SessionCompanycycleAction = 'created' | 'resumed' | 'paused' | 'ended' | 'updated';
+export type SessionCompanycycleAction =
+  | "created"
+  | "resumed"
+  | "paused"
+  | "ended"
+  | "updated";
 
 export interface SessionCompanycycleEvent {
   sessionId: string;
@@ -90,7 +99,7 @@ export interface SessionCompanycycleEvent {
 export interface SessionTranscriptUpdate {
   sessionId: string;
   messageId?: string;
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   text: string;
   timestamp: number;
   meta?: Record<string, unknown>;
@@ -98,7 +107,10 @@ export interface SessionTranscriptUpdate {
 
 // --- Input Provenance ---
 
-export type InputProvenanceKind = 'external_user' | 'inter_session' | 'internal_system';
+export type InputProvenanceKind =
+  | "external_user"
+  | "inter_session"
+  | "internal_system";
 
 export interface InputProvenance {
   kind: InputProvenanceKind;

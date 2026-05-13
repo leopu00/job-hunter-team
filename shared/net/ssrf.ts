@@ -123,12 +123,19 @@ const BLOCKED_HOSTNAMES = new Set([
 
 const DEFAULT_MAX_REDIRECTS = 3;
 
-function resolveIpv4SpecialUseBlockOptions(policy?: SsrFPolicy): Ipv4SpecialUseBlockOptions {
-  return { allowRfc2544BenchmarkRange: policy?.allowRfc2544BenchmarkRange === true };
+function resolveIpv4SpecialUseBlockOptions(
+  policy?: SsrFPolicy,
+): Ipv4SpecialUseBlockOptions {
+  return {
+    allowRfc2544BenchmarkRange: policy?.allowRfc2544BenchmarkRange === true,
+  };
 }
 
 function isPrivateNetworkAllowedByPolicy(policy?: SsrFPolicy): boolean {
-  return policy?.dangerouslyAllowPrivateNetwork === true || policy?.allowPrivateNetwork === true;
+  return (
+    policy?.dangerouslyAllowPrivateNetwork === true ||
+    policy?.allowPrivateNetwork === true
+  );
 }
 
 function normalizeHostnameSet(values?: string[]): Set<string> {
@@ -151,7 +158,10 @@ function normalizeHostnameAllowlist(values?: string[]): string[] {
   );
 }
 
-function isHostnameAllowedByPattern(hostname: string, pattern: string): boolean {
+function isHostnameAllowedByPattern(
+  hostname: string,
+  pattern: string,
+): boolean {
   if (pattern.startsWith("*.")) {
     const suffix = pattern.slice(2);
     if (!suffix || hostname === suffix) {
@@ -162,11 +172,16 @@ function isHostnameAllowedByPattern(hostname: string, pattern: string): boolean 
   return hostname === pattern;
 }
 
-function matchesHostnameAllowlist(hostname: string, allowlist: string[]): boolean {
+function matchesHostnameAllowlist(
+  hostname: string,
+  allowlist: string[],
+): boolean {
   if (allowlist.length === 0) {
     return true;
   }
-  return allowlist.some((pattern) => isHostnameAllowedByPattern(hostname, pattern));
+  return allowlist.some((pattern) =>
+    isHostnameAllowedByPattern(hostname, pattern),
+  );
 }
 
 function looksLikeUnsupportedIpv4Literal(address: string): boolean {
@@ -188,7 +203,10 @@ function looksLikeUnsupportedIpv4Literal(address: string): boolean {
  * fail-closed: malformed IPv6, legacy IPv4 (0177.0.0.1, 127.1, 0x7f000001,
  * decimal 2130706433, embedded-IPv4-in-IPv6 sentinels for 6to4/Teredo/NAT64).
  */
-export function isPrivateIpAddress(address: string, policy?: SsrFPolicy): boolean {
+export function isPrivateIpAddress(
+  address: string,
+  policy?: SsrFPolicy,
+): boolean {
   const normalized = normalizeHostname(address);
   if (!normalized) {
     return false;
@@ -213,7 +231,10 @@ export function isPrivateIpAddress(address: string, policy?: SsrFPolicy): boolea
   if (normalized.includes(":") && !parseLooseIpAddress(normalized)) {
     return true;
   }
-  if (!isCompany 033DottedDecimalIPv4(normalized) && isLegacyIpv4Literal(normalized)) {
+  if (
+    !isCompany 033DottedDecimalIPv4(normalized) &&
+    isLegacyIpv4Literal(normalized)
+  ) {
     return true;
   }
   if (looksLikeUnsupportedIpv4Literal(normalized)) {
@@ -233,12 +254,18 @@ function isBlockedHostnameLiteral(normalized: string): boolean {
   );
 }
 
-export function isBlockedHostnameOrIp(hostname: string, policy?: SsrFPolicy): boolean {
+export function isBlockedHostnameOrIp(
+  hostname: string,
+  policy?: SsrFPolicy,
+): boolean {
   const normalized = normalizeHostname(hostname);
   if (!normalized) {
     return false;
   }
-  return isBlockedHostnameLiteral(normalized) || isPrivateIpAddress(normalized, policy);
+  return (
+    isBlockedHostnameLiteral(normalized) ||
+    isPrivateIpAddress(normalized, policy)
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +290,9 @@ export function validateUrl(rawUrl: string, policy?: SsrFPolicy): URL {
     throw new SsrFBlockedError(`Invalid URL: ${rawUrl}`);
   }
   if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
-    throw new SsrFBlockedError(`Blocked scheme: ${parsed.protocol} (only http/https allowed)`);
+    throw new SsrFBlockedError(
+      `Blocked scheme: ${parsed.protocol} (only http/https allowed)`,
+    );
   }
 
   const normalized = normalizeHostname(parsed.hostname);
@@ -273,7 +302,9 @@ export function validateUrl(rawUrl: string, policy?: SsrFPolicy): URL {
 
   const allowlist = normalizeHostnameAllowlist(policy?.hostnameAllowlist);
   if (!matchesHostnameAllowlist(normalized, allowlist)) {
-    throw new SsrFBlockedError(`Blocked hostname (not in allowlist): ${parsed.hostname}`);
+    throw new SsrFBlockedError(
+      `Blocked hostname (not in allowlist): ${parsed.hostname}`,
+    );
   }
 
   const skipPrivateNetworkChecks =
@@ -319,7 +350,10 @@ export async function resolveAndAssertPublicHostname(
   // pass — call this directly for hostnames that bypass validateUrl).
   const literalIp = parseCompany 033IpAddress(normalized);
   if (literalIp) {
-    if (!skipPrivateNetworkChecks && isPrivateIpAddress(normalized, options.policy)) {
+    if (
+      !skipPrivateNetworkChecks &&
+      isPrivateIpAddress(normalized, options.policy)
+    ) {
       throw new SsrFBlockedError(
         `Blocked: literal IP resolves to private/internal/special-use address: ${hostname}`,
       );
@@ -375,7 +409,11 @@ function retainSafeHeadersForCrossOriginRedirect(
   const incoming = new Headers(headers);
   const safeHeaders: Record<string, string> = {};
   for (const [key, value] of incoming.entries()) {
-    if (CROSS_ORIGIN_REDIRECT_SAFE_HEADERS.has(normalizeLowercaseStringOrEmpty(key))) {
+    if (
+      CROSS_ORIGIN_REDIRECT_SAFE_HEADERS.has(
+        normalizeLowercaseStringOrEmpty(key),
+      )
+    ) {
       safeHeaders[key] = value;
     }
   }
@@ -434,7 +472,13 @@ function rewriteRedirectInitForCrossOrigin(
 }
 
 function isRedirectStatus(status: number): boolean {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+  return (
+    status === 301 ||
+    status === 302 ||
+    status === 303 ||
+    status === 307 ||
+    status === 308
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -463,7 +507,8 @@ export async function safeFetch(
   }
 
   const maxRedirects =
-    typeof options.maxRedirects === "number" && Number.isFinite(options.maxRedirects)
+    typeof options.maxRedirects === "number" &&
+    Number.isFinite(options.maxRedirects)
       ? Math.max(0, Math.floor(options.maxRedirects))
       : DEFAULT_MAX_REDIRECTS;
 
@@ -499,7 +544,9 @@ export async function safeFetch(
 
       const location = response.headers.get("location");
       if (!location) {
-        throw new Error(`Redirect missing location header (${response.status})`);
+        throw new Error(
+          `Redirect missing location header (${response.status})`,
+        );
       }
 
       redirectCount += 1;
@@ -523,7 +570,9 @@ export async function safeFetch(
         if (currentInit?.headers) {
           currentInit = {
             ...currentInit,
-            headers: retainSafeHeadersForCrossOriginRedirect(currentInit.headers),
+            headers: retainSafeHeadersForCrossOriginRedirect(
+              currentInit.headers,
+            ),
           };
         }
       }
@@ -555,7 +604,10 @@ function combineSignals(
   if (!caller) {
     return timeout;
   }
-  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+  if (
+    typeof AbortSignal !== "undefined" &&
+    typeof AbortSignal.any === "function"
+  ) {
     return AbortSignal.any([caller, timeout]);
   }
   // Fallback for older runtimes: relay both into a fresh controller.

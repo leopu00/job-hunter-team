@@ -7,7 +7,10 @@ import { normalizeLowercaseStringOrEmpty } from "./string-coerce.js";
  * Ported from OpenClaw `src/infra/net/hostname.ts`.
  */
 export function normalizeHostname(hostname: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(hostname).replace(/\.$/, "");
+  const normalized = normalizeLowercaseStringOrEmpty(hostname).replace(
+    /\.$/,
+    "",
+  );
   if (normalized.startsWith("[") && normalized.endsWith("]")) {
     return normalized.slice(1, -1);
   }

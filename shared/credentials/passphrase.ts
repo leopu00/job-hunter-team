@@ -18,14 +18,14 @@
  * il path env var.
  */
 
-import { createRequire } from 'node:module'
+import { createRequire } from "node:module";
 
-const KEYRING_SERVICE = 'jht-credentials'
+const KEYRING_SERVICE = "jht-credentials";
 
 export class MissingPassphraseError extends Error {
   constructor(envVarName: string) {
-    super(buildMissingPassphraseMessage(envVarName))
-    this.name = 'MissingPassphraseError'
+    super(buildMissingPassphraseMessage(envVarName));
+    this.name = "MissingPassphraseError";
   }
 }
 
@@ -39,48 +39,48 @@ function buildMissingPassphraseMessage(envVarName: string): string {
     ``,
     `Niente piu' fallback machine-derived: i token cifrati non sono`,
     `recuperabili senza una passphrase scelta dall'utente.`,
-  ].join('\n')
+  ].join("\n");
 }
 
 interface KeyringEntry {
-  getPassword(): string | null
+  getPassword(): string | null;
 }
 interface KeyringModule {
-  Entry: new (service: string, account: string) => KeyringEntry
+  Entry: new (service: string, account: string) => KeyringEntry;
 }
 
 const requireMaybe = (() => {
   try {
-    return createRequire(import.meta.url)
+    return createRequire(import.meta.url);
   } catch {
-    return null
+    return null;
   }
-})()
+})();
 
 function tryKeyring(account: string): string | null {
-  if (!requireMaybe) return null
+  if (!requireMaybe) return null;
   try {
-    const mod = requireMaybe('@napi-rs/keyring') as KeyringModule | null
-    if (!mod?.Entry) return null
-    const entry = new mod.Entry(KEYRING_SERVICE, account)
-    const value = entry.getPassword()
-    return value && value.trim() ? value : null
+    const mod = requireMaybe("@napi-rs/keyring") as KeyringModule | null;
+    if (!mod?.Entry) return null;
+    const entry = new mod.Entry(KEYRING_SERVICE, account);
+    const value = entry.getPassword();
+    return value && value.trim() ? value : null;
   } catch {
     // Pacchetto non installato o errore platform → fallback silenzioso.
-    return null
+    return null;
   }
 }
 
 export interface ResolvePassphraseOptions {
   /** Nome dell'env var preferita. Default: `JHT_CREDENTIALS_KEY`. */
-  envVar?: string
+  envVar?: string;
   /** Account name per il keyring. Default: l'env var name. */
-  keyringAccount?: string
+  keyringAccount?: string;
   /**
    * Env var legacy ammesse come fallback (non documentate). Utili per
    * non rompere setup esistenti come `JHT_ENCRYPTION_KEY` (tui/oauth).
    */
-  legacyEnvVars?: readonly string[]
+  legacyEnvVars?: readonly string[];
 }
 
 /**
@@ -90,20 +90,20 @@ export interface ResolvePassphraseOptions {
 export function resolveJhtPassphrase(
   options: ResolvePassphraseOptions = {},
 ): string {
-  const envVar = options.envVar ?? 'JHT_CREDENTIALS_KEY'
-  const account = options.keyringAccount ?? envVar
-  const legacy = options.legacyEnvVars ?? []
+  const envVar = options.envVar ?? "JHT_CREDENTIALS_KEY";
+  const account = options.keyringAccount ?? envVar;
+  const legacy = options.legacyEnvVars ?? [];
 
-  const fromEnv = process.env[envVar]?.trim()
-  if (fromEnv) return fromEnv
+  const fromEnv = process.env[envVar]?.trim();
+  if (fromEnv) return fromEnv;
 
   for (const name of legacy) {
-    const v = process.env[name]?.trim()
-    if (v) return v
+    const v = process.env[name]?.trim();
+    if (v) return v;
   }
 
-  const fromKeyring = tryKeyring(account)
-  if (fromKeyring) return fromKeyring
+  const fromKeyring = tryKeyring(account);
+  if (fromKeyring) return fromKeyring;
 
-  throw new MissingPassphraseError(envVar)
+  throw new MissingPassphraseError(envVar);
 }

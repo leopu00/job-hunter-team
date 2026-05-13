@@ -5,9 +5,19 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { JHT_HOME } from "../paths.js";
-import type { PluginManifest, PluginModule, PluginContext, PluginLogger, PluginsConfig } from "./types.js";
+import type {
+  PluginManifest,
+  PluginModule,
+  PluginContext,
+  PluginLogger,
+  PluginsConfig,
+} from "./types.js";
 import { DEFAULT_PLUGINS_CONFIG } from "./types.js";
-import { RegistryBuilder, setActiveRegistry, type PluginRegistry } from "./registry.js";
+import {
+  RegistryBuilder,
+  setActiveRegistry,
+  type PluginRegistry,
+} from "./registry.js";
 
 const MANIFEST_FILENAME = "jht.plugin.json";
 const STATE_DIR = JHT_HOME;
@@ -23,10 +33,7 @@ export function discoverPlugins(
   config: PluginsConfig = DEFAULT_PLUGINS_CONFIG,
   logger?: PluginLogger,
 ): PluginCandidate[] {
-  const searchPaths = [
-    ...DEFAULT_PLUGIN_DIRS,
-    ...(config.searchPaths ?? []),
-  ];
+  const searchPaths = [...DEFAULT_PLUGIN_DIRS, ...(config.searchPaths ?? [])];
 
   const candidates: PluginCandidate[] = [];
 
@@ -43,14 +50,19 @@ export function discoverPlugins(
         if (candidate) candidates.push(candidate);
       }
     } catch (err) {
-      logger?.warn(`Errore scansione directory plugin ${resolved}: ${String(err)}`);
+      logger?.warn(
+        `Errore scansione directory plugin ${resolved}: ${String(err)}`,
+      );
     }
   }
 
   return candidates;
 }
 
-function loadPluginCandidate(dir: string, logger?: PluginLogger): PluginCandidate | null {
+function loadPluginCandidate(
+  dir: string,
+  logger?: PluginLogger,
+): PluginCandidate | null {
   const manifestPath = join(dir, MANIFEST_FILENAME);
   if (!existsSync(manifestPath)) return null;
 
@@ -85,7 +97,8 @@ function validateManifest(raw: unknown): PluginManifest | null {
 
   const id = typeof obj.id === "string" ? obj.id.trim() : "";
   const name = typeof obj.name === "string" ? obj.name.trim() : "";
-  const version = typeof obj.version === "string" ? obj.version.trim() : "0.0.0";
+  const version =
+    typeof obj.version === "string" ? obj.version.trim() : "0.0.0";
 
   if (!id || !name) return null;
 
@@ -93,18 +106,28 @@ function validateManifest(raw: unknown): PluginManifest | null {
     id,
     name,
     version,
-    description: typeof obj.description === "string" ? obj.description : undefined,
+    description:
+      typeof obj.description === "string" ? obj.description : undefined,
     kind: normalizeKind(obj.kind),
-    enabledByDefault: typeof obj.enabledByDefault === "boolean" ? obj.enabledByDefault : true,
-    envVars: Array.isArray(obj.envVars) ? obj.envVars.filter((v): v is string => typeof v === "string") : undefined,
-    dependencies: Array.isArray(obj.dependencies) ? obj.dependencies.filter((v): v is string => typeof v === "string") : undefined,
-    configSchema: typeof obj.configSchema === "object" && obj.configSchema ? obj.configSchema as Record<string, unknown> : undefined,
+    enabledByDefault:
+      typeof obj.enabledByDefault === "boolean" ? obj.enabledByDefault : true,
+    envVars: Array.isArray(obj.envVars)
+      ? obj.envVars.filter((v): v is string => typeof v === "string")
+      : undefined,
+    dependencies: Array.isArray(obj.dependencies)
+      ? obj.dependencies.filter((v): v is string => typeof v === "string")
+      : undefined,
+    configSchema:
+      typeof obj.configSchema === "object" && obj.configSchema
+        ? (obj.configSchema as Record<string, unknown>)
+        : undefined,
   };
 }
 
 function normalizeKind(raw: unknown): PluginManifest["kind"] {
   if (typeof raw === "string") return raw as never;
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string") as never;
+  if (Array.isArray(raw))
+    return raw.filter((v): v is string => typeof v === "string") as never;
   return undefined;
 }
 
@@ -114,7 +137,9 @@ export interface PluginLoadOptions {
   activate?: boolean;
 }
 
-export async function loadPlugins(options: PluginLoadOptions = {}): Promise<PluginRegistry> {
+export async function loadPlugins(
+  options: PluginLoadOptions = {},
+): Promise<PluginRegistry> {
   const config = options.config ?? DEFAULT_PLUGINS_CONFIG;
   const logger = options.logger;
   const builder = new RegistryBuilder();
@@ -132,12 +157,14 @@ export async function loadPlugins(options: PluginLoadOptions = {}): Promise<Plug
 
     if (candidate.entryFile) {
       try {
-        const mod = await import(candidate.entryFile) as PluginModule;
+        const mod = (await import(candidate.entryFile)) as PluginModule;
         const definition = mod.default ?? mod.plugin;
         if (definition) builder.setLoaded(candidate.manifest.id, definition);
       } catch (err) {
         builder.setError(candidate.manifest.id, String(err));
-        logger?.error(`Errore caricamento plugin ${candidate.manifest.id}: ${String(err)}`);
+        logger?.error(
+          `Errore caricamento plugin ${candidate.manifest.id}: ${String(err)}`,
+        );
       }
     }
   }
@@ -145,7 +172,10 @@ export async function loadPlugins(options: PluginLoadOptions = {}): Promise<Plug
   if (options.activate) {
     for (const record of builder.build().getByStatus("loaded")) {
       const definition = record.definition;
-      if (!definition?.setup) { builder.setActive(record.id); continue; }
+      if (!definition?.setup) {
+        builder.setActive(record.id);
+        continue;
+      }
 
       const ctx: PluginContext = {
         pluginId: record.id,
@@ -167,7 +197,9 @@ export async function loadPlugins(options: PluginLoadOptions = {}): Promise<Plug
 
   const registry = builder.build();
   setActiveRegistry(registry);
-  logger?.info(`Registry: ${registry.size} totali, ${registry.getActive().length} attivi`);
+  logger?.info(
+    `Registry: ${registry.size} totali, ${registry.getActive().length} attivi`,
+  );
   return registry;
 }
 

@@ -9,8 +9,8 @@ export type {
   MigrationConfig,
   MigrationBatchResult,
   AppliedMigration,
-} from './types.js';
-export { DEFAULT_MIGRATION_CONFIG } from './types.js';
+} from "./types.js";
+export { DEFAULT_MIGRATION_CONFIG } from "./types.js";
 
 export {
   loadState,
@@ -20,4 +20,4 @@ export {
   migrateDown,
   getPendingMigrations,
   getCurrentVersion,
-} from './runner.js';
+} from "./runner.js";
