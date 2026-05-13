@@ -1,6 +1,7 @@
 import { state, dom, showStep, appendLog } from './state.js'
 import { t } from './i18n.js'
 import { STEP_RUNNING, STEP_READY } from './constants.js'
+import { showHome } from './home.js'
 
 export function updateRunningUI(status) {
   if (!status) return
@@ -81,6 +82,17 @@ export async function startTeam() {
       _runningLog.error('startTeam.vps.openExternal.failed', { err: String(e?.message || e) })
       // fallback: prova openBrowser anche se non e' il caso d'uso
       try { await window.launcherApi.openBrowser() } catch { /* ignore */ }
+    }
+    // Transitiona alla Home dell'app desktop (sidebar Team/Provider/...).
+    // L'utente ha appena completato il wizard: dopo il click Start non
+    // deve restare sullo step Ready (one-shot) ma vedere la dashboard
+    // locale del launcher. La dashboard cloud sul browser si gestisce
+    // da sola in parallelo.
+    try {
+      await showHome('team')
+      _runningLog.info('startTeam.vps.showHome.ok')
+    } catch (e) {
+      _runningLog.error('startTeam.vps.showHome.failed', { err: String(e?.message || e) })
     }
     return
   }
