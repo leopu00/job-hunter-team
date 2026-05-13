@@ -1,6 +1,6 @@
 import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
-import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS } from './constants.js'
+import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS, LOCATION_VPS } from './constants.js'
 import { camelId } from './docker-card.js'
 import { enterReady } from './wizard-flow.js'
 
@@ -401,9 +401,22 @@ async function openLoginTerminal(providerId, displayName) {
     } catch { /* ignore */ }
   })
 
+  // VPS mode: il TUI deve girare sul container REMOTO (oauth → ~/.claude
+  // dentro il container sulla VPS, non sul Mac). Passiamo host+vpsIp;
+  // main.js instrada via SshExec.openPty quando host==='vps' && vpsIp.
+  // Local mode (default): host='local', back-compat puro.
+  const isVps = state.location === LOCATION_VPS
+  const vpsIp = isVps ? (state.vps && state.vps.ip) || null : null
+  if (isVps && !vpsIp) {
+    log.warn('openLoginTerminal.vps-without-ip')
+  }
   let result
   try {
-    result = await window.terminalApi.start({ providerId })
+    result = await window.terminalApi.start({
+      providerId,
+      host: isVps ? 'vps' : 'local',
+      vpsIp,
+    })
   } catch (error) {
     term.writeln(`\r\n[error] ${error && error.message ? error.message : error}`)
     return
