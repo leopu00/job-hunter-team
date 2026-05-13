@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const log = require('./logger').child('container')
 
 const DEFAULT_IMAGE = process.env.JHT_IMAGE || 'ghcr.io/leopu00/jht:latest'
 
@@ -54,19 +55,31 @@ function startColima() {
 }
 
 function ensureContainerRuntime({ logger = () => {} } = {}) {
+  log.info('ensure-runtime.start', { platform: process.platform })
   if (process.platform === 'darwin') {
-    if (!colimaInstalled()) {
+    const installed = colimaInstalled()
+    log.debug('ensure-runtime.colima-installed', { installed })
+    if (!installed) {
+      log.error('ensure-runtime.colima-missing')
       throw new Error(
         "Colima non e' installato. Esegui 'brew install colima docker' oppure rilancia con JHT_NO_DOCKER=1.",
       )
     }
     if (!colimaRunning()) {
+      log.info('ensure-runtime.colima-start')
       logger('Avvio Colima (puo richiedere fino a un minuto)...')
+      const t0 = Date.now()
       startColima()
+      log.info('ensure-runtime.colima-started', { ms: Date.now() - t0 })
       logger('Colima avviato')
+    } else {
+      log.debug('ensure-runtime.colima-already-running')
     }
   }
-  if (!isDockerAvailable()) {
+  const docker = isDockerAvailable()
+  log.info('ensure-runtime.docker-check', { available: docker })
+  if (!docker) {
+    log.error('ensure-runtime.docker-unavailable')
     throw new Error(
       "Docker non risponde. Verifica con 'docker info' (Linux) o 'colima status' (Mac).",
     )
@@ -172,6 +185,7 @@ function removeContainerIfExists(name = DEFAULT_CONTAINER_NAME) {
       timeout: 5000,
       windowsHide: true,
     })
+    log.debug('container.removed', { name })
   } catch {
     // Container did not exist — nothing to clean up.
   }

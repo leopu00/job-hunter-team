@@ -61,11 +61,14 @@ const DEFAULT_BLOB_TYPE = 'config_v1'
 
 const KEYRING_SERVICE = 'jht-desktop-sync'
 
+const log = require('../logger').child('sync')
+
 let keyring = null
 try {
   keyring = require('@napi-rs/keyring')
-} catch {
+} catch (err) {
   keyring = null
+  log.warn('keyring.unavailable', { err })
 }
 
 function keyringEntry(account) {
@@ -179,7 +182,9 @@ async function getStatus(blobType = DEFAULT_BLOB_TYPE) {
 }
 
 async function setup({ passphrase, blobType = DEFAULT_BLOB_TYPE } = {}) {
+  log.info('setup.start', { blobType, passphraseLen: passphrase?.length || 0 })
   if (!passphrase || typeof passphrase !== 'string' || passphrase.length < 8) {
+    log.warn('setup.passphrase-too-short')
     return { ok: false, error: 'Passphrase must be at least 8 characters' }
   }
   try {
@@ -194,30 +199,38 @@ async function setup({ passphrase, blobType = DEFAULT_BLOB_TYPE } = {}) {
       lastSyncAt: null,
     })
     keyCache.set(blobType, key)
+    log.info('setup.success', { blobType })
     return { ok: true }
   } catch (err) {
+    log.error('setup.failed', { blobType, err })
     return { ok: false, error: err.message || String(err) }
   }
 }
 
 async function unlock({ passphrase, blobType = DEFAULT_BLOB_TYPE } = {}) {
+  log.debug('unlock.start', { blobType })
   try {
     if (!passphrase || typeof passphrase !== 'string') {
+      log.warn('unlock.passphrase-missing')
       return { ok: false, error: 'Passphrase required' }
     }
     const meta = loadMeta(blobType)
     if (!meta?.salt || !meta?.verifyBlob) {
+      log.warn('unlock.not-set-up', { blobType })
       return { ok: false, error: 'Cloud sync is not set up on this device' }
     }
     const salt = Buffer.from(meta.salt, 'base64')
     const key = deriveKey(passphrase, salt, meta.iterations || KDF_ITERATIONS_V1)
     if (!checkVerifyBlob(meta.verifyBlob, key)) {
       key.fill(0)
+      log.warn('unlock.wrong-passphrase')
       return { ok: false, error: 'Wrong passphrase' }
     }
     keyCache.set(blobType, key)
+    log.info('unlock.success', { blobType })
     return { ok: true }
   } catch (err) {
+    log.error('unlock.crashed', { err })
     return { ok: false, error: err.message || String(err) }
   }
 }
@@ -228,11 +241,19 @@ function lock(blobType = DEFAULT_BLOB_TYPE) {
 }
 
 async function push({ data, blobType = DEFAULT_BLOB_TYPE } = {}) {
+  const dataKeys = data && typeof data === 'object' ? Object.keys(data).length : 0
+  log.info('push.start', { blobType, dataKeys })
   try {
     const key = keyCache.get(blobType)
-    if (!key) return { ok: false, error: 'Cloud sync is locked' }
+    if (!key) {
+      log.warn('push.locked', { blobType })
+      return { ok: false, error: 'Cloud sync is locked' }
+    }
     const meta = loadMeta(blobType)
-    if (!meta?.salt) return { ok: false, error: 'Cloud sync is not set up' }
+    if (!meta?.salt) {
+      log.warn('push.not-set-up', { blobType })
+      return { ok: false, error: 'Cloud sync is not set up' }
+    }
     const { client, session } = await getAuthedClient()
     const envelope = encryptJson(data ?? {}, key)
     // Supabase BYTEA columns accept hex literals via the JS client
@@ -251,11 +272,16 @@ async function push({ data, blobType = DEFAULT_BLOB_TYPE } = {}) {
       metadata: { app: 'jht-desktop', version: 1 },
     }
     const { error } = await client.from(TABLE).upsert(row, { onConflict: 'user_id,blob_type' })
-    if (error) return { ok: false, error: error.message }
+    if (error) {
+      log.error('push.upsert-failed', { blobType, err: error.message })
+      return { ok: false, error: error.message }
+    }
     const now = new Date().toISOString()
     saveMeta(blobType, { ...meta, lastSyncAt: now })
+    log.info('push.success', { blobType, lastSyncAt: now })
     return { ok: true, lastSyncAt: now }
   } catch (err) {
+    log.error('push.crashed', { blobType, err })
     return { ok: false, error: err.message || String(err) }
   }
 }
