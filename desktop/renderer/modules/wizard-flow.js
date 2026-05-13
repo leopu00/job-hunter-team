@@ -2,6 +2,8 @@ import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
 import {
   STEP_WELCOME,
+  STEP_LOCATION,
+  STEP_SUPABASE_LOGIN,
   STEP_SETUP,
   STEP_CONTAINER,
   STEP_SUBSCRIPTION_NOTICE,
@@ -10,6 +12,8 @@ import {
   STEP_PROVIDER_INSTALL,
   STEP_PROVIDER_LOGIN,
   STEP_READY,
+  LOCATION_LOCAL,
+  LOCATION_VPS,
   PROVIDER_OPTIONS,
   PROVIDER_PLANS,
   MODEL_VARIANTS,
@@ -36,10 +40,168 @@ export async function smartAdvanceFromWelcome() {
   } catch {
     // Probe failed; walk the wizard anyway.
   }
-  await enterSetup()
+  await enterLocation()
 }
 
-dom.btnSetupBack.addEventListener('click', () => showStep(STEP_WELCOME))
+// ── Step: location (Local PC vs VPS Hetzner) ─────────────────
+//
+// Drives wizard branching from here onward. Selection persists via
+// prefsApi (added in a follow-up commit); for now it lives only in
+// state.location until the relaunch resumes from welcome anyway.
+
+async function enterLocation() {
+  showStep(STEP_LOCATION)
+  // Restore any persisted choice so the user sees the previous pick
+  // already selected when relaunching.
+  try {
+    const saved = window.prefsApi?.get ? await window.prefsApi.get('location') : null
+    if (saved === LOCATION_LOCAL || saved === LOCATION_VPS) {
+      state.location = saved
+    }
+  } catch {
+    // no-op: missing prefsApi is fine, persistence lands in a later commit
+  }
+  renderLocationCards()
+}
+
+function renderLocationCards() {
+  const cards = [
+    { el: dom.locationCardLocal, value: LOCATION_LOCAL },
+    { el: dom.locationCardVps, value: LOCATION_VPS },
+  ]
+  for (const { el, value } of cards) {
+    if (!el) continue
+    el.classList.toggle('is-selected', state.location === value)
+  }
+  if (dom.btnLocationContinue) {
+    dom.btnLocationContinue.disabled = !state.location
+  }
+}
+
+function onLocationCardClick(value) {
+  state.location = value
+  renderLocationCards()
+  // Persist immediately so a relaunch resumes on the right branch.
+  try { window.prefsApi?.set?.('location', value) } catch { /* ignore */ }
+}
+
+if (dom.locationCardLocal) {
+  dom.locationCardLocal.addEventListener('click', () => onLocationCardClick(LOCATION_LOCAL))
+}
+if (dom.locationCardVps) {
+  dom.locationCardVps.addEventListener('click', () => onLocationCardClick(LOCATION_VPS))
+}
+if (dom.btnLocationBack) {
+  dom.btnLocationBack.addEventListener('click', () => showStep(STEP_WELCOME))
+}
+if (dom.btnLocationContinue) {
+  dom.btnLocationContinue.addEventListener('click', () => {
+    if (!state.location) return
+    enterSupabaseLogin()
+  })
+}
+
+// ── Step: Supabase OAuth ─────────────────────────────────────
+//
+// Local path: opt-in (skip button visible, continue always enabled).
+// VPS path: required (skip hidden, continue disabled until signed in).
+
+async function enterSupabaseLogin() {
+  showStep(STEP_SUPABASE_LOGIN)
+  // Adapt copy + skip-button visibility to the chosen path.
+  if (dom.supabaseHint) {
+    const key = state.location === LOCATION_VPS ? 'supabase.lead.vps' : 'supabase.lead.local'
+    dom.supabaseHint.setAttribute('data-i18n', key)
+    dom.supabaseHint.textContent = t(key)
+  }
+  if (dom.btnSupabaseSkip) {
+    dom.btnSupabaseSkip.hidden = state.location === LOCATION_VPS
+  }
+  // Probe current auth state — the user might already be signed in
+  // from a previous session (Supabase session stored in OS keyring).
+  try {
+    const status = window.authApi?.getStatus ? await window.authApi.getStatus() : null
+    state.supabaseUser = status?.signedIn ? status.user : null
+  } catch {
+    state.supabaseUser = null
+  }
+  renderSupabaseStep()
+}
+
+function renderSupabaseStep() {
+  const signedIn = Boolean(state.supabaseUser)
+  if (dom.supabaseStatus) {
+    if (signedIn) {
+      const name = state.supabaseUser.name || state.supabaseUser.email || 'account'
+      dom.supabaseStatus.textContent = t('supabase.signedInAs', { name })
+      dom.supabaseStatus.hidden = false
+    } else {
+      dom.supabaseStatus.textContent = ''
+      dom.supabaseStatus.hidden = true
+    }
+  }
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.hidden = signedIn
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.hidden = signedIn
+  if (dom.btnSupabaseSignout) dom.btnSupabaseSignout.hidden = !signedIn
+  if (dom.btnSupabaseContinue) {
+    // Local path: continue always enabled (skip is also available).
+    // VPS path: continue only enabled once signed in.
+    dom.btnSupabaseContinue.disabled = state.location === LOCATION_VPS && !signedIn
+  }
+}
+
+async function doSupabaseSignIn(provider) {
+  if (!window.authApi?.signIn) return
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = true
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = true
+  try {
+    const res = await window.authApi.signIn(provider)
+    if (!res?.ok) {
+      if (dom.supabaseStatus) {
+        dom.supabaseStatus.textContent = t('supabase.error', { message: res?.error || 'unknown' })
+        dom.supabaseStatus.hidden = false
+      }
+      state.supabaseUser = null
+    } else {
+      state.supabaseUser = res.user || null
+    }
+  } finally {
+    if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = false
+    if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = false
+    renderSupabaseStep()
+  }
+}
+
+async function doSupabaseSignOut() {
+  if (!window.authApi?.signOut) return
+  try { await window.authApi.signOut() } catch { /* ignore */ }
+  state.supabaseUser = null
+  renderSupabaseStep()
+}
+
+if (dom.btnSupabaseGoogle) {
+  dom.btnSupabaseGoogle.addEventListener('click', () => doSupabaseSignIn('google'))
+}
+if (dom.btnSupabaseGithub) {
+  dom.btnSupabaseGithub.addEventListener('click', () => doSupabaseSignIn('github'))
+}
+if (dom.btnSupabaseSignout) {
+  dom.btnSupabaseSignout.addEventListener('click', () => doSupabaseSignOut())
+}
+if (dom.btnSupabaseBack) {
+  dom.btnSupabaseBack.addEventListener('click', () => enterLocation())
+}
+if (dom.btnSupabaseSkip) {
+  dom.btnSupabaseSkip.addEventListener('click', () => enterSetup())
+}
+if (dom.btnSupabaseContinue) {
+  dom.btnSupabaseContinue.addEventListener('click', () => {
+    if (dom.btnSupabaseContinue.disabled) return
+    enterSetup()
+  })
+}
+
+dom.btnSetupBack.addEventListener('click', () => enterSupabaseLogin())
 
 dom.btnSetupContinue.addEventListener('click', () => {
   const dockerOk = state.docker?.check.state === 'ok'
