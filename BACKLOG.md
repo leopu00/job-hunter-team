@@ -616,15 +616,28 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - ❌ Contenuti tradotti: **zero**. La branch parallela in corso ottimizza i file italiani — non li traduce. Quindi baseline `<role>.md` resta italiano nel prevedibile.
   - ⚠️ Inconsistenza attiva: `DEFAULT_LOCALE='en'` (settato stamattina per onboarding desktop) + baseline IT → drift mismatch reale per utenti default-EN.
 
-  **Decisioni aperte (vedi design doc per dettaglio):**
-  - 🅰️ Status quo + accettare drift fino a traduzione esplicita futura
-  - 🅱️ Rollback `DEFAULT_LOCALE='it'` (riallinea ma contraddice memory `feedback_lang_picker_default_english`)
-  - 🅲 RULE-T14 in `team-rules.md` ("respond in user's language") — neutralizza drift in 5 min, ma tocca file in lavorazione altra branch → da coordinare
+  **✅ Decisione lockata (2026-05-13) — policy "lingua utente unica"**
 
-  **Sprint futuri (oggi non assegnati a nessuno):**
-  - ⬜ Task esplicito traduzione `<role>.md` → EN (zero attività in corso)
+  L'utente sceglie una lingua al primo setup; tutto user-visible (chat, dashboard UI, messaggi inter-agente, commenti deliverable) è in quella lingua. Eccezione: JD content originale resta originale.
+
+  Implementazione:
+  - ✅ **RULE-T14** in `agents/_team/team-rules.md` (deployed 2026-05-13) — safeguard runtime: anche con baseline IT, locale=en → output EN
+  - ⬜ **[JHT-I18N-TRANSLATE]** (sotto) — traduzione vera dei baseline IT→EN (elimina costo "traduzione mentale" runtime)
   - ⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
   - ⬜ Community translation HU/ES/DE/FR (post-launch)
+
+##### 🌐 [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN
+
+- **Why HIGH:** RULE-T14 mitiga il drift ma l'agente fa "traduzione mentale" runtime → token overhead. Traduzione vera elimina il costo.
+- **Scope:** 10 file `<role>.md`, ~1650 righe totali (post-refactor).
+- **Procedura:**
+  1. `cp agents/<role>/<role>.md agents/<role>/<role>.it.md` (preserva IT come override)
+  2. Tradurre il baseline `<role>.md` in inglese
+  3. Preservare invariati: protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc. parsati per pattern dal Capitano), tmux session names (`CAPITANO`, `SCOUT-N`), comandi shell, path
+  4. Smoke test: team start con `locale=en` → verifica baseline EN caricato + risposte EN
+- **Acceptance:** 10 file EN, 10 file `<role>.it.md` con IT preservato, smoke test pass.
+- **Effort stimato:** 4-6 ore. Da fare pre-launch.
+- **Design doc:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md) § "Task traduzione esplicito".
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 
