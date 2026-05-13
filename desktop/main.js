@@ -51,6 +51,7 @@ const providerAuth = require('./provider-auth')
 const terminal = require('./terminal')
 const auth = require('./auth')
 const sync = require('./sync')
+const vps = require('./vps')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -623,6 +624,11 @@ app.whenReady().then(() => {
   // or gets read by the CLI / container.
   ipcMain.handle('prefs:get', (_event, key) => readPref(key))
   ipcMain.handle('prefs:set', (_event, key, value) => writePref(key, value))
+
+  // -------- VPS provisioning (SSH key gen + remote install.sh) -----
+  ipcMain.handle('vps:generate-key', (_event, args = {}) => vps.generateKey(args))
+  ipcMain.handle('vps:get-public-key', () => vps.getPublicKey())
+  ipcMain.handle('vps:has-key', () => ({ ok: true, hasKey: vps.hasKey() }))
 
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
   ipcMain.handle('sync:get-status', () => sync.getStatus())
