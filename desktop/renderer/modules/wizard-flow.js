@@ -2,6 +2,9 @@ import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
 import {
   STEP_WELCOME,
+  STEP_LOCATION,
+  STEP_SUPABASE_LOGIN,
+  STEP_VPS_PROVISION,
   STEP_SETUP,
   STEP_CONTAINER,
   STEP_SUBSCRIPTION_NOTICE,
@@ -10,6 +13,8 @@ import {
   STEP_PROVIDER_INSTALL,
   STEP_PROVIDER_LOGIN,
   STEP_READY,
+  LOCATION_LOCAL,
+  LOCATION_VPS,
   PROVIDER_OPTIONS,
   PROVIDER_PLANS,
   MODEL_VARIANTS,
@@ -36,10 +41,184 @@ export async function smartAdvanceFromWelcome() {
   } catch {
     // Probe failed; walk the wizard anyway.
   }
-  await enterSetup()
+  await enterLocation()
 }
 
-dom.btnSetupBack.addEventListener('click', () => showStep(STEP_WELCOME))
+// ── Step: location (Local PC vs VPS Hetzner) ─────────────────
+//
+// Drives wizard branching from here onward. Selection persists via
+// prefsApi (added in a follow-up commit); for now it lives only in
+// state.location until the relaunch resumes from welcome anyway.
+
+async function enterLocation() {
+  showStep(STEP_LOCATION)
+  // Restore any persisted choice so the user sees the previous pick
+  // already selected when relaunching.
+  try {
+    const saved = window.prefsApi?.get ? await window.prefsApi.get('location') : null
+    if (saved === LOCATION_LOCAL || saved === LOCATION_VPS) {
+      state.location = saved
+    }
+  } catch {
+    // no-op: missing prefsApi is fine
+  }
+  renderLocationCards()
+}
+
+function renderLocationCards() {
+  const cards = [
+    { el: dom.locationCardLocal, value: LOCATION_LOCAL },
+    { el: dom.locationCardVps, value: LOCATION_VPS },
+  ]
+  for (const { el, value } of cards) {
+    if (!el) continue
+    el.classList.toggle('is-selected', state.location === value)
+  }
+  if (dom.btnLocationContinue) {
+    dom.btnLocationContinue.disabled = !state.location
+  }
+}
+
+function onLocationCardClick(value) {
+  state.location = value
+  renderLocationCards()
+  // Persist immediately so a relaunch resumes on the right branch.
+  try { window.prefsApi?.set?.('location', value) } catch { /* ignore */ }
+}
+
+if (dom.locationCardLocal) {
+  dom.locationCardLocal.addEventListener('click', () => onLocationCardClick(LOCATION_LOCAL))
+}
+if (dom.locationCardVps) {
+  dom.locationCardVps.addEventListener('click', () => onLocationCardClick(LOCATION_VPS))
+}
+if (dom.btnLocationBack) {
+  dom.btnLocationBack.addEventListener('click', () => showStep(STEP_WELCOME))
+}
+if (dom.btnLocationContinue) {
+  dom.btnLocationContinue.addEventListener('click', () => {
+    if (!state.location) return
+    enterSupabaseLogin()
+  })
+}
+
+// ── Step: Supabase OAuth ─────────────────────────────────────
+//
+// Local path: opt-in (skip button visible, continue always enabled).
+// VPS path: required (skip hidden, continue disabled until signed in).
+
+async function enterSupabaseLogin() {
+  showStep(STEP_SUPABASE_LOGIN)
+  // Adapt copy + skip-button visibility to the chosen path.
+  if (dom.supabaseHint) {
+    const key = state.location === LOCATION_VPS ? 'supabase.lead.vps' : 'supabase.lead.local'
+    dom.supabaseHint.setAttribute('data-i18n', key)
+    dom.supabaseHint.textContent = t(key)
+  }
+  if (dom.btnSupabaseSkip) {
+    dom.btnSupabaseSkip.hidden = state.location === LOCATION_VPS
+  }
+  // Probe current auth state — the user might already be signed in
+  // from a previous session (Supabase session stored in OS keyring).
+  try {
+    const status = window.authApi?.getStatus ? await window.authApi.getStatus() : null
+    state.supabaseUser = status?.signedIn ? status.user : null
+  } catch {
+    state.supabaseUser = null
+  }
+  renderSupabaseStep()
+}
+
+function renderSupabaseStep() {
+  const signedIn = Boolean(state.supabaseUser)
+  if (dom.supabaseStatus) {
+    if (signedIn) {
+      const name = state.supabaseUser.name || state.supabaseUser.email || 'account'
+      dom.supabaseStatus.textContent = t('supabase.signedInAs', { name })
+      dom.supabaseStatus.hidden = false
+    } else {
+      dom.supabaseStatus.textContent = ''
+      dom.supabaseStatus.hidden = true
+    }
+  }
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.hidden = signedIn
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.hidden = signedIn
+  if (dom.btnSupabaseSignout) dom.btnSupabaseSignout.hidden = !signedIn
+  if (dom.btnSupabaseContinue) {
+    // Local path: continue always enabled (skip is also available).
+    // VPS path: continue only enabled once signed in.
+    dom.btnSupabaseContinue.disabled = state.location === LOCATION_VPS && !signedIn
+  }
+}
+
+async function doSupabaseSignIn(provider) {
+  if (!window.authApi?.signIn) return
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = true
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = true
+  try {
+    const res = await window.authApi.signIn(provider)
+    if (!res?.ok) {
+      if (dom.supabaseStatus) {
+        dom.supabaseStatus.textContent = t('supabase.error', { message: res?.error || 'unknown' })
+        dom.supabaseStatus.hidden = false
+      }
+      state.supabaseUser = null
+    } else {
+      state.supabaseUser = res.user || null
+    }
+  } finally {
+    if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = false
+    if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = false
+    renderSupabaseStep()
+  }
+}
+
+async function doSupabaseSignOut() {
+  if (!window.authApi?.signOut) return
+  try { await window.authApi.signOut() } catch { /* ignore */ }
+  state.supabaseUser = null
+  renderSupabaseStep()
+}
+
+if (dom.btnSupabaseGoogle) {
+  dom.btnSupabaseGoogle.addEventListener('click', () => doSupabaseSignIn('google'))
+}
+if (dom.btnSupabaseGithub) {
+  dom.btnSupabaseGithub.addEventListener('click', () => doSupabaseSignIn('github'))
+}
+if (dom.btnSupabaseSignout) {
+  dom.btnSupabaseSignout.addEventListener('click', () => doSupabaseSignOut())
+}
+if (dom.btnSupabaseBack) {
+  dom.btnSupabaseBack.addEventListener('click', () => enterLocation())
+}
+if (dom.btnSupabaseSkip) {
+  // Skip is only visible on Local path (hidden on VPS — Supabase
+  // is required there). So Skip always goes to the local Docker
+  // check step.
+  dom.btnSupabaseSkip.addEventListener('click', () => enterSetup())
+}
+if (dom.btnSupabaseContinue) {
+  dom.btnSupabaseContinue.addEventListener('click', () => {
+    if (dom.btnSupabaseContinue.disabled) return
+    advanceAfterSupabase()
+  })
+}
+
+// After Supabase login the path forks:
+//   - Local → Docker check on this PC (STEP_SETUP)
+//   - VPS   → skip local Docker checks entirely, jump straight to
+//             the VPS provisioning wizard (decisione 2026-05-13: il
+//             container vive sulla VPS, niente Docker locale).
+function advanceAfterSupabase() {
+  if (state.location === LOCATION_VPS) {
+    enterVpsProvision()
+  } else {
+    enterSetup()
+  }
+}
+
+dom.btnSetupBack.addEventListener('click', () => enterSupabaseLogin())
 
 dom.btnSetupContinue.addEventListener('click', () => {
   const dockerOk = state.docker?.check.state === 'ok'
@@ -75,8 +254,160 @@ dom.btnContainerContinue.addEventListener('click', () => {
 })
 
 dom.btnSubscriptionBack.addEventListener('click', () => {
-  showStep(STEP_CONTAINER)
+  // VPS path skipped both setup + container locally, so back from
+  // subscription returns to the VPS provisioning step. Local path
+  // keeps the old behavior.
+  if (state.location === LOCATION_VPS) {
+    enterVpsProvision()
+  } else {
+    showStep(STEP_CONTAINER)
+  }
 })
+
+// ── Step: VPS provisioning (Hetzner, manual + guided) ───────
+//
+// Three sub-steps inside one wizard page:
+//   1. Generate SSH keypair via window.vpsApi.generateKey
+//   2. Show pubkey for the user to paste on Hetzner + open portal
+//   3. User pastes IP, app SSHs over and runs install.sh remotely
+//
+// IPC backing (vpsApi.{generateKey, getPublicKey, runInstall}) is
+// added in task 12-13; this module only owns the UX choreography.
+// When vpsApi isn't wired yet the buttons stay graceful (status
+// message instead of crashes).
+
+async function enterVpsProvision() {
+  showStep(STEP_VPS_PROVISION)
+  // If a key was generated previously (relaunch), restore it so the
+  // user doesn't have to regenerate. Pubkey is non-secret.
+  try {
+    const existing = window.vpsApi?.getPublicKey ? await window.vpsApi.getPublicKey() : null
+    if (existing?.ok && existing.pubkey) {
+      state.vps.pubkey = existing.pubkey
+    }
+  } catch {
+    // no-op: IPC not available yet
+  }
+  renderVpsStep()
+}
+
+function renderVpsStep() {
+  const hasKey = Boolean(state.vps.pubkey)
+  if (dom.vpsStep2) dom.vpsStep2.hidden = !hasKey
+  if (dom.vpsStep3) dom.vpsStep3.hidden = !hasKey
+  if (dom.vpsPubkey) dom.vpsPubkey.value = state.vps.pubkey || ''
+  if (dom.btnVpsGenerateKey) {
+    dom.btnVpsGenerateKey.textContent = hasKey
+      ? t('vps.step1.regenerate')
+      : t('vps.step1.generate')
+  }
+  updateVpsConnectState()
+  if (dom.btnVpsContinue) dom.btnVpsContinue.disabled = !state.vps.installed
+}
+
+function updateVpsConnectState() {
+  if (!dom.btnVpsConnect) return
+  const ipOk = isValidIPv4(dom.vpsIp?.value || '')
+  dom.btnVpsConnect.disabled = !state.vps.pubkey || !ipOk || state.vps.busy
+}
+
+function isValidIPv4(s) {
+  return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(String(s || '').trim())
+}
+
+function setVpsStatus(key, vars, kind) {
+  if (!dom.vpsStatus) return
+  dom.vpsStatus.textContent = t(key, vars)
+  dom.vpsStatus.hidden = false
+  dom.vpsStatus.dataset.kind = kind || 'info'
+}
+
+async function onVpsGenerateKey() {
+  if (!window.vpsApi?.generateKey) {
+    setVpsStatus('vps.status.error', { message: 'SSH backend not wired yet' }, 'error')
+    return
+  }
+  const passphrase = dom.vpsPassphrase?.value || ''
+  if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = true
+  try {
+    const res = await window.vpsApi.generateKey({ passphrase })
+    if (!res?.ok) {
+      setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
+      return
+    }
+    state.vps.pubkey = res.pubkey
+    state.vps.installed = false
+    renderVpsStep()
+  } finally {
+    if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = false
+  }
+}
+
+async function onVpsCopyPubkey() {
+  if (!state.vps.pubkey) return
+  try {
+    await window.clipboardApi?.write?.(state.vps.pubkey)
+    if (dom.btnVpsCopyPubkey) {
+      const original = dom.btnVpsCopyPubkey.textContent
+      dom.btnVpsCopyPubkey.textContent = t('vps.step2.copied')
+      setTimeout(() => { dom.btnVpsCopyPubkey.textContent = original }, 1500)
+    }
+  } catch { /* ignore */ }
+}
+
+function onVpsOpenHetzner() {
+  window.launcherApi?.openExternal?.('https://console.hetzner.cloud/projects')
+}
+
+async function onVpsConnect() {
+  const ip = (dom.vpsIp?.value || '').trim()
+  if (!isValidIPv4(ip) || !state.vps.pubkey) return
+  if (!window.vpsApi?.runInstall) {
+    setVpsStatus('vps.status.error', { message: 'SSH runner not wired yet' }, 'error')
+    return
+  }
+  state.vps.busy = true
+  state.vps.ip = ip
+  updateVpsConnectState()
+  setVpsStatus('vps.status.connecting', { ip }, 'info')
+  if (dom.vpsInstallLog) {
+    dom.vpsInstallLog.hidden = false
+    dom.vpsInstallLog.textContent = ''
+  }
+  const unsubscribe = window.vpsApi.onInstallLog
+    ? window.vpsApi.onInstallLog((line) => {
+        if (dom.vpsInstallLog) dom.vpsInstallLog.textContent += `${line}\n`
+      })
+    : null
+  try {
+    setVpsStatus('vps.status.installing', { ip }, 'info')
+    const res = await window.vpsApi.runInstall({ ip })
+    if (!res?.ok) {
+      setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
+      state.vps.installed = false
+    } else {
+      setVpsStatus('vps.status.done', { ip }, 'ok')
+      state.vps.installed = true
+    }
+  } finally {
+    state.vps.busy = false
+    if (typeof unsubscribe === 'function') unsubscribe()
+    renderVpsStep()
+  }
+}
+
+if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.addEventListener('click', onVpsGenerateKey)
+if (dom.btnVpsCopyPubkey) dom.btnVpsCopyPubkey.addEventListener('click', onVpsCopyPubkey)
+if (dom.btnVpsOpenHetzner) dom.btnVpsOpenHetzner.addEventListener('click', onVpsOpenHetzner)
+if (dom.btnVpsConnect) dom.btnVpsConnect.addEventListener('click', onVpsConnect)
+if (dom.vpsIp) dom.vpsIp.addEventListener('input', updateVpsConnectState)
+if (dom.btnVpsBack) dom.btnVpsBack.addEventListener('click', () => enterSupabaseLogin())
+if (dom.btnVpsContinue) {
+  dom.btnVpsContinue.addEventListener('click', () => {
+    if (!state.vps.installed) return
+    showStep(STEP_SUBSCRIPTION_NOTICE)
+  })
+}
 
 dom.btnSubscriptionContinue.addEventListener('click', () => {
   enterModelCompare()
