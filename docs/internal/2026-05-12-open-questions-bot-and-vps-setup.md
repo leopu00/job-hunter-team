@@ -1,107 +1,9 @@
-# Open questions: Telegram bot multi-agente + setup VPS via Desktop
+# Open question: setup VPS via Desktop
 
-**Data**: 2026-05-12
-**Stato**: documento di memoria, NIENTE decisione finale presa. Da rivedere prima dell'onboarding multi-agente e del rilascio Desktop installer.
+**Data**: 2026-05-12 (round 1)
+**Stato**: ancora aperto. Da rivedere prima del rilascio Desktop installer.
 
-> Decisione finale rimandata. Questo doc serve a non perderci la memoria del ragionamento.
-
----
-
-# 🤖 Tema A — Quanti bot Telegram?
-
-## Agenti utente-facing identificati
-
-- 👨‍💼 **Assistente** — onboarding profilo, tech support, drop-zone documenti
-- 👨‍✈️ **Capitano** — direzione team, fine-tuning ricerca/scoring, priorità candidature
-- 🧙‍♂️ **Maestro** — mentore di crescita, posizionamento strategico
-
-Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) non parla direttamente con l'utente: ricevono ordini dal Capitano.
-
-## Opzioni valutate
-
-### Opzione 1 — Un bot solo, l'Assistente è router (status quo)
-
-```
-                ┌─────────────────────────┐
-   👤 utente ───▶│  @jht_<user>_bot        │───▶ ASSISTENTE (router)
-                └─────────────────────────┘            │
-                                                       ├──▶ Capitano (forward)
-                                                       └──▶ Maestro  (forward)
-```
-
-✅ 1 token, 1 wizard step
-✅ Già implementato
-🔴 Tutte le notifiche in una chat → mute selettivo impossibile
-🔴 Routing manuale via prefix `/cap` `/maestro` o linguaggio naturale → ambiguità
-🔴 Contesto mescolato (l'Assistente legge anche le richieste di mentoring)
-
-### Opzione 2 — N bot dedicati per agente
-
-```
-   👤 utente ──▶ @jht_<user>_assistente_bot ──▶ ASSISTENTE
-            └─▶ @jht_<user>_capitano_bot ───▶ CAPITANO
-            └─▶ @jht_<user>_maestro_bot ────▶ MAESTRO
-```
-
-✅ Notifiche separate per agente (Telegram nativo)
-✅ Contesto pulito
-✅ "Tag" implicito dal canale che usi
-🔴 Wizard chiede 3× `/newbot` a `@BotFather` → UX faticosa
-🟡 3× token da gestire nel config (`channels.telegram.bots.{assistente,capitano,maestro}`)
-🟡 3× `/start` sul bot prima del setup
-
-### Opzione 3 — Gruppo Telegram con topic (Forum mode) ⭐
-
-```
-   👤 utente ┌─ #📥 Assistente  ─▶ ASSISTENTE
-       in    ├─ #🎯 Capitano    ─▶ CAPITANO
-   gruppo ──┤ #🧭 Maestro      ─▶ MAESTRO
-    JHT     └─ #📣 Team-log    ─▶ broadcast (read-only)
-              (1 bot, 1 chat_id, N topic)
-```
-
-✅ 1 solo bot da configurare
-✅ Topic = sub-canale Telegram nativo
-✅ Notifiche per topic configurabili separatamente
-✅ Il "team-log" diventa il forum citato in `docs/internal/INFRA.md` come planned upgrade
-🟡 Bot API: `message_thread_id` + `is_topic_message` da gestire nel `tg-bridge.py`
-🟡 Telegram client deve supportare topic (Telegram Premium per creare gruppi con topic, ma free user può scrivere/leggere)
-🟡 Setup wizard: creare gruppo + abilitare topic + invitare bot + dare admin per gestire topic
-
-### Opzione 4 — Un bot, routing via @-tag
-
-```
-   👤 utente: "@capitano alza score posizioni Roma"
-                  │
-         ┌────────┴────────┐
-         ▼                 ▼
-   parse @<role>       default
-         │                 │
-         ▼                 ▼
-       CAPITANO        ASSISTENTE
-```
-
-✅ 1 bot
-🟡 Routing dipende dall'utente che ricorda i tag
-🔴 Mix conversazionale rumoroso (notifiche tutte insieme)
-🟡 Fallback dell'Opzione 1 con minimo overhead
-
-## Matrice decisione
-
-| Opz | Setup utente | UX quotidiana | Effort dev | Scala |
-|-----|--------------|---------------|------------|-------|
-| 1 — un bot router | 🟢 1 step | 🟡 rumoroso | 🟢 zero | 🟢 |
-| 2 — N bot dedicati | 🔴 3 step BotFather | 🟢 pulita | 🟡 wizard + multi-token config | 🟢 |
-| 3 — Topic mode ⭐ | 🟡 1 step + gruppo | 🟢🟢 ottimo | 🟡 bridge topic-aware | 🟢 |
-| 4 — @-tag in chat | 🟢 1 step | 🟡 abitudine | 🟢 piccolo router | 🟢 |
-
-## Decisione provvisoria
-
-- **Beta now** → Opzione 1 (status quo) per non bloccare i test attuali
-- **Onboarding multi-agente** → **Opzione 3 (topic)** raccomandata. Verifica wizard fattibile prima del lock.
-- **Opzione 4** come fallback se topic UX non convince
-
-Da decidere prima di pre-cablare Capitano e Maestro nel `tg-bridge.py`.
+> Tema A (bot Telegram multi-agente) — decisioni del 2026-05-13 sono confluite in `docs/internal/bot-telegram.md`. Questo doc tiene solo il Tema B che resta aperto.
 
 ---
 
@@ -241,9 +143,7 @@ Indipendentemente dal path scelto:
 
 ## Riferimenti
 
-- `docs/internal/INFRA.md` — canali utente↔team, planned upgrade Telegram
-- `docs/internal/2026-05-04-vps-deployment-design.md` — design 3 tier VPS
-- `docs/internal/2026-05-12-document-channels-decision.md` — scelta canali documenti
-- `docs/internal/2026-05-12-telegram-document-ingest-design.md` — design ingest TG
-- `docs/internal/2026-05-12-vps-fresh-install-ux-fixes.md` — punch list UX install
+- `docs/internal/INFRA.md` — canali utente↔team
+- `docs/internal/vps.md` — design VPS consolidato (host/container split, providers, install UX, lifecycle)
+- `docs/internal/bot-telegram.md` — design bot Telegram multi-agente + ingest documenti
 - `BACKLOG.md` — `[JHT-VPS-FRIENDLY]`, `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`

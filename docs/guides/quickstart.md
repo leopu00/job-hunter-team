@@ -78,7 +78,7 @@ The script:
 3. Downloads `docker-compose.yml` to `~/.jht/runtime/`
 4. Downloads the `jht` wrapper bash to `~/.local/bin/jht`
 
-The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/2026-05-06-host-container-split.md`](../internal/2026-05-06-host-container-split.md) for the design rationale.
+The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/vps.md`](../internal/vps.md) for the design rationale.
 
 After install:
 
