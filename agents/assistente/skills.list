@@ -12,6 +12,9 @@ telegram-send
 # Notifiche utente con fallback Telegram -> dashboard web (domande proattive, alert profilo)
 notify-user
 
+# Pickup risposte utente arrivate via dashboard web (marker prompt-injection)
+user-reply-check
+
 # Inter-agent (bridge to the Capitano when needed)
 tmux-send
 
