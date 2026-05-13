@@ -138,15 +138,10 @@ Sufficiente per beta + alpha pubblica iniziale.
 
 ## ❓ Open questions
 
-1. 🔄 **Sync direction** local↔cloud: ancora aperta (memoria
-   `project_cloud_sync_direction_open`). Se ideale è solo local→cloud, lo
-   storage cloud cresce piano e il VPS CX22 basta a lungo. Se serve
-   bidirezionale per il caso "cambio macchina", aumenta R/W e backup
-   complexity.
-2. ⚖️ **Cloudflare Pages vs self-host Next.js**: scelta da rimandare a quando
+1. ⚖️ **Cloudflare Pages vs self-host Next.js**: scelta da rimandare a quando
    il sito web esce da MVP. Per ora Vercel Hobby va bene; switch è
    reversibile.
-3. 🤔 **Supabase managed vs self-host nel deploy "VPS dell'utente"**: se ogni
+2. 🤔 **Supabase managed vs self-host nel deploy "VPS dell'utente"**: se ogni
    utente self-hosta tutto sul proprio VPS (memoria
    `project_team_location_exclusive`), il "nostro" Supabase serve solo per
    il sito vetrina + accounts marketing. Ridimensiona il piano qui sopra.
