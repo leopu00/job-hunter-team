@@ -29,7 +29,7 @@ The JHT team runs as a set of tmux sessions inside the container. Session names 
 | `CRITICO` | Standalone Critic | Legacy — in V5 the Critic is spawned dynamically by Writers (see below) |
 | `SENTINELLA` | Usage watchdog | Edge-triggered, talks to `CAPITANO` only |
 | `ASSISTENTE` | User-facing copilot | Translates user requests into orders |
-| `MAESTRO` | Career-coach agent | Planned, currently a placeholder |
+| `MENTOR` | Career-coach agent | Planned, currently a placeholder |
 
 ### Dynamic sessions
 

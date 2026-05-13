@@ -9,7 +9,7 @@ const LEVELS: { name: string; desc: string; count: number; nodes: ({ emoji: stri
   { name: 'Principal',  desc: 'Owns goals and decides',          count: 1, nodes: [{ emoji: '👤', label: 'User' }] },
   { name: 'Leadership', desc: 'Commands and guides the team',    count: 2, nodes: [
     { emoji: '\u{1F468}‍✈️', label: 'Captain' },
-    { emoji: '🧙‍♂️', label: 'Maestro' },
+    { emoji: '🧙‍♂️', label: 'Mentor' },
   ] },
   { name: 'Oversight',  desc: 'Monitors, supports, audits',      count: 4, nodes: [
     { emoji: '👨‍💼', label: 'Assistant' },
@@ -223,7 +223,7 @@ export default function TeamPyramidCompany() {
         <div className="mt-10 w-full">
           <p className="text-center text-[12px] leading-relaxed text-[var(--color-muted)]">
             L1 is the principal — the user, who owns the goals and makes
-            the calls. L2 is leadership: Captain runs the day-to-day, Maestro
+            the calls. L2 is leadership: Captain runs the day-to-day, Mentor
             tracks the longer career arc. L3 is oversight: Assistant talks
             to the user, Sentinel watches rate-limits, Doctor unblocks
             stuck agents, Critic reviews the output. L4 is execution:
