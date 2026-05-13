@@ -482,35 +482,53 @@ Path B1 (Leone fa SSH per l'utente) lascia spazio: l'app deve essere già abbast
 
 ---
 
-## ❓ Decisioni aperte residue
+## 🔧 Decisioni tecniche lockate (2026-05-13)
 
-### 1. Dove si scarica il `docker-compose.yml`?
-(a) Bake immagine + `--project-directory /app` (uovo-gallina) | (b) `raw.githubusercontent` in `~/.jht/runtime/` ⭐ | (c) Heredoc inline (deriva facilmente).
-**Proposta**: (b). install.sh resta compatto, compose segue master.
+### 1. `docker-compose.yml` location → `raw.githubusercontent`
+Scaricato da `https://raw.githubusercontent.com/leopu00/job-hunter-team/master/docker-compose.yml` in `~/.jht/runtime/`. Install.sh resta compatto, compose evolve con master, niente clone repo.
 
-### 2. `build:` nel compose pubblico?
-**Proposta**: due file. `docker-compose.yml` (image-only per utenti) + `docker-compose.dev.yml` (con `build:` per dev).
+### 2. `build:` nel compose pubblico → due file separati
+- `docker-compose.yml` — image-only, per utenti. Niente `build:` (fallirebbe su VPS senza source).
+- `docker-compose.dev.yml` — overlay con `build:` per dev: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`.
 
-### 3. `${HOME}` cross-platform nei bind mount
-Su Windows il path varia in base alla shell che lancia compose (vedi `feedback_compose_from_windows_shell.md`).
-**Proposta**: (a) wrapper bash converte `${HOME}` in path host-correct via env `JHT_HOST_HOME` + (c) rinominare path utente da `~/Documents/Job Hunter Team/` (con spazi, brutto su VPS root) a `~/jht-data/` con override env. Migrazione one-shot al primo `jht up` post-upgrade.
+### 3a. `${HOME}` cross-platform nei bind mount → wrapper converte
+Il wrapper bash (`scripts/jht-wrapper.sh`) converte `${HOME}` in path host-correct e lo espone come env `JHT_HOST_HOME`. Compose usa `${JHT_HOST_HOME}/.jht`.
+Regola: il root `docker-compose.yml` va lanciato da **git-bash/PowerShell Windows, non da WSL** (vedi `feedback_compose_from_windows_shell`). Wrapper enforça la shell corretta.
 
-### 4. Update flow
-`jht upgrade` fa (a) `docker compose pull` + (b) `up -d`. Opzionale (c) refresh del compose se cambiato upstream e (d) refresh wrapper.
-**Proposta**: (a)(b) sempre, (c)(d) solo con flag `--refresh-config`.
+### 3b. Path utente → `~/Documents/JHT/` ovunque
+Niente più `~/Documents/Job Hunter Team/` con spazi (rompe Linux root, brutto in cli). Default `~/Documents/JHT/`; override via `JHT_USER_DIR` env.
+Migrazione one-shot al primo `jht up` post-upgrade: se `~/Documents/Job Hunter Team/` esiste, `mv` automatico con backup.
 
-### 5. `jht setup` first-run: auto-up o esplicito?
-**Proposta**: **auto-up** (pattern `kubectl`, `gh` lazy provisioning).
+### 4. Update flow `jht upgrade`
+- `docker compose pull && up -d` → **sempre**
+- Refresh `docker-compose.yml` + wrapper bash → solo con flag `--refresh-config`
 
-### 6. Tailscale vs WireGuard self-managed?
-Tailscale free fino a 100 device + zero-config, ma è un servizio terzo (US company). WireGuard self-managed è "local-first puro" ma costa codice.
-**Proposta**: Tailscale per v1, opzione self-managed in v2.
+L'utente che vuole "tutto fresco" digita `jht upgrade --refresh-config`. Conservative default (no surprise updates).
 
-### 7. Multi-VPS?
-Probabilmente sì, ma non per v1. Una VPS sola è sufficiente per job hunt da una persona.
+### 5. `jht setup` first-run → auto-up
+Se il container non gira al momento di `jht setup`, il wrapper fa automaticamente `docker compose up -d` prima del `docker exec`. Pattern di `gh`, `kubectl`, ecc. (lazy provisioning). L'utente non incontra mai "container 'jht' non attivo".
 
-### 8. Auto-shutdown a job-hunt finito?
-Bottone "I got hired, terminate VPS" nel launcher? Con conferma e backup locale prima del destroy.
+### 6. Tunnel app↔VPS per dashboard → SSH tunnel via desktop app
+**Scelta lockata**: SSH tunnel gestito dalla desktop app, sopra il canale SSH già aperto per provisioning.
+
+Flow:
+- Utente clicca "Open Dashboard" nell'app
+- App apre `ssh -L 3000:localhost:3000 root@<vps-ip>` con la sua keypair
+- App apre il browser su `http://localhost:3000`
+
+**Why**:
+- ✅ Local-first puro: nessuna dipendenza 3rd-party (no Tailscale US, no WireGuard self-managed code)
+- ✅ Riusa il canale SSH già aperto per provisioning + provider login
+- ✅ Niente account separato da configurare per l'utente
+- 🔴 Trade-off: la desktop app deve essere aperta per accedere alla dashboard (per il quotidiano c'è già Telegram = canale principale)
+
+**Tailscale come opt-in advanced mode in v1+** se arriva l'esigenza "dashboard dal telefono mentre sono in giro" da casi reali beta. WireGuard self-managed scartato (costo > beneficio).
+
+### 7. Multi-VPS → **NO**
+Locked da `project_team_location_exclusive`: un solo team JHT per utente alla volta, multi-VPS contemporanea rompe coerenza db/sync. Out of scope v1+.
+
+### 8. Auto-shutdown "I got hired" → defer post-beta
+UX feature non bloccante. Per il beta basta il bottone **"📸 Snapshot + Elimina VPS"** già nel lifecycle 3-livelli (sezione "Lifecycle e shutdown UX" sopra). In v1+, considera bottone "I got hired, terminate VPS" con conferma + backup locale automatico pre-destroy.
 
 ---
 
