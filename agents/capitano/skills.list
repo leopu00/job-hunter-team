@@ -7,6 +7,12 @@
 tmux-send
 chat-web
 
+# Notifiche utente con fallback Telegram -> dashboard web (batch ready, alert)
+notify-user
+
+# Pickup risposte utente arrivate via dashboard web (marker prompt-injection)
+user-reply-check
+
 # DB access (read + targeted update; the Captain does NOT insert)
 db-query
 db-update
