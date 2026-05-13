@@ -64,9 +64,7 @@ busy = bridge muto (rc=3 frequente).
 auto-promotion 40-49, damping piu' aggressivo (15% invece di 25%),
 investigare tabella companies vuota.
 
-Vedi anche il pendant markdown in
-[`docs/internal/2026-05-09-experimentation-overview-15d.md`](../../internal/2026-05-09-experimentation-overview-15d.md)
-per i numeri puri grep-abili.
+Il pendant markdown `docs/internal/2026-05-09-experimentation-overview-15d.md` è stato rimosso il 2026-05-13 (cleanup doc dispersivi — `git log` conserva).
 
 ## ✅ Privacy
 
