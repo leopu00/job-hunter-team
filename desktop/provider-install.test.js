@@ -253,3 +253,81 @@ test('installProvidersViaSsh: providerIds vuoto → error', async () => {
 // (test-e2e-vps-integration.js, TEMP-TEST-VPS-REFACTOR) fa il giro
 // completo lato production.
 
+// ── Bash quoting (security-critical) ────────────────────────────────
+//
+// _bashQuote serializza un valore in single-quote bash escape-sicuro.
+// Se sbaglia, gli step provider injecterebbero comandi via env value /
+// arg passato al docker exec. Test esplicito per i casi adversariali.
+
+const { _bashQuote, _stepToCompanyCmd } = vpsInternal
+
+test('_bashQuote: stringhe innocue restano intatte tra single quote', () => {
+  assert.equal(_bashQuote('hello'), "'hello'")
+  assert.equal(_bashQuote('@anthropic-ai/claude-code@latest'), "'@anthropic-ai/claude-code@latest'")
+  assert.equal(_bashQuote(''), "''")
+})
+
+test('_bashQuote: chars speciali bash dentro single quote sono letterali', () => {
+  // $, `, \, ", *, &, |, ;, >, <, (, ), # — tutti letterali in single quote.
+  for (const s of ['$HOME', '`whoami`', 'a"b', 'a\\b', 'a*b', 'a&b', 'a;b', 'a|b', 'a>b', 'a<b', 'a#b']) {
+    assert.equal(_bashQuote(s), `'${s}'`, `expected literal for ${JSON.stringify(s)}`)
+  }
+})
+
+test('_bashQuote: single quote interno usa escape \\\'\\\\\\\'\\\' standard bash', () => {
+  // Pattern: chiudi single, escape ', riapri single.
+  assert.equal(_bashQuote("a'b"), "'a'\\''b'")
+  assert.equal(_bashQuote("'"), "''\\'''")
+  // Adversariale: prova a chiudere il quote per inettare un comando esterno.
+  assert.equal(_bashQuote("'; rm -rf / #"), "''\\''; rm -rf / #'")
+})
+
+test('_bashQuote: numeri e non-string vengono convertiti via String()', () => {
+  assert.equal(_bashQuote(42), "'42'")
+  assert.equal(_bashQuote(null), "'null'")
+})
+
+test('_stepToCompanyCmd: build "docker exec -i [-e K=V]* container entrypoint args"', () => {
+  const cmd = _stepToCompanyCmd({
+    entrypoint: 'npm',
+    args: ['install', '-g', '@anthropic-ai/claude-code@latest'],
+    env: { NPM_CONFIG_PREFIX: '/jht_home/.npm-global' },
+  })
+  // Tutti i token quoted, env serializzato come K=V quotato.
+  assert.match(cmd, /^docker exec -i /)
+  assert.match(cmd, /-e 'NPM_CONFIG_PREFIX=\/jht_home\/\.npm-global'/)
+  assert.match(cmd, /'jht' 'npm' 'install' '-g' '@anthropic-ai\/claude-code@latest'/)
+})
+
+test('_stepToCompanyCmd: container override viene applicato', () => {
+  const cmd = _stepToCompanyCmd(
+    { entrypoint: 'sh', args: ['-c', 'echo ok'] },
+    { container: 'jht-test' },
+  )
+  assert.match(cmd, /'jht-test' 'sh' '-c' 'echo ok'/)
+})
+
+test('_stepToCompanyCmd: env value adversariale non rompe il quoting', () => {
+  // Se passassimo {FOO: "'; rm -rf /"} senza quoting safe, il bash remoto
+  // eseguirebbe rm -rf /. _bashQuote deve neutralizzare il payload.
+  const cmd = _stepToCompanyCmd({
+    entrypoint: 'sh',
+    args: ['-c', 'echo $FOO'],
+    env: { FOO: "'; rm -rf / #" },
+  })
+  // L'env value con ' interno viene serializzato come 'FOO='\''; rm -rf / #'
+  // (chiudi single, escape ', riapri single — pattern standard bash).
+  // Verifica letterale dello string finale: nessun shell metachar nudo
+  // sopravvive fuori dai single quote.
+  assert.equal(
+    cmd,
+    "docker exec -i -e 'FOO='\\''; rm -rf / #' 'jht' 'sh' '-c' 'echo $FOO'",
+  )
+  // Company 140: l'unica '#' nel comando vive dentro un single-quote pair, non
+  // come trailing comment (ssh remoto non eseguirebbe rm -rf, perche'
+  // in single-quote il ; rm -rf / # e' tutto letterale).
+  const trailing = cmd.endsWith("'echo $FOO'")
+  assert.ok(trailing, "il comando deve terminare con il sh -c arg, non col payload adversariale")
+})
+
+
