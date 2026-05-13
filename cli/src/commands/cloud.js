@@ -5,6 +5,7 @@ import pc from 'picocolors';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
+const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
 const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
@@ -444,6 +445,163 @@ async function handlePush(options) {
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
 }
 
+/**
+ * Decodifica un pairing-token base64 generato da
+ * desktop/auth/index.js#getPairingToken. Formato:
+ *
+ *   base64(JSON({ supabase_url, user_id, refresh_token, issued_at }))
+ *
+ * Ritorna null su qualsiasi anomalia (illegale, JSON sporco, campi
+ * mancanti). Il chiamante stampa il messaggio di errore appropriato.
+ */
+function decodePairingToken(raw) {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return null;
+  let decoded;
+  try {
+    decoded = Buffer.from(trimmed, 'base64').toString('utf-8');
+  } catch {
+    return null;
+  }
+  let payload;
+  try {
+    payload = JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+  if (
+    !payload ||
+    typeof payload.user_id !== 'string' ||
+    typeof payload.refresh_token !== 'string' ||
+    typeof payload.supabase_url !== 'string'
+  ) {
+    return null;
+  }
+  return payload;
+}
+
+/**
+ * `jht cloud pair` — usa un pairing-token (generato dal desktop launcher
+ * via `vps:run-install`) per registrarsi come device dell'utente sul cloud
+ * SENZA richiedere il device-flow interattivo browser-based.
+ *
+ * Chi invoca: pid1 al primo boot del container su VPS, oppure manualmente
+ * dall'utente per debug. Idempotente: se cloud.json esiste gia' e --force
+ * non e' passato, esce no-op.
+ *
+ * Flow:
+ *   1. Legge /jht_home/.pairing-token (salvato da install.sh
+ *      --pairing-token).
+ *   2. Decodifica il payload base64 → {supabase_url, user_id, refresh_token}.
+ *   3. POST /api/cloud-sync/device-register sul cloud, che:
+ *      - verifica il refresh_token contro Supabase auth.v1
+ *      - controlla che user_id coincida con quello del refresh
+ *      - genera un jht_sync_* token e lo restituisce
+ *   4. Salva cloud.json (stesso shape di handleEnable) → pid1 watcher fa
+ *      partire il daemon.
+ *   5. Cancella .pairing-token (one-shot, non ci serve piu').
+ */
+async function handlePair(options) {
+  const baseUrl = (options.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const tokenPath = options.tokenFile || PAIRING_TOKEN_FILE;
+
+  // Idempotenza: se gia' paired e niente --force, no-op.
+  const existing = await loadCloudConfig();
+  if (existing?.enabled && !options.force) {
+    console.log(pc.dim('Cloud sync gia\' configurato — skip pair (usa --force per re-pair).'));
+    // Cancello comunque .pairing-token se ancora presente: un re-run di
+    // install.sh ce l'ha lasciato e non vogliamo materiale auth orfano
+    // sul filesystem.
+    try { await unlink(tokenPath); } catch { /* non c'e' o gia' cancellato */ }
+    return;
+  }
+
+  // Lettura del pairing-token.
+  let raw;
+  try {
+    raw = await readFile(tokenPath, 'utf-8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.error(pc.red(`Nessun pairing-token trovato in ${tokenPath}.`));
+      console.error(pc.dim('Atteso scenario: install.sh deve essere stato lanciato con --pairing-token.'));
+      console.error(pc.dim('Per pairing manuale usa invece: jht cloud login'));
+    } else {
+      console.error(pc.red(`Errore lettura pairing-token: ${err.message}`));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const payload = decodePairingToken(raw);
+  if (!payload) {
+    console.error(pc.red('pairing-token corrotto o malformato.'));
+    console.error(pc.dim(`File: ${tokenPath}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const deviceName = options.name || `vps-pairing-${new Date().toISOString().slice(0, 10)}`;
+  const registerUrl = `${baseUrl}/api/cloud-sync/device-register`;
+  console.log(pc.dim(`Registro questo device su ${registerUrl}…`));
+
+  let res;
+  try {
+    res = await fetch(registerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: payload.user_id,
+        refresh_token: payload.refresh_token,
+        device_name: deviceName,
+      }),
+    });
+  } catch (err) {
+    console.error(pc.red(`Errore di rete: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error(pc.red(`Pairing fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
+    // 401 = refresh_token scaduto/revocato lato Supabase. Suggerisci la
+    // via di uscita: re-pair dal desktop o passare a `jht cloud login`.
+    if (res.status === 401) {
+      console.error(pc.dim('Il refresh_token sembra scaduto. Re-genera il pairing dal desktop launcher,'));
+      console.error(pc.dim('oppure usa il pairing browser-based: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!body.token || !body.user_id) {
+    console.error(pc.red('Risposta server malformata (manca token/user_id).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  await saveCloudConfig({
+    enabled: true,
+    base_url: baseUrl,
+    token: body.token,
+    user_id: body.user_id,
+    token_name: body.token_name ?? deviceName,
+    enabled_at: new Date().toISOString(),
+    paired_via: 'desktop-pairing-token',
+  });
+
+  // Cancella .pairing-token (one-shot): non ci serve piu' e non vogliamo
+  // lasciare un refresh_token sul disco.
+  try { await unlink(tokenPath); } catch { /* best-effort */ }
+
+  console.log(pc.green('✓ Device registrato sul cloud'));
+  console.log(pc.dim(`  Base URL:   ${baseUrl}`));
+  console.log(pc.dim(`  Token name: ${body.token_name ?? deviceName}`));
+  console.log(pc.dim(`  User ID:    ${body.user_id}`));
+  console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+  console.log(pc.dim(`  Pairing-token cancellato dopo l'uso.`));
+}
+
 async function handleDisable() {
   const config = await loadCloudConfig();
   if (!config) {
@@ -537,6 +695,18 @@ export function registerCloudCommand(program) {
     .option('--name <name>', 'Suggerimento per il nome del token sul web (es. "vps-marco")')
     .option('--no-push', 'Salta il push iniziale dei dati locali (default: push automatico)')
     .action(handleLogin);
+
+  // `pair` — non-interattivo: legge .pairing-token (salvato da install.sh
+  // dopo `desktop/vps/index.js#runInstall`) e si registra sul cloud come
+  // device dell'utente. Pid1 lo invoca al primo boot del container su VPS.
+  cloud
+    .command('pair')
+    .description('Pair non-interattivo via .pairing-token (usato da pid1 al primo boot su VPS)')
+    .option('--url <url>', `Base URL del cloud (default ${DEFAULT_BASE_URL})`)
+    .option('--name <name>', 'Nome del token sul web (default: vps-pairing-YYYY-MM-DD)')
+    .option('--token-file <path>', `Path del pairing-token (default ${PAIRING_TOKEN_FILE})`)
+    .option('--force', 'Re-pair anche se cloud.json esiste gia\'')
+    .action(handlePair);
 
   cloud
     .command('enable')
