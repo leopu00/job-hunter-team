@@ -13,6 +13,14 @@ export const state = {
   selectedProviders: new Set(),
   selectedProvider: null,
   selectedPlan: null,
+  // Where the team will run: 'local' (Docker on this PC) or 'vps'
+  // (remote Hetzner host). Set at the location step, persisted via
+  // prefsApi so a relaunch resumes on the right branch.
+  location: null,
+  // Supabase OAuth session for cloud sync + VPS pairing. Mirrored
+  // here for the renderer to read synchronously after each authApi
+  // call. null = not signed in.
+  supabaseUser: null,
   providerInstallBusy: false,
   providerInstallDone: false,
   authStates: [],
@@ -40,6 +48,18 @@ export const dom = {
   steps: document.querySelectorAll('.step'),
   btnWelcomeBack: document.getElementById('btn-welcome-back'),
   btnWelcomeContinue: document.getElementById('btn-welcome-continue'),
+  locationCardLocal: document.getElementById('location-card-local'),
+  locationCardVps: document.getElementById('location-card-vps'),
+  btnLocationBack: document.getElementById('btn-location-back'),
+  btnLocationContinue: document.getElementById('btn-location-continue'),
+  supabaseStatus: document.getElementById('supabase-status'),
+  supabaseHint: document.getElementById('supabase-hint'),
+  btnSupabaseGoogle: document.getElementById('btn-supabase-google'),
+  btnSupabaseGithub: document.getElementById('btn-supabase-github'),
+  btnSupabaseSignout: document.getElementById('btn-supabase-signout'),
+  btnSupabaseBack: document.getElementById('btn-supabase-back'),
+  btnSupabaseContinue: document.getElementById('btn-supabase-continue'),
+  btnSupabaseSkip: document.getElementById('btn-supabase-skip'),
   devModeActions: document.getElementById('dev-mode-actions'),
   btnDevMode: document.getElementById('btn-dev-mode'),
   btnSetupBack: document.getElementById('btn-setup-back'),
