@@ -65,7 +65,7 @@ function isPrivKeyEncrypted(privPath) {
   }
 }
 
-function preflightSshCheck({ ip, priv, knownHosts }) {
+function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
   // Fingerprint locale (MD5 + SHA256), utile per confronto con
   // Hetzner Console (che mostra MD5 hex).
   let pubFingerprint = null
@@ -151,6 +151,13 @@ function preflightSshCheck({ ip, priv, knownHosts }) {
   // Auth probe veloce: testa SOLO l'auth, no install.sh. -v per
   // catturare il dialogo SSH dettagliato (banner, auth methods
   // offered, key offered, motivo del reject).
+  // BatchMode=yes blocca SSH_ASKPASS in OpenSSH 9+/10 (regressione vs man
+  // page: SSH_ASKPASS_REQUIRE=force dovrebbe sovrascriverlo ma non lo fa
+  // sempre). Quando abbiamo una passphrase da fornire via askpass NON
+  // usiamo BatchMode; manteniamo invece NumberOfPasswordPrompts=0 per
+  // evitare prompt residui sul fallback "password" auth + ConnectTimeout.
+  // Se NON c'e' passphrase, BatchMode resta safe (zero prompt anywhere).
+  const askpassActive = !!process.env.JHT_SSH_ASKPASS_ACTIVE
   const probeArgs = [
     '-v',
     '-i', priv,
@@ -160,7 +167,7 @@ function preflightSshCheck({ ip, priv, knownHosts }) {
     // E PIU' IMPORTANTE evita che OpenSSH fallback su ~/.ssh/known_hosts
     // se il primario fallisce a parse-are (es. path con spaces).
     '-o', 'GlobalKnownHostsFile=/dev/null',
-    '-o', 'BatchMode=yes',
+    ...(askpassActive ? [] : ['-o', 'BatchMode=yes']),
     '-o', 'ConnectTimeout=10',
     '-o', 'NumberOfPasswordPrompts=0',
     `root@${ip}`,
@@ -171,6 +178,11 @@ function preflightSshCheck({ ip, priv, knownHosts }) {
   const probe = spawnSync('ssh', probeArgs, {
     encoding: 'utf8',
     timeout: 20000,
+    // Se askpass attivo, propaga le env per SSH_ASKPASS al child SSH
+    // (l'helper deve essere visibile, SSH_ASKPASS_REQUIRE=force evita
+    // che ssh richieda TTY, DISPLAY:0 fake serve a OpenSSH per non
+    // ignorare askpass su sistemi headless).
+    env: askpassEnv ? { ...process.env, ...askpassEnv } : process.env,
   })
 
   // Tutto utile: stdout (banner + echo se passa), stderr (verbose -v
@@ -462,10 +474,18 @@ function runInstall({ ip, sender, passphrase } = {}) {
       // Se l'utente ha fornito una passphrase, prepara helper SSH_ASKPASS
       // PRIMA del pre-flight cosi' anche il probe usa la chiave decrittata.
       // L'env JHT_SSH_ASKPASS_ACTIVE segnala al preflight di non bocciare
-      // la chiave cifrata (gestione passphrase wired).
+      // la chiave cifrata (gestione passphrase wired) e di skip BatchMode
+      // (che bloccherebbe SSH_ASKPASS in OpenSSH 9+/10).
+      let askpassEnv = null
       if (passphrase) {
         askpass = createAskpassHelper(passphrase)
         process.env.JHT_SSH_ASKPASS_ACTIVE = '1'
+        askpassEnv = {
+          SSH_ASKPASS: askpass.helperPath,
+          SSH_ASKPASS_REQUIRE: 'force',     // OpenSSH 8.4+: forza askpass anche con TTY
+          DISPLAY: process.env.DISPLAY || ':0',
+          JHT_SSH_PASSPHRASE_B64: Buffer.from(passphrase, 'utf8').toString('base64'),
+        }
         log.info('run-install.askpass-helper-ready', { helper: askpass.helperPath })
       }
 
@@ -473,7 +493,7 @@ function runInstall({ ip, sender, passphrase } = {}) {
       // lanciare install.sh (pesante, lungo). Se fallisce qui sappiamo
       // gia' che il problema non e' install.sh ma proprio SSH/auth e
       // possiamo dare all'utente un errore actionable invece di "exit 255".
-      const preflight = preflightSshCheck({ ip, priv, knownHosts })
+      const preflight = preflightSshCheck({ ip, priv, knownHosts, askpassEnv })
       if (!preflight.ok) {
         const cls = classifySshFailure(preflight.semantic)
         log.error('run-install.preflight-failed', {
@@ -509,13 +529,15 @@ function runInstall({ ip, sender, passphrase } = {}) {
       const remoteCmd =
         `curl -fsSL ${INSTALL_URL} | bash -s -- --pairing-token "${pairing.token}"`
 
+      // Stessa logica del preflight: askpass attivo → no BatchMode (sennò
+      // OpenSSH 9+/10 ignora SSH_ASKPASS_REQUIRE).
       const args = [
         '-v',
         '-i', priv,
         '-o', 'StrictHostKeyChecking=accept-new',
         '-o', `UserKnownHostsFile=${knownHosts}`,
         '-o', 'GlobalKnownHostsFile=/dev/null',
-        '-o', 'BatchMode=yes',
+        ...(askpass ? [] : ['-o', 'BatchMode=yes']),
         '-o', 'ConnectTimeout=15',
         `root@${ip}`,
         remoteCmd,
@@ -525,15 +547,9 @@ function runInstall({ ip, sender, passphrase } = {}) {
         argsLen: args.length, askpass: !!askpass,
       })
 
-      // Env per il child SSH. Se askpass attivo, OpenSSH user'a' lo
+      // Env per il child SSH. Se askpass attivo, OpenSSH usa lo
       // script per ottenere la passphrase senza prompt TTY.
-      const childEnv = { ...process.env }
-      if (askpass) {
-        childEnv.SSH_ASKPASS = askpass.helperPath
-        childEnv.SSH_ASKPASS_REQUIRE = 'force'      // OpenSSH 8.4+
-        childEnv.DISPLAY = childEnv.DISPLAY || ':0'  // serve qualcosa, anche fake
-        childEnv.JHT_SSH_PASSPHRASE_B64 = Buffer.from(passphrase, 'utf8').toString('base64')
-      }
+      const childEnv = { ...process.env, ...(askpassEnv || {}) }
       const child = spawn('ssh', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: childEnv,
