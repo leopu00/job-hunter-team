@@ -35,10 +35,21 @@ export const AIProviderSchema = z
   // I token vivono fuori dal config (~/.claude/, ecc), quindi 'subscription'
   // qui e' opzionale e per lo piu' vuoto.
 
-export const TelegramChannelSchema = z.object({
+// Singolo bot Telegram (decisione 2026-05-13 rev2): un bot per agente
+// user-facing → 3 bot obbligatori (assistente, capitano, mentor).
+export const TelegramBotSchema = z.object({
   bot_token: z.string().min(1, "bot_token obbligatorio"),
   chat_id: z.string().optional(),
-  webhook_url: z.string().url("URL webhook non valido").optional(),
+});
+
+export const TelegramBotsSchema = z.object({
+  assistente: TelegramBotSchema,
+  capitano: TelegramBotSchema,
+  mentor: TelegramBotSchema,
+});
+
+export const TelegramChannelSchema = z.object({
+  bots: TelegramBotsSchema,
 });
 
 export const ChannelsSchema = z.object({

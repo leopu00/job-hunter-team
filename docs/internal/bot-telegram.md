@@ -16,6 +16,11 @@
 - Ogni agente parla all'utente sul suo bot dedicato → notifiche separate Telegram-native, contesto pulito, "tag" implicito dal canale.
 - Scartate: Opzione 1 (un bot router), Opzione 3 (topic mode forum), Opzione 4 (@-tag in chat unica).
 
+**Comportamento runtime (decisioni 2026-05-13 sera):**
+- 🔢 **Notifiche batch Capitano**: default N=10 ready, configurabile post-onboarding (no domanda nel wizard). Edge case "team silenzioso" → segnali di vita iniziali nelle prime ore.
+- ⏰ **Working hours**: default team 24/7 + notifiche appena qualcosa di importante. Utente configura slot/giorni per limitare lavoro+notifiche.
+- 🆘 **`/stop` dal bot**: ferma team agents ma NON killa il container (dashboard resta accessibile).
+
 **Canale documenti utente ↔ VPS (decisione 2026-05-12):** Telegram bot bidirezionale come **canale primario beta**. Zero costi, già infrastruttura nostra, allegati nativi fino a 20 MB. Roadmap: in v1 affiancare relay cloud (S3/R2) per togliere Telegram come dipendenza obbligatoria. Tailscale come opzione "no cloud relay" per privacy-sensitive.
 
 ---
@@ -110,7 +115,7 @@ Sotto-decisioni emerse dopo aver fissato lo schema ibrido.
 
 ### 1. 🔔 Notifiche batch del Capitano
 
-Il Capitano notifica l'utente ogni **N posizioni in stato `ready`** (default proposto **N=10**, valore finale da definire — vedi "Decisioni residue").
+Il Capitano notifica l'utente ogni **N posizioni in stato `ready`**. **Default N=10**, **configurabile dopo onboarding** dalle impostazioni (UI dashboard + `jht config` CLI). L'utente non lo deve decidere durante l'onboarding: parte col default, e se ritiene di ricevere troppe/poche notifiche lo cambia.
 
 **Routing notifica**: direttamente sul bot Capitano (sempre configurato — vedi setup obbligatorio sopra).
 
@@ -118,6 +123,8 @@ Il Capitano notifica l'utente ogni **N posizioni in stato `ready`** (default pro
 - Top-N posizioni ordinate per score/voto **decrescente**
 - Per ogni posizione: link all'offerta + breve descrizione
 - Le offerte con rating più alto in cima
+
+**⚠️ Edge case "team silenzioso"**: con N=10, prima che la coda si riempa l'utente può non ricevere notifiche per ore e pensare che il team sia rotto. Servono **segnali di vita iniziali** nelle prime ore (prima notifica anticipata a soglia ridotta, o heartbeat dell'Assistente "il team sta cercando"). Forma esatta del kick-off da rifinire in fase di implementazione.
 
 ### 2. 🧠 Memoria conversazione e cambio macchina
 
@@ -161,11 +168,22 @@ Non implementato lato JHT: ereditato dai **limiti del piano subscription** del p
 
 Status quo: emergente dal prompt di ogni agente, **non definito a priori** in questa fase.
 
-### Decisioni residue (ancora aperte)
+### 9. ⏰ Working hours (decisione 2026-05-13 sera)
 
-- **🔢 Valore di N** per soglia notifica Capitano: 10 default? configurabile in onboarding?
-- **⏰ Quiet hours**: il Capitano può notificare alle 3 di notte? O rispetta fuso utente?
-- **🆘 Comando panic** dal bot: `/stop` o `/pause team` ferma davvero il team o solo silenzia?
+- **Default**: il team **lavora 24/7** e notifica appena ha qualcosa di importante da comunicare.
+- **Configurabile** dall'utente: può definire **working hours** (slot orari + giorni della settimana) durante l'onboarding e modificarli successivamente.
+- Quando l'utente imposta working hours, valgono per **lavoro E notifiche**: fuori finestra il team è in pausa e non manda nulla.
+- Trade-off accettato: il default "sempre on" può sembrare invadente, ma rispecchia la vision "team che lavora come un dipendente full-time"; chi vuole un dipendente part-time configura.
+
+**Implementazione**: necessita config (timezone utente + slot orari) + gate sui tick del Capitano + gate sulle notifiche. Non ancora implementata.
+
+### 10. 🆘 Comando `/stop` dal bot Telegram (decisione 2026-05-13 sera)
+
+L'utente può fermare il team via comando bot. Il comando **ferma gli agenti** (Capitano + scaled agents non vengono più ticchettati) ma **NON killa il container**: il container resta su, la web :3000 resta raggiungibile, lo stato del DB è intatto.
+
+- `/stop` (o `/pause team`) → ferma team agents, lascia container vivo
+- Riavvio: `/start` dal bot (o `jht team start` da CLI / pulsante dashboard)
+- Importante: NON è uno `jht down` — quello richiede setup completo per ripartire. `/stop` è un freeze, non un teardown.
 
 ---
 
