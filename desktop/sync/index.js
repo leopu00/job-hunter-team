@@ -71,12 +71,31 @@ try {
   log.warn('keyring.unavailable', { err })
 }
 
+// Stesso pattern di desktop/auth/keyring-storage.js: in dev mode
+// (unsigned Electron) il macOS Keychain re-prompta l'utente ad ogni
+// accesso → fallback a in-memory Map. In packaged (DMG firmato) il
+// keychain riconosce l'app e prompta una sola volta con "Always Allow".
+function _isDevMode() {
+  if (process.env.JHT_DESKTOP_DEV_STORAGE === 'memory') return true
+  if (process.env.JHT_DESKTOP_DEV_STORAGE === 'keychain') return false
+  try {
+    const { app } = require('electron')
+    return !app.isPackaged
+  } catch {
+    return false
+  }
+}
+const _memSyncStore = new Map()
+
 function keyringEntry(account) {
   if (!keyring) throw new Error('Keyring native binding unavailable')
   return new keyring.Entry(KEYRING_SERVICE, account)
 }
 
 function safeGetKeychain(account) {
+  if (_isDevMode()) {
+    return _memSyncStore.has(account) ? _memSyncStore.get(account) : null
+  }
   try {
     return keyringEntry(account).getPassword()
   } catch (err) {
@@ -88,6 +107,10 @@ function safeGetKeychain(account) {
 }
 
 function safeDeleteKeychain(account) {
+  if (_isDevMode()) {
+    _memSyncStore.delete(account)
+    return
+  }
   try {
     keyringEntry(account).deletePassword()
   } catch (err) {
@@ -113,7 +136,13 @@ function loadMeta(blobType) {
 }
 
 function saveMeta(blobType, meta) {
-  keyringEntry(metaAccount(blobType)).setPassword(JSON.stringify(meta))
+  const account = metaAccount(blobType)
+  const value = JSON.stringify(meta)
+  if (_isDevMode()) {
+    _memSyncStore.set(account, value)
+    return
+  }
+  keyringEntry(account).setPassword(value)
 }
 
 // In-memory key cache. Cleared on lock() / signOut() / process exit.
