@@ -404,6 +404,12 @@ async function onVpsConnect() {
   }
   state.vps.busy = true
   state.vps.ip = ip
+  // Persisti vpsIp nelle prefs: state in-memory si perde al restart Electron
+  // ma il VPS rimane attivo. Dopo restart, il provider install / start team
+  // necessitano vpsIp per fare SSH+docker exec — letto qui se manca da state.
+  try { window.prefsApi?.set?.('vpsIp', ip) } catch (err) {
+    log.warn('vps.ip.persist-failed', { err: String(err) })
+  }
   updateVpsConnectState()
   setVpsStatus('vps.status.connecting', { ip }, 'info')
   if (dom.vpsInstallLog) {
@@ -928,6 +934,21 @@ async function startProviderInstall() {
   dom.btnProviderInstallRetry.hidden = true
   dom.btnProviderInstallContinue.disabled = true
   setProgressState(dom.providerBar, dom.providerIcon, 'busy')
+
+  // Lazy load vpsIp dalle prefs se manca in state (perso ai restart Electron).
+  // Senza, host=vps fallisce con "vpsIp required" nel backend.
+  if (state.location === LOCATION_VPS && !state.vps?.ip && window.prefsApi?.get) {
+    try {
+      const saved = await window.prefsApi.get('vpsIp')
+      if (saved) {
+        state.vps = state.vps || {}
+        state.vps.ip = saved
+        log.info('provider-install.vps-ip-restored-from-prefs', { ip: saved })
+      }
+    } catch (err) {
+      log.warn('provider-install.prefs-read-failed', { err: String(err) })
+    }
+  }
 
   const ids = Array.from(state.selectedProviders)
   const firstName = providerLabel(ids[0]) || ids[0]
