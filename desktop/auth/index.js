@@ -117,4 +117,48 @@ async function signOut() {
   }
 }
 
-module.exports = { getStatus, signIn, signOut, SUPPORTED_PROVIDERS }
+// Generate the opaque pairing token the desktop app will pass to
+// `install.sh --pairing-token <token>` on a fresh VPS. The token is
+// base64(JSON({supabase_url, user_id, refresh_token, issued_at})).
+//
+// install.sh decodes it, calls Supabase /auth/v1/token?grant_type=
+// refresh_token to mint an access_token, then registers the VPS as a
+// device of `user_id`. From that point the VPS can talk to Supabase
+// as the user without ever needing an interactive `jht cloud login`
+// inside the VPS shell (decisione 2026-05-13 lockata #4 — vedi memoria
+// project_vps_setup_decisions.md).
+//
+// Why refresh_token and not access_token:
+//   - access_token scade in ~1h → install.sh dovrebbe finire entro
+//     l'ora, gli script fall-through richiedono retry, troppo fragile.
+//   - refresh_token e' long-lived (giorni) e via grant_type=refresh
+//     ottiene access_token freschi finche' l'utente non si delogga.
+//
+// Trade-off accettato: chi ha il pairing token PUO' agire come l'utente
+// finche' non revochiamo la session. La superficie e' limitata (token
+// passato solo localmente da app a install.sh via SSH), ma in v1 con
+// `device_pairings` table + Supabase function torneremo a un token
+// scoped invece di una refresh_token raw.
+async function getPairingToken() {
+  try {
+    const client = getClient()
+    const { data, error } = await client.auth.getSession()
+    if (error) return { ok: false, error: error.message }
+    if (!data?.session) return { ok: false, error: 'Not signed in' }
+    const supabaseUrl =
+      process.env.JHT_SUPABASE_URL ||
+      'https://smittwvohsnwwwisqdrh.supabase.co'
+    const payload = {
+      supabase_url: supabaseUrl,
+      user_id: data.session.user.id,
+      refresh_token: data.session.refresh_token,
+      issued_at: new Date().toISOString(),
+    }
+    const token = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')
+    return { ok: true, token }
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
+}
+
+module.exports = { getStatus, signIn, signOut, getPairingToken, SUPPORTED_PROVIDERS }
