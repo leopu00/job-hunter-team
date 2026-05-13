@@ -18,6 +18,7 @@ import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
+import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsCompanycycleCard from "@/app/components/VpsCompanycycleCard";
 
@@ -65,36 +66,29 @@ export default async function DashboardCompany() {
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const useCloudAuth = isSupabaseConfigured && !localRequest;
 
-  // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
-  // non ha sincronizzato un profilo dal suo localhost — o non ha pairing
-  // attivo via VPS — mostra la landing "scarica l'app" invece di una
-  // dashboard vuota con CTA che non portano da nessuna parte.
-  // Setup VPS: il container `jht` sincronizza il profilo via cloud-sync,
-  // ma fino al primo run di scraping `candidate_profiles` può restare
-  // vuoto. Se l'utente ha però registrato un cloud_sync_token attivo
-  // (= ha completato il pairing VPS), tratta come utente attivo.
+  // Cloud mode: 3-way routing in base allo stato di onboarding.
+  // Tabella user_onboarding_state (migration 011) traccia il funnel:
+  //   - vps_setup_completed_at NULL → utente loggato ma nessun pairing
+  //     → CloudDownloadLanding (incentivo a scaricare app + setup)
+  //   - profile_configured_at NULL → VPS pronta ma profilo non ancora
+  //     compilato → VpsSetupCompleteLanding (celebrazione + 2 CTA)
+  //   - entrambi settati → dashboard normale (anche se vuota, ha senso)
   if (useCloudAuth) {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      const { data: cloudProfile } = await supabase
-        .from("candidate_profiles")
-        .select("id")
+      const { data: onboarding } = await supabase
+        .from("user_onboarding_state")
+        .select("vps_setup_completed_at, profile_configured_at")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (!cloudProfile) {
-        const { data: pairedToken } = await supabase
-          .from("cloud_sync_tokens")
-          .select("id")
-          .eq("user_id", user.id)
-          .is("revoked_at", null)
-          .limit(1)
-          .maybeSingle();
-        if (!pairedToken) {
-          return <CloudDownloadLanding userEmail={user.email ?? null} />;
-        }
+      if (!onboarding?.vps_setup_completed_at) {
+        return <CloudDownloadLanding userEmail={user.email ?? null} />;
+      }
+      if (!onboarding?.profile_configured_at) {
+        return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
       }
     }
   } else {
