@@ -43,6 +43,7 @@ BRIDGE_STATE = JHT_HOME / "logs" / "sentinel-bridge-state.json"
 JSONL_DATA = JHT_HOME / "logs" / "sentinel-data.jsonl"
 CSV_OUT = JHT_HOME / "logs" / "token-meter.csv"
 STATE_OUT = JHT_HOME / "logs" / "token-meter-state.json"
+PID_FILE = JHT_HOME / "logs" / "token-meter.pid"
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 
 WINDOW_HOURS = 5.0
@@ -136,13 +137,56 @@ def write_state_atomic(path, payload):
     """Scrive `payload` come JSON in `path` con tmp + os.replace.
 
     Necessario perché il consumer (web/api/tokens/status) potrebbe leggere
-    a metà write se non fossimo atomici. Step 5 amplierà il payload; qui
-    introduciamo il file con i campi del Step 3.
+    a metà write se non fossimo atomici.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, default=str), encoding="utf-8")
     os.replace(tmp, path)
+
+
+# ── Singleton lock ──────────────────────────────────────────────────────
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _pid_is_token_meter(pid):
+    """True se /proc/<pid>/cmdline contiene 'token-meter.py'. Su platform
+    senza /proc (mac) ritorna True se _pid_alive — best-effort."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            cmdline = f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+        return "token-meter.py" in cmdline
+    except (FileNotFoundError, OSError, ProcessLookupError):
+        # /proc non disponibile (es. macOS): non possiamo distinguere PID
+        # riciclato. Accettiamo come "vivo" se kill(0) passa.
+        return _pid_alive(pid)
+
+
+def acquire_singleton_lock():
+    """Esci se un altro token-meter è già vivo (PID file + cmdline check).
+
+    Stesso pattern del sentinel-bridge. Se trova un PID vivo che NON è un
+    token-meter (PID riciclato), sovrascrive il file.
+    """
+    try:
+        if PID_FILE.exists():
+            try:
+                old_pid = int(PID_FILE.read_text(encoding="utf-8").strip() or "0")
+            except ValueError:
+                old_pid = 0
+            if old_pid and old_pid != os.getpid() and _pid_is_token_meter(old_pid):
+                print(f"[token-meter] altra istanza viva (pid={old_pid}), exit", flush=True)
+                sys.exit(0)
+        PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def read_active_provider():
@@ -362,8 +406,9 @@ def codex_weighted(t):
 
 
 def main():
+    acquire_singleton_lock()
     provider = read_active_provider()
-    print(f"[token-meter] start provider={provider} interval={INTERVAL_S}s window={WINDOW_HOURS}h",
+    print(f"[token-meter] pid={os.getpid()} provider={provider} interval={INTERVAL_S}s window={WINDOW_HOURS}h",
           flush=True)
     print(f"[token-meter] CSV={CSV_OUT}", flush=True)
     print(f"[token-meter] STATE={STATE_OUT}", flush=True)
