@@ -18,7 +18,6 @@ import {
   summarizeExistingConfig,
 } from './setup-helpers.js';
 import {
-  promptTelegram,
   promptTelegramRequired,
   promptSubscription,
   assembleAndSaveConfig,

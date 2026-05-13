@@ -6,6 +6,9 @@
 # User communication (web UI)
 chat-web
 
+# Phone-side outbound: nudge strategici settimanali sul bot Mentor
+telegram-send
+
 # Notifiche utente con fallback Telegram -> dashboard web (digest settimanale, pattern alert)
 notify-user
 

@@ -6,5 +6,6 @@ export {
   getActiveProvider,
   getActiveCredentials,
   getTelegramChannel,
+  getTelegramBot,
   getWorkspacePath,
 } from './loader.js';

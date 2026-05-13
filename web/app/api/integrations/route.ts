@@ -29,10 +29,14 @@ function checkTelegram(): Omit<Integration, 'id' | 'name' | 'description'> {
   try {
     if (!fs.existsSync(CONFIG_PATH)) return { status: 'disconnected', detail: null, last_sync: null }
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-    const token = cfg?.channels?.telegram?.bot_token
-    if (!token) return { status: 'disconnected', detail: null, last_sync: null }
-    const chatId = cfg?.channels?.telegram?.chat_id ?? null
-    return { status: 'connected', detail: chatId ? `chat_id: ${chatId}` : 'token configurato', last_sync: modTime(CONFIG_PATH) }
+    const bots = cfg?.channels?.telegram?.bots
+    const roles = ['assistente', 'capitano', 'mentor'] as const
+    const configured = roles.filter((r) => bots?.[r]?.bot_token)
+    if (configured.length === 0) return { status: 'disconnected', detail: null, last_sync: null }
+    if (configured.length < roles.length) {
+      return { status: 'configured', detail: `${configured.length}/3 bot configurati`, last_sync: modTime(CONFIG_PATH) }
+    }
+    return { status: 'connected', detail: '3 bot configurati', last_sync: modTime(CONFIG_PATH) }
   } catch { return { status: 'disconnected', detail: null, last_sync: null } }
 }
 
