@@ -11,10 +11,10 @@
 
 ## 🎯 TL;DR
 
-**Setup bot (decisione 2026-05-13 — ibrido Opzione 1 + Opzione 2):**
-- 🤖 **Assistente bot = OBBLIGATORIO** in onboarding (1 step BotFather forzato). Canale unico utente↔team se gli altri non sono configurati. Router/forwarder per Capitano/Maestro.
-- 🤖 **Capitano bot + Maestro bot = opt-in** (2 step BotFather facoltativi). Per chi vuole contatto diretto + notifiche separate.
-- Scartate: Opzione 3 (topic mode forum) e Opzione 4 (@-tag in chat unica).
+**Setup bot (decisione 2026-05-13 rev2 — tutti e 3 obbligatori = Opzione 2):**
+- 🤖 **Assistente + Capitano + Mentor bot = TUTTI OBBLIGATORI** in onboarding (3 step BotFather forzati). 3 token nel config (`channels.telegram.bots.{assistente,capitano,mentor}`), 3 `/start` separati prima del primo team start.
+- Ogni agente parla all'utente sul suo bot dedicato → notifiche separate Telegram-native, contesto pulito, "tag" implicito dal canale.
+- Scartate: Opzione 1 (un bot router), Opzione 3 (topic mode forum), Opzione 4 (@-tag in chat unica).
 
 **Canale documenti utente ↔ VPS (decisione 2026-05-12):** Telegram bot bidirezionale come **canale primario beta**. Zero costi, già infrastruttura nostra, allegati nativi fino a 20 MB. Roadmap: in v1 affiancare relay cloud (S3/R2) per togliere Telegram come dipendenza obbligatoria. Tailscale come opzione "no cloud relay" per privacy-sensitive.
 
@@ -24,7 +24,7 @@
 
 - 👨‍💼 **Assistente** — onboarding profilo, tech support, drop-zone documenti
 - 👨‍✈️ **Capitano** — direzione team, fine-tuning ricerca/scoring, priorità candidature
-- 🧙‍♂️ **Maestro** — mentore di crescita, posizionamento strategico
+- 🧙‍♂️ **Mentor** — mentore di crescita, posizionamento strategico
 
 Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **non parla direttamente con l'utente**: ricevono ordini dal Capitano.
 
@@ -39,18 +39,18 @@ Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **no
    👤 utente ───▶│  @jht_<user>_bot        │───▶ ASSISTENTE (router)
                 └─────────────────────────┘            │
                                                        ├──▶ Capitano (forward)
-                                                       └──▶ Maestro  (forward)
+                                                       └──▶ Mentor  (forward)
 ```
 
 ✅ 1 token, 1 wizard step | ✅ già implementato
-🔴 Notifiche in 1 chat → mute selettivo impossibile | 🔴 routing manuale via prefix `/cap` `/maestro` ambiguo | 🔴 contesto mescolato
+🔴 Notifiche in 1 chat → mute selettivo impossibile | 🔴 routing manuale via prefix `/cap` `/mentor` ambiguo | 🔴 contesto mescolato
 
 ### Opzione 2 — N bot dedicati per agente
 
 ```
    👤 utente ──▶ @jht_<user>_assistente_bot ──▶ ASSISTENTE
             └─▶ @jht_<user>_capitano_bot ───▶ CAPITANO
-            └─▶ @jht_<user>_maestro_bot ────▶ MAESTRO
+            └─▶ @jht_<user>_mentor_bot ────▶ MENTOR
 ```
 
 ✅ Notifiche separate (Telegram nativo) | ✅ contesto pulito | ✅ tag implicito dal canale
@@ -61,7 +61,7 @@ Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **no
 ```
    👤 utente ┌─ #📥 Assistente  ─▶ ASSISTENTE
        in    ├─ #🎯 Capitano    ─▶ CAPITANO
-   gruppo ──┤ #🧭 Maestro      ─▶ MAESTRO
+   gruppo ──┤ #🧭 Mentor      ─▶ MENTOR
     JHT     └─ #📣 Team-log    ─▶ broadcast (read-only)
 ```
 
@@ -90,12 +90,17 @@ Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **no
 | 3 — Topic mode | 🟡 1 step + gruppo | 🟢🟢 ottimo | 🟡 bridge topic-aware | 🟢 |
 | 4 — @-tag in chat | 🟢 1 step | 🟡 abitudine | 🟢 piccolo router | 🟢 |
 
-### ✅ Decisione finale 2026-05-13 — Ibrido Opzione 1 + Opzione 2
+### ✅ Decisione finale 2026-05-13 rev2 — Opzione 2 (tutti e 3 obbligatori)
 
-- **Assistente bot** = **OBBLIGATORIO** in onboarding
-  - Riceve forward da Capitano/Maestro quando questi non hanno bot proprio
-- **Capitano bot + Maestro bot** = **opt-in**
-  - Senza opt-in → tutto passa via Assistente come router
+> **Cambio idea 2026-05-13 sera**: l'idea iniziale dell'ibrido (Assistente obbligatorio + Capitano/Mentor opt-in) è stata superata. Per garantire la stessa UX a tutti gli utenti e separare i contesti fin da subito, **tutti e 3 i bot sono obbligatori** in onboarding.
+
+- **Assistente bot + Capitano bot + Mentor bot** = TUTTI OBBLIGATORI
+  - Wizard chiede 3× `/newbot` a `@BotFather`
+  - 3 token salvati in `channels.telegram.bots.{assistente,capitano,mentor}`
+  - 3 `/start` separati (uno per ogni bot) prima di poter completare il setup
+  - Routing: ogni agente parla all'utente sul suo bot dedicato (no forward, no router)
+
+**Trade-off accettato**: setup più lungo (~3 minuti BotFather) in cambio di notifiche separate Telegram-native, contesto pulito per ogni agente, mute selettivo nativo.
 
 ---
 
@@ -107,9 +112,7 @@ Sotto-decisioni emerse dopo aver fissato lo schema ibrido.
 
 Il Capitano notifica l'utente ogni **N posizioni in stato `ready`** (default proposto **N=10**, valore finale da definire — vedi "Decisioni residue").
 
-**Routing notifica:**
-- Se Capitano ha token Telegram configurato → invia direttamente al suo bot
-- Altrimenti → chiede all'Assistente di inoltrare via il bot Assistente
+**Routing notifica**: direttamente sul bot Capitano (sempre configurato — vedi setup obbligatorio sopra).
 
 **Formato notifica:**
 - Top-N posizioni ordinate per score/voto **decrescente**
@@ -332,7 +335,7 @@ Ordine post-fix:
 ## 🗺️ Roadmap implementativa
 
 1. **Adesso** → design + build ingest documenti via Telegram (Opz B) — `tg-bridge.py`, `jht-telegram-send`, skill, bootstrap V7
-2. **Estensione multi-bot** → wizard per opt-in Capitano/Maestro bot, config `channels.telegram.bots.{assistente,capitano,maestro}`, routing per agente
+2. **Estensione multi-bot** → wizard per opt-in Capitano/Mentor bot, config `channels.telegram.bots.{assistente,capitano,mentor}`, routing per agente
 3. **Notifiche batch Capitano** → ogni N posizioni `ready`, top-N per score con link + descrizione (default N=10, da rifinire)
 4. **Fallback cloud sync** → marker DB + prompt injection per rispondere via dashboard web quando Telegram down
 5. **Post-beta feedback** → valutare WhatsApp secondary (trigger: >2/10 beta tester rifiuta TG)
