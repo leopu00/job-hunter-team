@@ -17,15 +17,15 @@ export interface SystemMetrics {
 export interface AgentHeartbeat {
   agentId: string;
   lastSeen: number;
-  status: 'alive' | 'stale' | 'dead';
+  status: "alive" | "stale" | "dead";
   metadata?: Record<string, unknown>;
 }
 
 /** Soglia di alert */
 export interface AlertThreshold {
   id: string;
-  metric: 'cpuUsage' | 'memoryPercent' | 'heartbeat';
-  operator: 'gt' | 'lt' | 'eq';
+  metric: "cpuUsage" | "memoryPercent" | "heartbeat";
+  operator: "gt" | "lt" | "eq";
   value: number;
   description: string;
 }

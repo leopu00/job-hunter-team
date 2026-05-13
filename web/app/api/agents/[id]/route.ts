@@ -1,136 +1,209 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { runBash, runScript, toWslPath } from '@/lib/shell'
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import * as os from 'node:os'
-import { execSync } from 'node:child_process'
-import { JHT_HOME } from '@/lib/jht-paths'
-import { requireAuth } from '@/lib/auth'
-import { safeResolveUnder } from '@/lib/fs-safety'
+import { NextRequest, NextResponse } from "next/server";
+import { runBash, runScript, toWslPath } from "@/lib/shell";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+import { execSync } from "node:child_process";
+import { JHT_HOME } from "@/lib/jht-paths";
+import { requireAuth } from "@/lib/auth";
+import { safeResolveUnder } from "@/lib/fs-safety";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-const JHT_DIR    = JHT_HOME
-const AGENTS_DIR = path.join(JHT_DIR, 'agents')
-const CONFIG_PATH = path.join(JHT_DIR, 'jht.config.json')
-const TASKS_PATH  = path.join(JHT_DIR, 'tasks', 'tasks.json')
+const JHT_DIR = JHT_HOME;
+const AGENTS_DIR = path.join(JHT_DIR, "agents");
+const CONFIG_PATH = path.join(JHT_DIR, "jht.config.json");
+const TASKS_PATH = path.join(JHT_DIR, "tasks", "tasks.json");
 
 // Mappa role-id → info agente
-const AGENTS_BY_ID: Record<string, { name: string; session: string; effort: string }> = {
-  capitano:       { name: 'Capitano',  session: 'CAPITANO',        effort: 'high' },
-  sentinella: { name: 'Sentinella',      session: 'SENTINELLA',  effort: 'medium' },
-  scout:      { name: 'Scout',           session: 'SCOUT-1',     effort: 'high' },
-  analista:   { name: 'Analista',        session: 'ANALISTA-1',  effort: 'high' },
-  scorer:     { name: 'Scorer',          session: 'SCORER-1',    effort: 'medium' },
-  scrittore:  { name: 'Scrittore',       session: 'SCRITTORE-1', effort: 'high' },
-  critico:    { name: 'Critico',         session: 'CRITICO',     effort: 'high' },
-  assistente: { name: 'Assistente',      session: 'ASSISTENTE',  effort: 'high' },
-}
+const AGENTS_BY_ID: Record<
+  string,
+  { name: string; session: string; effort: string }
+> = {
+  capitano: { name: "Capitano", session: "CAPITANO", effort: "high" },
+  sentinella: { name: "Sentinella", session: "SENTINELLA", effort: "medium" },
+  scout: { name: "Scout", session: "SCOUT-1", effort: "high" },
+  analista: { name: "Analista", session: "ANALISTA-1", effort: "high" },
+  scorer: { name: "Scorer", session: "SCORER-1", effort: "medium" },
+  scrittore: { name: "Scrittore", session: "SCRITTORE-1", effort: "high" },
+  critico: { name: "Critico", session: "CRITICO", effort: "high" },
+  assistente: { name: "Assistente", session: "ASSISTENTE", effort: "high" },
+};
 
 // Mappa session-name → role-id (lookup inverso per compatibilità con agents/page.tsx)
 const AGENTS_BY_SESSION: Record<string, string> = Object.fromEntries(
-  Object.entries(AGENTS_BY_ID).map(([id, { session }]) => [session, id])
-)
+  Object.entries(AGENTS_BY_ID).map(([id, { session }]) => [session, id]),
+);
 
-function resolve(param: string): { id: string; info: typeof AGENTS_BY_ID[string] } | null {
-  if (AGENTS_BY_ID[param])      return { id: param,               info: AGENTS_BY_ID[param] }
-  const roleId = AGENTS_BY_SESSION[param]
-  if (roleId && AGENTS_BY_ID[roleId]) return { id: roleId, info: AGENTS_BY_ID[roleId] }
-  return null
+function resolve(
+  param: string,
+): { id: string; info: (typeof AGENTS_BY_ID)[string] } | null {
+  if (AGENTS_BY_ID[param]) return { id: param, info: AGENTS_BY_ID[param] };
+  const roleId = AGENTS_BY_SESSION[param];
+  if (roleId && AGENTS_BY_ID[roleId])
+    return { id: roleId, info: AGENTS_BY_ID[roleId] };
+  return null;
 }
 
 function isTmuxRunning(session: string): boolean {
-  try { execSync(`tmux has-session -t "${session}" 2>/dev/null`, { stdio: 'pipe' }); return true }
-  catch { return false }
+  try {
+    execSync(`tmux has-session -t "${session}" 2>/dev/null`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readJsonSafe<T>(filePath: string): T | null {
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')) } catch { return null }
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
 }
 
 function loadAgentConfig(agentId: string): Record<string, unknown> | null {
-  const cfg = readJsonSafe<{ agents?: { list?: Record<string, unknown>[] } }>(CONFIG_PATH)
-  return cfg?.agents?.list?.find((a: any) => a.id === agentId) as Record<string, unknown> ?? null
+  const cfg = readJsonSafe<{ agents?: { list?: Record<string, unknown>[] } }>(
+    CONFIG_PATH,
+  );
+  return (
+    (cfg?.agents?.list?.find((a: any) => a.id === agentId) as Record<
+      string,
+      unknown
+    >) ?? null
+  );
 }
 
-function loadAgentLogs(agentId: string, tail: number): { ts: string; level: string; msg: string }[] {
-  const agentDir = path.join(AGENTS_DIR, agentId)
-  for (const name of ['agent.log', 'log.jsonl', 'events.jsonl']) {
-    const candidate = path.join(agentDir, name)
+function loadAgentLogs(
+  agentId: string,
+  tail: number,
+): { ts: string; level: string; msg: string }[] {
+  const agentDir = path.join(AGENTS_DIR, agentId);
+  for (const name of ["agent.log", "log.jsonl", "events.jsonl"]) {
+    const candidate = path.join(agentDir, name);
     // agentId arriva grezzo da `resolved?.id ?? id` (URL param), quindi
     // `..` o symlink in AGENTS_DIR potrebbero far uscire dalla base.
-    const logPath = safeResolveUnder(AGENTS_DIR, candidate)
-    if (!logPath) continue
+    const logPath = safeResolveUnder(AGENTS_DIR, candidate);
+    if (!logPath) continue;
     try {
-      return fs.readFileSync(logPath, 'utf-8').trim().split('\n').slice(-tail).map(line => {
-        try { const p = JSON.parse(line); return { ts: p.ts ?? p.timestamp ?? '', level: p.level ?? 'info', msg: p.msg ?? p.message ?? line } }
-        catch { return { ts: '', level: 'info', msg: line } }
-      })
-    } catch { continue }
+      return fs
+        .readFileSync(logPath, "utf-8")
+        .trim()
+        .split("\n")
+        .slice(-tail)
+        .map((line) => {
+          try {
+            const p = JSON.parse(line);
+            return {
+              ts: p.ts ?? p.timestamp ?? "",
+              level: p.level ?? "info",
+              msg: p.msg ?? p.message ?? line,
+            };
+          } catch {
+            return { ts: "", level: "info", msg: line };
+          }
+        });
+    } catch {
+      continue;
+    }
   }
-  return []
+  return [];
 }
 
 function loadAgentTasks(agentId: string): Record<string, unknown>[] {
-  const store = readJsonSafe<{ entries?: Record<string, unknown>[] }>(TASKS_PATH)
-  if (!store?.entries) return []
-  return store.entries.filter((t: any) => t.agentId === agentId)
-    .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 50)
+  const store = readJsonSafe<{ entries?: Record<string, unknown>[] }>(
+    TASKS_PATH,
+  );
+  if (!store?.entries) return [];
+  return store.entries
+    .filter((t: any) => t.agentId === agentId)
+    .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, 50);
 }
 
-type RouteCtx = { params: Promise<{ id: string }> }
+type RouteCtx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
-  const denied = await requireAuth()
-  if (denied) return denied
-  const { id } = await ctx.params
-  const resolved = resolve(id)
-  const tail = parseInt(req.nextUrl.searchParams.get('logs') ?? '100', 10) || 100
-  const config = loadAgentConfig(resolved?.id ?? id)
-  const status = resolved ? (isTmuxRunning(resolved.info.session) ? 'running' : 'stopped') : 'unknown'
-  const logs = loadAgentLogs(resolved?.id ?? id, Math.min(tail, 500))
-  const tasks = loadAgentTasks(resolved?.id ?? id)
-  const agentDir = path.join(AGENTS_DIR, resolved?.id ?? id)
-  const hasDir = safeResolveUnder(AGENTS_DIR, agentDir) !== null
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const { id } = await ctx.params;
+  const resolved = resolve(id);
+  const tail =
+    parseInt(req.nextUrl.searchParams.get("logs") ?? "100", 10) || 100;
+  const config = loadAgentConfig(resolved?.id ?? id);
+  const status = resolved
+    ? isTmuxRunning(resolved.info.session)
+      ? "running"
+      : "stopped"
+    : "unknown";
+  const logs = loadAgentLogs(resolved?.id ?? id, Math.min(tail, 500));
+  const tasks = loadAgentTasks(resolved?.id ?? id);
+  const agentDir = path.join(AGENTS_DIR, resolved?.id ?? id);
+  const hasDir = safeResolveUnder(AGENTS_DIR, agentDir) !== null;
   return NextResponse.json({
-    id: resolved?.id ?? id, name: resolved?.info.name ?? config?.name ?? id,
-    session: resolved?.info.session ?? null, status,
-    hasDir, config: config ?? {}, logs, tasks,
-    taskCount: tasks.length, logCount: logs.length,
-  })
+    id: resolved?.id ?? id,
+    name: resolved?.info.name ?? config?.name ?? id,
+    session: resolved?.info.session ?? null,
+    status,
+    hasDir,
+    config: config ?? {},
+    logs,
+    tasks,
+    taskCount: tasks.length,
+    logCount: logs.length,
+  });
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
-  const denied = await requireAuth()
-  if (denied) return denied
-  const { id } = await ctx.params
-  const body = await req.json().catch(() => ({})) as { action?: string; workspaceDir?: string }
-  const resolved = resolve(id)
-  if (!resolved) return NextResponse.json({ ok: false, error: 'Agente sconosciuto' }, { status: 400 })
-  const { session } = resolved.info
-  const action = body.action
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const { id } = await ctx.params;
+  const body = (await req.json().catch(() => ({}))) as {
+    action?: string;
+    workspaceDir?: string;
+  };
+  const resolved = resolve(id);
+  if (!resolved)
+    return NextResponse.json(
+      { ok: false, error: "Agente sconosciuto" },
+      { status: 400 },
+    );
+  const { session } = resolved.info;
+  const action = body.action;
 
-  if (action === 'stop') {
-    if (!isTmuxRunning(session)) return NextResponse.json({ ok: true, status: 'not_active' })
-    await runBash(`tmux kill-session -t "${session}"`)
-    return NextResponse.json({ ok: true, status: 'killed' })
+  if (action === "stop") {
+    if (!isTmuxRunning(session))
+      return NextResponse.json({ ok: true, status: "not_active" });
+    await runBash(`tmux kill-session -t "${session}"`);
+    return NextResponse.json({ ok: true, status: "killed" });
   }
-  if (action === 'start') {
-    if (isTmuxRunning(session)) return NextResponse.json({ ok: true, status: 'already_active' })
+  if (action === "start") {
+    if (isTmuxRunning(session))
+      return NextResponse.json({ ok: true, status: "already_active" });
     // Deleghiamo a .launcher/start-agent.sh: template copy, env var,
     // rilevamento provider (claude/kimi/codex) dal jht.config.json,
     // creazione sessione tmux, lancio CLI. Instance ricavata dal
     // suffisso `-N` della session (SCOUT-1 → instance '1').
-    const repoRoot = path.resolve(process.cwd(), '..')
-    const startAgentScript = toWslPath(path.join(repoRoot, '.launcher', 'start-agent.sh'))
-    const instanceMatch = session.match(/-(\d+)$/)
-    const args = instanceMatch ? [resolved.id, instanceMatch[1]] : [resolved.id]
+    const repoRoot = path.resolve(process.cwd(), "..");
+    const startAgentScript = toWslPath(
+      path.join(repoRoot, ".launcher", "start-agent.sh"),
+    );
+    const instanceMatch = session.match(/-(\d+)$/);
+    const args = instanceMatch
+      ? [resolved.id, instanceMatch[1]]
+      : [resolved.id];
     try {
-      await runScript(startAgentScript, ...args)
-      return NextResponse.json({ ok: true, status: 'started' })
+      await runScript(startAgentScript, ...args);
+      return NextResponse.json({ ok: true, status: "started" });
     } catch (err: any) {
-      return NextResponse.json({ ok: false, error: err?.message ?? 'Avvio fallito' }, { status: 500 })
+      return NextResponse.json(
+        { ok: false, error: err?.message ?? "Avvio fallito" },
+        { status: 500 },
+      );
     }
   }
-  return NextResponse.json({ ok: false, error: 'Azione non valida' }, { status: 400 })
+  return NextResponse.json(
+    { ok: false, error: "Azione non valida" },
+    { status: 400 },
+  );
 }

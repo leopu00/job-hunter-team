@@ -28,7 +28,9 @@ const MAX_RETRY_MS = 60_000;
 
 // --- Indicator ---
 
-export function resolveIndicatorType(status: HeartbeatStatus): HeartbeatIndicatorType | undefined {
+export function resolveIndicatorType(
+  status: HeartbeatStatus,
+): HeartbeatIndicatorType | undefined {
   switch (status) {
     case "ok-empty":
     case "ok-token":
@@ -49,13 +51,21 @@ export function emitHeartbeatEvent(evt: Omit<HeartbeatEvent, "ts">): void {
   enriched.indicatorType = resolveIndicatorType(enriched.status);
   lastEvent = enriched;
   for (const listener of listeners) {
-    try { listener(enriched); } catch { /* ignora errori listener */ }
+    try {
+      listener(enriched);
+    } catch {
+      /* ignora errori listener */
+    }
   }
 }
 
-export function onHeartbeatEvent(listener: (evt: HeartbeatEvent) => void): () => void {
+export function onHeartbeatEvent(
+  listener: (evt: HeartbeatEvent) => void,
+): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function getLastHeartbeatEvent(): HeartbeatEvent | null {
@@ -79,7 +89,10 @@ export function areHeartbeatsEnabled(): boolean {
 
 // --- Timer e esecuzione ---
 
-async function executeHeartbeat(reason?: string, agentId?: string): Promise<void> {
+async function executeHeartbeat(
+  reason?: string,
+  agentId?: string,
+): Promise<void> {
   if (!handler || running) return;
   running = true;
   emitHeartbeatEvent({ status: "sent", agentId, reason });
@@ -87,20 +100,33 @@ async function executeHeartbeat(reason?: string, agentId?: string): Promise<void
   try {
     const result = await handler({ reason, agentId });
     if (result.status === "ran") {
-      emitHeartbeatEvent({ status: "ok-token", agentId, durationMs: result.durationMs, reason });
+      emitHeartbeatEvent({
+        status: "ok-token",
+        agentId,
+        durationMs: result.durationMs,
+        reason,
+      });
     } else if (result.status === "skipped") {
       emitHeartbeatEvent({ status: "skipped", agentId, reason: result.reason });
     } else {
       emitHeartbeatEvent({ status: "failed", agentId, reason: result.reason });
     }
   } catch (err) {
-    emitHeartbeatEvent({ status: "failed", agentId, reason: (err as Error).message });
+    emitHeartbeatEvent({
+      status: "failed",
+      agentId,
+      reason: (err as Error).message,
+    });
   } finally {
     running = false;
   }
 }
 
-function scheduleNext(delayMs: number, reason?: string, agentId?: string): void {
+function scheduleNext(
+  delayMs: number,
+  reason?: string,
+  agentId?: string,
+): void {
   if (timer) clearTimeout(timer);
   const delay = Math.max(0, Math.min(delayMs, MAX_RETRY_MS));
   timer = setTimeout(() => {
@@ -112,7 +138,10 @@ function scheduleNext(delayMs: number, reason?: string, agentId?: string): void 
 /**
  * Richiede un heartbeat immediato (con coalescing).
  */
-export function requestHeartbeatNow(opts?: { reason?: string; agentId?: string }): void {
+export function requestHeartbeatNow(opts?: {
+  reason?: string;
+  agentId?: string;
+}): void {
   if (!enabled) return;
   scheduleNext(DEFAULT_COALESCE_MS, opts?.reason ?? "requested", opts?.agentId);
 }

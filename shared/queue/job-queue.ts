@@ -44,22 +44,38 @@ export class JobQueue {
 
   on(listener: QueueEventListener): () => void {
     this.listeners.push(listener);
-    return () => { this.listeners = this.listeners.filter((l) => l !== listener); };
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
   }
 
   private emit(event: QueueEvent): void {
-    for (const l of this.listeners) { try { l(event); } catch {} }
+    for (const l of this.listeners) {
+      try {
+        l(event);
+      } catch {}
+    }
   }
 
-  enqueue<T>(name: string, payload: T, priority: JobPriority = "normal"): JobRecord<T> {
+  enqueue<T>(
+    name: string,
+    payload: T,
+    priority: JobPriority = "normal",
+  ): JobRecord<T> {
     const job: JobRecord<T> = {
-      id: randomUUID(), name, payload, priority,
-      status: "queued", attempts: 0,
+      id: randomUUID(),
+      name,
+      payload,
+      priority,
+      status: "queued",
+      attempts: 0,
       maxAttempts: this.retryPolicy.maxAttempts,
       createdAt: Date.now(),
     };
     this.pending.push(job);
-    this.pending.sort((a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority]);
+    this.pending.sort(
+      (a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority],
+    );
     this.emit({ kind: "enqueued", job });
     this.process();
     return job;
@@ -117,7 +133,9 @@ export class JobQueue {
           job.status = "queued";
           job.nextRetryAt = undefined;
           this.pending.push(job);
-          this.pending.sort((a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority]);
+          this.pending.sort(
+            (a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority],
+          );
           this.process();
         }, delayMs);
       }
@@ -143,9 +161,15 @@ export class JobQueue {
     };
   }
 
-  getDeadLetterCompany(): JobRecord[] { return [...this.deadLetter]; }
-  getPendingCompany(): JobRecord[] { return [...this.pending]; }
-  getRunningCompany(): JobRecord[] { return [...this.running.values()]; }
+  getDeadLetterCompany(): JobRecord[] {
+    return [...this.deadLetter];
+  }
+  getPendingCompany(): JobRecord[] {
+    return [...this.pending];
+  }
+  getRunningCompany(): JobRecord[] {
+    return [...this.running.values()];
+  }
 
   retryDeadJob(jobId: string): boolean {
     const idx = this.deadLetter.findIndex((j) => j.id === jobId);
@@ -156,7 +180,9 @@ export class JobQueue {
     job.lastError = undefined;
     job.endedAt = undefined;
     this.pending.push(job);
-    this.pending.sort((a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority]);
+    this.pending.sort(
+      (a, b) => PRIORITY_VALUES[a.priority] - PRIORITY_VALUES[b.priority],
+    );
     this.process();
     return true;
   }

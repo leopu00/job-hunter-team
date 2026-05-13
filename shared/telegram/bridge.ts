@@ -65,7 +65,9 @@ export class TelegramBridge {
         onStart: () => {
           this.status.running = true;
           this.status.startedAt = Date.now();
-          console.log(`[telegram-bridge] Bot @${me.username} avviato (polling)`);
+          console.log(
+            `[telegram-bridge] Bot @${me.username} avviato (polling)`,
+          );
         },
       });
     }
@@ -104,7 +106,7 @@ export class TelegramBridge {
  */
 export async function sendTextMessage(
   bot: Bot,
-  msg: OutboundMessage
+  msg: OutboundMessage,
 ): Promise<SendResult> {
   const chatId = Number(msg.chatId);
   const chunks = chunkText(msg.text, 4096);
@@ -134,10 +136,20 @@ export async function sendTextMessage(
           });
           firstMessageId ??= result.message_id;
         } catch (retryErr) {
-          return { messageId: 0, chatId: msg.chatId, success: false, error: String(retryErr) };
+          return {
+            messageId: 0,
+            chatId: msg.chatId,
+            success: false,
+            error: String(retryErr),
+          };
         }
       } else {
-        return { messageId: 0, chatId: msg.chatId, success: false, error: String(err) };
+        return {
+          messageId: 0,
+          chatId: msg.chatId,
+          success: false,
+          error: String(err),
+        };
       }
     }
   }

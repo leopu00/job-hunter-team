@@ -38,7 +38,4 @@ export type {
   LLMResponse,
 } from "./agent-runner.js";
 
-export {
-  onAgentEvent,
-  runAgentTurn,
-} from "./agent-runner.js";
+export { onAgentEvent, runAgentTurn } from "./agent-runner.js";

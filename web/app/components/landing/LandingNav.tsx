@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { useState, useRef, useEffect } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useLandingI18n, type Lang } from './LandingI18n'
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useLandingI18n, type Lang } from "./LandingI18n";
 
 function FlagIT() {
   return (
@@ -12,7 +12,7 @@ function FlagIT() {
       <rect x="7" width="6" height="14" fill="#fff" />
       <rect x="13" width="7" height="14" fill="#CE2B37" />
     </svg>
-  )
+  );
 }
 
 function FlagEN() {
@@ -24,7 +24,7 @@ function FlagEN() {
       <path d="M10,0 V14 M0,7 H20" stroke="#fff" strokeWidth="4" />
       <path d="M10,0 V14 M0,7 H20" stroke="#C8102E" strokeWidth="2.5" />
     </svg>
-  )
+  );
 }
 
 function FlagHU() {
@@ -34,43 +34,65 @@ function FlagHU() {
       <rect y="4.67" width="20" height="4.66" fill="#fff" />
       <rect y="9.33" width="20" height="4.67" fill="#436F4D" />
     </svg>
-  )
+  );
 }
 
-const LANGUAGES: { code: Lang; label: string; Flag: () => React.JSX.Element }[] = [
-  { code: 'it', label: 'Italiano', Flag: FlagIT },
-  { code: 'en', label: 'English', Flag: FlagEN },
-  { code: 'hu', label: 'Magyar', Flag: FlagHU },
-]
+const LANGUAGES: {
+  code: Lang;
+  label: string;
+  Flag: () => React.JSX.Element;
+}[] = [
+  { code: "it", label: "Italiano", Flag: FlagIT },
+  { code: "en", label: "English", Flag: FlagEN },
+  { code: "hu", label: "Magyar", Flag: FlagHU },
+];
 
 function LangDropdown() {
-  const { lang, setLang } = useLandingI18n()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const { lang, setLang } = useLandingI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  const current = LANGUAGES.find(l => l.code === lang)!
+  const current = LANGUAGES.find((l) => l.code === lang)!;
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 px-0 py-0 transition-all"
         style={{
-          cursor: 'pointer',
+          cursor: "pointer",
         }}
         aria-label={`Language: ${current.label}`}
       >
         <current.Flag />
-        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : '' }}>
-          <path d="M2 4L5 7L8 4" stroke="var(--color-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <svg
+          aria-hidden="true"
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          style={{
+            opacity: 0.5,
+            transition: "transform 0.15s",
+            transform: open ? "rotate(180deg)" : "",
+          }}
+        >
+          <path
+            d="M2 4L5 7L8 4"
+            stroke="var(--color-muted)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
@@ -78,32 +100,49 @@ function LangDropdown() {
         <div
           className="absolute right-0 top-full mt-1.5 overflow-hidden"
           style={{
-            background: 'var(--color-panel)',
-            border: '1px solid var(--color-border)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-            animation: 'fade-in 0.15s ease both',
+            background: "var(--color-panel)",
+            border: "1px solid var(--color-border)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            animation: "fade-in 0.15s ease both",
             minWidth: 140,
           }}
         >
           {LANGUAGES.map(({ code, label, Flag }) => (
             <button
               key={code}
-              onClick={() => { setLang(code); setOpen(false) }}
+              onClick={() => {
+                setLang(code);
+                setOpen(false);
+              }}
               className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
               style={{
-                cursor: 'pointer',
-                background: code === lang ? 'var(--color-card)' : 'transparent',
-                color: code === lang ? 'var(--color-white)' : 'var(--color-muted)',
+                cursor: "pointer",
+                background: code === lang ? "var(--color-card)" : "transparent",
+                color:
+                  code === lang ? "var(--color-white)" : "var(--color-muted)",
                 fontSize: 11,
                 fontWeight: code === lang ? 600 : 400,
-                fontFamily: 'var(--font-mono)',
+                fontFamily: "var(--font-mono)",
               }}
             >
               <Flag />
               <span>{label}</span>
               {code === lang && (
-                <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none" className="ml-auto">
-                  <path d="M2 5L4 7L8 3" stroke="var(--color-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  aria-hidden="true"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  className="ml-auto"
+                >
+                  <path
+                    d="M2 5L4 7L8 3"
+                    stroke="var(--color-green)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               )}
             </button>
@@ -111,34 +150,39 @@ function LangDropdown() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export default function LandingNav() {
-  const { t } = useLandingI18n()
-  const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const homeAnchor = (id: string) => pathname === '/' ? `#${id}` : `/#${id}`
+  const { t } = useLandingI18n();
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const homeAnchor = (id: string) => (pathname === "/" ? `#${id}` : `/#${id}`);
 
   const navLinkStyle = (href: string) => ({
-    color: pathname === href ? 'var(--color-green)' : 'var(--color-muted)',
-  })
-  const currentCompany = (href: string) => pathname === href ? 'page' as const : undefined
+    color: pathname === href ? "var(--color-green)" : "var(--color-muted)",
+  });
+  const currentCompany = (href: string) =>
+    pathname === href ? ("page" as const) : undefined;
 
   return (
     <nav
       aria-label="Main navigation"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
-        background: 'linear-gradient(180deg, var(--color-void) 60%, transparent)',
-        backdropFilter: 'blur(12px)',
+        background:
+          "linear-gradient(180deg, var(--color-void) 60%, transparent)",
+        backdropFilter: "blur(12px)",
       }}
     >
       <div className="flex items-center justify-between px-5 sm:px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5 no-underline">
           <div
             className="w-2 h-2"
-            style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
+            style={{
+              background: "var(--color-green)",
+              boxShadow: "0 0 8px var(--color-green)",
+            }}
           />
           <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
             JHT
@@ -186,10 +230,10 @@ export default function LandingNav() {
             href="/?login=true"
             className="hidden sm:inline-flex px-0 py-0 text-[11px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
             style={{
-              color: 'var(--color-green)',
+              color: "var(--color-green)",
             }}
           >
-            {t('nav_login')}
+            {t("nav_login")}
           </Link>
 
           {/* Mobile hamburger nascosto temporaneamente
@@ -254,5 +298,5 @@ export default function LandingNav() {
       )}
       */}
     </nav>
-  )
+  );
 }

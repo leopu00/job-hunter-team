@@ -4,7 +4,11 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { MessageRouter, type ChannelHandler, type ProviderHandler } from "./router.js";
+import {
+  MessageRouter,
+  type ChannelHandler,
+  type ProviderHandler,
+} from "./router.js";
 import {
   MiddlewarePipeline,
   loggingMiddleware,
@@ -35,14 +39,18 @@ function mockResponse(messageId = "msg-1"): GatewayResponse {
   };
 }
 
-function mockChannel(id: ChannelId): ChannelHandler & { sent: GatewayResponse[] } {
+function mockChannel(
+  id: ChannelId,
+): ChannelHandler & { sent: GatewayResponse[] } {
   const sent: GatewayResponse[] = [];
   return {
     id,
     sent,
     connect: async () => {},
     disconnect: async () => {},
-    send: async (r: GatewayResponse) => { sent.push(r); },
+    send: async (r: GatewayResponse) => {
+      sent.push(r);
+    },
     status: () => ({ id, connected: true }),
   };
 }
@@ -59,7 +67,9 @@ function mockProvider(response?: GatewayResponse): ProviderHandler {
 describe("MessageRouter", () => {
   let router: MessageRouter;
 
-  beforeEach(() => { router = new MessageRouter(); });
+  beforeEach(() => {
+    router = new MessageRouter();
+  });
 
   it("registra e recupera un canale", () => {
     const ch = mockChannel("web");
@@ -94,10 +104,9 @@ describe("MessageRouter", () => {
   });
 
   it("routeToProvider lancia errore senza provider", async () => {
-    await assert.rejects(
-      () => router.routeToProvider(mockMessage()),
-      { message: "Nessun provider AI configurato" }
-    );
+    await assert.rejects(() => router.routeToProvider(mockMessage()), {
+      message: "Nessun provider AI configurato",
+    });
   });
 
   it("routeToChannel invia risposta al canale corretto", async () => {
@@ -112,7 +121,7 @@ describe("MessageRouter", () => {
   it("routeToChannel lancia errore per canale non registrato", async () => {
     await assert.rejects(
       () => router.routeToChannel("telegram", mockResponse()),
-      { message: 'Canale "telegram" non registrato' }
+      { message: 'Canale "telegram" non registrato' },
     );
   });
 });
@@ -122,17 +131,29 @@ describe("MessageRouter", () => {
 describe("MiddlewarePipeline", () => {
   let pipeline: MiddlewarePipeline;
 
-  beforeEach(() => { pipeline = new MiddlewarePipeline(); });
+  beforeEach(() => {
+    pipeline = new MiddlewarePipeline();
+  });
 
   it("esegue pre middleware in ordine di priorità", async () => {
     const order: number[] = [];
     pipeline.register({
-      name: "second", phase: "pre", priority: 20,
-      handler: async (ctx) => { order.push(2); return ctx; },
+      name: "second",
+      phase: "pre",
+      priority: 20,
+      handler: async (ctx) => {
+        order.push(2);
+        return ctx;
+      },
     });
     pipeline.register({
-      name: "first", phase: "pre", priority: 10,
-      handler: async (ctx) => { order.push(1); return ctx; },
+      name: "first",
+      phase: "pre",
+      priority: 10,
+      handler: async (ctx) => {
+        order.push(1);
+        return ctx;
+      },
     });
     await pipeline.runPre(mockMessage());
     assert.deepEqual(order, [1, 2]);
@@ -141,7 +162,9 @@ describe("MiddlewarePipeline", () => {
   it("abort interrompe la pipeline pre", async () => {
     const reached: string[] = [];
     pipeline.register({
-      name: "blocker", phase: "pre", priority: 1,
+      name: "blocker",
+      phase: "pre",
+      priority: 1,
       handler: async (ctx) => {
         reached.push("blocker");
         ctx.aborted = true;
@@ -150,8 +173,13 @@ describe("MiddlewarePipeline", () => {
       },
     });
     pipeline.register({
-      name: "after", phase: "pre", priority: 2,
-      handler: async (ctx) => { reached.push("after"); return ctx; },
+      name: "after",
+      phase: "pre",
+      priority: 2,
+      handler: async (ctx) => {
+        reached.push("after");
+        return ctx;
+      },
     });
     const result = await pipeline.runPre(mockMessage());
     assert.equal(result.aborted, true);

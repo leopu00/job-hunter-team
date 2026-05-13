@@ -1,106 +1,152 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
-import LandingNav from '../components/landing/LandingNav'
-import { LandingFooter } from '../components/landing/LandingCTA'
-import ScrollToTop from '../components/landing/ScrollToTop'
+import Link from "next/link";
+import {
+  LandingI18nProvider,
+  useLandingI18n,
+} from "../components/landing/LandingI18n";
+import LandingNav from "../components/landing/LandingNav";
+import { LandingFooter } from "../components/landing/LandingCTA";
+import ScrollToTop from "../components/landing/ScrollToTop";
 
 const T = {
   it: {
-    title: 'Termini di Servizio',
-    updated: 'Ultimo aggiornamento: Aprile 2026',
-    intro: 'Utilizzando Job Hunter Team (JHT) accetti i seguenti termini e condizioni.',
-    s1_title: 'Licenza',
-    s1_body: 'JHT e distribuito sotto licenza MIT. Puoi usarlo, modificarlo e redistribuirlo liberamente, purche la licenza originale sia inclusa. Il software e fornito "cosi com\'e", senza garanzie di alcun tipo.',
-    s2_title: 'Uso consentito',
-    s2_body: 'JHT e progettato per assistere nella ricerca di lavoro attraverso agenti AI. L\'uso del software per attivita illegali, spam, frode o per violare i termini di servizio di piattaforme terze (LinkedIn, Indeed, ecc.) e espressamente vietato.',
-    s3_title: 'Provider AI di terze parti',
-    s3_body: 'JHT orchestra una delle tre CLI supportate (Claude Code, Codex, Kimi) che richiedono un tuo abbonamento attivo col rispettivo provider (Anthropic, OpenAI, Moonshot). L\'uso di quei servizi e soggetto ai loro termini e ai costi dell\'abbonamento. Sei responsabile dell\'account, del pagamento e dell\'uso delle credenziali. JHT non intermedia ne fattura nulla.',
-    s4_title: 'Responsabilita',
-    s4_body: 'JHT genera contenuti (CV, cover letter, risposte) tramite intelligenza artificiale. Il contenuto generato potrebbe contenere errori o imprecisioni. Sei l\'unico responsabile della revisione e dell\'invio di qualsiasi materiale generato dal sistema.',
-    s5_title: 'Dati personali',
-    s5_body: 'Tutti i dati restano in locale sul tuo computer. Non raccogliamo ne trasmettiamo dati personali. Per maggiori dettagli, consulta la nostra Privacy Policy.',
-    s6_title: 'Modifiche ai termini',
-    s6_body: 'Ci riserviamo il diritto di aggiornare questi termini in qualsiasi momento. Le modifiche saranno pubblicate su questa pagina con la data di aggiornamento.',
-    s7_title: 'Contatti',
-    s7_body: 'Per domande sui termini di servizio, scrivi a info@jobhunterteam.ai.',
+    title: "Termini di Servizio",
+    updated: "Ultimo aggiornamento: Aprile 2026",
+    intro:
+      "Utilizzando Job Hunter Team (JHT) accetti i seguenti termini e condizioni.",
+    s1_title: "Licenza",
+    s1_body:
+      'JHT e distribuito sotto licenza MIT. Puoi usarlo, modificarlo e redistribuirlo liberamente, purche la licenza originale sia inclusa. Il software e fornito "cosi com\'e", senza garanzie di alcun tipo.',
+    s2_title: "Uso consentito",
+    s2_body:
+      "JHT e progettato per assistere nella ricerca di lavoro attraverso agenti AI. L'uso del software per attivita illegali, spam, frode o per violare i termini di servizio di piattaforme terze (LinkedIn, Indeed, ecc.) e espressamente vietato.",
+    s3_title: "Provider AI di terze parti",
+    s3_body:
+      "JHT orchestra una delle tre CLI supportate (Claude Code, Codex, Kimi) che richiedono un tuo abbonamento attivo col rispettivo provider (Anthropic, OpenAI, Moonshot). L'uso di quei servizi e soggetto ai loro termini e ai costi dell'abbonamento. Sei responsabile dell'account, del pagamento e dell'uso delle credenziali. JHT non intermedia ne fattura nulla.",
+    s4_title: "Responsabilita",
+    s4_body:
+      "JHT genera contenuti (CV, cover letter, risposte) tramite intelligenza artificiale. Il contenuto generato potrebbe contenere errori o imprecisioni. Sei l'unico responsabile della revisione e dell'invio di qualsiasi materiale generato dal sistema.",
+    s5_title: "Dati personali",
+    s5_body:
+      "Tutti i dati restano in locale sul tuo computer. Non raccogliamo ne trasmettiamo dati personali. Per maggiori dettagli, consulta la nostra Privacy Policy.",
+    s6_title: "Modifiche ai termini",
+    s6_body:
+      "Ci riserviamo il diritto di aggiornare questi termini in qualsiasi momento. Le modifiche saranno pubblicate su questa pagina con la data di aggiornamento.",
+    s7_title: "Contatti",
+    s7_body:
+      "Per domande sui termini di servizio, scrivi a info@jobhunterteam.ai.",
   },
   en: {
-    title: 'Terms of Service',
-    updated: 'Last updated: April 2026',
-    intro: 'By using Job Hunter Team (JHT) you agree to the following terms and conditions.',
-    s1_title: 'License',
-    s1_body: 'JHT is distributed under the MIT License. You can use, modify, and redistribute it freely, provided the original license is included. The software is provided "as is", without warranties of any kind.',
-    s2_title: 'Permitted use',
-    s2_body: 'JHT is designed to assist in job searching through AI agents. Using the software for illegal activities, spam, fraud, or to violate the terms of service of third-party platforms (LinkedIn, Indeed, etc.) is expressly prohibited.',
-    s3_title: 'Third-party AI providers',
-    s3_body: 'JHT orchestrates one of three supported CLIs (Claude Code, Codex, Kimi), each requiring your own active subscription with the respective provider (Anthropic, OpenAI, Moonshot). Use of those services is subject to their terms and subscription costs. You are responsible for the account, payment, and credential use. JHT does not intermediate or bill anything.',
-    s4_title: 'Liability',
-    s4_body: 'JHT generates content (CVs, cover letters, responses) through artificial intelligence. Generated content may contain errors or inaccuracies. You are solely responsible for reviewing and submitting any material generated by the system.',
-    s5_title: 'Personal data',
-    s5_body: 'All data stays locally on your computer. We do not collect or transmit personal data. For more details, see our Privacy Policy.',
-    s6_title: 'Changes to terms',
-    s6_body: 'We reserve the right to update these terms at any time. Changes will be posted on this page with the update date.',
-    s7_title: 'Contact',
-    s7_body: 'For questions about the terms of service, write to info@jobhunterteam.ai.',
+    title: "Terms of Service",
+    updated: "Last updated: April 2026",
+    intro:
+      "By using Job Hunter Team (JHT) you agree to the following terms and conditions.",
+    s1_title: "License",
+    s1_body:
+      'JHT is distributed under the MIT License. You can use, modify, and redistribute it freely, provided the original license is included. The software is provided "as is", without warranties of any kind.',
+    s2_title: "Permitted use",
+    s2_body:
+      "JHT is designed to assist in job searching through AI agents. Using the software for illegal activities, spam, fraud, or to violate the terms of service of third-party platforms (LinkedIn, Indeed, etc.) is expressly prohibited.",
+    s3_title: "Third-party AI providers",
+    s3_body:
+      "JHT orchestrates one of three supported CLIs (Claude Code, Codex, Kimi), each requiring your own active subscription with the respective provider (Anthropic, OpenAI, Moonshot). Use of those services is subject to their terms and subscription costs. You are responsible for the account, payment, and credential use. JHT does not intermediate or bill anything.",
+    s4_title: "Liability",
+    s4_body:
+      "JHT generates content (CVs, cover letters, responses) through artificial intelligence. Generated content may contain errors or inaccuracies. You are solely responsible for reviewing and submitting any material generated by the system.",
+    s5_title: "Personal data",
+    s5_body:
+      "All data stays locally on your computer. We do not collect or transmit personal data. For more details, see our Privacy Policy.",
+    s6_title: "Changes to terms",
+    s6_body:
+      "We reserve the right to update these terms at any time. Changes will be posted on this page with the update date.",
+    s7_title: "Contact",
+    s7_body:
+      "For questions about the terms of service, write to info@jobhunterteam.ai.",
   },
   hu: {
-    title: 'Szolgáltatási feltételek',
-    updated: 'Utolsó frissítés: 2026 április',
-    intro: 'A Job Hunter Team (JHT) használatával elfogadod az alábbi feltételeket.',
-    s1_title: 'Licenc',
-    s1_body: 'A JHT MIT licenc alatt kerül terjesztésre. Szabadon használhatod, módosíthatod és újraterjesztheted, feltéve, hogy az eredeti licenc benne van. A szoftver „ahogy van" alapon készült, mindennemű garancia nélkül.',
-    s2_title: 'Engedélyezett használat',
-    s2_body: 'A JHT az AI ügynökökön keresztül történő álláskeresés támogatására készült. A szoftver használata illegális tevékenységre, spamre, csalásra vagy harmadik féltől származó platformok (LinkedIn, Indeed, stb.) szolgáltatási feltételeinek megsértésére kifejezetten tilos.',
-    s3_title: 'Harmadik féltől származó AI szolgáltatók',
-    s3_body: 'A JHT három támogatott CLI valamelyikét vezérli (Claude Code, Codex, Kimi), és mindegyikhez saját aktív előfizetés kell az adott szolgáltatónál (Anthropic, OpenAI, Moonshot). E szolgáltatások használata az ő feltételeiknek és az előfizetési költségeiknek van alávetve. A fiók, fizetés és a hitelesítő adatok használatáért Te vagy felelős. A JHT nem közvetít és nem számláz semmit.',
-    s4_title: 'Felelősség',
-    s4_body: 'A JHT mesterséges intelligenciával generálja a tartalmat (önéletrajzok, motivációs levelek, válaszok). A generált tartalom hibákat vagy pontatlanságokat tartalmazhat. Egyedül Te vagy felelős a rendszer által generált anyagok átnézéséért és benyújtásáért.',
-    s5_title: 'Személyes adatok',
-    s5_body: 'Minden adat helyben marad a számítógépeden. Nem gyűjtünk és nem továbbítunk személyes adatokat. További részletekért olvasd el az Adatvédelmi irányelveket.',
-    s6_title: 'Feltételek változása',
-    s6_body: 'Fenntartjuk a jogot, hogy bármikor frissítsük ezeket a feltételeket. A változások ezen az oldalon lesznek közzétéve a frissítés dátumával.',
-    s7_title: 'Kapcsolat',
-    s7_body: 'A szolgáltatási feltételekkel kapcsolatos kérdések esetén írj az info@jobhunterteam.ai címre.',
+    title: "Szolgáltatási feltételek",
+    updated: "Utolsó frissítés: 2026 április",
+    intro:
+      "A Job Hunter Team (JHT) használatával elfogadod az alábbi feltételeket.",
+    s1_title: "Licenc",
+    s1_body:
+      'A JHT MIT licenc alatt kerül terjesztésre. Szabadon használhatod, módosíthatod és újraterjesztheted, feltéve, hogy az eredeti licenc benne van. A szoftver „ahogy van" alapon készült, mindennemű garancia nélkül.',
+    s2_title: "Engedélyezett használat",
+    s2_body:
+      "A JHT az AI ügynökökön keresztül történő álláskeresés támogatására készült. A szoftver használata illegális tevékenységre, spamre, csalásra vagy harmadik féltől származó platformok (LinkedIn, Indeed, stb.) szolgáltatási feltételeinek megsértésére kifejezetten tilos.",
+    s3_title: "Harmadik féltől származó AI szolgáltatók",
+    s3_body:
+      "A JHT három támogatott CLI valamelyikét vezérli (Claude Code, Codex, Kimi), és mindegyikhez saját aktív előfizetés kell az adott szolgáltatónál (Anthropic, OpenAI, Moonshot). E szolgáltatások használata az ő feltételeiknek és az előfizetési költségeiknek van alávetve. A fiók, fizetés és a hitelesítő adatok használatáért Te vagy felelős. A JHT nem közvetít és nem számláz semmit.",
+    s4_title: "Felelősség",
+    s4_body:
+      "A JHT mesterséges intelligenciával generálja a tartalmat (önéletrajzok, motivációs levelek, válaszok). A generált tartalom hibákat vagy pontatlanságokat tartalmazhat. Egyedül Te vagy felelős a rendszer által generált anyagok átnézéséért és benyújtásáért.",
+    s5_title: "Személyes adatok",
+    s5_body:
+      "Minden adat helyben marad a számítógépeden. Nem gyűjtünk és nem továbbítunk személyes adatokat. További részletekért olvasd el az Adatvédelmi irányelveket.",
+    s6_title: "Feltételek változása",
+    s6_body:
+      "Fenntartjuk a jogot, hogy bármikor frissítsük ezeket a feltételeket. A változások ezen az oldalon lesznek közzétéve a frissítés dátumával.",
+    s7_title: "Kapcsolat",
+    s7_body:
+      "A szolgáltatási feltételekkel kapcsolatos kérdések esetén írj az info@jobhunterteam.ai címre.",
   },
-}
+};
 
-type TKey = keyof typeof T.it
+type TKey = keyof typeof T.it;
 
 function Section({ title, body }: { title: string; body: string }) {
   return (
     <div className="mb-6">
-      <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-2">{title}</h2>
-      <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">{body}</p>
+      <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-2">
+        {title}
+      </h2>
+      <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
+        {body}
+      </p>
     </div>
-  )
+  );
 }
 
 function TermsContent() {
-  const { lang } = useLandingI18n()
-  const tx = T[lang] ?? T.en
-  const t = (k: TKey) => tx[k] ?? k
+  const { lang } = useLandingI18n();
+  const tx = T[lang] ?? T.en;
+  const t = (k: TKey) => tx[k] ?? k;
 
   const sections: [TKey, TKey][] = [
-    ['s1_title', 's1_body'], ['s2_title', 's2_body'], ['s3_title', 's3_body'],
-    ['s4_title', 's4_body'], ['s5_title', 's5_body'], ['s6_title', 's6_body'],
-    ['s7_title', 's7_body'],
-  ]
+    ["s1_title", "s1_body"],
+    ["s2_title", "s2_body"],
+    ["s3_title", "s3_body"],
+    ["s4_title", "s4_body"],
+    ["s5_title", "s5_body"],
+    ["s6_title", "s6_body"],
+    ["s7_title", "s7_body"],
+  ];
 
   return (
-    <main style={{ position: 'relative', zIndex: 1 }}>
+    <main style={{ position: "relative", zIndex: 1 }}>
       <LandingNav />
       <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
         <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-3">
-            <Link href="/" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">Home</Link>
+            <Link
+              href="/"
+              className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+            >
+              Home
+            </Link>
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">Terms</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">{t('title')}</h1>
-          <p className="text-[var(--color-dim)] text-[10px] mt-2">{t('updated')}</p>
-          <p className="text-[var(--color-muted)] text-[12px] mt-3 leading-relaxed">{t('intro')}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
+            {t("title")}
+          </h1>
+          <p className="text-[var(--color-dim)] text-[10px] mt-2">
+            {t("updated")}
+          </p>
+          <p className="text-[var(--color-muted)] text-[12px] mt-3 leading-relaxed">
+            {t("intro")}
+          </p>
         </div>
 
         {sections.map(([titleKey, bodyKey]) => (
@@ -108,10 +154,16 @@ function TermsContent() {
         ))}
 
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
-          <Link href="/privacy" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+          <Link
+            href="/privacy"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
+          >
             &larr; Privacy Policy
           </Link>
-          <Link href="/" className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline">
+          <Link
+            href="/"
+            className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
+          >
             Home &rarr;
           </Link>
         </div>
@@ -119,7 +171,7 @@ function TermsContent() {
       <LandingFooter />
       <ScrollToTop />
     </main>
-  )
+  );
 }
 
 export default function TermsCompany() {
@@ -127,5 +179,5 @@ export default function TermsCompany() {
     <LandingI18nProvider>
       <TermsContent />
     </LandingI18nProvider>
-  )
+  );
 }

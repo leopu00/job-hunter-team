@@ -40,7 +40,11 @@ export class Gateway {
 
   private emit(event: GatewayEvent): void {
     for (const handler of this.eventHandlers) {
-      try { handler(event); } catch { /* non bloccare il gateway */ }
+      try {
+        handler(event);
+      } catch {
+        /* non bloccare il gateway */
+      }
     }
   }
 
@@ -98,7 +102,9 @@ export class Gateway {
       // Pre-processing
       const preCtx = await this.middleware.runPre(message);
       if (preCtx.aborted) {
-        throw new Error(preCtx.abortReason || "Messaggio bloccato dal middleware");
+        throw new Error(
+          preCtx.abortReason || "Messaggio bloccato dal middleware",
+        );
       }
 
       // Routing al provider

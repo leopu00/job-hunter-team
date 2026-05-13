@@ -8,7 +8,7 @@ export type {
   CacheStats,
   CacheSetOptions,
   EvictReason,
-} from './types.js';
-export { DEFAULT_CACHE_CONFIG } from './types.js';
+} from "./types.js";
+export { DEFAULT_CACHE_CONFIG } from "./types.js";
 
-export { LRUCache } from './lru-cache.js';
+export { LRUCache } from "./lru-cache.js";

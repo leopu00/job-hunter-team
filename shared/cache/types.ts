@@ -24,7 +24,7 @@ export interface CacheConfig {
   onEvict?: (key: string, reason: EvictReason) => void;
 }
 
-export type EvictReason = 'expired' | 'lru' | 'manual' | 'clear';
+export type EvictReason = "expired" | "lru" | "manual" | "clear";
 
 export interface CacheStats {
   /** Entry attualmente in cache */
@@ -46,7 +46,9 @@ export interface CacheSetOptions {
   size?: number;
 }
 
-export const DEFAULT_CACHE_CONFIG: Required<Pick<CacheConfig, 'maxEntries' | 'defaultTTL'>> = {
+export const DEFAULT_CACHE_CONFIG: Required<
+  Pick<CacheConfig, "maxEntries" | "defaultTTL">
+> = {
   maxEntries: 1000,
   defaultTTL: 5 * 60 * 1000, // 5 minuti
 };

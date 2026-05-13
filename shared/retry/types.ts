@@ -72,4 +72,7 @@ export interface CircuitBreakerStatus {
 // ── RETRY RUNNER ───────────────────────────────────────────
 
 /** Funzione riutilizzabile per eseguire retry con config fissa */
-export type RetryRunner = <T>(fn: () => Promise<T>, label?: string) => Promise<T>;
+export type RetryRunner = <T>(
+  fn: () => Promise<T>,
+  label?: string,
+) => Promise<T>;

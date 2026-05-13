@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { runBash } from '@/lib/shell'
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { runBash } from "@/lib/shell";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 /**
  * Bottone "⏸️ Pausa team" del lifecycle dashboard
@@ -18,35 +18,35 @@ export const dynamic = 'force-dynamic'
  * quello c'e' "📸 Snapshot+Termina" (vedi snapshot-destroy/route.ts).
  */
 export async function POST() {
-  const denied = await requireAuth()
-  if (denied) return denied
+  const denied = await requireAuth();
+  if (denied) return denied;
 
-  const container = (process.env.JHT_CONTAINER_NAME || 'jht').trim()
+  const container = (process.env.JHT_CONTAINER_NAME || "jht").trim();
   // Company 140 check: niente caratteri shell pericolosi nel container name.
   // Bind a [a-zA-Z0-9_.-] perche' Docker accetta solo questi nei nomi.
   if (!/^[a-zA-Z0-9_.-]+$/.test(container)) {
     return NextResponse.json(
       { error: `JHT_CONTAINER_NAME non valido: ${container}` },
-      { status: 500 }
-    )
+      { status: 500 },
+    );
   }
 
   try {
-    const { stdout, stderr } = await runBash(`docker stop ${container}`)
+    const { stdout, stderr } = await runBash(`docker stop ${container}`);
     return NextResponse.json({
       ok: true,
-      action: 'pause',
+      action: "pause",
       container,
       output: stdout.trim() || stderr.trim(),
-    })
+    });
   } catch (e) {
-    const msg = (e as Error).message || String(e)
+    const msg = (e as Error).message || String(e);
     // `docker stop` su container gia' fermo ritorna comunque exit 0 con
     // il nome stampato — quindi un errore qui significa daemon down,
     // container inesistente, o permessi insufficienti.
     return NextResponse.json(
-      { ok: false, action: 'pause', error: `docker stop fallito: ${msg}` },
-      { status: 500 }
-    )
+      { ok: false, action: "pause", error: `docker stop fallito: ${msg}` },
+      { status: 500 },
+    );
   }
 }

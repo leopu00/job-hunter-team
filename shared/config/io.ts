@@ -7,7 +7,10 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { JHT_HOME, JHT_CONFIG_PATH as SHARED_JHT_CONFIG_PATH } from "../paths.js";
+import {
+  JHT_HOME,
+  JHT_CONFIG_PATH as SHARED_JHT_CONFIG_PATH,
+} from "../paths.js";
 import { validateConfig } from "./schema";
 import type { JHTConfigParsed } from "./schema";
 
@@ -29,9 +32,15 @@ const SENSITIVE_FIELDS = ["api_key", "bot_token", "session_token", "value"];
 export function parseJson5(raw: string): unknown {
   let cleaned = raw;
   // Rimuovi commenti single-line (// ...) fuori da stringhe
-  cleaned = cleaned.replace(/("(?:[^"\\]|\\.)*")|\/\/[^\n]*/g, (_, str) => str ?? "");
+  cleaned = cleaned.replace(
+    /("(?:[^"\\]|\\.)*")|\/\/[^\n]*/g,
+    (_, str) => str ?? "",
+  );
   // Rimuovi commenti multi-line (/* ... */)
-  cleaned = cleaned.replace(/("(?:[^"\\]|\\.)*")|\/\*[\s\S]*?\*\//g, (_, str) => str ?? "");
+  cleaned = cleaned.replace(
+    /("(?:[^"\\]|\\.)*")|\/\*[\s\S]*?\*\//g,
+    (_, str) => str ?? "",
+  );
   // Rimuovi trailing commas prima di } o ]
   cleaned = cleaned.replace(/,(\s*[}\]])/g, "$1");
   return JSON.parse(cleaned);
@@ -53,7 +62,10 @@ export function readConfig(): {
   try {
     raw = fs.readFileSync(JHT_CONFIG_PATH, "utf-8");
   } catch (err) {
-    return { success: false, error: `Errore lettura file: ${(err as Error).message}` };
+    return {
+      success: false,
+      error: `Errore lettura file: ${(err as Error).message}`,
+    };
   }
 
   let parsed: unknown;
@@ -65,7 +77,9 @@ export function readConfig(): {
 
   const result = validateConfig(parsed);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
     return { success: false, error: `Validazione fallita:\n${issues}` };
   }
 
@@ -83,7 +97,9 @@ export function writeConfig(config: unknown): {
 } {
   const result = validateConfig(config);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
     return { success: false, error: `Validazione fallita:\n${issues}` };
   }
 
@@ -91,15 +107,26 @@ export function writeConfig(config: unknown): {
     fs.mkdirSync(JHT_CONFIG_DIR, { recursive: true });
     // Scrittura atomica: tmp + rename
     const tmpPath = JHT_CONFIG_PATH + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(result.data, null, 2) + "\n", "utf-8");
+    fs.writeFileSync(
+      tmpPath,
+      JSON.stringify(result.data, null, 2) + "\n",
+      "utf-8",
+    );
     fs.renameSync(tmpPath, JHT_CONFIG_PATH);
   } catch (err) {
-    return { success: false, error: `Errore scrittura file: ${(err as Error).message}` };
+    return {
+      success: false,
+      error: `Errore scrittura file: ${(err as Error).message}`,
+    };
   }
 
   // Notifica listener hot reload
   for (const cb of configChangeListeners) {
-    try { cb(result.data!); } catch { /* ignora errori listener */ }
+    try {
+      cb(result.data!);
+    } catch {
+      /* ignora errori listener */
+    }
   }
 
   return { success: true, data: result.data };
@@ -111,9 +138,15 @@ export function configExists(): boolean {
 }
 
 /** Copia config con campi sensibili mascherati. */
-export function redactConfig(config: Record<string, unknown>): Record<string, unknown> {
+export function redactConfig(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
   return JSON.parse(JSON.stringify(config), (key, value) => {
-    if (SENSITIVE_FIELDS.includes(key) && typeof value === "string" && value.length > 0) {
+    if (
+      SENSITIVE_FIELDS.includes(key) &&
+      typeof value === "string" &&
+      value.length > 0
+    ) {
       return value.slice(0, 4) + "****";
     }
     return value;
@@ -139,7 +172,11 @@ export function onConfigChange(callback: ConfigChangeCallback): () => void {
         const result = readConfig();
         if (result.success && result.data) {
           for (const cb of configChangeListeners) {
-            try { cb(result.data); } catch { /* ignora */ }
+            try {
+              cb(result.data);
+            } catch {
+              /* ignora */
+            }
           }
         }
       }, 200);

@@ -21,7 +21,12 @@ export type EventBusOptions = {
 
 // --- Event Streams ---
 
-export type EventStream = "lifecycle" | "tool" | "assistant" | "error" | (string & {});
+export type EventStream =
+  | "lifecycle"
+  | "tool"
+  | "assistant"
+  | "error"
+  | (string & {});
 
 // --- Event Payload ---
 

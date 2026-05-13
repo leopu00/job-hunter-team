@@ -54,7 +54,9 @@ describe("TelegramBridge", () => {
   });
 
   it("costruttore con allowedChatIds", () => {
-    const bridge = new TelegramBridge(TEST_TOKEN, { allowedChatIds: ["111", "222"] });
+    const bridge = new TelegramBridge(TEST_TOKEN, {
+      allowedChatIds: ["111", "222"],
+    });
     // Bridge creato senza errori — config interna non esposta, ma status OK
     assert.equal(bridge.getStatus().running, false);
   });
@@ -121,7 +123,9 @@ describe("sendTextMessage", () => {
   it("ritorna errore se invio fallisce", async () => {
     const mockBot = {
       api: {
-        sendMessage: async () => { throw new Error("network error"); },
+        sendMessage: async () => {
+          throw new Error("network error");
+        },
       },
     } as any;
 
@@ -177,7 +181,11 @@ describe("sendTextMessage", () => {
       },
     } as any;
 
-    await sendTextMessage(mockBot, { chatId: "100", text: "test", silent: true });
+    await sendTextMessage(mockBot, {
+      chatId: "100",
+      text: "test",
+      silent: true,
+    });
     assert.equal(capturedOpts.disable_notification, true);
   });
 });

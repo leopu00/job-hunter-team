@@ -3,8 +3,12 @@
  *
  * Subscriber persistenti e one-shot per notifiche multi-canale.
  */
-import { randomUUID } from 'node:crypto';
-import type { NotificationChannel, NotificationSubscription, SubscriptionMode } from './types.js';
+import { randomUUID } from "node:crypto";
+import type {
+  NotificationChannel,
+  NotificationSubscription,
+  SubscriptionMode,
+} from "./types.js";
 
 const subscriptions = new Map<string, NotificationSubscription>();
 
@@ -19,8 +23,10 @@ export function subscribe(
     return existing;
   }
   const sub: NotificationSubscription = {
-    id: randomUUID(), channel, target,
-    mode: opts?.mode ?? 'persistent',
+    id: randomUUID(),
+    channel,
+    target,
+    mode: opts?.mode ?? "persistent",
     userId: opts?.userId,
     createdAtMs: Date.now(),
   };
@@ -32,7 +38,9 @@ export function unsubscribe(id: string): boolean {
   return subscriptions.delete(id);
 }
 
-export function getSubscription(id: string): NotificationSubscription | undefined {
+export function getSubscription(
+  id: string,
+): NotificationSubscription | undefined {
   return subscriptions.get(id);
 }
 
@@ -56,7 +64,9 @@ export function listSubscriptions(opts?: {
   return subs;
 }
 
-export function listSubscriptionsByChannel(channel: NotificationChannel): NotificationSubscription[] {
+export function listSubscriptionsByChannel(
+  channel: NotificationChannel,
+): NotificationSubscription[] {
   return listSubscriptions({ channel });
 }
 
@@ -64,7 +74,10 @@ export function listSubscriptionsByChannel(channel: NotificationChannel): Notifi
 export function pruneOneShot(): number {
   let removed = 0;
   for (const [id, sub] of subscriptions) {
-    if (sub.mode === 'once') { subscriptions.delete(id); removed++; }
+    if (sub.mode === "once") {
+      subscriptions.delete(id);
+      removed++;
+    }
   }
   return removed;
 }

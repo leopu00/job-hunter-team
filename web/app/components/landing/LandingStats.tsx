@@ -1,34 +1,38 @@
-'use client'
+"use client";
 
-import { useLandingI18n } from './LandingI18n'
+import { useLandingI18n } from "./LandingI18n";
 
 const STATS = {
   it: [
-    { value: '7', label: 'Agenti AI specializzati' },
-    { value: '100%', label: 'Locale e privato' },
-    { value: '0', label: 'Dati inviati ai nostri server', unit: '' },
-    { value: 'MIT', label: 'Licenza open source' },
+    { value: "7", label: "Agenti AI specializzati" },
+    { value: "100%", label: "Locale e privato" },
+    { value: "0", label: "Dati inviati ai nostri server", unit: "" },
+    { value: "MIT", label: "Licenza open source" },
   ],
   en: [
-    { value: '7', label: 'Specialized AI agents' },
-    { value: '100%', label: 'Local and private' },
-    { value: '0', label: 'Data sent to our servers', unit: '' },
-    { value: 'MIT', label: 'Open source license' },
+    { value: "7", label: "Specialized AI agents" },
+    { value: "100%", label: "Local and private" },
+    { value: "0", label: "Data sent to our servers", unit: "" },
+    { value: "MIT", label: "Open source license" },
   ],
-}
+};
 
 export default function LandingStats() {
-  const { lang } = useLandingI18n()
-  const items = STATS[lang as 'it' | 'en'] ?? STATS.it
+  const { lang } = useLandingI18n();
+  const items = STATS[lang as "it" | "en"] ?? STATS.it;
 
   return (
     <section aria-label="Statistiche" className="py-16 px-5">
       <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
         {items.map((stat, i) => (
-          <div key={stat.label} className="text-center p-4 rounded-lg border border-transparent transition-all duration-200 hover:border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.01)]" style={{ animation: `fade-in 0.4s ease ${i * 0.1}s both` }}>
+          <div
+            key={stat.label}
+            className="text-center p-4 rounded-lg border border-transparent transition-all duration-200 hover:border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.01)]"
+            style={{ animation: `fade-in 0.4s ease ${i * 0.1}s both` }}
+          >
             <div
               className="text-3xl font-bold mb-1"
-              style={{ color: 'var(--color-green)' }}
+              style={{ color: "var(--color-green)" }}
             >
               {stat.value}
             </div>
@@ -39,5 +43,5 @@ export default function LandingStats() {
         ))}
       </div>
     </section>
-  )
+  );
 }

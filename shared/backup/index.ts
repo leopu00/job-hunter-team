@@ -9,12 +9,12 @@ export type {
   BackupConfig,
   BackupManifest,
   RetentionPolicy,
-} from './types.js';
-export { DEFAULT_BACKUP_CONFIG } from './types.js';
+} from "./types.js";
+export { DEFAULT_BACKUP_CONFIG } from "./types.js";
 
 export {
   createBackup,
   restoreBackup,
   listBackups,
   applyRetention,
-} from './runner.js';
+} from "./runner.js";

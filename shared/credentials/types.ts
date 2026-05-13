@@ -54,9 +54,9 @@ export type ResolvedCredential = {
 export type EncryptedPayload = {
   version: 1;
   algorithm: "aes-256-gcm";
-  iv: string;       // hex
-  authTag: string;  // hex
-  data: string;     // hex (ciphertext)
+  iv: string; // hex
+  authTag: string; // hex
+  data: string; // hex (ciphertext)
 };
 
 /** Mapping provider → variabile d'ambiente */
@@ -68,15 +68,19 @@ export const ENV_VAR_MAP: Record<ApiKeyProvider, string> = {
 
 /** Set provider API key */
 export const API_KEY_PROVIDERS = new Set<ApiKeyProvider>([
-  "claude", "openai", "kimi",
+  "claude",
+  "openai",
+  "kimi",
 ]);
 
 /** Set provider OAuth */
 export const OAUTH_PROVIDERS = new Set<OAuthProvider>([
-  "chatgpt_pro", "claude_max",
+  "chatgpt_pro",
+  "claude_max",
 ]);
 
 /** Tutti i provider validi */
 export const ALL_PROVIDERS = new Set<Provider>([
-  ...API_KEY_PROVIDERS, ...OAUTH_PROVIDERS,
+  ...API_KEY_PROVIDERS,
+  ...OAUTH_PROVIDERS,
 ]);

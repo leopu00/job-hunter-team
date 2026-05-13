@@ -5,13 +5,18 @@
  * telegram-bridge/ per inviare e ricevere messaggi.
  * Supporta markdown (HTML Telegram) e allegati.
  */
-import type { Channel, ChannelMeta, ChannelMessage, MessageHandler } from './channel.js';
-import { buildInboundMessage, buildOutboundMessage } from './channel.js';
+import type {
+  Channel,
+  ChannelMeta,
+  ChannelMessage,
+  MessageHandler,
+} from "./channel.js";
+import { buildInboundMessage, buildOutboundMessage } from "./channel.js";
 
 const TELEGRAM_META: ChannelMeta = {
-  id: 'telegram',
-  label: 'Telegram',
-  description: 'Bot Telegram — messaggi via Telegram Bot API',
+  id: "telegram",
+  label: "Telegram",
+  description: "Bot Telegram — messaggi via Telegram Bot API",
   capabilities: {
     markdown: true,
     streaming: false,
@@ -24,11 +29,11 @@ const TELEGRAM_META: ChannelMeta = {
 export type TelegramSendFn = (params: {
   chatId: string;
   text: string;
-  parseMode?: 'HTML' | 'MarkdownV2';
+  parseMode?: "HTML" | "MarkdownV2";
 }) => Promise<void>;
 
 export class TelegramChannel implements Channel {
-  readonly id = 'telegram' as const;
+  readonly id = "telegram" as const;
   readonly meta = TELEGRAM_META;
 
   #connected = false;
@@ -47,7 +52,7 @@ export class TelegramChannel implements Channel {
 
   async connect(): Promise<void> {
     if (!this.#chatId) {
-      throw new Error('Telegram chat_id non configurato');
+      throw new Error("Telegram chat_id non configurato");
     }
     this.#connected = true;
   }
@@ -58,15 +63,18 @@ export class TelegramChannel implements Channel {
   }
 
   async send(
-    params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+    params: Omit<
+      ChannelMessage,
+      "id" | "channelId" | "direction" | "timestamp"
+    >,
   ): Promise<ChannelMessage> {
-    const message = buildOutboundMessage('telegram', params);
+    const message = buildOutboundMessage("telegram", params);
 
     if (this.#sendFn) {
       await this.#sendFn({
         chatId: this.#chatId,
         text: message.text,
-        parseMode: 'HTML',
+        parseMode: "HTML",
       });
     }
 
@@ -91,7 +99,7 @@ export class TelegramChannel implements Channel {
     messageId?: number;
     meta?: Record<string, unknown>;
   }): Promise<ChannelMessage> {
-    const message = buildInboundMessage('telegram', {
+    const message = buildInboundMessage("telegram", {
       text: params.text,
       sender: params.sender,
       meta: {
