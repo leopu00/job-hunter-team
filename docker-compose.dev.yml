@@ -7,7 +7,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 #
 # Equivalente al vecchio `docker compose up -d` pre 2026-05-06 (split
-# host/container, vedi docs/internal/2026-05-06-host-container-split.md).
+# host/container, vedi docs/internal/vps.md).
 #
 # Cosa cambia rispetto al compose di produzione:
 # - build locale dal Dockerfile (sovrascrive l'immagine GHCR pullata)
