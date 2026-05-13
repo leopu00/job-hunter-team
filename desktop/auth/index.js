@@ -12,6 +12,7 @@
 const { getClient } = require('./supabase-client')
 const { startCallbackServer } = require('./callback-server')
 const { openInChosenBrowser } = require('./browser-picker')
+const log = require('../logger').child('auth')
 
 const SUPPORTED_PROVIDERS = new Set(['google', 'github'])
 
@@ -38,26 +39,40 @@ async function getStatus() {
   try {
     const client = getClient()
     const { data, error } = await client.auth.getSession()
-    if (error) return { signedIn: false, user: null, error: error.message }
-    if (!data?.session) return { signedIn: false, user: null }
+    if (error) {
+      log.warn('status.session-error', { err: error.message })
+      return { signedIn: false, user: null, error: error.message }
+    }
+    if (!data?.session) {
+      log.debug('status.signed-out')
+      return { signedIn: false, user: null }
+    }
+    log.debug('status.signed-in', { userId: data.session.user?.id })
     return { signedIn: true, user: userFromSession(data.session) }
   } catch (err) {
+    log.error('status.crashed', { err })
     return { signedIn: false, user: null, error: err.message || String(err) }
   }
 }
 
 async function signIn(provider) {
   if (!SUPPORTED_PROVIDERS.has(provider)) {
+    log.warn('signin.unsupported-provider', { provider })
     return { ok: false, error: `Unsupported provider: ${provider}` }
   }
   // Coalesce concurrent signIn() calls — clicking the button twice
   // shouldn't spawn two callback servers.
-  if (inFlightSignIn) return inFlightSignIn
+  if (inFlightSignIn) {
+    log.debug('signin.coalesced', { provider })
+    return inFlightSignIn
+  }
+  log.info('signin.start', { provider })
   inFlightSignIn = (async () => {
     let server = null
     try {
       const client = getClient()
       server = await startCallbackServer()
+      log.debug('signin.callback-server.ready', { redirectUri: server.redirectUri })
       // Per-provider authorize options. Google supports prompt=
       // select_account so the user can pick which Google account
       // when their browser has multiple sessions open. GitHub does
@@ -75,8 +90,10 @@ async function signIn(provider) {
         options: authorizeOptions,
       })
       if (error || !data?.url) {
+        log.error('signin.authorize-url-missing', { err: error?.message })
         throw new Error(error?.message || 'Supabase did not return an authorize URL')
       }
+      log.debug('signin.authorize-url.ready')
       // Ask the user which installed browser should receive the
       // authorize URL. The pre-flight dialog avoids the "auto-logged
       // into the wrong account" surprise that happens when the
@@ -86,15 +103,20 @@ async function signIn(provider) {
         title: 'Sign in with ' + (PROVIDER_LABEL[provider] || provider),
         message: `Con quale browser vuoi aprire il login ${PROVIDER_LABEL[provider] || provider}?`,
       })
+      log.info('signin.browser-launched', { provider })
       const { code } = await server.waitForCallback()
+      log.debug('signin.callback-received')
       const { data: exchangeData, error: exchangeError } =
         await client.auth.exchangeCodeForSession(code)
       if (exchangeError) {
+        log.error('signin.exchange-failed', { err: exchangeError.message })
         throw new Error(exchangeError.message)
       }
       const user = userFromSession(exchangeData?.session)
+      log.info('signin.success', { provider, userId: user?.id, email: user?.email })
       return { ok: true, user, provider: PROVIDER_LABEL[provider] || provider }
     } catch (err) {
+      log.error('signin.failed', { provider, err })
       return { ok: false, error: err.message || String(err) }
     } finally {
       if (server) {
@@ -107,12 +129,18 @@ async function signIn(provider) {
 }
 
 async function signOut() {
+  log.info('signout.start')
   try {
     const client = getClient()
     const { error } = await client.auth.signOut()
-    if (error) return { ok: false, error: error.message }
+    if (error) {
+      log.warn('signout.failed', { err: error.message })
+      return { ok: false, error: error.message }
+    }
+    log.info('signout.success')
     return { ok: true }
   } catch (err) {
+    log.error('signout.crashed', { err })
     return { ok: false, error: err.message || String(err) }
   }
 }
@@ -140,11 +168,18 @@ async function signOut() {
 // `device_pairings` table + Supabase function torneremo a un token
 // scoped invece di una refresh_token raw.
 async function getPairingToken() {
+  log.debug('pairing-token.request')
   try {
     const client = getClient()
     const { data, error } = await client.auth.getSession()
-    if (error) return { ok: false, error: error.message }
-    if (!data?.session) return { ok: false, error: 'Not signed in' }
+    if (error) {
+      log.warn('pairing-token.session-error', { err: error.message })
+      return { ok: false, error: error.message }
+    }
+    if (!data?.session) {
+      log.warn('pairing-token.not-signed-in')
+      return { ok: false, error: 'Not signed in' }
+    }
     const supabaseUrl =
       process.env.JHT_SUPABASE_URL ||
       'https://smittwvohsnwwwisqdrh.supabase.co'
@@ -155,8 +190,10 @@ async function getPairingToken() {
       issued_at: new Date().toISOString(),
     }
     const token = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')
+    log.info('pairing-token.issued', { userId: payload.user_id, supabaseUrl })
     return { ok: true, token }
   } catch (err) {
+    log.error('pairing-token.crashed', { err })
     return { ok: false, error: err.message || String(err) }
   }
 }
