@@ -98,6 +98,10 @@ contextBridge.exposeInMainWorld('authApi', {
   getStatus: () => ipcRenderer.invoke('auth:get-status'),
   signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  // Used by the (upcoming) VPS provisioning wizard to feed
+  // `install.sh --pairing-token <token>`. Renderer-side: treat the
+  // returned string as an opaque blob; never log it.
+  getPairingToken: () => ipcRenderer.invoke('auth:get-pairing-token'),
 })
 
 // Lightweight key/value store backed by JSON in app.getPath('userData').
