@@ -806,7 +806,20 @@ dom.btnProviderInstallRetry.addEventListener('click', () => {
 })
 
 dom.btnProviderInstallContinue.addEventListener('click', () => {
-  if (state.providerInstallDone) enterProviderLogin()
+  log.info('provider-install.continue.click', {
+    providerInstallDone: state.providerInstallDone,
+    providerInstallBusy: state.providerInstallBusy,
+  })
+  if (state.providerInstallDone) {
+    log.info('provider-install.continue.enterProviderLogin')
+    try {
+      enterProviderLogin()
+    } catch (e) {
+      log.error('provider-install.continue.crashed', { err: String(e?.message || e) })
+    }
+  } else {
+    log.warn('provider-install.continue.gated', { reason: 'install not done' })
+  }
 })
 
 async function startProviderInstall() {
@@ -822,8 +835,14 @@ async function startProviderInstall() {
   const firstName = providerLabel(ids[0]) || ids[0]
   dom.providerMessage.textContent = t('provider.installStatus.running', { name: firstName })
 
+  log.info('provider-install.start', { providers: ids })
   try {
     const result = await window.setupApi.installProviders(ids)
+    log.info('provider-install.result', {
+      ok: result?.ok,
+      failedAt: result?.failedAt,
+      err: result?.error,
+    })
     if (result?.ok) {
       state.providerInstallDone = true
       setProgressState(dom.providerBar, dom.providerIcon, 'ok')
