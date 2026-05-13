@@ -155,6 +155,10 @@ contextBridge.exposeInMainWorld('vpsApi', {
     ipcRenderer.on('vps:install-log', listener)
     return () => ipcRenderer.removeListener('vps:install-log', listener)
   },
+  // Scrive un file di config sulla VPS via SSH (default
+  // /root/.jht/jht.config.json, mode 0600, atomic). Usato dal wizard
+  // step di sync config in VPS mode (T4).
+  writeConfig: (args) => ipcRenderer.invoke('vps:write-config', args),
 })
 
 contextBridge.exposeInMainWorld('syncApi', {
