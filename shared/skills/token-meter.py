@@ -31,6 +31,9 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import token_metrics_lib as tlib  # noqa: E402
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_SESSIONS = JHT_HOME / ".kimi" / "sessions"
 CODEX_SESSIONS = JHT_HOME / ".codex" / "sessions"
@@ -65,53 +68,15 @@ def read_bridge_state():
 
 
 def read_kimi_tokens(window_start_ts):
-    """Somma token_usage da tutti i wire.jsonl Kimi nella finestra.
+    """Thin wrapper su token_metrics_lib: legge eventi Kimi e aggrega.
 
-    Ritorna dict {input_other, output, input_cache_read, input_cache_creation,
-    events, sessions, by_session}.
+    Ritorna (totals, by_session) per backward-compat con la firma originale.
+    totals contiene anche `weighted` precalcolato e `events`/`sessions`.
     """
-    out = {
-        "input_other": 0, "output": 0,
-        "input_cache_read": 0, "input_cache_creation": 0,
-        "events": 0, "sessions": 0,
-    }
-    by_session = {}
-    if not KIMI_SESSIONS.exists():
-        return out, by_session
-
-    for wire in KIMI_SESSIONS.rglob("wire.jsonl"):
-        sess = wire.parent.name
-        try:
-            with wire.open() as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        e = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    ts = e.get("timestamp")
-                    if not isinstance(ts, (int, float)):
-                        continue
-                    if ts < window_start_ts:
-                        continue
-                    msg = e.get("message") or {}
-                    pl = msg.get("payload") or {}
-                    tu = pl.get("token_usage")
-                    if not isinstance(tu, dict):
-                        continue
-                    for k in ("input_other", "output", "input_cache_read", "input_cache_creation"):
-                        v = tu.get(k, 0)
-                        if isinstance(v, (int, float)):
-                            out[k] += v
-                    out["events"] += 1
-                    by_session.setdefault(sess, 0)
-                    by_session[sess] += tu.get("input_other", 0) + tu.get("output", 0)
-        except OSError:
-            continue
-    out["sessions"] = len(by_session)
-    return out, by_session
+    events = tlib.read_kimi_events(window_start_ts, sessions_root=KIMI_SESSIONS)
+    agg = tlib.aggregate(events)
+    totals = dict(agg["totals"])
+    return totals, agg["by_session"]
 
 
 def read_claude_tokens(window_start_ts):
@@ -211,33 +176,19 @@ def read_codex_tokens(window_start_ts):
 
 
 # ── Billing weighting ────────────────────────────────────────────────────
-
-CACHE_READ_WEIGHT = 0.1     # cache hit costa ~10% del normale
-CACHE_CREATION_WEIGHT = 1.25  # cache creation costa ~25% in più
-
+# Pesi e formule centralizzate in token_metrics_lib.billing_weighted.
+# Mantenuti come thin alias per leggibilità del codice locale.
 
 def kimi_weighted(t):
-    return (
-        t["input_other"] + t["output"]
-        + t["input_cache_read"] * CACHE_READ_WEIGHT
-        + t["input_cache_creation"] * CACHE_CREATION_WEIGHT
-    )
+    return tlib.billing_weighted(t, "kimi")
 
 
 def claude_weighted(t):
-    return (
-        t["input_tokens"] + t["output_tokens"]
-        + t["cache_read_input_tokens"] * CACHE_READ_WEIGHT
-        + t["cache_creation_input_tokens"] * CACHE_CREATION_WEIGHT
-    )
+    return tlib.billing_weighted(t, "claude")
 
 
 def codex_weighted(t):
-    # OpenAI: cached_input ≈ 1/2 di input
-    return (
-        t["input_tokens"] + t["output_tokens"] + t["reasoning_output_tokens"]
-        + t["cached_input_tokens"] * 0.5
-    )
+    return tlib.billing_weighted(t, "openai")
 
 
 # ── Main loop ────────────────────────────────────────────────────────────
