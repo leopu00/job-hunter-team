@@ -14,9 +14,12 @@ export type {
   NotificationEvent,
   NotificationEventListener,
   NotificationsConfig,
-} from './types.js';
+} from "./types.js";
 
-export { NOTIFICATION_CHANNELS, DEFAULT_NOTIFICATIONS_CONFIG } from './types.js';
+export {
+  NOTIFICATION_CHANNELS,
+  DEFAULT_NOTIFICATIONS_CONFIG,
+} from "./types.js";
 
 export {
   registerAdapter,
@@ -29,7 +32,7 @@ export {
   createNotification,
   send,
   broadcast,
-} from './registry.js';
+} from "./registry.js";
 
 export {
   subscribe,
@@ -41,4 +44,4 @@ export {
   pruneOneShot,
   subscriptionCount,
   clearSubscriptions,
-} from './notifier.js';
+} from "./notifier.js";

@@ -125,13 +125,19 @@ export type PluginHookHandlerMap = {
   afterAgentEnd: (event: AfterAgentEndEvent) => void | Promise<void>;
   beforeToolCall: (event: BeforeToolCallEvent) => void | Promise<void>;
   afterToolCall: (event: AfterToolCallEvent) => void | Promise<void>;
-  beforeMessageSend: (event: PluginHookEvent & { message: string }) => void | Promise<void>;
-  afterMessageReceived: (event: PluginHookEvent & { message: string }) => void | Promise<void>;
+  beforeMessageSend: (
+    event: PluginHookEvent & { message: string },
+  ) => void | Promise<void>;
+  afterMessageReceived: (
+    event: PluginHookEvent & { message: string },
+  ) => void | Promise<void>;
   onError: (event: PluginHookEvent & { error: string }) => void | Promise<void>;
 };
 
 /** Registrazione hook con priorità e plugin di provenienza */
-export interface PluginHookRegistration<K extends PluginHookName = PluginHookName> {
+export interface PluginHookRegistration<
+  K extends PluginHookName = PluginHookName,
+> {
   pluginId: string;
   hook: K;
   handler: PluginHookHandlerMap[K];
@@ -156,7 +162,12 @@ export interface PluginToolDefinition {
 
 // ── REGISTRY STATE ─────────────────────────────────────────
 
-export type PluginStatus = "discovered" | "loaded" | "active" | "error" | "disabled";
+export type PluginStatus =
+  | "discovered"
+  | "loaded"
+  | "active"
+  | "error"
+  | "disabled";
 
 export interface PluginRecord {
   id: string;

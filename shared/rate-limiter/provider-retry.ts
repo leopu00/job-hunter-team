@@ -72,7 +72,12 @@ export function createProviderRetryRunner(params: {
   providerName?: string;
   shouldRetry?: (err: unknown) => boolean;
   retryAfterMs?: (err: unknown) => number | undefined;
-  onRetry?: (label: string, attempt: number, maxRetries: number, delayMs: number) => void;
+  onRetry?: (
+    label: string,
+    attempt: number,
+    maxRetries: number,
+    delayMs: number,
+  ) => void;
 }): RetryRunner {
   const retryConfig = resolveRetryConfig(
     params.defaults ?? API_RETRY_DEFAULTS,

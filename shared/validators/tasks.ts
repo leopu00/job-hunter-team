@@ -21,7 +21,15 @@ import {
 // ── Enum ───────────────────────────────────────────────────────────────────
 
 const TASK_RUNTIMES = ["subagent", "cli", "cron"] as const;
-const TASK_STATUSES = ["queued", "running", "succeeded", "failed", "timed_out", "cancelled", "lost"] as const;
+const TASK_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "timed_out",
+  "cancelled",
+  "lost",
+] as const;
 const NOTIFY_POLICIES = ["done_only", "state_changes", "silent"] as const;
 const TERMINAL_OUTCOMES = ["succeeded", "blocked"] as const;
 const SCOPE_KINDS = ["session", "system"] as const;
@@ -67,16 +75,17 @@ export const CreateTaskInput = z.object({
   status: TaskStatusSchema.default("queued"),
 });
 
-export const UpdateTaskInput = z.object({
-  status: TaskStatusSchema.optional(),
-  progressSummary: z.string().optional(),
-  terminalSummary: z.string().optional(),
-  terminalOutcome: TaskTerminalOutcomeSchema.optional(),
-  error: z.string().optional(),
-}).refine(
-  (d) => Object.values(d).some((v) => v !== undefined),
-  { message: "Almeno un campo deve essere specificato" },
-);
+export const UpdateTaskInput = z
+  .object({
+    status: TaskStatusSchema.optional(),
+    progressSummary: z.string().optional(),
+    terminalSummary: z.string().optional(),
+    terminalOutcome: TaskTerminalOutcomeSchema.optional(),
+    error: z.string().optional(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: "Almeno un campo deve essere specificato",
+  });
 
 // ── TaskEvent ──────────────────────────────────────────────────────────────
 
@@ -126,18 +135,26 @@ export const TaskStoreSnapshotSchema = z.object({
 
 // ── Funzioni di validazione ────────────────────────────────────────────────
 
-export function validateTaskRecord(data: unknown): ValidationResult<z.infer<typeof TaskRecordSchema>> {
+export function validateTaskRecord(
+  data: unknown,
+): ValidationResult<z.infer<typeof TaskRecordSchema>> {
   return validate(TaskRecordSchema, data);
 }
 
-export function validateCreateTask(data: unknown): ValidationResult<z.infer<typeof CreateTaskInput>> {
+export function validateCreateTask(
+  data: unknown,
+): ValidationResult<z.infer<typeof CreateTaskInput>> {
   return validate(CreateTaskInput, data);
 }
 
-export function validateUpdateTask(data: unknown): ValidationResult<z.infer<typeof UpdateTaskInput>> {
+export function validateUpdateTask(
+  data: unknown,
+): ValidationResult<z.infer<typeof UpdateTaskInput>> {
   return validate(UpdateTaskInput, data);
 }
 
-export function validateTaskSnapshot(data: unknown): ValidationResult<z.infer<typeof TaskStoreSnapshotSchema>> {
+export function validateTaskSnapshot(
+  data: unknown,
+): ValidationResult<z.infer<typeof TaskStoreSnapshotSchema>> {
   return validate(TaskStoreSnapshotSchema, data);
 }

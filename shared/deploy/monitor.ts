@@ -45,10 +45,18 @@ export type MonitorReport = {
 
 function parseLevel(line: string): LogLevel {
   const lower = line.toLowerCase();
-  if (lower.includes("[urg]") || lower.includes("error") || lower.includes("errore")) {
+  if (
+    lower.includes("[urg]") ||
+    lower.includes("error") ||
+    lower.includes("errore")
+  ) {
     return "error";
   }
-  if (lower.includes("warn") || lower.includes("attenzione") || lower.includes("problema")) {
+  if (
+    lower.includes("warn") ||
+    lower.includes("attenzione") ||
+    lower.includes("problema")
+  ) {
     return "warn";
   }
   return "info";
@@ -73,11 +81,20 @@ function parseForumLog(
       if (!match) return null;
       const [, ts, agent, message] = match;
       const level = parseLevel(line);
-      return { ts: ts ?? "", agent: agent ?? "", level, message: message ?? "", raw: line };
+      return {
+        ts: ts ?? "",
+        agent: agent ?? "",
+        level,
+        message: message ?? "",
+        raw: line,
+      };
     })
     .filter((entry): entry is LogEntry => {
       if (!entry) return false;
-      if (opts.agentFilter && !entry.agent.toLowerCase().includes(opts.agentFilter.toLowerCase())) {
+      if (
+        opts.agentFilter &&
+        !entry.agent.toLowerCase().includes(opts.agentFilter.toLowerCase())
+      ) {
         return false;
       }
       if (opts.level && opts.level !== "all" && entry.level !== opts.level) {
@@ -89,9 +106,12 @@ function parseForumLog(
 
 function listActiveSessions(): AgentStatus[] {
   try {
-    const output = execSync("tmux list-sessions -F '#{session_name}' 2>/dev/null || true", {
-      encoding: "utf8",
-    });
+    const output = execSync(
+      "tmux list-sessions -F '#{session_name}' 2>/dev/null || true",
+      {
+        encoding: "utf8",
+      },
+    );
     return output
       .split("\n")
       .filter((line) => line.startsWith("JHT-"))

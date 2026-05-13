@@ -1,7 +1,14 @@
 export default function SetupLoading() {
   return (
-    <main aria-busy="true" aria-label="Caricamento setup" className="min-h-screen flex items-center justify-center px-5 py-10">
-      <div className="w-full max-w-lg" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <main
+      aria-busy="true"
+      aria-label="Caricamento setup"
+      className="min-h-screen flex items-center justify-center px-5 py-10"
+    >
+      <div
+        className="w-full max-w-lg"
+        style={{ animation: "fade-in 0.2s ease both" }}
+      >
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center mb-4">
@@ -18,7 +25,8 @@ export default function SetupLoading() {
               <div
                 className="h-1.5 rounded-full flex-1 animate-pulse"
                 style={{
-                  background: i === 0 ? 'var(--color-green)' : 'var(--color-border)',
+                  background:
+                    i === 0 ? "var(--color-green)" : "var(--color-border)",
                   opacity: i === 0 ? 0.6 : 0.4,
                 }}
               />
@@ -33,7 +41,10 @@ export default function SetupLoading() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded bg-[var(--color-border)] animate-pulse flex-shrink-0" />
-                <div className="h-3 rounded bg-[var(--color-border)] animate-pulse" style={{ width: `${60 + i * 15}%` }} />
+                <div
+                  className="h-3 rounded bg-[var(--color-border)] animate-pulse"
+                  style={{ width: `${60 + i * 15}%` }}
+                />
               </div>
             ))}
           </div>
@@ -46,5 +57,5 @@ export default function SetupLoading() {
         </div>
       </div>
     </main>
-  )
+  );
 }

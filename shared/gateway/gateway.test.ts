@@ -15,25 +15,37 @@ import type {
 
 function mockMessage(channel: ChannelId = "web"): GatewayMessage {
   return {
-    id: "msg-1", channel, role: "user",
-    content: "ciao", timestamp: new Date(),
+    id: "msg-1",
+    channel,
+    role: "user",
+    content: "ciao",
+    timestamp: new Date(),
   };
 }
 
 function mockResponse(messageId = "msg-1"): GatewayResponse {
   return {
-    id: "resp-1", messageId, content: "risposta",
-    role: "assistant", timestamp: new Date(), streaming: false,
+    id: "resp-1",
+    messageId,
+    content: "risposta",
+    role: "assistant",
+    timestamp: new Date(),
+    streaming: false,
   };
 }
 
-function mockChannel(id: ChannelId): ChannelHandler & { sent: GatewayResponse[] } {
+function mockChannel(
+  id: ChannelId,
+): ChannelHandler & { sent: GatewayResponse[] } {
   const sent: GatewayResponse[] = [];
   return {
-    id, sent,
+    id,
+    sent,
     connect: async () => {},
     disconnect: async () => {},
-    send: async (r: GatewayResponse) => { sent.push(r); },
+    send: async (r: GatewayResponse) => {
+      sent.push(r);
+    },
     status: () => ({ id, connected: true }),
   };
 }
@@ -60,10 +72,9 @@ describe("Gateway", () => {
   });
 
   it("handleMessage lancia errore se gateway non attivo", async () => {
-    await assert.rejects(
-      () => gw.handleMessage(mockMessage()),
-      { message: "Gateway non attivo" }
-    );
+    await assert.rejects(() => gw.handleMessage(mockMessage()), {
+      message: "Gateway non attivo",
+    });
   });
 
   it("ciclo completo: pre → provider → post → canale", async () => {
@@ -99,11 +110,11 @@ describe("Gateway", () => {
     await gw.start();
 
     const promises = Array.from({ length: 3 }, (_, i) =>
-      gw.handleMessage({ ...mockMessage(), id: `msg-${i}` })
+      gw.handleMessage({ ...mockMessage(), id: `msg-${i}` }),
     );
     await assert.rejects(
       () => gw.handleMessage({ ...mockMessage(), id: "msg-overflow" }),
-      { message: "Coda messaggi piena" }
+      { message: "Coda messaggi piena" },
     );
     await Promise.allSettled(promises);
     await gw.stop();
@@ -111,7 +122,9 @@ describe("Gateway", () => {
 
   it("middleware pre abort blocca il messaggio", async () => {
     gw.middleware.register({
-      name: "blocker", phase: "pre", priority: 100,
+      name: "blocker",
+      phase: "pre",
+      priority: 100,
       handler: async (ctx) => {
         ctx.aborted = true;
         ctx.abortReason = "test block";
@@ -119,10 +132,9 @@ describe("Gateway", () => {
       },
     });
     await gw.start();
-    await assert.rejects(
-      () => gw.handleMessage(mockMessage()),
-      { message: "test block" }
-    );
+    await assert.rejects(() => gw.handleMessage(mockMessage()), {
+      message: "test block",
+    });
     assert.equal(ch.sent.length, 0);
     await gw.stop();
   });
@@ -132,13 +144,14 @@ describe("Gateway", () => {
     gw.onEvent((e) => events.push(e));
     gw.router.setProvider({
       name: "broken",
-      chat: async () => { throw new Error("provider crash"); },
+      chat: async () => {
+        throw new Error("provider crash");
+      },
     });
     await gw.start();
-    await assert.rejects(
-      () => gw.handleMessage(mockMessage()),
-      { message: "provider crash" }
-    );
+    await assert.rejects(() => gw.handleMessage(mockMessage()), {
+      message: "provider crash",
+    });
     assert.ok(events.some((e) => e.type === "error"));
     await gw.stop();
   });

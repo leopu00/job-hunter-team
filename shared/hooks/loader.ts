@@ -27,7 +27,10 @@ const HANDLER_FILES = ["handler.ts", "handler.js", "handler.mjs"];
 
 // --- Frontmatter parsing ---
 
-function parseFrontmatter(content: string): { metadata: HookMetadata; description: string } {
+function parseFrontmatter(content: string): {
+  metadata: HookMetadata;
+  description: string;
+} {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
     return { metadata: { events: [] }, description: content };
@@ -39,8 +42,10 @@ function parseFrontmatter(content: string): { metadata: HookMetadata; descriptio
 
   for (const line of yamlBlock.split("\n")) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("emoji:")) metadata.emoji = trimmed.slice(6).trim().replace(/['"]/g, "");
-    if (trimmed.startsWith("always:")) metadata.always = trimmed.slice(7).trim() === "true";
+    if (trimmed.startsWith("emoji:"))
+      metadata.emoji = trimmed.slice(6).trim().replace(/['"]/g, "");
+    if (trimmed.startsWith("always:"))
+      metadata.always = trimmed.slice(7).trim() === "true";
     if (trimmed.startsWith("- ") && metadata.events !== undefined) {
       const val = trimmed.slice(2).trim().replace(/['"]/g, "");
       if (val.includes(":")) metadata.events.push(val);
@@ -63,7 +68,10 @@ function findHandlerPath(hookDir: string): string | undefined {
 /**
  * Scansiona una directory per hook (ogni sottocartella con HOOK.md).
  */
-export function discoverHooksInDir(dir: string, source: HookSource): HookEntry[] {
+export function discoverHooksInDir(
+  dir: string,
+  source: HookSource,
+): HookEntry[] {
   if (!fs.existsSync(dir)) return [];
 
   const entries: HookEntry[] = [];
@@ -118,7 +126,9 @@ export async function loadHooks(
   entries: HookEntry[],
   config?: HooksConfig,
 ): Promise<number> {
-  const precedence = await import("./types.js").then((m) => m.HOOK_SOURCE_PRECEDENCE);
+  const precedence = await import("./types.js").then(
+    (m) => m.HOOK_SOURCE_PRECEDENCE,
+  );
   const resolved = resolveHookEntries(entries, precedence);
   const eligible = filterEligibleHooks(resolved, config);
 
@@ -135,7 +145,10 @@ export async function loadHooks(
         count++;
       }
     } catch (err) {
-      console.error(`[hooks] errore caricamento hook "${entry.hook.name}":`, err);
+      console.error(
+        `[hooks] errore caricamento hook "${entry.hook.name}":`,
+        err,
+      );
     }
   }
 

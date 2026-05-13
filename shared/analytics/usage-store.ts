@@ -15,7 +15,10 @@ const DEFAULT_RETENTION_DAYS = 30;
 
 let storeFilePath: string | null = null;
 
-export function configureAnalyticsStore(dirPath: string, filename?: string): string {
+export function configureAnalyticsStore(
+  dirPath: string,
+  filename?: string,
+): string {
   mkdirSync(dirPath, { recursive: true });
   storeFilePath = join(dirPath, filename ?? DEFAULT_FILENAME);
   return storeFilePath;
@@ -71,7 +74,10 @@ export function rotateEntries(retentionDays?: number): number {
 }
 
 /** Salva entries su un path specifico (per export/backup) */
-export function saveAnalyticsToPath(filePath: string, entries: UsageEntry[]): boolean {
+export function saveAnalyticsToPath(
+  filePath: string,
+  entries: UsageEntry[],
+): boolean {
   const snapshot: AnalyticsSnapshot = {
     version: 1,
     updatedAt: Date.now(),

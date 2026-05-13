@@ -5,7 +5,12 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Gateway, createGateway } from "./gateway.js";
 import type { ChannelHandler, ProviderHandler } from "./router.js";
-import type { ChannelId, GatewayEvent, GatewayMessage, GatewayResponse } from "./types.js";
+import type {
+  ChannelId,
+  GatewayEvent,
+  GatewayMessage,
+  GatewayResponse,
+} from "./types.js";
 
 type MockProviderConfig = { name: string; model: string; apiKey: string };
 type MockConfig = {
@@ -53,10 +58,18 @@ function createMockChannel(id: ChannelId): ChannelHandler & {
   return {
     id,
     sent,
-    get connected() { return connected; },
-    connect: async () => { connected = true; },
-    disconnect: async () => { connected = false; },
-    send: async (r: GatewayResponse) => { sent.push(r); },
+    get connected() {
+      return connected;
+    },
+    connect: async () => {
+      connected = true;
+    },
+    disconnect: async () => {
+      connected = false;
+    },
+    send: async (r: GatewayResponse) => {
+      sent.push(r);
+    },
     status: () => ({ id, connected }),
   };
 }
@@ -84,7 +97,9 @@ describe("Integration: config → provider → gateway → channel", () => {
     cliChannel = createMockChannel("cli");
     gw.router.registerChannel(webChannel);
     gw.router.registerChannel(cliChannel);
-    gw.router.setProvider(createMockProvider(config.providers[config.activeProvider]));
+    gw.router.setProvider(
+      createMockProvider(config.providers[config.activeProvider]),
+    );
   });
 
   it("bootstrap: config carica provider e canali", () => {
@@ -142,9 +157,14 @@ describe("Integration: config → provider → gateway → channel", () => {
 
   it("middleware pre modifica messaggio prima del provider", async () => {
     gw.middleware.register({
-      name: "prefix", phase: "pre", priority: 50,
+      name: "prefix",
+      phase: "pre",
+      priority: 50,
       handler: async (ctx) => {
-        ctx.message = { ...ctx.message, content: `[FILTRATO] ${ctx.message.content}` };
+        ctx.message = {
+          ...ctx.message,
+          content: `[FILTRATO] ${ctx.message.content}`,
+        };
         return ctx;
       },
     });
@@ -156,10 +176,15 @@ describe("Integration: config → provider → gateway → channel", () => {
 
   it("middleware post modifica risposta prima del canale", async () => {
     gw.middleware.register({
-      name: "suffix", phase: "post", priority: 50,
+      name: "suffix",
+      phase: "post",
+      priority: 50,
       handler: async (ctx) => {
         if (ctx.response) {
-          ctx.response = { ...ctx.response, content: ctx.response.content + " [VERIFICATO]" };
+          ctx.response = {
+            ...ctx.response,
+            content: ctx.response.content + " [VERIFICATO]",
+          };
         }
         return ctx;
       },

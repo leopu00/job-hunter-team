@@ -4,9 +4,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  listAgentIds, resolveDefaultAgentId, getAgentConfig,
-  resolveAgent, resolveAgentWorkspaceDir, resolveAgentDir,
-  resolveAgentModel, resolveAgentProvider, createSingleAgentConfig,
+  listAgentIds,
+  resolveDefaultAgentId,
+  getAgentConfig,
+  resolveAgent,
+  resolveAgentWorkspaceDir,
+  resolveAgentDir,
+  resolveAgentModel,
+  resolveAgentProvider,
+  createSingleAgentConfig,
 } from "./agent-scope.js";
 import type { AgentsConfig } from "./types.js";
 
@@ -14,7 +20,12 @@ function mockConfig(): AgentsConfig {
   return {
     defaults: { model: "def-model", provider: "def-prov", workspace: "~/ws" },
     list: [
-      { id: "scout", name: "Scout", skills: ["search"], model: "claude-opus-4-6" },
+      {
+        id: "scout",
+        name: "Scout",
+        skills: ["search"],
+        model: "claude-opus-4-6",
+      },
       { id: "writer", name: "Writer", default: true, provider: "openai" },
       { id: "plain", name: "Plain" },
     ],
@@ -29,7 +40,9 @@ describe("AgentScope", () => {
   it("resolveDefaultAgentId ritorna agente default o primo", () => {
     assert.equal(resolveDefaultAgentId(mockConfig()), "writer");
     const cfg = mockConfig();
-    cfg.list.forEach((a) => { a.default = undefined; });
+    cfg.list.forEach((a) => {
+      a.default = undefined;
+    });
     assert.equal(resolveDefaultAgentId(cfg), "scout");
   });
 

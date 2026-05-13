@@ -1,27 +1,27 @@
 // shared/memory/identity.ts — Parsing e caricamento IDENTITY.md
 
-import fs from 'node:fs';
-import path from 'node:path';
-import type { AgentIdentity } from './types.js';
+import fs from "node:fs";
+import path from "node:path";
+import type { AgentIdentity } from "./types.js";
 
-const IDENTITY_FILENAME = 'IDENTITY.md';
+const IDENTITY_FILENAME = "IDENTITY.md";
 
 const PLACEHOLDER_VALUES = new Set([
-  'pick something you like',
-  'ai? robot? familiar? ghost in the machine? something weirder?',
-  'how do you come across? sharp? warm? chaotic? calm?',
-  'your signature - pick one that feels right',
-  'workspace-relative path, http(s) url, or data uri',
+  "pick something you like",
+  "ai? robot? familiar? ghost in the machine? something weirder?",
+  "how do you come across? sharp? warm? chaotic? calm?",
+  "your signature - pick one that feels right",
+  "workspace-relative path, http(s) url, or data uri",
 ]);
 
 function normalizeValue(value: string): string {
   let normalized = value.trim();
-  normalized = normalized.replace(/^[*_]+|[*_]+$/g, '').trim();
-  if (normalized.startsWith('(') && normalized.endsWith(')')) {
+  normalized = normalized.replace(/^[*_]+|[*_]+$/g, "").trim();
+  if (normalized.startsWith("(") && normalized.endsWith(")")) {
     normalized = normalized.slice(1, -1).trim();
   }
-  normalized = normalized.replace(/[\u2013\u2014]/g, '-');
-  normalized = normalized.replace(/\s+/g, ' ').toLowerCase();
+  normalized = normalized.replace(/[\u2013\u2014]/g, "-");
+  normalized = normalized.replace(/\s+/g, " ").toLowerCase();
   return normalized;
 }
 
@@ -35,21 +35,28 @@ export function parseIdentityMarkdown(content: string): AgentIdentity {
   const lines = content.split(/\r?\n/);
 
   for (const line of lines) {
-    const cleaned = line.trim().replace(/^\s*-\s*/, '');
-    const colonIndex = cleaned.indexOf(':');
+    const cleaned = line.trim().replace(/^\s*-\s*/, "");
+    const colonIndex = cleaned.indexOf(":");
     if (colonIndex === -1) continue;
 
-    const label = cleaned.slice(0, colonIndex).replace(/[*_]/g, '').trim().toLowerCase();
-    const value = cleaned.slice(colonIndex + 1).replace(/^[*_]+|[*_]+$/g, '').trim();
+    const label = cleaned
+      .slice(0, colonIndex)
+      .replace(/[*_]/g, "")
+      .trim()
+      .toLowerCase();
+    const value = cleaned
+      .slice(colonIndex + 1)
+      .replace(/^[*_]+|[*_]+$/g, "")
+      .trim();
 
     if (!value || isPlaceholder(value)) continue;
 
-    if (label === 'name') identity.name = value;
-    if (label === 'emoji') identity.emoji = value;
-    if (label === 'creature') identity.creature = value;
-    if (label === 'vibe') identity.vibe = value;
-    if (label === 'theme') identity.theme = value;
-    if (label === 'avatar') identity.avatar = value;
+    if (label === "name") identity.name = value;
+    if (label === "emoji") identity.emoji = value;
+    if (label === "creature") identity.creature = value;
+    if (label === "vibe") identity.vibe = value;
+    if (label === "theme") identity.theme = value;
+    if (label === "avatar") identity.avatar = value;
   }
 
   return identity;
@@ -58,15 +65,19 @@ export function parseIdentityMarkdown(content: string): AgentIdentity {
 /** Verifica se un'identità ha almeno un campo valorizzato */
 export function identityHasValues(identity: AgentIdentity): boolean {
   return Boolean(
-    identity.name || identity.emoji || identity.theme ||
-    identity.creature || identity.vibe || identity.avatar,
+    identity.name ||
+    identity.emoji ||
+    identity.theme ||
+    identity.creature ||
+    identity.vibe ||
+    identity.avatar,
   );
 }
 
 /** Carica e parsa IDENTITY.md da un path specifico */
 export function loadIdentityFromFile(filePath: string): AgentIdentity | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, "utf-8");
     const parsed = parseIdentityMarkdown(content);
     return identityHasValues(parsed) ? parsed : null;
   } catch {
@@ -75,17 +86,23 @@ export function loadIdentityFromFile(filePath: string): AgentIdentity | null {
 }
 
 /** Carica IDENTITY.md dalla directory workspace di un agente */
-export function loadIdentityFromWorkspace(workspaceDir: string): AgentIdentity | null {
+export function loadIdentityFromWorkspace(
+  workspaceDir: string,
+): AgentIdentity | null {
   return loadIdentityFromFile(path.join(workspaceDir, IDENTITY_FILENAME));
 }
 
 /** Risolve il nome display di un agente dalla sua identità */
-export function resolveIdentityName(identity: AgentIdentity | null): string | undefined {
+export function resolveIdentityName(
+  identity: AgentIdentity | null,
+): string | undefined {
   return identity?.name?.trim() || undefined;
 }
 
 /** Formato prefisso: [Nome] per messaggi */
-export function resolveIdentityPrefix(identity: AgentIdentity | null): string | undefined {
+export function resolveIdentityPrefix(
+  identity: AgentIdentity | null,
+): string | undefined {
   const name = resolveIdentityName(identity);
   return name ? `[${name}]` : undefined;
 }

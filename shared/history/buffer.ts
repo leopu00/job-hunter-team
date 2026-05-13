@@ -5,7 +5,7 @@
  * limiti per chiave, e costruzione contesto per prompt AI.
  */
 
-import type { HistoryEntry, HistoryMessage, HistoryRole } from './types.js';
+import type { HistoryEntry, HistoryMessage, HistoryRole } from "./types.js";
 
 // --- In-memory buffer ---
 
@@ -92,18 +92,21 @@ export function getBufferKeyCount(): number {
  * Utile per iniettare storia recente nel system prompt.
  */
 export function buildHistoryContext(entries: readonly HistoryEntry[]): string {
-  if (entries.length === 0) return '';
+  if (entries.length === 0) return "";
 
   const lines = entries.map((e) => {
-    const time = new Date(e.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(e.timestamp).toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     return `[${time}] ${e.sender}: ${e.body}`;
   });
 
   return [
-    '[Messaggi recenti della conversazione — per contesto]',
+    "[Messaggi recenti della conversazione — per contesto]",
     ...lines,
-    '[Fine contesto conversazione]',
-  ].join('\n');
+    "[Fine contesto conversazione]",
+  ].join("\n");
 }
 
 // --- History turn limiter ---
@@ -119,7 +122,7 @@ export function limitHistoryTurns(
   if (messages.length === 0 || maxTurns <= 0) return [];
 
   // Preserva system prompt
-  const hasSystem = messages[0]?.role === 'system';
+  const hasSystem = messages[0]?.role === "system";
   const systemMsgs = hasSystem ? [messages[0]] : [];
   const rest = hasSystem ? messages.slice(1) : messages;
 
@@ -128,7 +131,7 @@ export function limitHistoryTurns(
   let cutIndex = rest.length;
 
   for (let i = rest.length - 1; i >= 0; i--) {
-    if (rest[i].role === 'user') {
+    if (rest[i].role === "user") {
       turnCount++;
       if (turnCount >= maxTurns) {
         cutIndex = i;
@@ -143,9 +146,11 @@ export function limitHistoryTurns(
 /**
  * Converte HistoryEntry in HistoryMessage per uso in context engine.
  */
-export function entriesToMessages(entries: readonly HistoryEntry[]): HistoryMessage[] {
+export function entriesToMessages(
+  entries: readonly HistoryEntry[],
+): HistoryMessage[] {
   return entries.map((e) => ({
-    role: 'user' as HistoryRole,
+    role: "user" as HistoryRole,
     content: `${e.sender}: ${e.body}`,
     timestamp: e.timestamp,
     id: e.messageId,
