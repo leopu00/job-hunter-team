@@ -353,17 +353,21 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
 ✅ Promote db-insert to a SKILL.md wrapper under agents/_skills/db-insert/
 ✅ Update Dockerfile symlink loop to source from agents/_skills/ instead
    of .skills-source/ (kept global flat for now)
+✅ Add the per-agent distribution step to .launcher/start-agent.sh:
+   reads agents/<role>/skills.list manifest + always-copies
+   agents/<role>/_skills/, populates <agent_cwd>/.claude/skills/ and
+   <agent_cwd>/.agents/skills/ via cp -R at each spawn
+   (commit e220114c, "feat(skills): per-agent skill distribution via manifest")
+✅ Drop the global Dockerfile symlink loop in favour of per-agent
+   distribution at boot — the Dockerfile now only documents the
+   architecture (lines 112-119), no more global farm of symlinks
+   (same commit e220114c, provider-uniform: no .git/ needed)
 ⬜ Move agents/_tools/jht-tmux-send into agents/_skills/tmux-send/ as a
    colocated artifact (and drop _tools/ if jht-send is not used)
 ⬜ Move 1:1 Python scripts into their skill folders + create
    agents/_skills/_lib/ for shared deps (_db.py, compute_metrics.py,
    usage_record.py); update sys.path imports + the ~10 prompt files
    that reference /app/shared/skills/<x>.py absolute paths
-⬜ Add the symlink-distribution step to .launcher/start-agent.sh:
-   for each role, populate <agent_cwd>/.claude/skills/ and
-   <agent_cwd>/.agents/skills/ with links to global + role-private
-⬜ Drop the global Dockerfile symlink loop once start-agent.sh handles
-   per-agent distribution at boot (provider-uniform: no .git/ needed)
 ⬜ Update CONTRIBUTING + agents/_team/architettura.md (Skills section)
    to describe the new layout and how to add a skill (drop into
    agents/_skills/ for shared, into agents/<role>/_skills/ for private)
