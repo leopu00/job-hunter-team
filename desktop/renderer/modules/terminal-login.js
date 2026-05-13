@@ -4,6 +4,11 @@ import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS } from './constants.
 import { camelId } from './docker-card.js'
 import { enterReady } from './wizard-flow.js'
 
+// Logger renderer → main (preload espone window.jhtLog).
+const log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('terminal-login')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+
 // -------- Step: provider login (tmux/subscription auth) --------
 
 dom.btnLoginBack.addEventListener('click', () => {
@@ -51,15 +56,30 @@ function providerNeedsLoginContinue() {
 }
 
 export async function enterProviderLogin() {
-  showStep(STEP_PROVIDER_LOGIN)
-  await refreshAuthList()
+  log.info('enterProviderLogin.called')
+  try {
+    showStep(STEP_PROVIDER_LOGIN)
+    log.info('enterProviderLogin.step-shown')
+  } catch (e) {
+    log.error('enterProviderLogin.showStep-failed', { err: String(e?.message || e) })
+    throw e
+  }
+  try {
+    await refreshAuthList()
+    log.info('enterProviderLogin.refreshAuthList-done')
+  } catch (e) {
+    log.error('enterProviderLogin.refreshAuthList-failed', { err: String(e?.message || e) })
+  }
 }
 
 export async function refreshAuthList() {
+  log.debug('refreshAuthList.start')
   try {
     const res = await window.setupApi.getAuthStates()
+    log.debug('refreshAuthList.result', { count: Array.isArray(res?.auth) ? res.auth.length : 0 })
     state.authStates = Array.isArray(res?.auth) ? res.auth : []
-  } catch {
+  } catch (e) {
+    log.error('refreshAuthList.failed', { err: String(e?.message || e) })
     state.authStates = []
   }
   renderAuthList()
