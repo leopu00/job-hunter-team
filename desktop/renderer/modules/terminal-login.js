@@ -73,10 +73,19 @@ export async function enterProviderLogin() {
 }
 
 export async function refreshAuthList() {
-  log.debug('refreshAuthList.start')
+  log.debug('refreshAuthList.start', { location: state.location })
   try {
-    const res = await window.setupApi.getAuthStates()
-    log.debug('refreshAuthList.result', { count: Array.isArray(res?.auth) ? res.auth.length : 0 })
+    // VPS mode: il check auth deve interrogare il container REMOTO
+    // (`docker exec jht test -s /jht_home/.kimi/...` via SSH), non i
+    // file in ~/.jht sul Mac. Vedi main.js → 'setup:get-auth-states'.
+    const args = state.location === LOCATION_VPS && state.vps?.ip
+      ? { host: 'vps', vpsIp: state.vps.ip }
+      : undefined
+    const res = await window.setupApi.getAuthStates(args)
+    log.debug('refreshAuthList.result', {
+      count: Array.isArray(res?.auth) ? res.auth.length : 0,
+      mode: args ? 'vps' : 'local',
+    })
     state.authStates = Array.isArray(res?.auth) ? res.auth : []
   } catch (e) {
     log.error('refreshAuthList.failed', { err: String(e?.message || e) })
@@ -162,7 +171,13 @@ function renderAuthList() {
       btnLogout.addEventListener('click', async () => {
         btnLogout.disabled = true
         try {
-          await window.setupApi.logoutProvider(entry.id)
+          // VPS mode: logout rimuove i file token DENTRO il container
+          // remoto via SSH+docker exec rm -f, non sul Mac. Vedi main.js
+          // → 'setup:logout-provider'.
+          const arg = state.location === LOCATION_VPS && state.vps?.ip
+            ? { providerId: entry.id, host: 'vps', vpsIp: state.vps.ip }
+            : entry.id
+          await window.setupApi.logoutProvider(arg)
         } finally {
           btnLogout.disabled = false
           await refreshAuthList()
