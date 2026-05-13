@@ -441,6 +441,40 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Acceptance:** modify config on laptop A, install launcher + login on laptop B, config restored after passphrase entry. Server admin (us) cannot read VPS IP from raw DB.
 - **Dependency:** [JHT-DESKTOP-LOGIN].
 
+##### 🔄 [JHT-CLOUD-RESTORE] Bootstrap automatico al login su container vuoto
+
+- **Why:** la sync è push-only `local → cloud`. Quando l'utente fa login con stesso account su container nuovo/vuoto (nuova VPS post-install, nuovo PC dopo perdita del vecchio), l'app deve fare un **pull automatico** dal cloud per allineare il DB locale. Senza questo, il container parte vuoto e si perde la storia.
+- **Trigger automatico:**
+  1. Utente fa login Supabase nell'app (o nel container post-install via pairing token)
+  2. App rileva: container locale ha `jobs.db` vuoto / mai sincronizzato prima
+  3. App fa pull dei blob cifrati cloud → decifra con passphrase recovery → popola DB locale
+  4. Da lì in poi: push normale, niente più trigger automatici
+- **Comando esplicito CLI:** `jht cloud restore [--force]` — utile per debug, per reseed manuale, o per casi edge dove l'utente vuole sovrascrivere dati locali esistenti
+- **Guard rails:**
+  - Se container ha già dati e nessun `--force` → fallisce con messaggio chiaro ("container has local data — use --force to overwrite")
+  - Se cloud è vuoto (utente non ha mai sincronizzato prima) → no-op silenzioso
+- **Decisione doc:** vedi `docs/internal/INFRA.md` § Bootstrap automatico e memoria `project_cloud_sync_direction`.
+- **Dependency:** [JHT-DESKTOP-SYNC] (sync infrastructure), [JHT-DESKTOP-RECOVERY] (passphrase per decifrare).
+
+##### 👤 [JHT-CLOUD-SYNC-PROFILE] Aggiungere profilo utente al sync
+
+- **Why:** il profilo (`candidate_profile.yml` — nome, skills, experience, preferenze) è il dato più "personale" del team e quello che l'utente non vuole rifare da capo cambiando macchina. Oggi sincronizziamo solo positions/applications.
+- **Task:**
+  1. Aggiungere `candidate_profile.yml` al payload di push verso Supabase (cifrato user-side)
+  2. Aggiungere alla logica di pull in `[JHT-CLOUD-RESTORE]`
+  3. Migration: utenti esistenti con sync attiva → primo push successivo include automaticamente il profilo
+- **Acceptance:** modifica profilo su macchina A → 1 minuto dopo, login su macchina B → profilo presente.
+
+##### 🎨 [JHT-CLOUD-SYNC-THEME] Aggiungere tema/settings dashboard al sync
+
+- **Why:** la personalizzazione UI (dark/light, lingua, sidebar pinned, ecc.) è un piccolo ma significativo "rifare da capo" per l'utente che cambia macchina.
+- **Task:**
+  1. Verificare dove vivono i settings oggi (DB tabella `user_settings` o browser localStorage?)
+  2. Se localStorage: migrare a DB `user_settings` table (necessario per sync server-side)
+  3. Aggiungere al payload push e alla logica pull
+- **Acceptance:** cambio tema/lingua su macchina A → 1 minuto dopo, login su macchina B → stesso tema/lingua.
+- **Dependency:** [JHT-CLOUD-RESTORE].
+
 ##### 🔑 [JHT-DESKTOP-RECOVERY] Recovery passphrase generation + decrypt flow
 
 - **Why:** the encrypted cloud sync needs a passphrase that's NOT the OAuth password (which we don't have). This is the user's "vault key".
