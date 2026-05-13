@@ -33,14 +33,17 @@ Two managed services can hold a **read-only mirror** of the operational state:
 - **Supabase** — PostgreSQL for structured metadata (positions, scores, applications) + auth
 - **Google Drive** — user files (CVs, cover letters, generated PDFs)
 
-This is **opt-in** — the user enables it explicitly via `jht cloud enable` (see [`docs/cli-install.md`](../guides/cli-install.md)). Nothing leaves the local machine until then. Once enabled, the local container periodically pushes a snapshot of the operational state to Supabase + Drive so the user can:
+This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud storage as the only way to recover state if it dies). When enabled, the local container periodically pushes a snapshot of operational state to Supabase + Drive so the user can:
 - Browse positions/applications from another device (phone, work laptop)
 - Have a backup against local data loss
 - Visit `jobhunterteam.ai` and see their own results in the web dashboard
+- Migrate to a new machine without losing data (see "Bootstrap" below)
 
 > 📡 **No LLM calls happen on the managed storage side.** The agents always run inside the local container. Supabase and Drive are storage only.
 
-> ⚠️ **Open question — reverse seed**: today the sync flows local → managed-storage only. If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the managed storage at least once. This is being designed — see memory `project_cloud_sync_direction_open` and the open task `[JHT-CLOUD-SEED-DIRECTION]` *(to be filed)*. For now, the workaround is a manual backup/restore of the Docker volume.
+> 🔄 **Bootstrap automatico (decisione 2026-05-13)**: il sync è **push-only** local → cloud. Quando l'utente fa login con lo stesso account su un **container nuovo/vuoto** (es. nuova VPS appena installata, o nuovo PC dopo perdita del vecchio), l'app rileva che il DB locale è vuoto e fa un **pull automatico** dal cloud — DB locale allineato, da lì in poi push normale. Niente comandi manuali, niente backup/restore Docker volume.
+>
+> **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard. Memoria agenti runtime (tmux, skill state) e CV binari → restano locali. Vedi `project_cloud_sync_direction` per la spec.
 
 ### 👤 Clients — how the user talks to the team
 
