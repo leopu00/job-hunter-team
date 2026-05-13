@@ -114,10 +114,20 @@ contextBridge.exposeInMainWorld('prefsApi', {
 })
 
 contextBridge.exposeInMainWorld('vpsApi', {
-  // SSH key gen + lookup. runInstall + onInstallLog land in task 13.
   generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
   getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
   hasKey: () => ipcRenderer.invoke('vps:has-key'),
+  // SSH into the user's freshly-created VPS and stream install.sh
+  // output back via onInstallLog. The token comes from authApi
+  // automatically (main side) so no secret leaves the IPC boundary.
+  runInstall: (args) => ipcRenderer.invoke('vps:run-install', args),
+  onInstallLog: (callback) => {
+    const listener = (_event, line) => {
+      try { callback(line) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('vps:install-log', listener)
+    return () => ipcRenderer.removeListener('vps:install-log', listener)
+  },
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

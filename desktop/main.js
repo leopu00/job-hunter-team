@@ -629,6 +629,9 @@ app.whenReady().then(() => {
   ipcMain.handle('vps:generate-key', (_event, args = {}) => vps.generateKey(args))
   ipcMain.handle('vps:get-public-key', () => vps.getPublicKey())
   ipcMain.handle('vps:has-key', () => ({ ok: true, hasKey: vps.hasKey() }))
+  ipcMain.handle('vps:run-install', (event, args = {}) =>
+    vps.runInstall({ ...args, sender: event.sender })
+  )
 
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
   ipcMain.handle('sync:get-status', () => sync.getStatus())
