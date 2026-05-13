@@ -161,3 +161,26 @@ export interface PositionWithScore extends Position {
 export interface ApplicationWithPosition extends Application {
   positions: Pick<Position, 'id' | 'title' | 'company' | 'status' | 'url'>
 }
+
+// Coda notifiche agente -> utente (schema V5, decisione 2026-05-13).
+// L'agente scrive qui via `jht-notify-user`; il record viene sincronizzato
+// su Supabase e mostrato sulla dashboard quando `delivered_via = 'web'`
+// (Telegram non configurato/down). L'utente puo' ack-are o rispondere.
+export type PendingMessageKind = 'notification' | 'question' | 'digest' | 'alert'
+export type PendingMessageDelivery = 'telegram' | 'web' | null
+
+export interface PendingMessage {
+  // Stringa anche per SQLite, dove l'id e' integer: il widget non se ne accorge.
+  id: string
+  agent: string
+  body: string
+  kind: PendingMessageKind
+  related_position_id: string | null
+  delivered_via: PendingMessageDelivery
+  delivered_at: string | null
+  acknowledged_at: string | null
+  user_reply: string | null
+  user_reply_at: string | null
+  agent_seen_reply_at: string | null
+  created_at: string
+}
