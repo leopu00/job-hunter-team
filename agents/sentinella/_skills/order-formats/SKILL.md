@@ -1,14 +1,14 @@
 ---
 name: order-formats
 description: Templates for the orders the Sentinel sends to the Captain. Use this skill whenever you decide to notify the Captain — pick the matching template, fill in the placeholders, send via `jht-tmux-send`.
-allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_tools/jht-tmux-send *)
+allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *)
 ---
 
 # Skill — Formati ORDINE al Capitano
 
 Tutti gli ordini sono inviati via:
 ```bash
-/app/agents/_tools/jht-tmux-send CAPITANO "<messaggio>"
+/app/agents/_skills/tmux-send/jht-tmux-send CAPITANO "<messaggio>"
 ```
 
 Path **assoluto** obbligatorio (PATH del CLI può non includerlo).
