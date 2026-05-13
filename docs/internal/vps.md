@@ -197,15 +197,14 @@ Tutti prezzi includono VAT EU (22% IT, 19% DE), aggiornati 2026-05-06.
 
 ## 🧰 Install + wizard UX fixes (2026-05-12)
 
-> **Stato fix**: i 🔴 P0 di questo blocco sono stati applicati su `dev1` nei commit `c360bb27`, `d24d2b8a`, `4a6cb181`, `c2ab7247`. Restano P1/P2/P3 sotto.
+> **Stato fix (aggiornato 2026-05-13)**: tutti i 🔴 P0 del blocco install + wizard + pairing risolti (commit `c360bb27`, `d24d2b8a`, `4a6cb181`, `c2ab7247`). 🟡 P2 verbosity install + warning gruppo docker root anche risolti. Resta aperto solo 🟠 P1 `jht` no-args che chiama ancora `ensure_up` (`scripts/jht-wrapper.sh::''` branch) e qualche P2/P3 minore.
 
 Test "utente totalmente nuovo" su VPS Hetzner fresca (Ubuntu 24.04, root), one-liner `curl -fsSL https://jobhunterteam.ai/install.sh | bash`. L'install gira liscio ma il post-install ha attriti.
 
-### 🔴 P0 — Wizard non parte da solo dopo install
-**Stato**: dopo `curl | bash` lo script stampa "Stdin/stdout non è un terminale interattivo: salto il wizard" e lascia tre istruzioni divergenti (`jht`, `jht up`, `jht setup`).
-**Atteso**: dopo `curl | bash` il wizard parte da solo, è l'unica chance di onboarding pulito.
-**Fix**: A (re-exec via TTY pattern `rustup`/`nvm`) + C (first-run hook in `jht`).
-**File**: `scripts/install.sh::maybe_onboard()`, `scripts/jht-wrapper.sh`, `cli/bin/jht.js`.
+### ✅ 🔴 P0 — Wizard non parte da solo dopo install (risolto)
+**Stato originale**: dopo `curl | bash` lo script stampa "Stdin/stdout non è un terminale interattivo: salto il wizard" e lascia tre istruzioni divergenti (`jht`, `jht up`, `jht setup`).
+**Fix applicato (commit `4a6cb181`)**: auto-launch wizard via TTY re-exec + skip root noise + cleaner final msg.
+**File**: `scripts/install.sh::maybe_onboard()`.
 
 ### 🟠 P1 — `jht` senza argomenti ha doppio comportamento
 **Stato**: `jht` nudo fa `jht up` implicito (pull 500 MB) + stampa help. Effetto collaterale invisibile.
@@ -227,13 +226,11 @@ Per tutti i comandi: jht help
 ```
 **File**: `cli/src/program.js`.
 
-### 🟡 P2 — Verbosity install
-`apt-get install -y docker.io` stampa ~30 righe. Fix: `apt-get install -qq -y`, redirect verbose a `/tmp/jht-install.log`, mostrare singolo spinner `▸ Installazione Docker... ✓ (12s)`.
-**File**: `scripts/install.sh::install_docker_linux()`.
+### ✅ 🟡 P2 — Verbosity install (risolto in `4a6cb181`)
+Output `apt-get install` ora redirected, spinner singolo. **File**: `scripts/install.sh::install_docker_linux()`.
 
-### 🟡 P2 — Warning "gruppo docker" mostrato anche a root
-Su VPS-root il warning `usermod -aG docker $USER` è rumore puro. Fix: condizionare a `[ "$(id -u)" -ne 0 ]`.
-**File**: `scripts/install.sh` riga ~307.
+### ✅ 🟡 P2 — Warning "gruppo docker" mostrato anche a root (risolto in `4a6cb181`)
+Warning `usermod -aG docker $USER` condizionato a `[ "$(id -u)" -ne 0 ]`. **File**: `scripts/install.sh`.
 
 ### 🟡 P2 — "Allineo owner di /root/.jht a 1001:1001..."
 Messaggio criptico. Fix: silenzioso o contestualizzato "▸ Imposto permessi cartelle host per container non-root (sicurezza)... ✓".
@@ -252,10 +249,9 @@ Manca cancellazione di `/root/.jht/{config,db,allegati,agents}` e `~/Documents/J
 
 ### Wizard step 1 — Host detection
 
-**🔴 P0 — Lingua deve essere LA PRIMA scelta del wizard.** Il wizard parte in italiano, utente non può scegliere lingua. Fix: primissimo step `Choose your language / Scegli la lingua`, default English (allineato `feedback_lang_picker_default_english.md`).
-**File**: `cli/wizard/setup.js`, `scripts/host-setup.sh` i18n.
+**✅ 🔴 P0 — Lingua deve essere LA PRIMA scelta del wizard (risolto in `c2ab7247`).** Primissimo step `Choose your language / Scegli la lingua` in `scripts/host-setup.sh:58`, default English, persistito in `~/.jht/host.env` come `JHT_LANG=en|it` letto poi dal wizard Node.
 
-**🔴 P0 — Selettore host ambiguo (`[V] 1)` / `[ ] 2)`).** Sembra checkbox interattiva, in realtà è prompt numerico. Fix: rimuovere finto-checkbox, prompt numerico con default visibile + spiegazione di cosa è stato rilevato.
+**✅ 🔴 P0 — Selettore host ambiguo (risolto in `c2ab7247`).** Rimossa la finto-checkbox `[V] 1)` / `[ ] 2)`, prompt numerico con default visibile + spiegazione di cosa è stato rilevato.
 
 **🟠 P1 — Testo opzioni poco esplicativo.** "Server remoto / VPS" + "Computer locale" non spiega perché la scelta conta. Fix: testo lungo che spiega "il tuo PC accessibile in rete locale" vs "server cloud raggiungibile via IP pubblico, servono passi extra".
 **File**: `scripts/host-setup.sh:81-89`.
@@ -273,15 +269,10 @@ Skip step se RAM ≥ 8GB o swap già configurata. ✅ Applicato in commit `c2ab7
 
 ### Wizard step 4 — Pairing CLI ↔ web
 
-**🔴 P0 — Link diretto `/cli-link?code=...` non porta al login, perde il code.**
-Chain di 3 bug:
-1. `web/app/(protected)/layout.tsx:42` — `if (!user) redirect('/')` scarta URL+query
-2. `web/proxy.ts:137` — middleware espone `x-pathname` ma non la search string
-3. `web/app/components/landing/LandingClient.tsx:42-48` — `signInWithOAuth` hardcoda `redirectTo` senza `returnTo`
+**✅ 🔴 P0 — Link diretto `/cli-link?code=...` non porta al login, perde il code (risolto in `d24d2b8a`).**
+Chain di 3 bug: `(protected)/layout` scartava URL+query; proxy non esponeva la search string; `LandingClient` hardcodava `redirectTo`. Fix applicato: aggiunto `x-search` header in proxy, `returnTo` propagato da `(protected)/layout`, accettato in `LandingClient`, usato `next=` nel callback OAuth. **Impatto**: sistemato un bug generale "perdita URL su login" per tutte le pagine protette.
 
-Fix (4 modifiche, 3 file): aggiungere `x-search` header in proxy, propagare `returnTo` da `(protected)/layout`, accettare `returnTo` in landing/LandingClient, usare `next=` nel callback OAuth. **Impatto**: sistema un bug generale "perdita URL su login" per tutte le pagine protette.
-
-**🔴 P0 — CSRF guard blocca pairing su `jobhunterteam.ai` prod.** `web/lib/csrf.ts:26-33` ha allowlist hardcoded di origin che NON include il dominio prod (manca env `JHT_PUBLIC_ORIGIN`). Fix raccomandato (B): in `proxy.ts` calcolare `hostOrigin` da `x-forwarded-proto` + `x-forwarded-host`, passarlo a `shouldRejectBrowserMutation`. Same-origin → non-CSRF. Funziona su qualsiasi dominio futuro.
+**✅ 🔴 P0 — CSRF guard blocca pairing su `jobhunterteam.ai` prod (risolto in `c360bb27`).** `proxy.ts` ora calcola `hostOrigin` da `x-forwarded-proto` + `x-forwarded-host` dinamicamente e lo passa a `shouldRejectBrowserMutation`. Same-origin → non-CSRF. Funziona su qualsiasi dominio futuro senza env hardcoded.
 
 ---
 
@@ -469,7 +460,11 @@ Il token Supabase OAuth dell'app desktop = identità unica per **app + dashboard
 
 **Risultato**: l'utente fa OAuth Supabase **una sola volta** nell'app, niente `jht cloud login` interattivo da rifare dentro la VPS.
 
-**Stato**: `[JHT-DESKTOP-LOGIN]` + `[JHT-DESKTOP-SYNC]` in dev1 hanno la parte app già fatta. Da cablare: `install.sh` deve accettare `--pairing-token <token>` invece di chiamare login interattivo.
+**Stato (aggiornato 2026-05-13 sera)**: ✅ tutto cablato.
+- `[JHT-DESKTOP-LOGIN]` + `[JHT-DESKTOP-SYNC]` lato app: già fatto in dev1.
+- `scripts/install.sh --pairing-token <token>`: implementato (commit `43d94016`, righe 95/105/767/854). Skip wizard interattivo, salva token in `~/.jht/.pairing-token` con perms 0600.
+- App desktop genera pairing token dalla session Supabase + SSH keypair + runInstall remoto (commit `b0dfdda9/23a140cb/32a51766`).
+- CLI `jht cloud pair --token <t>` + endpoint Supabase `POST /api/cloud-sync/device-register`: implementati (merge dev2, commits `61a544aa/a4112d10/bae27059`).
 
 ### 5. Rollout strategy → **B3 desktop diretto anche per beta 0**
 
