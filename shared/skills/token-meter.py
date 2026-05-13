@@ -64,6 +64,75 @@ def read_bridge_state():
         return None
 
 
+# Finestra rate-limit per provider (ore). Tutti i provider supportati hanno
+# rolling window di 5h ma teniamo la mappa esplicita per provider futuri.
+PROVIDER_WINDOW_HOURS = {
+    "kimi": 5.0,
+    "moonshot": 5.0,
+    "claude": 5.0,
+    "anthropic": 5.0,
+    "openai": 5.0,
+    "codex": 5.0,
+}
+
+
+def _parse_reset_hhmm(reset_str, now_local):
+    """Converte "HH:MM" del bridge in datetime locale del prossimo reset.
+
+    Il bridge formatta reset_at come HH:MM in local TZ (vedi _iso_to_hhmm in
+    sentinel-bridge.py). Per disambiguare oggi vs domani, se l'orario è
+    già passato lo proiettiamo al giorno successivo.
+
+    Ritorna datetime aware in TZ locale, o None se la stringa non è valida.
+    """
+    if not isinstance(reset_str, str) or ":" not in reset_str:
+        return None
+    try:
+        hh, mm = reset_str.split(":", 1)
+        h, m = int(hh), int(mm)
+        if not (0 <= h < 24 and 0 <= m < 60):
+            return None
+    except ValueError:
+        return None
+    candidate = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
+    if candidate < now_local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def compute_window_start_ts(provider, bridge_state, now=None):
+    """Determina window_start come timestamp UNIX.
+
+    Strategy:
+      1. Se bridge_state ha `last_reset_at_unix` (epoch UTC), ancora la
+         window a `reset_at - WINDOW_HOURS(provider)` — coerente col rolling
+         window che il provider usa lato server. Epoch è preferito perché
+         non ambiguo su mezzanotte / rolling drift.
+      2. Fallback HH:MM: parse `last_reset_at` come "prossimo HH:MM nel
+         futuro". Usato per backward-compat con bridge < V7 stato file.
+      3. Fallback graceful finale: `now - WINDOW_HOURS` (comportamento PoC).
+
+    Ritorna (window_start_ts, source) dove source ∈ {"reset_at_unix",
+    "reset_at_hhmm", "now"} per logging/diagnostica.
+    """
+    if now is None:
+        now = datetime.now().astimezone()
+    win_h = PROVIDER_WINDOW_HOURS.get(provider, WINDOW_HOURS)
+
+    if bridge_state:
+        epoch = bridge_state.get("last_reset_at_unix")
+        if isinstance(epoch, (int, float)) and epoch > 0:
+            return epoch - win_h * 3600.0, "reset_at_unix"
+
+        reset_dt = _parse_reset_hhmm(bridge_state.get("last_reset_at"), now)
+        if reset_dt is not None:
+            window_start = reset_dt - timedelta(hours=win_h)
+            return window_start.timestamp(), "reset_at_hhmm"
+
+    window_start = now - timedelta(hours=win_h)
+    return window_start.timestamp(), "now"
+
+
 # ── Provider readers ─────────────────────────────────────────────────────
 
 
@@ -209,7 +278,12 @@ def main():
 
     while True:
         now = datetime.now(timezone.utc)
-        window_start_ts = (now - timedelta(hours=WINDOW_HOURS)).timestamp()
+        # Step 2: la finestra di aggregazione è ancorata al reset_at del bridge
+        # quando disponibile, così il ratio cumulativo (weighted/bridge_pct)
+        # è coerente con la stessa finestra che il provider sta misurando.
+        # Senza reset_at, fallback graceful: now-5h come nel PoC.
+        state = read_bridge_state() or {}
+        window_start_ts, win_source = compute_window_start_ts(provider, state, now=datetime.now().astimezone())
 
         if provider == "kimi":
             totals, by_sess = read_kimi_tokens(window_start_ts)
@@ -227,11 +301,11 @@ def main():
             in_raw, out_raw = totals["input_tokens"], totals["output_tokens"]
             cache_r, cache_c = totals["cached_input_tokens"], 0
 
-        state = read_bridge_state() or {}
         bridge_pct = state.get("last_usage")
         bridge_proj = state.get("last_projection")
         bridge_status = state.get("last_status") or ""
         bridge_tick = state.get("last_tick_at", "")[:19]
+        bridge_reset = state.get("last_reset_at") or "?"
 
         ratio = (weighted / bridge_pct) if (bridge_pct and bridge_pct > 0 and weighted > 0) else None
 
@@ -239,7 +313,7 @@ def main():
         line = (
             f"[{now.strftime('%H:%M:%S')}] {provider:6} "
             f"bridge={str(bridge_pct):>3}% proj={str(bridge_proj):>6} ({bridge_status:>12}) "
-            f"@ {bridge_tick} | "
+            f"reset={bridge_reset} win={win_source} | "
             f"events={totals['events']:>3} sess={totals['sessions']} "
             f"in={in_raw:>7,} out={out_raw:>5,} "
             f"cache_r={cache_r:>9,} cache_w={cache_c:>5,} "
