@@ -771,13 +771,10 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
   3. Set up GitHub project board (kanban: triage → confirmed → in-progress → done)
   4. Document SLA expectations in `CONTRIBUTING.md` ("we aim to triage within 48h, no fix SLA in beta")
 
-#### 📰 [JHT-LAUNCH-09] Show HN post draft ⬜
+#### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
-- **Title** (60 char max): test multiple variants
-- **Body**: lead with the manifesto + numbers (200/20/5) + screenshots/GIF + link to STORY.md
-- **Tone**: dev-to-dev, not marketing
-- **Timing**: Tuesday-Wednesday morning UTC (best HN engagement window)
-- **Plan B**: if HN doesn't pick up → fall back to r/LocalLLaMA + r/ClaudeAI + r/selfhosted
+- Draft landed at [`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md): 4 title variants, body in dev-to-dev tone with the 200/20/5 numbers, 5 pre-written first-comment answers, timing window (Tue/Wed 13-15 UTC) and Plan B fallback subreddits.
+- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (Leone vs. a friend account with karma already).
 
 #### 🎙️ [JHT-LAUNCH-10] Press kit ⬜
 
