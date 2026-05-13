@@ -105,8 +105,8 @@ Vedi BACKLOG.md → `🐛 KNOWN BUGS` per dettagli.
 
 ```
 docs/internal/2026-05-01-bridge-and-token-monitoring.md   roadmap dettagliata
-docs/internal/2026-05-01-team-session-report.md           numeri sessione test
 BACKLOG.md → JHT-BRIDGE-V7 / V8 / LAUNCH-LOW-PROFILE      entry alta livello
+(numeri sessione test 2026-05-01: vedi git log @2026-05-12 — file consolidato)
 
 .launcher/sentinel-bridge.py                              bridge V6 (da estendere)
 shared/skills/token-meter.py                              PoC daemon (da rifattorizzare)

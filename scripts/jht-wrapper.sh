@@ -20,7 +20,7 @@
 # ║    JHT_RUNTIME_DIR=$HOME/.jht/runtime                                    ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR/docker-compose.yml                  ║
 # ║                                                                          ║
-# ║  Riferimento design: docs/internal/2026-05-06-host-container-split.md    ║
+# ║  Riferimento design: docs/internal/vps.md    ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail

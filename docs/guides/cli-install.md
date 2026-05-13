@@ -90,7 +90,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 ### 🐳 Default path — Docker (4 steps)
 
 > Since 2026-05-06 the Docker path follows the **host/container split**
-> design — see [`docs/internal/2026-05-06-host-container-split.md`](../internal/2026-05-06-host-container-split.md).
+> design — see [`docs/internal/vps.md`](../internal/vps.md).
 > The wrapper does not run an ephemeral `docker run --rm` per command:
 > it dispatches to `docker compose` (lifecycle) or `docker exec` (operativity)
 > against a long-running `jht` container.

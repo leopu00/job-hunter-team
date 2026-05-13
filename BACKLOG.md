@@ -237,7 +237,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - host-side: wrapper bash sottile (~165 righe) che fa `docker compose` + `docker exec`
   - container-side: il CLI Node attuale, raggiunto via `docker exec -it jht node /app/cli/bin/jht.js <args>`
 - **Done 2026-05-06:**
-  - Design doc completo: `docs/internal/2026-05-06-host-container-split.md`
+  - Design doc completo: `docs/internal/vps.md`
   - `scripts/jht-wrapper.sh` (wrapper bash con auto-up, lifecycle, exec proxy)
   - `cli/src/utils/container-proxy.js` con branch IS_CONTAINER=1 (passthrough, retro-compat con il path "from source")
   - `docker-compose.yml` riscritto image-only + production-friendly (no `build:`, no bind sorgenti)
@@ -271,7 +271,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
 - **Bonus:** ✅ aggiunge 1 cell al test campaign matrix (Hetzner CPX22 / Linux Ubuntu 24.04 / Claude Max).
-- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md), implementation: [`docs/internal/2026-05-06-host-container-split.md`](docs/internal/2026-05-06-host-container-split.md), provider research: [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md).
+- **Design rationale:** [`docs/internal/vps.md`](docs/internal/vps.md), implementation: [`docs/internal/vps.md`](docs/internal/vps.md), provider research: [`docs/internal/vps.md`](docs/internal/vps.md).
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
@@ -282,7 +282,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - "Vuoi zero pensieri / setup?" → Mode 1 (PC locale, ma deve restare on)
 - **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
-- **Provider research feeder:** [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
+- **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
 #### 🟡 MEDIUM PRIORITY
 
@@ -414,7 +414,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 #### 🚨 Launcher as primary tool — Phase 2 expansion (NEW 2026-05-04)
 
-> Driven by VPS deployment design ([`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
+> Driven by VPS deployment design ([`docs/internal/vps.md`](../docs/internal/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
 
 ##### 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher
 
@@ -531,7 +531,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - Tailscale (zero-config, US company) vs WireGuard self-hosted (more aligned with local-first, more code)
   - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
-- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
+- **Design rationale:** [`docs/internal/vps.md`](../docs/internal/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
 #### 🔗 [JHT-UX-CLOUD-PAIRING] Auto-pairing VPS↔account web (no token manuale + 2 comandi CLI)
 
