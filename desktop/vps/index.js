@@ -51,28 +51,7 @@ const log = require('../logger').child('vps')
 // (1-3 secondi). Se fallisce qui sappiamo che non e' un problema della
 // install.sh ma proprio di chiave/auth. Ogni evento finisce nel log,
 // cosi' un bug report contiene tutto il flow.
-// Detect se la chiave privata e' cifrata con passphrase. `ssh-keygen -y`
-// (extract pubkey from privkey) richiede la passphrase per decrypt; con
-// `-P ""` la passa esplicitamente come vuota. Se la chiave NON ha
-// passphrase, exit 0. Se ne ha una, exit != 0 con stderr che contiene
-// "incorrect passphrase" o "Load key ... bad passphrase".
-function isPrivKeyEncrypted(privPath) {
-  try {
-    const r = spawnSync('ssh-keygen', ['-y', '-P', '', '-f', privPath], {
-      encoding: 'utf8',
-      timeout: 5000,
-    })
-    if (r.status === 0) return false
-    // Tutti i pattern di errore visti su OpenSSH 8/9 quando la priv
-    // key e' cifrata e la passphrase fornita e' sbagliata/vuota.
-    const stderr = (r.stderr || '').toLowerCase()
-    return /bad passphrase|incorrect passphrase|passphrase is required|invalid format/i.test(stderr)
-  } catch {
-    return false
-  }
-}
-
-function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
+function preflightSshCheck({ ip, priv, knownHosts }) {
   // Fingerprint locale (MD5 + SHA256), utile per confronto con
   // Hetzner Console (che mostra MD5 hex).
   let pubFingerprint = null
@@ -128,54 +107,28 @@ function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
     log.warn('preflight.known-hosts-read-failed', { err })
   }
 
-  const encrypted = isPrivKeyEncrypted(priv)
-
   log.info('preflight.key-state', {
     ip,
     privPath: priv,
     privMode,
     privSize,
-    encrypted,
     fingerprint: pubFingerprint,
     pubKeyHead,
     knownHostsState,
   })
 
-  // Early exit: se la chiave e' cifrata e non e' stata fornita una
-  // passphrase via SSH_ASKPASS (vedi runInstall), e' inutile tentare
-  // il probe — OpenSSH chiedera' la passphrase, BatchMode rifiutera',
-  // e il fallimento sara' indistinguibile da "chiave non autorizzata".
-  // Diamo subito un errore actionable.
-  if (encrypted && !process.env.JHT_SSH_ASKPASS_ACTIVE) {
-    return {
-      ok: false,
-      semantic: { encryptedKeyNoPassphrase: true },
-      status: -1,
-      signal: null,
-    }
-  }
-
   // Auth probe veloce: testa SOLO l'auth, no install.sh. -v per
   // catturare il dialogo SSH dettagliato (banner, auth methods
   // offered, key offered, motivo del reject).
-  // BatchMode=yes blocca SSH_ASKPASS in OpenSSH 9+/10 (regressione vs man
-  // page: SSH_ASKPASS_REQUIRE=force dovrebbe sovrascriverlo ma non lo fa
-  // sempre). Quando abbiamo una passphrase da fornire via askpass NON
-  // usiamo BatchMode; manteniamo invece NumberOfPasswordPrompts=0 per
-  // evitare prompt residui sul fallback "password" auth + ConnectTimeout.
-  // Se NON c'e' passphrase, BatchMode resta safe (zero prompt anywhere).
-  const askpassActive = !!process.env.JHT_SSH_ASKPASS_ACTIVE
   const probeArgs = [
     '-v',
     '-i', priv,
     // No verification host key: la connessione e' one-shot per il
-    // pairing iniziale. Vedi commento in cima al file. UserKnownHostsFile
-    // /dev/null evita writes, GlobalKnownHostsFile /dev/null evita
-    // reads di /etc/ssh/ssh_known_hosts.
+    // pairing iniziale. Vedi commento in cima al file.
     '-o', 'StrictHostKeyChecking=no',
     '-o', `UserKnownHostsFile=${knownHosts}`,
     '-o', 'GlobalKnownHostsFile=/dev/null',
-    ...(askpassActive ? [] : ['-o', 'BatchMode=yes']),
+    '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',
     '-o', 'NumberOfPasswordPrompts=0',
     `root@${ip}`,
@@ -186,11 +139,6 @@ function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
   const probe = spawnSync('ssh', probeArgs, {
     encoding: 'utf8',
     timeout: 20000,
-    // Se askpass attivo, propaga le env per SSH_ASKPASS al child SSH
-    // (l'helper deve essere visibile, SSH_ASKPASS_REQUIRE=force evita
-    // che ssh richieda TTY, DISPLAY:0 fake serve a OpenSSH per non
-    // ignorare askpass su sistemi headless).
-    env: askpassEnv ? { ...process.env, ...askpassEnv } : process.env,
   })
 
   // Tutto utile: stdout (banner + echo se passa), stderr (verbose -v
@@ -239,16 +187,6 @@ function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
 // Mapping errore SSH → causa probabile + suggerimento utente. Restituisce
 // un oggetto strutturato che il renderer puo' usare per UI actionable.
 function classifySshFailure(semantic) {
-  if (semantic.encryptedKeyNoPassphrase) {
-    return {
-      kind: 'encrypted-key-no-passphrase',
-      title: 'La chiave SSH ha una passphrase ma non e\' stata fornita',
-      hint: 'Hai messo una passphrase quando hai generato la chiave. ' +
-            'OpenSSH non puo\' usarla in BatchMode senza la passphrase. ' +
-            'Soluzioni: (a) rigenera la chiave lasciando il campo passphrase vuoto; ' +
-            '(b) fornisci la passphrase al passo "Connetti e installa" (campo dedicato in arrivo).',
-    }
-  }
   if (semantic.knownHostsChanged) {
     return {
       kind: 'known-hosts-mismatch',
@@ -347,12 +285,13 @@ async function getPublicKey() {
 // Generate a fresh keypair. If one already exists it is overwritten —
 // the renderer side surfaces a "Regenerate key" label so the user
 // knows what's happening. ssh-keygen is invoked non-interactively
-// via -N for the passphrase (empty string for no passphrase) and -y
-// is implicit on -t ed25519.
-function generateKey({ passphrase = '' } = {}) {
+// via -N "" (no passphrase). Decisione 2026-05-13: niente passphrase,
+// la privkey e' protetta dai permessi filesystem (chmod 600) su
+// app.getPath('userData')/ssh/. Per pairing one-shot, askpass-on-OpenSSH-10
+// era un ballo di fix fragili che non valeva il guadagno di sicurezza.
+function generateKey() {
   return new Promise((resolve) => {
-    const hasPassphrase = !!(passphrase && passphrase.length > 0)
-    log.info('generate-key.start', { dir: getSshDir(), hasPassphrase })
+    log.info('generate-key.start', { dir: getSshDir() })
     try {
       ensureSshDir()
       const priv = getPrivateKeyPath()
@@ -366,7 +305,7 @@ function generateKey({ passphrase = '' } = {}) {
         '-t', 'ed25519',
         '-f', priv,
         '-C', KEY_COMMENT,
-        '-N', passphrase || '',
+        '-N', '',
         '-q',
       ]
       const child = spawn('ssh-keygen', args, { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -413,45 +352,18 @@ function generateKey({ passphrase = '' } = {}) {
 //     una VPS fresca, MitM realistico solo se Hetzner stesso è ostile.
 //   - UserKnownHostsFile=<userData>/ssh/known_hosts: isolata dalla
 //     ~/.ssh/known_hosts dell'utente, no inquinamento del suo host file.
-//   - BatchMode=yes: niente prompt interattivi. Se la chiave ha una
-//     passphrase BatchMode la rifiuta — gestiamo questo caso esplicita-
-//     mente piu' avanti (oggi: il keychain integration arriva post-MVP,
-//     la passphrase opzionale richiede unlock manuale tramite ssh-agent).
+//   - BatchMode=yes: niente prompt interattivi. La privkey non ha
+//     passphrase (decisione 2026-05-13: protezione via chmod 600).
 //   - ConnectTimeout=15: VPS nuova talvolta tarda ad aprire :22.
 //
 // Streaming: emette ogni linea (stdout + stderr merge) sul canale IPC
 // `vps:install-log` tramite il sender BrowserWindow corrente. Il
 // renderer fa `vpsApi.onInstallLog(cb)` per ricevere.
-// Spawna un helper temporaneo che echo'a la passphrase su stdout: e' il
-// pattern SSH_ASKPASS richiesto da OpenSSH quando deve sbloccare una
-// privkey cifrata senza prompt TTY interattivo. Il file e' chmod 0700,
-// vive solo per la durata della connessione, e viene rimosso nel
-// finally. Inietta JHT_SSH_PASSPHRASE in env del child SSH (no su disco).
-function createAskpassHelper(passphrase) {
-  const os = require('node:os')
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jht-askpass-'))
-  const helperPath = path.join(tmpDir, 'askpass.sh')
-  // Lo script legge la passphrase da env (JHT_SSH_PASSPHRASE_B64 in
-  // base64 per safety con caratteri shell speciali) e la stampa.
-  // No quoting nightmare, no leak via argv (ps ax non vede l'env).
-  const script = `#!/bin/sh
-echo "$JHT_SSH_PASSPHRASE_B64" | base64 --decode
-`
-  fs.writeFileSync(helperPath, script, { mode: 0o700 })
-  return {
-    helperPath,
-    cleanup() {
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch { /* ignore */ }
-    },
-  }
-}
-
-function runInstall({ ip, sender, passphrase } = {}) {
+function runInstall({ ip, sender } = {}) {
   return new Promise(async (resolve) => {
     const startedAt = Date.now()
-    let askpass = null
     try {
-      log.info('run-install.start', { ip, hasPassphrase: !!passphrase })
+      log.info('run-install.start', { ip })
       if (!IPV4_RE.test(String(ip || '').trim())) {
         log.warn('run-install.invalid-ip', { ip })
         resolve({ ok: false, error: 'invalid IPv4' })
@@ -478,29 +390,11 @@ function runInstall({ ip, sender, passphrase } = {}) {
       // Vedi commento in cima al file per il rationale di sicurezza.
       const knownHosts = '/dev/null'
 
-      // Se l'utente ha fornito una passphrase, prepara helper SSH_ASKPASS
-      // PRIMA del pre-flight cosi' anche il probe usa la chiave decrittata.
-      // L'env JHT_SSH_ASKPASS_ACTIVE segnala al preflight di non bocciare
-      // la chiave cifrata (gestione passphrase wired) e di skip BatchMode
-      // (che bloccherebbe SSH_ASKPASS in OpenSSH 9+/10).
-      let askpassEnv = null
-      if (passphrase) {
-        askpass = createAskpassHelper(passphrase)
-        process.env.JHT_SSH_ASKPASS_ACTIVE = '1'
-        askpassEnv = {
-          SSH_ASKPASS: askpass.helperPath,
-          SSH_ASKPASS_REQUIRE: 'force',     // OpenSSH 8.4+: forza askpass anche con TTY
-          DISPLAY: process.env.DISPLAY || ':0',
-          JHT_SSH_PASSPHRASE_B64: Buffer.from(passphrase, 'utf8').toString('base64'),
-        }
-        log.info('run-install.askpass-helper-ready', { helper: askpass.helperPath })
-      }
-
       // Pre-flight: testa auth + raccoglie diagnostica DETTAGLIATA prima di
       // lanciare install.sh (pesante, lungo). Se fallisce qui sappiamo
       // gia' che il problema non e' install.sh ma proprio SSH/auth e
       // possiamo dare all'utente un errore actionable invece di "exit 255".
-      const preflight = preflightSshCheck({ ip, priv, knownHosts, askpassEnv })
+      const preflight = preflightSshCheck({ ip, priv, knownHosts })
       if (!preflight.ok) {
         const cls = classifySshFailure(preflight.semantic)
         log.error('run-install.preflight-failed', {
@@ -536,36 +430,25 @@ function runInstall({ ip, sender, passphrase } = {}) {
       const remoteCmd =
         `curl -fsSL ${INSTALL_URL} | bash -s -- --pairing-token "${pairing.token}"`
 
-      // Stessa logica del preflight: askpass attivo → no BatchMode (sennò
-      // OpenSSH 9+/10 ignora SSH_ASKPASS_REQUIRE). Host key verification
-      // disabilitata per il pairing iniziale one-shot (vedi commento file).
+      // Host key verification disabilitata per il pairing iniziale
+      // one-shot (vedi commento file). BatchMode=yes: no prompt (la
+      // privkey non ha passphrase, niente da chiedere).
       const args = [
         '-v',
         '-i', priv,
         '-o', 'StrictHostKeyChecking=no',
         '-o', `UserKnownHostsFile=${knownHosts}`,
         '-o', 'GlobalKnownHostsFile=/dev/null',
-        ...(askpass ? [] : ['-o', 'BatchMode=yes']),
+        '-o', 'BatchMode=yes',
         '-o', 'ConnectTimeout=15',
         `root@${ip}`,
         remoteCmd,
       ]
       log.debug('run-install.ssh-spawn', {
-        ip, installUrl: INSTALL_URL, knownHosts,
-        argsLen: args.length, askpass: !!askpass,
+        ip, installUrl: INSTALL_URL, knownHosts, argsLen: args.length,
       })
 
-      // Env per il child SSH. Se askpass attivo, OpenSSH usa lo
-      // script per ottenere la passphrase senza prompt TTY.
-      const childEnv = { ...process.env, ...(askpassEnv || {}) }
-      const child = spawn('ssh', args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: childEnv,
-        // detached: serve a OpenSSH per dare al figlio un controlling
-        // terminal SEPARATO, sennò il prompt SSH_ASKPASS non viene
-        // intercettato dallo script helper.
-        detached: !!askpass,
-      })
+      const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
       let linesSent = 0
       const emit = (line) => {
         linesSent += 1
@@ -620,11 +503,6 @@ function runInstall({ ip, sender, passphrase } = {}) {
     } catch (err) {
       log.error('run-install.crashed', { err })
       resolve({ ok: false, error: err.message || String(err) })
-    } finally {
-      if (askpass) {
-        try { askpass.cleanup() } catch { /* ignore */ }
-        delete process.env.JHT_SSH_ASKPASS_ACTIVE
-      }
     }
   })
 }
