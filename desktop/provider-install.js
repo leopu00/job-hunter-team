@@ -336,12 +336,40 @@ async function _ensureContainerUpCompany(ssh, { container = 'jht', onLog = () =>
   // Conferma exec funzioni: il `up -d` ritorna prima che PID 1 abbia avuto
   // tempo di stabilizzarsi; un retry secco con piccolo back-off copre il
   // caso "container Created ma non Running" che dura tipicamente <2s.
+  let started = false
   for (let attempt = 1; attempt <= 5; attempt++) {
     const check = await ssh.run(`docker exec -i ${_bashQuote(container)} true`)
-    if (check.ok) return { ok: true, alreadyUp: false }
+    if (check.ok) { started = true; break }
     await new Promise((r) => setTimeout(r, 1000))
   }
-  return { ok: false, error: `container '${container}' avviato ma docker exec fallisce dopo 5 retry` }
+  if (!started) {
+    return { ok: false, error: `container '${container}' avviato ma docker exec fallisce dopo 5 retry` }
+  }
+  return { ok: true, alreadyUp: false }
+}
+
+// Pre-flight permessi npm: `~/.jht` lato VPS e' creato da install.sh come
+// root, ma il container `jht` runna come uid 1001 (user 'jht' nel
+// Dockerfile). Senza chown, `npm install -g` falla con EACCES su mkdir
+// /jht_home/.npm-global. Lo eseguiamo prima di OGNI install (idempotente,
+// chown e mkdir -p sono no-op sui path gia' giusti). docker exec --user
+// root e' necessario perche' il default user del container NON puo'
+// chown-are file owned da root.
+async function _ensureNpmDirsWritable(ssh, { container = 'jht', user = 'jht', onLog = () => {} } = {}) {
+  const remoteCmd = [
+    'docker', 'exec', '-i', '--user', 'root', _bashQuote(container),
+    'sh', '-c',
+    _bashQuote(
+      `mkdir -p /jht_home/.npm-global /jht_home/.npm /jht_home/.local && ` +
+      `chown -R ${user}:${user} /jht_home/.npm-global /jht_home/.npm /jht_home/.local`,
+    ),
+  ].join(' ')
+  const r = await ssh.run(remoteCmd)
+  if (!r.ok) {
+    onLog(`[preflight-npm-perms] ${(r.stderr || '').trim() || `exit ${r.code}`}`)
+    return { ok: false, error: `chown npm dirs fallito: exit ${r.code}` }
+  }
+  return { ok: true }
 }
 
 async function installViaSsh({
@@ -366,6 +394,13 @@ async function installViaSsh({
   if (!ensure.ok) {
     onLog(`[preflight-error] ${ensure.error}`)
     return { ok: false, stage: 'preflight', error: ensure.error }
+  }
+  // Pre-flight permessi npm: chown delle cache dirs all'user del
+  // container. Vedi _ensureNpmDirsWritable per il rationale (EACCES su
+  // bind-mount root-owned). Idempotente: no-op se gia' OK.
+  const perms = await _ensureNpmDirsWritable(ssh, { container, onLog })
+  if (!perms.ok) {
+    return { ok: false, stage: 'preflight', error: perms.error }
   }
 
   const results = []
@@ -445,5 +480,5 @@ module.exports = {
   installViaSsh,
   installProvidersViaSsh,
   openLoginViaSsh,
-  _internal: { runStreamed, _bashQuote, _stepToCompanyCmd, _ensureContainerUpCompany },
+  _internal: { runStreamed, _bashQuote, _stepToCompanyCmd, _ensureContainerUpCompany, _ensureNpmDirsWritable },
 }
