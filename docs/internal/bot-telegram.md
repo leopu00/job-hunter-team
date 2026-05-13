@@ -175,7 +175,7 @@ Status quo: emergente dal prompt di ogni agente, **non definito a priori** in qu
 - Quando l'utente imposta working hours, valgono per **lavoro E notifiche**: fuori finestra il team è in pausa e non manda nulla.
 - Trade-off accettato: il default "sempre on" può sembrare invadente, ma rispecchia la vision "team che lavora come un dipendente full-time"; chi vuole un dipendente part-time configura.
 
-**Implementazione**: necessita config (timezone utente + slot orari) + gate sui tick del Capitano + gate sulle notifiche. Non ancora implementata.
+**Implementazione (commit `13318e1d`)**: config `team.working_hours` (timezone IANA + slot day+HH:MM) in `shared/config/schema.ts`; helper `shared/skills/working_hours.py` (zoneinfo, wrap-around mezzanotte, failsafe 24/7 in caso di config rotto); gate in `.launcher/pacing-bridge.py` (skip tick fuori finestra) e in `agents/_tools/jht-notify-user` (no push Telegram, riga resta `delivered_via=web`). UI di onboarding/settings ancora da cablare — per ora si edita `jht.config.json` a mano. Default 24/7.
 
 ### 10. 🆘 Comando `/stop` dal bot Telegram (decisione 2026-05-13 sera)
 
@@ -343,24 +343,31 @@ Ordine post-fix:
 - ❌ **Non scaricare file > 20 MB direttamente**: Telegram Bot API limita a 20 MB con il bot token standard. Per file più grandi servirebbe self-hosted Bot API server (out of scope beta).
 - ❌ **Non rispondere via `jht-send` a un `[TG]`**: l'utente è sul telefono, la dashboard web non è aperta. Skill `chat-web` vs `telegram-send` — leggi il prefix `[CHAT]` vs `[TG]` per decidere.
 
-### Cose ancora NON fatte (per la beta)
+### Stato implementazione (aggiornato 2026-05-13 sera)
 
-- **Audio transcription** dei voice note: il file finisce in `inbox/voice-*.ogg` ma l'Assistente non ha un OCR/STT automatico. Per ora chiede all'utente di trascrivere a mano.
-- **Photo OCR**: idem per immagini di documenti. L'Assistente potrebbe usare Claude vision tool, ma non è cablato.
+- ✅ **Photo OCR**: cablato via Claude vision nativo del Read tool dell'Assistente (commit `37b359d4`). L'agente legge `path` di `[TG-DOC] mime=image/*` con `Read` e interpreta foto-di-documento / screenshot / meme in autonomia. Nessun servizio OCR esterno necessario.
+- ✅ **Fallback cloud sync (marker user-reply-check)**: skill + tool + integrazione nei 3 prompt agenti (Capitano/Mentor/Assistente) — commit `53efebc4`. Le risposte utente arrivate via dashboard web vengono lette al top del loop e marcate come viste.
+- ✅ **Working hours enforcement (§ 9)**: config `team.working_hours` + helper `shared/skills/working_hours.py` + gate in `pacing-bridge.py` e `jht-notify-user` — commit `13318e1d`. Default 24/7, configurabile via `jht.config.json`.
+
+Rimasti aperti (fuori scope beta):
+- **Audio transcription voice note**: STT automatico non in scope beta — decisione lockata. L'Assistente acknowledge il `voice-*.ogg` e chiede gentile la versione testo. Riapertura possibile in v1 con Whisper o servizio analogo.
 - **Risposte con allegato**: outbound CV/cover-letter generati. Per ora `jht-telegram-send` manda solo testo. `sendDocument` su Bot API supportato, ma wrapper non lo espone. Estensione futura: `jht-telegram-send-doc <path>`.
+- **Notifiche batch Capitano (kick-off iniziale)**: default N=10 + segnali di vita iniziali — forma esatta del kick-off ancora da rifinire.
 - **Multi-utente**: il design ipotizza 1 VPS = 1 utente (whitelist su `chat_id` singolo nel config). Open platform → richiederà mapping `chat_id → user_id` su DB.
 
 ---
 
 ## 🗺️ Roadmap implementativa
 
-1. **Adesso** → design + build ingest documenti via Telegram (Opz B) — `tg-bridge.py`, `jht-telegram-send`, skill, bootstrap V7
-2. **Estensione multi-bot** → wizard per opt-in Capitano/Mentor bot, config `channels.telegram.bots.{assistente,capitano,mentor}`, routing per agente
+1. ✅ **Ingest documenti via Telegram (Opz B)** — `tg-bridge.py` 3-bot, `jht-telegram-send` con `--from`, skill, role `tg-bridge` in `start-agent.sh`, bootstrap V7 CLI+web, wizard auto chat_id (merge dev2 `82bf4fc8`)
+2. ✅ **Multi-bot (3 obbligatori)** — config `channels.telegram.bots.{assistente,capitano,mentor}`, routing per agente, wizard 3× BotFather
 3. **Notifiche batch Capitano** → ogni N posizioni `ready`, top-N per score con link + descrizione (default N=10, da rifinire)
-4. **Fallback cloud sync** → marker DB + prompt injection per rispondere via dashboard web quando Telegram down
-5. **Post-beta feedback** → valutare WhatsApp secondary (trigger: >2/10 beta tester rifiuta TG)
-6. **v1 pubblica** → implementare Opz D (relay cloud S3/R2)
-7. **Desktop launcher VPS** → integrare Opz E (Tailscale) come opzione avanzata
+4. ✅ **Fallback cloud sync** — marker `user-reply-check` nei 3 prompt + tool `jht-check-user-replies` + schema V5 `pending_user_messages` + dashboard widget (merge dev3 + commit `53efebc4`)
+5. ✅ **Photo OCR** — cablato via Claude vision nativo nel prompt Assistente (commit `37b359d4`)
+6. ✅ **Working hours enforcement** — config + gate pacing-bridge + gate notify-user (commit `13318e1d`)
+7. **Post-beta feedback** → valutare WhatsApp secondary (trigger: >2/10 beta tester rifiuta TG)
+8. **v1 pubblica** → implementare Opz D (relay cloud S3/R2)
+9. **Desktop launcher VPS** → integrare Opz E (Tailscale) come opzione avanzata
 
 ---
 
