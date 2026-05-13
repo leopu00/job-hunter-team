@@ -1,6 +1,6 @@
 import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
-import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS, LOCATION_VPS } from './constants.js'
+import { STEP_PROVIDER_CHOOSE, STEP_PROVIDER_LOGIN, STEP_READY, PROVIDER_OPTIONS, LOCATION_VPS } from './constants.js'
 import { camelId } from './docker-card.js'
 import { enterReady } from './wizard-flow.js'
 
