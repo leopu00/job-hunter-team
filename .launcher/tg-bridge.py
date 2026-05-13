@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 """
-Telegram Inbound Bridge — long-poll Bot API → tmux ASSISTENTE.
+Telegram Inbound Bridge — long-poll Bot API → tmux <agente>.
+
+Schema 2026-05-13 rev2: 3 bot dedicati (assistente, capitano, mentor). Ogni
+istanza del bridge gestisce UN solo bot/ruolo (one process per role). Lo
+script da' per scontato di essere lanciato da start-agent.sh con env:
+
+  JHT_TG_BOT_ROLE          — assistente | capitano | mentor (obbligatorio)
+  JHT_TG_TARGET_SESSION    — sessione tmux destinataria (default = ROLE.upper())
+  JHT_TG_OFFSET_RESET=1    — reset offset (skip backlog)
+  JHT_HOME                 — dir config (default /jht_home)
+
+Config:
+  $JHT_HOME/jht.config.json → channels.telegram.bots.<role>.{bot_token,chat_id}
 
 Architettura (pattern simile a sentinel-bridge.py):
   • Long-poll su /getUpdates con timeout 30s
   • Per ogni messaggio text: invia [@utente -> @<target>] [TG] <body>
-    al tmux ASSISTENTE via jht-tmux-send
+    al tmux <target> via jht-tmux-send
   • Per allegati document/photo/voice: scarica via getFile + salva in
     $JHT_HOME/profile/inbox/<filename>, invia [TG-DOC] path=... name=...
   • Whitelist su chat_id: solo l'utente del config (canale 1:1, anti-spam)
-  • Persistenza offset in $JHT_HOME/tg-bridge-state.json (sopravvive restart)
-  • Singleton: kill preesistenti via /proc/*/cmdline
-
-Config:
-  $JHT_HOME/jht.config.json → channels.telegram.{bot_token, chat_id}
-  JHT_TG_TARGET_SESSION                       — default ASSISTENTE
-  JHT_TG_OFFSET_RESET=1                       — reset offset (skip backlog)
-  JHT_HOME                                    — dir config (default /jht_home)
+  • Persistenza offset in $JHT_HOME/tg-bridge-state-<role>.json (per-ruolo)
+  • Singleton per-ruolo: kill orchestrato da start-agent.sh
 
 Outbound (telegram-send) e' una skill agente che usa jht-telegram-send
 direttamente. Questo bridge gestisce solo l'inbound.
@@ -32,13 +38,22 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
+VALID_ROLES = ("assistente", "capitano", "mentor")
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
-STATE_PATH = JHT_HOME / "tg-bridge-state.json"
 INBOX_DIR = JHT_HOME / "profile" / "inbox"
-LOG_PATH = Path("/tmp/tg-bridge.log")
 
-TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", "ASSISTENTE")
+BOT_ROLE = (os.environ.get("JHT_TG_BOT_ROLE", "") or "").strip().lower()
+if BOT_ROLE not in VALID_ROLES:
+    print(f"FATAL: JHT_TG_BOT_ROLE deve essere uno di {VALID_ROLES} (ricevuto: '{BOT_ROLE}')",
+          flush=True)
+    sys.exit(2)
+
+# State file e default target session sono derivati dal ruolo. Cosi' 3 bridge
+# paralleli (uno per bot) non si pestano i piedi sull'offset file.
+STATE_PATH = JHT_HOME / f"tg-bridge-state-{BOT_ROLE}.json"
+TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
 POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 
@@ -47,19 +62,20 @@ MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 
 def log(msg: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    print(f"[{ts}] {msg}", flush=True)
+    print(f"[{ts}][{BOT_ROLE}] {msg}", flush=True)
 
 
 def read_config() -> tuple[str, int]:
-    """Token + chat_id whitelist dal config. Exit se mancanti."""
+    """Token + chat_id whitelist per il ruolo corrente. Exit se mancanti."""
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
-        tg = cfg.get("channels", {}).get("telegram", {})
-        token = tg.get("bot_token", "").strip()
-        chat_id = tg.get("chat_id", "")
-        chat_id = int(chat_id) if str(chat_id).strip() else 0
+        bots = cfg.get("channels", {}).get("telegram", {}).get("bots", {}) or {}
+        bot = bots.get(BOT_ROLE) or {}
+        token = (bot.get("bot_token") or "").strip()
+        chat_id_raw = bot.get("chat_id", "")
+        chat_id = int(chat_id_raw) if str(chat_id_raw).strip() else 0
         if not token or not chat_id:
-            log(f"FATAL: token o chat_id mancante in {CONFIG_PATH}")
+            log(f"FATAL: token o chat_id mancante per ruolo '{BOT_ROLE}' in {CONFIG_PATH}")
             sys.exit(2)
         return token, chat_id
     except FileNotFoundError:
@@ -203,7 +219,7 @@ def handle_voice(token: str, msg: dict) -> None:
 def main() -> None:
     token, allowed_chat = read_config()
     offset = load_offset()
-    log(f"start: target={TARGET_SESSION} allowed_chat={allowed_chat} offset={offset}")
+    log(f"start: role={BOT_ROLE} target={TARGET_SESSION} allowed_chat={allowed_chat} offset={offset}")
 
     # offset == -1 → ricalcola dal max attuale (skip backlog post-reset)
     if offset == -1:
