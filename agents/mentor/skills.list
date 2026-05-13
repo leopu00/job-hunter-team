@@ -6,6 +6,9 @@
 # User communication (web UI)
 chat-web
 
+# Notifiche utente con fallback Telegram -> dashboard web (digest settimanale, pattern alert)
+notify-user
+
 # Inter-agent (rare — escalation to Capitano if needed)
 tmux-send
 
