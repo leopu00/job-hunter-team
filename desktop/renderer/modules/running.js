@@ -42,6 +42,21 @@ export async function refreshRunningStatus() {
 
 export async function startTeam() {
   if (state.starting) return
+  // VPS mode: il team gira sulla VPS, non sul Mac. Il container li' si
+  // e' gia' auto-pairing-ato via pairing token salvato da install.sh.
+  // Il "Start team" sul Mac NON deve scaricare payload + spawn container
+  // locale — apre semplicemente la dashboard cloud che legge dal Supabase
+  // sincronizzato dalla VPS. Vedi docs/internal/onboarding-flow.md § Path 2.
+  if (state.location === 'vps') {
+    const dashboardUrl = 'https://jobhunterteam.ai/dashboard'
+    try {
+      await window.launcherApi.openExternal(dashboardUrl)
+    } catch (e) {
+      // fallback: prova openBrowser anche se non e' il caso d'uso
+      try { await window.launcherApi.openBrowser() } catch { /* ignore */ }
+    }
+    return
+  }
   state.starting = true
   dom.btnStartTeam.disabled = true
   dom.btnStartTeam.textContent = t('running.startingBtn')
