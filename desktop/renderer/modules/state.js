@@ -21,6 +21,15 @@ export const state = {
   // here for the renderer to read synchronously after each authApi
   // call. null = not signed in.
   supabaseUser: null,
+  // VPS provisioning state. null = key not generated yet; otherwise
+  // pubkey is the OpenSSH single-line public key shown to the user.
+  // installed = true after the remote install.sh run succeeds.
+  vps: {
+    pubkey: null,
+    ip: null,
+    installed: false,
+    busy: false,
+  },
   providerInstallBusy: false,
   providerInstallDone: false,
   authStates: [],
@@ -60,6 +69,19 @@ export const dom = {
   btnSupabaseBack: document.getElementById('btn-supabase-back'),
   btnSupabaseContinue: document.getElementById('btn-supabase-continue'),
   btnSupabaseSkip: document.getElementById('btn-supabase-skip'),
+  vpsPassphrase: document.getElementById('vps-passphrase'),
+  btnVpsGenerateKey: document.getElementById('btn-vps-generate-key'),
+  vpsStep2: document.getElementById('vps-step2'),
+  vpsStep3: document.getElementById('vps-step3'),
+  vpsPubkey: document.getElementById('vps-pubkey'),
+  btnVpsCopyPubkey: document.getElementById('btn-vps-copy-pubkey'),
+  btnVpsOpenHetzner: document.getElementById('btn-vps-open-hetzner'),
+  vpsIp: document.getElementById('vps-ip'),
+  btnVpsConnect: document.getElementById('btn-vps-connect'),
+  vpsStatus: document.getElementById('vps-status'),
+  vpsInstallLog: document.getElementById('vps-install-log'),
+  btnVpsBack: document.getElementById('btn-vps-back'),
+  btnVpsContinue: document.getElementById('btn-vps-continue'),
   devModeActions: document.getElementById('dev-mode-actions'),
   btnDevMode: document.getElementById('btn-dev-mode'),
   btnSetupBack: document.getElementById('btn-setup-back'),
