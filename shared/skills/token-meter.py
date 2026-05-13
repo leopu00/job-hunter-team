@@ -48,6 +48,11 @@ CONFIG_PATH = JHT_HOME / "jht.config.json"
 WINDOW_HOURS = 5.0
 INTERVAL_S = 30
 
+# Step 4: rolling window per il rate per-agente. 60s come da TODO Step 4.
+# Stesso win usato in token-by-agent-rate.py (default 120s) ma più reattivo:
+# qui ci interessa "chi sta tirando ADESSO", non il trend di 2 minuti.
+PER_AGENT_ROLL_WIN_S = 60.0
+
 # Calibration EMA (Step 3): il ratio weighted/pct varia con la quantizzazione
 # del provider (kimi/codex/claude misurano usage_percent come int). Per dare
 # un valore stabile usabile dalla UI dobbiamo aggregare più sample:
@@ -381,9 +386,15 @@ def main():
         state = read_bridge_state() or {}
         window_start_ts, win_source = compute_window_start_ts(provider, state, now=datetime.now().astimezone())
 
+        kimi_events: list = []
         if provider == "kimi":
-            totals, by_sess = read_kimi_tokens(window_start_ts)
-            weighted = kimi_weighted(totals) if totals["events"] else 0
+            # Per il per-agent rolling rate ci servono gli events grezzi: li
+            # leggiamo una volta sola e aggrego sopra.
+            kimi_events = tlib.read_kimi_events(window_start_ts, sessions_root=KIMI_SESSIONS)
+            agg = tlib.aggregate(kimi_events)
+            totals = dict(agg["totals"])
+            by_sess = agg["by_session"]
+            weighted = totals["weighted"] if totals["events"] else 0
             in_raw, out_raw = totals["input_other"], totals["output"]
             cache_r, cache_c = totals["input_cache_read"], totals["input_cache_creation"]
         elif provider == "claude":
@@ -435,6 +446,29 @@ def main():
                 f"{int(weighted)},{ratio or ''},{ratio_ema or ''},{totals['sessions']}\n"
             )
 
+        # Step 4: per-agent rolling rate sugli ultimi 60s. Solo Kimi: per
+        # claude/codex non abbiamo ancora un mapping session→agent affidabile.
+        per_agent_out: dict = {}
+        if provider == "kimi" and kimi_events:
+            per_agent_raw = tlib.rolling_rate_per_agent(
+                kimi_events, PER_AGENT_ROLL_WIN_S, now_ts=now.timestamp()
+            )
+            for agent, info in per_agent_raw.items():
+                rate_tpm = info["rate_tokens_per_min"]
+                last_evt = info["last_event_at"]
+                per_agent_out[agent] = {
+                    "rate_tokens_per_min_60s": rate_tpm,
+                    "rate_kt_per_min_60s": rate_tpm / 1000.0,
+                    "weighted_60s": info["weighted_60s"],
+                    "last_event_at": (
+                        datetime.fromtimestamp(last_evt, tz=timezone.utc).isoformat()
+                        if last_evt else None
+                    ),
+                    "idle_seconds": (
+                        (now.timestamp() - last_evt) if last_evt else None
+                    ),
+                }
+
         state_payload = {
             "version": 1,
             "updated_at": now.isoformat(),
@@ -464,6 +498,8 @@ def main():
                 "alpha": CALIB_EMA_ALPHA,
                 "calibrations": calibrator.calibrations,
             },
+            "per_agent": per_agent_out,
+            "per_agent_rolling_window_s": PER_AGENT_ROLL_WIN_S,
         }
         write_state_atomic(STATE_OUT, state_payload)
 
