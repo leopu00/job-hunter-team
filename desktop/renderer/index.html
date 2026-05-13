@@ -124,6 +124,76 @@
         </div>
       </section>
 
+      <!-- Step: VPS provisioning (Hetzner, manual + guided).
+           Only shown when state.location === 'vps'.
+           No Hetzner API token — user creates VPS on the portal,
+           pastes pubkey + IP back into the app. -->
+      <section class="step step--centered" id="step-vps-provision" data-step="vps-provision" hidden>
+        <div class="step__emoji" aria-hidden="true">☁️</div>
+        <h1 class="step__title" data-i18n="vps.title">Create your VPS</h1>
+        <p class="step__lead" data-i18n="vps.lead">
+          We'll guide you through creating a Hetzner server.
+        </p>
+
+        <div class="vps-step">
+          <h2 class="vps-step__title" data-i18n="vps.step1.title">1. Generate your SSH key</h2>
+          <p class="vps-step__body" data-i18n="vps.step1.body">
+            JHT keeps the private key on this PC, never in the cloud.
+          </p>
+          <div class="vps-step__row">
+            <label class="vps-step__label" for="vps-passphrase" data-i18n="vps.step1.passphraseLabel">Passphrase (optional)</label>
+            <input type="password" id="vps-passphrase" class="vps-step__input" autocomplete="new-password" />
+          </div>
+          <p class="vps-step__hint" data-i18n="vps.step1.passphraseHint">
+            Leave empty for no passphrase.
+          </p>
+          <div class="vps-step__actions">
+            <button class="btn btn--secondary" id="btn-vps-generate-key" data-i18n="vps.step1.generate">
+              Generate key
+            </button>
+          </div>
+        </div>
+
+        <div class="vps-step" id="vps-step2" hidden>
+          <h2 class="vps-step__title" data-i18n="vps.step2.title">2. Create the VPS on Hetzner</h2>
+          <p class="vps-step__body" data-i18n="vps.step2.body">
+            Open the Hetzner console, pick CPX22, paste the public key.
+          </p>
+          <label class="vps-step__label" for="vps-pubkey" data-i18n="vps.step2.pubkeyLabel">Public key</label>
+          <textarea id="vps-pubkey" class="vps-step__textarea" readonly rows="3"></textarea>
+          <div class="vps-step__actions">
+            <button class="btn btn--secondary" id="btn-vps-copy-pubkey" data-i18n="vps.step2.copy">
+              Copy public key
+            </button>
+            <button class="btn btn--ghost" id="btn-vps-open-hetzner" data-i18n="vps.step2.openHetzner">
+              Open Hetzner console
+            </button>
+          </div>
+        </div>
+
+        <div class="vps-step" id="vps-step3" hidden>
+          <h2 class="vps-step__title" data-i18n="vps.step3.title">3. Paste the server IP</h2>
+          <label class="vps-step__label" for="vps-ip" data-i18n="vps.step3.ipLabel">Server IPv4</label>
+          <input type="text" id="vps-ip" class="vps-step__input" data-i18n-placeholder="vps.step3.ipPlaceholder" placeholder="e.g. 5.6.7.8" inputmode="numeric" />
+          <div class="vps-step__actions">
+            <button class="btn btn--primary" id="btn-vps-connect" data-i18n="vps.step3.connect" disabled>
+              Connect & install
+            </button>
+          </div>
+          <p class="vps-step__status" id="vps-status" hidden></p>
+          <pre class="vps-step__log" id="vps-install-log" hidden></pre>
+        </div>
+
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-vps-back" data-i18n="vps.back">
+            Back
+          </button>
+          <button class="btn btn--primary" id="btn-vps-continue" data-i18n="vps.continue" disabled>
+            Continue
+          </button>
+        </div>
+      </section>
+
       <!-- Step 2: setup / checklist -->
       <section class="step step--centered" id="step-setup" data-step="setup" hidden>
         <h1 class="step__title" data-i18n="setup.title">Setup</h1>
