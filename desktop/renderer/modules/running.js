@@ -45,11 +45,27 @@ const _runningLog = (typeof window !== 'undefined' && window.jhtLog && window.jh
   : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 
 export async function startTeam() {
-  _runningLog.info('startTeam.click', { location: state.location, starting: state.starting })
   if (state.starting) {
     _runningLog.warn('startTeam.already-starting')
     return
   }
+  // state.location e' in-memory e si perde ad ogni restart Electron.
+  // Le preferences su disco invece persistono. Se la location manca
+  // dallo state ma e' nelle prefs (VPS scelta in setup precedente),
+  // caricala prima di decidere il ramo — sennò il restart cade
+  // sempre sul Local path (default undefined).
+  if (!state.location && window.prefsApi?.get) {
+    try {
+      const saved = await window.prefsApi.get('location')
+      if (saved === 'local' || saved === 'vps') {
+        state.location = saved
+        _runningLog.info('startTeam.location-restored-from-prefs', { location: saved })
+      }
+    } catch (e) {
+      _runningLog.warn('startTeam.prefs-read-failed', { err: String(e?.message || e) })
+    }
+  }
+  _runningLog.info('startTeam.click', { location: state.location, starting: state.starting })
   // VPS mode: il team gira sulla VPS, non sul Mac. Il container li' si
   // e' gia' auto-pairing-ato via pairing token salvato da install.sh.
   // Il "Start team" sul Mac NON deve scaricare payload + spawn container
