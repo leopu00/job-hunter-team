@@ -175,10 +175,11 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/2026-05-01-bridge-and-token-monitoring.md`.
 - **Discovery:** the CLI subscription logs already contain weighted token counts per response, fresher than the provider /usage endpoint. Empirical calibration on Kimi K2 Plan: 1 % rate budget ≈ 30 kT weighted. Per-agent attribution works via `state.json.custom_title` regex (Kimi) or path naming (Claude / Codex).
 - **Observed asymmetry:** in 46 min of work the Scout consumed 1083 kT vs 125 kT for the Capitano (7×). Today the throttle is global ("everyone +30s pause"); the right move is per-agent.
-- **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):**
-  - Token-meter `WINDOW = since reset_at` instead of fixed 5 h (current cumulative ratio is inflated)
-  - Promote token-meter to a persistent service (singleton + autorestart) alongside the bridge
-  - Bridge state file V7 exposes `per_agent_rate` (kT/min, 60 s rolling)
+- **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):** ✅ **DONE 2026-05-13** (commits 924c93bd…da74e3bd on dev3)
+  - ✅ Token-meter `WINDOW = since reset_at` instead of fixed 5 h — `compute_window_start_ts` reads `last_reset_at_unix` from bridge state file (V7), three-level fallback (epoch → HH:MM → now-5h)
+  - ✅ Persistent service — `shared/skills/token-meter.py` has singleton PID lock + `/proc/cmdline` check; `shared/skills/token-meter-control.sh` start|stop|status|restart; integrated in `.launcher/start-agent.sh` (ROLE=token-meter) + CLI `cli/src/commands/team/start.js` + web `web/app/api/team/start-all/route.ts`
+  - ✅ State file `$JHT_HOME/logs/token-meter-state.json` exposes `ratio.ema_kt_per_pct` + `per_agent[<name>].rate_kt_per_min_60s` + `idle_seconds` + `window_source`; consumed by `web/app/api/tokens/status/route.ts`
+  - ✅ Shared lib `shared/skills/token_metrics_lib.py` (read_kimi_events, parse_session_to_agent, billing_weighted, aggregate, rolling_rate, rolling_rate_per_agent) — `token-meter.py`, `token-by-agent-plot.py`, `token-by-agent-rate.py` are now thin wrappers
 - **Tier 3 — dedicated session (~1 day):**
   - `throttle-controller.py`: deterministic (no LLM), reads state every 30 s, computes `error = actual - target_per_agent`, emits `[THROTTLE @<agent> ±Ns]` to the Capitano
   - Capitano forwards to agents; agents honour the delta in their loop sleep

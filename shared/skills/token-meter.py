@@ -28,8 +28,12 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import token_metrics_lib as tlib  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_SESSIONS = JHT_HOME / ".kimi" / "sessions"
@@ -38,10 +42,151 @@ CLAUDE_PROJECTS = JHT_HOME / ".claude" / "projects"
 BRIDGE_STATE = JHT_HOME / "logs" / "sentinel-bridge-state.json"
 JSONL_DATA = JHT_HOME / "logs" / "sentinel-data.jsonl"
 CSV_OUT = JHT_HOME / "logs" / "token-meter.csv"
+STATE_OUT = JHT_HOME / "logs" / "token-meter-state.json"
+PID_FILE = JHT_HOME / "logs" / "token-meter.pid"
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 
 WINDOW_HOURS = 5.0
 INTERVAL_S = 30
+
+# Step 4: rolling window per il rate per-agente. 60s come da TODO Step 4.
+# Stesso win usato in token-by-agent-rate.py (default 120s) ma più reattivo:
+# qui ci interessa "chi sta tirando ADESSO", non il trend di 2 minuti.
+PER_AGENT_ROLL_WIN_S = 60.0
+
+# Calibration EMA (Step 3): il ratio weighted/pct varia con la quantizzazione
+# del provider (kimi/codex/claude misurano usage_percent come int). Per dare
+# un valore stabile usabile dalla UI dobbiamo aggregare più sample:
+#   • buffer delle ultime N coppie (pct, weighted)
+#   • ratio puntuale = Δweighted / Δpct, considerato SOLO quando |Δpct| ≥ 1
+#     (sotto 1% siamo nel rumore di quantizzazione)
+#   • EMA(α=0.3) smussa burst momentanei senza ritardare il rientro a regime
+CALIB_BUFFER_MAX = 32                 # ~16 min a 30s/tick
+CALIB_MIN_DELTA_PCT = 1.0             # soglia anti-quantizzazione
+CALIB_EMA_ALPHA = 0.3                 # come da TODO Step 3
+CALIB_MIN_DELTA_WEIGHTED = 100.0      # ignora pairs con Δw assurdamente piccolo
+
+
+class RatioCalibrator:
+    """Tiene il buffer (ts, pct, weighted) e calcola un ratio EMA stabile.
+
+    Invariant: i sample sono inseriti monotonamente crescenti in ts. Il buffer
+    è una deque con maxlen, quindi i sample vecchi cadono naturalmente.
+    """
+
+    def __init__(self, alpha=CALIB_EMA_ALPHA, min_delta_pct=CALIB_MIN_DELTA_PCT,
+                 min_delta_weighted=CALIB_MIN_DELTA_WEIGHTED, maxlen=CALIB_BUFFER_MAX):
+        self.alpha = alpha
+        self.min_delta_pct = min_delta_pct
+        self.min_delta_weighted = min_delta_weighted
+        self.buffer: deque[tuple[float, float, float]] = deque(maxlen=maxlen)
+        self.ema: float | None = None
+        self.last_sample_ratio: float | None = None  # ratio puntuale ultimo confronto
+        self.calibrations: int = 0                    # quante volte abbiamo updato l'EMA
+
+    def observe(self, ts, pct, weighted):
+        """Aggiunge un sample e, se possibile, aggiorna l'EMA.
+
+        Ritorna dict con info diagnostiche: {ratio_instant, ratio_ema, calibrated_this_tick}.
+        """
+        out = {
+            "ratio_instant": None,
+            "ratio_ema": self.ema,
+            "calibrated_this_tick": False,
+        }
+
+        # Reset detect: se il pct cala di > 30 punti rispetto all'ultimo
+        # sample, il provider ha resettato la finestra. L'EMA precedente non
+        # è più valida (Δw del prossimo step sarà negativo o sballato).
+        if self.buffer:
+            _, prev_pct, _ = self.buffer[-1]
+            if pct < prev_pct - 30:
+                self.buffer.clear()
+                self.ema = None
+                self.last_sample_ratio = None
+                self.calibrations = 0
+
+        # Cerca il sample più vecchio nel buffer con Δpct sufficiente.
+        chosen = None
+        for old_ts, old_pct, old_w in self.buffer:
+            dp = pct - old_pct
+            if dp >= self.min_delta_pct:
+                chosen = (old_ts, old_pct, old_w, dp)
+                break
+
+        if chosen is not None and weighted is not None:
+            _, _, old_w, dp = chosen
+            dw = weighted - old_w
+            if dw >= self.min_delta_weighted:
+                ratio = dw / dp
+                self.last_sample_ratio = ratio
+                out["ratio_instant"] = ratio
+                if self.ema is None:
+                    self.ema = ratio
+                else:
+                    self.ema = self.alpha * ratio + (1.0 - self.alpha) * self.ema
+                self.calibrations += 1
+                out["ratio_ema"] = self.ema
+                out["calibrated_this_tick"] = True
+
+        self.buffer.append((float(ts), float(pct), float(weighted or 0)))
+        return out
+
+
+def write_state_atomic(path, payload):
+    """Scrive `payload` come JSON in `path` con tmp + os.replace.
+
+    Necessario perché il consumer (web/api/tokens/status) potrebbe leggere
+    a metà write se non fossimo atomici.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, default=str), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+# ── Singleton lock ──────────────────────────────────────────────────────
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _pid_is_token_meter(pid):
+    """True se /proc/<pid>/cmdline contiene 'token-meter.py'. Su platform
+    senza /proc (mac) ritorna True se _pid_alive — best-effort."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            cmdline = f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+        return "token-meter.py" in cmdline
+    except (FileNotFoundError, OSError, ProcessLookupError):
+        # /proc non disponibile (es. macOS): non possiamo distinguere PID
+        # riciclato. Accettiamo come "vivo" se kill(0) passa.
+        return _pid_alive(pid)
+
+
+def acquire_singleton_lock():
+    """Esci se un altro token-meter è già vivo (PID file + cmdline check).
+
+    Stesso pattern del sentinel-bridge. Se trova un PID vivo che NON è un
+    token-meter (PID riciclato), sovrascrive il file.
+    """
+    try:
+        if PID_FILE.exists():
+            try:
+                old_pid = int(PID_FILE.read_text(encoding="utf-8").strip() or "0")
+            except ValueError:
+                old_pid = 0
+            if old_pid and old_pid != os.getpid() and _pid_is_token_meter(old_pid):
+                print(f"[token-meter] altra istanza viva (pid={old_pid}), exit", flush=True)
+                sys.exit(0)
+        PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def read_active_provider():
@@ -61,57 +206,88 @@ def read_bridge_state():
         return None
 
 
+# Finestra rate-limit per provider (ore). Tutti i provider supportati hanno
+# rolling window di 5h ma teniamo la mappa esplicita per provider futuri.
+PROVIDER_WINDOW_HOURS = {
+    "kimi": 5.0,
+    "moonshot": 5.0,
+    "claude": 5.0,
+    "anthropic": 5.0,
+    "openai": 5.0,
+    "codex": 5.0,
+}
+
+
+def _parse_reset_hhmm(reset_str, now_local):
+    """Converte "HH:MM" del bridge in datetime locale del prossimo reset.
+
+    Il bridge formatta reset_at come HH:MM in local TZ (vedi _iso_to_hhmm in
+    sentinel-bridge.py). Per disambiguare oggi vs domani, se l'orario è
+    già passato lo proiettiamo al giorno successivo.
+
+    Ritorna datetime aware in TZ locale, o None se la stringa non è valida.
+    """
+    if not isinstance(reset_str, str) or ":" not in reset_str:
+        return None
+    try:
+        hh, mm = reset_str.split(":", 1)
+        h, m = int(hh), int(mm)
+        if not (0 <= h < 24 and 0 <= m < 60):
+            return None
+    except ValueError:
+        return None
+    candidate = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
+    if candidate < now_local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def compute_window_start_ts(provider, bridge_state, now=None):
+    """Determina window_start come timestamp UNIX.
+
+    Strategy:
+      1. Se bridge_state ha `last_reset_at_unix` (epoch UTC), ancora la
+         window a `reset_at - WINDOW_HOURS(provider)` — coerente col rolling
+         window che il provider usa lato server. Epoch è preferito perché
+         non ambiguo su mezzanotte / rolling drift.
+      2. Fallback HH:MM: parse `last_reset_at` come "prossimo HH:MM nel
+         futuro". Usato per backward-compat con bridge < V7 stato file.
+      3. Fallback graceful finale: `now - WINDOW_HOURS` (comportamento PoC).
+
+    Ritorna (window_start_ts, source) dove source ∈ {"reset_at_unix",
+    "reset_at_hhmm", "now"} per logging/diagnostica.
+    """
+    if now is None:
+        now = datetime.now().astimezone()
+    win_h = PROVIDER_WINDOW_HOURS.get(provider, WINDOW_HOURS)
+
+    if bridge_state:
+        epoch = bridge_state.get("last_reset_at_unix")
+        if isinstance(epoch, (int, float)) and epoch > 0:
+            return epoch - win_h * 3600.0, "reset_at_unix"
+
+        reset_dt = _parse_reset_hhmm(bridge_state.get("last_reset_at"), now)
+        if reset_dt is not None:
+            window_start = reset_dt - timedelta(hours=win_h)
+            return window_start.timestamp(), "reset_at_hhmm"
+
+    window_start = now - timedelta(hours=win_h)
+    return window_start.timestamp(), "now"
+
+
 # ── Provider readers ─────────────────────────────────────────────────────
 
 
 def read_kimi_tokens(window_start_ts):
-    """Somma token_usage da tutti i wire.jsonl Kimi nella finestra.
+    """Thin wrapper su token_metrics_lib: legge eventi Kimi e aggrega.
 
-    Ritorna dict {input_other, output, input_cache_read, input_cache_creation,
-    events, sessions, by_session}.
+    Ritorna (totals, by_session) per backward-compat con la firma originale.
+    totals contiene anche `weighted` precalcolato e `events`/`sessions`.
     """
-    out = {
-        "input_other": 0, "output": 0,
-        "input_cache_read": 0, "input_cache_creation": 0,
-        "events": 0, "sessions": 0,
-    }
-    by_session = {}
-    if not KIMI_SESSIONS.exists():
-        return out, by_session
-
-    for wire in KIMI_SESSIONS.rglob("wire.jsonl"):
-        sess = wire.parent.name
-        try:
-            with wire.open() as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        e = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    ts = e.get("timestamp")
-                    if not isinstance(ts, (int, float)):
-                        continue
-                    if ts < window_start_ts:
-                        continue
-                    msg = e.get("message") or {}
-                    pl = msg.get("payload") or {}
-                    tu = pl.get("token_usage")
-                    if not isinstance(tu, dict):
-                        continue
-                    for k in ("input_other", "output", "input_cache_read", "input_cache_creation"):
-                        v = tu.get(k, 0)
-                        if isinstance(v, (int, float)):
-                            out[k] += v
-                    out["events"] += 1
-                    by_session.setdefault(sess, 0)
-                    by_session[sess] += tu.get("input_other", 0) + tu.get("output", 0)
-        except OSError:
-            continue
-    out["sessions"] = len(by_session)
-    return out, by_session
+    events = tlib.read_kimi_events(window_start_ts, sessions_root=KIMI_SESSIONS)
+    agg = tlib.aggregate(events)
+    totals = dict(agg["totals"])
+    return totals, agg["by_session"]
 
 
 def read_claude_tokens(window_start_ts):
@@ -211,58 +387,59 @@ def read_codex_tokens(window_start_ts):
 
 
 # ── Billing weighting ────────────────────────────────────────────────────
-
-CACHE_READ_WEIGHT = 0.1     # cache hit costa ~10% del normale
-CACHE_CREATION_WEIGHT = 1.25  # cache creation costa ~25% in più
-
+# Pesi e formule centralizzate in token_metrics_lib.billing_weighted.
+# Mantenuti come thin alias per leggibilità del codice locale.
 
 def kimi_weighted(t):
-    return (
-        t["input_other"] + t["output"]
-        + t["input_cache_read"] * CACHE_READ_WEIGHT
-        + t["input_cache_creation"] * CACHE_CREATION_WEIGHT
-    )
+    return tlib.billing_weighted(t, "kimi")
 
 
 def claude_weighted(t):
-    return (
-        t["input_tokens"] + t["output_tokens"]
-        + t["cache_read_input_tokens"] * CACHE_READ_WEIGHT
-        + t["cache_creation_input_tokens"] * CACHE_CREATION_WEIGHT
-    )
+    return tlib.billing_weighted(t, "claude")
 
 
 def codex_weighted(t):
-    # OpenAI: cached_input ≈ 1/2 di input
-    return (
-        t["input_tokens"] + t["output_tokens"] + t["reasoning_output_tokens"]
-        + t["cached_input_tokens"] * 0.5
-    )
+    return tlib.billing_weighted(t, "openai")
 
 
 # ── Main loop ────────────────────────────────────────────────────────────
 
 
 def main():
+    acquire_singleton_lock()
     provider = read_active_provider()
-    print(f"[token-meter] start provider={provider} interval={INTERVAL_S}s window={WINDOW_HOURS}h",
+    print(f"[token-meter] pid={os.getpid()} provider={provider} interval={INTERVAL_S}s window={WINDOW_HOURS}h",
           flush=True)
     print(f"[token-meter] CSV={CSV_OUT}", flush=True)
+    print(f"[token-meter] STATE={STATE_OUT}", flush=True)
 
     CSV_OUT.parent.mkdir(parents=True, exist_ok=True)
     if not CSV_OUT.exists():
         with CSV_OUT.open("w") as f:
             f.write("ts,provider,bridge_pct,bridge_proj,bridge_status,events,"
                     "in_raw,out_raw,cache_read_raw,cache_creation_raw,"
-                    "weighted,ratio_tokens_per_pct,sessions\n")
+                    "weighted,ratio_tokens_per_pct,ratio_ema_tokens_per_pct,sessions\n")
+
+    calibrator = RatioCalibrator()
 
     while True:
         now = datetime.now(timezone.utc)
-        window_start_ts = (now - timedelta(hours=WINDOW_HOURS)).timestamp()
+        # Step 2: la finestra di aggregazione è ancorata al reset_at del bridge
+        # quando disponibile, così il ratio cumulativo (weighted/bridge_pct)
+        # è coerente con la stessa finestra che il provider sta misurando.
+        # Senza reset_at, fallback graceful: now-5h come nel PoC.
+        state = read_bridge_state() or {}
+        window_start_ts, win_source = compute_window_start_ts(provider, state, now=datetime.now().astimezone())
 
+        kimi_events: list = []
         if provider == "kimi":
-            totals, by_sess = read_kimi_tokens(window_start_ts)
-            weighted = kimi_weighted(totals) if totals["events"] else 0
+            # Per il per-agent rolling rate ci servono gli events grezzi: li
+            # leggiamo una volta sola e aggrego sopra.
+            kimi_events = tlib.read_kimi_events(window_start_ts, sessions_root=KIMI_SESSIONS)
+            agg = tlib.aggregate(kimi_events)
+            totals = dict(agg["totals"])
+            by_sess = agg["by_session"]
+            weighted = totals["weighted"] if totals["events"] else 0
             in_raw, out_raw = totals["input_other"], totals["output"]
             cache_r, cache_c = totals["input_cache_read"], totals["input_cache_creation"]
         elif provider == "claude":
@@ -276,23 +453,34 @@ def main():
             in_raw, out_raw = totals["input_tokens"], totals["output_tokens"]
             cache_r, cache_c = totals["cached_input_tokens"], 0
 
-        state = read_bridge_state() or {}
         bridge_pct = state.get("last_usage")
         bridge_proj = state.get("last_projection")
         bridge_status = state.get("last_status") or ""
         bridge_tick = state.get("last_tick_at", "")[:19]
+        bridge_reset = state.get("last_reset_at") or "?"
 
         ratio = (weighted / bridge_pct) if (bridge_pct and bridge_pct > 0 and weighted > 0) else None
 
+        # Step 3: aggiorna l'EMA della calibrazione (incrementale, robusta
+        # alla quantizzazione integer del bridge_pct).
+        calib = (
+            calibrator.observe(now.timestamp(), bridge_pct, weighted)
+            if (isinstance(bridge_pct, (int, float)) and bridge_pct > 0)
+            else {"ratio_instant": None, "ratio_ema": calibrator.ema, "calibrated_this_tick": False}
+        )
+        ratio_ema = calibrator.ema
+
         ratio_str = f"{ratio/1000:.2f}kT/1%" if ratio else "n/a"
+        ema_str = f"{ratio_ema/1000:.2f}" if ratio_ema else "n/a"
         line = (
             f"[{now.strftime('%H:%M:%S')}] {provider:6} "
             f"bridge={str(bridge_pct):>3}% proj={str(bridge_proj):>6} ({bridge_status:>12}) "
-            f"@ {bridge_tick} | "
+            f"reset={bridge_reset} win={win_source} | "
             f"events={totals['events']:>3} sess={totals['sessions']} "
             f"in={in_raw:>7,} out={out_raw:>5,} "
             f"cache_r={cache_r:>9,} cache_w={cache_c:>5,} "
-            f"weighted={int(weighted):>8,} | ratio={ratio_str}"
+            f"weighted={int(weighted):>8,} | ratio={ratio_str} ema={ema_str}kT/1% "
+            f"calib={calibrator.calibrations}"
         )
         print(line, flush=True)
 
@@ -300,8 +488,65 @@ def main():
             f.write(
                 f"{now.isoformat()},{provider},{bridge_pct or ''},{bridge_proj or ''},"
                 f"{bridge_status},{totals['events']},{in_raw},{out_raw},{cache_r},{cache_c},"
-                f"{int(weighted)},{ratio or ''},{totals['sessions']}\n"
+                f"{int(weighted)},{ratio or ''},{ratio_ema or ''},{totals['sessions']}\n"
             )
+
+        # Step 4: per-agent rolling rate sugli ultimi 60s. Solo Kimi: per
+        # claude/codex non abbiamo ancora un mapping session→agent affidabile.
+        per_agent_out: dict = {}
+        if provider == "kimi" and kimi_events:
+            per_agent_raw = tlib.rolling_rate_per_agent(
+                kimi_events, PER_AGENT_ROLL_WIN_S, now_ts=now.timestamp()
+            )
+            for agent, info in per_agent_raw.items():
+                rate_tpm = info["rate_tokens_per_min"]
+                last_evt = info["last_event_at"]
+                per_agent_out[agent] = {
+                    "rate_tokens_per_min_60s": rate_tpm,
+                    "rate_kt_per_min_60s": rate_tpm / 1000.0,
+                    "weighted_60s": info["weighted_60s"],
+                    "last_event_at": (
+                        datetime.fromtimestamp(last_evt, tz=timezone.utc).isoformat()
+                        if last_evt else None
+                    ),
+                    "idle_seconds": (
+                        (now.timestamp() - last_evt) if last_evt else None
+                    ),
+                }
+
+        state_payload = {
+            "version": 1,
+            "updated_at": now.isoformat(),
+            "provider": provider,
+            "window_hours": PROVIDER_WINDOW_HOURS.get(provider, WINDOW_HOURS),
+            "window_source": win_source,
+            "bridge": {
+                "usage_pct": bridge_pct,
+                "projection": bridge_proj,
+                "status": bridge_status,
+                "reset_at": bridge_reset,
+                "last_tick_at": state.get("last_tick_at"),
+            },
+            "tokens": {
+                "events": totals["events"],
+                "sessions": totals["sessions"],
+                "input_raw": in_raw,
+                "output_raw": out_raw,
+                "cache_read_raw": cache_r,
+                "cache_creation_raw": cache_c,
+                "weighted_total": int(weighted),
+            },
+            "ratio": {
+                "instant_tokens_per_pct": calib["ratio_instant"],
+                "ema_tokens_per_pct": ratio_ema,
+                "ema_kt_per_pct": (ratio_ema / 1000.0) if ratio_ema else None,
+                "alpha": CALIB_EMA_ALPHA,
+                "calibrations": calibrator.calibrations,
+            },
+            "per_agent": per_agent_out,
+            "per_agent_rolling_window_s": PER_AGENT_ROLL_WIN_S,
+        }
+        write_state_atomic(STATE_OUT, state_payload)
 
         time.sleep(INTERVAL_S)
 
