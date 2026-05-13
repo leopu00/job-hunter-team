@@ -2,6 +2,9 @@
 // in renderer/index.html).
 export const STEP_LANGUAGE = 'language'
 export const STEP_WELCOME = 'welcome'
+export const STEP_LOCATION = 'location'
+export const STEP_SUPABASE_LOGIN = 'supabase-login'
+export const STEP_VPS_PROVISION = 'vps-provision'
 export const STEP_SETUP = 'setup'
 export const STEP_CONTAINER = 'container'
 export const STEP_SUBSCRIPTION_NOTICE = 'subscription-notice'
@@ -11,6 +14,13 @@ export const STEP_PROVIDER_INSTALL = 'provider-install'
 export const STEP_PROVIDER_LOGIN = 'provider-login'
 export const STEP_READY = 'ready'
 export const STEP_RUNNING = 'running'
+
+// User-chosen host where the team will live. Picked at onboarding,
+// drives wizard branching: 'vps' surfaces the Hetzner provisioning
+// step (gap 2 — not implemented yet, falls back to local container
+// for now); 'local' keeps the existing Docker-on-laptop path.
+export const LOCATION_LOCAL = 'local'
+export const LOCATION_VPS = 'vps'
 
 export const PROVIDER_OPTIONS = [
   { id: 'claude', label: 'Claude Code', vendor: 'Anthropic · Claude Pro/Max' },

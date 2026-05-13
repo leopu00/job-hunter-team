@@ -74,6 +74,7 @@ MIN_NODE_MAJOR=22
 # ── Argomenti ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
 DRY_RUN=0
+PAIRING_TOKEN=""
 # Position-based parser: gestisce sia flag standalone (--no-docker) sia
 # coppie key/value (--branch dev-1). Non usiamo `for arg in "$@"` perche'
 # perde il legame tra --branch e il valore successivo.
@@ -91,6 +92,17 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --branch=*) BRANCH="${1#*=}"; shift ;;
+    --pairing-token)
+      # Token opaco generato dalla desktop app dalla session Supabase.
+      # Decisione lockata 2026-05-13 #4: l'app passa qui il token, install.sh
+      # lo salva in $HOME/.jht/.pairing-token (perms 0600) e salta il wizard
+      # interattivo (no `jht cloud login` da rifare dentro la VPS). Il
+      # container lo legge al primo run via `jht cloud pair` (gap futuro).
+      [ -n "${2:-}" ] || { printf "%s richiede un argomento\n" "$1" >&2; exit 2; }
+      PAIRING_TOKEN="$2"
+      shift 2
+      ;;
+    --pairing-token=*) PAIRING_TOKEN="${1#*=}"; shift ;;
     -h|--help)
       sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -752,12 +764,41 @@ final_message() {
   printf "\n"
 }
 
+save_pairing_token() {
+  # Salva il pairing token in $HOME/.jht/.pairing-token con perms 0600.
+  # Il container lo legge al primo run e fa lo scambio refresh_token →
+  # access_token Supabase prima di chiamare /auth/v1/user. Vedi
+  # cli/src/commands/cloud.js handlePair (task futuro).
+  [ -z "$PAIRING_TOKEN" ] && return 0
+  local jht_home="$HOME/.jht"
+  local token_file="$jht_home/.pairing-token"
+  run mkdir -p "$jht_home"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: salverei pairing token in $token_file"
+    return 0
+  fi
+  umask 077
+  printf '%s' "$PAIRING_TOKEN" > "$token_file"
+  chmod 600 "$token_file" 2>/dev/null || true
+  ok "Pairing token salvato in $token_file (mode 0600)"
+}
+
 maybe_onboard() {
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dry-run: salto il wizard di onboarding."
     return 0
   fi
   if [ "${JHT_SKIP_ONBOARD:-0}" = "1" ]; then
+    return 0
+  fi
+  if [ -n "$PAIRING_TOKEN" ]; then
+    # Pairing token presente → l'utente sta provisionando la VPS dal
+    # desktop launcher (decisione lockata 2026-05-13 #4). Niente wizard
+    # interattivo: il container far\u00E0 il pair non-interattivo al primo run
+    # tramite il file .pairing-token. L'utente completer\u00E0 il provider
+    # login (Claude/Codex/Kimi) dal terminale embedded del desktop.
+    info "Pairing token presente: skip wizard interattivo."
+    info "Il container completer\u00E0 il pairing al primo avvio."
     return 0
   fi
 
@@ -810,6 +851,7 @@ main() {
   else
     main_native
   fi
+  save_pairing_token
   final_message
   maybe_onboard
 }
