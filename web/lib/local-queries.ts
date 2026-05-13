@@ -8,6 +8,7 @@ import type {
   Company,
   ApplicationWithPosition,
   Application,
+  PendingMessage,
 } from './types'
 
 // Helpers per convertire ID integer -> string (compatibilita' con tipi TS)
@@ -409,6 +410,62 @@ export function getCriticoStatsLocal(ws: string) {
     if (row.critic_verdict === 'REJECT') grouped[key].reject++
   }
   return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+}
+
+// ── Pending user messages (V5) ──────────────────────────────────────
+// Restituisce i messaggi che l'utente deve ancora ack-are: arrivati via
+// fallback web (Telegram down/non configurato) e non ancora visti.
+// Quelli consegnati a Telegram non finiscono qui: l'utente li ha gia'
+// visti sul telefono, non serve duplicarli in dashboard.
+export function getPendingMessagesLocal(ws: string, limit = 20): PendingMessage[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT id, agent, body, kind, related_position_id,
+           delivered_via, delivered_at, acknowledged_at,
+           user_reply, user_reply_at, agent_seen_reply_at, created_at
+    FROM pending_user_messages
+    WHERE delivered_via = 'web' AND acknowledged_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(limit) as any[]
+
+  return rows.map((r) => ({
+    id: sid(r.id),
+    agent: r.agent,
+    body: r.body,
+    kind: r.kind,
+    related_position_id: r.related_position_id != null ? sid(r.related_position_id) : null,
+    delivered_via: r.delivered_via,
+    delivered_at: r.delivered_at,
+    acknowledged_at: r.acknowledged_at,
+    user_reply: r.user_reply,
+    user_reply_at: r.user_reply_at,
+    agent_seen_reply_at: r.agent_seen_reply_at,
+    created_at: r.created_at,
+  }))
+}
+
+export function ackPendingMessageLocal(ws: string, id: string): boolean {
+  const db = getDb(ws)
+  const result = db.prepare(`
+    UPDATE pending_user_messages
+    SET acknowledged_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND acknowledged_at IS NULL
+  `).run(id)
+  return result.changes > 0
+}
+
+export function replyPendingMessageLocal(ws: string, id: string, reply: string): boolean {
+  const db = getDb(ws)
+  // Risposta + ack atomico: una reply implica visione.
+  const result = db.prepare(`
+    UPDATE pending_user_messages
+    SET user_reply = ?,
+        user_reply_at = CURRENT_TIMESTAMP,
+        acknowledged_at = COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
+    WHERE id = ?
+  `).run(reply, id)
+  return result.changes > 0
 }
 
 // ── Application stats ───────────────────────────────────────────────
