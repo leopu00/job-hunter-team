@@ -71,21 +71,49 @@ try {
   log.warn('keyring.unavailable', { err })
 }
 
-// Stesso pattern di desktop/auth/keyring-storage.js: in dev mode
-// (unsigned Electron) il macOS Keychain re-prompta l'utente ad ogni
-// accesso → fallback a in-memory Map. In packaged (DMG firmato) il
-// keychain riconosce l'app e prompta una sola volta con "Always Allow".
-function _isDevMode() {
-  if (process.env.JHT_DESKTOP_DEV_STORAGE === 'memory') return true
-  if (process.env.JHT_DESKTOP_DEV_STORAGE === 'keychain') return false
-  try {
-    const { app } = require('electron')
-    return !app.isPackaged
-  } catch {
-    return false
+// Backend storage scelto a runtime: stesso pattern di
+// desktop/auth/keyring-storage.js (vedi commento dettagliato in quel
+// file). In sync il payload e' un blob JSON con metadata sync (salt,
+// last_sync, ecc.) — niente segreti grezzi qui (le chiavi crypto
+// derivate dalla passphrase NON vengono persistite, solo verify blob).
+const _path = require('node:path')
+const _fs = require('node:fs')
+
+function _getElectronApp() {
+  try { return require('electron').app } catch { return null }
+}
+function _chooseBackend() {
+  const override = (process.env.JHT_DESKTOP_DEV_STORAGE || '').toLowerCase()
+  if (override === 'memory' || override === 'file' || override === 'keychain') {
+    return override
   }
+  const app = _getElectronApp()
+  if (!app) return 'keychain'
+  if (!app.isPackaged) return 'memory'
+  if (process.env.JHT_PACKAGED_SIGNED === '1') return 'keychain'
+  return 'file'
 }
 const _memSyncStore = new Map()
+function _filePath(account) {
+  const app = _getElectronApp()
+  const base = app ? app.getPath('userData') : require('node:os').tmpdir()
+  return _path.join(base, 'sync', `${account}.txt`)
+}
+function _fileRead(account) {
+  try { return _fs.readFileSync(_filePath(account), 'utf8') }
+  catch (err) { if (err?.code === 'ENOENT') return null; throw err }
+}
+function _fileWrite(account, value) {
+  const p = _filePath(account)
+  try { _fs.mkdirSync(_path.dirname(p), { recursive: true, mode: 0o700 }) } catch { /* ignore */ }
+  const tmp = p + '.tmp'
+  _fs.writeFileSync(tmp, String(value), { mode: 0o600 })
+  _fs.renameSync(tmp, p)
+}
+function _fileDelete(account) {
+  try { _fs.unlinkSync(_filePath(account)) }
+  catch (err) { if (err?.code === 'ENOENT') return; throw err }
+}
 
 function keyringEntry(account) {
   if (!keyring) throw new Error('Keyring native binding unavailable')
@@ -93,8 +121,12 @@ function keyringEntry(account) {
 }
 
 function safeGetKeychain(account) {
-  if (_isDevMode()) {
+  const backend = _chooseBackend()
+  if (backend === 'memory') {
     return _memSyncStore.has(account) ? _memSyncStore.get(account) : null
+  }
+  if (backend === 'file') {
+    return _fileRead(account)
   }
   try {
     return keyringEntry(account).getPassword()
@@ -107,8 +139,13 @@ function safeGetKeychain(account) {
 }
 
 function safeDeleteKeychain(account) {
-  if (_isDevMode()) {
+  const backend = _chooseBackend()
+  if (backend === 'memory') {
     _memSyncStore.delete(account)
+    return
+  }
+  if (backend === 'file') {
+    _fileDelete(account)
     return
   }
   try {
@@ -138,8 +175,13 @@ function loadMeta(blobType) {
 function saveMeta(blobType, meta) {
   const account = metaAccount(blobType)
   const value = JSON.stringify(meta)
-  if (_isDevMode()) {
+  const backend = _chooseBackend()
+  if (backend === 'memory') {
     _memSyncStore.set(account, value)
+    return
+  }
+  if (backend === 'file') {
+    _fileWrite(account, value)
     return
   }
   keyringEntry(account).setPassword(value)
