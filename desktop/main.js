@@ -1,6 +1,7 @@
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+const log = require('./logger')
 
 // macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
 // that excludes /opt/homebrew/bin and /usr/local/bin. Every spawn/execFile
@@ -252,6 +253,44 @@ async function openRuntimeInBrowser() {
 }
 
 app.whenReady().then(() => {
+  // Inizializza il file logger PRIMA di tutto: cosi' anche gli errori del
+  // boot (payload, runtime manager) finiscono su disco. Path:
+  // app.getPath('userData')/logs/jht-desktop-<ts>.log. Rotation a 10 file.
+  const logInit = log.init(app)
+  log.info('app.ready', {
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    electron: process.versions.electron,
+    node: process.versions.node,
+    chrome: process.versions.chrome,
+    packaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    userData: app.getPath('userData'),
+    logFile: logInit.file,
+    locale: app.getLocale(),
+  })
+
+  // Companycycle: chiudi pulito anche i log quando l'utente esce, cosi' un
+  // crash subito dopo non lascia righe a meta'.
+  app.on('window-all-closed', () => log.info('app.window-all-closed'))
+  app.on('before-quit', () => log.info('app.before-quit'))
+  app.on('will-quit', () => log.info('app.will-quit'))
+
+  // Canale IPC `log:append` — il renderer (wizard, dashboard) puo' mandare
+  // log strutturati che finiscono nello stesso file del main, cosi' un
+  // bug report ha il flow completo (UI step → IPC → modulo backend).
+  // Vedi preload.js → window.jhtLog per l'API esposta al renderer.
+  ipcMain.on('log:append', (event, payload = {}) => {
+    const level = ['debug', 'info', 'warn', 'error'].includes(payload.level)
+      ? payload.level
+      : 'info'
+    const scope = `renderer${payload.scope ? '.' + payload.scope : ''}`
+    const event_ = String(payload.event || 'unknown')
+    const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : undefined
+    log.child(scope)[level](event_, meta)
+  })
+
   payloadDir = path.join(app.getPath('userData'), 'app-payload')
   runtime = createRuntimeManager({
     containerMode: containerRuntime.shouldUseContainer(),
@@ -259,6 +298,13 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('launcher:get-status', () => runtime.getStatus())
+  // Espone il path del log file del main process al renderer (per UI
+  // "Open log folder" e bug reports). Diverso da launcher:get-log-file
+  // che ritorna il log del container runtime.
+  ipcMain.handle('launcher:get-app-log-file', () => ({
+    file: log.getLogFile(),
+    dir: log.getLogDir(),
+  }))
   ipcMain.handle('launcher:inspect-setup', () => runtime.inspectSetup())
   ipcMain.handle('launcher:get-log-file', () => runtime.getLogFile())
   ipcMain.handle('launcher:get-payload-dir', () => ({
