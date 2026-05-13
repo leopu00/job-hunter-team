@@ -95,16 +95,31 @@ export function getActiveCredentials() {
 
 /**
  * Restituisce la configurazione del canale Telegram (se presente).
- * @returns {{ configured: boolean, bot_token?: string, chat_id?: string }}
+ * Schema 2026-05-13 rev2: 3 bot obbligatori sotto `channels.telegram.bots`.
+ * @returns {{ configured: boolean, bots?: { assistente: {bot_token: string, chat_id?: string}, capitano: {bot_token: string, chat_id?: string}, mentor: {bot_token: string, chat_id?: string} } }}
  */
 export function getTelegramChannel() {
   const result = loadConfig();
   if (!result.success) return { configured: false };
 
-  const tg = result.config.channels?.telegram;
-  if (!tg?.bot_token) return { configured: false };
+  const bots = result.config.channels?.telegram?.bots;
+  if (!bots?.assistente?.bot_token || !bots?.capitano?.bot_token || !bots?.mentor?.bot_token) {
+    return { configured: false };
+  }
+  return { configured: true, bots };
+}
 
-  return { configured: true, bot_token: tg.bot_token, chat_id: tg.chat_id };
+/**
+ * Restituisce il singolo bot Telegram per `role`, o null se non configurato.
+ * @param {'assistente'|'capitano'|'mentor'} role
+ * @returns {{ bot_token: string, chat_id?: string } | null}
+ */
+export function getTelegramBot(role) {
+  const result = loadConfig();
+  if (!result.success) return null;
+  const bot = result.config.channels?.telegram?.bots?.[role];
+  if (!bot?.bot_token) return null;
+  return { bot_token: bot.bot_token, chat_id: bot.chat_id };
 }
 
 /**
