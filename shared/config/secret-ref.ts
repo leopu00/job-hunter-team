@@ -36,7 +36,11 @@ export interface SecretExecRef {
   command: string;
 }
 
-export type SecretRef = SecretPlaintext | SecretEnvRef | SecretFileRef | SecretExecRef;
+export type SecretRef =
+  | SecretPlaintext
+  | SecretEnvRef
+  | SecretFileRef
+  | SecretExecRef;
 
 // --- Risoluzione ---
 
@@ -62,7 +66,10 @@ export function resolveSecret(secret: SecretRef | string | undefined): string {
       }
     case "exec":
       try {
-        return execSync(secret.command, { encoding: "utf-8", timeout: 5000 }).trim();
+        return execSync(secret.command, {
+          encoding: "utf-8",
+          timeout: 5000,
+        }).trim();
       } catch {
         return "";
       }
@@ -100,7 +107,8 @@ export function createSecretRef(
  */
 export function describeSecret(secret: SecretRef | string | undefined): string {
   if (!secret) return "non configurato";
-  if (typeof secret === "string") return `plaintext (${secret.slice(0, 8)}****)`;
+  if (typeof secret === "string")
+    return `plaintext (${secret.slice(0, 8)}****)`;
 
   if (secret.type === "plaintext") {
     return `plaintext (${(secret.value ?? "").slice(0, 8)}****)`;

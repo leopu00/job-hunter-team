@@ -15,9 +15,9 @@ import {
 import type { EncryptedPayload } from "./types.js";
 
 const ALGORITHM = "aes-256-gcm";
-const KEY_LENGTH = 32;        // 256 bit
-const IV_LENGTH = 16;         // 128 bit
-const AUTH_TAG_LENGTH = 16;   // 128 bit
+const KEY_LENGTH = 32; // 256 bit
+const IV_LENGTH = 16; // 128 bit
+const AUTH_TAG_LENGTH = 16; // 128 bit
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_DIGEST = "sha512";
 /**
@@ -30,7 +30,7 @@ export function deriveKey(passphrase: string, salt: Buffer): Buffer {
     salt,
     PBKDF2_ITERATIONS,
     KEY_LENGTH,
-    PBKDF2_DIGEST
+    PBKDF2_DIGEST,
   );
 }
 
@@ -78,9 +78,14 @@ export function encrypt(data: unknown, key: Buffer): EncryptedPayload {
  * @returns oggetto JSON decifrato
  * @throws se auth tag non valido o dati corrotti
  */
-export function decrypt<T = unknown>(payload: EncryptedPayload, key: Buffer): T {
+export function decrypt<T = unknown>(
+  payload: EncryptedPayload,
+  key: Buffer,
+): T {
   if (payload.version !== 1 || payload.algorithm !== ALGORITHM) {
-    throw new Error(`Formato payload non supportato: v${payload.version} ${payload.algorithm}`);
+    throw new Error(
+      `Formato payload non supportato: v${payload.version} ${payload.algorithm}`,
+    );
   }
 
   const iv = Buffer.from(payload.iv, "hex");

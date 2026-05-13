@@ -4,8 +4,13 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  t, getLocale, setLocale, getFallbackLocale, detectLocale,
-  addTranslations, resetI18n,
+  t,
+  getLocale,
+  setLocale,
+  getFallbackLocale,
+  detectLocale,
+  addTranslations,
+  resetI18n,
 } from "./i18n.js";
 import { isValidLocale, LOCALES, DEFAULT_LOCALE } from "./types.js";
 import { translations } from "./translations.js";
@@ -95,7 +100,10 @@ describe("t() traduzioni base", () => {
   });
 
   it("usa fallback esplicito se chiave mancante", () => {
-    assert.equal(t("missing.key", { fallback: "valore default" }), "valore default");
+    assert.equal(
+      t("missing.key", { fallback: "valore default" }),
+      "valore default",
+    );
   });
 });
 
@@ -107,8 +115,13 @@ describe("t() interpolazione", () => {
   });
 
   it("sostituisce multiple variabili", () => {
-    addTranslations("it", { "test.hello": "Ciao {name}, hai {count} messaggi" });
-    assert.equal(t("test.hello", { vars: { name: "Leo", count: 3 } }), "Ciao Leo, hai 3 messaggi");
+    addTranslations("it", {
+      "test.hello": "Ciao {name}, hai {count} messaggi",
+    });
+    assert.equal(
+      t("test.hello", { vars: { name: "Leo", count: 3 } }),
+      "Ciao Leo, hai 3 messaggi",
+    );
   });
 
   it("lascia placeholder se variabile mancante", () => {
@@ -138,22 +151,31 @@ describe("t() fallback locale", () => {
 
 describe("t() pluralizzazione", () => {
   it("usa .one per count=1", () => {
-    addTranslations("it", { "items.one": "1 elemento", "items.other": "{count} elementi" });
+    addTranslations("it", {
+      "items.one": "1 elemento",
+      "items.other": "{count} elementi",
+    });
     assert.equal(t("items", { count: 1 }), "1 elemento");
   });
 
   it("usa .other per count!=1", () => {
-    addTranslations("it", { "items.one": "1 elemento", "items.other": "{count} elementi" });
+    addTranslations("it", {
+      "items.one": "1 elemento",
+      "items.other": "{count} elementi",
+    });
     assert.equal(t("items", { count: 5 }), "5 elementi");
   });
 
   it("usa .other per count=0", () => {
-    addTranslations("it", { "items.one": "1 elemento", "items.other": "{count} elementi" });
+    addTranslations("it", {
+      "items.one": "1 elemento",
+      "items.other": "{count} elementi",
+    });
     assert.equal(t("items", { count: 0 }), "0 elementi");
   });
 
   it("fallback a chiave base se plurale non definito", () => {
-    addTranslations("it", { "simple": "semplice" });
+    addTranslations("it", { simple: "semplice" });
     assert.equal(t("simple", { count: 3 }), "semplice");
   });
 });
@@ -174,7 +196,7 @@ describe("addTranslations", () => {
 describe("resetI18n", () => {
   it("ripristina locale e dizionari", () => {
     setLocale("en");
-    addTranslations("it", { "temp": "temporaneo" });
+    addTranslations("it", { temp: "temporaneo" });
     resetI18n();
     assert.equal(getLocale(), "it");
     assert.equal(t("temp"), "temp");
@@ -185,8 +207,12 @@ describe("resetI18n", () => {
 
 describe("translations builtin", () => {
   it("it e en hanno le stesse chiavi nav", () => {
-    const itKeys = Object.keys(translations.it).filter(k => k.startsWith("nav.")).sort();
-    const enKeys = Object.keys(translations.en).filter(k => k.startsWith("nav.")).sort();
+    const itKeys = Object.keys(translations.it)
+      .filter((k) => k.startsWith("nav."))
+      .sort();
+    const enKeys = Object.keys(translations.en)
+      .filter((k) => k.startsWith("nav."))
+      .sort();
     assert.deepEqual(itKeys, enKeys);
   });
 });

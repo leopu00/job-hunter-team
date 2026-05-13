@@ -5,8 +5,8 @@
  * dei messaggi vecchi e li sostituisce con un singolo messaggio system.
  * Il riassunto puo' essere generato via AI o con strategia locale.
  */
-import type { ContextMessage, CompactResult } from './types.js';
-import { estimateMessageTokens } from './types.js';
+import type { ContextMessage, CompactResult } from "./types.js";
+import { estimateMessageTokens } from "./types.js";
 
 /** Callback per generare riassunto via AI */
 export type SummarizeFn = (params: {
@@ -20,15 +20,21 @@ export type SummarizeFn = (params: {
  * e li riduce a bullet point (senza AI).
  */
 function localSummarize(messages: ContextMessage[]): string {
-  const lines: string[] = ['Riassunto conversazione precedente:'];
+  const lines: string[] = ["Riassunto conversazione precedente:"];
   for (const msg of messages) {
-    const prefix = msg.role === 'user' ? 'Utente' : msg.role === 'assistant' ? 'Assistente' : 'Sistema';
-    const text = msg.content.length > 150
-      ? msg.content.slice(0, 147) + '...'
-      : msg.content;
+    const prefix =
+      msg.role === "user"
+        ? "Utente"
+        : msg.role === "assistant"
+          ? "Assistente"
+          : "Sistema";
+    const text =
+      msg.content.length > 150
+        ? msg.content.slice(0, 147) + "..."
+        : msg.content;
     lines.push(`- [${prefix}] ${text}`);
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -56,12 +62,15 @@ function splitForCompaction(
   }
 
   // Mantieni system prompt (primo messaggio se system)
-  const hasSystemPrefix = messages[0]?.role === 'system';
+  const hasSystemPrefix = messages[0]?.role === "system";
   const systemMsg = hasSystemPrefix ? [messages[0]] : [];
   const rest = hasSystemPrefix ? messages.slice(1) : messages;
 
   // Calcola token system
-  const systemTokens = systemMsg.reduce((s, m) => s + estimateMessageTokens(m), 0);
+  const systemTokens = systemMsg.reduce(
+    (s, m) => s + estimateMessageTokens(m),
+    0,
+  );
   const remainingBudget = tokenBudget - systemTokens;
 
   // Mantieni messaggi recenti che entrano nel budget (riserva ~200 token per riassunto)
@@ -113,7 +122,7 @@ export async function compactContext(params: {
     return {
       ok: true,
       compacted: false,
-      reason: 'sotto soglia',
+      reason: "sotto soglia",
       tokensBefore: totalTokens,
       tokensAfter: totalTokens,
       messages,
@@ -126,7 +135,7 @@ export async function compactContext(params: {
     return {
       ok: true,
       compacted: false,
-      reason: 'niente da compattare',
+      reason: "niente da compattare",
       tokensBefore: totalTokens,
       tokensAfter: totalTokens,
       messages,
@@ -137,7 +146,11 @@ export async function compactContext(params: {
   let summary: string;
   try {
     if (summarizeFn) {
-      summary = await summarizeFn({ messages: compact, instructions, maxTokens: 150 });
+      summary = await summarizeFn({
+        messages: compact,
+        instructions,
+        maxTokens: 150,
+      });
     } else {
       summary = localSummarize(compact);
     }
@@ -145,11 +158,14 @@ export async function compactContext(params: {
     summary = localSummarize(compact);
   }
 
-  const summaryMsg: ContextMessage = { role: 'system', content: summary };
-  const resultMessages = [summaryMsg, ...keep.filter((m) => m.role !== 'system' || keep.indexOf(m) > 0)];
+  const summaryMsg: ContextMessage = { role: "system", content: summary };
+  const resultMessages = [
+    summaryMsg,
+    ...keep.filter((m) => m.role !== "system" || keep.indexOf(m) > 0),
+  ];
 
   // Reinserisci system prompt originale se presente
-  if (keep[0]?.role === 'system') {
+  if (keep[0]?.role === "system") {
     resultMessages.unshift(keep[0]);
     // Rimuovi duplicato
     const idx = resultMessages.indexOf(summaryMsg);

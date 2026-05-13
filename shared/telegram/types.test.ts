@@ -4,7 +4,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getSequentialKey, DEFAULT_CONFIG } from "./types.js";
-import type { TelegramBotConfig, InboundMessage, OutboundMessage, BridgeStatus } from "./types.js";
+import type {
+  TelegramBotConfig,
+  InboundMessage,
+  OutboundMessage,
+  BridgeStatus,
+} from "./types.js";
 
 describe("getSequentialKey", () => {
   it("genera chiave con solo chatId", () => {
@@ -106,7 +111,10 @@ describe("BridgeStatus type shape", () => {
 
 describe("TelegramBotConfig type shape", () => {
   it("crea config completa da DEFAULT_CONFIG", () => {
-    const config: TelegramBotConfig = { ...DEFAULT_CONFIG, token: "test:token" };
+    const config: TelegramBotConfig = {
+      ...DEFAULT_CONFIG,
+      token: "test:token",
+    };
     assert.equal(config.token, "test:token");
     assert.equal(config.mode, "polling");
     assert.equal(config.textLimit, 4096);

@@ -28,7 +28,12 @@ export class TeamBridge {
   private totalRequests = 0;
   private eventHandlers = new Set<AssistantEventHandler>();
 
-  constructor(config: Partial<AssistantConfig> & { botToken: string; ownerChatId: string }) {
+  constructor(
+    config: Partial<AssistantConfig> & {
+      botToken: string;
+      ownerChatId: string;
+    },
+  ) {
     this.config = { ...DEFAULT_ASSISTANT_CONFIG, ...config };
   }
 
@@ -40,7 +45,11 @@ export class TeamBridge {
 
   private emit(event: AssistantEvent): void {
     for (const handler of this.eventHandlers) {
-      try { handler(event); } catch { /* mai bloccare su errori di callback */ }
+      try {
+        handler(event);
+      } catch {
+        /* mai bloccare su errori di callback */
+      }
     }
   }
 
@@ -115,13 +124,17 @@ export class TeamBridge {
     const text = this.formatTmuxMessage(msg);
 
     try {
-      execSync(`tmux has-session -t "${session}" 2>/dev/null`, { stdio: "pipe" });
+      execSync(`tmux has-session -t "${session}" 2>/dev/null`, {
+        stdio: "pipe",
+      });
     } catch {
       throw new Error(`Sessione capitano ${session} non attiva`);
     }
 
     // Invio in due step come da protocollo JHT
-    execSync(`tmux send-keys -t "${session}" ${escapeForTmux(text)}`, { stdio: "pipe" });
+    execSync(`tmux send-keys -t "${session}" ${escapeForTmux(text)}`, {
+      stdio: "pipe",
+    });
     execSync(`tmux send-keys -t "${session}" Enter`, { stdio: "pipe" });
   }
 

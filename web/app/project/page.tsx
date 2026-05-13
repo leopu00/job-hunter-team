@@ -1,75 +1,82 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
-import LandingNav from '../components/landing/LandingNav'
-import { LandingFooter } from '../components/landing/LandingCTA'
-import ScrollToTop from '../components/landing/ScrollToTop'
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  LandingI18nProvider,
+  useLandingI18n,
+} from "../components/landing/LandingI18n";
+import LandingNav from "../components/landing/LandingNav";
+import { LandingFooter } from "../components/landing/LandingCTA";
+import ScrollToTop from "../components/landing/ScrollToTop";
 
 const T = {
   it: {
-    title: 'Panoramica del progetto',
-    subtitle: 'Un team di agenti AI che cerca lavoro per te.',
-    back: '← Indietro',
-    open_source: 'open source',
-    repo_cta: 'Repository',
-    story_title: 'Storia e obiettivo',
+    title: "Panoramica del progetto",
+    subtitle: "Un team di agenti AI che cerca lavoro per te.",
+    back: "← Indietro",
+    open_source: "open source",
+    repo_cta: "Repository",
+    story_title: "Storia e obiettivo",
     story_body_1:
-      'Job Hunter Team nasce come progetto open source per automatizzare la ricerca di lavoro con una pipeline di agenti AI specializzati, eseguita in locale e controllata dall\'utente.',
+      "Job Hunter Team nasce come progetto open source per automatizzare la ricerca di lavoro con una pipeline di agenti AI specializzati, eseguita in locale e controllata dall'utente.",
     story_body_2:
-      'L\'obiettivo è costruire uno strumento accessibile a tutti: chi preferisce semplicità può scaricare il launcher desktop e usare l\'interfaccia web, mentre chi ha competenze tecniche può clonare la repository o utilizzare la TUI per un controllo avanzato.',
+      "L'obiettivo è costruire uno strumento accessibile a tutti: chi preferisce semplicità può scaricare il launcher desktop e usare l'interfaccia web, mentre chi ha competenze tecniche può clonare la repository o utilizzare la TUI per un controllo avanzato.",
     story_body_3:
-      'Il progetto è interamente gratuito e senza costi nascosti: se usi un provider AI esterno pagherai solo il tuo consumo, ma puoi anche utilizzare modelli locali gratuitamente. Le contribuzioni degli sviluppatori sono benvenute per migliorare insieme uno strumento che usa l\'intelligenza artificiale a favore dei lavoratori, non contro.'
+      "Il progetto è interamente gratuito e senza costi nascosti: se usi un provider AI esterno pagherai solo il tuo consumo, ma puoi anche utilizzare modelli locali gratuitamente. Le contribuzioni degli sviluppatori sono benvenute per migliorare insieme uno strumento che usa l'intelligenza artificiale a favore dei lavoratori, non contro.",
   },
   en: {
-    title: 'Project overview',
-    subtitle: 'An AI agent team that finds jobs for you.',
-    back: '← Back',
-    open_source: 'open source',
-    repo_cta: 'Repository',
-    story_title: 'History and goal',
+    title: "Project overview",
+    subtitle: "An AI agent team that finds jobs for you.",
+    back: "← Back",
+    open_source: "open source",
+    repo_cta: "Repository",
+    story_title: "History and goal",
     story_body_1:
-      'Job Hunter Team started as an open source project to automate job hunting through a pipeline of specialized AI agents, running locally inside a Docker container and controlled by the user.',
+      "Job Hunter Team started as an open source project to automate job hunting through a pipeline of specialized AI agents, running locally inside a Docker container and controlled by the user.",
     story_body_2:
-      'The goal is to build a tool accessible to everyone: those who prefer simplicity download the desktop launcher that handles the container for you, while technical users can clone the repository and work with the CLI/TUI directly.',
+      "The goal is to build a tool accessible to everyone: those who prefer simplicity download the desktop launcher that handles the container for you, while technical users can clone the repository and work with the CLI/TUI directly.",
     story_body_3:
-      'The software is free and open source: JHT never bills you. You only pay the subscription of the AI provider you choose (Claude Code, Codex or Kimi) using the account you already have. Developer contributions are welcome to improve together a tool that puts AI on the side of workers, not against them.'
+      "The software is free and open source: JHT never bills you. You only pay the subscription of the AI provider you choose (Claude Code, Codex or Kimi) using the account you already have. Developer contributions are welcome to improve together a tool that puts AI on the side of workers, not against them.",
   },
   hu: {
-    title: 'Projekt áttekintése',
-    subtitle: 'Egy AI ügynök csapat, amely állást keres neked.',
-    back: '← Vissza',
-    open_source: 'nyílt forráskód',
-    repo_cta: 'Repository',
-    story_title: 'Történet és cél',
+    title: "Projekt áttekintése",
+    subtitle: "Egy AI ügynök csapat, amely állást keres neked.",
+    back: "← Vissza",
+    open_source: "nyílt forráskód",
+    repo_cta: "Repository",
+    story_title: "Történet és cél",
     story_body_1:
-      'A Job Hunter Team nyílt forráskódú projektként indult, hogy specializált AI ügynökök csővezetékével automatizálja az álláskeresést. A rendszer helyben, egy Docker konténeren belül fut, és a felhasználó irányítja.',
+      "A Job Hunter Team nyílt forráskódú projektként indult, hogy specializált AI ügynökök csővezetékével automatizálja az álláskeresést. A rendszer helyben, egy Docker konténeren belül fut, és a felhasználó irányítja.",
     story_body_2:
-      'A cél egy mindenki számára hozzáférhető eszköz építése: aki az egyszerűséget kedveli, letölti az asztali launchert, amely a konténert helyetted kezeli; a műszaki felhasználók klónozhatják a repository-t és közvetlenül dolgozhatnak a CLI/TUI felülettel.',
+      "A cél egy mindenki számára hozzáférhető eszköz építése: aki az egyszerűséget kedveli, letölti az asztali launchert, amely a konténert helyetted kezeli; a műszaki felhasználók klónozhatják a repository-t és közvetlenül dolgozhatnak a CLI/TUI felülettel.",
     story_body_3:
-      'A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak a választott AI szolgáltató (Claude Code, Codex vagy Kimi) előfizetését fizeted, a már meglévő fiókoddal. A fejlesztői közreműködéseket szívesen fogadjuk, hogy együtt jobbítsunk egy olyan eszközt, amely a dolgozók oldalára állítja az AI-t, nem pedig ellenük.'
+      "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak a választott AI szolgáltató (Claude Code, Codex vagy Kimi) előfizetését fizeted, a már meglévő fiókoddal. A fejlesztői közreműködéseket szívesen fogadjuk, hogy együtt jobbítsunk egy olyan eszközt, amely a dolgozók oldalára állítja az AI-t, nem pedig ellenük.",
   },
-} as const
+} as const;
 
 function GitHubIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" className="w-4 h-4 fill-current">
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="w-4 h-4 fill-current"
+    >
       <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49C4 14.09 3.48 13.22 3.32 12.77c-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
     </svg>
-  )
+  );
 }
 
 function BackLink({ label }: { label: string }) {
-  const router = useRouter()
-  
+  const router = useRouter();
+
   const handleBack = () => {
     if (window.history.length > 1) {
-      router.back()
+      router.back();
     } else {
-      router.push('/')
+      router.push("/");
     }
-  }
+  };
 
   return (
     <button
@@ -78,12 +85,12 @@ function BackLink({ label }: { label: string }) {
     >
       {label}
     </button>
-  )
+  );
 }
 
 function ProjectContent() {
-  const { lang } = useLandingI18n()
-  const t = T[lang] ?? T.en
+  const { lang } = useLandingI18n();
+  const t = T[lang] ?? T.en;
 
   // The WebPage JSON-LD that used to live here was a duplicate of the one
   // emitted by `project/layout.tsx` (server component) with the same
@@ -94,20 +101,32 @@ function ProjectContent() {
   return (
     <>
       <LandingNav />
-      <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto" style={{ animation: 'fade-in 0.4s ease both' }}>
+      <main
+        className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto"
+        style={{ animation: "fade-in 0.4s ease both" }}
+      >
         <div className="text-center mb-12">
-          <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">{t.title}</h1>
-          <p className="text-[13px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed">{t.subtitle}</p>
+          <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">
+            {t.title}
+          </h1>
+          <p className="text-[13px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed">
+            {t.subtitle}
+          </p>
           <div className="mt-6 flex flex-col items-center gap-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)]" style={{ background: 'var(--color-deep)' }}>
-              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">{t.open_source}</span>
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)]"
+              style={{ background: "var(--color-deep)" }}
+            >
+              <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">
+                {t.open_source}
+              </span>
             </div>
             <a
               href="https://github.com/leopu00/job-hunter-team"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold tracking-wide no-underline transition-all hover:opacity-90"
-              style={{ background: 'var(--color-green)', color: '#060608' }}
+              style={{ background: "var(--color-green)", color: "#060608" }}
             >
               <GitHubIcon />
               <span>{t.repo_cta}</span>
@@ -115,12 +134,23 @@ function ProjectContent() {
           </div>
         </div>
 
-        <section className="p-6 border border-[var(--color-border)]" style={{ background: 'var(--color-panel)' }}>
-          <h2 className="text-[15px] font-bold text-[var(--color-white)] mb-4">{t.story_title}</h2>
+        <section
+          className="p-6 border border-[var(--color-border)]"
+          style={{ background: "var(--color-panel)" }}
+        >
+          <h2 className="text-[15px] font-bold text-[var(--color-white)] mb-4">
+            {t.story_title}
+          </h2>
           <div className="flex flex-col gap-4">
-            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_1}</p>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_2}</p>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">{t.story_body_3}</p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+              {t.story_body_1}
+            </p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+              {t.story_body_2}
+            </p>
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+              {t.story_body_3}
+            </p>
           </div>
         </section>
 
@@ -131,7 +161,7 @@ function ProjectContent() {
       <LandingFooter />
       <ScrollToTop />
     </>
-  )
+  );
 }
 
 export default function ProjectPage() {
@@ -139,5 +169,5 @@ export default function ProjectPage() {
     <LandingI18nProvider>
       <ProjectContent />
     </LandingI18nProvider>
-  )
+  );
 }

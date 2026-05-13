@@ -18,7 +18,10 @@ import { BOOTSTRAP_FILENAMES, MAX_CONTEXT_FILE_CHARS } from "./types.js";
 const templateCache = new Map<string, PromptTemplate>();
 
 /** Parsa frontmatter YAML delimitato da --- */
-export function parseFrontmatter(raw: string): { frontmatter: TemplateFrontmatter; content: string } {
+export function parseFrontmatter(raw: string): {
+  frontmatter: TemplateFrontmatter;
+  content: string;
+} {
   const trimmed = raw.trimStart();
   if (!trimmed.startsWith("---")) {
     return { frontmatter: {}, content: raw };
@@ -34,7 +37,10 @@ export function parseFrontmatter(raw: string): { frontmatter: TemplateFrontmatte
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, "");
+    const value = line
+      .slice(colonIdx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, "");
     if (key && value) frontmatter[key] = value;
   }
   return { frontmatter, content };
@@ -91,15 +97,18 @@ export function loadBootstrapTemplates(workspaceDir: string): PromptTemplate[] {
 }
 
 /** Verifica se un file e' un bootstrap file noto */
-export function isBootstrapFile(filename: string): filename is BootstrapFileName {
+export function isBootstrapFile(
+  filename: string,
+): filename is BootstrapFileName {
   return (BOOTSTRAP_FILENAMES as readonly string[]).includes(filename);
 }
 
 /** Converte template in ContextFile per iniezione nel prompt */
 export function templateToContextFile(template: PromptTemplate): ContextFile {
-  const content = template.content.length > MAX_CONTEXT_FILE_CHARS
-    ? truncateContent(template.content, MAX_CONTEXT_FILE_CHARS)
-    : template.content;
+  const content =
+    template.content.length > MAX_CONTEXT_FILE_CHARS
+      ? truncateContent(template.content, MAX_CONTEXT_FILE_CHARS)
+      : template.content;
   return { path: template.filePath, content };
 }
 
@@ -115,9 +124,10 @@ export function templatesToContextFiles(
     const remaining = budget - used;
     if (remaining < 64) break;
     const maxChars = Math.min(remaining, MAX_CONTEXT_FILE_CHARS);
-    const content = t.content.length > maxChars
-      ? truncateContent(t.content, maxChars)
-      : t.content;
+    const content =
+      t.content.length > maxChars
+        ? truncateContent(t.content, maxChars)
+        : t.content;
     files.push({ path: t.filePath, content });
     used += content.length;
   }

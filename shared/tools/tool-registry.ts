@@ -27,16 +27,76 @@ const TOOL_SECTIONS: ToolSection[] = [
 // --- Tool definitions core ---
 
 const CORE_TOOL_DEFINITIONS: ToolDefinition[] = [
-  { id: "read", label: "read", description: "Legge contenuto file", sectionId: "fs", profiles: ["coding"] },
-  { id: "write", label: "write", description: "Crea o sovrascrive file", sectionId: "fs", profiles: ["coding"] },
-  { id: "edit", label: "edit", description: "Modifiche precise a file", sectionId: "fs", profiles: ["coding"] },
-  { id: "exec", label: "exec", description: "Esegue comandi shell", sectionId: "runtime", profiles: ["coding"] },
-  { id: "process", label: "process", description: "Gestisce processi background", sectionId: "runtime", profiles: ["coding"] },
-  { id: "web_search", label: "web_search", description: "Ricerca sul web", sectionId: "web", profiles: ["coding"] },
-  { id: "web_fetch", label: "web_fetch", description: "Scarica contenuto web", sectionId: "web", profiles: ["coding"] },
-  { id: "memory_search", label: "memory_search", description: "Ricerca semantica", sectionId: "memory", profiles: ["coding"] },
-  { id: "sessions_list", label: "sessions_list", description: "Elenca sessioni", sectionId: "sessions", profiles: ["coding"] },
-  { id: "cron", label: "cron", description: "Programma task ricorrenti", sectionId: "automation", profiles: ["coding"] },
+  {
+    id: "read",
+    label: "read",
+    description: "Legge contenuto file",
+    sectionId: "fs",
+    profiles: ["coding"],
+  },
+  {
+    id: "write",
+    label: "write",
+    description: "Crea o sovrascrive file",
+    sectionId: "fs",
+    profiles: ["coding"],
+  },
+  {
+    id: "edit",
+    label: "edit",
+    description: "Modifiche precise a file",
+    sectionId: "fs",
+    profiles: ["coding"],
+  },
+  {
+    id: "exec",
+    label: "exec",
+    description: "Esegue comandi shell",
+    sectionId: "runtime",
+    profiles: ["coding"],
+  },
+  {
+    id: "process",
+    label: "process",
+    description: "Gestisce processi background",
+    sectionId: "runtime",
+    profiles: ["coding"],
+  },
+  {
+    id: "web_search",
+    label: "web_search",
+    description: "Ricerca sul web",
+    sectionId: "web",
+    profiles: ["coding"],
+  },
+  {
+    id: "web_fetch",
+    label: "web_fetch",
+    description: "Scarica contenuto web",
+    sectionId: "web",
+    profiles: ["coding"],
+  },
+  {
+    id: "memory_search",
+    label: "memory_search",
+    description: "Ricerca semantica",
+    sectionId: "memory",
+    profiles: ["coding"],
+  },
+  {
+    id: "sessions_list",
+    label: "sessions_list",
+    description: "Elenca sessioni",
+    sectionId: "sessions",
+    profiles: ["coding"],
+  },
+  {
+    id: "cron",
+    label: "cron",
+    description: "Programma task ricorrenti",
+    sectionId: "automation",
+    profiles: ["coding"],
+  },
 ];
 
 // --- Registry ---
@@ -72,7 +132,9 @@ function listToolIdsForProfile(profile: ToolProfileId): string[] {
     .map((t) => t.id);
 }
 
-export function resolveProfilePolicy(profile?: ToolProfileId): ToolProfilePolicy | undefined {
+export function resolveProfilePolicy(
+  profile?: ToolProfileId,
+): ToolProfilePolicy | undefined {
   if (!profile) return undefined;
   if (profile === "full") return undefined;
   const allow = listToolIdsForProfile(profile);
@@ -81,14 +143,14 @@ export function resolveProfilePolicy(profile?: ToolProfileId): ToolProfilePolicy
 
 // --- Sezioni e catalogo ---
 
-export function listSections(): Array<ToolSection & { tools: ToolDefinition[] }> {
+export function listSections(): Array<
+  ToolSection & { tools: ToolDefinition[] }
+> {
   const allDefs = listAllDefinitions();
-  return TOOL_SECTIONS
-    .map((section) => ({
-      ...section,
-      tools: allDefs.filter((t) => t.sectionId === section.id),
-    }))
-    .filter((s) => s.tools.length > 0);
+  return TOOL_SECTIONS.map((section) => ({
+    ...section,
+    tools: allDefs.filter((t) => t.sectionId === section.id),
+  })).filter((s) => s.tools.length > 0);
 }
 
 export function isKnownToolId(toolId: string): boolean {

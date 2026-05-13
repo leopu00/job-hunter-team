@@ -6,7 +6,12 @@
  */
 
 import { setTimeout as delay } from "node:timers/promises";
-import type { RetryConfig, RetryOptions, RetryInfo, RetryRunner } from "./types.js";
+import type {
+  RetryConfig,
+  RetryOptions,
+  RetryInfo,
+  RetryRunner,
+} from "./types.js";
 import { DEFAULT_RETRY_CONFIG } from "./types.js";
 
 // ── CONFIG RESOLUTION ──────────────────────────────────────
@@ -16,9 +21,18 @@ export function resolveRetryConfig(
   defaults: RetryConfig = DEFAULT_RETRY_CONFIG,
   overrides?: Partial<RetryConfig>,
 ): RetryConfig {
-  const attempts = Math.max(1, Math.round(overrides?.attempts ?? defaults.attempts));
-  const minDelayMs = Math.max(0, Math.round(overrides?.minDelayMs ?? defaults.minDelayMs));
-  const maxDelayMs = Math.max(minDelayMs, Math.round(overrides?.maxDelayMs ?? defaults.maxDelayMs));
+  const attempts = Math.max(
+    1,
+    Math.round(overrides?.attempts ?? defaults.attempts),
+  );
+  const minDelayMs = Math.max(
+    0,
+    Math.round(overrides?.minDelayMs ?? defaults.minDelayMs),
+  );
+  const maxDelayMs = Math.max(
+    minDelayMs,
+    Math.round(overrides?.maxDelayMs ?? defaults.maxDelayMs),
+  );
   const jitter = Math.min(1, Math.max(0, overrides?.jitter ?? defaults.jitter));
   return { attempts, minDelayMs, maxDelayMs, jitter };
 }
@@ -26,7 +40,11 @@ export function resolveRetryConfig(
 // ── BACKOFF COMPUTATION ────────────────────────────────────
 
 /** Calcola delay con exponential backoff: minDelay * 2^(attempt-1) */
-export function computeBackoff(minDelayMs: number, maxDelayMs: number, attempt: number): number {
+export function computeBackoff(
+  minDelayMs: number,
+  maxDelayMs: number,
+  attempt: number,
+): number {
   const base = minDelayMs * 2 ** Math.max(attempt - 1, 0);
   return Math.min(base, maxDelayMs);
 }
@@ -58,14 +76,21 @@ export async function retryAsync<T>(
       if (attempt >= attempts || !shouldRetry(err, attempt)) break;
 
       const retryAfter = options.retryAfterMs?.(err);
-      const hasRetryAfter = typeof retryAfter === "number" && Number.isFinite(retryAfter);
+      const hasRetryAfter =
+        typeof retryAfter === "number" && Number.isFinite(retryAfter);
       const baseDelay = hasRetryAfter
         ? Math.max(retryAfter, minDelayMs)
         : computeBackoff(minDelayMs, maxDelayMs, attempt);
       let waitMs = applyJitter(baseDelay, jitter);
       waitMs = Math.min(Math.max(waitMs, minDelayMs), maxDelayMs);
 
-      options.onRetry?.({ attempt, maxAttempts: attempts, delayMs: waitMs, err, label: options.label });
+      options.onRetry?.({
+        attempt,
+        maxAttempts: attempts,
+        delayMs: waitMs,
+        err,
+        label: options.label,
+      });
       await delay(waitMs);
     }
   }
@@ -76,12 +101,16 @@ export async function retryAsync<T>(
 // ── SLEEP WITH ABORT ───────────────────────────────────────
 
 /** Sleep interrompibile via AbortSignal */
-export async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+export async function sleepWithAbort(
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
   if (ms <= 0) return;
   try {
     await delay(ms, undefined, { signal });
   } catch (err) {
-    if (signal?.aborted) throw new Error("Operazione annullata", { cause: err });
+    if (signal?.aborted)
+      throw new Error("Operazione annullata", { cause: err });
     throw err;
   }
 }
@@ -89,7 +118,8 @@ export async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<
 // ── RETRY RUNNER FACTORY ───────────────────────────────────
 
 /** Errori HTTP/rete comuni da ritentare */
-const TRANSIENT_ERROR_RE = /429|timeout|connect|reset|closed|unavailable|temporarily|ECONNREFUSED|ETIMEDOUT/i;
+const TRANSIENT_ERROR_RE =
+  /429|timeout|connect|reset|closed|unavailable|temporarily|ECONNREFUSED|ETIMEDOUT/i;
 
 export function isTransientError(err: unknown): boolean {
   if (!err) return false;
@@ -109,7 +139,9 @@ export function createRetryRunner(params: {
     retryAsync(fn, {
       ...config,
       label,
-      shouldRetry: params.shouldRetry ? (err) => params.shouldRetry!(err) : undefined,
+      shouldRetry: params.shouldRetry
+        ? (err) => params.shouldRetry!(err)
+        : undefined,
       retryAfterMs: params.retryAfterMs,
       onRetry: params.onRetry,
     });

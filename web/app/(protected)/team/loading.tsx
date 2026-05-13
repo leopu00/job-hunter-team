@@ -1,13 +1,20 @@
 export default function Loading() {
   return (
-    <div aria-busy="true" aria-label="Loading team" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div
+      aria-busy="true"
+      aria-label="Loading team"
+      style={{ animation: "fade-in 0.2s ease both" }}
+    >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-7 w-48 rounded bg-[var(--color-border)] mb-2 animate-pulse" />
         <div className="h-3 w-64 rounded bg-[var(--color-border)] animate-pulse" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+          <div
+            key={i}
+            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
+          >
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--color-border)] animate-pulse" />
               <div>
@@ -20,5 +27,5 @@ export default function Loading() {
         ))}
       </div>
     </div>
-  )
+  );
 }

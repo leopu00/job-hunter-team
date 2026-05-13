@@ -33,13 +33,18 @@ export function listAgentIds(agents: AgentsConfig): string[] {
 }
 
 /** Trova l'agente di default dalla lista */
-export function resolveDefaultAgentId(agents: AgentsConfig): string | undefined {
+export function resolveDefaultAgentId(
+  agents: AgentsConfig,
+): string | undefined {
   const defaultAgent = agents.list.find((a) => a.default);
   return defaultAgent?.id ?? agents.list[0]?.id;
 }
 
 /** Trova la config grezza di un agente per ID */
-export function getAgentConfig(agents: AgentsConfig, agentId: string): AgentConfig | undefined {
+export function getAgentConfig(
+  agents: AgentsConfig,
+  agentId: string,
+): AgentConfig | undefined {
   return agents.list.find((a) => a.id === agentId);
 }
 
@@ -49,7 +54,8 @@ export function resolveAgentWorkspaceDir(
   agentId: string,
 ): string {
   const agent = getAgentConfig(agents, agentId);
-  const workspace = agent?.workspace ?? agents.defaults.workspace ?? DEFAULT_WORKSPACE;
+  const workspace =
+    agent?.workspace ?? agents.defaults.workspace ?? DEFAULT_WORKSPACE;
   return expandHome(workspace);
 }
 
@@ -77,7 +83,8 @@ export function resolveAgent(
     agentDir: resolveAgentDir(agentId),
     skills: agent.skills,
     thinking: agent.thinking ?? defaults.thinking ?? DEFAULT_THINKING,
-    contextTokens: agent.contextTokens ?? defaults.contextTokens ?? DEFAULT_CONTEXT_TOKENS,
+    contextTokens:
+      agent.contextTokens ?? defaults.contextTokens ?? DEFAULT_CONTEXT_TOKENS,
   };
 }
 

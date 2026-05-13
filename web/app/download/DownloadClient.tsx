@@ -1,116 +1,152 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { CopyButton } from '../components/CopyButton'
-import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
-import LandingNav from '../components/landing/LandingNav'
-import { LandingFooter } from '../components/landing/LandingCTA'
-import ScrollToTop from '../components/landing/ScrollToTop'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { CopyButton } from "../components/CopyButton";
+import {
+  LandingI18nProvider,
+  useLandingI18n,
+} from "../components/landing/LandingI18n";
+import LandingNav from "../components/landing/LandingNav";
+import { LandingFooter } from "../components/landing/LandingCTA";
+import ScrollToTop from "../components/landing/ScrollToTop";
 
 function BackLink() {
-  const { t } = useLandingI18n()
-  const router = useRouter()
+  const { t } = useLandingI18n();
+  const router = useRouter();
   const handleBack = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
-    else router.push('/')
-  }
+    if (typeof window !== "undefined" && window.history.length > 1)
+      router.back();
+    else router.push("/");
+  };
   return (
     <button
       onClick={handleBack}
       className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer bg-transparent border-0"
     >
-      {t('dl_back')}
+      {t("dl_back")}
     </button>
-  )
+  );
 }
 
-export type PlatformId = 'mac' | 'linux' | 'windows'
-export type Arch = 'x64' | 'arm64'
+export type PlatformId = "mac" | "linux" | "windows";
+export type Arch = "x64" | "arm64";
 
 export interface DownloadVariant {
-  id: PlatformId
-  arch: Arch
-  label: string
-  file: string
-  size: string | null
-  downloadUrl: string
-  available: boolean
-  format: string
+  id: PlatformId;
+  arch: Arch;
+  label: string;
+  file: string;
+  size: string | null;
+  downloadUrl: string;
+  available: boolean;
+  format: string;
 }
 
 export interface DownloadClientProps {
-  version: string
-  releasesUrl: string
-  primary: DownloadVariant | null
-  others: DownloadVariant[]
-  releaseAvailable: boolean
+  version: string;
+  releasesUrl: string;
+  primary: DownloadVariant | null;
+  others: DownloadVariant[];
+  releaseAvailable: boolean;
 }
 
-type InstallMode = 'desktop' | 'terminal'
+type InstallMode = "desktop" | "terminal";
 
 function PlatformIcon({ id }: { id: PlatformId }) {
-  if (id === 'mac') return <AppleIcon />
-  if (id === 'linux') return <LinuxIcon />
-  if (id === 'windows') return <WindowsIcon />
-  return null
+  if (id === "mac") return <AppleIcon />;
+  if (id === "linux") return <LinuxIcon />;
+  if (id === "windows") return <WindowsIcon />;
+  return null;
 }
 
-const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
+const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
 
-function DownloadContent({ version, releasesUrl, primary, others, releaseAvailable }: DownloadClientProps) {
-  const { t } = useLandingI18n()
-  const [installMode, setInstallMode] = useState<InstallMode>('desktop')
-  const [showOthers, setShowOthers] = useState(false)
+function DownloadContent({
+  version,
+  releasesUrl,
+  primary,
+  others,
+  releaseAvailable,
+}: DownloadClientProps) {
+  const { t } = useLandingI18n();
+  const [installMode, setInstallMode] = useState<InstallMode>("desktop");
+  const [showOthers, setShowOthers] = useState(false);
 
-  const terminalCommand = CLI_SETUP_CMD
+  const terminalCommand = CLI_SETUP_CMD;
 
   return (
     <>
       <LandingNav />
-      <main style={{ position: 'relative', zIndex: 1 }} className="min-h-screen flex flex-col items-center px-5 py-12 pt-24">
-        <div className="w-full max-w-2xl" style={{ animation: 'fade-in 0.5s ease both' }}>
-
+      <main
+        style={{ position: "relative", zIndex: 1 }}
+        className="min-h-screen flex flex-col items-center px-5 py-12 pt-24"
+      >
+        <div
+          className="w-full max-w-2xl"
+          style={{ animation: "fade-in 0.5s ease both" }}
+        >
           <div className="mb-12 text-center">
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-[var(--color-white)] leading-none mb-3">
-              {t('dl_title_1')} <span className="text-[var(--color-green)]">{t('dl_title_2')}</span>
+              {t("dl_title_1")}{" "}
+              <span className="text-[var(--color-green)]">
+                {t("dl_title_2")}
+              </span>
             </h1>
             <p className="text-[var(--color-muted)] text-[12px] md:text-[13px] leading-relaxed max-w-4xl mx-auto mb-2">
-              {t('dl_desc')}
+              {t("dl_desc")}
             </p>
-            <span className="text-[10px] text-[var(--color-dim)]">v{version} &middot; open source</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              v{version} &middot; open source
+            </span>
           </div>
 
           <div className="mb-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
-                onClick={() => setInstallMode('desktop')}
+                onClick={() => setInstallMode("desktop")}
                 className="px-4 py-4 text-left transition-colors"
                 style={{
-                  background: installMode === 'desktop' ? 'var(--color-card)' : 'transparent',
-                  color: installMode === 'desktop' ? 'var(--color-bright)' : 'var(--color-muted)',
-                  border: `1px solid ${installMode === 'desktop' ? 'var(--color-green)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
+                  background:
+                    installMode === "desktop"
+                      ? "var(--color-card)"
+                      : "transparent",
+                  color:
+                    installMode === "desktop"
+                      ? "var(--color-bright)"
+                      : "var(--color-muted)",
+                  border: `1px solid ${installMode === "desktop" ? "var(--color-green)" : "var(--color-border)"}`,
+                  cursor: "pointer",
                 }}
               >
-                <div className="text-[12px] font-semibold tracking-wide">{t('dl_mode_desktop_title')}</div>
+                <div className="text-[12px] font-semibold tracking-wide">
+                  {t("dl_mode_desktop_title")}
+                </div>
               </button>
               <button
-                onClick={() => setInstallMode('terminal')}
+                onClick={() => setInstallMode("terminal")}
                 className="px-4 py-4 text-left transition-colors"
                 style={{
-                  background: installMode === 'terminal' ? 'var(--color-card)' : 'transparent',
-                  color: installMode === 'terminal' ? 'var(--color-bright)' : 'var(--color-muted)',
-                  border: `1px solid ${installMode === 'terminal' ? 'var(--color-green)' : 'var(--color-border)'}`,
-                  cursor: 'pointer',
+                  background:
+                    installMode === "terminal"
+                      ? "var(--color-card)"
+                      : "transparent",
+                  color:
+                    installMode === "terminal"
+                      ? "var(--color-bright)"
+                      : "var(--color-muted)",
+                  border: `1px solid ${installMode === "terminal" ? "var(--color-green)" : "var(--color-border)"}`,
+                  cursor: "pointer",
                 }}
               >
-                <div className="text-[12px] font-semibold tracking-wide">{t('dl_mode_terminal_title')}</div>
+                <div className="text-[12px] font-semibold tracking-wide">
+                  {t("dl_mode_terminal_title")}
+                </div>
               </button>
             </div>
           </div>
 
-          {installMode === 'desktop' ? (
+          {installMode === "desktop" ? (
             <div className="mb-10">
               <PrimaryCta
                 variant={primary}
@@ -121,24 +157,28 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
               {others.length > 0 && (
                 <div className="mt-6">
                   <button
-                    onClick={() => setShowOthers(v => !v)}
+                    onClick={() => setShowOthers((v) => !v)}
                     className="text-[11px] tracking-widest uppercase"
                     style={{
-                      color: 'var(--color-muted)',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
+                      color: "var(--color-muted)",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
                       padding: 0,
                     }}
                     aria-expanded={showOthers}
                   >
-                    {showOthers ? t('dl_toggle_hide') : t('dl_toggle_show')}
+                    {showOthers ? t("dl_toggle_hide") : t("dl_toggle_show")}
                   </button>
 
                   {showOthers && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                       {others.map((variant) => (
-                        <OtherVariantCard key={`${variant.id}-${variant.arch}`} variant={variant} releasesUrl={releasesUrl} />
+                        <OtherVariantCard
+                          key={`${variant.id}-${variant.arch}`}
+                          variant={variant}
+                          releasesUrl={releasesUrl}
+                        />
                       ))}
                     </div>
                   )}
@@ -147,18 +187,34 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
             </div>
           ) : (
             <div className="mb-8">
-              <div className="border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
-                <div className="flex items-center justify-end px-3 py-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <CopyButton text={terminalCommand} size="sm" className="rounded-none">{t('dl_copy_cmd')}</CopyButton>
+              <div
+                className="border overflow-hidden"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-end px-3 py-2"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
+                  <CopyButton
+                    text={terminalCommand}
+                    size="sm"
+                    className="rounded-none"
+                  >
+                    {t("dl_copy_cmd")}
+                  </CopyButton>
                 </div>
                 <pre className="px-4 py-4 overflow-x-auto text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
                   {terminalCommand}
                 </pre>
               </div>
-              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">macOS · Linux · WSL</p>
+              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
+                macOS · Linux · WSL
+              </p>
             </div>
           )}
-
 
           <div className="mt-8 flex justify-center">
             <BackLink />
@@ -168,7 +224,7 @@ function DownloadContent({ version, releasesUrl, primary, others, releaseAvailab
       <LandingFooter />
       <ScrollToTop />
     </>
-  )
+  );
 }
 
 function PrimaryCta({
@@ -176,66 +232,72 @@ function PrimaryCta({
   releasesUrl,
   releaseAvailable,
 }: {
-  variant: DownloadVariant | null
-  releasesUrl: string
-  releaseAvailable: boolean
+  variant: DownloadVariant | null;
+  releasesUrl: string;
+  releaseAvailable: boolean;
 }) {
-  const { t } = useLandingI18n()
+  const { t } = useLandingI18n();
   // No release published yet, or UA unknown and no default variant.
   if (!variant || !releaseAvailable) {
     return (
       <div
         className="border overflow-hidden"
-        style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
+        style={{
+          borderColor: "var(--color-border)",
+          background: "var(--color-panel)",
+        }}
       >
         <div className="px-5 py-5">
           <p className="text-[13px] font-semibold text-[var(--color-white)] mb-2">
-            {t('dl_norelease_title')}
+            {t("dl_norelease_title")}
           </p>
           <p className="text-[11px] text-[var(--color-muted)] mb-4 leading-relaxed">
-            {t('dl_norelease_desc')}
+            {t("dl_norelease_desc")}
           </p>
           <a
             href={releasesUrl}
             className="inline-block text-center px-5 py-2 text-[12px] font-bold tracking-wide no-underline hover:no-underline"
             style={{
-              background: 'var(--color-card)',
-              color: 'var(--color-green)',
-              border: '1px solid var(--color-green)',
-              cursor: 'pointer',
+              background: "var(--color-card)",
+              color: "var(--color-green)",
+              border: "1px solid var(--color-green)",
+              cursor: "pointer",
             }}
           >
-            {t('dl_open_releases')}
+            {t("dl_open_releases")}
           </a>
         </div>
       </div>
-    )
+    );
   }
 
-  const ctaHref = variant.available ? variant.downloadUrl : releasesUrl
+  const ctaHref = variant.available ? variant.downloadUrl : releasesUrl;
 
   return (
     <div
       className="border overflow-hidden transition-all duration-200"
       style={{
-        borderColor: 'var(--color-green)',
-        background: 'var(--color-panel)',
-        animation: 'fade-in 0.4s ease both',
+        borderColor: "var(--color-green)",
+        background: "var(--color-panel)",
+        animation: "fade-in 0.4s ease both",
       }}
     >
       <div className="px-5 py-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
         <div
           className="w-12 h-12 flex items-center justify-center flex-shrink-0"
-          style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+          style={{
+            background: "var(--color-card)",
+            border: "1px solid var(--color-border)",
+          }}
         >
           <PlatformIcon id={variant.id} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[10px] tracking-widest uppercase text-[var(--color-dim)] mb-1">
-            {t('dl_detected_label')}: {variant.label}
+            {t("dl_detected_label")}: {variant.label}
           </div>
           <div className="text-[15px] font-bold text-[var(--color-white)] mb-1">
-            {t('dl_download_for')} {variant.label}
+            {t("dl_download_for")} {variant.label}
           </div>
           <div className="text-[10px] text-[var(--color-dim)] break-all">
             {variant.file}
@@ -246,46 +308,58 @@ function PrimaryCta({
           href={ctaHref}
           className="w-full sm:w-auto block text-center px-6 py-3 text-[12px] font-bold tracking-wide no-underline hover:no-underline"
           style={{
-            background: 'var(--color-green)',
-            color: 'var(--color-panel)',
-            border: '1px solid var(--color-green)',
-            cursor: 'pointer',
+            background: "var(--color-green)",
+            color: "var(--color-panel)",
+            border: "1px solid var(--color-green)",
+            cursor: "pointer",
           }}
         >
-          {variant.available ? t('dl_download') : t('dl_view_release')}
+          {variant.available ? t("dl_download") : t("dl_view_release")}
         </a>
       </div>
     </div>
-  )
+  );
 }
 
 function OtherVariantCard({
   variant,
   releasesUrl,
 }: {
-  variant: DownloadVariant
-  releasesUrl: string
+  variant: DownloadVariant;
+  releasesUrl: string;
 }) {
-  const { t } = useLandingI18n()
-  const ctaHref = variant.available ? variant.downloadUrl : releasesUrl
+  const { t } = useLandingI18n();
+  const ctaHref = variant.available ? variant.downloadUrl : releasesUrl;
 
   return (
     <div
       className="border overflow-hidden transition-all duration-200"
-      style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-glow)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-panel)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--color-border-glow)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--color-border)";
+      }}
     >
       <div className="px-4 py-3 flex flex-col gap-3 h-full">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center flex-shrink-0"
-            style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+            style={{
+              background: "var(--color-card)",
+              border: "1px solid var(--color-border)",
+            }}
           >
             <PlatformIcon id={variant.id} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-bold text-[var(--color-white)]">{variant.label}</div>
+            <div className="text-[12px] font-bold text-[var(--color-white)]">
+              {variant.label}
+            </div>
             <div className="text-[9px] text-[var(--color-dim)] break-all">
               {variant.file}
               {variant.size && <> &middot; {variant.size}</>}
@@ -296,17 +370,17 @@ function OtherVariantCard({
           href={ctaHref}
           className="block w-full text-center px-4 py-2 text-[11px] font-semibold tracking-wide no-underline hover:no-underline mt-auto"
           style={{
-            background: 'var(--color-card)',
-            color: 'var(--color-green)',
-            border: '1px solid var(--color-green)',
-            cursor: 'pointer',
+            background: "var(--color-card)",
+            color: "var(--color-green)",
+            border: "1px solid var(--color-green)",
+            cursor: "pointer",
           }}
         >
-          {variant.available ? t('dl_download') : t('dl_view_release')}
+          {variant.available ? t("dl_download") : t("dl_view_release")}
         </a>
       </div>
     </div>
-  )
+  );
 }
 
 export default function DownloadClient(props: DownloadClientProps) {
@@ -314,22 +388,36 @@ export default function DownloadClient(props: DownloadClientProps) {
     <LandingI18nProvider>
       <DownloadContent {...props} />
     </LandingI18nProvider>
-  )
+  );
 }
 
 /* ── OS Icons (SVG inline) ── */
 
 function AppleIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      style={{ color: "var(--color-muted)" }}
+    >
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
     </svg>
-  )
+  );
 }
 
 function LinuxIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 15 15" fill="none" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 15 15"
+      fill="none"
+      aria-hidden="true"
+      style={{ color: "var(--color-muted)" }}
+    >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -337,13 +425,20 @@ function LinuxIcon() {
         fill="currentColor"
       />
     </svg>
-  )
+  );
 }
 
 function WindowsIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ color: 'var(--color-muted)' }}>
-      <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      style={{ color: "var(--color-muted)" }}
+    >
+      <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
     </svg>
-  )
+  );
 }

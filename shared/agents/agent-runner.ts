@@ -22,13 +22,19 @@ const listeners = new Set<AgentEventListener>();
 
 export function onAgentEvent(listener: AgentEventListener): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 function emit(event: Omit<AgentEvent, "ts">): void {
   const enriched = { ...event, ts: Date.now() } as AgentEvent;
   for (const listener of listeners) {
-    try { listener(enriched); } catch { /* ignora */ }
+    try {
+      listener(enriched);
+    } catch {
+      /* ignora */
+    }
   }
 }
 
@@ -99,7 +105,11 @@ export async function runAgentTurn(
   const signal = opts.abortSignal ?? abortController.signal;
 
   const payloads: AgentPayload[] = [];
-  const totalUsage: AgentUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const totalUsage: AgentUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  };
 
   const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
@@ -118,7 +128,10 @@ export async function runAgentTurn(
 
   try {
     while (iterations < MAX_TOOL_ITERATIONS) {
-      if (signal.aborted) { stopReason = "timeout"; break; }
+      if (signal.aborted) {
+        stopReason = "timeout";
+        break;
+      }
       iterations++;
 
       const response = await llmCall({
@@ -155,28 +168,66 @@ export async function runAgentTurn(
 
       for (const tc of response.tool_calls) {
         let args: unknown;
-        try { args = JSON.parse(tc.arguments); } catch { args = {}; }
+        try {
+          args = JSON.parse(tc.arguments);
+        } catch {
+          args = {};
+        }
 
-        payloads.push({ kind: "tool_use", toolName: tc.name, toolCallId: tc.id, args });
-        emit({ type: "tool_call", agentId: agent.id, sessionId: opts.sessionId,
-          payload: { kind: "tool_use", toolName: tc.name, toolCallId: tc.id, args } });
+        payloads.push({
+          kind: "tool_use",
+          toolName: tc.name,
+          toolCallId: tc.id,
+          args,
+        });
+        emit({
+          type: "tool_call",
+          agentId: agent.id,
+          sessionId: opts.sessionId,
+          payload: {
+            kind: "tool_use",
+            toolName: tc.name,
+            toolCallId: tc.id,
+            args,
+          },
+        });
 
         const result = await executeTool(tools, tc.name, tc.id, args, signal);
         const resultText = result.content.map((c) => c.text).join("\n");
 
-        payloads.push({ kind: "tool_result", toolCallId: tc.id, content: resultText });
-        messages.push({ role: "tool", tool_call_id: tc.id, content: resultText });
+        payloads.push({
+          kind: "tool_result",
+          toolCallId: tc.id,
+          content: resultText,
+        });
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: resultText,
+        });
 
-        emit({ type: "tool_result", agentId: agent.id, sessionId: opts.sessionId,
-          payload: { kind: "tool_result", toolCallId: tc.id, content: resultText } });
+        emit({
+          type: "tool_result",
+          agentId: agent.id,
+          sessionId: opts.sessionId,
+          payload: {
+            kind: "tool_result",
+            toolCallId: tc.id,
+            content: resultText,
+          },
+        });
       }
     }
   } catch (err) {
     stopReason = "error";
     const errorMsg = (err as Error).message;
     payloads.push({ kind: "error", message: errorMsg });
-    emit({ type: "error", agentId: agent.id, sessionId: opts.sessionId,
-      payload: { kind: "error", message: errorMsg } });
+    emit({
+      type: "error",
+      agentId: agent.id,
+      sessionId: opts.sessionId,
+      payload: { kind: "error", message: errorMsg },
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -188,10 +239,18 @@ export async function runAgentTurn(
     provider: opts.provider ?? agent.provider,
     stopReason,
     durationMs: Date.now() - startMs,
-    error: stopReason === "error" ? payloads.find((p) => p.kind === "error")?.message : undefined,
+    error:
+      stopReason === "error"
+        ? payloads.find((p) => p.kind === "error")?.message
+        : undefined,
   };
 
-  emit({ type: "turn_end", agentId: agent.id, sessionId: opts.sessionId, result: runResult });
+  emit({
+    type: "turn_end",
+    agentId: agent.id,
+    sessionId: opts.sessionId,
+    result: runResult,
+  });
 
   return runResult;
 }

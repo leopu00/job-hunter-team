@@ -34,7 +34,9 @@ function addListener<T>(
   listener: EventListener<T>,
 ): Unsubscribe {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 // --- Global singleton (da shared/global-singleton pattern) ---

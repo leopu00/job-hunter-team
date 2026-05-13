@@ -1,6 +1,10 @@
 export default function PositionDetailLoading() {
   return (
-    <div aria-busy="true" aria-label="Caricamento dettaglio posizione" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div
+      aria-busy="true"
+      aria-label="Caricamento dettaglio posizione"
+      style={{ animation: "fade-in 0.2s ease both" }}
+    >
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-6">
         <div className="h-3 w-16 rounded bg-[var(--color-border)] animate-pulse" />
@@ -34,10 +38,16 @@ export default function PositionDetailLoading() {
           {/* Pro/Con */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+              <div
+                key={i}
+                className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4"
+              >
                 <div className="h-2.5 w-12 rounded bg-[var(--color-border)] mb-3 animate-pulse" />
                 {Array.from({ length: 3 }).map((_, j) => (
-                  <div key={j} className="h-3 w-full rounded bg-[var(--color-border)] mb-2 last:mb-0 animate-pulse" />
+                  <div
+                    key={j}
+                    className="h-3 w-full rounded bg-[var(--color-border)] mb-2 last:mb-0 animate-pulse"
+                  />
                 ))}
               </div>
             ))}
@@ -59,7 +69,11 @@ export default function PositionDetailLoading() {
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="h-3 w-32 rounded bg-[var(--color-border)] mb-4 animate-pulse" />
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-2.5 rounded bg-[var(--color-border)] mb-2.5 animate-pulse" style={{ width: `${75 + Math.random() * 25}%` }} />
+              <div
+                key={i}
+                className="h-2.5 rounded bg-[var(--color-border)] mb-2.5 animate-pulse"
+                style={{ width: `${75 + Math.random() * 25}%` }}
+              />
             ))}
           </div>
         </div>
@@ -87,5 +101,5 @@ export default function PositionDetailLoading() {
         </div>
       </div>
     </div>
-  )
+  );
 }

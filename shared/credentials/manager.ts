@@ -5,7 +5,13 @@
  * Interfaccia unificata per il provider abstraction layer.
  */
 
-import { deleteCredential, hasStoredCredential, listStoredProviders, readCredential, writeCredential } from "./storage.js";
+import {
+  deleteCredential,
+  hasStoredCredential,
+  listStoredProviders,
+  readCredential,
+  writeCredential,
+} from "./storage.js";
 import {
   API_KEY_PROVIDERS,
   ALL_PROVIDERS,
@@ -52,7 +58,7 @@ export function saveApiKey(provider: ApiKeyProvider, apiKey: string): void {
 
 export function resolveApiKey(
   provider: ApiKeyProvider,
-  precedence: CredentialPrecedence = "env-first"
+  precedence: CredentialPrecedence = "env-first",
 ): ResolvedCredential | null {
   if (!API_KEY_PROVIDERS.has(provider)) {
     throw new Error(`Provider non supportato: ${provider}`);
@@ -95,7 +101,7 @@ export function saveOAuthToken(
   provider: OAuthProvider,
   accessToken: string,
   refreshToken?: string,
-  expiresAt?: number
+  expiresAt?: number,
 ): void {
   if (!OAUTH_PROVIDERS.has(provider)) {
     throw new Error(`Provider OAuth non supportato: ${provider}`);
@@ -114,14 +120,17 @@ export function saveOAuthToken(
   writeCredential(provider, credential);
 }
 
-export function resolveOAuthToken(provider: OAuthProvider): (OAuthCredential & { isExpired: boolean }) | null {
+export function resolveOAuthToken(
+  provider: OAuthProvider,
+): (OAuthCredential & { isExpired: boolean }) | null {
   if (!OAUTH_PROVIDERS.has(provider)) {
     throw new Error(`Provider OAuth non supportato: ${provider}`);
   }
   const credential = readCredential(provider) as OAuthCredential | null;
   if (!credential || credential.type !== "oauth") return null;
 
-  const isExpired = credential.expiresAt != null && Date.now() > credential.expiresAt;
+  const isExpired =
+    credential.expiresAt != null && Date.now() > credential.expiresAt;
   return { ...credential, isExpired };
 }
 
@@ -133,7 +142,7 @@ export function deleteOAuthToken(provider: OAuthProvider): boolean {
 
 export function resolveCredential(
   provider: Provider,
-  precedence: CredentialPrecedence = "env-first"
+  precedence: CredentialPrecedence = "env-first",
 ): ResolvedCredential | null {
   if (API_KEY_PROVIDERS.has(provider as ApiKeyProvider)) {
     return resolveApiKey(provider as ApiKeyProvider, precedence);
@@ -154,7 +163,11 @@ export function listConfiguredProviders(): Array<{
   type: string;
   source: CredentialSource;
 }> {
-  const configured: Array<{ provider: string; type: string; source: CredentialSource }> = [];
+  const configured: Array<{
+    provider: string;
+    type: string;
+    source: CredentialSource;
+  }> = [];
 
   for (const provider of API_KEY_PROVIDERS) {
     const envKey = readEnvKey(provider);
