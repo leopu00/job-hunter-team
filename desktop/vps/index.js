@@ -233,7 +233,10 @@ function classifySshFailure(semantic) {
   }
 }
 
-const INSTALL_URL = 'https://jobhunterteam.ai/install.sh'
+// URL di install.sh. Override via env JHT_INSTALL_URL — utile durante
+// development o per bypassare Vercel CDN cache lenta dopo un fix nel
+// file (es. puntare a GitHub raw production HEAD per test immediati).
+const INSTALL_URL = process.env.JHT_INSTALL_URL || 'https://jobhunterteam.ai/install.sh'
 // Validated again on the renderer side; double-check before shelling out
 // because the IP ends up inside an ssh argv that we don't quote a second
 // time.
