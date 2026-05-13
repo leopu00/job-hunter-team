@@ -39,25 +39,55 @@ const IPV4_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]
 // passano `opts.timeout` esplicito.
 const DEFAULT_RUN_TIMEOUT_MS = 30_000
 
-// Ritardo massimo deciso per readPrivKeyPath: importiamo lazy per
-// evitare loop di require (vps/index.js fa require('electron') al top
-// e non vogliamo trascinarlo dentro a chi vuole ssh-exec senza UI).
-function readPrivKeyPath() {
-  // require lazy + cache locale
-  if (!readPrivKeyPath._fn) {
-    readPrivKeyPath._fn = require('./index').getPrivateKeyPath
+// Resolve del path della privkey SSH, in ordine di priorita':
+//
+//   1. `opts.keyPath` esplicito passato dal chiamante (massima
+//      priorita': vince anche se electron e' disponibile).
+//   2. `process.env.JHT_SSH_KEY_PATH` (test integration, dev workflow,
+//      override per chiavi gia' caricate fuori dal launcher).
+//   3. `vps/index.js::getPrivateKeyPath()` che usa
+//      `electron.app.getPath('userData')`.
+//
+// Punto (3) vive dentro un try/catch: in node --test (no electron)
+// app=undefined → throw "Cannot read properties of undefined". Lo
+// catturiamo e lanciamo un errore esplicito che spiega le 3 vie.
+function readPrivKeyPath(keyPath) {
+  if (typeof keyPath === 'string' && keyPath.length > 0) return keyPath
+  const fromEnv = process.env.JHT_SSH_KEY_PATH
+  if (typeof fromEnv === 'string' && fromEnv.length > 0) return fromEnv
+  // Lazy require + cache: vps/index.js importa electron al top,
+  // teniamolo fuori dai code path che non lo richiedono (es. test
+  // offline che passano opts.keyPath o env).
+  try {
+    if (!readPrivKeyPath._fn) {
+      readPrivKeyPath._fn = require('./index').getPrivateKeyPath
+    }
+    const p = readPrivKeyPath._fn()
+    if (typeof p === 'string' && p.length > 0) return p
+    throw new Error('getPrivateKeyPath() returned empty')
+  } catch (err) {
+    throw new Error(
+      `ssh-exec: cannot resolve SSH private key path. ` +
+      `Pass opts.keyPath, set JHT_SSH_KEY_PATH env, or run inside Electron. ` +
+      `(underlying: ${err.message})`
+    )
   }
-  return readPrivKeyPath._fn()
 }
 
 // Costruisce gli args ssh comuni a tutti i metodi.
 //   pty=false  → BatchMode=yes (no allocazione TTY, no prompt)
 //   pty=true   → -tt (forza TTY anche con stdin pipe), niente BatchMode
-function sshArgs(ip, { pty = false, extra = [], priv } = {}) {
+//
+// Param keyPath: override esplicito del path privkey. Se omesso fa
+// fallback su JHT_SSH_KEY_PATH env e poi su electron app.getPath.
+// Vedi `readPrivKeyPath` per la cascata completa.
+function sshArgs(ip, { pty = false, extra = [], priv, keyPath } = {}) {
   if (!ip || !IPV4_RE.test(String(ip).trim())) {
     throw new Error(`ssh-exec: invalid ipv4 "${ip}"`)
   }
-  const privKey = priv || readPrivKeyPath()
+  // `priv` e' alias retro-compat di `keyPath` per i call site interni
+  // di ssh-exec.js stesso. La API pubblica documenta solo `keyPath`.
+  const privKey = readPrivKeyPath(keyPath || priv)
   const base = [
     '-i', privKey,
     '-o', 'StrictHostKeyChecking=no',
@@ -88,7 +118,7 @@ function run(ip, remoteCmd, opts = {}) {
   const timeoutMs = Number.isFinite(opts.timeout) ? opts.timeout : DEFAULT_RUN_TIMEOUT_MS
   let args
   try {
-    args = [...sshArgs(ip, { pty: false, priv: opts.priv }), remoteCmd]
+    args = [...sshArgs(ip, { pty: false, keyPath: opts.keyPath || opts.priv }), remoteCmd]
   } catch (err) {
     log.warn('run.bad-args', { ip, err: err.message })
     return { ok: false, code: -1, stdout: '', stderr: err.message }
@@ -125,7 +155,7 @@ function runStream(ip, remoteCmd, onLine, opts = {}) {
     const startedAt = Date.now()
     let args
     try {
-      args = [...sshArgs(ip, { pty: false, priv: opts.priv }), remoteCmd]
+      args = [...sshArgs(ip, { pty: false, keyPath: opts.keyPath || opts.priv }), remoteCmd]
     } catch (err) {
       log.warn('stream.bad-args', { ip, err: err.message })
       resolve({ ok: false, code: -1, error: err.message })
@@ -187,7 +217,7 @@ function runStream(ip, remoteCmd, onLine, opts = {}) {
 // per inviare keystroke. La gestione resize (SIGWINCH) NON e' coperta da
 // SSH client-side; per resize reale serve node-pty (T2/T3 decideranno).
 function openPty(ip, remoteCmd, opts = {}) {
-  const args = [...sshArgs(ip, { pty: true, priv: opts.priv }), remoteCmd]
+  const args = [...sshArgs(ip, { pty: true, keyPath: opts.keyPath || opts.priv }), remoteCmd]
   log.debug('openPty.spawn', { ip, cmd: _truncForLog(remoteCmd) })
   // stdio pipe (NON inherit): vogliamo intercettare i bytes per
   // inoltrarli all'xterm sul renderer. windowsHide irrilevante su -tt.
@@ -247,7 +277,7 @@ function writeFile(ip, remotePath, content, opts = {}) {
     remoteCmd = `set -e; cat > '${remotePath}' && chmod ${mode} '${remotePath}'`
   }
 
-  const args = [...sshArgs(ip, { pty: false }), remoteCmd]
+  const args = [...sshArgs(ip, { pty: false, keyPath: opts.keyPath }), remoteCmd]
   const startedAt = Date.now()
   log.debug('writeFile.spawn', {
     ip, path: remotePath, atomic, mode, contentLen: (content || '').length,
@@ -273,15 +303,23 @@ function writeFile(ip, remotePath, content, opts = {}) {
   return { ok: true }
 }
 
-// Factory ergonomica: apre un "client" pre-bound a un ip. Pensato per
-// chi fa N call sullo stesso server (es. provider-install via SSH che
-// dopo la verifica binario procede con i 3 step di install).
-function forIp(ip) {
+// Factory ergonomica: apre un "client" pre-bound a un ip (e
+// opzionalmente a un keyPath di default). Pensato per chi fa N call
+// sullo stesso server (es. provider-install via SSH che dopo la
+// verifica binario procede con i 3 step di install). Le opts passate
+// alla singola chiamata vincono sempre sui defaults.
+function forIp(ip, defaults = {}) {
+  const merge = (opts) => {
+    if (defaults.keyPath && !(opts && opts.keyPath)) {
+      return { ...(opts || {}), keyPath: defaults.keyPath }
+    }
+    return opts
+  }
   return {
-    run: (remoteCmd, opts) => run(ip, remoteCmd, opts),
-    runStream: (remoteCmd, onLine, opts) => runStream(ip, remoteCmd, onLine, opts),
-    openPty: (remoteCmd, opts) => openPty(ip, remoteCmd, opts),
-    writeFile: (remotePath, content, opts) => writeFile(ip, remotePath, content, opts),
+    run: (remoteCmd, opts) => run(ip, remoteCmd, merge(opts)),
+    runStream: (remoteCmd, onLine, opts) => runStream(ip, remoteCmd, onLine, merge(opts)),
+    openPty: (remoteCmd, opts) => openPty(ip, remoteCmd, merge(opts)),
+    writeFile: (remotePath, content, opts) => writeFile(ip, remotePath, content, merge(opts)),
   }
 }
 
