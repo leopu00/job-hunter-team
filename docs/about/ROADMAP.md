@@ -78,7 +78,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 ✅ CLI ↔ container coordination (jht team / container / sentinella)
 ⬜ db_supabase.py wrapper — push agent results to cloud
 ⬜ Weekly window monitoring calibration (today: 5h windows)
-⬜ User-defined work hours ("team as employee" model)
+✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d`)
 ⬜ Kimi €40 calibration (mass-market target)
 ⬜ Sentinel token consumption optimization
 ⬜ Documented test campaign matrix (provider × tier × persona)
