@@ -37,7 +37,7 @@ def get_db() -> sqlite3.Connection:
 
 
 def ensure_schema(conn: sqlite3.Connection):
-    """Crea le tabelle se non esistono (schema V4).
+    """Crea le tabelle se non esistono (schema V5).
 
     Le migrazioni retroattive vengono eseguite PRIMA del CREATE TABLE
     IF NOT EXISTS, così i CREATE TRIGGER IF NOT EXISTS più sotto
@@ -47,6 +47,8 @@ def ensure_schema(conn: sqlite3.Connection):
     Storia:
     - v2→v3: CHECK su `positions.status`.
     - v3→v4: `created_at`/`updated_at` uniformi su tutte le 5 tabelle.
+    - v4→v5: tabella `pending_user_messages` (fallback notifiche via cloud
+      sync quando Telegram non e' configurato/down — decisione 2026-05-13).
     """
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
@@ -155,12 +157,35 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    CREATE TABLE IF NOT EXISTS pending_user_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent TEXT NOT NULL,
+        body TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
+            'notification','question','digest','alert'
+        )),
+        related_position_id INTEGER,
+        delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
+        delivered_at TIMESTAMP,
+        acknowledged_at TIMESTAMP,
+        user_reply TEXT,
+        user_reply_at TIMESTAMP,
+        agent_seen_reply_at TIMESTAMP,
+        cloud_synced_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (related_position_id) REFERENCES positions(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+    CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
+    CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
+    CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
 
     -- Trigger educativi: rifiutano la stringa letterale 'now' nei timestamp
     -- e suggeriscono il pattern corretto. Audit 2026-05-02 mostro' 8 record
@@ -327,8 +352,25 @@ def ensure_schema(conn: sqlite3.Connection):
           updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
       WHERE id = NEW.id;
     END;
+
+    CREATE TRIGGER IF NOT EXISTS pending_user_messages_touch_updated_at
+    AFTER UPDATE ON pending_user_messages FOR EACH ROW
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE pending_user_messages SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS pending_user_messages_default_created_at
+    AFTER INSERT ON pending_user_messages FOR EACH ROW
+    WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+    BEGIN
+      UPDATE pending_user_messages
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE id = NEW.id;
+    END;
     """)
-    conn.execute("PRAGMA user_version = 4")
+    conn.execute("PRAGMA user_version = 5")
     conn.commit()
 
 
