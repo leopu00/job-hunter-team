@@ -614,6 +614,26 @@ async function refreshHomeTeam() {
 
 async function startTeamFromHome() {
   if (state.starting) return
+  // Carica location dalle prefs se non gia' in state (perso ai restart).
+  if (!state.location && window.prefsApi?.get) {
+    try {
+      const saved = await window.prefsApi.get('location')
+      if (saved === 'local' || saved === 'vps') state.location = saved
+    } catch { /* ignore */ }
+  }
+  // VPS mode: il team gira sulla VPS, NON sul Mac. Skippa Docker probe +
+  // payload download + container locale + browser localhost — apre la
+  // dashboard cloud (Supabase sincronizza dalla VPS). Vedi
+  // docs/internal/onboarding-flow.md § Path 2.
+  if (state.location === 'vps') {
+    const dashboardUrl = 'https://jobhunterteam.ai/dashboard'
+    try {
+      await window.launcherApi.openExternal(dashboardUrl)
+    } catch (error) {
+      appendLog(`startTeamFromHome vps openExternal: ${error.message || error}`)
+    }
+    return
+  }
   // Always re-probe Docker right before starting: the dockerBlocked
   // flag is only as fresh as the last gate run, and Docker may have
   // died between refreshes (the panel poll runs every 5s, leaving a
