@@ -762,14 +762,12 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - PRs to `awesome-ai-agents`, `awesome-claude`, `awesome-selfhosted`
 - Create JHT entry with repo link + 1-line description
 
-#### 🐛 [JHT-LAUNCH-08] GitHub issue triage workflow ⬜
+#### 🐛 [JHT-LAUNCH-08] GitHub issue triage workflow 🟡
 
-- **Why:** the first week post-launch will bring a wave of issues — install problems, edge cases, "doesn't work for me" reports. Without a triage workflow we drown.
-- **Task:**
-  1. Issue templates already exist (`.github/ISSUE_TEMPLATE/{bug_report,feature_request}.md`) — verify they ask the right questions
-  2. Define labels: `installer`, `monitoring`, `provider:claude`, `provider:kimi`, `provider:codex`, `desktop`, `web`, `cli`, `docs`, `triage`, `wontfix`
-  3. Set up GitHub project board (kanban: triage → confirmed → in-progress → done)
-  4. Document SLA expectations in `CONTRIBUTING.md` ("we aim to triage within 48h, no fix SLA in beta")
+- ✅ Issue templates expanded with install-path, provider, severity checkbox + log-source hints ([`.github/ISSUE_TEMPLATE/bug_report.md`](.github/ISSUE_TEMPLATE/bug_report.md) + [`feature_request.md`](.github/ISSUE_TEMPLATE/feature_request.md))
+- ✅ Company 033 label set declared in [`.github/labels.yml`](.github/labels.yml) — surface (installer/monitoring/desktop/web/cli/container/agents/docs), provider, state (triage/confirmed/in-progress/blocked), severity, type, outcomes, community
+- ✅ Workflow + SLA documented in [`docs/internal/triage.md`](docs/internal/triage.md); `CONTRIBUTING.md` carries the public 48h-triage / 24h-blocker-ack contract
+- ⬜ Remaining (manual, maintainer-side): run the `gh label create` sync once on the live repo, create the `JHT — Triage` project board with the 5 columns + state-label automation, wire `severity:blocker` notification path
 
 #### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
