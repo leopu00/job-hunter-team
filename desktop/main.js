@@ -277,6 +277,47 @@ app.whenReady().then(() => {
   app.on('before-quit', () => log.info('app.before-quit'))
   app.on('will-quit', () => log.info('app.will-quit'))
 
+  // Modalita' "fresh setup": JHT_DESKTOP_FRESH_SETUP=1 al boot wipa le
+  // cache utente che fanno skippare step gia' completati, cosi' il
+  // wizard riparte da Welcome come prima volta. Utile per testare il
+  // flow di onboarding senza dover cancellare a mano:
+  //   - preferences.json (location, eventuali altri toggle)
+  //   - ssh/ (keypair Ed25519 generata dal passo VPS)
+  //   - logs/ (log delle sessioni precedenti)
+  //
+  // Non tocca: session Supabase (in-memory in dev gia' volatile),
+  // app-payload/ (download cache pesante, niente senso wipare).
+  // Storage memory NON viene toccato qui perche' e' gia' nuovo a ogni boot.
+  if (process.env.JHT_DESKTOP_FRESH_SETUP === '1') {
+    const fs = require('node:fs')
+    const userData = app.getPath('userData')
+    const targets = [
+      path.join(userData, 'preferences.json'),
+      path.join(userData, 'ssh'),
+      path.join(userData, 'logs'),  // wipato DOPO che il logger ha gia' aperto il file di questa sessione → safe
+    ]
+    for (const t of targets) {
+      try {
+        const stat = fs.lstatSync(t)
+        if (stat.isDirectory()) {
+          fs.rmSync(t, { recursive: true, force: true })
+        } else {
+          fs.unlinkSync(t)
+        }
+        log.warn('fresh-setup.wiped', { path: t })
+      } catch (err) {
+        if (err && err.code === 'ENOENT') {
+          log.debug('fresh-setup.skip', { path: t, reason: 'not present' })
+        } else {
+          log.error('fresh-setup.failed', { path: t, err })
+        }
+      }
+    }
+    log.warn('fresh-setup.complete', {
+      hint: "unset JHT_DESKTOP_FRESH_SETUP per il prossimo run",
+    })
+  }
+
   // Canale IPC `log:append` — il renderer (wizard, dashboard) puo' mandare
   // log strutturati che finiscono nello stesso file del main, cosi' un
   // bug report ha il flow completo (UI step → IPC → modulo backend).
