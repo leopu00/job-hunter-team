@@ -198,6 +198,30 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
+CREATE TABLE IF NOT EXISTS pending_user_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent TEXT NOT NULL,
+  body TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
+    'notification','question','digest','alert'
+  )),
+  related_position_id INTEGER,
+  delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
+  delivered_at TIMESTAMP,
+  acknowledged_at TIMESTAMP,
+  user_reply TEXT,
+  user_reply_at TIMESTAMP,
+  agent_seen_reply_at TIMESTAMP,
+  cloud_synced_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (related_position_id) REFERENCES positions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+
 -- Touch trigger su tutte le tabelle: aggiorna updated_at quando una UPDATE
 -- non lo tocca esplicitamente. WHEN evita ricorsione. Allineato a
 -- shared/skills/_db.py (single source of truth runtime).
@@ -221,7 +245,11 @@ CREATE TRIGGER IF NOT EXISTS applications_touch_updated_at
 AFTER UPDATE ON applications FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
 BEGIN UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
 
-PRAGMA user_version = 4;
+CREATE TRIGGER IF NOT EXISTS pending_user_messages_touch_updated_at
+AFTER UPDATE ON pending_user_messages FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE pending_user_messages SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+PRAGMA user_version = 5;
 `;
 
 function loadConfig(): Record<string, unknown> {
