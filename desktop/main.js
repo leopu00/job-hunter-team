@@ -53,6 +53,7 @@ const terminal = require('./terminal')
 const auth = require('./auth')
 const sync = require('./sync')
 const vps = require('./vps')
+const telegram = require('./telegram')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -729,6 +730,18 @@ app.whenReady().then(() => {
   ipcMain.handle('vps:has-key', () => ({ ok: true, hasKey: vps.hasKey() }))
   ipcMain.handle('vps:run-install', (event, args = {}) =>
     vps.runInstall({ ...args, sender: event.sender })
+  )
+
+  // -------- Telegram bot setup (VPS path: 3-bot tokens + remote save)
+  ipcMain.handle('telegram:verify-bot', (_event, token) => telegram.verifyBot(token))
+  ipcMain.handle('telegram:wait-for-chat', (_event, args = {}) =>
+    telegram.waitForFirstChat(args.token, args.deadlineMs),
+  )
+  ipcMain.handle('telegram:cancel-wait-for-chat', (_event, token) =>
+    telegram.cancelWaitForFirstChat(token),
+  )
+  ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
+    telegram.saveBotsToVps(args.vpsIp, args.bots),
   )
 
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
