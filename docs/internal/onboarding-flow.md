@@ -60,12 +60,26 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
 7. 🔑  Provider AI login              ←── ULTIMO, sul host finale
        ├─ Container parte sul host scelto (locale o VPS)
        ├─ App apre terminal embedded → docker exec sul container
+       │  └─ Local: `docker compose run --rm jht <binary> <loginArgs>`
+       │  └─ VPS:   `ssh -tt root@ip docker exec -it jht <binary> <loginArgs>`
+       │     (T1 SshExec.openPty + T3 renderer host/vpsIp routing,
+       │      merge `187dbefb`)
+       ├─ Provider install: `npm install -g <pkg>` su container scelto
+       │  └─ VPS: pre-flight container up + chown npm dirs (T2 fix EACCES,
+       │     merge `3500f8b8`)
        ├─ Utente fa login interattivo (Claude/Codex/Kimi)
        └─ Token salvato direttamente sul host scelto
-       (Già implementato in dev1, [JHT-DESKTOP-LOGIN] — da ottimizzare)
+       (`[JHT-DESKTOP-LOGIN]` chiuso 2026-05-13 dal protocol-vps-refactor)
 
 8. ✅  First team start
 ```
+
+> **Stato implementazione 2026-05-13** (protocol-vps-refactor, master = `fd1f7e6d`):
+> - T1: `desktop/vps/ssh-exec.js` helper centralizzato (`run`/`runStream`/`openPty`/`writeFile`/`forIp`)
+> - T2: `installProvidersViaSsh` con pre-flight container up + chown npm dirs
+> - T3: `terminal:start` location-aware → PTY remoto per OAuth provider
+> - T4: step `STEP_TELEGRAM_TOKENS` con `verifyBot` + `saveBotsToVps` (writeFile su `/root/.jht/jht.config.json`)
+>
 
 ---
 
