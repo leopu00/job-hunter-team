@@ -66,9 +66,13 @@ export default async function DashboardCompany() {
   const useCloudAuth = isSupabaseConfigured && !localRequest;
 
   // Cloud mode: il deploy pubblico è SOLO visualizzazione. Finché l'utente
-  // non ha sincronizzato un profilo dal suo localhost, mostra la landing
-  // "scarica l'app" invece di una dashboard vuota con CTA che non portano
-  // da nessuna parte.
+  // non ha sincronizzato un profilo dal suo localhost — o non ha pairing
+  // attivo via VPS — mostra la landing "scarica l'app" invece di una
+  // dashboard vuota con CTA che non portano da nessuna parte.
+  // Setup VPS: il container `jht` sincronizza il profilo via cloud-sync,
+  // ma fino al primo run di scraping `candidate_profiles` può restare
+  // vuoto. Se l'utente ha però registrato un cloud_sync_token attivo
+  // (= ha completato il pairing VPS), tratta come utente attivo.
   if (useCloudAuth) {
     const supabase = await createClient();
     const {
@@ -81,7 +85,16 @@ export default async function DashboardCompany() {
         .eq("user_id", user.id)
         .maybeSingle();
       if (!cloudProfile) {
-        return <CloudDownloadLanding userEmail={user.email ?? null} />;
+        const { data: pairedToken } = await supabase
+          .from("cloud_sync_tokens")
+          .select("id")
+          .eq("user_id", user.id)
+          .is("revoked_at", null)
+          .limit(1)
+          .maybeSingle();
+        if (!pairedToken) {
+          return <CloudDownloadLanding userEmail={user.email ?? null} />;
+        }
       }
     }
   } else {
