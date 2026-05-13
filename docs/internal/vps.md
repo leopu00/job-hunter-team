@@ -427,7 +427,62 @@ File che NON cambiano: `setup`, `providers`, `sentinella`, `positions`, `shared/
 
 ---
 
-## ❓ Decisioni aperte
+## 🔐 Setup wizard decisions (lockate 2026-05-13)
+
+5 sub-decisioni del Tema B (open-questions doc) chiuse il 2026-05-13.
+
+### 1. Hetzner API token → **NON USATO**
+
+L'app non automatizza la creazione VPS via Hetzner Cloud API.
+Flow lockato:
+- Utente apre portale Hetzner manualmente, crea VPS
+- App genera SSH keypair (no API token Hetzner necessario)
+- Utente paste pubkey JHT su Hetzner durante creazione VPS
+- Utente copia IP e lo paste nell'app
+- App fa SSH con la sua chiave → `curl install.sh | bash`
+
+**Why**: meno superficie (no token con potere di spendere soldi), UX accettabile (2 click extra), flow universale (vale per qualsiasi provider, non solo Hetzner).
+
+### 2. SSH key → **una sola JHT key**
+
+Una sola chiave per l'utente (non una per VPS).
+
+**Regola fondamentale invariante**: **un solo team JHT per utente alla volta**. Non si supporta multi-VPS contemporanea (rompe coerenza db/sync). Quindi N=1 → una sola chiave basta.
+
+### 3. SSH passphrase → **opzionale, scelta utente**
+
+- Default: no passphrase
+- Se utente la setta: app la salva nel keychain OS → utente non la digita più
+- Trade-off lo gestisce l'utente in autonomia
+
+### 4. Identità unificata Supabase → **pairing token via app**
+
+Il token Supabase OAuth dell'app desktop = identità unica per **app + dashboard cloud + VPS pairing**.
+
+**Flow lockato**:
+1. App ha già la session Supabase dell'utente
+2. App genera un "pairing token" derivato dalla session
+3. App passa il pairing token a `install.sh` come parametro
+4. La VPS usa il pairing token per dichiararsi a Supabase come device dell'utente
+
+**Risultato**: l'utente fa OAuth Supabase **una sola volta** nell'app, niente `jht cloud login` interattivo da rifare dentro la VPS.
+
+**Stato**: `[JHT-DESKTOP-LOGIN]` + `[JHT-DESKTOP-SYNC]` in dev1 hanno la parte app già fatta. Da cablare: `install.sh` deve accettare `--pairing-token <token>` invece di chiamare login interattivo.
+
+### 5. Rollout strategy → **B3 desktop diretto anche per beta 0**
+
+Path B1 (Leone-assisted SSH) **scartato**.
+
+| Fase | Path | Note |
+|------|------|------|
+| Beta 0 (ora) | **B3 — Desktop app full** | Anche i primi beta tester usano la desktop app |
+| Beta 1+ | **B2 — CLI assistita** | Path per AI agent (Claude Code, OpenClaw, ecc.) — utente lascia che il suo agente guidi il setup via `jht` CLI |
+
+Path B1 (Leone fa SSH per l'utente) lascia spazio: l'app deve essere già abbastanza buona da bastare ai primi beta tester senza hand-holding 1-a-1.
+
+---
+
+## ❓ Decisioni aperte residue
 
 ### 1. Dove si scarica il `docker-compose.yml`?
 (a) Bake immagine + `--project-directory /app` (uovo-gallina) | (b) `raw.githubusercontent` in `~/.jht/runtime/` ⭐ | (c) Heredoc inline (deriva facilmente).
@@ -465,7 +520,7 @@ Anche con la migliore UX, il VPS resta intrinsecamente più complesso del PC loc
 - scegliere un provider
 - creare un account
 - mettere una carta di credito
-- generare un API token (anche con tutorial)
+- creare la VPS sul portale Hetzner (con tutorial inline nell'app)
 
 Per chi non vuole NIENTE di tutto questo c'è il PC locale (Mode 1) o il PC dedicato in casa (Mode 2). **Il VPS è per "non sono uno smanettone, ma sono motivato e disposto a 30 minuti di setup guidato"** — non per il completo principiante.
 
@@ -519,7 +574,6 @@ Vuoi zero pensieri / setup?             → Mode 1 (PC locale, ma deve restare o
 - `docs/about/VISION.md` — target setup VPS
 - `docs/security/04-threat-model.md` — perché socket-mount è inaccettabile
 - `docs/internal/2026-05-01-bridge-and-token-monitoring.md` — CPU stabile per calibration
-- `docs/internal/2026-05-12-open-questions-bot-and-vps-setup.md` — Tema B: setup VPS roadmap (B1 Leone-assisted / B2 CLI / B3 Desktop full)
 - `scripts/install.sh`, `cli/utils/container-proxy.js`, `docker-compose.yml`
 
 ### Sources providers (2026-05-06)

@@ -244,6 +244,40 @@ l'audit grep lo trovera'.
 
 ---
 
+## 🌍 RULE-T14 — Output language follows the user's locale
+
+The user picks one language at first setup (`~/.jht/i18n-prefs.json::locale`).
+**Everything user-visible must be in that language**, regardless of the
+language of these rules or of your identity prompt:
+
+- 💬 Chat to the user (web, Telegram)
+- 📋 Dashboard UI text you produce (status lines, summaries, notes)
+- 📨 Inter-agent messages via `jht-tmux-send` (they may surface in tools
+  like `tmux capture-pane` and end up shown to the user — keep consistent)
+- 📝 Comments and notes inside deliverables (CV summaries, cover-letter
+  rationale, analyst notes, scorer reasoning, critic feedback)
+
+**Exception — original-language content stays original:**
+
+- 🌐 Job description content (the JD body, requirements, company About)
+  is **not translated**. If the user is Italian but applies to a German
+  position, the JD stays in German. Your *comments about it* are in the
+  user's language.
+- 🔗 URLs, company names, technology names, brand terms — never translate.
+
+**Inter-agent edge case**: agent A in the user's locale receives a JD
+quote (German) from agent B. Agent A processes the German JD, but its
+*own output / commentary* is in the user's locale.
+
+**Implementation note**: the language resolution at boot is in
+`.launcher/start-agent.sh::resolve_identity_template` (reads
+`$JHT_HOME/i18n-prefs.json`, prefers `<role>.<locale>.md` over baseline
+`<role>.md`). Until the translated identity prompts exist, this rule is
+the **runtime safeguard**: even with an IT-baseline prompt, a user with
+`locale=en` must read EN output.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:
