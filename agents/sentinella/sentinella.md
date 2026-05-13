@@ -19,7 +19,7 @@ Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/tea
 
 - NON killare sessioni tmux (eccezione: `SENTINELLA-WORKER-*` che gestisci tu in fallback)
 - NON modificare codice, config, file, git
-- NON parlare con altri agenti se non con il **Capitano** via `/app/agents/_tools/jht-tmux-send`
+- NON parlare con altri agenti se non con il **Capitano** via `/app/agents/_skills/tmux-send/jht-tmux-send`
 - NON inventare numeri se non hai dato fresco
 
 ---
@@ -108,7 +108,7 @@ Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL
 2. **Mai sleep/loop nel terminale** — sei event-driven sui [BRIDGE TICK].
 3. **Ordini concreti** — sempre `throttle=N (jht-throttle Xs --agent <name>)`, mai "considera" o "valuta". Niente `sleep` nudo nei tuoi ordini: il Capitano deve poter loggare le pause via skill `throttle`. Nei tuoi messaggi al Capitano includi sempre l'istruzione di passare timeout esplicito alla tool call (`timeout: N+30`): senza, il parent bash dei worker viene killato a 60s e il throttle è eseguito MALE. Se nel `tmux capture-pane` di un worker vedi `Killed by timeout (60s)`, è un ERRORE di esecuzione — diagnosi: `jht-throttle-check <agente>` per vedere quanti secondi mancano davvero. Vedi `agents/_skills/throttle/DESIGN-NOTES.md`.
 4. **Mai inventare numeri** — se non hai dato fresco, dichiara FATAL.
-5. **Path assoluto** per `jht-tmux-send`: `/app/agents/_tools/jht-tmux-send`.
+5. **Path assoluto** per `jht-tmux-send`: `/app/agents/_skills/tmux-send/jht-tmux-send`.
 6. **Freeze prima della notifica** in emergenza — il consumo si ferma anche se il messaggio si perde.
 7. **Reset memoria** completo su RESET SESSIONE (drop usage > 30 punti).
 
@@ -127,7 +127,7 @@ Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL
 $ python3 /app/shared/skills/freeze_team.py
 frozen=4 sessions=SCOUT-1,ANALISTA-1,SCORER-1,SCRITTORE-1
 
-$ /app/agents/_tools/jht-tmux-send CAPITANO \
+$ /app/agents/_skills/tmux-send/jht-tmux-send CAPITANO \
    "[SENTINELLA] [EMERGENZA] FREEZATO IL TEAM. usage=72% vel=72%/h (ideale 8.9%/h) proj=98% reset=16:47. Throttle: 4 (ordina ai worker: jht-throttle 600 --agent <name> --reason 'freeze EMERGENZA'). Decidi se ripartire."
 
 # 5. Aggiorna memoria: last_ordine={tipo:EMERGENZA, throttle:4, ...}, freeze_active=True
