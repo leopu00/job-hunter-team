@@ -161,6 +161,20 @@ contextBridge.exposeInMainWorld('vpsApi', {
   writeConfig: (args) => ipcRenderer.invoke('vps:write-config', args),
 })
 
+// Telegram bot setup (VPS-only path): /getMe verification, chat_id
+// auto-capture via long-poll getUpdates, and atomic merge-then-write of
+// the 3 bots into /root/.jht/jht.config.json on the VPS. All HTTPS to
+// api.telegram.org and SSH writes happen in main — renderer stays
+// CSP-clean.
+contextBridge.exposeInMainWorld('telegramApi', {
+  verifyBot: (token) => ipcRenderer.invoke('telegram:verify-bot', token),
+  waitForChatId: (token, deadlineMs) =>
+    ipcRenderer.invoke('telegram:wait-for-chat', { token, deadlineMs }),
+  cancelWaitForChatId: (token) =>
+    ipcRenderer.invoke('telegram:cancel-wait-for-chat', token),
+  saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
+})
+
 contextBridge.exposeInMainWorld('syncApi', {
   getStatus: () => ipcRenderer.invoke('sync:get-status'),
   setup: (args) => ipcRenderer.invoke('sync:setup', args),
