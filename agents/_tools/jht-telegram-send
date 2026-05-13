@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
-# jht-telegram-send — invia un messaggio al chat Telegram dell'utente.
+# jht-telegram-send — invia un messaggio al bot Telegram di un agente.
 #
-# Risolve token + chat_id da:
-#   1. ENV: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
-#   2. credenziali: $JHT_HOME/credentials/telegram_bot.json (.token)
-#   3. config:      $JHT_HOME/jht.config.json (channels.telegram.{bot_token,chat_id})
+# Schema 2026-05-13 rev2: 3 bot dedicati (assistente, capitano, mentor)
+# in channels.telegram.bots.<role>. Ogni agente parla all'utente sul SUO bot.
+#
+# Risoluzione token + chat_id:
+#   1. ENV: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (override esplicito)
+#   2. config: $JHT_HOME/jht.config.json → channels.telegram.bots.<role>
+#      (role default: $JHT_TG_BOT_ROLE oppure "assistente")
+#   3. fallback creds: $JHT_HOME/credentials/telegram_bot.json (.token)
+#      [legacy — usato solo se config mancante]
 #
 # Uso:
-#   jht-telegram-send "<testo>"                # plain text
-#   jht-telegram-send --html "<b>ciao</b>"     # HTML parse_mode
-#   jht-telegram-send --chat-id 123 "<testo>"  # override esplicito chat_id
+#   jht-telegram-send "<testo>"                       # bot assistente (default)
+#   jht-telegram-send --from capitano "<testo>"       # bot Capitano
+#   jht-telegram-send --from mentor --html "<b>x</b>"
+#   jht-telegram-send --chat-id 123 "<testo>"         # override chat_id
 #
 # Exit:
 #   0 → consegnato (HTTP 200, ok:true)
-#   1 → argomenti mancanti
+#   1 → argomenti mancanti / ruolo invalido
 #   2 → token assente
 #   3 → chat_id assente
 #   4 → errore di rete o HTTP non-200
@@ -23,6 +29,7 @@ set -euo pipefail
 
 parse_mode=""
 chat_id_override=""
+role="${JHT_TG_BOT_ROLE:-assistente}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -32,6 +39,8 @@ while [ $# -gt 0 ]; do
       parse_mode="MarkdownV2"; shift ;;
     --chat-id)
       chat_id_override="${2:-}"; shift 2 ;;
+    --from)
+      role="${2:-}"; shift 2 ;;
     --)
       shift; break ;;
     -*)
@@ -42,8 +51,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+case "$role" in
+  assistente|capitano|mentor) ;;
+  *)
+    echo "jht-telegram-send: --from deve essere assistente|capitano|mentor (ricevuto: '$role')" >&2
+    exit 1 ;;
+esac
+
 if [ $# -lt 1 ]; then
-  echo "Usage: jht-telegram-send [--html|--markdown] [--chat-id <id>] <text>" >&2
+  echo "Usage: jht-telegram-send [--from <role>] [--html|--markdown] [--chat-id <id>] <text>" >&2
   exit 1
 fi
 
@@ -54,23 +70,24 @@ creds_path="$jht_home/credentials/telegram_bot.json"
 
 # ── Risoluzione token ─────────────────────────────────────────────────
 token="${TELEGRAM_BOT_TOKEN:-}"
+if [ -z "$token" ] && [ -f "$config_path" ]; then
+  token=$(python3 -c "import json,sys
+try:
+  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('bots',{}).get(sys.argv[2],{}).get('bot_token',''))
+except Exception:
+  pass" "$config_path" "$role" 2>/dev/null || true)
+fi
 if [ -z "$token" ] && [ -f "$creds_path" ]; then
+  # Fallback legacy: file credentials/telegram_bot.json (un solo token, no role)
   token=$(python3 -c "import json,sys
 try:
   print(json.load(open(sys.argv[1])).get('token',''))
 except Exception:
   pass" "$creds_path" 2>/dev/null || true)
 fi
-if [ -z "$token" ] && [ -f "$config_path" ]; then
-  token=$(python3 -c "import json,sys
-try:
-  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('bot_token',''))
-except Exception:
-  pass" "$config_path" 2>/dev/null || true)
-fi
 
 if [ -z "$token" ]; then
-  echo "jht-telegram-send: token Telegram non trovato (env TELEGRAM_BOT_TOKEN, $creds_path, o config)" >&2
+  echo "jht-telegram-send: token Telegram non trovato per ruolo '$role' (env TELEGRAM_BOT_TOKEN, channels.telegram.bots.$role in $config_path, o $creds_path)" >&2
   exit 2
 fi
 
@@ -80,13 +97,13 @@ chat_id="$chat_id_override"
 if [ -z "$chat_id" ] && [ -f "$config_path" ]; then
   chat_id=$(python3 -c "import json,sys
 try:
-  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('chat_id',''))
+  print(json.load(open(sys.argv[1])).get('channels',{}).get('telegram',{}).get('bots',{}).get(sys.argv[2],{}).get('chat_id',''))
 except Exception:
-  pass" "$config_path" 2>/dev/null || true)
+  pass" "$config_path" "$role" 2>/dev/null || true)
 fi
 
 if [ -z "$chat_id" ]; then
-  echo "jht-telegram-send: chat_id non trovato (env TELEGRAM_CHAT_ID, --chat-id, o $config_path)" >&2
+  echo "jht-telegram-send: chat_id non trovato per ruolo '$role' (env TELEGRAM_CHAT_ID, --chat-id, o channels.telegram.bots.$role.chat_id in $config_path)" >&2
   exit 3
 fi
 

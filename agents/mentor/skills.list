@@ -6,6 +6,9 @@
 # User communication (web UI)
 chat-web
 
+# Phone-side outbound: nudge strategici settimanali sul bot Mentor
+telegram-send
+
 # Inter-agent (rare — escalation to Capitano if needed)
 tmux-send
 
