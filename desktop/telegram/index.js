@@ -190,7 +190,7 @@ async function saveBotsToVps(vpsIp, bots) {
   // distinguishes "file missing" from "host unreachable" if needed.
   let remote = {}
   try {
-    const readRes = await SshExec.run(vpsIp, `cat '${REMOTE_CONFIG_PATH}' 2>/dev/null || true`, { timeoutMs: 15000 })
+    const readRes = await SshExec.run(vpsIp, `cat '${REMOTE_CONFIG_PATH}' 2>/dev/null || true`, { timeout: 15000 })
     if (readRes.ok && readRes.stdout && readRes.stdout.trim()) {
       try {
         remote = JSON.parse(readRes.stdout)
@@ -236,7 +236,7 @@ async function saveBotsToVps(vpsIp, bots) {
   // it but we don't depend on its run order). mkdir is a no-op if it
   // already exists, so cheaper than branching.
   try {
-    const mkdirRes = await SshExec.run(vpsIp, `mkdir -p '${REMOTE_CONFIG_DIR}'`, { timeoutMs: 15000 })
+    const mkdirRes = await SshExec.run(vpsIp, `mkdir -p '${REMOTE_CONFIG_DIR}'`, { timeout: 15000 })
     if (!mkdirRes.ok) {
       log.warn('saveBotsToVps.mkdir-failed', { code: mkdirRes.code, stderr: mkdirRes.stderr })
       return { ok: false, error: 'ssh-mkdir-failed', stderr: mkdirRes.stderr }
