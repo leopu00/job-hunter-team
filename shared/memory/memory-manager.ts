@@ -1,32 +1,32 @@
 // shared/memory/memory-manager.ts — Orchestratore caricamento memoria agente
 
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 import type {
   AgentMemoryContext,
   BootstrapFile,
   BootstrapFileName,
   MemoryManagerOptions,
-} from './types.js';
-import { loadIdentityFromWorkspace } from './identity.js';
-import { loadSoulFromWorkspace } from './soul.js';
-import { IDENTITY_TEMPLATE } from './identity.js';
-import { SOUL_TEMPLATE } from './soul.js';
+} from "./types.js";
+import { loadIdentityFromWorkspace } from "./identity.js";
+import { loadSoulFromWorkspace } from "./soul.js";
+import { IDENTITY_TEMPLATE } from "./identity.js";
+import { SOUL_TEMPLATE } from "./soul.js";
 
 /** Nomi dei file di bootstrap riconosciuti, in ordine di caricamento */
 const BOOTSTRAP_FILES: readonly BootstrapFileName[] = [
-  'SOUL.md',
-  'IDENTITY.md',
-  'MEMORY.md',
-  'AGENTS.md',
-  'USER.md',
-  'TOOLS.md',
+  "SOUL.md",
+  "IDENTITY.md",
+  "MEMORY.md",
+  "AGENTS.md",
+  "USER.md",
+  "TOOLS.md",
 ];
 
 /** File che hanno un template predefinito */
 const TEMPLATES: Partial<Record<BootstrapFileName, string>> = {
-  'IDENTITY.md': IDENTITY_TEMPLATE,
-  'SOUL.md': SOUL_TEMPLATE,
+  "IDENTITY.md": IDENTITY_TEMPLATE,
+  "SOUL.md": SOUL_TEMPLATE,
 };
 
 /** Carica un singolo file bootstrap se esiste */
@@ -36,7 +36,7 @@ function loadBootstrapFile(
 ): BootstrapFile | null {
   const filePath = path.join(dir, name);
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, "utf-8");
     if (!content.trim()) return null;
     return { name, filePath, content };
   } catch {
@@ -48,7 +48,7 @@ function loadBootstrapFile(
 function writeFileIfMissing(filePath: string, content: string): boolean {
   if (fs.existsSync(filePath)) return false;
   try {
-    fs.writeFileSync(filePath, content, 'utf-8');
+    fs.writeFileSync(filePath, content, "utf-8");
     return true;
   } catch {
     return false;
@@ -83,11 +83,11 @@ export function loadBootstrapFiles(workspaceDir: string): BootstrapFile[] {
 
   // MEMORY.md: preferisci maiuscolo, fallback a minuscolo
   const memoryFile =
-    loadBootstrapFile(workspaceDir, 'MEMORY.md') ??
-    loadBootstrapFile(workspaceDir, 'memory.md');
+    loadBootstrapFile(workspaceDir, "MEMORY.md") ??
+    loadBootstrapFile(workspaceDir, "memory.md");
 
   for (const name of BOOTSTRAP_FILES) {
-    if (name === 'MEMORY.md') {
+    if (name === "MEMORY.md") {
       if (memoryFile) files.push(memoryFile);
       continue;
     }
@@ -102,7 +102,9 @@ export function loadBootstrapFiles(workspaceDir: string): BootstrapFile[] {
  * Carica il contesto memoria completo di un agente.
  * Include identity, soul, e tutti i file bootstrap.
  */
-export function loadAgentMemory(options: MemoryManagerOptions): AgentMemoryContext {
+export function loadAgentMemory(
+  options: MemoryManagerOptions,
+): AgentMemoryContext {
   const { workspaceDir, createTemplates = false } = options;
 
   if (createTemplates) {

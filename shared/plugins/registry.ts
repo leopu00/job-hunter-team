@@ -58,7 +58,9 @@ export function createRegistry(records: PluginRecord[]): PluginRegistry {
       return records.filter((r) => {
         const kinds = r.manifest.kind;
         if (!kinds) return false;
-        return Array.isArray(kinds) ? kinds.includes(kind as never) : kinds === kind;
+        return Array.isArray(kinds)
+          ? kinds.includes(kind as never)
+          : kinds === kind;
       });
     },
 
@@ -160,7 +162,9 @@ export function getActiveRegistry(): PluginRegistry | null {
 /** Ottieni il registry attivo o lancia errore */
 export function requireActiveRegistry(): PluginRegistry {
   if (!activeRegistry) {
-    throw new Error("Plugin registry non inizializzato. Chiama loadPlugins() prima.");
+    throw new Error(
+      "Plugin registry non inizializzato. Chiama loadPlugins() prima.",
+    );
   }
   return activeRegistry;
 }

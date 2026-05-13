@@ -1,9 +1,14 @@
 /**
  * i18n — Helper t(), gestione locale, interpolazione
  */
-import type { Locale, TranslateOptions, I18nConfig, TranslationMap } from './types.js';
-import { DEFAULT_I18N_CONFIG, DEFAULT_LOCALE, isValidLocale } from './types.js';
-import { translations as builtinTranslations } from './translations.js';
+import type {
+  Locale,
+  TranslateOptions,
+  I18nConfig,
+  TranslationMap,
+} from "./types.js";
+import { DEFAULT_I18N_CONFIG, DEFAULT_LOCALE, isValidLocale } from "./types.js";
+import { translations as builtinTranslations } from "./translations.js";
 
 // --- State ---
 
@@ -29,12 +34,15 @@ export function getFallbackLocale(): Locale {
 /** Rileva locale da environment o header Accept-Language */
 export function detectLocale(acceptLanguage?: string): Locale {
   // 1. Env var
-  const envLocale = typeof process !== 'undefined' ? process.env.JHT_LOCALE : undefined;
+  const envLocale =
+    typeof process !== "undefined" ? process.env.JHT_LOCALE : undefined;
   if (envLocale && isValidLocale(envLocale)) return envLocale;
 
   // 2. Accept-Language header
   if (acceptLanguage) {
-    const langs = acceptLanguage.split(',').map(l => l.split(';')[0].trim().slice(0, 2).toLowerCase());
+    const langs = acceptLanguage
+      .split(",")
+      .map((l) => l.split(";")[0].trim().slice(0, 2).toLowerCase());
     for (const lang of langs) {
       if (isValidLocale(lang)) return lang;
     }
@@ -48,15 +56,15 @@ export function detectLocale(acceptLanguage?: string): Locale {
 function resolve(map: TranslationMap, key: string): string | undefined {
   // Prova chiave diretta
   const direct = map[key];
-  if (typeof direct === 'string') return direct;
+  if (typeof direct === "string") return direct;
 
   // Prova dot notation: "nav.dashboard" → map["nav"]["dashboard"]
-  const parts = key.split('.');
+  const parts = key.split(".");
   if (parts.length === 2) {
     const section = map[parts[0]];
-    if (typeof section === 'object' && section !== null) {
+    if (typeof section === "object" && section !== null) {
       const val = section[parts[1]];
-      if (typeof val === 'string') return val;
+      if (typeof val === "string") return val;
     }
   }
 
@@ -65,7 +73,10 @@ function resolve(map: TranslationMap, key: string): string | undefined {
 
 // --- Interpolation ---
 
-function interpolate(text: string, vars: Record<string, string | number>): string {
+function interpolate(
+  text: string,
+  vars: Record<string, string | number>,
+): string {
   return text.replace(/\{(\w+)\}/g, (match, key: string) => {
     const val = vars[key];
     return val !== undefined ? String(val) : match;
@@ -92,7 +103,10 @@ export function t(key: string, options?: TranslateOptions): string {
 
   // Fallback locale
   if (text === undefined && config.fallbackLocale !== config.locale) {
-    text = resolve(config.dictionaries[config.fallbackLocale] ?? {}, resolvedKey);
+    text = resolve(
+      config.dictionaries[config.fallbackLocale] ?? {},
+      resolvedKey,
+    );
   }
 
   // Fallback chiave originale (senza .one/.other) se plurale non trovato

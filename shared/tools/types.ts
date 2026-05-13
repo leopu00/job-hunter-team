@@ -91,7 +91,12 @@ export type ToolDefinition = {
 
 export type HeartbeatIndicatorType = "ok" | "alert" | "error";
 
-export type HeartbeatStatus = "sent" | "ok-empty" | "ok-token" | "skipped" | "failed";
+export type HeartbeatStatus =
+  | "sent"
+  | "ok-empty"
+  | "ok-token"
+  | "skipped"
+  | "failed";
 
 export type HeartbeatEvent = {
   ts: number;

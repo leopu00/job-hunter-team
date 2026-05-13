@@ -97,7 +97,11 @@ export function classifyIntent(text: string): UserIntent {
 
 // ── FILTER EXTRACTION ───────────────────────────────────────
 
-function extractJobFilters(text: string): { role?: string; remote?: boolean; location?: string } {
+function extractJobFilters(text: string): {
+  role?: string;
+  remote?: boolean;
+  location?: string;
+} {
   const filters: { role?: string; remote?: boolean; location?: string } = {};
 
   // Rileva remote
@@ -106,13 +110,17 @@ function extractJobFilters(text: string): { role?: string; remote?: boolean; loc
   }
 
   // Rileva ruolo (dopo "come" o "da")
-  const roleMatch = text.match(/(?:come|da|ruolo\s+di?)\s+([a-zA-ZàèéìòùÀÈÉÌÒÙ\s-]+)/i);
+  const roleMatch = text.match(
+    /(?:come|da|ruolo\s+di?)\s+([a-zA-ZàèéìòùÀÈÉÌÒÙ\s-]+)/i,
+  );
   if (roleMatch) {
     filters.role = roleMatch[1].trim().slice(0, 100);
   }
 
   // Rileva location (dopo "a" o "in")
-  const locMatch = text.match(/(?:\ba\b|\bin\b)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/);
+  const locMatch = text.match(
+    /(?:\ba\b|\bin\b)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/,
+  );
   if (locMatch) {
     filters.location = locMatch[1].trim();
   }
@@ -123,12 +131,14 @@ function extractJobFilters(text: string): { role?: string; remote?: boolean; loc
 // ── USER MESSAGES ───────────────────────────────────────────
 
 const INTENT_MESSAGES: Record<string, string> = {
-  job_search: "🔍 Ricerca avviata! Ho inoltrato la tua richiesta al team. Ti aggiorno appena ci sono novità.",
+  job_search:
+    "🔍 Ricerca avviata! Ho inoltrato la tua richiesta al team. Ti aggiorno appena ci sono novità.",
   status_check: "📊 Chiedo aggiornamenti al team...",
   list_applications: "📋 Recupero la lista delle tue candidature...",
   stop_search: "⏸️ Richiesta di pausa inviata al team.",
   update_profile: "✏️ Richiesta di aggiornamento profilo inviata.",
-  unknown: "🤔 Non ho capito la richiesta. Prova con:\n• \"Trovami lavoro come developer\"\n• \"Stato della ricerca\"\n• \"Lista candidature\"",
+  unknown:
+    '🤔 Non ho capito la richiesta. Prova con:\n• "Trovami lavoro come developer"\n• "Stato della ricerca"\n• "Lista candidature"',
 };
 
 /** Messaggio di conferma per l'utente */
@@ -138,23 +148,27 @@ export function getIntentAck(intent: UserIntent): string {
 
 // ── HANDLER REGISTRATION ────────────────────────────────────
 
-export type OnUserRequest = (intent: UserIntent, chatId: string, messageId: number) => Promise<void>;
+export type OnUserRequest = (
+  intent: UserIntent,
+  chatId: string,
+  messageId: number,
+) => Promise<void>;
 
 /** Registra handler messaggi sul bot assistente */
 export function registerAssistantHandlers(
   bot: Bot,
   config: AssistantConfig,
-  onRequest: OnUserRequest
+  onRequest: OnUserRequest,
 ): void {
   // Comando /start
   bot.command("start", async (ctx) => {
     if (!isOwner(ctx, config.ownerChatId)) return;
     await ctx.reply(
       `${config.avatar} Ciao! Sono il tuo ${config.name}.\n\n` +
-      "Dimmi cosa cerchi e il team si mette al lavoro:\n" +
-      '• "Trovami lavoro come React developer"\n' +
-      '• "Stato della ricerca"\n' +
-      '• "Lista candidature"'
+        "Dimmi cosa cerchi e il team si mette al lavoro:\n" +
+        '• "Trovami lavoro come React developer"\n' +
+        '• "Stato della ricerca"\n' +
+        '• "Lista candidature"',
     );
   });
 

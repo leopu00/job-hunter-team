@@ -2,13 +2,20 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createFixedWindowRateLimiter } from "./fixed-window.js";
 import { resolveRetryConfig, retryAsync } from "./retry.js";
-import { createProviderRetryRunner, API_RETRY_DEFAULTS } from "./provider-retry.js";
+import {
+  createProviderRetryRunner,
+  API_RETRY_DEFAULTS,
+} from "./provider-retry.js";
 
 // ── Fixed Window Rate Limiter ──────────────────────────────
 
 describe("createFixedWindowRateLimiter", () => {
   it("permette richieste entro il limite", () => {
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 3, windowMs: 1000, now: () => 100 });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 3,
+      windowMs: 1000,
+      now: () => 100,
+    });
     const r1 = limiter.consume();
     assert.equal(r1.allowed, true);
     assert.equal(r1.remaining, 2);
@@ -17,7 +24,11 @@ describe("createFixedWindowRateLimiter", () => {
 
   it("blocca dopo maxRequests esaurite", () => {
     let t = 100;
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 2, windowMs: 1000, now: () => t });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 2,
+      windowMs: 1000,
+      now: () => t,
+    });
     limiter.consume();
     limiter.consume();
     const r3 = limiter.consume();
@@ -27,7 +38,11 @@ describe("createFixedWindowRateLimiter", () => {
   });
 
   it("remaining decresce ad ogni consume", () => {
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 4, windowMs: 1000, now: () => 0 });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 4,
+      windowMs: 1000,
+      now: () => 0,
+    });
     assert.equal(limiter.consume().remaining, 3);
     assert.equal(limiter.consume().remaining, 2);
     assert.equal(limiter.consume().remaining, 1);
@@ -36,7 +51,11 @@ describe("createFixedWindowRateLimiter", () => {
 
   it("retryAfterMs indica il tempo restante della finestra", () => {
     let t = 0;
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 1, windowMs: 1000, now: () => t });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 1,
+      windowMs: 1000,
+      now: () => t,
+    });
     limiter.consume();
     t = 300;
     const blocked = limiter.consume();
@@ -46,7 +65,11 @@ describe("createFixedWindowRateLimiter", () => {
 
   it("resetta la finestra dopo windowMs", () => {
     let t = 0;
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 1, windowMs: 100, now: () => t });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 1,
+      windowMs: 100,
+      now: () => t,
+    });
     limiter.consume();
     assert.equal(limiter.consume().allowed, false);
     t = 100;
@@ -56,7 +79,11 @@ describe("createFixedWindowRateLimiter", () => {
   });
 
   it("reset() azzera contatore e finestra", () => {
-    const limiter = createFixedWindowRateLimiter({ maxRequests: 1, windowMs: 1000, now: () => 50 });
+    const limiter = createFixedWindowRateLimiter({
+      maxRequests: 1,
+      windowMs: 1000,
+      now: () => 50,
+    });
     limiter.consume();
     assert.equal(limiter.consume().allowed, false);
     limiter.reset();
@@ -82,7 +109,10 @@ describe("resolveRetryConfig", () => {
   });
 
   it("maxDelayMs non scende sotto minDelayMs", () => {
-    const cfg = resolveRetryConfig(undefined, { minDelayMs: 5000, maxDelayMs: 100 });
+    const cfg = resolveRetryConfig(undefined, {
+      minDelayMs: 5000,
+      maxDelayMs: 100,
+    });
     assert.ok(cfg.maxDelayMs >= cfg.minDelayMs);
   });
 });
@@ -97,11 +127,14 @@ describe("retryAsync", () => {
 
   it("ritenta e riesce al secondo tentativo", async () => {
     let calls = 0;
-    const result = await retryAsync(() => {
-      calls++;
-      if (calls < 2) throw new Error("fail");
-      return Promise.resolve("recovered");
-    }, { attempts: 3, minDelayMs: 1, maxDelayMs: 1 });
+    const result = await retryAsync(
+      () => {
+        calls++;
+        if (calls < 2) throw new Error("fail");
+        return Promise.resolve("recovered");
+      },
+      { attempts: 3, minDelayMs: 1, maxDelayMs: 1 },
+    );
     assert.equal(result, "recovered");
     assert.equal(calls, 2);
   });
@@ -109,7 +142,15 @@ describe("retryAsync", () => {
   it("lancia dopo tentativi esauriti (forma numerica)", async () => {
     let calls = 0;
     await assert.rejects(
-      () => retryAsync(() => { calls++; throw new Error("always"); }, 2, 1),
+      () =>
+        retryAsync(
+          () => {
+            calls++;
+            throw new Error("always");
+          },
+          2,
+          1,
+        ),
       { message: "always" },
     );
     assert.equal(calls, 2);
@@ -117,12 +158,18 @@ describe("retryAsync", () => {
 
   it("rispetta shouldRetry — non ritenta se false", async () => {
     let calls = 0;
-    await assert.rejects(
-      () => retryAsync(() => { calls++; throw new Error("stop"); }, {
-        attempts: 5,
-        minDelayMs: 1,
-        shouldRetry: () => false,
-      }),
+    await assert.rejects(() =>
+      retryAsync(
+        () => {
+          calls++;
+          throw new Error("stop");
+        },
+        {
+          attempts: 5,
+          minDelayMs: 1,
+          shouldRetry: () => false,
+        },
+      ),
     );
     assert.equal(calls, 1);
   });
@@ -130,13 +177,19 @@ describe("retryAsync", () => {
   it("invoca onRetry callback", async () => {
     const retries: number[] = [];
     let calls = 0;
-    await assert.rejects(
-      () => retryAsync(() => { calls++; throw new Error("err"); }, {
-        attempts: 3,
-        minDelayMs: 1,
-        maxDelayMs: 1,
-        onRetry: (info) => retries.push(info.attempt),
-      }),
+    await assert.rejects(() =>
+      retryAsync(
+        () => {
+          calls++;
+          throw new Error("err");
+        },
+        {
+          attempts: 3,
+          minDelayMs: 1,
+          maxDelayMs: 1,
+          onRetry: (info) => retries.push(info.attempt),
+        },
+      ),
     );
     assert.deepEqual(retries, [1, 2]);
   });

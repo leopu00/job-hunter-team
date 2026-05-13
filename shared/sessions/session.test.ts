@@ -4,17 +4,31 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  createSession, pauseSession, resumeSession, endSession,
-  updateSession, recordMessage, normalizeInputProvenance,
-  onSessionLifecycle, onSessionTranscript,
+  createSession,
+  pauseSession,
+  resumeSession,
+  endSession,
+  updateSession,
+  recordMessage,
+  normalizeInputProvenance,
+  onSessionLifecycle,
+  onSessionTranscript,
 } from "./session.js";
 import {
-  findSessionById, findSessionsByChannel, findActiveSessions,
-  findSessionsByUser, removeSessionFromStore, addSessionToStore,
+  findSessionById,
+  findSessionsByChannel,
+  findActiveSessions,
+  findSessionsByUser,
+  removeSessionFromStore,
+  addSessionToStore,
   pruneEndedSessions,
 } from "./store.js";
 import { looksLikeSessionId, parseSessionLabel } from "./types.js";
-import type { SessionEntry, SessionStoreFile, SessionLifecycleEvent } from "./types.js";
+import type {
+  SessionEntry,
+  SessionStoreFile,
+  SessionLifecycleEvent,
+} from "./types.js";
 
 function mockStore(...entries: SessionEntry[]): SessionStoreFile {
   return { version: 1, sessions: entries };
@@ -22,8 +36,13 @@ function mockStore(...entries: SessionEntry[]): SessionStoreFile {
 
 function mockEntry(overrides: Partial<SessionEntry> = {}): SessionEntry {
   return {
-    id: "s-1", channelId: "web", chatType: "direct", state: "active",
-    createdAtMs: Date.now(), updatedAtMs: Date.now(), messageCount: 0,
+    id: "s-1",
+    channelId: "web",
+    chatType: "direct",
+    state: "active",
+    createdAtMs: Date.now(),
+    updatedAtMs: Date.now(),
+    messageCount: 0,
     ...overrides,
   };
 }
@@ -38,7 +57,12 @@ describe("Session Logic", () => {
   });
 
   it("createSession applica parametri opzionali", () => {
-    const s = createSession({ channelId: "cli", label: "Test", provider: "openai", model: "gpt-4o" });
+    const s = createSession({
+      channelId: "cli",
+      label: "Test",
+      provider: "openai",
+      model: "gpt-4o",
+    });
     assert.equal(s.label, "Test");
     assert.equal(s.provider, "openai");
     assert.equal(s.model, "gpt-4o");
@@ -71,7 +95,11 @@ describe("Session Logic", () => {
 
   it("updateSession patcha label, provider, model, context", () => {
     const s = createSession({ channelId: "web", label: "old" });
-    updateSession(s, { label: "new", provider: "openai", context: { key: "val" } });
+    updateSession(s, {
+      label: "new",
+      provider: "openai",
+      context: { key: "val" },
+    });
     assert.equal(s.label, "new");
     assert.equal(s.provider, "openai");
     assert.deepEqual(s.context, { key: "val" });
@@ -95,12 +123,17 @@ describe("Session Logic", () => {
     pauseSession(s);
     endSession(s);
     unsub();
-    assert.deepEqual(evts.map((e) => e.action), ["created", "paused", "ended"]);
+    assert.deepEqual(
+      evts.map((e) => e.action),
+      ["created", "paused", "ended"],
+    );
   });
 
   it("transcript events emessi su recordMessage", () => {
     const updates: Array<{ role: string; text: string }> = [];
-    const unsub = onSessionTranscript((u) => updates.push({ role: u.role, text: u.text }));
+    const unsub = onSessionTranscript((u) =>
+      updates.push({ role: u.role, text: u.text }),
+    );
     const s = createSession({ channelId: "cli" });
     recordMessage(s, { role: "user", text: "ping" });
     unsub();
@@ -111,7 +144,10 @@ describe("Session Logic", () => {
   it("normalizeInputProvenance valida e rifiuta input invalido", () => {
     assert.equal(normalizeInputProvenance(null), undefined);
     assert.equal(normalizeInputProvenance({ kind: "invalid" }), undefined);
-    const p = normalizeInputProvenance({ kind: "external_user", sourceChannel: "web" });
+    const p = normalizeInputProvenance({
+      kind: "external_user",
+      sourceChannel: "web",
+    });
     assert.ok(p);
     assert.equal(p.kind, "external_user");
     assert.equal(p.sourceChannel, "web");

@@ -22,7 +22,10 @@ export function hasVariables(text: string): boolean {
 }
 
 /** Sostituisce variabili {var} nel testo. Variabili non risolte restano invariate. */
-export function substituteVariables(text: string, vars: TemplateVariables): string {
+export function substituteVariables(
+  text: string,
+  vars: TemplateVariables,
+): string {
   return text.replace(VAR_PATTERN, (match, key: string) => {
     const lowerKey = key.toLowerCase();
     for (const [k, v] of Object.entries(vars)) {
@@ -63,14 +66,20 @@ export function formatContextFiles(files: ContextFile[]): string {
 }
 
 /** Filtra sezioni per modalita' prompt */
-function filterSectionsForMode(sections: PromptSection[], mode: PromptMode): PromptSection[] {
+function filterSectionsForMode(
+  sections: PromptSection[],
+  mode: PromptMode,
+): PromptSection[] {
   if (mode === "none") return [];
   if (mode === "minimal") return sections.filter((s) => s.priority >= 80);
   return sections;
 }
 
 /** Tronca testo a maxChars rispettando confini di riga */
-function truncateToChars(text: string, maxChars: number): { text: string; truncated: boolean } {
+function truncateToChars(
+  text: string,
+  maxChars: number,
+): { text: string; truncated: boolean } {
   if (text.length <= maxChars) return { text, truncated: false };
   const cutIdx = text.lastIndexOf("\n", maxChars);
   const idx = cutIdx > maxChars * 0.5 ? cutIdx : maxChars;
@@ -142,6 +151,9 @@ export function composePrompt(options: ComposeOptions): ComposedPrompt {
 /**
  * Shortcut: applica variabili a un template e ritorna il testo risultante.
  */
-export function renderTemplate(templateContent: string, vars: TemplateVariables): string {
+export function renderTemplate(
+  templateContent: string,
+  vars: TemplateVariables,
+): string {
   return substituteVariables(templateContent, vars);
 }

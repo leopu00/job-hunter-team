@@ -12,7 +12,12 @@
  *   bot.start();
  */
 
-export { createAssistantBot, registerAssistantHandlers, classifyIntent, getIntentAck } from "./assistant-bot.js";
+export {
+  createAssistantBot,
+  registerAssistantHandlers,
+  classifyIntent,
+  getIntentAck,
+} from "./assistant-bot.js";
 export { TeamBridge } from "./bridge-to-team.js";
 export type {
   AssistantConfig,

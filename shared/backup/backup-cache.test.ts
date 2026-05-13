@@ -4,12 +4,20 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { createBackup, restoreBackup, listBackups, applyRetention } from "./runner.js";
+import {
+  createBackup,
+  restoreBackup,
+  listBackups,
+  applyRetention,
+} from "./runner.js";
 import { LRUCache } from "../cache/lru-cache.js";
 import type { BackupEntry } from "./types.js";
 
 let tmpDir: string, backupDir: string, srcDir: string;
-const src = (files: Record<string, string>) => { for (const [n, c] of Object.entries(files)) fs.writeFileSync(path.join(srcDir, n), c); };
+const src = (files: Record<string, string>) => {
+  for (const [n, c] of Object.entries(files))
+    fs.writeFileSync(path.join(srcDir, n), c);
+};
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bkcache-"));
@@ -17,7 +25,9 @@ beforeEach(() => {
   srcDir = path.join(tmpDir, "src");
   fs.mkdirSync(srcDir, { recursive: true });
 });
-afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
 
 describe("cache backup metadata", () => {
   it("cache lista backup dopo primo fetch", () => {
@@ -98,7 +108,11 @@ describe("invalidazione post-restore", () => {
     const result = restoreBackup(r.entry!.id, restoreDir, { backupDir });
     cache.set("restore:files", result.restoredFiles);
     assert.deepEqual(cache.get("restore:files"), ["g.json"]);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(restoreDir, "g.json"), "utf-8")).data, "test");
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(restoreDir, "g.json"), "utf-8"))
+        .data,
+      "test",
+    );
   });
 });
 
@@ -109,7 +123,10 @@ describe("backup stats via cache", () => {
     createBackup([path.join(srcDir, "h.json")], { backupDir });
     createBackup([path.join(srcDir, "i.json")], { backupDir });
     const list = listBackups({ backupDir });
-    cache.set("backup:stats", { count: list.length, totalSize: list.reduce((s, e) => s + e.sizeBytes, 0) });
+    cache.set("backup:stats", {
+      count: list.length,
+      totalSize: list.reduce((s, e) => s + e.sizeBytes, 0),
+    });
     assert.equal(cache.get("backup:stats")!.count, 2);
     assert.ok(cache.get("backup:stats")!.totalSize > 0);
   });
@@ -131,9 +148,13 @@ describe("backup stats via cache", () => {
     src({ "k.json": "{}" });
     createBackup([path.join(srcDir, "k.json")], { backupDir });
     cache.set("backup:list", listBackups({ backupDir }));
-    cache.get("backup:list"); cache.get("backup:list"); cache.get("backup:missing");
+    cache.get("backup:list");
+    cache.get("backup:list");
+    cache.get("backup:missing");
     const s = cache.stats();
-    assert.equal(s.hits, 2); assert.equal(s.misses, 1); assert.ok(s.hitRate > 0.6);
+    assert.equal(s.hits, 2);
+    assert.equal(s.misses, 1);
+    assert.ok(s.hitRate > 0.6);
   });
 
   it("TTL scade metadata stale dopo intervallo", () => {
@@ -141,13 +162,18 @@ describe("backup stats via cache", () => {
     src({ "l.json": "{}" });
     createBackup([path.join(srcDir, "l.json")], { backupDir });
     cache.set("backup:list", listBackups({ backupDir }));
-    const start = Date.now(); while (Date.now() - start < 5) { /* wait */ }
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      /* wait */
+    }
     assert.equal(cache.get("backup:list"), undefined);
   });
 
   it("cache LRU evict vecchi backup metadata quando piena", () => {
     const cache = new LRUCache<string>({ maxEntries: 2 });
-    cache.set("backup:a", "first"); cache.set("backup:b", "second"); cache.set("backup:c", "third");
+    cache.set("backup:a", "first");
+    cache.set("backup:b", "second");
+    cache.set("backup:c", "third");
     assert.equal(cache.has("backup:a"), false);
     assert.equal(cache.get("backup:b"), "second");
     assert.equal(cache.get("backup:c"), "third");
@@ -165,8 +191,13 @@ describe("backup stats via cache", () => {
 
   it("onEvict callback traccia rimozione metadata backup", () => {
     const evicted: string[] = [];
-    const cache = new LRUCache<string>({ maxEntries: 1, onEvict: (k) => evicted.push(k) });
-    cache.set("backup:old", "v1"); cache.set("backup:new", "v2");
-    assert.equal(evicted.length, 1); assert.equal(evicted[0], "backup:old");
+    const cache = new LRUCache<string>({
+      maxEntries: 1,
+      onEvict: (k) => evicted.push(k),
+    });
+    cache.set("backup:old", "v1");
+    cache.set("backup:new", "v2");
+    assert.equal(evicted.length, 1);
+    assert.equal(evicted[0], "backup:old");
   });
 });

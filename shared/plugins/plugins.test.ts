@@ -4,22 +4,57 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  createRegistry, createEmptyRegistry, RegistryBuilder,
-  resetActiveRegistry, setActiveRegistry, getActiveRegistry, requireActiveRegistry,
+  createRegistry,
+  createEmptyRegistry,
+  RegistryBuilder,
+  resetActiveRegistry,
+  setActiveRegistry,
+  getActiveRegistry,
+  requireActiveRegistry,
 } from "./registry.js";
-import { HookRunner, createHookRunner, resetActiveHookRunner } from "./hooks.js";
-import type { PluginManifest, PluginRecord, PluginsConfig, PluginDefinition } from "./types.js";
+import {
+  HookRunner,
+  createHookRunner,
+  resetActiveHookRunner,
+} from "./hooks.js";
+import type {
+  PluginManifest,
+  PluginRecord,
+  PluginsConfig,
+  PluginDefinition,
+} from "./types.js";
 
-function mockManifest(id: string, overrides?: Partial<PluginManifest>): PluginManifest {
-  return { id, name: `Plugin ${id}`, version: "1.0.0", enabledByDefault: true, ...overrides };
+function mockManifest(
+  id: string,
+  overrides?: Partial<PluginManifest>,
+): PluginManifest {
+  return {
+    id,
+    name: `Plugin ${id}`,
+    version: "1.0.0",
+    enabledByDefault: true,
+    ...overrides,
+  };
 }
 
-function mockRecord(id: string, status: PluginRecord["status"] = "active", extra?: Partial<PluginRecord>): PluginRecord {
-  return { id, manifest: mockManifest(id), status, rootDir: `/tmp/${id}`, ...extra };
+function mockRecord(
+  id: string,
+  status: PluginRecord["status"] = "active",
+  extra?: Partial<PluginRecord>,
+): PluginRecord {
+  return {
+    id,
+    manifest: mockManifest(id),
+    status,
+    rootDir: `/tmp/${id}`,
+    ...extra,
+  };
 }
 
 describe("Plugin Registry", () => {
-  beforeEach(() => { resetActiveRegistry(); });
+  beforeEach(() => {
+    resetActiveRegistry();
+  });
 
   it("createEmptyRegistry crea registry vuoto", () => {
     const reg = createEmptyRegistry();
@@ -37,15 +72,25 @@ describe("Plugin Registry", () => {
   });
 
   it("getActive ritorna solo plugin attivi", () => {
-    const reg = createRegistry([mockRecord("a", "active"), mockRecord("b", "loaded"), mockRecord("c", "active")]);
+    const reg = createRegistry([
+      mockRecord("a", "active"),
+      mockRecord("b", "loaded"),
+      mockRecord("c", "active"),
+    ]);
     assert.equal(reg.getActive().length, 2);
   });
 
   it("getByKind filtra per tipo plugin", () => {
     const reg = createRegistry([
-      mockRecord("a", "active", { manifest: mockManifest("a", { kind: "skill" }) }),
-      mockRecord("b", "active", { manifest: mockManifest("b", { kind: ["tool", "channel"] }) }),
-      mockRecord("c", "active", { manifest: mockManifest("c", { kind: "channel" }) }),
+      mockRecord("a", "active", {
+        manifest: mockManifest("a", { kind: "skill" }),
+      }),
+      mockRecord("b", "active", {
+        manifest: mockManifest("b", { kind: ["tool", "channel"] }),
+      }),
+      mockRecord("c", "active", {
+        manifest: mockManifest("c", { kind: "channel" }),
+      }),
     ]);
     assert.equal(reg.getByKind("skill").length, 1);
     assert.equal(reg.getByKind("channel").length, 2);
@@ -53,14 +98,20 @@ describe("Plugin Registry", () => {
   });
 
   it("getByStatus filtra per stato", () => {
-    const reg = createRegistry([mockRecord("a", "active"), mockRecord("b", "error"), mockRecord("c", "error")]);
+    const reg = createRegistry([
+      mockRecord("a", "active"),
+      mockRecord("b", "error"),
+      mockRecord("c", "error"),
+    ]);
     assert.equal(reg.getByStatus("error").length, 2);
     assert.equal(reg.getByStatus("disabled").length, 0);
   });
 
   it("singleton set/get/require/reset", () => {
     assert.equal(getActiveRegistry(), null);
-    assert.throws(() => requireActiveRegistry(), { message: /non inizializzato/ });
+    assert.throws(() => requireActiveRegistry(), {
+      message: /non inizializzato/,
+    });
     const reg = createEmptyRegistry();
     setActiveRegistry(reg);
     assert.equal(getActiveRegistry(), reg);
@@ -102,7 +153,10 @@ describe("RegistryBuilder", () => {
   it("isPluginEnabled rispetta allow, deny, enabledByDefault", () => {
     const builder = new RegistryBuilder();
     builder.addDiscovered(mockManifest("p1"), "/tmp/p1");
-    builder.addDiscovered(mockManifest("p2", { enabledByDefault: false }), "/tmp/p2");
+    builder.addDiscovered(
+      mockManifest("p2", { enabledByDefault: false }),
+      "/tmp/p2",
+    );
     assert.ok(builder.isPluginEnabled("p1", { enabled: true }));
     assert.ok(!builder.isPluginEnabled("p2", { enabled: true }));
     assert.ok(!builder.isPluginEnabled("p1", { enabled: false }));
@@ -114,30 +168,71 @@ describe("RegistryBuilder", () => {
 
 describe("Plugin HookRunner", () => {
   let runner: HookRunner;
-  beforeEach(() => { runner = new HookRunner(); resetActiveHookRunner(); });
+  beforeEach(() => {
+    runner = new HookRunner();
+    resetActiveHookRunner();
+  });
 
   it("register e run eseguono handler", async () => {
     const calls: string[] = [];
     runner.register({
-      pluginId: "p1", hook: "beforeAgentStart",
-      handler: async (e) => { calls.push(e.agentId); },
+      pluginId: "p1",
+      hook: "beforeAgentStart",
+      handler: async (e) => {
+        calls.push(e.agentId);
+      },
     });
-    await runner.run("beforeAgentStart", { pluginId: "p1", timestamp: Date.now(), agentId: "scout", task: "t" });
+    await runner.run("beforeAgentStart", {
+      pluginId: "p1",
+      timestamp: Date.now(),
+      agentId: "scout",
+      task: "t",
+    });
     assert.deepEqual(calls, ["scout"]);
   });
 
   it("handler eseguiti in ordine di priorita", async () => {
     const order: number[] = [];
-    runner.register({ pluginId: "p1", hook: "onError", handler: () => { order.push(2); }, priority: 200 });
-    runner.register({ pluginId: "p2", hook: "onError", handler: () => { order.push(1); }, priority: 50 });
-    await runner.run("onError", { pluginId: "x", timestamp: Date.now(), error: "e" });
+    runner.register({
+      pluginId: "p1",
+      hook: "onError",
+      handler: () => {
+        order.push(2);
+      },
+      priority: 200,
+    });
+    runner.register({
+      pluginId: "p2",
+      hook: "onError",
+      handler: () => {
+        order.push(1);
+      },
+      priority: 50,
+    });
+    await runner.run("onError", {
+      pluginId: "x",
+      timestamp: Date.now(),
+      error: "e",
+    });
     assert.deepEqual(order, [1, 2]);
   });
 
   it("unregisterPlugin rimuove tutti gli hook di un plugin", () => {
-    runner.register({ pluginId: "p1", hook: "beforeAgentStart", handler: async () => {} });
-    runner.register({ pluginId: "p1", hook: "afterAgentEnd", handler: async () => {} });
-    runner.register({ pluginId: "p2", hook: "beforeAgentStart", handler: async () => {} });
+    runner.register({
+      pluginId: "p1",
+      hook: "beforeAgentStart",
+      handler: async () => {},
+    });
+    runner.register({
+      pluginId: "p1",
+      hook: "afterAgentEnd",
+      handler: async () => {},
+    });
+    runner.register({
+      pluginId: "p2",
+      hook: "beforeAgentStart",
+      handler: async () => {},
+    });
     runner.unregisterPlugin("p1");
     assert.equal(runner.count("beforeAgentStart"), 1);
     assert.ok(!runner.has("afterAgentEnd"));
@@ -146,7 +241,11 @@ describe("Plugin HookRunner", () => {
   it("has, count e listHooks", () => {
     assert.ok(!runner.has("onError"));
     runner.register({ pluginId: "p1", hook: "onError", handler: () => {} });
-    runner.register({ pluginId: "p1", hook: "beforeToolCall", handler: () => {} });
+    runner.register({
+      pluginId: "p1",
+      hook: "beforeToolCall",
+      handler: () => {},
+    });
     assert.ok(runner.has("onError"));
     assert.equal(runner.count("onError"), 1);
     assert.equal(runner.count("beforeAgentStart"), 0);
@@ -155,9 +254,27 @@ describe("Plugin HookRunner", () => {
 
   it("run cattura errori senza bloccare", async () => {
     const calls: string[] = [];
-    runner.register({ pluginId: "bad", hook: "onError", handler: () => { throw new Error("fail"); }, priority: 1 });
-    runner.register({ pluginId: "good", hook: "onError", handler: () => { calls.push("ok"); }, priority: 2 });
-    await runner.run("onError", { pluginId: "x", timestamp: Date.now(), error: "e" });
+    runner.register({
+      pluginId: "bad",
+      hook: "onError",
+      handler: () => {
+        throw new Error("fail");
+      },
+      priority: 1,
+    });
+    runner.register({
+      pluginId: "good",
+      hook: "onError",
+      handler: () => {
+        calls.push("ok");
+      },
+      priority: 2,
+    });
+    await runner.run("onError", {
+      pluginId: "x",
+      timestamp: Date.now(),
+      error: "e",
+    });
     assert.deepEqual(calls, ["ok"]);
   });
 
@@ -171,11 +288,22 @@ describe("Plugin HookRunner", () => {
     const calls: string[] = [];
     const def: PluginDefinition = {
       manifest: mockManifest("p1"),
-      hooks: { beforeAgentStart: async (e) => { calls.push(e.agentId); } },
+      hooks: {
+        beforeAgentStart: async (e) => {
+          calls.push(e.agentId);
+        },
+      },
     };
-    const reg = createRegistry([mockRecord("p1", "active", { definition: def })]);
+    const reg = createRegistry([
+      mockRecord("p1", "active", { definition: def }),
+    ]);
     const r = createHookRunner(reg);
-    await r.run("beforeAgentStart", { pluginId: "p1", timestamp: Date.now(), agentId: "a1", task: "t" });
+    await r.run("beforeAgentStart", {
+      pluginId: "p1",
+      timestamp: Date.now(),
+      agentId: "a1",
+      task: "t",
+    });
     assert.deepEqual(calls, ["a1"]);
   });
 });

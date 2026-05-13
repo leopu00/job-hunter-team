@@ -56,9 +56,15 @@ export const uuid = z.string().uuid("UUID non valido");
 // ── Enum helpers ───────────────────────────────────────────────────────────
 
 /** Crea schema enum da array di valori */
-export function enumFromValues<T extends string>(values: readonly [T, ...T[]], label?: string) {
+export function enumFromValues<T extends string>(
+  values: readonly [T, ...T[]],
+  label?: string,
+) {
   return z.enum(values, {
-    errorMap: () => ({ message: label ?? `Valore non valido. Valori ammessi: ${values.join(", ")}` }),
+    errorMap: () => ({
+      message:
+        label ?? `Valore non valido. Valori ammessi: ${values.join(", ")}`,
+    }),
   });
 }
 
@@ -69,7 +75,10 @@ export type ValidationResult<T> =
   | { success: false; errors: string[] };
 
 /** Valida dati con schema Zod, ritorna risultato tipizzato */
-export function validate<T>(schema: z.ZodType<T>, data: unknown): ValidationResult<T> {
+export function validate<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+): ValidationResult<T> {
   const result = schema.safeParse(data);
   if (result.success) {
     return { success: true, data: result.data };
@@ -84,7 +93,11 @@ export function validate<T>(schema: z.ZodType<T>, data: unknown): ValidationResu
 }
 
 /** Valida e lancia errore se non valido */
-export function validateOrThrow<T>(schema: z.ZodType<T>, data: unknown, label?: string): T {
+export function validateOrThrow<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  label?: string,
+): T {
   const result = validate(schema, data);
   if (result.success) return result.data;
   const prefix = label ? `${label}: ` : "";

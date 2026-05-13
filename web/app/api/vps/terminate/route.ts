@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { deleteServer, getHetznerToken, resolveServerId } from '@/lib/hetzner'
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { deleteServer, getHetznerToken, resolveServerId } from "@/lib/hetzner";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 /**
  * Bottone "💀 Termina VPS" del lifecycle dashboard
@@ -26,55 +26,64 @@ export const dynamic = 'force-dynamic'
  * da redirect XSS (anche se la CSRF guard del proxy ci protegge gia').
  */
 export async function POST(req: Request) {
-  const denied = await requireAuth()
-  if (denied) return denied
+  const denied = await requireAuth();
+  if (denied) return denied;
 
-  let body: { confirm?: string } | null = null
+  let body: { confirm?: string } | null = null;
   try {
-    body = (await req.json()) as { confirm?: string }
+    body = (await req.json()) as { confirm?: string };
   } catch {
     return NextResponse.json(
-      { ok: false, error: 'body JSON obbligatorio: { "confirm": "TERMINATE" }' },
-      { status: 400 }
-    )
+      {
+        ok: false,
+        error: 'body JSON obbligatorio: { "confirm": "TERMINATE" }',
+      },
+      { status: 400 },
+    );
   }
-  if (body?.confirm !== 'TERMINATE') {
+  if (body?.confirm !== "TERMINATE") {
     return NextResponse.json(
-      { ok: false, error: 'campo "confirm" deve valere "TERMINATE" per procedere' },
-      { status: 400 }
-    )
+      {
+        ok: false,
+        error: 'campo "confirm" deve valere "TERMINATE" per procedere',
+      },
+      { status: 400 },
+    );
   }
 
-  const token = getHetznerToken()
+  const token = getHetznerToken();
   if (!token) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          'Hetzner token non configurato. Setta HCLOUD_TOKEN (o JHT_HETZNER_API_TOKEN) ' +
-          'in environment, oppure usa il portale Hetzner per distruggere il server.',
+          "Hetzner token non configurato. Setta HCLOUD_TOKEN (o JHT_HETZNER_API_TOKEN) " +
+          "in environment, oppure usa il portale Hetzner per distruggere il server.",
       },
-      { status: 503 }
-    )
+      { status: 503 },
+    );
   }
 
-  const resolved = await resolveServerId(token)
+  const resolved = await resolveServerId(token);
   if (!resolved.ok) {
-    return NextResponse.json({ ok: false, error: resolved.error }, { status: resolved.status })
+    return NextResponse.json(
+      { ok: false, error: resolved.error },
+      { status: resolved.status },
+    );
   }
 
-  const del = await deleteServer(token, resolved.id)
+  const del = await deleteServer(token, resolved.id);
   if (!del.ok) {
     return NextResponse.json(
-      { ok: false, stage: 'delete-server', error: del.error },
-      { status: del.status }
-    )
+      { ok: false, stage: "delete-server", error: del.error },
+      { status: del.status },
+    );
   }
 
   return NextResponse.json({
     ok: true,
-    action: 'terminate',
+    action: "terminate",
     serverId: resolved.id,
     deleteActionId: del.data.action.id,
-  })
+  });
 }

@@ -22,16 +22,29 @@ const API_KEY_PROVIDERS = ["claude", "openai", "kimi"] as const;
 const OAUTH_PROVIDERS = ["chatgpt_pro", "claude_max"] as const;
 const ALL_PROVIDERS = [...API_KEY_PROVIDERS, ...OAUTH_PROVIDERS] as const;
 
-export const ApiKeyProviderSchema = enumFromValues(API_KEY_PROVIDERS, "Provider API key non valido");
-export const OAuthProviderSchema = enumFromValues(OAUTH_PROVIDERS, "Provider OAuth non valido");
-export const ProviderSchema = enumFromValues(ALL_PROVIDERS, "Provider non valido");
+export const ApiKeyProviderSchema = enumFromValues(
+  API_KEY_PROVIDERS,
+  "Provider API key non valido",
+);
+export const OAuthProviderSchema = enumFromValues(
+  OAUTH_PROVIDERS,
+  "Provider OAuth non valido",
+);
+export const ProviderSchema = enumFromValues(
+  ALL_PROVIDERS,
+  "Provider non valido",
+);
 
-export const CredentialSourceSchema = enumFromValues(
-  ["env", "file", "config", "none"] as const,
-);
-export const CredentialPrecedenceSchema = enumFromValues(
-  ["env-first", "file-first"] as const,
-);
+export const CredentialSourceSchema = enumFromValues([
+  "env",
+  "file",
+  "config",
+  "none",
+] as const);
+export const CredentialPrecedenceSchema = enumFromValues([
+  "env-first",
+  "file-first",
+] as const);
 
 // ── Credenziali ────────────────────────────────────────────────────────────
 
@@ -87,19 +100,27 @@ export const ResolveCredentialInput = z.object({
 
 // ── Funzioni di validazione ────────────────────────────────────────────────
 
-export function validateCredential(data: unknown): ValidationResult<z.infer<typeof CredentialSchema>> {
+export function validateCredential(
+  data: unknown,
+): ValidationResult<z.infer<typeof CredentialSchema>> {
   return validate(CredentialSchema, data);
 }
 
-export function validateEncryptedPayload(data: unknown): ValidationResult<z.infer<typeof EncryptedPayloadSchema>> {
+export function validateEncryptedPayload(
+  data: unknown,
+): ValidationResult<z.infer<typeof EncryptedPayloadSchema>> {
   return validate(EncryptedPayloadSchema, data);
 }
 
-export function validateSaveApiKey(data: unknown): ValidationResult<z.infer<typeof SaveApiKeyInput>> {
+export function validateSaveApiKey(
+  data: unknown,
+): ValidationResult<z.infer<typeof SaveApiKeyInput>> {
   return validate(SaveApiKeyInput, data);
 }
 
-export function validateSaveOAuthToken(data: unknown): ValidationResult<z.infer<typeof SaveOAuthTokenInput>> {
+export function validateSaveOAuthToken(
+  data: unknown,
+): ValidationResult<z.infer<typeof SaveOAuthTokenInput>> {
   return validate(SaveOAuthTokenInput, data);
 }
 

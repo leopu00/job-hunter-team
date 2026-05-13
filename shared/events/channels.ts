@@ -6,7 +6,11 @@
  */
 
 import { EventBus } from "./event-bus.js";
-import type { AgentEventData, SystemEventData, MessageEventData } from "./types.js";
+import type {
+  AgentEventData,
+  SystemEventData,
+  MessageEventData,
+} from "./types.js";
 
 /** Eventi agente: turn start/end, tool call/result, text, error */
 export const agentEvents = new EventBus<AgentEventData>("agent");

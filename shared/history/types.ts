@@ -7,7 +7,7 @@
 
 // --- Message ---
 
-export type HistoryRole = 'system' | 'user' | 'assistant' | 'tool';
+export type HistoryRole = "system" | "user" | "assistant" | "tool";
 
 export interface HistoryMessage {
   id?: string;
@@ -24,7 +24,7 @@ export interface HistoryMessage {
 
 /** Prima riga del file JSONL — header con metadati sessione */
 export interface TranscriptHeader {
-  type: 'session';
+  type: "session";
   version: string;
   sessionId: string;
   timestamp: number;
@@ -72,11 +72,14 @@ export interface HistoryEntry {
 
 // --- Helpers ---
 
-const TRANSCRIPT_VERSION = '1.0.0';
+const TRANSCRIPT_VERSION = "1.0.0";
 
-export function createTranscriptHeader(sessionId: string, cwd?: string): TranscriptHeader {
+export function createTranscriptHeader(
+  sessionId: string,
+  cwd?: string,
+): TranscriptHeader {
   return {
-    type: 'session',
+    type: "session",
     version: TRANSCRIPT_VERSION,
     sessionId,
     timestamp: Date.now(),

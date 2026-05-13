@@ -8,7 +8,7 @@
 
 // --- Message ---
 
-export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
+export type MessageRole = "system" | "user" | "assistant" | "tool";
 
 export interface ContextMessage {
   role: MessageRole;
@@ -21,7 +21,7 @@ export interface ContextMessage {
 
 // --- Context Section ---
 
-export type SectionPriority = 'required' | 'high' | 'medium' | 'low';
+export type SectionPriority = "required" | "high" | "medium" | "low";
 
 export interface ContextSection {
   /** Identificativo sezione (es. "system", "memory", "tools", "history") */
@@ -119,5 +119,8 @@ export function estimateMessageTokens(msg: ContextMessage): number {
 
 export function estimateSectionTokens(section: ContextSection): number {
   if (section.estimatedTokens !== undefined) return section.estimatedTokens;
-  return section.messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0);
+  return section.messages.reduce(
+    (sum, msg) => sum + estimateMessageTokens(msg),
+    0,
+  );
 }

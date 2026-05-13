@@ -4,13 +4,18 @@
  * Canale per interazione via web/API. I messaggi transitano
  * attraverso endpoint HTTP. Supporta markdown e streaming.
  */
-import type { Channel, ChannelMeta, ChannelMessage, MessageHandler } from './channel.js';
-import { buildInboundMessage, buildOutboundMessage } from './channel.js';
+import type {
+  Channel,
+  ChannelMeta,
+  ChannelMessage,
+  MessageHandler,
+} from "./channel.js";
+import { buildInboundMessage, buildOutboundMessage } from "./channel.js";
 
 const WEB_META: ChannelMeta = {
-  id: 'web',
-  label: 'Web',
-  description: 'Interfaccia web — messaggi via API HTTP',
+  id: "web",
+  label: "Web",
+  description: "Interfaccia web — messaggi via API HTTP",
   capabilities: {
     markdown: true,
     streaming: true,
@@ -26,7 +31,7 @@ type OutboundQueue = {
 };
 
 export class WebChannel implements Channel {
-  readonly id = 'web' as const;
+  readonly id = "web" as const;
   readonly meta = WEB_META;
 
   #connected = false;
@@ -55,9 +60,12 @@ export class WebChannel implements Channel {
   }
 
   async send(
-    params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+    params: Omit<
+      ChannelMessage,
+      "id" | "channelId" | "direction" | "timestamp"
+    >,
   ): Promise<ChannelMessage> {
-    const message = buildOutboundMessage('web', params);
+    const message = buildOutboundMessage("web", params);
 
     this.#outbound.messages.push(message);
     if (this.#outbound.messages.length > this.#outbound.maxSize) {
@@ -83,7 +91,7 @@ export class WebChannel implements Channel {
     sender: string;
     meta?: Record<string, unknown>;
   }): Promise<ChannelMessage> {
-    const message = buildInboundMessage('web', {
+    const message = buildInboundMessage("web", {
       text: params.text,
       sender: params.sender,
       meta: params.meta,
