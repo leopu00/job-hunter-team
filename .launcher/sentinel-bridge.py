@@ -59,7 +59,7 @@ PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 # Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
 # la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
 STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
-STATE_VERSION = 6
+STATE_VERSION = 7
 
 DEFAULT_TICK_MINUTES = 5               # default se config mancante
 MIN_TICK_SECONDS = 15                  # safety floor: <15s spammerebbe il provider
@@ -206,7 +206,8 @@ def _should_notify_sentinella(in_gspot, state, now_ts):
 
 
 def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
-                      last_status=None, last_projection=None, last_usage=None):
+                      last_status=None, last_projection=None, last_usage=None,
+                      last_reset_at=None, last_provider=None):
     """Pubblica lo stato corrente del bridge in un JSON atomico letto dalla
     UI web (`/api/bridge/status`). Sostituisce la replica della logica
     `_choose_tick_interval` lato TS, che era fragile rispetto a cambi del
@@ -214,6 +215,11 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
 
     Atomic write: scriviamo in `<file>.tmp` e poi `os.replace` per evitare
     letture parziali se il fetcher web colpisce a metà write.
+
+    last_reset_at è la stringa HH:MM del reset della finestra rate-limit del
+    provider (5h Kimi/Claude/Codex). Esposto per il token-meter V1 che lo usa
+    per ancorare la finestra di aggregazione (window_start = reset_at - 5h);
+    altrimenti dovrebbe ricostruire la window dal `now`, divergendo dal bridge.
     """
     payload = {
         "version": STATE_VERSION,
@@ -231,6 +237,8 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         "last_status": last_status,
         "last_projection": last_projection,
         "last_usage": last_usage,
+        "last_reset_at": last_reset_at,
+        "last_provider": last_provider,
         "g_spot": {"lower": GSPOT_LOWER, "upper": GSPOT_UPPER},
         "sentinella_cooldown_min": SENTINELLA_COOLDOWN_MIN,
     }
@@ -888,9 +896,13 @@ def main():
             _write_state_file(
                 state, last_tick_iso, next_tick_iso, next_tick_min,
                 last_status=status, last_projection=proj, last_usage=usage,
+                last_reset_at=entry.get("reset_at"), last_provider=provider,
             )
         else:
-            _write_state_file(state, last_tick_iso, next_tick_iso, next_tick_min)
+            _write_state_file(
+                state, last_tick_iso, next_tick_iso, next_tick_min,
+                last_provider=provider,
+            )
 
         time.sleep(sleep_sec)
 
