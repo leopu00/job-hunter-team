@@ -38,7 +38,7 @@ Going from "works for Leone" to "works for anyone" is a different project entire
 
 ## What I want next
 
-- **🧙‍♂️ A Maestro agent** — a career coach that looks at your goals, your gaps, and what the market is offering, and helps you adjust direction. The job market changes every month; the team should help you adapt, not just apply.
+- **🧙‍♂️ A Mentor agent** — a career coach that looks at your goals, your gaps, and what the market is offering, and helps you adjust direction. The job market changes every month; the team should help you adapt, not just apply.
 - **A €40/month tier that actually works** — if Kimi at €40 holds up for a full month under real load, JHT becomes accessible to anyone, not just people who can afford €200/month for Claude Max.
 - **More case studies, not just mine** — see [`docs/RESULTS.md`](RESULTS.md). If you use JHT, share your numbers.
 

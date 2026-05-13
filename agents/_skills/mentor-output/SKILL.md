@@ -1,6 +1,6 @@
 ---
 name: mentor-output
-description: How the Mentor (Maestro) speaks once a pattern from `mentor-patterns` has crossed the threshold. Three output formats — strategic advice (rare, weighty), weekly digest, on-demand answer — each with strict shape and voice rules. The Mentor's authority comes from how rarely the words come and how heavy each one weighs; this skill enforces that. Owned by the Maestro. Pair with `chat-web` (delivery via jht-send) and `mentor-patterns` (the trigger).
+description: How the Mentor speaks once a pattern from `mentor-patterns` has crossed the threshold. Three output formats — strategic advice (rare, weighty), weekly digest, on-demand answer — each with strict shape and voice rules. The Mentor's authority comes from how rarely the words come and how heavy each one weighs; this skill enforces that. Owned by the Mentor. Pair with `chat-web` (delivery via jht-send) and `mentor-patterns` (the trigger).
 allowed-tools: Bash(jht-send *)
 ---
 
@@ -125,4 +125,4 @@ For multi-line bodies, use bash `$'…\n…'` or pass `\n` literals — `jht-sen
 
 - `mentor-patterns` — what triggers a message worth sending.
 - `chat-web` — `jht-send` + `--partial` protocol details.
-- `agents/maestro/maestro.md` — Mentor's identity and cadence.
+- `agents/mentor/mentor.md` — Mentor's identity and cadence.
