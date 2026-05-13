@@ -98,10 +98,11 @@ Exit 0 con `via=web` NON e' un errore: e' il comportamento atteso quando Telegra
 
 ## Marker prompt-injection (decisione 2026-05-13 § 6)
 
-Quando l'utente risponde via dashboard (compila `user_reply` su una riga con `delivered_via='web'`), il prossimo tick dell'agente trova un marker in `pending_user_messages.user_reply_at IS NOT NULL AND agent_seen_reply_at IS NULL` filtrato per `agent = <tuo nome>`. Il runtime inietta quei messaggi nel prompt e l'agente risponde sullo stesso canale (web). Lato agente: NON ri-mandi su Telegram una risposta a un thread che e' stato aperto via web — confonderebbe l'utente.
+Quando l'utente risponde via dashboard (compila `user_reply` su una riga con `delivered_via='web'`), tocca a te leggere quella risposta — Telegram non vedra' nulla. Per farlo usa la skill **`user-reply-check`** ad ogni iterazione del tuo loop: ritorna le risposte che l'utente ti ha lasciato in dashboard e le marca come viste cosi' non le processi due volte. Quando rispondi, usa `jht-notify-user --no-telegram` per restare nel canale web (mandare un eco su Telegram di una conversazione web confonde l'utente).
 
 ## See also
 
+- `user-reply-check` — l'altra meta' del pattern. Leggi le risposte arrivate via dashboard nel tuo loop.
 - `telegram-send` — chiamato sotto il cofano da `jht-notify-user`; usalo direttamente solo se sai gia' che Telegram e' il canale giusto (es. reply a `[TG]` inbound).
 - `chat-web` (`jht-send`) — per il thread chat-agente sulla dashboard.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema della coda + indici.

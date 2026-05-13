@@ -144,12 +144,14 @@ Non serve un canale separato "team-log" passivo: il Capitano stesso copre il cas
 
 Quando Telegram bot è non configurato/down/rate-limited:
 
-1. Messaggio destinato all'utente → scritto sul DB locale
-2. DB sincronizza con Supabase via `[JHT-DESKTOP-SYNC]`
-3. Dashboard web legge il DB e lo presenta
-4. Al prossimo tick l'agente trova un "marker" nel DB che funge da **prompt injection** istruendolo a rispondere via web invece che Telegram
+1. Messaggio destinato all'utente → l'agente chiama `jht-notify-user --agent <id>` (skill `notify-user`). La riga finisce in `pending_user_messages` con `delivered_via='web'` se Telegram non risponde (timeout 25s).
+2. DB sincronizza con Supabase via `[JHT-DESKTOP-SYNC]` / `jht cloud daemon` (interval default 30s sul VPS).
+3. Dashboard `/(protected)/dashboard` legge `pending_user_messages` (filtro `delivered_via='web' AND acknowledged_at IS NULL`) e mostra una card per ogni messaggio non letto, con bottoni "segna come letto" / "rispondi".
+4. Quando l'utente risponde via dashboard, `POST /api/pending-messages/[id]/reply` scrive `user_reply` + `user_reply_at`.
+5. Al prossimo tick l'agente chiama la skill `user-reply-check` (tool `jht-check-user-replies --agent <id>`) che ritorna le risposte non ancora viste e le marca `agent_seen_reply_at`. **Questo è il "marker" prompt-injection**: l'output del tool finisce nel contesto dell'agente al loop successivo.
+6. L'agente risponde con `jht-notify-user --no-telegram` per restare nel canale web (mandare la stessa risposta anche via TG confonderebbe l'utente, che vive il thread sulla dashboard).
 
-Riusa l'infra cloud sync già esistente, niente secondo canale push da aggiungere.
+Riusa l'infra cloud sync già esistente, niente secondo canale push da aggiungere. Schema dettagliato in `agents/_manual/db-schema.md` § `pending_user_messages` (V5).
 
 ### 7. ⚖️ Rate limit
 
