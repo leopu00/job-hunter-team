@@ -109,6 +109,13 @@ RUN useradd --create-home --shell /bin/bash jht \
     && for f in /app/agents/_tools/*; do \
          [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
        done \
+    # Stessa logica per gli script colocated dentro le skill
+    # (agents/_skills/<skill>/jht-*): permettono di tenere SKILL.md + binario
+    # nello stesso folder (es. tmux-send/jht-tmux-send) senza perdere
+    # l'esposizione su PATH.
+    && for f in /app/agents/_skills/*/jht-*; do \
+         [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
+       done \
     # Skill discovery: per-agente, popolato dal launcher.
     # `agents/_skills/` è la library (single source of truth). Il manifest
     # `agents/<role>/skills.list` dichiara quali skill l'agente consuma;
