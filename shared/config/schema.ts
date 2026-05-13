@@ -56,6 +56,31 @@ export const ChannelsSchema = z.object({
   telegram: TelegramChannelSchema.optional(),
 });
 
+// Working hours (decisione 2026-05-13 sera, bot-telegram.md § 9).
+// Default = team 24/7. Quando `windows` e' non vuoto, fuori finestra
+// il pacing-bridge non emette tick al Capitano e jht-notify-user non
+// fa push Telegram (la riga resta in pending_user_messages → dashboard).
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+export const WorkingHoursWindowSchema = z.object({
+  days: z.array(z.enum(WEEKDAYS)).min(1, "almeno un giorno"),
+  start: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
+  end: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
+});
+
+export const WorkingHoursSchema = z.object({
+  // IANA tz name (es. "Europe/Rome"). Default UTC perche' funziona sempre,
+  // anche se la UI di onboarding dovrebbe proporre la tz locale dell'utente.
+  timezone: z.string().min(1).default("UTC"),
+  // Array vuoto = 24/7. Wrap-around mezzanotte supportato (start > end).
+  windows: z.array(WorkingHoursWindowSchema).default([]),
+});
+
+export const TeamSettingsSchema = z.object({
+  working_hours: WorkingHoursSchema.optional(),
+});
+
 // --- Root schema ---
 
 export const JHTConfigSchema = z
@@ -68,6 +93,7 @@ export const JHTConfigSchema = z
       kimi: AIProviderSchema.optional(),
     }),
     channels: ChannelsSchema.default({}),
+    team: TeamSettingsSchema.optional(),
     workspace: z.string().min(1, "workspace obbligatorio"),
   })
   .refine(

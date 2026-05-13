@@ -14,6 +14,10 @@ export type {
   TelegramBotConfig,
   TelegramChannelConfig,
   ChannelsConfig,
+  Weekday,
+  WorkingHoursWindow,
+  WorkingHoursConfig,
+  TeamSettings,
   JHTConfig,
 } from "./types";
 
@@ -24,6 +28,9 @@ export {
   TelegramBotsSchema,
   TelegramChannelSchema,
   ChannelsSchema,
+  WorkingHoursWindowSchema,
+  WorkingHoursSchema,
+  TeamSettingsSchema,
   SubscriptionSchema,
   validateConfig,
 } from "./schema";
