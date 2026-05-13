@@ -113,6 +113,13 @@ contextBridge.exposeInMainWorld('prefsApi', {
   set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
 })
 
+contextBridge.exposeInMainWorld('vpsApi', {
+  // SSH key gen + lookup. runInstall + onInstallLog land in task 13.
+  generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
+  getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
+  hasKey: () => ipcRenderer.invoke('vps:has-key'),
+})
+
 contextBridge.exposeInMainWorld('syncApi', {
   getStatus: () => ipcRenderer.invoke('sync:get-status'),
   setup: (args) => ipcRenderer.invoke('sync:setup', args),
