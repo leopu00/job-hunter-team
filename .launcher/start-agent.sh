@@ -146,30 +146,36 @@ if [ "$ROLE" = "bridge" ]; then
   exit 0
 fi
 
-# ── Telegram inbound bridge (long-poll → tmux ASSISTENTE) ──────────────
-# Short-circuit per "tg-bridge": spawna tg-bridge.py in background. Stesso
-# pattern del sentinel-bridge (setsid + singleton via /proc cmdline).
-# Lanciato dopo che ASSISTENTE e' partito, cosi' i primi messaggi arrivati
-# trovano gia' una sessione tmux pronta a ricevere.
+# ── Telegram inbound bridge (long-poll → tmux <agente>) ───────────────
+# Short-circuit per "tg-bridge": spawna 3 istanze di tg-bridge.py in
+# background, una per ogni bot user-facing (assistente, capitano, mentor —
+# decisione 2026-05-13 rev2). Stesso pattern del sentinel-bridge (setsid +
+# singleton via /proc cmdline). Lanciato dopo che le 3 sessioni tmux sono
+# partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
   TG_SCRIPT="/app/.launcher/tg-bridge.py"
   if [ ! -f "$TG_SCRIPT" ]; then
     echo "✗ $TG_SCRIPT non trovato — tg-bridge NON partito"
     exit 1
   fi
+  # Kill TUTTE le istanze esistenti (di qualsiasi ruolo): rispawnamo 3 fresche.
   for _pid in $(grep -l tg-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
     kill "$_pid" 2>/dev/null || true
   done
   sleep 1
-  # JHT_TG_TARGET_SESSION = sessione tmux destinataria (default ASSISTENTE).
   # JHT_TG_OFFSET_RESET=1 → al primo poll skippa il backlog (utile in fresh
   # install per non rifare replay di vecchi /start dell'utente).
-  setsid sh -c "
-    JHT_TG_TARGET_SESSION='${JHT_TG_TARGET_SESSION:-ASSISTENTE}' \
-    JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
-      python3 -u $TG_SCRIPT >> /tmp/tg-bridge.log 2>&1
-  " >/dev/null 2>&1 < /dev/null &
-  echo "✓ tg-bridge partito (target=${JHT_TG_TARGET_SESSION:-ASSISTENTE}, log /tmp/tg-bridge.log)"
+  for _role in assistente capitano mentor; do
+    _target=$(echo "$_role" | tr '[:lower:]' '[:upper:]')
+    _log="/tmp/tg-bridge-${_role}.log"
+    setsid sh -c "
+      JHT_TG_BOT_ROLE='$_role' \
+      JHT_TG_TARGET_SESSION='$_target' \
+      JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
+        python3 -u $TG_SCRIPT >> $_log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ tg-bridge[$_role] partito (target=$_target, log $_log)"
+  done
   exit 0
 fi
 
@@ -206,6 +212,9 @@ get_agent_info() {
     analista)   echo "ANALISTA|high|sonnet" ;;
     scorer)     echo "SCORER|high|sonnet" ;;
     assistente) echo "ASSISTENTE|high|sonnet" ;;
+    # Mentor (user-facing always-on, come l'Assistente):
+    # Opus high — coaching/posizionamento richiedono nuance reasoning.
+    mentor)     echo "MENTOR|high|" ;;
     # Sonnet (no high) — watchdog: logica if-then semplice, non serve
     # reasoning profondo. Riduce il costo del polling 10-min sostenuto.
     sentinella) echo "SENTINELLA|medium|sonnet" ;;
@@ -217,7 +226,7 @@ AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Errore: ruolo '$ROLE' non riconosciuto."
-  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente"
+  echo "Ruoli validi: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, mentor"
   exit 1
 fi
 
