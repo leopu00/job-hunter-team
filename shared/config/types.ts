@@ -50,6 +50,40 @@ export interface ChannelsConfig {
   telegram?: TelegramChannelConfig;
 }
 
+// --- Team settings ---
+
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/**
+ * Finestra di lavoro. `start` e `end` in formato "HH:MM" (24h) nella
+ * timezone del config team. Wrap-around mezzanotte supportato: se
+ * `start > end` la finestra si estende al giorno successivo (es. start
+ * 22:00, end 06:00 = mon 22:00 → tue 06:00).
+ */
+export interface WorkingHoursWindow {
+  days: Weekday[];
+  start: string;
+  end: string;
+}
+
+/**
+ * Working hours del team (decisione 2026-05-13, bot-telegram.md § 9).
+ * Default = team 24/7 (campo assente o `windows` vuoto). Quando configurato,
+ * fuori finestra il pacing-bridge non emette tick al Capitano e
+ * jht-notify-user salta il push Telegram (DB-only, dashboard prende il
+ * messaggio).
+ */
+export interface WorkingHoursConfig {
+  /** IANA tz name (es. "Europe/Rome"). Default "UTC". */
+  timezone: string;
+  /** Array vuoto = 24/7. */
+  windows: WorkingHoursWindow[];
+}
+
+export interface TeamSettings {
+  working_hours?: WorkingHoursConfig;
+}
+
 // --- Config Root ---
 
 export interface JHTConfig {
@@ -61,6 +95,8 @@ export interface JHTConfig {
   providers: Partial<Record<AIProviderName, AIProviderConfig>>;
   /** Canali di comunicazione */
   channels: ChannelsConfig;
+  /** Impostazioni team-wide (working hours, ecc.) */
+  team?: TeamSettings;
   /** Path assoluto alla workspace JHT */
   workspace: string;
 }
