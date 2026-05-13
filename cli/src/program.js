@@ -35,6 +35,27 @@ import { registerContainerCommand } from './commands/container.js';
 import { registerPositionsCommand } from './commands/positions.js';
 import { registerPid1Command } from './commands/pid1.js';
 
+// Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
+// Per la lista completa di tutti i sotto-comandi (export/import/cron/
+// webhooks/secrets/...) l'utente usa `jht help`. Riduce l'attrito post-
+// install: VPS fresca → 30+ sotto-comandi spaventano e nascondono i 5
+// che servono davvero. Vedi docs/internal/vps.md → "P1 — Help post-install
+// troppo lunga".
+const ESSENTIAL_HELP = `Usage: jht [command]
+
+Job Hunter Team — CLI
+
+Comandi essenziali:
+  setup        Configurazione iniziale (lancia il wizard)
+  status       Stato del sistema (container, agenti, db)
+  agents       Lista agenti e task in corso
+  dashboard    Apri la dashboard web
+  doctor       Diagnostica setup e dipendenze
+
+Per la lista completa di tutti i comandi:
+  jht help
+`;
+
 export function buildProgram() {
   const program = new Command();
 
@@ -42,6 +63,11 @@ export function buildProgram() {
     .name('jht')
     .description('Job Hunter Team — CLI')
     .version(pkg.version);
+
+  // Disabilita il sotto-comando `help` auto-generato da commander: lo
+  // ridefiniamo sotto per stampare l'help COMPLETO (essential mode da
+  // solo non basta a chi cerca un sotto-comando avanzato).
+  program.helpCommand(false);
 
   registerSetupCommand(program);
   registerConfigCommand(program);
@@ -77,6 +103,22 @@ export function buildProgram() {
   registerContainerCommand(program);
   registerPositionsCommand(program);
   registerPid1Command(program);
+
+  // Salviamo il riferimento all'help "lungo" autogenerato da commander
+  // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
+  // mostrare tutti i sotto-comandi registrati sopra.
+  const fullHelp = Command.prototype.helpInformation.bind(program);
+
+  program.helpInformation = function () {
+    return ESSENTIAL_HELP;
+  };
+
+  program
+    .command('help')
+    .description('Mostra TUTTI i comandi disponibili (versione lunga)')
+    .action(() => {
+      process.stdout.write(fullHelp());
+    });
 
   return program;
 }
