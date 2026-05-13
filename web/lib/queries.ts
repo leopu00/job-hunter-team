@@ -12,6 +12,7 @@ import type {
   Company,
   ApplicationWithPosition,
   Application,
+  PendingMessage,
 } from '@/lib/types'
 
 // Source of truth = origine della request:
@@ -322,6 +323,31 @@ export async function getCriticoStats() {
   const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
   for (const row of data) { const key = row.reviewed_by!; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.critic_verdict === 'REJECT') grouped[key].reject++ }
   return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+}
+
+// ── Pending user messages (V5) ──────────────────────────────────────
+// Notifiche agente -> utente in fallback web. Cloud: filtra per user_id
+// implicito via RLS. Local: legge SQLite via local-queries.
+export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> {
+  const w = await ws()
+  if (w) {
+    try { return local.getPendingMessagesLocal(w, limit) } catch { return [] }
+  }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('pending_user_messages')
+    .select(
+      'id, agent, body, kind, related_position_id, delivered_via, delivered_at, ' +
+      'acknowledged_at, user_reply, user_reply_at, agent_seen_reply_at, created_at'
+    )
+    .eq('delivered_via', 'web')
+    .is('acknowledged_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data as PendingMessage[]
 }
 
 // ── Application stats ───────────────────────────────────────────────
