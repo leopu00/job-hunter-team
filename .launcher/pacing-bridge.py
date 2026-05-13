@@ -585,8 +585,12 @@ def format_message(d: dict) -> str:
 
 
 _JHT_TMUX_SEND_FALLBACKS = [
-    "/app/agents/_tools/jht-tmux-send",
-    str(Path(__file__).resolve().parent.parent / "agents" / "_tools" / "jht-tmux-send"),
+    # Path canonico post-refactor 2026-05-13 (colocate sotto skill).
+    "/app/agents/_skills/tmux-send/jht-tmux-send",
+    str(
+        Path(__file__).resolve().parent.parent
+        / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
+    ),
 ]
 
 
