@@ -10,6 +10,8 @@ export type {
   AIProviderConfig,
   SubscriptionConfig,
   ChannelName,
+  TelegramBotRole,
+  TelegramBotConfig,
   TelegramChannelConfig,
   ChannelsConfig,
   JHTConfig,
@@ -18,6 +20,8 @@ export type {
 export {
   JHTConfigSchema,
   AIProviderSchema,
+  TelegramBotSchema,
+  TelegramBotsSchema,
   TelegramChannelSchema,
   ChannelsSchema,
   SubscriptionSchema,
