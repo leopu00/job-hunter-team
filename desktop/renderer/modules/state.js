@@ -29,6 +29,12 @@ export const state = {
     ip: null,
     installed: false,
     busy: false,
+    // Passphrase della privkey, salvata al passo "Genera chiave" e
+    // riutilizzata al passo "Connetti e installa" per sbloccare la
+    // chiave via SSH_ASKPASS (vedi desktop/vps/index.js → createAskpassHelper).
+    // Resta in memoria del processo renderer finche' l'app vive (mai
+    // su disco). Vuota = chiave senza passphrase.
+    passphrase: '',
   },
   providerInstallBusy: false,
   providerInstallDone: false,
