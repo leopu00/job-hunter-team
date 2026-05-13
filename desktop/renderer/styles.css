@@ -1498,6 +1498,8 @@ body { display: flex; flex-direction: column; }
   gap: 18px;
 }
 
+.home__card[hidden] { display: none; }
+
 .home__card + .home__card { margin-top: 16px; }
 
 .home__card-link {
@@ -1529,6 +1531,186 @@ body { display: flex; flex-direction: column; }
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
   margin-bottom: -6px;
+}
+
+/* ── Location cards (step-location) ─────────────────────────── */
+
+.location-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+  max-width: 720px;
+  margin: 12px auto 24px;
+}
+
+.location-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.location-card:hover {
+  border-color: var(--border-strong);
+  background: var(--panel-subtle);
+}
+
+.location-card.is-selected {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.location-card[disabled],
+.location-card[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.location-card__icon { font-size: 28px; }
+
+.location-card__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.location-card__body {
+  font-size: 13px;
+  opacity: 0.78;
+  line-height: 1.45;
+}
+
+.location-card__badge {
+  align-self: flex-start;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  opacity: 0.85;
+}
+
+.location-card__badge--soon {
+  border-color: rgba(230, 196, 96, 0.4);
+  color: rgba(230, 196, 96, 0.95);
+}
+
+/* ── VPS provisioning step ──────────────────────────────────── */
+
+.vps-step {
+  width: 100%;
+  max-width: 720px;
+  margin: 12px auto;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  text-align: left;
+}
+
+.vps-step__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.vps-step__body {
+  font-size: 13px;
+  opacity: 0.78;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.vps-step__hint {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 6px 0 12px;
+}
+
+.vps-step__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.vps-step__label {
+  font-size: 12px;
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+}
+
+.vps-step__input,
+.vps-step__textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-subtle);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.vps-step__textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.vps-step__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.vps-step__status {
+  margin: 10px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.vps-step__log {
+  margin: 10px 0 0;
+  padding: 10px;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--panel-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+/* ── Supabase login step ────────────────────────────────────── */
+
+.supabase-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  margin: 18px auto 12px;
+}
+
+.step__actions-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .home__row {
@@ -1682,3 +1864,113 @@ body { display: flex; flex-direction: column; }
 }
 
 .home__content .lang-select { max-width: 280px; }
+
+.home__card-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.home__card-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger, #dc3545);
+}
+
+.home__card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.home__account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.home__account-email {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.home__account-provider {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.home__card--sub {
+  margin-top: 16px;
+}
+
+.home__card-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.home__sync-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.home__sync-field input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #2a2f4d);
+  background: var(--color-input-bg, #0f1430);
+  color: var(--color-text, #e6e9f2);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.home__sync-field input:focus {
+  outline: none;
+  border-color: var(--color-accent, #6f7eff);
+}
+
+.home__sync-warning {
+  color: var(--color-warning, #f5a524);
+  font-weight: 500;
+}
+
+.home__sync-success {
+  color: var(--color-success, #2eb872);
+}
+
+.home__sync-meta {
+  margin: 6px 0 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.home__sync-why {
+  margin: 6px 0 14px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.home__sync-why summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.home__sync-why summary:hover { opacity: 0.85; }
+
+.home__sync-why p {
+  margin: 8px 0 0;
+}

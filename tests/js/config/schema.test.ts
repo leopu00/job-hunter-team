@@ -137,10 +137,18 @@ describe('validateConfig — config valide', () => {
     expect(r.success).toBe(true);
   });
 
-  it('accetta canale telegram configurato', () => {
+  it('accetta canale telegram con 3 bot configurati', () => {
     const r = validateConfig({
       ...validClaudeConfig,
-      channels: { telegram: { bot_token: '123456:ABCDEF' } },
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: '111:AAA', chat_id: '100' },
+            capitano:   { bot_token: '222:BBB', chat_id: '100' },
+            mentor:     { bot_token: '333:CCC', chat_id: '100' },
+          },
+        },
+      },
     });
     expect(r.success).toBe(true);
   });
@@ -171,10 +179,41 @@ describe('validateConfig — errori schema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rifiuta telegram con bot_token vuoto', () => {
+  it('rifiuta telegram con bot_token vuoto in un ruolo', () => {
     const r = validateConfig({
       ...validClaudeConfig,
-      channels: { telegram: { bot_token: '' } },
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: '' },
+            capitano:   { bot_token: '222:BBB' },
+            mentor:     { bot_token: '333:CCC' },
+          },
+        },
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rifiuta telegram senza tutti e 3 i bot (manca mentor)', () => {
+    const r = validateConfig({
+      ...validClaudeConfig,
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: '111:AAA' },
+            capitano:   { bot_token: '222:BBB' },
+          },
+        },
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rifiuta telegram con schema legacy single-bot (no bots)', () => {
+    const r = validateConfig({
+      ...validClaudeConfig,
+      channels: { telegram: { bot_token: '123:ABC' } as unknown as { bots: never } },
     });
     expect(r.success).toBe(false);
   });

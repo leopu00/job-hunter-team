@@ -10,16 +10,27 @@ export type {
   AIProviderConfig,
   SubscriptionConfig,
   ChannelName,
+  TelegramBotRole,
+  TelegramBotConfig,
   TelegramChannelConfig,
   ChannelsConfig,
+  Weekday,
+  WorkingHoursWindow,
+  WorkingHoursConfig,
+  TeamSettings,
   JHTConfig,
 } from "./types";
 
 export {
   JHTConfigSchema,
   AIProviderSchema,
+  TelegramBotSchema,
+  TelegramBotsSchema,
   TelegramChannelSchema,
   ChannelsSchema,
+  WorkingHoursWindowSchema,
+  WorkingHoursSchema,
+  TeamSettingsSchema,
   SubscriptionSchema,
   validateConfig,
 } from "./schema";

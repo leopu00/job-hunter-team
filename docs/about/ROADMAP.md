@@ -78,7 +78,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 ✅ CLI ↔ container coordination (jht team / container / sentinella)
 ⬜ db_supabase.py wrapper — push agent results to cloud
 ⬜ Weekly window monitoring calibration (today: 5h windows)
-⬜ User-defined work hours ("team as employee" model)
+✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d`)
 ⬜ Kimi €40 calibration (mass-market target)
 ⬜ Sentinel token consumption optimization
 ⬜ Documented test campaign matrix (provider × tier × persona)
@@ -211,7 +211,7 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ✅ install.sh served via short URL
 ✅ 9 new pre-launch docs (STORY, PROVIDERS, AI-AGENT-INTEGRATION,
    VISION, MONITORING, RESULTS, BETA, MAINTAINERS,
-   agents/maestro spec)
+   agents/mentor spec)
 ⬜ Subdomain setup (app, docs, api)
 ⬜ Launcher screenshots in docs (soft BLOCKER pre-launch)
 ⬜ Visual FAQ
@@ -266,15 +266,15 @@ Today Telegram is wired to the **Captain only**. Planned: per-agent chats + a "t
 ⬜ Backwards compatibility: plain messages still route to Captain
 ```
 
-### 🔄 Cloud sync direction (open architectural question)
+### 🔄 Cloud sync direction (decisione 2026-05-13)
 
-Today the sync flows **local → cloud only** (see `docs/internal/INFRA.md` § Optional managed storage). If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the cloud at least once. Possible approaches under evaluation:
+**Direzione**: push-only `local → cloud`, sempre. Il container è la fonte di verità, Supabase è il mirror.
 
-- A) Manual `jht cloud bootstrap` for one-time reverse seed
-- B) Bidirectional sync with conflict resolution
-- C) Container "freeze + export" workflow (no Supabase for the seed)
+**Bootstrap automatico**: quando l'utente fa login con lo stesso account su un container nuovo/vuoto (es. nuova VPS, nuovo PC), l'app rileva il DB locale vuoto e fa un pull automatico — DB allineato, sync normale da lì in poi. Niente comandi manuali.
 
-→ Will be filed as `[JHT-CLOUD-SEED-DIRECTION]` once decided.
+**Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard. Memoria agenti runtime e CV binari restano locali.
+
+→ Task di implementazione: `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`.
 
 ### 🛠️ Skill discovery — launcher-distributed isolation (priority)
 
@@ -353,17 +353,26 @@ Each Claude / Codex / Kimi instance launched from `cwd = /app/agents/<role>/` th
 ✅ Promote db-insert to a SKILL.md wrapper under agents/_skills/db-insert/
 ✅ Update Dockerfile symlink loop to source from agents/_skills/ instead
    of .skills-source/ (kept global flat for now)
-⬜ Move agents/_tools/jht-tmux-send into agents/_skills/tmux-send/ as a
-   colocated artifact (and drop _tools/ if jht-send is not used)
+✅ Add the per-agent distribution step to .launcher/start-agent.sh:
+   reads agents/<role>/skills.list manifest + always-copies
+   agents/<role>/_skills/, populates <agent_cwd>/.claude/skills/ and
+   <agent_cwd>/.agents/skills/ via cp -R at each spawn
+   (commit e220114c, "feat(skills): per-agent skill distribution via manifest")
+✅ Drop the global Dockerfile symlink loop in favour of per-agent
+   distribution at boot — the Dockerfile now only documents the
+   architecture (lines 112-119), no more global farm of symlinks
+   (same commit e220114c, provider-uniform: no .git/ needed)
+✅ Move agents/_tools/jht-tmux-send into agents/_skills/tmux-send/ as a
+   colocated artifact. Dockerfile gained a second `ln -sf` loop over
+   `/app/agents/_skills/*/jht-*` so colocated `jht-*` scripts still land
+   in `/usr/local/bin/`. References in sentinella.md, sentinel-orders,
+   order-formats, anti-collision, web/api/team/messages updated.
+   (`agents/_tools/` kept: still hosts jht-send + the throttle/notify
+   wrappers, not all script families have moved yet.)
 ⬜ Move 1:1 Python scripts into their skill folders + create
    agents/_skills/_lib/ for shared deps (_db.py, compute_metrics.py,
    usage_record.py); update sys.path imports + the ~10 prompt files
    that reference /app/shared/skills/<x>.py absolute paths
-⬜ Add the symlink-distribution step to .launcher/start-agent.sh:
-   for each role, populate <agent_cwd>/.claude/skills/ and
-   <agent_cwd>/.agents/skills/ with links to global + role-private
-⬜ Drop the global Dockerfile symlink loop once start-agent.sh handles
-   per-agent distribution at boot (provider-uniform: no .git/ needed)
 ⬜ Update CONTRIBUTING + agents/_team/architettura.md (Skills section)
    to describe the new layout and how to add a skill (drop into
    agents/_skills/ for shared, into agents/<role>/_skills/ for private)
@@ -389,11 +398,11 @@ The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.
 
 Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports `_global/* + <its role>/*` and nothing else.
 
-### 🧙‍♂️ Maestro — career-coach agent (planned)
+### 🧙‍♂️ Mentor — career-coach agent (planned)
 
 The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
 
-→ Spec in [`agents/maestro/maestro.md`](../../agents/maestro/maestro.md). See [`docs/VISION.md`](VISION.md) for the rationale.
+→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale.
 
 ### 🗄️ Database schema optimization (priority)
 

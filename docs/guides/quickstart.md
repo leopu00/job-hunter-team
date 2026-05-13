@@ -78,7 +78,7 @@ The script:
 3. Downloads `docker-compose.yml` to `~/.jht/runtime/`
 4. Downloads the `jht` wrapper bash to `~/.local/bin/jht`
 
-The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/2026-05-06-host-container-split.md`](../internal/2026-05-06-host-container-split.md) for the design rationale.
+The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/vps.md`](../internal/vps.md) for the design rationale.
 
 After install:
 
@@ -164,7 +164,7 @@ Whichever path you took:
 | 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
 | 👨‍⚖️ | **Critic** | 3-round blind review before submission |
 | 👨‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
-| 🧙‍♂️ | **Maestro** *(planned)* | Career coach — analyzes goals/gaps/market signals |
+| 🧙‍♂️ | **Mentor** *(planned)* | Career coach — analyzes goals/gaps/market signals |
 | 📡 | **Bridge** *(infrastructure, not LLM)* | Polls provider usage on a fixed clock, notifies the Sentinel |
 
 For the full architecture diagram → see the README.
@@ -234,7 +234,7 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 - 📋 [`docs/STORY.md`](../about/STORY.md) — origin story (legacy team results)
 - 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
-- 🎯 [`docs/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Maestro
+- 🎯 [`docs/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
 - 🧪 [`docs/BETA.md`](BETA.md) — join the beta program
 - 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
 - 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next

@@ -79,23 +79,43 @@ def _path_import(p: Path, name: str):
     return mod
 
 
-def _load_helpers():
-    """Carica le formule dal monorepo. Funziona sia in container
-    (/app/shared/skills) sia su host (<repo>/shared/skills)."""
+def _shared_skills_dir() -> Path:
     here = Path(__file__).resolve().parent
     candidates = [
         Path("/app/shared/skills"),
         here.parent / "shared" / "skills",
     ]
-    skills_dir = next((p for p in candidates if p.exists()), None)
-    if skills_dir is None:
+    p = next((c for c in candidates if c.exists()), None)
+    if p is None:
         raise RuntimeError(
-            f"shared/skills non trovata: ho provato {[str(p) for p in candidates]}"
+            f"shared/skills non trovata: ho provato {[str(c) for c in candidates]}"
         )
+    return p
+
+
+def _load_helpers():
+    """Carica le formule dal monorepo. Funziona sia in container
+    (/app/shared/skills) sia su host (<repo>/shared/skills)."""
+    skills_dir = _shared_skills_dir()
     ast = _path_import(skills_dir / "agent-speed-table.py", "_ast")
     tba = _path_import(skills_dir / "token-by-agent-series.py", "_tba")
     rb = _path_import(skills_dir / "rate_budget.py", "_rb")
     return ast, tba, rb
+
+
+def _load_working_hours():
+    """Modulo gate working hours (decisione 2026-05-13 bot-telegram § 9).
+
+    Caricato lazy con lo stesso pattern di _load_helpers cosi' un missing
+    file → log warning ma il bridge continua a girare in modalita' 24/7
+    (failsafe: meglio rumore in piu' che team fermo per gate rotto).
+    """
+    try:
+        return _path_import(_shared_skills_dir() / "working_hours.py", "_wh")
+    except Exception as e:
+        print(f"[pacing-bridge] WARN working_hours.py non caricabile: {e} — assumo 24/7",
+              file=sys.stderr, flush=True)
+        return None
 
 
 def next_quarter(now: datetime | None = None) -> datetime:
@@ -510,12 +530,12 @@ def format_message(d: dict) -> str:
     # worker produttivi, throttllarli non serve a nulla. Caso 04:44:
     # share era 100% sentinella ma il vero problema era pipeline vuota.
     # Agenti NON throttle-target: monitoring (sentinella, sentinella-worker),
-    # coordinator (capitano), meta (maestro), unattributed (?unknown).
+    # coordinator (capitano), meta (mentor), unattributed (?unknown).
     # Throttllare il capitano rallenta l'intera orchestrazione, throttllare
     # sentinella ferma il monitoring. I throttle vanno SEMPRE su worker
     # produttivi: scout, analista, scorer, scrittore, critico.
     NON_PRODUCTIVE = {
-        "sentinella", "sentinella-worker", "capitano", "maestro", "?unknown",
+        "sentinella", "sentinella-worker", "capitano", "mentor", "?unknown",
     }
     top_consumer = None
     if d.get("agents"):
@@ -565,8 +585,12 @@ def format_message(d: dict) -> str:
 
 
 _JHT_TMUX_SEND_FALLBACKS = [
-    "/app/agents/_tools/jht-tmux-send",
-    str(Path(__file__).resolve().parent.parent / "agents" / "_tools" / "jht-tmux-send"),
+    # Path canonico post-refactor 2026-05-13 (colocate sotto skill).
+    "/app/agents/_skills/tmux-send/jht-tmux-send",
+    str(
+        Path(__file__).resolve().parent.parent
+        / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
+    ),
 ]
 
 
@@ -731,6 +755,7 @@ def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None
 
 def loop():
     ast, tba, rb = _load_helpers()
+    wh = _load_working_hours()
     write_pid()
     print(
         f"[pacing-bridge] up — target={TARGET_SESSION} tick={TICK_MIN}m "
@@ -749,6 +774,16 @@ def loop():
             time.sleep(sleep_s)
 
         now = datetime.now(timezone.utc)
+        # Working hours gate: fuori finestra il Capitano resta dormiente
+        # (no tick, no mailbox append). Decisione 2026-05-13: pausa = anche
+        # niente notifiche. La UI vede l'off-hours dallo state file.
+        if wh is not None and not wh.is_within_working_hours(now):
+            status = wh.describe_status(now)
+            print(f"[pacing-bridge] off-hours skip tick {now.isoformat()} ({status})",
+                  flush=True)
+            write_state(None, next_quarter(now + timedelta(seconds=1)),
+                        f"off-hours ({status})")
+            continue
         try:
             d = compute_tick(ast, tba, rb, now)
             msg = format_message(d)

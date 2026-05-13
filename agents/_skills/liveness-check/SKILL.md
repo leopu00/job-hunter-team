@@ -55,7 +55,7 @@ a) **Use the pane already captured** at Step 1 as the agent's "memory". Extract:
    - any recent error
 
 b) **Identify role + workdir**.
-   - Singletons (`capitano | critico | sentinella | assistente | maestro | dottore`) → `/jht_home/agents/<role>/`
+   - Singletons (`capitano | critico | sentinella | assistente | mentor | dottore`) → `/jht_home/agents/<role>/`
    - Multi-instance (`scout | scrittore | scorer | analista`) → `/jht_home/agents/<role>-<N>/` where `<N>` is the trailing number in the tmux session (e.g. `SCRITTORE-2` → `/jht_home/agents/scrittore-2/`).
 
 c) **Kill the broken session, respawn via launcher** (use `spawn-agent` skill semantics — never raw `tmux new-session` + `send-keys "kimi ..."`):

@@ -49,30 +49,40 @@ type TeamAgent = {
 
 async function buildTeam(): Promise<TeamAgent[]> {
   const tickMin = await readSentinellaTickMinutes()
-  // Sequenza V7 (rivista 2026-05-12, Telegram-inbound):
+  // Sequenza V7 (rivista 2026-05-13, 3 bot Telegram dedicati):
   //   0. ASSISTENTE: per primo, cosi' manda subito il welcome Telegram
   //      (canale primario su VPS headless).
-  //   1. TG-BRIDGE: long-poll Bot API → tmux ASSISTENTE. Background.
+  //   1. TG-BRIDGE: spawna 3 long-poll Bot API (assistente/capitano/mentor)
+  //      → tmux corrispondente. Background. No JHT_TG_TARGET_SESSION:
+  //      ogni processo lo deriva dal proprio role.
   //   2. SENTINELLA: pronta a ricevere il primo [BRIDGE TICK].
   //   3. BRIDGE (sentinel + pacing): processo Python background.
-  //   4. CAPITANO: per ultimo, monitoring gia' stabile.
+  //   4. MENTOR: tmux user-facing always-on (riceve `[TG]` dal bridge).
+  //   5. CAPITANO: per ULTIMO, monitoring gia' stabile.
   //
   // Pre-delay rivisti per PC lenti:
   //   • tg-bridge:   5s dopo assistente (TUI assistente in boot)
   //   • sentinella:  3s dopo tg-bridge  (CLI boot iniziale)
   //   • bridge:     20s dopo sentinella (CLI boot lento + trust dialog)
-  //   • capitano:    5s dopo bridge     (lascia che il primo fetch
+  //   • mentor:      3s dopo bridge     (CLI boot user-facing)
+  //   • capitano:    5s dopo mentor     (lascia che il primo fetch
   //                                      arrivi prima del kick-off)
   return [
     { role: 'assistente', session: 'ASSISTENTE', instance: null },
     { role: 'tg-bridge',  session: 'TG-BRIDGE',  instance: null,
-      preDelayMs: 5000, notATmuxSession: true,
-      env: { JHT_TG_TARGET_SESSION: 'ASSISTENTE' } },
+      preDelayMs: 5000, notATmuxSession: true, env: {} },
     { role: 'sentinella', session: 'SENTINELLA', instance: null,
       preDelayMs: 3000 },
     { role: 'bridge',     session: 'BRIDGE',     instance: null,
       preDelayMs: 20000, notATmuxSession: true,
       env: { JHT_TARGET_SESSION: 'CAPITANO' } },
+    // Bridge V7 Step 5: daemon che misura il consumo token reale dai log
+    // locali e calcola EMA ratio + per-agent rate. Legge lo state file del
+    // sentinel bridge (window dinamica), quindi parte dopo di lui.
+    { role: 'token-meter', session: 'TOKEN-METER', instance: null,
+      preDelayMs: 5000, notATmuxSession: true, env: {} },
+    { role: 'mentor',     session: 'MENTOR',     instance: null,
+      preDelayMs: 3000 },
     { role: 'capitano',   session: 'CAPITANO',   instance: null,
       preDelayMs: 5000,
       env: { JHT_TICK_INTERVAL: String(tickMin) } },

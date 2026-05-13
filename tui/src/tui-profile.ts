@@ -98,7 +98,9 @@ CREATE TABLE IF NOT EXISTS companies (
   culture_notes TEXT,
   analyzed_by TEXT,
   analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  verdict TEXT
+  verdict TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS positions (
@@ -127,6 +129,8 @@ CREATE TABLE IF NOT EXISTS positions (
   )),
   notes TEXT,
   last_checked TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (company_id) REFERENCES companies(id)
 );
 
@@ -139,6 +143,8 @@ CREATE TABLE IF NOT EXISTS position_highlights (
   position_id INTEGER NOT NULL,
   type TEXT NOT NULL,
   text TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (position_id) REFERENCES positions(id)
 );
 
@@ -155,6 +161,8 @@ CREATE TABLE IF NOT EXISTS scores (
   notes TEXT,
   scored_by TEXT,
   scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (position_id) REFERENCES positions(id)
 );
 
@@ -183,12 +191,65 @@ CREATE TABLE IF NOT EXISTS applications (
   interview_round INTEGER DEFAULT NULL,
   cv_drive_id TEXT,
   cl_drive_id TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (position_id) REFERENCES positions(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
-PRAGMA user_version = 3;
+CREATE TABLE IF NOT EXISTS pending_user_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent TEXT NOT NULL,
+  body TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
+    'notification','question','digest','alert'
+  )),
+  related_position_id INTEGER,
+  delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
+  delivered_at TIMESTAMP,
+  acknowledged_at TIMESTAMP,
+  user_reply TEXT,
+  user_reply_at TIMESTAMP,
+  agent_seen_reply_at TIMESTAMP,
+  cloud_synced_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (related_position_id) REFERENCES positions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
+CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+
+-- Touch trigger su tutte le tabelle: aggiorna updated_at quando una UPDATE
+-- non lo tocca esplicitamente. WHEN evita ricorsione. Allineato a
+-- shared/skills/_db.py (single source of truth runtime).
+CREATE TRIGGER IF NOT EXISTS companies_touch_updated_at
+AFTER UPDATE ON companies FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE companies SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS positions_touch_updated_at
+AFTER UPDATE ON positions FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE positions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS position_highlights_touch_updated_at
+AFTER UPDATE ON position_highlights FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE position_highlights SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS scores_touch_updated_at
+AFTER UPDATE ON scores FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE scores SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS applications_touch_updated_at
+AFTER UPDATE ON applications FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE applications SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS pending_user_messages_touch_updated_at
+AFTER UPDATE ON pending_user_messages FOR EACH ROW WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE pending_user_messages SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+PRAGMA user_version = 5;
 `;
 
 function loadConfig(): Record<string, unknown> {

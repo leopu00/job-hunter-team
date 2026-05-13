@@ -10,6 +10,33 @@ contextBridge.exposeInMainWorld('platformInfo', {
   arch: process.arch,
 })
 
+// Logger esposto al renderer: ogni window.jhtLog.<level>(event, meta)
+// viene serializzato e mandato al main via canale `log:append`, che lo
+// scrive nello stesso file di log del processo main. Cosi' un bug report
+// contiene il flusso completo (click UI → IPC → modulo backend).
+//
+// Safe: fire-and-forget (ipcRenderer.send, no invoke), errori swallowati.
+function sendLog(level, event, meta, scope) {
+  try {
+    ipcRenderer.send('log:append', { level, event, meta, scope })
+  } catch {
+    // ignore — non vogliamo mai che il logger faccia crashare il renderer
+  }
+}
+contextBridge.exposeInMainWorld('jhtLog', {
+  debug: (event, meta) => sendLog('debug', event, meta),
+  info: (event, meta) => sendLog('info', event, meta),
+  warn: (event, meta) => sendLog('warn', event, meta),
+  error: (event, meta) => sendLog('error', event, meta),
+  // Helper per loggare con namespace (es. window.jhtLog.scope('wizard')).
+  scope: (name) => ({
+    debug: (event, meta) => sendLog('debug', event, meta, name),
+    info: (event, meta) => sendLog('info', event, meta, name),
+    warn: (event, meta) => sendLog('warn', event, meta, name),
+    error: (event, meta) => sendLog('error', event, meta, name),
+  }),
+})
+
 contextBridge.exposeInMainWorld('launcherApi', {
   getStatus: () => ipcRenderer.invoke('launcher:get-status'),
   inspectSetup: () => ipcRenderer.invoke('launcher:inspect-setup'),
@@ -92,6 +119,52 @@ contextBridge.exposeInMainWorld('setupApi', {
 contextBridge.exposeInMainWorld('clipboardApi', {
   read: () => ipcRenderer.invoke('clipboard:read'),
   write: (text) => ipcRenderer.invoke('clipboard:write', text),
+})
+
+contextBridge.exposeInMainWorld('authApi', {
+  getStatus: () => ipcRenderer.invoke('auth:get-status'),
+  signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
+  signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  // Used by the (upcoming) VPS provisioning wizard to feed
+  // `install.sh --pairing-token <token>`. Renderer-side: treat the
+  // returned string as an opaque blob; never log it.
+  getPairingToken: () => ipcRenderer.invoke('auth:get-pairing-token'),
+})
+
+// Lightweight key/value store backed by JSON in app.getPath('userData').
+// Used by the onboarding wizard to persist the `location` choice so a
+// relaunch resumes on the right branch. Not a general settings API —
+// keep it small and renderer-only.
+contextBridge.exposeInMainWorld('prefsApi', {
+  get: (key) => ipcRenderer.invoke('prefs:get', key),
+  set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+})
+
+contextBridge.exposeInMainWorld('vpsApi', {
+  generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
+  getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
+  hasKey: () => ipcRenderer.invoke('vps:has-key'),
+  // SSH into the user's freshly-created VPS and stream install.sh
+  // output back via onInstallLog. The token comes from authApi
+  // automatically (main side) so no secret leaves the IPC boundary.
+  runInstall: (args) => ipcRenderer.invoke('vps:run-install', args),
+  onInstallLog: (callback) => {
+    const listener = (_event, line) => {
+      try { callback(line) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('vps:install-log', listener)
+    return () => ipcRenderer.removeListener('vps:install-log', listener)
+  },
+})
+
+contextBridge.exposeInMainWorld('syncApi', {
+  getStatus: () => ipcRenderer.invoke('sync:get-status'),
+  setup: (args) => ipcRenderer.invoke('sync:setup', args),
+  unlock: (args) => ipcRenderer.invoke('sync:unlock', args),
+  lock: () => ipcRenderer.invoke('sync:lock'),
+  push: (args) => ipcRenderer.invoke('sync:push', args),
+  pull: (args) => ipcRenderer.invoke('sync:pull', args),
+  disable: (args) => ipcRenderer.invoke('sync:disable', args),
 })
 
 contextBridge.exposeInMainWorld('terminalApi', {

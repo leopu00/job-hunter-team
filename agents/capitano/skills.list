@@ -6,6 +6,14 @@
 # Inter-agent + user communication
 tmux-send
 chat-web
+# Phone-side outbound: notifiche batch + risposte all'utente sul bot Capitano
+telegram-send
+
+# Notifiche utente con fallback Telegram -> dashboard web (batch ready, alert)
+notify-user
+
+# Pickup risposte utente arrivate via dashboard web (marker prompt-injection)
+user-reply-check
 
 # DB access (read + targeted update; the Captain does NOT insert)
 db-query

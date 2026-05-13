@@ -1,6 +1,7 @@
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+const log = require('./logger')
 
 // macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
 // that excludes /opt/homebrew/bin and /usr/local/bin. Every spawn/execFile
@@ -49,10 +50,57 @@ const providerInstall = require('./provider-install')
 const providerStore = require('./provider-store')
 const providerAuth = require('./provider-auth')
 const terminal = require('./terminal')
+const auth = require('./auth')
+const sync = require('./sync')
+const vps = require('./vps')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
   return path.join(require('node:os').homedir(), '.jht')
+}
+
+// Renderer preferences store. Lives in app.getPath('userData') so it
+// survives uninstall/upgrade (see feedback_no_user_data_wipe.md) and
+// does not couple to ~/.jht, which may not exist yet at onboarding
+// time. Single JSON file keyed by short strings; reads return null if
+// missing or unreadable. Atomic-ish writes via temp-rename to avoid a
+// half-written file if the process is killed mid-write.
+function getPrefsPath() {
+  return path.join(app.getPath('userData'), 'preferences.json')
+}
+
+function readPrefsFile() {
+  const fs = require('node:fs')
+  try {
+    const raw = fs.readFileSync(getPrefsPath(), 'utf8')
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function readPref(key) {
+  if (typeof key !== 'string' || !key) return null
+  const data = readPrefsFile()
+  return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null
+}
+
+function writePref(key, value) {
+  if (typeof key !== 'string' || !key) return { ok: false, error: 'invalid-key' }
+  const fs = require('node:fs')
+  const data = readPrefsFile()
+  data[key] = value
+  const target = getPrefsPath()
+  const tmp = `${target}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8')
+    fs.renameSync(tmp, target)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
 }
 
 // Map desktop-side provider id → the active_provider value that
@@ -205,6 +253,44 @@ async function openRuntimeInBrowser() {
 }
 
 app.whenReady().then(() => {
+  // Inizializza il file logger PRIMA di tutto: cosi' anche gli errori del
+  // boot (payload, runtime manager) finiscono su disco. Path:
+  // app.getPath('userData')/logs/jht-desktop-<ts>.log. Rotation a 10 file.
+  const logInit = log.init(app)
+  log.info('app.ready', {
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    electron: process.versions.electron,
+    node: process.versions.node,
+    chrome: process.versions.chrome,
+    packaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    userData: app.getPath('userData'),
+    logFile: logInit.file,
+    locale: app.getLocale(),
+  })
+
+  // Companycycle: chiudi pulito anche i log quando l'utente esce, cosi' un
+  // crash subito dopo non lascia righe a meta'.
+  app.on('window-all-closed', () => log.info('app.window-all-closed'))
+  app.on('before-quit', () => log.info('app.before-quit'))
+  app.on('will-quit', () => log.info('app.will-quit'))
+
+  // Canale IPC `log:append` — il renderer (wizard, dashboard) puo' mandare
+  // log strutturati che finiscono nello stesso file del main, cosi' un
+  // bug report ha il flow completo (UI step → IPC → modulo backend).
+  // Vedi preload.js → window.jhtLog per l'API esposta al renderer.
+  ipcMain.on('log:append', (event, payload = {}) => {
+    const level = ['debug', 'info', 'warn', 'error'].includes(payload.level)
+      ? payload.level
+      : 'info'
+    const scope = `renderer${payload.scope ? '.' + payload.scope : ''}`
+    const event_ = String(payload.event || 'unknown')
+    const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : undefined
+    log.child(scope)[level](event_, meta)
+  })
+
   payloadDir = path.join(app.getPath('userData'), 'app-payload')
   runtime = createRuntimeManager({
     containerMode: containerRuntime.shouldUseContainer(),
@@ -212,6 +298,13 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('launcher:get-status', () => runtime.getStatus())
+  // Espone il path del log file del main process al renderer (per UI
+  // "Open log folder" e bug reports). Diverso da launcher:get-log-file
+  // che ritorna il log del container runtime.
+  ipcMain.handle('launcher:get-app-log-file', () => ({
+    file: log.getLogFile(),
+    dir: log.getLogDir(),
+  }))
   ipcMain.handle('launcher:inspect-setup', () => runtime.inspectSetup())
   ipcMain.handle('launcher:get-log-file', () => runtime.getLogFile())
   ipcMain.handle('launcher:get-payload-dir', () => ({
@@ -552,6 +645,48 @@ app.whenReady().then(() => {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   })
+
+  // -------- Auth (Supabase OAuth via loopback PKCE) --------
+  ipcMain.handle('auth:get-status', () => auth.getStatus())
+  ipcMain.handle('auth:sign-in', (_event, provider) => {
+    if (typeof provider !== 'string' || !auth.SUPPORTED_PROVIDERS.has(provider)) {
+      return { ok: false, error: 'invalid-provider' }
+    }
+    return auth.signIn(provider)
+  })
+  ipcMain.handle('auth:sign-out', async () => {
+    sync.clearAllKeys()
+    return auth.signOut()
+  })
+  // Pairing token: base64(JSON) blob the renderer will hand to the
+  // VPS wizard (gap 2) so install.sh can register the VPS as a device
+  // of the signed-in user without an interactive `jht cloud login`.
+  ipcMain.handle('auth:get-pairing-token', () => auth.getPairingToken())
+
+  // -------- Renderer preferences (small key/value store) --------
+  // JSON file in userData. Used today for the onboarding `location`
+  // choice (local vs VPS) so a relaunch resumes on the right wizard
+  // branch. Renderer-only state — nothing in here ends up in ~/.jht
+  // or gets read by the CLI / container.
+  ipcMain.handle('prefs:get', (_event, key) => readPref(key))
+  ipcMain.handle('prefs:set', (_event, key, value) => writePref(key, value))
+
+  // -------- VPS provisioning (SSH key gen + remote install.sh) -----
+  ipcMain.handle('vps:generate-key', (_event, args = {}) => vps.generateKey(args))
+  ipcMain.handle('vps:get-public-key', () => vps.getPublicKey())
+  ipcMain.handle('vps:has-key', () => ({ ok: true, hasKey: vps.hasKey() }))
+  ipcMain.handle('vps:run-install', (event, args = {}) =>
+    vps.runInstall({ ...args, sender: event.sender })
+  )
+
+  // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
+  ipcMain.handle('sync:get-status', () => sync.getStatus())
+  ipcMain.handle('sync:setup', (_event, args = {}) => sync.setup(args))
+  ipcMain.handle('sync:unlock', (_event, args = {}) => sync.unlock(args))
+  ipcMain.handle('sync:lock', () => sync.lock())
+  ipcMain.handle('sync:push', (_event, args = {}) => sync.push(args))
+  ipcMain.handle('sync:pull', (_event, args = {}) => sync.pull(args))
+  ipcMain.handle('sync:disable', (_event, args = {}) => sync.disable(args))
 
   // Setup wizard — Docker status + download page + disk space preview.
   ipcMain.handle('setup:get-docker-status', async () => {

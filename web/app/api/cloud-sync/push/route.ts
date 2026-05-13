@@ -73,10 +73,26 @@ interface ProfileIn {
   summaries?: Record<string, string>
 }
 
+interface PendingMessageIn {
+  id: number
+  agent: string
+  body: string
+  kind?: string | null
+  related_position_id?: number | null
+  delivered_via?: string | null
+  delivered_at?: string | null
+  acknowledged_at?: string | null
+  user_reply?: string | null
+  user_reply_at?: string | null
+  agent_seen_reply_at?: string | null
+  created_at?: string | null
+}
+
 interface PushBody {
   positions?: PositionIn[]
   scores?: ScoreIn[]
   applications?: ApplicationIn[]
+  pending_user_messages?: PendingMessageIn[]
   profile?: ProfileIn
 }
 
@@ -145,6 +161,8 @@ const ALLOWED_POSITION_STATUS = new Set([
 ])
 const ALLOWED_APPLICATION_STATUS = new Set(['draft', 'review', 'approved', 'applied', 'response'])
 const ALLOWED_CRITIC_VERDICT = new Set(['PASS', 'NEEDS_WORK', 'REJECT'])
+const ALLOWED_MESSAGE_KIND = new Set(['notification', 'question', 'digest', 'alert'])
+const ALLOWED_DELIVERED_VIA = new Set(['telegram', 'web'])
 
 function normalizePositionStatus(s: string | null | undefined): string {
   if (!s) return 'new'
@@ -197,10 +215,14 @@ export async function POST(req: NextRequest) {
   const positions = Array.isArray(body.positions) ? body.positions : []
   const scores = Array.isArray(body.scores) ? body.scores : []
   const applications = Array.isArray(body.applications) ? body.applications : []
+  const pendingMessages = Array.isArray(body.pending_user_messages)
+    ? body.pending_user_messages
+    : []
 
   let positionsUpserted = 0
   let scoresUpserted = 0
   let applicationsUpserted = 0
+  let pendingMessagesUpserted = 0
   const legacyToUuid = new Map<number, string>()
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -338,6 +360,60 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3b. Upsert pending_user_messages via (user_id, legacy_id).
+  // related_position_id (numero locale) -> UUID cloud via legacyToUuid se
+  // disponibile. Se non lo conosciamo (push parziale o push successivo dove
+  // la position esiste gia' cloud ma non in questo batch), passiamo NULL —
+  // la dashboard mostra il messaggio senza link alla posizione, che e' un
+  // degrado accettabile. Una soluzione completa farebbe un lookup
+  // server-side per legacy_id mancanti, e' rimandata.
+  if (pendingMessages.length > 0) {
+    const payload = pendingMessages
+      .filter((m) => typeof m.id === 'number' && m.agent && m.body)
+      .map((m) => {
+        const relatedUuid =
+          m.related_position_id != null
+            ? legacyToUuid.get(m.related_position_id) ?? null
+            : null
+        return {
+          user_id: userId,
+          legacy_id: m.id,
+          agent: m.agent,
+          body: m.body,
+          kind: m.kind && ALLOWED_MESSAGE_KIND.has(m.kind) ? m.kind : 'notification',
+          related_position_id: relatedUuid,
+          delivered_via:
+            m.delivered_via && ALLOWED_DELIVERED_VIA.has(m.delivered_via)
+              ? m.delivered_via
+              : null,
+          delivered_at: m.delivered_at ?? null,
+          acknowledged_at: m.acknowledged_at ?? null,
+          user_reply: m.user_reply ?? null,
+          user_reply_at: m.user_reply_at ?? null,
+          agent_seen_reply_at: m.agent_seen_reply_at ?? null,
+          // created_at lato cloud usa il default now() solo se l'INSERT lo
+          // omette. Forziamo a quello locale cosi' l'ordinamento per timestamp
+          // riflette quando l'agente ha scritto, non quando il push e' arrivato.
+          ...(m.created_at ? { created_at: m.created_at } : {}),
+        }
+      })
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from('pending_user_messages')
+        .upsert(payload, { onConflict: 'user_id,legacy_id' })
+        .select('id')
+
+      if (error) {
+        return NextResponse.json(
+          { error: `pending_user_messages upsert: ${error.message}` },
+          { status: 500 }
+        )
+      }
+      pendingMessagesUpserted = upserted?.length ?? 0
+    }
+  }
+
   // 4. Profile upsert (opzionale, indipendente da positions/scores/apps)
   let profileUpserted = false
   let profileError: string | null = null
@@ -372,6 +448,7 @@ export async function POST(req: NextRequest) {
     positions: { upserted: positionsUpserted },
     scores: { upserted: scoresUpserted },
     applications: { upserted: applicationsUpserted },
+    pending_user_messages: { upserted: pendingMessagesUpserted },
     profile: { upserted: profileUpserted, error: profileError },
   })
 }

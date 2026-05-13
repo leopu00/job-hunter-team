@@ -11,10 +11,13 @@ const CONFIG_PATH = path.join(JHT_HOME, 'jht.config.json')
 const TIMEOUT_MS  = 5_000
 
 function readBotToken(): string | null {
+  // Lo status del canale Telegram è ancorato al bot Assistente (entry-point
+  // user-facing). Capitano/Mentor restano configurati a parte ma non sono
+  // sondati qui (decisione 2026-05-13: 1 status per canale).
   try {
     if (!fs.existsSync(CONFIG_PATH)) return null
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-    return cfg?.channels?.telegram?.bot_token ?? null
+    return cfg?.channels?.telegram?.bots?.assistente?.bot_token ?? null
   } catch { return null }
 }
 

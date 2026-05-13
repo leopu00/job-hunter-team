@@ -26,7 +26,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
 - 💬 **Telegram** — today talks to the Captain only; planned: per-agent chat + a "team forum" channel where the user can join the whole team's conversation
-- 🧙‍♂️ **Maestro** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
+- 🧙‍♂️ **Mentor** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
 
@@ -61,7 +61,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ### 🤖 Team & monitoring (post 04-11)
 
-- ✅ **8-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant) **+ 🧙‍♂️ Maestro (planned)**
+- ✅ **8-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant) **+ 🧙‍♂️ Mentor (planned)**
 - ✅ **📡 Bridge** as separate role (`sentinel-bridge.py` clock-only daemon)
 - ✅ **Monitoring V5** (Bridge → Sentinel event-driven → Captain autonomous, multi-source)
 - ✅ Sentinel refactor (491→130 lines + 6 on-demand skills: `check_usage_http/tui`, `decision_throttle`, `emergency_handling`, `memory_state`, `order_formats`)
@@ -72,7 +72,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 ### 📚 Pre-launch documentation (2026-04-27)
 
 - ✅ README rewritten (story, providers, vision, monitoring, AI-agent integration)
-- ✅ 8 new docs: STORY, PROVIDERS, AI-AGENT-INTEGRATION, VISION, MONITORING, RESULTS, BETA, `agents/maestro/maestro.md` spec
+- ✅ 8 new docs: STORY, PROVIDERS, AI-AGENT-INTEGRATION, VISION, MONITORING, RESULTS, BETA, `agents/mentor/mentor.md` spec
 
 ### 📝 Doc-review pass (2026-04-28) — in progress
 
@@ -89,7 +89,7 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 - `supabase/README.md` (English, hybrid model clarified)
 - `docs/security/` × 7 (README + 6 detailed files: 01-pre-launch-review, 02-openclaw-comparison, 03-implementation-tradeoffs, 04-threat-model, 05-checklist, 06-post-fix-comparison) — full English translation
 - ⚠️ `web/C:/Users/.../CLAUDE.md` phantom dir cleaned + guard added in `cli/src/jht-paths.js`
-- Agent prompts (9) — V5-alignment pass: orphan separators stripped, raw `tmux send-keys` for inter-agent comms migrated to `jht-tmux-send` (scout · analista · scorer · scrittore · assistente), capitano CHAT WEB switched to `jht-send`, stale `MENTOR` row dropped (Maestro is still planned), GPT-4o → GPT-5.5. Italian content kept in place (full i18n is Phase 4).
+- Agent prompts (9) — V5-alignment pass: orphan separators stripped, raw `tmux send-keys` for inter-agent comms migrated to `jht-tmux-send` (scout · analista · scorer · scrittore · assistente), capitano CHAT WEB switched to `jht-send`, stale `MENTOR` row dropped (Mentor is still planned), GPT-4o → GPT-5.5. Italian content kept in place (full i18n is Phase 4).
 
 **⏳ Remaining:**
 
@@ -175,10 +175,11 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/2026-05-01-bridge-and-token-monitoring.md`.
 - **Discovery:** the CLI subscription logs already contain weighted token counts per response, fresher than the provider /usage endpoint. Empirical calibration on Kimi K2 Plan: 1 % rate budget ≈ 30 kT weighted. Per-agent attribution works via `state.json.custom_title` regex (Kimi) or path naming (Claude / Codex).
 - **Observed asymmetry:** in 46 min of work the Scout consumed 1083 kT vs 125 kT for the Capitano (7×). Today the throttle is global ("everyone +30s pause"); the right move is per-agent.
-- **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):**
-  - Token-meter `WINDOW = since reset_at` instead of fixed 5 h (current cumulative ratio is inflated)
-  - Promote token-meter to a persistent service (singleton + autorestart) alongside the bridge
-  - Bridge state file V7 exposes `per_agent_rate` (kT/min, 60 s rolling)
+- **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):** ✅ **DONE 2026-05-13** (commits 924c93bd…da74e3bd on dev3)
+  - ✅ Token-meter `WINDOW = since reset_at` instead of fixed 5 h — `compute_window_start_ts` reads `last_reset_at_unix` from bridge state file (V7), three-level fallback (epoch → HH:MM → now-5h)
+  - ✅ Persistent service — `shared/skills/token-meter.py` has singleton PID lock + `/proc/cmdline` check; `shared/skills/token-meter-control.sh` start|stop|status|restart; integrated in `.launcher/start-agent.sh` (ROLE=token-meter) + CLI `cli/src/commands/team/start.js` + web `web/app/api/team/start-all/route.ts`
+  - ✅ State file `$JHT_HOME/logs/token-meter-state.json` exposes `ratio.ema_kt_per_pct` + `per_agent[<name>].rate_kt_per_min_60s` + `idle_seconds` + `window_source`; consumed by `web/app/api/tokens/status/route.ts`
+  - ✅ Shared lib `shared/skills/token_metrics_lib.py` (read_kimi_events, parse_session_to_agent, billing_weighted, aggregate, rolling_rate, rolling_rate_per_agent) — `token-meter.py`, `token-by-agent-plot.py`, `token-by-agent-rate.py` are now thin wrappers
 - **Tier 3 — dedicated session (~1 day):**
   - `throttle-controller.py`: deterministic (no LLM), reads state every 30 s, computes `error = actual - target_per_agent`, emits `[THROTTLE @<agent> ±Ns]` to the Capitano
   - Capitano forwards to agents; agents honour the delta in their loop sleep
@@ -237,7 +238,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - host-side: wrapper bash sottile (~165 righe) che fa `docker compose` + `docker exec`
   - container-side: il CLI Node attuale, raggiunto via `docker exec -it jht node /app/cli/bin/jht.js <args>`
 - **Done 2026-05-06:**
-  - Design doc completo: `docs/internal/2026-05-06-host-container-split.md`
+  - Design doc completo: `docs/internal/vps.md`
   - `scripts/jht-wrapper.sh` (wrapper bash con auto-up, lifecycle, exec proxy)
   - `cli/src/utils/container-proxy.js` con branch IS_CONTAINER=1 (passthrough, retro-compat con il path "from source")
   - `docker-compose.yml` riscritto image-only + production-friendly (no `build:`, no bind sorgenti)
@@ -271,7 +272,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
 - **Bonus:** ✅ aggiunge 1 cell al test campaign matrix (Hetzner CPX22 / Linux Ubuntu 24.04 / Claude Max).
-- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](docs/internal/2026-05-04-vps-deployment-design.md), implementation: [`docs/internal/2026-05-06-host-container-split.md`](docs/internal/2026-05-06-host-container-split.md), provider research: [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md).
+- **Design rationale:** [`docs/internal/vps.md`](docs/internal/vps.md), implementation: [`docs/internal/vps.md`](docs/internal/vps.md), provider research: [`docs/internal/vps.md`](docs/internal/vps.md).
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
@@ -282,7 +283,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - "Vuoi zero pensieri / setup?" → Mode 1 (PC locale, ma deve restare on)
 - **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
-- **Provider research feeder:** [`docs/internal/2026-05-06-vps-providers-research.md`](docs/internal/2026-05-06-vps-providers-research.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
+- **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
 #### 🟡 MEDIUM PRIORITY
 
@@ -322,10 +323,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Why MEDIUM (was LOW):** first question on HN/Reddit. Missing explicit positioning blocks credibility.
 - **Task:** FAQ section in README or new `docs/FAQ.md`. Cover: positioning vs LangChain/AutoGen/CrewAI, why subscription not API, why local-first not SaaS, what "AI on the side of workers" means.
 
-##### 🧙‍♂️ [JHT-MAESTRO-SKILLS] Add Maestro-specific skills if testing reveals the need
+##### 🧙‍♂️ [JHT-MENTOR-SKILLS] Add Mentor-specific skills if testing reveals the need
 
-- **Context:** `agents/maestro/maestro.md` was rewritten as a real prompt (Gandalf-the-grey voice, pattern-detection focus). For now the Maestro relies only on the global `db-query` skill — no Maestro-specific skills under `agents/maestro/_skills/`.
-- **When to revisit:** during the first round of real-world testing of the Maestro. If pattern-detection logic becomes repetitive in the prompt or hard to reason about in plain English, peel it out into Agent-Skills format.
+- **Context:** `agents/mentor/mentor.md` was rewritten as a real prompt (Gandalf-the-grey voice, pattern-detection focus). For now the Mentor relies only on the global `db-query` skill — no Mentor-specific skills under `agents/mentor/_skills/`.
+- **When to revisit:** during the first round of real-world testing of the Mentor. If pattern-detection logic becomes repetitive in the prompt or hard to reason about in plain English, peel it out into Agent-Skills format.
 - **Candidate skills (do NOT pre-create):** `pattern-skill-gaps`, `pattern-exclusions`, `pattern-near-fits`, `pattern-feedback`, `pattern-reviews`, `weekly-digest`, `market-research`. Each maps 1-1 with a section already in the prompt.
 - **Acceptance:** add a skill only when a test session shows the prompt is failing to apply the pattern correctly because the procedure is too vague to execute consistently.
 
@@ -344,7 +345,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 ##### 🤖 [JHT-AGENT-PROMPTS-V2] Deep validation of the 9 agent prompts (section by section)
 
-- **Context:** the V5-alignment pass on 2026-04-30 (`de7774bd`) was a global sweep — drop V4 leftovers, migrate to `jht-tmux-send`, refresh the TEAM table. After that, two prompts were rewritten in depth: Maestro as Gandalf-the-grey (`b61c3e70`) and Critico translated to English with `jht-tmux-send` wired (`47ac5c17`). Sentinella is already mostly EN-clean. The remaining six prompts still carry Italian sections, mixed formatting, and ad-hoc rules that should reference the new `agents/_team/team-rules.md` baseline.
+- **Context:** the V5-alignment pass on 2026-04-30 (`de7774bd`) was a global sweep — drop V4 leftovers, migrate to `jht-tmux-send`, refresh the TEAM table. After that, two prompts were rewritten in depth: Mentor as Gandalf-the-grey (`b61c3e70`) and Critico translated to English with `jht-tmux-send` wired (`47ac5c17`). Sentinella is already mostly EN-clean. The remaining six prompts still carry Italian sections, mixed formatting, and ad-hoc rules that should reference the new `agents/_team/team-rules.md` baseline.
 - **Method:** one agent at a time, one section at a time. Show the raw section, propose the edit, leave protocol tokens verbatim (`STEADY`, `ATTENZIONE`, `EMERGENZA`, `MANTIENI`, `SCALA UP`, `RALLENTARE`, `ACCELERARE`, `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`, `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`) — they are parsed by the Captain by pattern. Validate AVAILABLE TOOLS against `skills.list`. Wire the team-rules header line at the top of each RULES section.
 - **Order (least → most central):** ① Sentinella · ② Assistente · ③ Scout · ④ Analista · ⑤ Scorer · ⑥ Scrittore · ⑦ Capitano (heaviest, 647 lines, last for cross-coherence check).
 - **Linked task:** [JHT-DB-ANALISTA-FIX] (the Analista review must also fix REGOLA-08 to populate `companies` + `position_highlights`).
@@ -354,10 +355,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 Found while mapping the runtime filesystem of the JHT container. Schema is sane; agents are instructed inconsistently and naming has drifted. Subtasks:
 
 - **[JHT-DB-RENAME]** Rename `~/.jht/jobs.db` → `~/.jht/db/jht.db`. Move `~/.jht/data/scout_coordination.db` next to it (or absorb — see SCOUT-COORD). Update `.launcher/config.sh:14`, `shared/skills/_db.py` resolver, `check_links.py`, `scout_coord.py`, `rate_sentinel.py`, `agents/_team/team-rules.md`, `agents/_manual/db-schema.md`, plus comments/docstrings in `db_*.py`. Migration: move existing file at boot if not present at the new path.
-- **[JHT-DB-ANALISTA-FIX]** Currently `agents/analista/analista.md` REGOLA-08 says "MAI toccare `companies`, `scores`, `applications`". Result: `companies` table has 0 rows out of 105 positions analyzed — duplicate company names as text in `positions.company`. Skill `agents/_skills/db-insert/SKILL.md` correctly says "Analyst for companies and highlights" but the prompt contradicts it. Fix prompt: Analista IS the agent that INSERTs into `companies` (anagrafica) and `position_highlights` (red flags + perks notabili) on first encounter; on subsequent encounters UPDATEs. Coordinate with [JHT-AGENT-PROMPTS-V2] step ④.
+- ✅ **[JHT-DB-ANALISTA-FIX]** *Done 2026-05-12.* `agents/analista/analista.md` REGOLA-08 riscritta: l'Analista popola `companies` (anagrafica, primo incontro → insert; successivi → update se info nuove) e `position_highlights` (1-3 pro/con concreti). Resta interdetto su `scores` e `applications`. LOOP PRINCIPALE allungato con step 5 (companies) e 6 (highlights), più snippet bash pronti. Allinea il prompt alla skill `agents/_skills/db-insert/SKILL.md` che già dichiarava "Analyst for companies and highlights". **Verifica runtime ancora da fare**: contare righe `companies` su una sessione completa post-fix.
 - ✅ **[JHT-DB-STATUS-CHECK]** *Done 2026-05-06.* CHECK su `positions.status` aggiunto in tutti e tre i punti di scrittura schema (`shared/skills/_db.py`, `web/lib/db.ts`, `tui/src/tui-profile.ts`). Enum allineato al doc canonico in `db-schema.md`: `('new','checked','scored','writing','ready','applied','response','excluded')` — non quello del backlog originale (`'written','interview','rejected','offer'`) che divergeva dal flow reale degli agenti. Migrazione retroattiva v2→v3 via `_migrate_v2_to_v3()` (CREATE+COPY+DROP+RENAME perché SQLite non supporta `ALTER TABLE ADD CHECK`); guard idempotente (cerca il marker preciso `CHECK(STATUSIN` per evitare falso-positivo su `last_checked`); user_version bumpato 2→3. **applications.status NON vincolato**: il doc canonico dice esplicitamente "il flag operativo è `applied` (BOOLEAN)" → CHECK sarebbe over-engineering. Smoke test: 8 status canonici accettati, 4 invalid (incluso `'Applied'` con maiuscola — la classe di bug principale) rigettati con `IntegrityError`. Idempotenza verificata.
 - ✅ **[JHT-DB-FK-PRAGMA]** *Verificato 2026-05-06.* `PRAGMA foreign_keys = ON` è già su ogni `connect()`: `shared/skills/_db.py:34` (Python agents), `web/lib/db.ts:64` (read handle Next), `web/lib/db.ts:176` (`initDb`). Il client `cli/src/commands/cloud.js` apre in readonly tramite `node:sqlite` → FK constraints non si applicano in lettura, NA. Gli orphan position_id sono già bloccati al primo INSERT/UPDATE.
-- **[JHT-DB-TIMESTAMPS]** Add uniform `created_at`/`updated_at` to all 5 tables with `DEFAULT CURRENT_TIMESTAMP` and an `AFTER UPDATE` trigger on `updated_at`. Keep domain `*_at` fields (`scored_at`, `applied_at`, …) for event semantics. Helps audit ("which row changed last").
+- ✅ **[JHT-DB-TIMESTAMPS]** *Done 2026-05-12.* Schema bumpato a V4: `created_at`/`updated_at` su tutte e 5 le tabelle (companies, positions, position_highlights, scores, applications) con `DEFAULT CURRENT_TIMESTAMP` su DB freschi. Trigger `*_touch_updated_at` (AFTER UPDATE FOR EACH ROW, WHEN updated_at non e' stato toccato manualmente) garantisce l'aggiornamento automatico — anti-ricorsione via WHEN NEW=OLD. Trigger `*_default_created_at` (AFTER INSERT) popola NULL → CURRENT_TIMESTAMP per coprire i DB migrati dove ALTER TABLE ADD COLUMN non puo' avere DEFAULT (limite SQLite). Migrazione retroattiva `_migrate_v3_to_v4()` in `shared/skills/_db.py` con fallback intelligente (es. `created_at = COALESCE(found_at, CURRENT_TIMESTAMP)` per positions; analyzed_at/scored_at/written_at per le altre). Domain `*_at` field preservati per event semantics. Schema replicato in `web/lib/db.ts` (CREATE TABLE + trigger, niente migrazione) e `tui/src/tui-profile.ts` (WORKSPACE_DB_SCHEMA codegen). Doc canonico aggiornato in `agents/_manual/db-schema.md` (V3→V4). Smoke test locale: fresh DB OK (insert popola entrambi i campi, update tocca solo updated_at), V3→V4 migration OK (created_at riprende il domain field se presente, updated_at scatta al primo UPDATE), idempotenza OK (re-run di ensure_schema = no-op).
 - **[JHT-DB-SCOUT-COORD]** Consolidate `~/.jht/data/scout_coordination.db` (20K, separate file) into the main DB as a table. Verify if it is separate for real reasons (lock contention, isolation) or by accident; if it can rejoin → migration + UPDATE skills that read it. If it cannot → document why in `db-schema.md`.
 
 ##### 📁 [JHT-HOME-REFACTOR] Clean up `~/.jht` runtime filesystem
@@ -414,21 +415,22 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 #### 🚨 Launcher as primary tool — Phase 2 expansion (NEW 2026-05-04)
 
-> Driven by VPS deployment design ([`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
+> Driven by VPS deployment design ([`docs/internal/vps.md`](../docs/internal/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
 
-##### 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher
+##### ✅ 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher — **DONE 2026-05-13**
 
+- **Stato implementazione (merge `8040a576` dev1 + commit `909566fe` desktop/auth):** OAuth login flow live in `desktop/auth/` (`browser-picker.js`, `callback-server.js`, `keyring-storage.js`, `supabase-client.js`, `index.js`). Pairing token derivato dalla session per bootstrap VPS.
 - **Why:** today the launcher is anonymous (no identity). VPS mode requires identity for cross-device recovery. Without login, user changing PC loses access to their VPS.
 - **Task:**
-  1. Login button in launcher → opens system browser to Supabase OAuth (Google/GitHub)
-  2. Callback to `http://localhost:<random-port>/auth/callback` with PKCE flow
-  3. Session token stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-  4. Two modes coexist: 🔓 **Guest** (today's behavior, local PC only) + 🔐 **Signed-in** (unlocks VPS, sync, multi-device)
+  1. ✅ Login button in launcher → opens system browser to Supabase OAuth (Google/GitHub)
+  2. ✅ Callback to `http://localhost:<random-port>/auth/callback` with PKCE flow
+  3. ✅ Session token stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+  4. ✅ Two modes coexist: 🔓 **Guest** (today's behavior, local PC only) + 🔐 **Signed-in** (unlocks VPS, sync, multi-device)
 - **Acceptance:** user clicks "Sign in", completes OAuth, session persists across launcher restarts, "Sign out" cleanly revokes.
-- **Dependency:** must land before [JHT-VPS-FRIENDLY].
 
-##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata
+##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata — **CORE DONE 2026-05-13**
 
+- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato; endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
 - **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
 - **Sync to cloud (Supabase, encrypted user-side with passphrase):**
   - Profile + preferences
@@ -440,6 +442,40 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Encryption:** AES-256-GCM with key derived from user passphrase via Argon2id. Server stores ciphertext only — `jobhunterteam.ai` ops cannot decrypt.
 - **Acceptance:** modify config on laptop A, install launcher + login on laptop B, config restored after passphrase entry. Server admin (us) cannot read VPS IP from raw DB.
 - **Dependency:** [JHT-DESKTOP-LOGIN].
+
+##### 🔄 [JHT-CLOUD-RESTORE] Bootstrap automatico al login su container vuoto
+
+- **Why:** la sync è push-only `local → cloud`. Quando l'utente fa login con stesso account su container nuovo/vuoto (nuova VPS post-install, nuovo PC dopo perdita del vecchio), l'app deve fare un **pull automatico** dal cloud per allineare il DB locale. Senza questo, il container parte vuoto e si perde la storia.
+- **Trigger automatico:**
+  1. Utente fa login Supabase nell'app (o nel container post-install via pairing token)
+  2. App rileva: container locale ha `jobs.db` vuoto / mai sincronizzato prima
+  3. App fa pull dei blob cifrati cloud → decifra con passphrase recovery → popola DB locale
+  4. Da lì in poi: push normale, niente più trigger automatici
+- **Comando esplicito CLI:** `jht cloud restore [--force]` — utile per debug, per reseed manuale, o per casi edge dove l'utente vuole sovrascrivere dati locali esistenti
+- **Guard rails:**
+  - Se container ha già dati e nessun `--force` → fallisce con messaggio chiaro ("container has local data — use --force to overwrite")
+  - Se cloud è vuoto (utente non ha mai sincronizzato prima) → no-op silenzioso
+- **Decisione doc:** vedi `docs/internal/INFRA.md` § Bootstrap automatico e memoria `project_cloud_sync_direction`.
+- **Dependency:** [JHT-DESKTOP-SYNC] (sync infrastructure), [JHT-DESKTOP-RECOVERY] (passphrase per decifrare).
+
+##### 👤 [JHT-CLOUD-SYNC-PROFILE] Aggiungere profilo utente al sync
+
+- **Why:** il profilo (`candidate_profile.yml` — nome, skills, experience, preferenze) è il dato più "personale" del team e quello che l'utente non vuole rifare da capo cambiando macchina. Oggi sincronizziamo solo positions/applications.
+- **Task:**
+  1. Aggiungere `candidate_profile.yml` al payload di push verso Supabase (cifrato user-side)
+  2. Aggiungere alla logica di pull in `[JHT-CLOUD-RESTORE]`
+  3. Migration: utenti esistenti con sync attiva → primo push successivo include automaticamente il profilo
+- **Acceptance:** modifica profilo su macchina A → 1 minuto dopo, login su macchina B → profilo presente.
+
+##### 🎨 [JHT-CLOUD-SYNC-THEME] Aggiungere tema/settings dashboard al sync
+
+- **Why:** la personalizzazione UI (dark/light, lingua, sidebar pinned, ecc.) è un piccolo ma significativo "rifare da capo" per l'utente che cambia macchina.
+- **Task:**
+  1. Verificare dove vivono i settings oggi (DB tabella `user_settings` o browser localStorage?)
+  2. Se localStorage: migrare a DB `user_settings` table (necessario per sync server-side)
+  3. Aggiungere al payload push e alla logica pull
+- **Acceptance:** cambio tema/lingua su macchina A → 1 minuto dopo, login su macchina B → stesso tema/lingua.
+- **Dependency:** [JHT-CLOUD-RESTORE].
 
 ##### 🔑 [JHT-DESKTOP-RECOVERY] Recovery passphrase generation + decrypt flow
 
@@ -453,16 +489,11 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Acceptance:** passphrase shown once at setup, encryption verified by round-trip test, recovery on new PC works in <60s end-to-end.
 - **Dependency:** [JHT-DESKTOP-SYNC].
 
-##### 🔄 [JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me" entry point
+##### 🔄 ~~[JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me"~~ — ❌ ANNULLATA 2026-05-13
 
-- **Why:** the recovery flow needs an entry point in the UI. Without it, user on new PC sees only "Create new VPS" and panics.
-- **Task:**
-  1. Launcher start screen on new PC: "🆕 Setup new team" / "🔄 Reconnect existing team" buttons
-  2. "Reconnect" → OAuth → enter passphrase → restore config from cloud
-  3. Detect mismatched state: cloud says VPS exists at IP X, but Hetzner API (with re-pasted token) says no such server → offer "Restore from snapshot" or "Create new"
-  4. Detect orphan VPS: VPS exists on Hetzner but no cloud config → "Adopt existing server" flow
-- **Acceptance:** all 3 scenarios (clean restore, missing VPS, orphan VPS) handled with clear UX.
-- **Dependency:** [JHT-DESKTOP-RECOVERY].
+**Decisione 2026-05-13 sera**: niente flusso reclaim. Cambio PC = wipe + ricreate. L'utente cancella la vecchia VPS Hetzner manualmente, l'app ne crea una nuova, il cloud sync (obbligatorio in Path 2) re-seeda i dati. Vedi `docs/internal/onboarding-flow.md` § "Reclaim VPS da nuovo PC".
+
+Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt existing server". Lo gestisce il wizard "Crea VPS Hetzner" standard del Path 2 ogni volta.
 
 ##### 🩹 [JHT-DESKTOP-ERRORS] Friendly error handling (no stack traces)
 
@@ -511,8 +542,9 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Depends on**: at least 1 adapter (CLOUD-04)
 - "Choose where the team runs", cloud credentials input, real-time cost estimate, one-click deploy/teardown, billing alerts
 
-#### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy
+#### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy — **CORE DONE 2026-05-13**
 
+- **Stato implementazione (merge dev2 `82bf4fc8` + commits `23a140cb/32a51766/43d94016`):** Path B3 (desktop diretto) cablato per beta 0. Componenti live: location picker (Local/VPS) come primo step (`desktop/renderer/modules/wizard-flow.js`); SSH keypair gen IPC vpsApi (`desktop/vps/index.js`); runInstall SSH remoto + log streaming; pairing-token derivato dalla session Supabase passato a `install.sh --pairing-token`. **Decisione lockata 2026-05-13**: niente Hetzner API automation in beta — utente crea la VPS manualmente e paste IP. Tailscale rimandato a v1+ (vedi `docs/internal/vps.md` § decisioni infra). I tre lifecycle button (⏸️/📸/💀) live (merge dev1 `cf09e483`).
 - **Depends on:** [JHT-CLOUD-04] Hetzner adapter + [JHT-CLOUD-05] Cloud UI
 - **Goal:** non-tech user provisions a VPS in <5 minutes without ever touching SSH or terminal.
 - **UX:**
@@ -531,7 +563,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - Tailscale (zero-config, US company) vs WireGuard self-hosted (more aligned with local-first, more code)
   - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
-- **Design rationale:** [`docs/internal/2026-05-04-vps-deployment-design.md`](../docs/internal/2026-05-04-vps-deployment-design.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
+- **Design rationale:** [`docs/internal/vps.md`](../docs/internal/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
 #### 🔗 [JHT-UX-CLOUD-PAIRING] Auto-pairing VPS↔account web (no token manuale + 2 comandi CLI)
 
@@ -559,7 +591,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
   - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
 - **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
-- **Stato implementazione esistente:** infrastruttura presente (`web/app/api/cloud-sync/{ping,push,tokens}/route.ts`, `cli/src/commands/cloud.js` con `enable/status/push/disable`, `web/app/(protected)/settings/cloud-sync/CloudSyncClient.tsx`). Il pezzo mancante e' SOLO il device flow OAuth-style + wizard onboarding empty-state.
+- **Stato implementazione (aggiornato 2026-05-13 sera):** ✅ pairing automatico via desktop app cablato (path B3). L'app desktop deriva il pairing token dalla session Supabase + lo passa a `install.sh --pairing-token`; `jht cloud pair --token <t>` chiama `POST /api/cloud-sync/device-register` che registra il device su Supabase. Zero copia-incolla per Path 2. Resta opzione 1 (`jht cloud login` device flow OAuth) per Path 3 / power-user senza desktop app — non bloccante per la beta.
 
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
@@ -616,15 +648,28 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - ❌ Contenuti tradotti: **zero**. La branch parallela in corso ottimizza i file italiani — non li traduce. Quindi baseline `<role>.md` resta italiano nel prevedibile.
   - ⚠️ Inconsistenza attiva: `DEFAULT_LOCALE='en'` (settato stamattina per onboarding desktop) + baseline IT → drift mismatch reale per utenti default-EN.
 
-  **Decisioni aperte (vedi design doc per dettaglio):**
-  - 🅰️ Status quo + accettare drift fino a traduzione esplicita futura
-  - 🅱️ Rollback `DEFAULT_LOCALE='it'` (riallinea ma contraddice memory `feedback_lang_picker_default_english`)
-  - 🅲 RULE-T14 in `team-rules.md` ("respond in user's language") — neutralizza drift in 5 min, ma tocca file in lavorazione altra branch → da coordinare
+  **✅ Decisione lockata (2026-05-13) — policy "lingua utente unica"**
 
-  **Sprint futuri (oggi non assegnati a nessuno):**
-  - ⬜ Task esplicito traduzione `<role>.md` → EN (zero attività in corso)
+  L'utente sceglie una lingua al primo setup; tutto user-visible (chat, dashboard UI, messaggi inter-agente, commenti deliverable) è in quella lingua. Eccezione: JD content originale resta originale.
+
+  Implementazione:
+  - ✅ **RULE-T14** in `agents/_team/team-rules.md` (deployed 2026-05-13) — safeguard runtime: anche con baseline IT, locale=en → output EN
+  - ⬜ **[JHT-I18N-TRANSLATE]** (sotto) — traduzione vera dei baseline IT→EN (elimina costo "traduzione mentale" runtime)
   - ⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
   - ⬜ Community translation HU/ES/DE/FR (post-launch)
+
+##### 🌐 [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN
+
+- **Why HIGH:** RULE-T14 mitiga il drift ma l'agente fa "traduzione mentale" runtime → token overhead. Traduzione vera elimina il costo.
+- **Scope:** 10 file `<role>.md`, ~1650 righe totali (post-refactor).
+- **Procedura:**
+  1. `cp agents/<role>/<role>.md agents/<role>/<role>.it.md` (preserva IT come override)
+  2. Tradurre il baseline `<role>.md` in inglese
+  3. Preservare invariati: protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc. parsati per pattern dal Capitano), tmux session names (`CAPITANO`, `SCOUT-N`), comandi shell, path
+  4. Smoke test: team start con `locale=en` → verifica baseline EN caricato + risposte EN
+- **Acceptance:** 10 file EN, 10 file `<role>.it.md` con IT preservato, smoke test pass.
+- **Effort stimato:** 4-6 ore. Da fare pre-launch.
+- **Design doc:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md) § "Task traduzione esplicito".
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 
@@ -691,10 +736,14 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - ✅ Contributor Covenant 2.1 standard at root, contact `info@jobhunterteam.ai`
 - ✅ `.github/CONTRIBUTING.md` updated to link the new CoC
 
-#### 🎬 [JHT-LAUNCH-03] 30s demo video ⬜ BLOCKER
+#### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
 
-- Asciinema or screencast full pipeline
-- Embed in README above the fold
+- ✅ Storyboard + recording plan landed at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md): 6-beat shot list timed to 30s, asciinema record/convert commands (`.cast` → `.gif` via `agg`, ≤ 2.5 MB target), captions, README embed snippet, Show HN/press-kit reuse plan.
+- ⬜ Remaining (Leone-only — needs the live install + the demo SQLite snapshot):
+  - Add `--demo-profile` to `jht setup` and `--fixture` to `jht sentinella tail` (or drop beat 4 of the storyboard)
+  - Ship `docs/launch/demo-profile.yml` (anonymised) + `assets/demo-fixtures/` snapshot
+  - Record, convert, verify size, upload `.cast` to asciinema.org
+  - Replace the README "🚧 Coming soon" placeholder with the embed snippet, drop the URL into the Show HN draft
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
@@ -720,22 +769,17 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - PRs to `awesome-ai-agents`, `awesome-claude`, `awesome-selfhosted`
 - Create JHT entry with repo link + 1-line description
 
-#### 🐛 [JHT-LAUNCH-08] GitHub issue triage workflow ⬜
+#### 🐛 [JHT-LAUNCH-08] GitHub issue triage workflow 🟡
 
-- **Why:** the first week post-launch will bring a wave of issues — install problems, edge cases, "doesn't work for me" reports. Without a triage workflow we drown.
-- **Task:**
-  1. Issue templates already exist (`.github/ISSUE_TEMPLATE/{bug_report,feature_request}.md`) — verify they ask the right questions
-  2. Define labels: `installer`, `monitoring`, `provider:claude`, `provider:kimi`, `provider:codex`, `desktop`, `web`, `cli`, `docs`, `triage`, `wontfix`
-  3. Set up GitHub project board (kanban: triage → confirmed → in-progress → done)
-  4. Document SLA expectations in `CONTRIBUTING.md` ("we aim to triage within 48h, no fix SLA in beta")
+- ✅ Issue templates expanded with install-path, provider, severity checkbox + log-source hints ([`.github/ISSUE_TEMPLATE/bug_report.md`](.github/ISSUE_TEMPLATE/bug_report.md) + [`feature_request.md`](.github/ISSUE_TEMPLATE/feature_request.md))
+- ✅ Company 033 label set declared in [`.github/labels.yml`](.github/labels.yml) — surface (installer/monitoring/desktop/web/cli/container/agents/docs), provider, state (triage/confirmed/in-progress/blocked), severity, type, outcomes, community
+- ✅ Workflow + SLA documented in [`docs/internal/triage.md`](docs/internal/triage.md); `CONTRIBUTING.md` carries the public 48h-triage / 24h-blocker-ack contract
+- ⬜ Remaining (manual, maintainer-side): run the `gh label create` sync once on the live repo, create the `JHT — Triage` project board with the 5 columns + state-label automation, wire `severity:blocker` notification path
 
-#### 📰 [JHT-LAUNCH-09] Show HN post draft ⬜
+#### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
-- **Title** (60 char max): test multiple variants
-- **Body**: lead with the manifesto + numbers (200/20/5) + screenshots/GIF + link to STORY.md
-- **Tone**: dev-to-dev, not marketing
-- **Timing**: Tuesday-Wednesday morning UTC (best HN engagement window)
-- **Plan B**: if HN doesn't pick up → fall back to r/LocalLLaMA + r/ClaudeAI + r/selfhosted
+- Draft landed at [`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md): 4 title variants, body in dev-to-dev tone with the 200/20/5 numbers, 5 pre-written first-comment answers, timing window (Tue/Wed 13-15 UTC) and Plan B fallback subreddits.
+- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (Leone vs. a friend account with karma already).
 
 #### 🎙️ [JHT-LAUNCH-10] Press kit ⬜
 
@@ -782,13 +826,12 @@ All 5 tasks from 04-22 have been implemented:
 - **Validato 2026-05-10:** VPS Hetzner CPX22 vergine, image `ghcr.io/leopu00/jht:dev1` con override entrypoint `tini -g`. Banner + step Node + selettore con `● QuickStart / ○ Avanzato`. ↓ → `● Avanzato`. ↑ → `● QuickStart`. Selezione live, marker ●/○ alternano correttamente. Da ribuildare image `:dev1` + retest senza override.
 - **Storia diagnostica:** prima ipotesi (docker exec) era data dal contesto del primo test (era allora `docker exec`). Refactor wrapper da exec → run ha lasciato il bug invariato perche' la causa vera era un livello sotto.
 
-### 🟢 [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato
+### ✅ [BUG-DOCTOR-TMUX] `jht doctor` segnala "tmux: non trovato" anche con tmux installato — FIXED 2026-05-12
 
-- **File:** `cli/src/commands/doctor.js:19`
-- **Stato:** `cmdVersion(cmd)` usa `${cmd} --version` per tutti i binari, ma `tmux 3.3a` non riconosce `--version` (vuole `-V` maiuscolo) e ritorna usage + status 1. Risultato: doctor segnala "tmux: non trovato" anche su install validi (sia host con tmux apt-installato sia dentro al container JHT che ha `/usr/bin/tmux 3.3a` baked).
+- **File:** `cli/src/commands/doctor.js:18`
+- **Causa:** `cmdVersion(cmd)` usava `${cmd} --version` per tutti i binari, ma `tmux` vuole `-V` maiuscolo e su `--version` ritorna usage + exit 1 → doctor diceva "tmux: non trovato" su install validi.
+- **Fix applicato:** mappa `VERSION_FLAGS = { tmux: '-V' }` con default `--version`, fallback su qualsiasi binario diverso da tmux. Smoke test locale: `tmux 3.6` ora ritornato correttamente.
 - **Scoperto durante:** spike host/container split del 2026-05-06.
-- **Fix proposto:** mappa `cmd → version_flag` con default `--version` e override `tmux: -V`. Oppure, prima `command -v tmux >/dev/null` per esistenza, poi `tmux -V` se serve la versione.
-- **Impatto:** UX confusing per chiunque usa `jht doctor` su un setup funzionante. Non blocca alcun flow operativo.
 
 ### ✅ [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accettava il "Bypass Permissions" prompt di Claude Code 2.1+ — FIXED 2026-05-08 (commit `7106ef6e`)
 

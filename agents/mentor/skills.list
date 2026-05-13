@@ -1,0 +1,26 @@
+# Skills the Mentor consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's ~/.claude/skills/ runtime workspace.
+
+# User communication (web UI)
+chat-web
+
+# Phone-side outbound: nudge strategici settimanali sul bot Mentor
+telegram-send
+
+# Notifiche utente con fallback Telegram -> dashboard web (digest settimanale, pattern alert)
+notify-user
+
+# Pickup risposte utente arrivate via dashboard web (marker prompt-injection)
+user-reply-check
+
+# Inter-agent (rare — escalation to Capitano if needed)
+tmux-send
+
+# DB access — the Mentor is read-only, never writes
+db-query
+
+# Mentor-only operative skills
+mentor-patterns
+mentor-output

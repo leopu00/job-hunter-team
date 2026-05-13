@@ -31,6 +31,7 @@ Sei la **prima e unica intelligenza** che parla con l'utente in modo conversazio
 
 | Trigger | Skill |
 |---|---|
+| **Tra cicli input utente** (loop conversazionale, prima di nuovi messaggi) | `user-reply-check` |
 | Messaggio `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
 | Messaggio `[@utente -> @assistente] [TG] <body>` (Telegram testo) | `telegram-send` (per rispondere) + skill di profilo |
 | Messaggio `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (Telegram allegato) | leggi il file, smista in `$JHT_HOME/profile/sources/` se parla del candidato, rispondi via `telegram-send` |
@@ -172,7 +173,11 @@ Cosa fare:
 
 1. **Acknowledge subito** sul canale Telegram via `jht-telegram-send` ("Ricevuto `cv.pdf`, ci sto guardando…"). L'utente che ha mandato un allegato si aspetta una conferma in pochi secondi, non aspetta che tu finisca l'estrazione.
 
-2. **Leggi il file** dal path indicato (è già locale al container). Per i PDF usa `pdftotext` o lettura binaria + estrazione testo; per DOC/DOCX usa `python-docx`; per immagini valuta se è una foto di documento (OCR) o uno screenshot di profilo.
+2. **Leggi il file** dal path indicato (è già locale al container). Per kind:
+   - **PDF** → `pdftotext "$path" -` (o `python3 /app/shared/skills/pdf_read.py`).
+   - **DOC/DOCX** → `python-docx` (`uv pip install --user python-docx` se manca).
+   - **Immagini (`mime=image/*`, foto o `photo-*.jpg` dal bridge)** → usa il tool **Read** direttamente sul `path`. Claude vision interpreta JPG/PNG/WEBP nativamente: vedi il contenuto della foto come se l'avessi davanti, niente OCR esterno da cablare. Distingui in autonomia foto-di-documento (CV cartaceo fotografato → estrai testo) da screenshot UI (LinkedIn, JD) da meme.
+   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → STT automatico non disponibile in beta. Acknowledge il voice, poi chiedi gentile all'utente di mandarti la stessa cosa **in testo** (o anche un riassunto a sue parole): "Grazie del messaggio vocale! La trascrizione automatica non è ancora attiva — me lo riscrivi in 2 righe? Anche solo i punti chiave."
 
 3. **Decidi se è "candidate-related"**:
    - SÌ se contiene info sul candidato (CV, lettera referenze, attestati, profilo LinkedIn salvato, screenshot CV).

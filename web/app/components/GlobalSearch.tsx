@@ -16,22 +16,12 @@ const ITEM_DEFS: ItemDef[] = [
   { id: 'profile',      labelKey: 'gs_profile_label',      detailKey: 'gs_profile_detail',      catKey: 'cat_pages',  href: '/profile' },
   { id: 'team',         labelKey: 'gs_team_label',         detailKey: 'gs_team_detail',         catKey: 'cat_pages',  href: '/team' },
   { id: 'assistente',   labelKey: 'gs_assistente_label',   detailKey: 'gs_assistente_detail',   catKey: 'cat_pages',  href: '/team/assistente' },
-  { id: 'agents',       labelKey: 'gs_agents_label',       detailKey: 'gs_agents_detail',       catKey: 'cat_pages',  href: '/agents' },
-  { id: 'tasks',        labelKey: 'gs_tasks_label',        detailKey: 'gs_tasks_detail',        catKey: 'cat_pages',  href: '/tasks' },
-  { id: 'sessions',     labelKey: 'gs_sessions_label',     detailKey: 'gs_sessions_detail',     catKey: 'cat_pages',  href: '/sessions' },
-  { id: 'queue',        labelKey: 'gs_queue_label',        detailKey: 'gs_queue_detail',        catKey: 'cat_pages',  href: '/queue' },
-  { id: 'events',       labelKey: 'gs_events_label',       detailKey: 'gs_events_detail',       catKey: 'cat_pages',  href: '/events' },
-  { id: 'logs',         labelKey: 'gs_logs_label',         detailKey: 'gs_logs_detail',         catKey: 'cat_pages',  href: '/logs' },
-  { id: 'analytics',    labelKey: 'gs_analytics_label',    detailKey: 'gs_analytics_detail',    catKey: 'cat_pages',  href: '/analytics' },
-  { id: 'budget',       labelKey: 'gs_budget_label',       detailKey: 'gs_budget_detail',       catKey: 'cat_pages',  href: '/budget' },
   { id: 'reports',      labelKey: 'gs_reports_label',      detailKey: 'gs_reports_detail',      catKey: 'cat_pages',  href: '/reports' },
   { id: 'integrations', labelKey: 'gs_integrations_label', detailKey: 'gs_integrations_detail', catKey: 'cat_pages',  href: '/integrations' },
   { id: 'settings',     labelKey: 'gs_settings_label',     detailKey: 'gs_settings_detail',     catKey: 'cat_config', href: '/settings' },
   { id: 'credentials',  labelKey: 'gs_credentials_label',  detailKey: 'gs_credentials_detail',  catKey: 'cat_config', href: '/credentials' },
   { id: 'providers',    labelKey: 'gs_providers_label',    detailKey: 'gs_providers_detail',    catKey: 'cat_config', href: '/providers' },
   { id: 'channels',     labelKey: 'gs_channels_label',     detailKey: 'gs_channels_detail',     catKey: 'cat_config', href: '/channels' },
-  { id: 'deploy',       labelKey: 'gs_deploy_label',       detailKey: 'gs_deploy_detail',       catKey: 'cat_system', href: '/deploy' },
-  { id: 'gateway',      labelKey: 'gs_gateway_label',      detailKey: 'gs_gateway_detail',      catKey: 'cat_system', href: '/gateway' },
 ]
 
 type Item = { id: string; label: string; detail: string; href: string; category: string }

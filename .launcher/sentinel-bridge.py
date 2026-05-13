@@ -59,7 +59,7 @@ PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 # Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
 # la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
 STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
-STATE_VERSION = 6
+STATE_VERSION = 7
 
 DEFAULT_TICK_MINUTES = 5               # default se config mancante
 MIN_TICK_SECONDS = 15                  # safety floor: <15s spammerebbe il provider
@@ -206,7 +206,9 @@ def _should_notify_sentinella(in_gspot, state, now_ts):
 
 
 def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
-                      last_status=None, last_projection=None, last_usage=None):
+                      last_status=None, last_projection=None, last_usage=None,
+                      last_reset_at=None, last_reset_at_unix=None,
+                      last_provider=None):
     """Pubblica lo stato corrente del bridge in un JSON atomico letto dalla
     UI web (`/api/bridge/status`). Sostituisce la replica della logica
     `_choose_tick_interval` lato TS, che era fragile rispetto a cambi del
@@ -214,6 +216,11 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
 
     Atomic write: scriviamo in `<file>.tmp` e poi `os.replace` per evitare
     letture parziali se il fetcher web colpisce a metà write.
+
+    last_reset_at è la stringa HH:MM del reset della finestra rate-limit del
+    provider (5h Kimi/Claude/Codex). Esposto per il token-meter V1 che lo usa
+    per ancorare la finestra di aggregazione (window_start = reset_at - 5h);
+    altrimenti dovrebbe ricostruire la window dal `now`, divergendo dal bridge.
     """
     payload = {
         "version": STATE_VERSION,
@@ -231,6 +238,9 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         "last_status": last_status,
         "last_projection": last_projection,
         "last_usage": last_usage,
+        "last_reset_at": last_reset_at,
+        "last_reset_at_unix": last_reset_at_unix,
+        "last_provider": last_provider,
         "g_spot": {"lower": GSPOT_LOWER, "upper": GSPOT_UPPER},
         "sentinella_cooldown_min": SENTINELLA_COOLDOWN_MIN,
     }
@@ -344,10 +354,17 @@ def fetch_codex_rollout():
         except (TypeError, ValueError):
             return None
         reset_at = None
+        reset_at_unix = None
         resets_unix = primary.get("resets_at")
         if isinstance(resets_unix, (int, float)):
             reset_at = datetime.fromtimestamp(resets_unix, timezone.utc).astimezone().strftime("%H:%M")
-        return {"usage": usage, "reset_at": reset_at, "weekly_usage": weekly}
+            reset_at_unix = float(resets_unix)
+        return {
+            "usage": usage,
+            "reset_at": reset_at,
+            "reset_at_unix": reset_at_unix,
+            "weekly_usage": weekly,
+        }
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -417,7 +434,12 @@ def fetch_claude_api():
         weekly = int(round(float(seven_d.get("utilization", 0)))) if seven_d.get("utilization") is not None else None
     except (TypeError, ValueError):
         return None
-    return {"usage": usage_5h, "reset_at": _iso_to_hhmm(five_h.get("resets_at")), "weekly_usage": weekly}
+    return {
+        "usage": usage_5h,
+        "reset_at": _iso_to_hhmm(five_h.get("resets_at")),
+        "reset_at_unix": _iso_to_unix(five_h.get("resets_at")),
+        "weekly_usage": weekly,
+    }
 
 
 # ── Kimi: HTTP API ──────────────────────────────────────────────────────
@@ -440,6 +462,20 @@ def _iso_to_hhmm(ts):
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         return dt.astimezone().strftime("%H:%M")
+    except (ValueError, TypeError):
+        return None
+
+
+def _iso_to_unix(ts):
+    """ISO string → epoch UTC float, o None se non parsabile.
+
+    Esposto come reset_at_unix nello state file per il token-meter: HH:MM da
+    solo è ambiguo su mezzanotte e su rolling window con drift, l'epoch no.
+    """
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
     except (ValueError, TypeError):
         return None
 
@@ -467,6 +503,7 @@ def fetch_kimi_api():
     return {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
+        "reset_at_unix": _iso_to_unix(five_h.get("resetTime")),
         "weekly_usage": weekly_used,
     }
 
@@ -888,9 +925,15 @@ def main():
             _write_state_file(
                 state, last_tick_iso, next_tick_iso, next_tick_min,
                 last_status=status, last_projection=proj, last_usage=usage,
+                last_reset_at=entry.get("reset_at"),
+                last_reset_at_unix=parsed.get("reset_at_unix"),
+                last_provider=provider,
             )
         else:
-            _write_state_file(state, last_tick_iso, next_tick_iso, next_tick_min)
+            _write_state_file(
+                state, last_tick_iso, next_tick_iso, next_tick_min,
+                last_provider=provider,
+            )
 
         time.sleep(sleep_sec)
 

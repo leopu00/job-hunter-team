@@ -35,7 +35,9 @@ case "$ACTION" in
     fi
     # Spawn detached: setsid stacca dal process group del chiamante (così
     # il bridge sopravvive al ritorno dello script), redirect IO, & per
-    # non bloccare. PATH include /app/agents/_tools per jht-tmux-send.
+    # non bloccare. PATH include /usr/local/bin dove il Dockerfile linka
+    # i tool da agents/_tools/ e agents/_skills/<skill>/jht-* (refactor
+    # skill-distribution 2026-05-13).
     # Niente nohup: l'immagine è busybox slim e non lo include.
     setsid bash -c "
       export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'

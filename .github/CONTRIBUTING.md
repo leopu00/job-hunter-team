@@ -9,6 +9,10 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 - **Fix a bug / ship a feature** — follow the PR flow below
 - **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/guides/feedback-ticketing.md`](../docs/guides/feedback-ticketing.md))
 
+## Triage and response time
+
+While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/triage.md`](../docs/internal/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
+
 ## Setup
 
 ```bash
