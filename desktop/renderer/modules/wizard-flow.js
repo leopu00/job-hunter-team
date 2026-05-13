@@ -1,5 +1,12 @@
 import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
+
+// Logger renderer → main (vedi desktop/preload.js, esposto come
+// `window.jhtLog`). Best-effort: se preload non e' caricato per qualche
+// ragione, fall back a console.log così non rompiamo il flow utente.
+const log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('wizard')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 import {
   STEP_WELCOME,
   STEP_LOCATION,
@@ -80,10 +87,13 @@ function renderLocationCards() {
 }
 
 function onLocationCardClick(value) {
+  log.info('location.selected', { value })
   state.location = value
   renderLocationCards()
   // Persist immediately so a relaunch resumes on the right branch.
-  try { window.prefsApi?.set?.('location', value) } catch { /* ignore */ }
+  try { window.prefsApi?.set?.('location', value) } catch (err) {
+    log.warn('location.persist-failed', { err: String(err) })
+  }
 }
 
 if (dom.locationCardLocal) {
@@ -152,18 +162,24 @@ function renderSupabaseStep() {
 }
 
 async function doSupabaseSignIn(provider) {
-  if (!window.authApi?.signIn) return
+  log.info('supabase.signin.click', { provider })
+  if (!window.authApi?.signIn) {
+    log.warn('supabase.signin.no-api')
+    return
+  }
   if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = true
   if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = true
   try {
     const res = await window.authApi.signIn(provider)
     if (!res?.ok) {
+      log.warn('supabase.signin.failed', { provider, err: res?.error })
       if (dom.supabaseStatus) {
         dom.supabaseStatus.textContent = t('supabase.error', { message: res?.error || 'unknown' })
         dom.supabaseStatus.hidden = false
       }
       state.supabaseUser = null
     } else {
+      log.info('supabase.signin.success', { provider, userId: res.user?.id })
       state.supabaseUser = res.user || null
     }
   } finally {
@@ -323,7 +339,9 @@ function setVpsStatus(key, vars, kind) {
 }
 
 async function onVpsGenerateKey() {
+  log.info('vps.generate-key.click')
   if (!window.vpsApi?.generateKey) {
+    log.error('vps.generate-key.no-api')
     setVpsStatus('vps.status.error', { message: 'SSH backend not wired yet' }, 'error')
     return
   }
@@ -332,9 +350,11 @@ async function onVpsGenerateKey() {
   try {
     const res = await window.vpsApi.generateKey({ passphrase })
     if (!res?.ok) {
+      log.error('vps.generate-key.failed', { err: res?.error })
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       return
     }
+    log.info('vps.generate-key.success', { pubkeyLen: res.pubkey?.length || 0 })
     state.vps.pubkey = res.pubkey
     state.vps.installed = false
     renderVpsStep()
@@ -361,8 +381,13 @@ function onVpsOpenHetzner() {
 
 async function onVpsConnect() {
   const ip = (dom.vpsIp?.value || '').trim()
-  if (!isValidIPv4(ip) || !state.vps.pubkey) return
+  log.info('vps.connect.click', { ip })
+  if (!isValidIPv4(ip) || !state.vps.pubkey) {
+    log.warn('vps.connect.invalid-input', { ipValid: isValidIPv4(ip), hasPubkey: !!state.vps.pubkey })
+    return
+  }
   if (!window.vpsApi?.runInstall) {
+    log.error('vps.connect.no-api')
     setVpsStatus('vps.status.error', { message: 'SSH runner not wired yet' }, 'error')
     return
   }
@@ -383,9 +408,11 @@ async function onVpsConnect() {
     setVpsStatus('vps.status.installing', { ip }, 'info')
     const res = await window.vpsApi.runInstall({ ip })
     if (!res?.ok) {
+      log.error('vps.connect.failed', { ip, err: res?.error, exitCode: res?.exitCode })
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       state.vps.installed = false
     } else {
+      log.info('vps.connect.success', { ip })
       setVpsStatus('vps.status.done', { ip }, 'ok')
       state.vps.installed = true
     }

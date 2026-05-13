@@ -40,6 +40,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "logger.js",
       "runtime.js",
       "container.js",
       "container-prep.js",
