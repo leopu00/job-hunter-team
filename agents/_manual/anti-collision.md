@@ -50,7 +50,7 @@ When an agent needs to inform a peer (e.g. "I'm taking IDs 42-44") or notify dow
 jht-tmux-send <PEER_SESSION> "[@me -> @peer] [INFO] taking IDs 42-44"
 ```
 
-⚠️ **Do not use raw `tmux send-keys`**: Codex/Kimi TUIs lose the Enter character if it arrives in the same `send-keys` call as the text body. The wrapper handles text + Enter atomically with a render pause. Skill: `agents/_tools/jht-tmux-send`.
+⚠️ **Do not use raw `tmux send-keys`**: Codex/Kimi TUIs lose the Enter character if it arrives in the same `send-keys` call as the text body. The wrapper handles text + Enter atomically with a render pause. Skill: `agents/_skills/tmux-send/jht-tmux-send`.
 
 ## 🩺 Stale claims (rare in production)
 
