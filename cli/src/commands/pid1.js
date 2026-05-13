@@ -34,6 +34,7 @@ const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
 const HOST_ENV_PATH = `${JHT_HOME}/host.env`;
 const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
+const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -95,9 +96,66 @@ function pid1Log(msg) {
   console.log(`[pid1] ${msg}`);
 }
 
+/**
+ * Esegue `jht cloud pair` (no-watch) UNA volta al boot, in modo bloccante.
+ * Gira solo se:
+ *   - host type = vps
+ *   - .pairing-token esiste
+ *   - cloud.json NON esiste (handlePair stesso e' idempotente, ma evitiamo
+ *     anche solo lo spawn nei boot ripetuti senza re-install)
+ *
+ * Il successo del pair fa apparire cloud.json → il watcher esistente fara'
+ * partire il daemon. Il fallimento NON blocca il boot: pid1 continua a
+ * partire la dashboard, l'utente puo' diagnosticare via `jht cloud pair`
+ * a mano dal terminale embedded del desktop.
+ */
+async function maybeRunPairing() {
+  let hasPairingToken = false;
+  let hasCloudJson = false;
+  try { await access(PAIRING_TOKEN_PATH); hasPairingToken = true; } catch { /* missing */ }
+  try { await access(CLOUD_JSON_PATH); hasCloudJson = true; } catch { /* missing */ }
+
+  if (!hasPairingToken) return;
+  if (hasCloudJson) {
+    // pid1 boot dopo che il pair e' stato fatto in un boot precedente:
+    // .pairing-token dovrebbe gia' essere stato cancellato da handlePair
+    // (one-shot). Se e' ancora qui e' un residuo: rimuovilo per non lasciare
+    // un refresh_token sul disco.
+    pid1Log('cloud.json gia\' presente: rimuovo .pairing-token residuo');
+    try { await import('node:fs').then((m) => m.promises.unlink(PAIRING_TOKEN_PATH)); } catch { /* best-effort */ }
+    return;
+  }
+
+  pid1Log('pairing-token rilevato: eseguo jht cloud pair (one-shot)');
+  await new Promise((resolve) => {
+    const child = spawn(process.execPath, [JHT_ENTRY, 'cloud', 'pair'], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    child.on('exit', (code) => {
+      if (code === 0) {
+        pid1Log('cloud pair OK');
+      } else {
+        pid1Log(`cloud pair fallito (exit ${code}): proseguo, retry manuale via 'jht cloud pair'`);
+      }
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`cloud pair spawn error: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
+
+  // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
+  // su cloud.json non scatta a vuoto e il daemon parte subito col token
+  // appena mintato. Su local non ha senso (no install.sh con --pairing-token).
+  if (isVps) {
+    await maybeRunPairing();
+  }
 
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
