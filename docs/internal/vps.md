@@ -566,7 +566,7 @@ Vuoi zero pensieri / setup?             → Mode 1 (PC locale, ma deve restare o
 - `[JHT-DESKTOP-LOGIN]` OAuth Google/GitHub via Supabase
 - `[JHT-DESKTOP-SYNC]` Cloud sync cifrato user-side di config + VPS metadata
 - `[JHT-DESKTOP-RECOVERY]` Recovery passphrase + decryption flow
-- `[JHT-DESKTOP-RECLAIM]` "Ho una VPS esistente, riconnettimi" entry point
+- ~~`[JHT-DESKTOP-RECLAIM]`~~ — ❌ annullata 2026-05-13: cambio PC = wipe + ricreate via wizard standard, cloud sync re-seeda i dati (vedi `onboarding-flow.md`)
 - `[JHT-DESKTOP-ERRORS]` Error handling friendly (no stack trace ai non-tech)
 - `[JHT-DESKTOP-HELP]` Help/FAQ embedded
 - `[JHT-DESKTOP-05]` auto-update (oggi LOW, promuovere a HIGH pre-launch)

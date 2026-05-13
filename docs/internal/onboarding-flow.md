@@ -124,10 +124,32 @@ L'utente:
 
 ---
 
-## ❓ Decisioni residue
+## 🔒 Decisioni lockate (2026-05-13 sera)
 
-1. **Toggle sync nel Path 2 (VPS)**: una volta abilitato è disabilitabile o no? Probabilmente no (rompe pairing) — da confermare.
-2. **Reclaim VPS senza desktop**: se l'utente cambia PC, perde la SSH key locale. Path: nuovo PC → desktop app → login Supabase → "ho già una VPS, qual è l'IP?" → app re-genera SSH key locale → la inietta via Hetzner API → verifica accesso. Da implementare in `[JHT-DESKTOP-RECLAIM]`.
+### Sync nel Path 2 (VPS) — **non disabilitabile**
+
+In modalità VPS, il sync con Supabase è **strutturalmente obbligatorio** e non può essere spento dopo l'onboarding: senza sync il pairing CLI ↔ web si rompe, la dashboard cloud non vede più nulla, il fallback "Telegram down → cloud sync" non funziona. È un'invariante architetturale del Path 2, non una preferenza utente. Niente toggle in settings.
+
+In Path 1 (Local PC), il sync resta opt-in e toggleable a piacere (vedi sopra).
+
+### Reclaim VPS da nuovo PC — **wipe + ricreate, no migrazione**
+
+Se l'utente cambia PC e perde la SSH key locale (o vuole semplicemente ripartire da un'altra macchina), **NON c'è un flusso "trasporto" della VPS esistente**. Il path è:
+
+```
+nuovo PC → desktop app → login Supabase (stesso account)
+  → cloud sync ha già: profilo + jobs.db + config team
+  → l'utente cancella la vecchia VPS dal portale Hetzner
+  → wizard "Crea VPS Hetzner" genera VPS nuova
+  → app re-seedare i dati dal cloud sulla VPS nuova
+```
+
+Perché funziona:
+- Il cloud sync di Path 2 è strutturalmente obbligatorio (vedi sopra), quindi i dati utente sono **sempre** già sincronizzati su Supabase: nessuna perdita.
+- Costo accettato: 24h-48h di ridondanza Hetzner (vecchia VPS attiva finché l'utente non la cancella manualmente). È pulizia utente, non automation app.
+- Niente codice "reclaim VPS esistente via Hetzner API + re-iniezione SSH key" — superato dal wipe+ricreate.
+
+**Annullato `[JHT-DESKTOP-RECLAIM]`**: non si fa più. Lo gestisce il wizard "crea VPS" standard del Path 2.
 
 ---
 
@@ -135,4 +157,4 @@ L'utente:
 
 - `docs/internal/bot-telegram.md` — decisione Telegram 3 bot obbligatori (2026-05-13 rev2)
 - `docs/internal/vps.md` — design VPS (provisioning, providers, install UX)
-- `BACKLOG.md` — `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`, `[JHT-DESKTOP-RECLAIM]`, `[JHT-VPS-FRIENDLY]`
+- `BACKLOG.md` — `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`, `[JHT-VPS-FRIENDLY]` (`[JHT-DESKTOP-RECLAIM]` annullato 2026-05-13)

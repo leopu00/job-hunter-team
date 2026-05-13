@@ -34,11 +34,16 @@ export interface SubscriptionConfig {
 
 export type ChannelName = "telegram";
 
-export interface TelegramChannelConfig {
+/** Ruoli user-facing che hanno un bot Telegram dedicato (decisione 2026-05-13 rev2). */
+export type TelegramBotRole = "assistente" | "capitano" | "mentor";
+
+export interface TelegramBotConfig {
   bot_token: string;
   chat_id?: string;
-  /** Webhook URL per ricevere messaggi */
-  webhook_url?: string;
+}
+
+export interface TelegramChannelConfig {
+  bots: Record<TelegramBotRole, TelegramBotConfig>;
 }
 
 export interface ChannelsConfig {
