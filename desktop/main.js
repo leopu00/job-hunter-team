@@ -53,6 +53,7 @@ const terminal = require('./terminal')
 const auth = require('./auth')
 const sync = require('./sync')
 const vps = require('./vps')
+const telegram = require('./telegram')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -731,15 +732,21 @@ app.whenReady().then(() => {
     vps.runInstall({ ...args, sender: event.sender })
   )
 
+  // -------- Telegram bot setup (VPS path: 3-bot tokens + remote save) -- (T4)
+  ipcMain.handle('telegram:verify-bot', (_event, token) => telegram.verifyBot(token))
+  ipcMain.handle('telegram:wait-for-chat', (_event, args = {}) =>
+    telegram.waitForFirstChat(args.token, args.deadlineMs),
+  )
+  ipcMain.handle('telegram:cancel-wait-for-chat', (_event, token) =>
+    telegram.cancelWaitForFirstChat(token),
+  )
+  ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
+    telegram.saveBotsToVps(args.vpsIp, args.bots),
+  )
+
+  // -------- vps:write-config (T1: generic config writer remoto) ---------
   // Scrive un file di config sul container remoto via SshExec.writeFile.
-  // Pensato per `/root/.jht/jht.config.json` post-pairing (T4: il config
-  // contiene scelta provider + plan + lingua + active_provider, oggi
-  // costruita nel wizard locale, va riflessa sulla VPS).
-  //
-  // Args: { vpsIp, content, path?, mode?, atomic? }
-  // - path default '/root/.jht/jht.config.json'
-  // - mode default '0600' (config con secrets/token candidati)
-  // - atomic default true (tmp+chmod+mv, safe contro crash a metà write)
+  // Pensato per `/root/.jht/jht.config.json` post-pairing.
   ipcMain.handle('vps:write-config', async (_event, args = {}) => {
     const {
       vpsIp,
@@ -753,14 +760,9 @@ app.whenReady().then(() => {
       return { ok: false, error: 'content must be a string (serialize JSON before)' }
     }
     const SshExec = require('./vps/ssh-exec')
-    // Mkdir -p del parent: la prima volta su VPS fresca /root/.jht
-    // potrebbe non esistere ancora (install.sh crea ~/.jht ma il config
-    // dentro non e' garantito).
     const slash = remotePath.lastIndexOf('/')
     if (slash > 0) {
       const parent = remotePath.slice(0, slash)
-      // Sanity: rifiutiamo se il parent contiene apici (writeFile farebbe lo
-      // stesso, ma diamo errore più chiaro qui).
       if (parent.includes("'")) {
         return { ok: false, error: "remote path parent cannot contain single quotes" }
       }
