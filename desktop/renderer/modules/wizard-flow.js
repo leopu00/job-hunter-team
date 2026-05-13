@@ -345,22 +345,22 @@ async function onVpsGenerateKey() {
     setVpsStatus('vps.status.error', { message: 'SSH backend not wired yet' }, 'error')
     return
   }
-  const passphrase = dom.vpsPassphrase?.value || ''
   if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = true
   try {
-    const res = await window.vpsApi.generateKey({ passphrase })
+    // Chiave SEMPRE senza passphrase: la privkey resta in
+    // app.getPath('userData')/ssh/ con chmod 600 → la protezione
+    // arriva dai permessi filesystem, non da una passphrase che
+    // complicava il flusso askpass su OpenSSH 10. Pattern usato da
+    // Slack/Discord/Cursor unsigned.
+    const res = await window.vpsApi.generateKey({})
     if (!res?.ok) {
       log.error('vps.generate-key.failed', { err: res?.error })
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       return
     }
-    log.info('vps.generate-key.success', { pubkeyLen: res.pubkey?.length || 0, hasPassphrase: !!passphrase })
+    log.info('vps.generate-key.success', { pubkeyLen: res.pubkey?.length || 0 })
     state.vps.pubkey = res.pubkey
     state.vps.installed = false
-    // Salva la passphrase in memoria del renderer cosi' al click
-    // "Connetti e installa" la passiamo al backend via IPC senza
-    // chiedere all'utente di redigitarla (vedi onVpsConnect).
-    state.vps.passphrase = passphrase
     renderVpsStep()
   } finally {
     if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = false
@@ -410,17 +410,7 @@ async function onVpsConnect() {
     : null
   try {
     setVpsStatus('vps.status.installing', { ip }, 'info')
-    // Passa la passphrase se l'utente ne ha messa una al passo "Genera
-    // chiave" — il backend la usera' via SSH_ASKPASS per sbloccare la
-    // privkey senza prompt TTY interattivo. Stringa vuota = chiave senza
-    // passphrase, niente helper.
-    const passphrase = state.vps.passphrase || (dom.vpsPassphrase?.value || '')
-    log.debug('vps.connect.runInstall-args', {
-      ip,
-      hasPassphrase: !!passphrase,
-      passphraseLen: passphrase.length,
-    })
-    const res = await window.vpsApi.runInstall({ ip, passphrase: passphrase || undefined })
+    const res = await window.vpsApi.runInstall({ ip })
     if (!res?.ok) {
       log.error('vps.connect.failed', {
         ip,
