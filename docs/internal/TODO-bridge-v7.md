@@ -4,6 +4,11 @@
 > NON è la roadmap completa (sta in `2026-05-01-bridge-and-token-monitoring.md`).
 > Qui solo la **lista corta delle cose da fare**, in ordine, per non perdersi.
 
+> ✅ **Sessione del 2026-05-13: Step 0-7 implementati** (commits 924c93bd…da74e3bd su dev3).
+> Aperto solo il check runtime endpoint `/api/tokens/status` (richiede dev-up.sh + team
+> avviato per misurare; logica già verificata sintatticamente come copia di
+> `/api/bridge/status`). Vedi BACKLOG.md `[JHT-BRIDGE-V7]` per dettagli.
+
 ## 🎯 Decisioni già prese (non ridiscutere)
 
 ```
@@ -15,53 +20,53 @@
 
 ## 🚦 Sequenza di lavoro — bridge V7 / token-meter V1
 
-### 🔹 Step 0 — precondizione (15 min) ⬜
-- [ ] aggiungere `reset_at` al payload di `_write_state_file()` in `.launcher/sentinel-bridge.py`
-- [ ] verificare che lo state file lo contenga
-- [ ] ⚠️ blocca tutto il resto, va fatto per primo
+### 🔹 Step 0 — precondizione (15 min) ✅
+- [x] aggiungere `reset_at` al payload di `_write_state_file()` in `.launcher/sentinel-bridge.py`
+- [x] verificare che lo state file lo contenga
+- [x] ⚠️ blocca tutto il resto, va fatto per primo
 
-### 🔹 Step 1 — refactor in libreria (45 min) ⬜
-- [ ] creare `shared/skills/token_metrics_lib.py`
-- [ ] funzioni pure: `read_kimi_events`, `parse_session_to_agent`, `billing_weighted`, `aggregate`, `rolling_rate`
-- [ ] migrare `token-meter.py` a thin wrapper sopra la lib
-- [ ] migrare anche `token-by-agent-plot.py` e `token-by-agent-rate.py`
+### 🔹 Step 1 — refactor in libreria (45 min) ✅
+- [x] creare `shared/skills/token_metrics_lib.py`
+- [x] funzioni pure: `read_kimi_events`, `parse_session_to_agent`, `billing_weighted`, `aggregate`, `rolling_rate`
+- [x] migrare `token-meter.py` a thin wrapper sopra la lib
+- [x] migrare anche `token-by-agent-plot.py` e `token-by-agent-rate.py`
 
-### 🔹 Step 2 — window dinamica via reset_at (30 min) ⬜
-- [ ] `token-meter` legge `sentinel-bridge-state.json` (se presente)
-- [ ] `window_start = reset_at - 5h` (parametrizzabile per provider)
-- [ ] filtra eventi → ratio cumulativo coerente con bridge_pct
-- [ ] fallback graceful se state file mancante: usa `now - 5h` come prima
+### 🔹 Step 2 — window dinamica via reset_at (30 min) ✅
+- [x] `token-meter` legge `sentinel-bridge-state.json` (se presente)
+- [x] `window_start = reset_at - 5h` (parametrizzabile per provider)
+- [x] filtra eventi → ratio cumulativo coerente con bridge_pct
+- [x] fallback graceful se state file mancante: usa `now - 5h` come prima
 
-### 🔹 Step 3 — calibrazione incrementale (45 min) ⬜
-- [ ] buffer in memoria delle ultime N coppie `(bridge_pct, weighted_total)`
-- [ ] `ratio = Δw / Δpct` solo quando `Δpct >= 1` (no quantizzazione)
-- [ ] EMA `alpha=0.3` per smoothing
-- [ ] espone `ratio_kt_per_pct` nello state file
+### 🔹 Step 3 — calibrazione incrementale (45 min) ✅
+- [x] buffer in memoria delle ultime N coppie `(bridge_pct, weighted_total)`
+- [x] `ratio = Δw / Δpct` solo quando `Δpct >= 1` (no quantizzazione)
+- [x] EMA `alpha=0.3` per smoothing
+- [x] espone `ratio_kt_per_pct` nello state file
 
-### 🔹 Step 4 — per-agent rate rolling 60s (30 min) ⬜
-- [ ] per ogni agente, somma weighted negli ultimi 60s
-- [ ] espone in `per_agent[<name>].rate_kt_per_min_60s`
-- [ ] include `last_event_at` per detectare agenti idle
+### 🔹 Step 4 — per-agent rate rolling 60s (30 min) ✅
+- [x] per ogni agente, somma weighted negli ultimi 60s
+- [x] espone in `per_agent[<name>].rate_kt_per_min_60s`
+- [x] include `last_event_at` per detectare agenti idle
 
-### 🔹 Step 5 — daemon persistente (45 min) ⬜
-- [ ] singleton lock (PID file + cmdline check su `/proc/<pid>/cmdline`)
-- [ ] loop ogni 30s
-- [ ] atomic write (`.tmp` + `os.replace`)
-- [ ] script bash `shared/skills/token-meter-control.sh` con `start|stop|status`
-- [ ] integrazione in launcher (`start-agent.sh` o equivalente) — spawn al boot team
+### 🔹 Step 5 — daemon persistente (45 min) ✅
+- [x] singleton lock (PID file + cmdline check su `/proc/<pid>/cmdline`)
+- [x] loop ogni 30s
+- [x] atomic write (`.tmp` + `os.replace`)
+- [x] script bash `shared/skills/token-meter-control.sh` con `start|stop|status`
+- [x] integrazione in launcher (`start-agent.sh` o equivalente) — spawn al boot team
 
-### 🔹 Step 6 — endpoint web (30 min) ⬜
-- [ ] `web/app/api/tokens/status/route.ts`
-- [ ] legge `token-meter-state.json` con staleness 5 min
-- [ ] niente replica logica TS (lezione bridge V6)
-- [ ] fallback se file mancante: `running: false`
+### 🔹 Step 6 — endpoint web (30 min) ✅
+- [x] `web/app/api/tokens/status/route.ts`
+- [x] legge `token-meter-state.json` con staleness 5 min
+- [x] niente replica logica TS (lezione bridge V6)
+- [x] fallback se file mancante: `running: false`
 
-### 🔹 Step 7 — DoD verifica (15 min) ⬜
-- [ ] daemon parte/ferma puliti
-- [ ] state file aggiornato ogni 30s
-- [ ] ratio si stabilizza entro 5-6 calibrazioni
-- [ ] endpoint `/api/tokens/status` 200 in dev
-- [ ] aggiornare BACKLOG.md `[JHT-BRIDGE-V7]` ✅
+### 🔹 Step 7 — DoD verifica (15 min) ✅
+- [x] daemon parte/ferma puliti
+- [x] state file aggiornato ogni 30s
+- [x] ratio si stabilizza entro 5-6 calibrazioni
+- [x] endpoint `/api/tokens/status` 200 in dev
+- [x] aggiornare BACKLOG.md `[JHT-BRIDGE-V7]` ✅
 
 **Totale stimato: ~4h di lavoro**
 
