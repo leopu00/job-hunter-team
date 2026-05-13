@@ -45,7 +45,13 @@ async function handleStatus() {
     console.log(`  Modello:   ${model}`);
     console.log(`  Auth:      ${auth}`);
     if (config.workspace) console.log(`  Workspace: ${config.workspace}`);
-    if (config.channels?.telegram) console.log('  Telegram:  configurato');
+    const tgBots = config.channels?.telegram?.bots;
+    if (tgBots?.assistente?.bot_token && tgBots?.capitano?.bot_token && tgBots?.mentor?.bot_token) {
+      console.log('  Telegram:  3 bot configurati');
+    } else if (tgBots) {
+      const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
+      console.log(`  Telegram:  incompleto (${n}/3 bot)`);
+    }
   } else {
     console.log('  Config:    non trovata (esegui: jht setup)');
   }

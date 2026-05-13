@@ -174,8 +174,12 @@ export function summarizeExistingConfig(config) {
   if (activeProviderConfig?.auth_method) {
     lines.push(`Auth: ${activeProviderConfig.auth_method}`);
   }
-  if (config.channels?.telegram) {
-    lines.push('Telegram: configurato');
+  const bots = config.channels?.telegram?.bots;
+  if (bots?.assistente?.bot_token && bots?.capitano?.bot_token && bots?.mentor?.bot_token) {
+    lines.push('Telegram: 3 bot configurati (assistente, capitano, mentor)');
+  } else if (bots) {
+    const present = ['assistente', 'capitano', 'mentor'].filter((r) => bots?.[r]?.bot_token);
+    lines.push(`Telegram: incompleto (${present.length}/3 bot)`);
   }
   return lines.join('\n') || 'Config vuota';
 }
