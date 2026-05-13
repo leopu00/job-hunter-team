@@ -453,16 +453,11 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Acceptance:** passphrase shown once at setup, encryption verified by round-trip test, recovery on new PC works in <60s end-to-end.
 - **Dependency:** [JHT-DESKTOP-SYNC].
 
-##### 🔄 [JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me" entry point
+##### 🔄 ~~[JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me"~~ — ❌ ANNULLATA 2026-05-13
 
-- **Why:** the recovery flow needs an entry point in the UI. Without it, user on new PC sees only "Create new VPS" and panics.
-- **Task:**
-  1. Launcher start screen on new PC: "🆕 Setup new team" / "🔄 Reconnect existing team" buttons
-  2. "Reconnect" → OAuth → enter passphrase → restore config from cloud
-  3. Detect mismatched state: cloud says VPS exists at IP X, but Hetzner API (with re-pasted token) says no such server → offer "Restore from snapshot" or "Create new"
-  4. Detect orphan VPS: VPS exists on Hetzner but no cloud config → "Adopt existing server" flow
-- **Acceptance:** all 3 scenarios (clean restore, missing VPS, orphan VPS) handled with clear UX.
-- **Dependency:** [JHT-DESKTOP-RECOVERY].
+**Decisione 2026-05-13 sera**: niente flusso reclaim. Cambio PC = wipe + ricreate. L'utente cancella la vecchia VPS Hetzner manualmente, l'app ne crea una nuova, il cloud sync (obbligatorio in Path 2) re-seeda i dati. Vedi `docs/internal/onboarding-flow.md` § "Reclaim VPS da nuovo PC".
+
+Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt existing server". Lo gestisce il wizard "Crea VPS Hetzner" standard del Path 2 ogni volta.
 
 ##### 🩹 [JHT-DESKTOP-ERRORS] Friendly error handling (no stack traces)
 
