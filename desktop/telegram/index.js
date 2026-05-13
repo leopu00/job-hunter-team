@@ -13,17 +13,25 @@
 //                                      channels.telegram.bots, writes back
 //                                      atomically. Idempotent.
 //
-// The SSH path uses desktop/vps/ssh-exec.js (T1 deliverable). We require
-// it lazily so this module loads even if T1 hasn't merged yet — the
-// caller gets a clear error from saveBotsToVps in that case.
+// SSH operations go through desktop/vps/ssh-exec.js (T1, sha a118cecb).
 
 const https = require('node:https')
 const path = require('node:path')
 const log = require('../logger').child('telegram')
+const SshExec = require('../vps/ssh-exec')
 
 const TG_API_HOST = 'api.telegram.org'
 const REMOTE_CONFIG_PATH = '/root/.jht/jht.config.json'
 const REMOTE_CONFIG_DIR = path.posix.dirname(REMOTE_CONFIG_PATH)
+
+// Test override (set in CI / end-to-end VPS dry-runs). When truthy, the
+// /getMe verification is skipped: any non-empty token with the right
+// syntax (`\d+:[A-Za-z0-9_-]+`) is accepted and we synthesise a fake
+// username. Without this the end-to-end test on a real VPS would need
+// 3 actual BotFather bots, which is overkill for the SSH-save check.
+// Master directive 2026-05-13 in [go] message (kick-parallel).
+const SKIP_VERIFY = !!process.env.JHT_TELEGRAM_SKIP_VERIFY
+const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/
 
 // Active long-polls keyed by token. The renderer can fire-and-forget
 // waitForFirstChat and later call cancelWaitForFirstChat(token) when the
@@ -56,6 +64,18 @@ function tgFetchJson(token, method, params = {}, timeoutMs = 30000) {
 async function verifyBot(rawToken) {
   const token = typeof rawToken === 'string' ? rawToken.trim() : ''
   if (!token) return { ok: false, error: 'token-empty' }
+
+  // Bypass for end-to-end tests on a fresh VPS where we don't want
+  // to register 3 real BotFather bots just to exercise the SSH save.
+  if (SKIP_VERIFY) {
+    if (!TG_TOKEN_RE.test(token)) {
+      return { ok: false, error: 'token-syntax-invalid' }
+    }
+    const synthetic = `jht_test_${token.slice(-6)}_bot`
+    log.info('verifyBot.skip-verify', { synthetic })
+    return { ok: true, botId: Number(token.split(':')[0]), username: synthetic, name: synthetic, skipped: true }
+  }
+
   try {
     const r = await tgFetchJson(token, 'getMe', {}, 10000)
     if (!r.ok) {
@@ -84,6 +104,15 @@ async function verifyBot(rawToken) {
 async function waitForFirstChat(rawToken, deadlineMs) {
   const token = typeof rawToken === 'string' ? rawToken.trim() : ''
   if (!token) return { ok: false, error: 'token-empty' }
+
+  // Same end-to-end bypass as verifyBot — synthesise a stable fake
+  // chat_id derived from the token so the save step has something to
+  // persist. The real /start handshake is skipped.
+  if (SKIP_VERIFY) {
+    const fakeChatId = '900' + token.split(':')[0].slice(-6).padStart(6, '0')
+    log.info('waitForFirstChat.skip-verify', { fakeChatId })
+    return { ok: true, chatId: fakeChatId, skipped: true }
+  }
   const deadline = Number.isFinite(deadlineMs) && deadlineMs > 0
     ? Date.now() + deadlineMs
     : Date.now() + 15 * 60 * 1000
@@ -145,24 +174,6 @@ function cancelWaitForFirstChat(rawToken) {
   return { ok: true, cancelled: Boolean(p) }
 }
 
-// ── SSH bridge (depends on T1: desktop/vps/ssh-exec.js) ────────────────
-//
-// Loaded lazily so this module imports cleanly pre-T1. Once T1 lands
-// and ssh-exec.js exists on master, the saveBotsToVps call succeeds.
-// Pre-T1 it returns a clean { ok: false, error: 'ssh-exec-not-available' }
-// so the UI can surface the actual blocker instead of a crash.
-let cachedSshExec = null
-function loadSshExec() {
-  if (cachedSshExec) return cachedSshExec
-  try {
-    cachedSshExec = require('../vps/ssh-exec.js')
-    return cachedSshExec
-  } catch (e) {
-    log.debug('ssh-exec.not-loaded', { err: e.message })
-    return null
-  }
-}
-
 // Merge new bots into the existing remote config without clobbering
 // unrelated fields. Reads the remote file (404 → empty object), deep-
 // merges channels.telegram.bots, then atomic write. The atomic flag on
@@ -172,10 +183,6 @@ function loadSshExec() {
 async function saveBotsToVps(vpsIp, bots) {
   if (!vpsIp) return { ok: false, error: 'vps-ip-missing' }
   if (!bots || typeof bots !== 'object') return { ok: false, error: 'bots-missing' }
-  const ssh = loadSshExec()
-  if (!ssh) {
-    return { ok: false, error: 'ssh-exec-not-available', hint: 'T1 (desktop/vps/ssh-exec.js) not merged yet' }
-  }
 
   // Read existing remote config. cat returns non-zero on missing file
   // (or empty stdout if the file is empty); both cases mean "start from
@@ -183,7 +190,7 @@ async function saveBotsToVps(vpsIp, bots) {
   // distinguishes "file missing" from "host unreachable" if needed.
   let remote = {}
   try {
-    const readRes = await ssh.run(vpsIp, `cat '${REMOTE_CONFIG_PATH}' 2>/dev/null || true`, { timeoutMs: 15000 })
+    const readRes = await SshExec.run(vpsIp, `cat '${REMOTE_CONFIG_PATH}' 2>/dev/null || true`, { timeoutMs: 15000 })
     if (readRes.ok && readRes.stdout && readRes.stdout.trim()) {
       try {
         remote = JSON.parse(readRes.stdout)
@@ -229,7 +236,7 @@ async function saveBotsToVps(vpsIp, bots) {
   // it but we don't depend on its run order). mkdir is a no-op if it
   // already exists, so cheaper than branching.
   try {
-    const mkdirRes = await ssh.run(vpsIp, `mkdir -p '${REMOTE_CONFIG_DIR}'`, { timeoutMs: 15000 })
+    const mkdirRes = await SshExec.run(vpsIp, `mkdir -p '${REMOTE_CONFIG_DIR}'`, { timeoutMs: 15000 })
     if (!mkdirRes.ok) {
       log.warn('saveBotsToVps.mkdir-failed', { code: mkdirRes.code, stderr: mkdirRes.stderr })
       return { ok: false, error: 'ssh-mkdir-failed', stderr: mkdirRes.stderr }
@@ -240,7 +247,7 @@ async function saveBotsToVps(vpsIp, bots) {
 
   const serialized = JSON.stringify(remote, null, 2) + '\n'
   try {
-    const writeRes = await ssh.writeFile(vpsIp, REMOTE_CONFIG_PATH, serialized, {
+    const writeRes = await SshExec.writeFile(vpsIp, REMOTE_CONFIG_PATH, serialized, {
       mode: '0600',
       atomic: true,
     })
