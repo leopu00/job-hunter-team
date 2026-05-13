@@ -356,12 +356,31 @@ async function _ensureContainerUpRemote(ssh, { container = 'jht', onLog = () => 
 // root e' necessario perche' il default user del container NON puo'
 // chown-are file owned da root.
 async function _ensureNpmDirsWritable(ssh, { container = 'jht', user = 'jht', onLog = () => {} } = {}) {
+  // Dirs che npm/uv/claude/codex/kimi creano nella home utente al primo
+  // install/launch. Tutte sotto /jht_home (bind-mount ~/.jht dell'host).
+  // - .npm-global: NPM_CONFIG_PREFIX per `npm install -g`
+  // - .npm: cache npm
+  // - .local: pip --user + uv tool dir (storage Python tools)
+  // - .cache: uv usa /jht_home/.cache/uv come download cache (kimi-cli)
+  // - .config: claude/codex storano qui session token + config
+  // - .kimi / .claude / .codex: CLI-specific data dirs (potrebbero gia' esistere
+  //   come root da uno run precedente fallito a meta')
+  const dirs = [
+    '/jht_home/.npm-global',
+    '/jht_home/.npm',
+    '/jht_home/.local',
+    '/jht_home/.cache',
+    '/jht_home/.config',
+    '/jht_home/.kimi',
+    '/jht_home/.claude',
+    '/jht_home/.codex',
+  ]
+  const dirsArg = dirs.join(' ')
   const remoteCmd = [
     'docker', 'exec', '-i', '--user', 'root', _bashQuote(container),
     'sh', '-c',
     _bashQuote(
-      `mkdir -p /jht_home/.npm-global /jht_home/.npm /jht_home/.local && ` +
-      `chown -R ${user}:${user} /jht_home/.npm-global /jht_home/.npm /jht_home/.local`,
+      `mkdir -p ${dirsArg} && chown -R ${user}:${user} ${dirsArg}`,
     ),
   ].join(' ')
   const r = await ssh.run(remoteCmd)
