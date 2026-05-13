@@ -18,11 +18,25 @@
 //     binary the user would use manually.
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 const { app } = require('electron')
 const auth = require('../auth')
 const log = require('../logger').child('vps')
+
+// Path per known_hosts: ATTENZIONE non usare userData su macOS perche'
+// e' "~/Library/Application Support/..." con lo SPAZIO che OpenSSH
+// interpreta come separatore di lista in UserKnownHostsFile → split
+// del path e fallback su ~/.ssh/known_hosts dell'utente con tutte le
+// entry stale dei vecchi VPS che pero' avevano stesso IP. Bug visto
+// live 2026-05-13: "REMOTE HOST IDENTIFICATION HAS CHANGED".
+// Soluzione: tmpdir su tutte le piattaforme (no spazi su macOS/Linux/Win).
+// La connessione iniziale e' one-shot (solo install.sh), non serve
+// persistere known_hosts tra restart.
+function getKnownHostsPath() {
+  return path.join(os.tmpdir(), 'jht-desktop-known-hosts')
+}
 
 // Diagnostica SSH: chiamato prima del run install vero. Logga
 // fingerprint chiave + permessi + stato known_hosts, poi tenta un
@@ -142,6 +156,10 @@ function preflightSshCheck({ ip, priv, knownHosts }) {
     '-i', priv,
     '-o', 'StrictHostKeyChecking=accept-new',
     '-o', `UserKnownHostsFile=${knownHosts}`,
+    // Esclude il known_hosts globale di sistema (`/etc/ssh/ssh_known_hosts`)
+    // E PIU' IMPORTANTE evita che OpenSSH fallback su ~/.ssh/known_hosts
+    // se il primario fallisce a parse-are (es. path con spaces).
+    '-o', 'GlobalKnownHostsFile=/dev/null',
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',
     '-o', 'NumberOfPasswordPrompts=0',
@@ -215,8 +233,9 @@ function classifySshFailure(semantic) {
     return {
       kind: 'known-hosts-mismatch',
       title: 'L\'IP risponde con una chiave host diversa',
-      hint: 'Un VPS precedente con questo IP ha lasciato una entry. Soluzione: cancella la entry da ' +
-            `~/Library/Application Support/jht-desktop/ssh/known_hosts e riprova.`,
+      hint: 'Un VPS precedente con questo IP ha lasciato una entry stale. ' +
+            'Workaround veloce dal Terminal: `ssh-keygen -R <IP>` rimuove le entry per quell\'IP dal tuo ~/.ssh/known_hosts. ' +
+            'A partire da v0.1.14 il path interno e\' in tmpdir per evitare il bug.',
     }
   }
   if (semantic.connectionRefused) {
@@ -435,7 +454,10 @@ function runInstall({ ip, sender, passphrase } = {}) {
       }
 
       const priv = getPrivateKeyPath()
-      const knownHosts = path.join(getSshDir(), 'known_hosts')
+      // ATTENZIONE: NON path.join(getSshDir(), 'known_hosts') — userData
+      // su macOS contiene "Application Support" con lo spazio che
+      // OpenSSH usa come separator → bug. Uso tmpdir (no spazi).
+      const knownHosts = getKnownHostsPath()
 
       // Se l'utente ha fornito una passphrase, prepara helper SSH_ASKPASS
       // PRIMA del pre-flight cosi' anche il probe usa la chiave decrittata.
@@ -492,6 +514,7 @@ function runInstall({ ip, sender, passphrase } = {}) {
         '-i', priv,
         '-o', 'StrictHostKeyChecking=accept-new',
         '-o', `UserKnownHostsFile=${knownHosts}`,
+        '-o', 'GlobalKnownHostsFile=/dev/null',
         '-o', 'BatchMode=yes',
         '-o', 'ConnectTimeout=15',
         `root@${ip}`,
