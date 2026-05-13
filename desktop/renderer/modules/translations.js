@@ -49,6 +49,32 @@ export const TRANSLATIONS = {
       'First we check your computer is ready. A restart may be needed to finish the WSL install.',
     'welcome.back': 'Back',
     'welcome.continue': 'Continue',
+    'location.title': 'Where will the team live?',
+    'location.lead':
+      'JHT runs in a container. Pick where that container lives — you can change it later by reinstalling.',
+    'location.local.title': 'This computer',
+    'location.local.body':
+      'Free. The team runs on this PC. Closes when you shut down.',
+    'location.local.badge': 'Recommended for the beta',
+    'location.vps.title': 'VPS (Hetzner)',
+    'location.vps.body':
+      'Always on, ~€6/mo. We will provision it from the desktop app (coming next).',
+    'location.vps.badge': 'Coming soon',
+    'location.back': 'Back',
+    'location.continue': 'Continue',
+    'supabase.title': 'Cloud account',
+    'supabase.lead.local':
+      'Optional: sign in to sync your dashboard across devices. You can enable it later from settings.',
+    'supabase.lead.vps':
+      'Required to pair this app with your VPS. Sign in with Google or GitHub.',
+    'supabase.google': 'Continue with Google',
+    'supabase.github': 'Continue with GitHub',
+    'supabase.signedInAs': 'Signed in as {name}',
+    'supabase.signOut': 'Sign out',
+    'supabase.back': 'Back',
+    'supabase.continue': 'Continue',
+    'supabase.skip': 'Skip for now',
+    'supabase.error': 'Sign-in failed: {message}',
     'setup.title': 'Setup',
     'setup.lead':
       "To run the team in isolation we need <strong>a container runtime</strong>, free. Let's check if it's already on your computer.",
@@ -365,6 +391,32 @@ export const TRANSLATIONS = {
       'Prima controlliamo che il tuo computer sia pronto. Potrebbe servire un riavvio per completare l\u2019installazione di WSL.',
     'welcome.back': 'Indietro',
     'welcome.continue': 'Continua',
+    'location.title': 'Dove gira il team?',
+    'location.lead':
+      'JHT vive dentro un container. Scegli dove farlo girare — puoi cambiare in qualsiasi momento reinstallando.',
+    'location.local.title': 'Questo computer',
+    'location.local.body':
+      'Gratis. Il team gira sul tuo PC. Si spegne quando spegni la macchina.',
+    'location.local.badge': 'Consigliato per la beta',
+    'location.vps.title': 'VPS (Hetzner)',
+    'location.vps.body':
+      'Sempre acceso, ~€6/mese. Lo creiamo dal desktop (prossimamente).',
+    'location.vps.badge': 'In arrivo',
+    'location.back': 'Indietro',
+    'location.continue': 'Continua',
+    'supabase.title': 'Account cloud',
+    'supabase.lead.local':
+      'Opzionale: accedi per sincronizzare la dashboard tra più dispositivi. Puoi abilitarlo dopo dalle impostazioni.',
+    'supabase.lead.vps':
+      'Obbligatorio per accoppiare questa app alla tua VPS. Accedi con Google o GitHub.',
+    'supabase.google': 'Accedi con Google',
+    'supabase.github': 'Accedi con GitHub',
+    'supabase.signedInAs': 'Connesso come {name}',
+    'supabase.signOut': 'Esci',
+    'supabase.back': 'Indietro',
+    'supabase.continue': 'Continua',
+    'supabase.skip': 'Salta per ora',
+    'supabase.error': 'Accesso fallito: {message}',
     'setup.title': 'Setup',
     'setup.lead':
       'Per far girare il team in modo isolato serve <strong>un container runtime</strong>, gratuito. Controlliamo se è già sul tuo computer.',
@@ -681,6 +733,32 @@ export const TRANSLATIONS = {
       'Először ellenőrizzük, hogy a gép készen áll. A WSL telepítés befejezéséhez lehet, hogy újraindításra lesz szükség.',
     'welcome.back': 'Vissza',
     'welcome.continue': 'Tovább',
+    'location.title': 'Hol fusson a csapat?',
+    'location.lead':
+      'A JHT konténerben fut. Válaszd ki, hol legyen ez a konténer — később újratelepítéssel módosíthatod.',
+    'location.local.title': 'Ezen a gépen',
+    'location.local.body':
+      'Ingyenes. A csapat ezen a PC-n fut. Leáll, amikor leállítod a gépet.',
+    'location.local.badge': 'Béta alatt ajánlott',
+    'location.vps.title': 'VPS (Hetzner)',
+    'location.vps.body':
+      'Mindig fut, ~€6/hó. Hamarosan a desktop alkalmazásból hozhatod létre.',
+    'location.vps.badge': 'Hamarosan',
+    'location.back': 'Vissza',
+    'location.continue': 'Tovább',
+    'supabase.title': 'Felhő-fiók',
+    'supabase.lead.local':
+      'Opcionális: jelentkezz be, hogy szinkronizáld a vezérlőpultot több eszközön. Később is engedélyezheted a beállításokból.',
+    'supabase.lead.vps':
+      'Kötelező, hogy összepárosítsd ezt az alkalmazást a VPS-eddel. Lépj be Google vagy GitHub fiókkal.',
+    'supabase.google': 'Belépés Google-lel',
+    'supabase.github': 'Belépés GitHubbal',
+    'supabase.signedInAs': 'Bejelentkezve mint {name}',
+    'supabase.signOut': 'Kijelentkezés',
+    'supabase.back': 'Vissza',
+    'supabase.continue': 'Tovább',
+    'supabase.skip': 'Most kihagyom',
+    'supabase.error': 'Belépés sikertelen: {message}',
     'setup.title': 'Beállítás',
     'setup.lead':
       'A csapat izolált futtatásához <strong>konténer-futtatókörnyezet</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
