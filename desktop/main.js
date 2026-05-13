@@ -611,6 +611,10 @@ app.whenReady().then(() => {
     sync.clearAllKeys()
     return auth.signOut()
   })
+  // Pairing token: base64(JSON) blob the renderer will hand to the
+  // VPS wizard (gap 2) so install.sh can register the VPS as a device
+  // of the signed-in user without an interactive `jht cloud login`.
+  ipcMain.handle('auth:get-pairing-token', () => auth.getPairingToken())
 
   // -------- Renderer preferences (small key/value store) --------
   // JSON file in userData. Used today for the onboarding `location`
