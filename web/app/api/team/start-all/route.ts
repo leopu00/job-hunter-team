@@ -76,6 +76,11 @@ async function buildTeam(): Promise<TeamAgent[]> {
     { role: 'bridge',     session: 'BRIDGE',     instance: null,
       preDelayMs: 20000, notATmuxSession: true,
       env: { JHT_TARGET_SESSION: 'CAPITANO' } },
+    // Bridge V7 Step 5: daemon che misura il consumo token reale dai log
+    // locali e calcola EMA ratio + per-agent rate. Legge lo state file del
+    // sentinel bridge (window dinamica), quindi parte dopo di lui.
+    { role: 'token-meter', session: 'TOKEN-METER', instance: null,
+      preDelayMs: 5000, notATmuxSession: true, env: {} },
     { role: 'mentor',     session: 'MENTOR',     instance: null,
       preDelayMs: 3000 },
     { role: 'capitano',   session: 'CAPITANO',   instance: null,
