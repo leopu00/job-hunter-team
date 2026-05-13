@@ -98,6 +98,36 @@ contextBridge.exposeInMainWorld('authApi', {
   getStatus: () => ipcRenderer.invoke('auth:get-status'),
   signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  // Used by the (upcoming) VPS provisioning wizard to feed
+  // `install.sh --pairing-token <token>`. Renderer-side: treat the
+  // returned string as an opaque blob; never log it.
+  getPairingToken: () => ipcRenderer.invoke('auth:get-pairing-token'),
+})
+
+// Lightweight key/value store backed by JSON in app.getPath('userData').
+// Used by the onboarding wizard to persist the `location` choice so a
+// relaunch resumes on the right branch. Not a general settings API —
+// keep it small and renderer-only.
+contextBridge.exposeInMainWorld('prefsApi', {
+  get: (key) => ipcRenderer.invoke('prefs:get', key),
+  set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+})
+
+contextBridge.exposeInMainWorld('vpsApi', {
+  generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
+  getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
+  hasKey: () => ipcRenderer.invoke('vps:has-key'),
+  // SSH into the user's freshly-created VPS and stream install.sh
+  // output back via onInstallLog. The token comes from authApi
+  // automatically (main side) so no secret leaves the IPC boundary.
+  runInstall: (args) => ipcRenderer.invoke('vps:run-install', args),
+  onInstallLog: (callback) => {
+    const listener = (_event, line) => {
+      try { callback(line) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('vps:install-log', listener)
+    return () => ipcRenderer.removeListener('vps:install-log', listener)
+  },
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

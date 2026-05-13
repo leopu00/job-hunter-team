@@ -1533,6 +1533,186 @@ body { display: flex; flex-direction: column; }
   margin-bottom: -6px;
 }
 
+/* ── Location cards (step-location) ─────────────────────────── */
+
+.location-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+  max-width: 720px;
+  margin: 12px auto 24px;
+}
+
+.location-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.location-card:hover {
+  border-color: var(--border-strong);
+  background: var(--panel-subtle);
+}
+
+.location-card.is-selected {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.location-card[disabled],
+.location-card[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.location-card__icon { font-size: 28px; }
+
+.location-card__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.location-card__body {
+  font-size: 13px;
+  opacity: 0.78;
+  line-height: 1.45;
+}
+
+.location-card__badge {
+  align-self: flex-start;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  opacity: 0.85;
+}
+
+.location-card__badge--soon {
+  border-color: rgba(230, 196, 96, 0.4);
+  color: rgba(230, 196, 96, 0.95);
+}
+
+/* ── VPS provisioning step ──────────────────────────────────── */
+
+.vps-step {
+  width: 100%;
+  max-width: 720px;
+  margin: 12px auto;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  text-align: left;
+}
+
+.vps-step__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.vps-step__body {
+  font-size: 13px;
+  opacity: 0.78;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.vps-step__hint {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 6px 0 12px;
+}
+
+.vps-step__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.vps-step__label {
+  font-size: 12px;
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+}
+
+.vps-step__input,
+.vps-step__textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-subtle);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.vps-step__textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.vps-step__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.vps-step__status {
+  margin: 10px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.vps-step__log {
+  margin: 10px 0 0;
+  padding: 10px;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--panel-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+/* ── Supabase login step ────────────────────────────────────── */
+
+.supabase-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  margin: 18px auto 12px;
+}
+
+.step__actions-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .home__row {
   display: flex;
   justify-content: space-between;
