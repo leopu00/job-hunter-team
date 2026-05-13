@@ -305,6 +305,45 @@ function _stepToCompanyCmd(step, { container = 'jht' } = {}) {
   return parts.join(' ')
 }
 
+// Pre-flight: assicura che il container `jht` sulla VPS sia in stato
+// "running" prima di provare a fare `docker exec`. install.sh scarica il
+// docker-compose.yml in /root/.jht/runtime/ ma NON lo avvia (l'utente
+// dovrebbe fare `jht up`); senza questo check il primo `docker exec` su
+// container assente fallisce con exit 1 e messaggio criptico
+// "Error response from daemon: No such container: jht", che il flow
+// install.sh→provider-install rende invisibile lato UI.
+//
+// Strategia:
+//   1. `docker ps -q -f name=^jht$` → se non vuoto, container gia' up, ok.
+//   2. Sennò `cd /root/.jht/runtime && docker compose up -d jht` (path
+//      hardcoded coerente con install.sh), poi `docker exec jht true` per
+//      confermare che parta davvero.
+//
+// Ritorna { ok, error? }. Loggato sul canale provider per visibilita' UI.
+async function _ensureContainerUpCompany(ssh, { container = 'jht', onLog = () => {} } = {}) {
+  const probe = await ssh.run(`docker ps -q -f name=^${container}$`)
+  if (probe.ok && probe.stdout.trim().length > 0) {
+    return { ok: true, alreadyUp: true }
+  }
+  onLog(`[preflight] container '${container}' non running su VPS, avvio via docker compose…`)
+  // -d background; jht e' il nome del servizio nel docker-compose.yml.
+  // Path /root/.jht/runtime/ e' hardcoded in install.sh download_runtime_files.
+  const upCmd = `cd /root/.jht/runtime && docker compose up -d ${_bashQuote(container)}`
+  const upRes = await ssh.runStream(upCmd, (line) => onLog(line))
+  if (!upRes.ok) {
+    return { ok: false, error: `docker compose up exited ${upRes.code}` }
+  }
+  // Conferma exec funzioni: il `up -d` ritorna prima che PID 1 abbia avuto
+  // tempo di stabilizzarsi; un retry secco con piccolo back-off copre il
+  // caso "container Created ma non Running" che dura tipicamente <2s.
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const check = await ssh.run(`docker exec -i ${_bashQuote(container)} true`)
+    if (check.ok) return { ok: true, alreadyUp: false }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return { ok: false, error: `container '${container}' avviato ma docker exec fallisce dopo 5 retry` }
+}
+
 async function installViaSsh({
   vpsIp,
   providerIds,
@@ -321,6 +360,13 @@ async function installViaSsh({
   // bene perche' siamo nel main process quando questa viene chiamata.
   const SshExec = require('./vps/ssh-exec')
   const ssh = SshExec.forIp(vpsIp)
+
+  // Pre-flight container running: vedi commento _ensureContainerUpCompany.
+  const ensure = await _ensureContainerUpCompany(ssh, { container, onLog })
+  if (!ensure.ok) {
+    onLog(`[preflight-error] ${ensure.error}`)
+    return { ok: false, stage: 'preflight', error: ensure.error }
+  }
 
   const results = []
   for (const providerId of providerIds) {
@@ -353,6 +399,11 @@ async function installViaSsh({
   }
   return { ok: true, results }
 }
+
+// Alias esplicito al nome usato nel brief T2 protocol-vps-refactor (dev1
+// ha ribattezzato `installViaSsh` per brevita' nel suo stub T1; teniamo
+// entrambi i nomi cosi' chi cerca la signature del brief la trova).
+const installProvidersViaSsh = installViaSsh
 
 // PTY remoto per il login OAuth del provider sulla VPS. Stessi loginArgs
 // (--dangerously-skip-permissions / --yolo) della modalita' locale, ma
@@ -390,8 +441,9 @@ module.exports = {
   inspectInstalledProviders,
   resolveHome,
   dockerEnv,
-  // VPS mode (T1 base, T2/T3 raffineranno)
+  // VPS mode (T1 base, T2 ha aggiunto pre-flight container up)
   installViaSsh,
+  installProvidersViaSsh,
   openLoginViaSsh,
-  _internal: { runStreamed, _bashQuote, _stepToCompanyCmd },
+  _internal: { runStreamed, _bashQuote, _stepToCompanyCmd, _ensureContainerUpCompany },
 }
