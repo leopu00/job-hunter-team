@@ -951,19 +951,47 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('setup:get-auth-states', () => {
+  ipcMain.handle('setup:get-auth-states', (_event, args = {}) => {
     const saved = providerStore.readProviders(app.getPath('userData'))
+    // VPS mode: i CLI provider sono installati DENTRO il container
+    // sulla VPS (T2), e l'auth file scritto dal flow OAuth via PTY-
+    // SSH (T3) finisce in /jht_home/.{claude,codex,kimi} REMOTO, NON
+    // in ~/.jht sul Mac. Per dare il "Signed in" giusto serve un
+    // probe SSH+docker exec test -s. Vedi provider-auth.js →
+    // authStatesViaSsh. Stesso ragionamento per logoutProvider.
+    if (args.host === 'vps' && args.vpsIp) {
+      // Su VPS l'inspect "is provider installed" parte dal providers
+      // store locale: lo abbiamo gia' scritto a fine install (T2 fa
+      // writeProviders dopo successo). Skippiamo inspectInstalledProviders
+      // perche' guarda binari locali.
+      const auth = providerAuth.authStatesViaSsh({ providers: saved, vpsIp: args.vpsIp })
+      return { auth, installed: saved }
+    }
     const installed = providerInstall.inspectInstalledProviders().installed
     const relevant = saved.filter((id) => installed.includes(id))
     const auth = providerAuth.authStates({ providers: relevant, bindHomeDir: getBindHomeDir() })
     return { auth, installed: relevant }
   })
 
-  ipcMain.handle('setup:logout-provider', (_event, providerId) => {
+  ipcMain.handle('setup:logout-provider', (_event, ...rest) => {
+    // Back-compat: vecchia signature era (providerId) bare. Nuova
+    // signature: (args = { providerId, host, vpsIp }). Riconciliamo.
+    let providerId, host, vpsIp
+    const first = rest[0]
+    if (typeof first === 'string') {
+      providerId = first
+    } else if (first && typeof first === 'object') {
+      providerId = first.providerId
+      host = first.host
+      vpsIp = first.vpsIp
+    }
     if (typeof providerId !== 'string' || !providerId) {
       return { ok: false, error: 'providerId required' }
     }
     try {
+      if (host === 'vps' && vpsIp) {
+        return providerAuth.logoutProviderViaSsh(providerId, { vpsIp })
+      }
       return providerAuth.logoutProvider(providerId, { bindHomeDir: getBindHomeDir() })
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
