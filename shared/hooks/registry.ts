@@ -85,7 +85,8 @@ export function getHandlerCount(event?: string): number {
  */
 export async function triggerHook(event: HookEvent): Promise<void> {
   const typeHandlers = handlers.get(event.type) ?? [];
-  const specificHandlers = handlers.get(eventKey(event.type, event.action)) ?? [];
+  const specificHandlers =
+    handlers.get(eventKey(event.type, event.action)) ?? [];
 
   const allHandlers = [...typeHandlers, ...specificHandlers];
   if (allHandlers.length === 0) return;
@@ -94,7 +95,10 @@ export async function triggerHook(event: HookEvent): Promise<void> {
     try {
       await handler(event);
     } catch (err) {
-      console.error(`[hooks] errore in hook "${hookName}" per ${event.type}:${event.action}:`, err);
+      console.error(
+        `[hooks] errore in hook "${hookName}" per ${event.type}:${event.action}:`,
+        err,
+      );
     }
   }
 }

@@ -18,7 +18,10 @@ function fakeTool(name: string): Tool {
     name,
     label: name,
     description: `Tool ${name}`,
-    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
+    execute: async () => ({
+      content: [{ type: "text", text: "ok" }],
+      details: {},
+    }),
   };
 }
 
@@ -75,7 +78,10 @@ describe("tool-registry", () => {
   it("resolveProfilePolicy — coding ha allow list, full ritorna undefined", () => {
     const codingPolicy = resolveProfilePolicy("coding");
     assert.ok(codingPolicy, "coding deve avere una policy");
-    assert.ok(Array.isArray(codingPolicy.allow), "coding.allow deve essere array");
+    assert.ok(
+      Array.isArray(codingPolicy.allow),
+      "coding.allow deve essere array",
+    );
     assert.ok(codingPolicy.allow!.includes("read"));
 
     const fullPolicy = resolveProfilePolicy("full");

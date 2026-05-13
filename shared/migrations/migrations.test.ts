@@ -7,8 +7,13 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import {
-  loadState, saveState, compareVersions,
-  migrateUp, migrateDown, getPendingMigrations, getCurrentVersion,
+  loadState,
+  saveState,
+  compareVersions,
+  migrateUp,
+  migrateDown,
+  getPendingMigrations,
+  getCurrentVersion,
 } from "./runner.js";
 import type { Migration } from "./types.js";
 import { DEFAULT_MIGRATION_CONFIG } from "./types.js";
@@ -16,11 +21,23 @@ import { DEFAULT_MIGRATION_CONFIG } from "./types.js";
 let tmpDir: string;
 let statePath: string;
 
-function mkMigration(version: string, desc: string, upFn?: (c: Record<string, unknown>) => void, downFn?: (c: Record<string, unknown>) => void): Migration {
+function mkMigration(
+  version: string,
+  desc: string,
+  upFn?: (c: Record<string, unknown>) => void,
+  downFn?: (c: Record<string, unknown>) => void,
+): Migration {
   return {
-    version, description: desc,
-    up: (c) => { upFn?.(c); return c; },
-    down: (c) => { downFn?.(c); return c; },
+    version,
+    description: desc,
+    up: (c) => {
+      upFn?.(c);
+      return c;
+    },
+    down: (c) => {
+      downFn?.(c);
+      return c;
+    },
   };
 }
 
@@ -29,7 +46,9 @@ beforeEach(() => {
   statePath = path.join(tmpDir, "state.json");
 });
 
-afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
 
 // --- compareVersions ---
 
@@ -62,7 +81,11 @@ describe("loadState / saveState", () => {
   });
 
   it("saveState persiste e loadState rilegge", () => {
-    const state = { currentVersion: "1.2.0", applied: [{ version: "1.2.0", description: "test", appliedAt: 1000 }], updatedAt: 0 };
+    const state = {
+      currentVersion: "1.2.0",
+      applied: [{ version: "1.2.0", description: "test", appliedAt: 1000 }],
+      updatedAt: 0,
+    };
     saveState(state, statePath);
     const loaded = loadState(statePath);
     assert.equal(loaded.currentVersion, "1.2.0");
@@ -109,8 +132,15 @@ describe("migrateUp", () => {
   it("rollback su fallimento", () => {
     const log: string[] = [];
     const migrations = [
-      mkMigration("1.0.0", "ok", () => log.push("up1"), () => log.push("down1")),
-      mkMigration("2.0.0", "fail", () => { throw new Error("boom"); }),
+      mkMigration(
+        "1.0.0",
+        "ok",
+        () => log.push("up1"),
+        () => log.push("down1"),
+      ),
+      mkMigration("2.0.0", "fail", () => {
+        throw new Error("boom");
+      }),
     ];
     const result = migrateUp(migrations, {}, { statePath });
     assert.equal(result.ok, false);
@@ -120,7 +150,11 @@ describe("migrateUp", () => {
   });
 
   it("modifica config in-place", () => {
-    const migrations = [mkMigration("1.0.0", "add field", (c) => { c.newField = true; })];
+    const migrations = [
+      mkMigration("1.0.0", "add field", (c) => {
+        c.newField = true;
+      }),
+    ];
     const config: Record<string, unknown> = {};
     migrateUp(migrations, config, { statePath });
     assert.equal(config.newField, true);
@@ -132,8 +166,26 @@ describe("migrateUp", () => {
 describe("migrateDown", () => {
   it("reverte migrazioni fino a target", () => {
     const migrations = [
-      mkMigration("1.0.0", "v1", (c) => { c.v1 = true; }, (c) => { delete c.v1; }),
-      mkMigration("2.0.0", "v2", (c) => { c.v2 = true; }, (c) => { delete c.v2; }),
+      mkMigration(
+        "1.0.0",
+        "v1",
+        (c) => {
+          c.v1 = true;
+        },
+        (c) => {
+          delete c.v1;
+        },
+      ),
+      mkMigration(
+        "2.0.0",
+        "v2",
+        (c) => {
+          c.v2 = true;
+        },
+        (c) => {
+          delete c.v2;
+        },
+      ),
     ];
     const config: Record<string, unknown> = {};
     migrateUp(migrations, config, { statePath });
@@ -154,7 +206,9 @@ describe("migrateDown", () => {
   it("gestisce errore in down senza crash", () => {
     const migrations = [
       mkMigration("1.0.0", "v1"),
-      mkMigration("2.0.0", "v2", undefined, () => { throw new Error("down fail"); }),
+      mkMigration("2.0.0", "v2", undefined, () => {
+        throw new Error("down fail");
+      }),
     ];
     migrateUp(migrations, {}, { statePath });
     const result = migrateDown(migrations, {}, "0.0.0", { statePath });

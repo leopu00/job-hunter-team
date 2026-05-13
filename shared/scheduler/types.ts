@@ -2,11 +2,20 @@
  * Scheduler — Tipi per scheduler avanzato con priorita' e dipendenze
  */
 
-export type TaskPriority = 'critical' | 'high' | 'normal' | 'low';
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
+export type TaskPriority = "critical" | "high" | "normal" | "low";
+export type TaskStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "timeout";
 
 export const PRIORITY_WEIGHT: Record<TaskPriority, number> = {
-  critical: 0, high: 1, normal: 2, low: 3,
+  critical: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
 };
 
 /** Task schedulato */
@@ -40,7 +49,9 @@ export interface SchedulerConfig {
   onTaskError?: (task: ScheduledTask) => void;
 }
 
-export const DEFAULT_SCHEDULER_CONFIG: Required<Omit<SchedulerConfig, 'onTaskComplete' | 'onTaskError'>> = {
+export const DEFAULT_SCHEDULER_CONFIG: Required<
+  Omit<SchedulerConfig, "onTaskComplete" | "onTaskError">
+> = {
   concurrency: 3,
   defaultTimeoutMs: 60_000,
 };

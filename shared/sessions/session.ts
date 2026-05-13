@@ -3,7 +3,7 @@
  *
  * Crea, aggiorna sessioni e emette eventi lifecycle/transcript.
  */
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 import type {
   SessionEntry,
   SessionState,
@@ -13,8 +13,8 @@ import type {
   SessionTranscriptUpdate,
   InputProvenance,
   InputProvenanceKind,
-} from './types.js';
-import type { ChannelId } from '../channels/channel.js';
+} from "./types.js";
+import type { ChannelId } from "../channels/channel.js";
 
 // --- Lifecycle Event Emitter ---
 
@@ -23,12 +23,18 @@ const lifecycleListeners = new Set<LifecycleListener>();
 
 export function onSessionLifecycle(listener: LifecycleListener): () => void {
   lifecycleListeners.add(listener);
-  return () => { lifecycleListeners.delete(listener); };
+  return () => {
+    lifecycleListeners.delete(listener);
+  };
 }
 
 export function emitSessionLifecycle(event: SessionLifecycleEvent): void {
   for (const listener of lifecycleListeners) {
-    try { listener(event); } catch { /* best-effort */ }
+    try {
+      listener(event);
+    } catch {
+      /* best-effort */
+    }
   }
 }
 
@@ -39,12 +45,18 @@ const transcriptListeners = new Set<TranscriptListener>();
 
 export function onSessionTranscript(listener: TranscriptListener): () => void {
   transcriptListeners.add(listener);
-  return () => { transcriptListeners.delete(listener); };
+  return () => {
+    transcriptListeners.delete(listener);
+  };
 }
 
 export function emitSessionTranscript(update: SessionTranscriptUpdate): void {
   for (const listener of transcriptListeners) {
-    try { listener(update); } catch { /* best-effort */ }
+    try {
+      listener(update);
+    } catch {
+      /* best-effort */
+    }
   }
 }
 
@@ -66,8 +78,8 @@ export function createSession(params: CreateSessionParams): SessionEntry {
     id: randomUUID(),
     label: params.label,
     channelId: params.channelId,
-    chatType: params.chatType ?? 'direct',
-    state: 'active',
+    chatType: params.chatType ?? "direct",
+    state: "active",
     provider: params.provider,
     model: params.model,
     userId: params.userId,
@@ -79,7 +91,7 @@ export function createSession(params: CreateSessionParams): SessionEntry {
 
   emitSessionLifecycle({
     sessionId: session.id,
-    action: 'created',
+    action: "created",
     label: session.label,
     timestamp: now,
   });
@@ -107,18 +119,18 @@ function transitionState(
 }
 
 export function pauseSession(session: SessionEntry, reason?: string): void {
-  if (session.state !== 'active') return;
-  transitionState(session, 'paused', 'paused', reason);
+  if (session.state !== "active") return;
+  transitionState(session, "paused", "paused", reason);
 }
 
 export function resumeSession(session: SessionEntry, reason?: string): void {
-  if (session.state !== 'paused') return;
-  transitionState(session, 'active', 'resumed', reason);
+  if (session.state !== "paused") return;
+  transitionState(session, "active", "resumed", reason);
 }
 
 export function endSession(session: SessionEntry, reason?: string): void {
-  if (session.state === 'ended') return;
-  transitionState(session, 'ended', 'ended', reason);
+  if (session.state === "ended") return;
+  transitionState(session, "ended", "ended", reason);
 }
 
 // --- Session Update ---
@@ -130,15 +142,19 @@ export interface SessionPatch {
   context?: Record<string, unknown>;
 }
 
-export function updateSession(session: SessionEntry, patch: SessionPatch): void {
+export function updateSession(
+  session: SessionEntry,
+  patch: SessionPatch,
+): void {
   if (patch.label !== undefined) session.label = patch.label;
   if (patch.provider !== undefined) session.provider = patch.provider;
   if (patch.model !== undefined) session.model = patch.model;
-  if (patch.context !== undefined) session.context = { ...session.context, ...patch.context };
+  if (patch.context !== undefined)
+    session.context = { ...session.context, ...patch.context };
   session.updatedAtMs = Date.now();
   emitSessionLifecycle({
     sessionId: session.id,
-    action: 'updated',
+    action: "updated",
     label: session.label,
     timestamp: session.updatedAtMs,
   });
@@ -148,7 +164,11 @@ export function updateSession(session: SessionEntry, patch: SessionPatch): void 
 
 export function recordMessage(
   session: SessionEntry,
-  params: { role: 'user' | 'assistant' | 'system'; text: string; meta?: Record<string, unknown> },
+  params: {
+    role: "user" | "assistant" | "system";
+    text: string;
+    meta?: Record<string, unknown>;
+  },
 ): SessionTranscriptUpdate {
   const now = Date.now();
   session.messageCount += 1;
@@ -171,19 +191,32 @@ export function recordMessage(
 // --- Input Provenance ---
 
 const INPUT_PROVENANCE_KINDS: readonly InputProvenanceKind[] = [
-  'external_user', 'inter_session', 'internal_system',
+  "external_user",
+  "inter_session",
+  "internal_system",
 ];
 
-export function normalizeInputProvenance(value: unknown): InputProvenance | undefined {
-  if (!value || typeof value !== 'object') return undefined;
+export function normalizeInputProvenance(
+  value: unknown,
+): InputProvenance | undefined {
+  if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
   const kind = record.kind;
-  if (typeof kind !== 'string' || !INPUT_PROVENANCE_KINDS.includes(kind as InputProvenanceKind)) {
+  if (
+    typeof kind !== "string" ||
+    !INPUT_PROVENANCE_KINDS.includes(kind as InputProvenanceKind)
+  ) {
     return undefined;
   }
   return {
     kind: kind as InputProvenanceKind,
-    sourceSessionId: typeof record.sourceSessionId === 'string' ? record.sourceSessionId.trim() || undefined : undefined,
-    sourceChannel: typeof record.sourceChannel === 'string' ? record.sourceChannel.trim() || undefined : undefined,
+    sourceSessionId:
+      typeof record.sourceSessionId === "string"
+        ? record.sourceSessionId.trim() || undefined
+        : undefined,
+    sourceChannel:
+      typeof record.sourceChannel === "string"
+        ? record.sourceChannel.trim() || undefined
+        : undefined,
   };
 }

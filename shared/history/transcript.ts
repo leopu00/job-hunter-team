@@ -1,31 +1,37 @@
 /**
  * History — Persistenza transcript JSONL
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { JHT_HOME } from '../paths.js';
+import fs from "node:fs";
+import path from "node:path";
+import { JHT_HOME } from "../paths.js";
 import type {
   HistoryMessage,
   TranscriptHeader,
   TranscriptLine,
   TranscriptData,
   HistoryConfig,
-} from './types.js';
-import { createTranscriptHeader, DEFAULT_HISTORY_CONFIG } from './types.js';
+} from "./types.js";
+import { createTranscriptHeader, DEFAULT_HISTORY_CONFIG } from "./types.js";
 
-const DEFAULT_BASE_DIR = path.join(JHT_HOME, 'history');
+const DEFAULT_BASE_DIR = path.join(JHT_HOME, "history");
 
 export function resolveBaseDir(config?: HistoryConfig): string {
   return config?.baseDir ?? DEFAULT_BASE_DIR;
 }
 
-export function resolveTranscriptPath(sessionId: string, config?: HistoryConfig): string {
+export function resolveTranscriptPath(
+  sessionId: string,
+  config?: HistoryConfig,
+): string {
   const baseDir = resolveBaseDir(config);
-  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
   return path.join(baseDir, `${safe}.jsonl`);
 }
 
-export function ensureTranscriptFile(sessionId: string, config?: HistoryConfig): string {
+export function ensureTranscriptFile(
+  sessionId: string,
+  config?: HistoryConfig,
+): string {
   const filePath = resolveTranscriptPath(sessionId, config);
   const dir = path.dirname(filePath);
 
@@ -35,7 +41,7 @@ export function ensureTranscriptFile(sessionId: string, config?: HistoryConfig):
 
   if (!fs.existsSync(filePath)) {
     const header = createTranscriptHeader(sessionId, process.cwd());
-    fs.writeFileSync(filePath, JSON.stringify(header) + '\n', 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(header) + "\n", "utf-8");
   }
 
   return filePath;
@@ -52,7 +58,7 @@ export function appendMessage(
   const id = message.id ?? `msg-${Date.now()}`;
   const line: TranscriptLine = { id, message };
 
-  fs.appendFileSync(filePath, JSON.stringify(line) + '\n', 'utf-8');
+  fs.appendFileSync(filePath, JSON.stringify(line) + "\n", "utf-8");
 
   // Enforce limits
   enforceLimits(filePath, config);
@@ -68,24 +74,28 @@ export function appendMessages(
   const filePath = ensureTranscriptFile(sessionId, config);
 
   const lines = messages.map((msg) => {
-    const id = msg.id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const id =
+      msg.id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     return JSON.stringify({ id, message: msg } satisfies TranscriptLine);
   });
 
-  fs.appendFileSync(filePath, lines.join('\n') + '\n', 'utf-8');
+  fs.appendFileSync(filePath, lines.join("\n") + "\n", "utf-8");
   enforceLimits(filePath, config);
 }
 
 /** Legge un transcript JSONL e ritorna header + messaggi. */
-export function loadTranscript(sessionId: string, config?: HistoryConfig): TranscriptData {
+export function loadTranscript(
+  sessionId: string,
+  config?: HistoryConfig,
+): TranscriptData {
   const filePath = resolveTranscriptPath(sessionId, config);
 
   if (!fs.existsSync(filePath)) {
     return { header: null, messages: [], lineCount: 0 };
   }
 
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const lines = raw.split("\n").filter((l) => l.trim().length > 0);
 
   let header: TranscriptHeader | null = null;
   const messages: HistoryMessage[] = [];
@@ -93,7 +103,7 @@ export function loadTranscript(sessionId: string, config?: HistoryConfig): Trans
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
-      if (parsed.type === 'session') {
+      if (parsed.type === "session") {
         header = parsed as TranscriptHeader;
       } else if (parsed.message) {
         messages.push(parsed.message as HistoryMessage);
@@ -107,7 +117,10 @@ export function loadTranscript(sessionId: string, config?: HistoryConfig): Trans
 }
 
 /** Archivia un transcript (rinomina con suffisso .archived.TIMESTAMP). */
-export function archiveTranscript(sessionId: string, config?: HistoryConfig): boolean {
+export function archiveTranscript(
+  sessionId: string,
+  config?: HistoryConfig,
+): boolean {
   const filePath = resolveTranscriptPath(sessionId, config);
   if (!fs.existsSync(filePath)) return false;
 
@@ -116,7 +129,10 @@ export function archiveTranscript(sessionId: string, config?: HistoryConfig): bo
   return true;
 }
 
-export function deleteTranscript(sessionId: string, config?: HistoryConfig): boolean {
+export function deleteTranscript(
+  sessionId: string,
+  config?: HistoryConfig,
+): boolean {
   const filePath = resolveTranscriptPath(sessionId, config);
   if (!fs.existsSync(filePath)) return false;
 
@@ -128,20 +144,23 @@ export function listTranscriptSessionIds(config?: HistoryConfig): string[] {
   const baseDir = resolveBaseDir(config);
   if (!fs.existsSync(baseDir)) return [];
 
-  return fs.readdirSync(baseDir)
-    .filter((f) => f.endsWith('.jsonl') && !f.includes('.archived.'))
-    .map((f) => f.replace('.jsonl', ''));
+  return fs
+    .readdirSync(baseDir)
+    .filter((f) => f.endsWith(".jsonl") && !f.includes(".archived."))
+    .map((f) => f.replace(".jsonl", ""));
 }
 
 function enforceLimits(filePath: string, config?: HistoryConfig): void {
-  const maxMessages = config?.maxMessages ?? DEFAULT_HISTORY_CONFIG.maxMessages ?? 0;
+  const maxMessages =
+    config?.maxMessages ?? DEFAULT_HISTORY_CONFIG.maxMessages ?? 0;
   const maxBytes = config?.maxBytes ?? DEFAULT_HISTORY_CONFIG.maxBytes ?? 0;
 
   if (maxMessages <= 0 && maxBytes <= 0) return;
 
   if (maxBytes > 0) {
     const stat = fs.statSync(filePath);
-    if (stat.size > maxBytes) truncateOldestMessages(filePath, maxMessages || 100);
+    if (stat.size > maxBytes)
+      truncateOldestMessages(filePath, maxMessages || 100);
   }
 
   if (maxMessages > 0) {
@@ -150,8 +169,8 @@ function enforceLimits(filePath: string, config?: HistoryConfig): void {
 }
 
 function truncateOldestMessages(filePath: string, keep: number): void {
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const lines = raw.split("\n").filter((l) => l.trim().length > 0);
 
   const headerLines: string[] = [];
   const msgLines: string[] = [];
@@ -159,7 +178,7 @@ function truncateOldestMessages(filePath: string, keep: number): void {
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
-      if (parsed.type === 'session') headerLines.push(line);
+      if (parsed.type === "session") headerLines.push(line);
       else msgLines.push(line);
     } catch {
       // skip
@@ -169,8 +188,8 @@ function truncateOldestMessages(filePath: string, keep: number): void {
   if (msgLines.length <= keep) return;
 
   const kept = msgLines.slice(-keep);
-  const output = [...headerLines, ...kept].join('\n') + '\n';
-  const tmpPath = filePath + '.tmp';
-  fs.writeFileSync(tmpPath, output, 'utf-8');
+  const output = [...headerLines, ...kept].join("\n") + "\n";
+  const tmpPath = filePath + ".tmp";
+  fs.writeFileSync(tmpPath, output, "utf-8");
   fs.renameSync(tmpPath, filePath);
 }

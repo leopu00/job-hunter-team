@@ -4,8 +4,8 @@
  * Gestione in-memoria delle sessioni con persistenza automatica.
  * Integra store e session logic per CRUD completo.
  */
-import type { SessionEntry, SessionStoreFile } from './types.js';
-import type { ChannelId } from '../channels/channel.js';
+import type { SessionEntry, SessionStoreFile } from "./types.js";
+import type { ChannelId } from "../channels/channel.js";
 import {
   createSession,
   pauseSession,
@@ -15,7 +15,7 @@ import {
   recordMessage,
   type CreateSessionParams,
   type SessionPatch,
-} from './session.js';
+} from "./session.js";
 import {
   loadSessionStore,
   saveSessionStore,
@@ -25,7 +25,7 @@ import {
   removeSessionFromStore,
   addSessionToStore,
   pruneEndedSessions,
-} from './store.js';
+} from "./store.js";
 
 export class SessionRegistry {
   #storePath?: string;
@@ -59,14 +59,17 @@ export class SessionRegistry {
     return findSessionById(store, id);
   }
 
-  async list(opts?: { channelId?: ChannelId; activeOnly?: boolean }): Promise<SessionEntry[]> {
+  async list(opts?: {
+    channelId?: ChannelId;
+    activeOnly?: boolean;
+  }): Promise<SessionEntry[]> {
     const store = await this.#ensureLoaded();
     let sessions = store.sessions;
     if (opts?.channelId) {
       sessions = findSessionsByChannel(store, opts.channelId);
     }
     if (opts?.activeOnly) {
-      sessions = sessions.filter((s) => s.state === 'active');
+      sessions = sessions.filter((s) => s.state === "active");
     }
     return sessions.toSorted((a, b) => b.updatedAtMs - a.updatedAtMs);
   }
@@ -83,7 +86,7 @@ export class SessionRegistry {
   async pause(id: string, reason?: string): Promise<boolean> {
     const store = await this.#ensureLoaded();
     const session = findSessionById(store, id);
-    if (!session || session.state !== 'active') return false;
+    if (!session || session.state !== "active") return false;
     pauseSession(session, reason);
     await this.#persist();
     return true;
@@ -92,7 +95,7 @@ export class SessionRegistry {
   async resume(id: string, reason?: string): Promise<boolean> {
     const store = await this.#ensureLoaded();
     const session = findSessionById(store, id);
-    if (!session || session.state !== 'paused') return false;
+    if (!session || session.state !== "paused") return false;
     resumeSession(session, reason);
     await this.#persist();
     return true;
@@ -101,7 +104,7 @@ export class SessionRegistry {
   async end(id: string, reason?: string): Promise<boolean> {
     const store = await this.#ensureLoaded();
     const session = findSessionById(store, id);
-    if (!session || session.state === 'ended') return false;
+    if (!session || session.state === "ended") return false;
     endSession(session, reason);
     await this.#persist();
     return true;
@@ -116,7 +119,11 @@ export class SessionRegistry {
 
   async addMessage(
     id: string,
-    params: { role: 'user' | 'assistant' | 'system'; text: string; meta?: Record<string, unknown> },
+    params: {
+      role: "user" | "assistant" | "system";
+      text: string;
+      meta?: Record<string, unknown>;
+    },
   ): Promise<boolean> {
     const store = await this.#ensureLoaded();
     const session = findSessionById(store, id);
@@ -133,14 +140,19 @@ export class SessionRegistry {
     return pruned;
   }
 
-  async status(): Promise<{ total: number; active: number; paused: number; ended: number }> {
+  async status(): Promise<{
+    total: number;
+    active: number;
+    paused: number;
+    ended: number;
+  }> {
     const store = await this.#ensureLoaded();
     const sessions = store.sessions;
     return {
       total: sessions.length,
-      active: sessions.filter((s) => s.state === 'active').length,
-      paused: sessions.filter((s) => s.state === 'paused').length,
-      ended: sessions.filter((s) => s.state === 'ended').length,
+      active: sessions.filter((s) => s.state === "active").length,
+      paused: sessions.filter((s) => s.state === "paused").length,
+      ended: sessions.filter((s) => s.state === "ended").length,
     };
   }
 }

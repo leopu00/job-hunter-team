@@ -1,6 +1,10 @@
 export default function ProfileEditLoading() {
   return (
-    <div aria-busy="true" aria-label="Caricamento modifica profilo" style={{ animation: 'fade-in 0.2s ease both' }}>
+    <div
+      aria-busy="true"
+      aria-label="Caricamento modifica profilo"
+      style={{ animation: "fade-in 0.2s ease both" }}
+    >
       {/* Header */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="h-7 w-48 rounded bg-[var(--color-border)] mb-2 animate-pulse" />
@@ -55,5 +59,5 @@ export default function ProfileEditLoading() {
         <div className="h-10 w-28 rounded bg-[var(--color-border)] animate-pulse" />
       </div>
     </div>
-  )
+  );
 }

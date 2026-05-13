@@ -21,10 +21,7 @@ export {
   createRetryRunner,
 } from "./retry.js";
 
-export {
-  CircuitBreaker,
-  CircuitBreakerOpenError,
-} from "./circuit-breaker.js";
+export { CircuitBreaker, CircuitBreakerOpenError } from "./circuit-breaker.js";
 
 export type {
   RetryConfig,

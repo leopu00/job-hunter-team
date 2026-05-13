@@ -73,7 +73,9 @@ export interface OutboundMessage {
 // ── BRIDGE ──────────────────────────────────────────────────
 
 /** Handler per messaggi in ingresso — implementato dal sistema JHT */
-export type InboundHandler = (message: InboundMessage) => Promise<OutboundMessage | null>;
+export type InboundHandler = (
+  message: InboundMessage,
+) => Promise<OutboundMessage | null>;
 
 /** Risultato invio messaggio */
 export interface SendResult {
@@ -97,7 +99,10 @@ export interface BridgeStatus {
 // ── SEQUENTIALIZE ───────────────────────────────────────────
 
 /** Chiave per serializzazione messaggi per chat/thread */
-export function getSequentialKey(chatId: string | number, threadId?: number): string {
+export function getSequentialKey(
+  chatId: string | number,
+  threadId?: number,
+): string {
   const base = `chat:${chatId}`;
   return threadId ? `${base}:thread:${threadId}` : base;
 }

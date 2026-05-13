@@ -1,22 +1,22 @@
 // shared/memory/soul.ts — Caricamento e parsing SOUL.md
 
-import fs from 'node:fs';
-import path from 'node:path';
-import type { AgentSoul } from './types.js';
+import fs from "node:fs";
+import path from "node:path";
+import type { AgentSoul } from "./types.js";
 
-const SOUL_FILENAME = 'SOUL.md';
+const SOUL_FILENAME = "SOUL.md";
 
 /** Estrae una sezione markdown dal contenuto grezzo */
 function extractSection(content: string, heading: string): string | undefined {
   const pattern = new RegExp(
-    `^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
-    'm',
+    `^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+    "m",
   );
   const match = content.match(pattern);
   if (!match || match.index === undefined) return undefined;
 
   const start = match.index + match[0].length;
-  const nextHeading = content.indexOf('\n## ', start);
+  const nextHeading = content.indexOf("\n## ", start);
   const end = nextHeading === -1 ? content.length : nextHeading;
   const section = content.slice(start, end).trim();
 
@@ -27,17 +27,17 @@ function extractSection(content: string, heading: string): string | undefined {
 export function parseSoulMarkdown(content: string): AgentSoul {
   return {
     raw: content,
-    coreTruths: extractSection(content, 'Core Truths'),
-    boundaries: extractSection(content, 'Boundaries'),
-    vibe: extractSection(content, 'Vibe'),
-    continuity: extractSection(content, 'Continuity'),
+    coreTruths: extractSection(content, "Core Truths"),
+    boundaries: extractSection(content, "Boundaries"),
+    vibe: extractSection(content, "Vibe"),
+    continuity: extractSection(content, "Continuity"),
   };
 }
 
 /** Carica e parsa SOUL.md da un path specifico */
 export function loadSoulFromFile(filePath: string): AgentSoul | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, "utf-8");
     if (!content.trim()) return null;
     return parseSoulMarkdown(content);
   } catch {

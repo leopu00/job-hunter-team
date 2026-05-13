@@ -42,4 +42,7 @@ export type RetryOptions = RetryConfig & {
   onRetry?: (info: RetryInfo) => void;
 };
 
-export type RetryRunner = <T>(fn: () => Promise<T>, label?: string) => Promise<T>;
+export type RetryRunner = <T>(
+  fn: () => Promise<T>,
+  label?: string,
+) => Promise<T>;

@@ -7,12 +7,12 @@
 
 // --- Channel IDs ---
 
-export const CHANNEL_IDS = ['web', 'cli', 'telegram'] as const;
+export const CHANNEL_IDS = ["web", "cli", "telegram"] as const;
 export type ChannelId = (typeof CHANNEL_IDS)[number];
 
 // --- Message Types ---
 
-export type MessageDirection = 'inbound' | 'outbound';
+export type MessageDirection = "inbound" | "outbound";
 
 export interface ChannelMessage {
   id: string;
@@ -79,7 +79,12 @@ export interface Channel {
   /**
    * Invia un messaggio in uscita attraverso il canale.
    */
-  send(message: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>): Promise<ChannelMessage>;
+  send(
+    message: Omit<
+      ChannelMessage,
+      "id" | "channelId" | "direction" | "timestamp"
+    >,
+  ): Promise<ChannelMessage>;
 
   /**
    * Registra un handler per i messaggi in entrata.
@@ -96,12 +101,12 @@ export function createMessageId(): string {
 
 export function buildOutboundMessage(
   channelId: ChannelId,
-  params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+  params: Omit<ChannelMessage, "id" | "channelId" | "direction" | "timestamp">,
 ): ChannelMessage {
   return {
     id: createMessageId(),
     channelId,
-    direction: 'outbound',
+    direction: "outbound",
     timestamp: Date.now(),
     ...params,
   };
@@ -109,12 +114,12 @@ export function buildOutboundMessage(
 
 export function buildInboundMessage(
   channelId: ChannelId,
-  params: Omit<ChannelMessage, 'id' | 'channelId' | 'direction' | 'timestamp'>,
+  params: Omit<ChannelMessage, "id" | "channelId" | "direction" | "timestamp">,
 ): ChannelMessage {
   return {
     id: createMessageId(),
     channelId,
-    direction: 'inbound',
+    direction: "inbound",
     timestamp: Date.now(),
     ...params,
   };

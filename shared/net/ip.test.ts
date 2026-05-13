@@ -28,7 +28,11 @@ import {
   parseLooseIpAddress,
 } from "./ip.js";
 
-const blockedIpv6MulticastLiterals = ["ff02::1", "ff05::1:3", "[ff02::1]"] as const;
+const blockedIpv6MulticastLiterals = [
+  "ff02::1",
+  "ff05::1:3",
+  "[ff02::1]",
+] as const;
 
 const privateIpCases = [
   "198.18.0.1",
@@ -106,7 +110,12 @@ const unsupportedLegacyIpv4Cases = [
   "127..0.1",
 ];
 
-const nonIpHostnameCases = ["example.com", "abc.123.example", "1password.com", "0x.example.com"];
+const nonIpHostnameCases = [
+  "example.com",
+  "abc.123.example",
+  "1password.com",
+  "0x.example.com",
+];
 
 /**
  * Mirror of OpenClaw's `isPrivateIpAddress` (in `infra/net/ssrf.ts`).
@@ -204,7 +213,9 @@ describe("isBlockedSpecialUseIpv4Address — RFC2544 benchmark policy", () => {
     const parsed = parseCanonicalIpAddress("198.18.0.1");
     assert.ok(parsed && isIpv4Address(parsed));
     assert.equal(
-      isBlockedSpecialUseIpv4Address(parsed, { allowRfc2544BenchmarkRange: true }),
+      isBlockedSpecialUseIpv4Address(parsed, {
+        allowRfc2544BenchmarkRange: true,
+      }),
       false,
     );
   });
@@ -213,7 +224,9 @@ describe("isBlockedSpecialUseIpv4Address — RFC2544 benchmark policy", () => {
     const parsed = parseCanonicalIpAddress("198.51.100.1");
     assert.ok(parsed && isIpv4Address(parsed));
     assert.equal(
-      isBlockedSpecialUseIpv4Address(parsed, { allowRfc2544BenchmarkRange: true }),
+      isBlockedSpecialUseIpv4Address(parsed, {
+        allowRfc2544BenchmarkRange: true,
+      }),
       true,
     );
   });

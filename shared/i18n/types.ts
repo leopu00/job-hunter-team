@@ -2,9 +2,9 @@
  * i18n — Tipi per internazionalizzazione
  */
 
-export const LOCALES = ['it', 'en'] as const;
+export const LOCALES = ["it", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
-export const DEFAULT_LOCALE: Locale = 'en';
+export const DEFAULT_LOCALE: Locale = "en";
 
 /** Mappa chiave → traduzione. Supporta nesting con dot notation. */
 export type TranslationMap = Record<string, string | Record<string, string>>;
@@ -34,7 +34,7 @@ export interface I18nConfig {
 
 export const DEFAULT_I18N_CONFIG: I18nConfig = {
   locale: DEFAULT_LOCALE,
-  fallbackLocale: 'en',
+  fallbackLocale: "en",
   dictionaries: { it: {}, en: {} },
 };
 

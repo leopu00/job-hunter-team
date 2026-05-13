@@ -4,13 +4,13 @@
  * Salva e carica sessioni da ~/.jht/sessions/sessions.json.
  * Scrittura atomica con backup, stessa strategia di shared/cron/store.
  */
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { JHT_HOME } from '../paths.js';
-import type { SessionStoreFile, SessionEntry } from './types.js';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { JHT_HOME } from "../paths.js";
+import type { SessionStoreFile, SessionEntry } from "./types.js";
 
-const JHT_SESSIONS_DIR = path.join(JHT_HOME, 'sessions');
-const JHT_SESSIONS_PATH = path.join(JHT_SESSIONS_DIR, 'sessions.json');
+const JHT_SESSIONS_DIR = path.join(JHT_HOME, "sessions");
+const JHT_SESSIONS_PATH = path.join(JHT_SESSIONS_DIR, "sessions.json");
 
 export function resolveSessionStorePath(custom?: string): string {
   return custom ?? JHT_SESSIONS_PATH;
@@ -20,18 +20,24 @@ const EMPTY_STORE: SessionStoreFile = { version: 1, sessions: [] };
 
 let lastSerializedCache: string | null = null;
 
-export async function loadSessionStore(storePath?: string): Promise<SessionStoreFile> {
+export async function loadSessionStore(
+  storePath?: string,
+): Promise<SessionStoreFile> {
   const p = resolveSessionStorePath(storePath);
   try {
-    const raw = fs.readFileSync(p, 'utf-8');
+    const raw = fs.readFileSync(p, "utf-8");
     const parsed = JSON.parse(raw) as SessionStoreFile;
-    if (!parsed || typeof parsed.version !== 'number' || !Array.isArray(parsed.sessions)) {
+    if (
+      !parsed ||
+      typeof parsed.version !== "number" ||
+      !Array.isArray(parsed.sessions)
+    ) {
       return { ...EMPTY_STORE };
     }
     lastSerializedCache = raw;
     return parsed;
   } catch (err: any) {
-    if (err.code === 'ENOENT') return { ...EMPTY_STORE };
+    if (err.code === "ENOENT") return { ...EMPTY_STORE };
     throw err;
   }
 }
@@ -41,7 +47,7 @@ export async function saveSessionStore(
   storePath?: string,
 ): Promise<void> {
   const p = resolveSessionStorePath(storePath);
-  const serialized = JSON.stringify(store, null, 2) + '\n';
+  const serialized = JSON.stringify(store, null, 2) + "\n";
 
   // Skip no-op writes
   if (serialized === lastSerializedCache) return;
@@ -51,14 +57,16 @@ export async function saveSessionStore(
   // Backup
   if (fs.existsSync(p)) {
     try {
-      fs.copyFileSync(p, p + '.bak');
-    } catch { /* ignore backup errors */ }
+      fs.copyFileSync(p, p + ".bak");
+    } catch {
+      /* ignore backup errors */
+    }
   }
 
   // Atomic write: temp + rename
-  const tmp = p + '.tmp.' + process.pid;
+  const tmp = p + ".tmp." + process.pid;
   try {
-    fs.writeFileSync(tmp, serialized, 'utf-8');
+    fs.writeFileSync(tmp, serialized, "utf-8");
     fs.renameSync(tmp, p);
     lastSerializedCache = serialized;
   } catch (err: any) {
@@ -90,7 +98,7 @@ export function findSessionsByChannel(
 }
 
 export function findActiveSessions(store: SessionStoreFile): SessionEntry[] {
-  return store.sessions.filter((s) => s.state === 'active');
+  return store.sessions.filter((s) => s.state === "active");
 }
 
 export function findSessionsByUser(
@@ -124,7 +132,7 @@ export function pruneEndedSessions(
   const cutoff = Date.now() - maxAgeMs;
   const before = store.sessions.length;
   store.sessions = store.sessions.filter(
-    (s) => s.state !== 'ended' || s.updatedAtMs > cutoff,
+    (s) => s.state !== "ended" || s.updatedAtMs > cutoff,
   );
   return before - store.sessions.length;
 }
