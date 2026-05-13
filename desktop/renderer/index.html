@@ -138,14 +138,7 @@
         <div class="vps-step">
           <h2 class="vps-step__title" data-i18n="vps.step1.title">1. Generate your SSH key</h2>
           <p class="vps-step__body" data-i18n="vps.step1.body">
-            JHT keeps the private key on this PC, never in the cloud.
-          </p>
-          <div class="vps-step__row">
-            <label class="vps-step__label" for="vps-passphrase" data-i18n="vps.step1.passphraseLabel">Passphrase (optional)</label>
-            <input type="password" id="vps-passphrase" class="vps-step__input" autocomplete="new-password" />
-          </div>
-          <p class="vps-step__hint" data-i18n="vps.step1.passphraseHint">
-            Leave empty for no passphrase.
+            JHT keeps the private key on this PC (chmod 600), never in the cloud. It's used only for the one-shot install handshake — after that the VPS talks to JHT via HTTPS + pairing token.
           </p>
           <div class="vps-step__actions">
             <button class="btn btn--secondary" id="btn-vps-generate-key" data-i18n="vps.step1.generate">
