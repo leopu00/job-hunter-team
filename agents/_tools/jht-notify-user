@@ -22,6 +22,7 @@ Exit:
 Output: stampa l'id della riga su stdout (utile per follow-up via cloud sync).
 """
 import argparse
+import importlib.util
 import os
 import pathlib
 import subprocess
@@ -35,6 +36,36 @@ def resolve_db_path() -> str:
         return env_db
     jht_home = os.environ.get("JHT_HOME") or str(pathlib.Path.home() / ".jht")
     return os.path.join(jht_home, "jobs.db")
+
+
+def _is_off_hours() -> bool:
+    """True se la config ha working_hours e l'orario corrente e' fuori finestra.
+
+    Failsafe: qualsiasi errore di caricamento / parsing → False (assume 24/7).
+    Cosi' un working_hours.py mancante o un config malformato non zittisce
+    la consegna Telegram per sempre.
+
+    Decisione 2026-05-13 (bot-telegram.md § 9): "fuori finestra il team e' in
+    pausa e non manda nulla" → niente push Telegram, la riga resta in
+    pending_user_messages con delivered_via='web' e l'utente la trova in
+    dashboard al ritorno.
+    """
+    try:
+        # Container: /app/shared/skills/. Dev/host: <repo>/shared/skills/.
+        here = pathlib.Path(__file__).resolve()
+        candidates = [
+            pathlib.Path("/app/shared/skills/working_hours.py"),
+            here.parent.parent.parent / "shared" / "skills" / "working_hours.py",
+        ]
+        wh_path = next((p for p in candidates if p.exists()), None)
+        if wh_path is None:
+            return False
+        spec = importlib.util.spec_from_file_location("_wh", str(wh_path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return not mod.is_within_working_hours()
+    except Exception:
+        return False
 
 
 def try_telegram(agent: str, body: str) -> bool:
@@ -151,8 +182,14 @@ def main() -> int:
         return 2
 
     delivered_via = "web"
-    if not args.no_telegram and try_telegram(args.agent, args.body):
+    off_hours = _is_off_hours()
+    if not args.no_telegram and not off_hours and try_telegram(args.agent, args.body):
         delivered_via = "telegram"
+    if off_hours:
+        print(
+            f"jht-notify-user: off-hours, push Telegram saltato (id={row_id}, "
+            f"delivered_via=web)", file=sys.stderr,
+        )
 
     try:
         mark_delivered(db_path, row_id, delivered_via)
