@@ -1569,6 +1569,13 @@ body { display: flex; flex-direction: column; }
   background: rgba(255, 255, 255, 0.06);
 }
 
+.location-card[disabled],
+.location-card[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .location-card__icon { font-size: 28px; }
 
 .location-card__title {
