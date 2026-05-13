@@ -7,9 +7,8 @@ Output: PNG con
   • Pannello 1: cumulative kT per agente (1 linea per agente, emoji nel label)
   • Pannello 2: bar chart totale per agente
 """
-import json
 import os
-import re
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +18,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import token_metrics_lib as tlib  # noqa: E402
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI = JHT_HOME / ".kimi" / "sessions"
 OUT_PNG = Path(os.environ.get("OUT_PNG", "/jht_home/logs/token-by-agent.png"))
@@ -27,9 +29,6 @@ TEAM_START = datetime.fromisoformat(
     os.environ.get("TEAM_START", "2026-04-30T22:44:00+00:00")
 )
 TEAM_START_TS = TEAM_START.timestamp()
-
-CACHE_R_W = 0.1
-CACHE_C_W = 1.25
 
 EMOJI = {
     "capitano":     "👑",
@@ -48,80 +47,15 @@ EMOJI = {
 }
 
 
-def session_to_agent(state_path: Path):
-    """Estrai l'agente OWNER della sessione dal custom_title.
-
-    Pattern noti:
-      "[@A -> @B] ..."             → owner = B (last @, receiver)
-      "[@user -> @capitano] ..."   → owner = capitano
-      "[SENTINELLA] [STATUS] ..."  → owner = sentinella  (broadcast)
-      "[@assistente] ..."          → owner = assistente
-    """
-    try:
-        with state_path.open() as f:
-            state = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
-    title = state.get("custom_title", "") or ""
-    # 1. Cerca @<name>: prendi l'ULTIMO match (receiver in "@A -> @B")
-    cands = re.findall(r"@([a-zA-Z][\w-]*)", title)
-    cands = [c.lower() for c in cands if c.lower() not in ("utente", "user")]
-    if cands:
-        return cands[-1]
-    # 2. Fallback: nome agente in MAIUSCOLO tra parentesi quadre [SENTINELLA]
-    m = re.match(r"^\[([A-Z][A-Z0-9_-]+)\]", title)
-    if m:
-        return m.group(1).lower().replace("_", "-")
-    return None
-
-
 def collect():
-    """Ritorna dict[agent] -> list[(datetime, weighted_delta)]."""
+    """Ritorna dict[agent] -> list[(datetime, weighted_delta)] usando la
+    libreria condivisa per leggere/pesare gli eventi Kimi."""
+    events = tlib.read_kimi_events(TEAM_START_TS, sessions_root=KIMI)
     by_agent = defaultdict(list)
-    if not KIMI.exists():
-        return by_agent
-    for hash_dir in KIMI.iterdir():
-        if not hash_dir.is_dir():
-            continue
-        for sub in hash_dir.iterdir():
-            if not sub.is_dir():
-                continue
-            wire = sub / "wire.jsonl"
-            state = sub / "state.json"
-            if not (wire.exists() and state.exists()):
-                continue
-            agent = session_to_agent(state) or "?unknown"
-            try:
-                with wire.open() as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            e = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        ts = e.get("timestamp")
-                        if not isinstance(ts, (int, float)) or ts < TEAM_START_TS:
-                            continue
-                        msg = e.get("message") or {}
-                        pl = msg.get("payload") or {}
-                        tu = pl.get("token_usage")
-                        if not isinstance(tu, dict):
-                            continue
-                        w = (
-                            tu.get("input_other", 0) + tu.get("output", 0)
-                            + tu.get("input_cache_read", 0) * CACHE_R_W
-                            + tu.get("input_cache_creation", 0) * CACHE_C_W
-                        )
-                        if w <= 0:
-                            continue
-                        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-                        by_agent[agent].append((dt, float(w)))
-            except OSError:
-                continue
-    for a in by_agent:
-        by_agent[a].sort()
+    for e in events:
+        agent = e["agent"] or "?unknown"
+        dt = datetime.fromtimestamp(e["ts"], tz=timezone.utc)
+        by_agent[agent].append((dt, e["weighted"]))
     return by_agent
 
 
