@@ -21,6 +21,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { app } = require('electron')
+const auth = require('../auth')
+
+const INSTALL_URL = 'https://jobhunterteam.ai/install.sh'
+// Validated again on the renderer side; double-check before shelling out
+// because the IP ends up inside an ssh argv that we don't quote a second
+// time.
+const IPV4_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$/
 
 const KEY_FILENAME = 'jht_ed25519'
 const KEY_COMMENT = 'jht-desktop'
@@ -117,10 +124,112 @@ function generateKey({ passphrase = '' } = {}) {
   })
 }
 
+// SSH into the freshly-created VPS and run install.sh, passing the
+// pairing token so install.sh registers the VPS as a device of the
+// signed-in user (no interactive `jht cloud login` inside the VPS).
+//
+// Why these ssh flags:
+//   - StrictHostKeyChecking=accept-new: accept on first connect, refuse
+//     on key change. Trade-off accettato per la beta: l'utente acquista
+//     una VPS fresca, MitM realistico solo se Hetzner stesso è ostile.
+//   - UserKnownHostsFile=<userData>/ssh/known_hosts: isolata dalla
+//     ~/.ssh/known_hosts dell'utente, no inquinamento del suo host file.
+//   - BatchMode=yes: niente prompt interattivi. Se la chiave ha una
+//     passphrase BatchMode la rifiuta — gestiamo questo caso esplicita-
+//     mente piu' avanti (oggi: il keychain integration arriva post-MVP,
+//     la passphrase opzionale richiede unlock manuale tramite ssh-agent).
+//   - ConnectTimeout=15: VPS nuova talvolta tarda ad aprire :22.
+//
+// Streaming: emette ogni linea (stdout + stderr merge) sul canale IPC
+// `vps:install-log` tramite il sender BrowserWindow corrente. Il
+// renderer fa `vpsApi.onInstallLog(cb)` per ricevere.
+function runInstall({ ip, sender } = {}) {
+  return new Promise(async (resolve) => {
+    try {
+      if (!IPV4_RE.test(String(ip || '').trim())) {
+        resolve({ ok: false, error: 'invalid IPv4' })
+        return
+      }
+      if (!hasKey()) {
+        resolve({ ok: false, error: 'SSH key not generated yet' })
+        return
+      }
+      // Pull the pairing token from the active Supabase session. If the
+      // user isn't signed in the install would still work but the VPS
+      // couldn't pair → fail fast with a clear error instead of going
+      // halfway.
+      const pairing = await auth.getPairingToken()
+      if (!pairing?.ok || !pairing.token) {
+        resolve({ ok: false, error: `pairing token unavailable: ${pairing?.error || 'not signed in'}` })
+        return
+      }
+
+      const priv = getPrivateKeyPath()
+      const knownHosts = path.join(getSshDir(), 'known_hosts')
+      // The remote shell command. install.sh accepts --pairing-token
+      // (cabling on the script side lands in task 14). Quoting: single
+      // quotes around the whole remote command + double quotes around
+      // the base64 token prevent shell expansion on the remote.
+      const remoteCmd =
+        `curl -fsSL ${INSTALL_URL} | bash -s -- --pairing-token "${pairing.token}"`
+
+      const args = [
+        '-i', priv,
+        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', `UserKnownHostsFile=${knownHosts}`,
+        '-o', 'BatchMode=yes',
+        '-o', 'ConnectTimeout=15',
+        `root@${ip}`,
+        remoteCmd,
+      ]
+
+      const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const emit = (line) => {
+        try {
+          if (sender && !sender.isDestroyed?.()) {
+            sender.send('vps:install-log', line)
+          }
+        } catch { /* renderer might be gone */ }
+      }
+
+      // Line-buffer stdout/stderr (merge) so the renderer gets one
+      // event per log line, not per chunk.
+      let buffer = ''
+      const onChunk = (chunk) => {
+        buffer += chunk.toString()
+        let nl = buffer.indexOf('\n')
+        while (nl >= 0) {
+          emit(buffer.slice(0, nl))
+          buffer = buffer.slice(nl + 1)
+          nl = buffer.indexOf('\n')
+        }
+      }
+      child.stdout.on('data', onChunk)
+      child.stderr.on('data', onChunk)
+
+      child.on('error', (err) => {
+        emit(`ssh spawn error: ${err.message}`)
+        resolve({ ok: false, error: err.message })
+      })
+      child.on('close', (code) => {
+        if (buffer) emit(buffer)
+        if (code !== 0) {
+          resolve({ ok: false, error: `ssh exited ${code}`, exitCode: code })
+          return
+        }
+        resolve({ ok: true, ip })
+      })
+    } catch (err) {
+      resolve({ ok: false, error: err.message || String(err) })
+    }
+  })
+}
+
 module.exports = {
   generateKey,
   getPublicKey,
   hasKey,
+  runInstall,
   getPrivateKeyPath,
   getPublicKeyPath,
 }
