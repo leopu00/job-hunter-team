@@ -28,6 +28,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -41,10 +42,102 @@ CLAUDE_PROJECTS = JHT_HOME / ".claude" / "projects"
 BRIDGE_STATE = JHT_HOME / "logs" / "sentinel-bridge-state.json"
 JSONL_DATA = JHT_HOME / "logs" / "sentinel-data.jsonl"
 CSV_OUT = JHT_HOME / "logs" / "token-meter.csv"
+STATE_OUT = JHT_HOME / "logs" / "token-meter-state.json"
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 
 WINDOW_HOURS = 5.0
 INTERVAL_S = 30
+
+# Calibration EMA (Step 3): il ratio weighted/pct varia con la quantizzazione
+# del provider (kimi/codex/claude misurano usage_percent come int). Per dare
+# un valore stabile usabile dalla UI dobbiamo aggregare più sample:
+#   • buffer delle ultime N coppie (pct, weighted)
+#   • ratio puntuale = Δweighted / Δpct, considerato SOLO quando |Δpct| ≥ 1
+#     (sotto 1% siamo nel rumore di quantizzazione)
+#   • EMA(α=0.3) smussa burst momentanei senza ritardare il rientro a regime
+CALIB_BUFFER_MAX = 32                 # ~16 min a 30s/tick
+CALIB_MIN_DELTA_PCT = 1.0             # soglia anti-quantizzazione
+CALIB_EMA_ALPHA = 0.3                 # come da TODO Step 3
+CALIB_MIN_DELTA_WEIGHTED = 100.0      # ignora pairs con Δw assurdamente piccolo
+
+
+class RatioCalibrator:
+    """Tiene il buffer (ts, pct, weighted) e calcola un ratio EMA stabile.
+
+    Invariant: i sample sono inseriti monotonamente crescenti in ts. Il buffer
+    è una deque con maxlen, quindi i sample vecchi cadono naturalmente.
+    """
+
+    def __init__(self, alpha=CALIB_EMA_ALPHA, min_delta_pct=CALIB_MIN_DELTA_PCT,
+                 min_delta_weighted=CALIB_MIN_DELTA_WEIGHTED, maxlen=CALIB_BUFFER_MAX):
+        self.alpha = alpha
+        self.min_delta_pct = min_delta_pct
+        self.min_delta_weighted = min_delta_weighted
+        self.buffer: deque[tuple[float, float, float]] = deque(maxlen=maxlen)
+        self.ema: float | None = None
+        self.last_sample_ratio: float | None = None  # ratio puntuale ultimo confronto
+        self.calibrations: int = 0                    # quante volte abbiamo updato l'EMA
+
+    def observe(self, ts, pct, weighted):
+        """Aggiunge un sample e, se possibile, aggiorna l'EMA.
+
+        Ritorna dict con info diagnostiche: {ratio_instant, ratio_ema, calibrated_this_tick}.
+        """
+        out = {
+            "ratio_instant": None,
+            "ratio_ema": self.ema,
+            "calibrated_this_tick": False,
+        }
+
+        # Reset detect: se il pct cala di > 30 punti rispetto all'ultimo
+        # sample, il provider ha resettato la finestra. L'EMA precedente non
+        # è più valida (Δw del prossimo step sarà negativo o sballato).
+        if self.buffer:
+            _, prev_pct, _ = self.buffer[-1]
+            if pct < prev_pct - 30:
+                self.buffer.clear()
+                self.ema = None
+                self.last_sample_ratio = None
+                self.calibrations = 0
+
+        # Cerca il sample più vecchio nel buffer con Δpct sufficiente.
+        chosen = None
+        for old_ts, old_pct, old_w in self.buffer:
+            dp = pct - old_pct
+            if dp >= self.min_delta_pct:
+                chosen = (old_ts, old_pct, old_w, dp)
+                break
+
+        if chosen is not None and weighted is not None:
+            _, _, old_w, dp = chosen
+            dw = weighted - old_w
+            if dw >= self.min_delta_weighted:
+                ratio = dw / dp
+                self.last_sample_ratio = ratio
+                out["ratio_instant"] = ratio
+                if self.ema is None:
+                    self.ema = ratio
+                else:
+                    self.ema = self.alpha * ratio + (1.0 - self.alpha) * self.ema
+                self.calibrations += 1
+                out["ratio_ema"] = self.ema
+                out["calibrated_this_tick"] = True
+
+        self.buffer.append((float(ts), float(pct), float(weighted or 0)))
+        return out
+
+
+def write_state_atomic(path, payload):
+    """Scrive `payload` come JSON in `path` con tmp + os.replace.
+
+    Necessario perché il consumer (web/api/tokens/status) potrebbe leggere
+    a metà write se non fossimo atomici. Step 5 amplierà il payload; qui
+    introduciamo il file con i campi del Step 3.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, default=str), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def read_active_provider():
@@ -268,13 +361,16 @@ def main():
     print(f"[token-meter] start provider={provider} interval={INTERVAL_S}s window={WINDOW_HOURS}h",
           flush=True)
     print(f"[token-meter] CSV={CSV_OUT}", flush=True)
+    print(f"[token-meter] STATE={STATE_OUT}", flush=True)
 
     CSV_OUT.parent.mkdir(parents=True, exist_ok=True)
     if not CSV_OUT.exists():
         with CSV_OUT.open("w") as f:
             f.write("ts,provider,bridge_pct,bridge_proj,bridge_status,events,"
                     "in_raw,out_raw,cache_read_raw,cache_creation_raw,"
-                    "weighted,ratio_tokens_per_pct,sessions\n")
+                    "weighted,ratio_tokens_per_pct,ratio_ema_tokens_per_pct,sessions\n")
+
+    calibrator = RatioCalibrator()
 
     while True:
         now = datetime.now(timezone.utc)
@@ -309,7 +405,17 @@ def main():
 
         ratio = (weighted / bridge_pct) if (bridge_pct and bridge_pct > 0 and weighted > 0) else None
 
+        # Step 3: aggiorna l'EMA della calibrazione (incrementale, robusta
+        # alla quantizzazione integer del bridge_pct).
+        calib = (
+            calibrator.observe(now.timestamp(), bridge_pct, weighted)
+            if (isinstance(bridge_pct, (int, float)) and bridge_pct > 0)
+            else {"ratio_instant": None, "ratio_ema": calibrator.ema, "calibrated_this_tick": False}
+        )
+        ratio_ema = calibrator.ema
+
         ratio_str = f"{ratio/1000:.2f}kT/1%" if ratio else "n/a"
+        ema_str = f"{ratio_ema/1000:.2f}" if ratio_ema else "n/a"
         line = (
             f"[{now.strftime('%H:%M:%S')}] {provider:6} "
             f"bridge={str(bridge_pct):>3}% proj={str(bridge_proj):>6} ({bridge_status:>12}) "
@@ -317,7 +423,8 @@ def main():
             f"events={totals['events']:>3} sess={totals['sessions']} "
             f"in={in_raw:>7,} out={out_raw:>5,} "
             f"cache_r={cache_r:>9,} cache_w={cache_c:>5,} "
-            f"weighted={int(weighted):>8,} | ratio={ratio_str}"
+            f"weighted={int(weighted):>8,} | ratio={ratio_str} ema={ema_str}kT/1% "
+            f"calib={calibrator.calibrations}"
         )
         print(line, flush=True)
 
@@ -325,8 +432,40 @@ def main():
             f.write(
                 f"{now.isoformat()},{provider},{bridge_pct or ''},{bridge_proj or ''},"
                 f"{bridge_status},{totals['events']},{in_raw},{out_raw},{cache_r},{cache_c},"
-                f"{int(weighted)},{ratio or ''},{totals['sessions']}\n"
+                f"{int(weighted)},{ratio or ''},{ratio_ema or ''},{totals['sessions']}\n"
             )
+
+        state_payload = {
+            "version": 1,
+            "updated_at": now.isoformat(),
+            "provider": provider,
+            "window_hours": PROVIDER_WINDOW_HOURS.get(provider, WINDOW_HOURS),
+            "window_source": win_source,
+            "bridge": {
+                "usage_pct": bridge_pct,
+                "projection": bridge_proj,
+                "status": bridge_status,
+                "reset_at": bridge_reset,
+                "last_tick_at": state.get("last_tick_at"),
+            },
+            "tokens": {
+                "events": totals["events"],
+                "sessions": totals["sessions"],
+                "input_raw": in_raw,
+                "output_raw": out_raw,
+                "cache_read_raw": cache_r,
+                "cache_creation_raw": cache_c,
+                "weighted_total": int(weighted),
+            },
+            "ratio": {
+                "instant_tokens_per_pct": calib["ratio_instant"],
+                "ema_tokens_per_pct": ratio_ema,
+                "ema_kt_per_pct": (ratio_ema / 1000.0) if ratio_ema else None,
+                "alpha": CALIB_EMA_ALPHA,
+                "calibrations": calibrator.calibrations,
+            },
+        }
+        write_state_atomic(STATE_OUT, state_payload)
 
         time.sleep(INTERVAL_S)
 
