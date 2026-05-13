@@ -354,9 +354,13 @@ async function onVpsGenerateKey() {
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       return
     }
-    log.info('vps.generate-key.success', { pubkeyLen: res.pubkey?.length || 0 })
+    log.info('vps.generate-key.success', { pubkeyLen: res.pubkey?.length || 0, hasPassphrase: !!passphrase })
     state.vps.pubkey = res.pubkey
     state.vps.installed = false
+    // Salva la passphrase in memoria del renderer cosi' al click
+    // "Connetti e installa" la passiamo al backend via IPC senza
+    // chiedere all'utente di redigitarla (vedi onVpsConnect).
+    state.vps.passphrase = passphrase
     renderVpsStep()
   } finally {
     if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = false
@@ -406,7 +410,17 @@ async function onVpsConnect() {
     : null
   try {
     setVpsStatus('vps.status.installing', { ip }, 'info')
-    const res = await window.vpsApi.runInstall({ ip })
+    // Passa la passphrase se l'utente ne ha messa una al passo "Genera
+    // chiave" — il backend la usera' via SSH_ASKPASS per sbloccare la
+    // privkey senza prompt TTY interattivo. Stringa vuota = chiave senza
+    // passphrase, niente helper.
+    const passphrase = state.vps.passphrase || (dom.vpsPassphrase?.value || '')
+    log.debug('vps.connect.runInstall-args', {
+      ip,
+      hasPassphrase: !!passphrase,
+      passphraseLen: passphrase.length,
+    })
+    const res = await window.vpsApi.runInstall({ ip, passphrase: passphrase || undefined })
     if (!res?.ok) {
       log.error('vps.connect.failed', {
         ip,
