@@ -64,6 +64,13 @@ function buildContainerBootstrap() {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
       preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' },
     },
+    {
+      // Bridge V7 Step 5: daemon che osserva i log dei provider e calcola
+      // weighted/pct + EMA ratio + per-agent rate. Spawnato dopo il sentinel
+      // bridge (legge sentinel-bridge-state.json per la window dinamica).
+      role: 'token-meter', session: 'TOKEN-METER', notATmuxSession: true,
+      preDelayMs: 5000, env: {},
+    },
     { role: 'mentor', session: 'MENTOR', preDelayMs: 3000 },
     {
       role: 'capitano', session: 'CAPITANO',
@@ -85,7 +92,7 @@ async function startActionContainer(agentArg, options = {}) {
 
   console.log('');
   console.log(c.bold('Avvio agenti nel container jht...'));
-  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + CAPITANO' : ''}`));
+  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO' : ''}`));
   console.log('');
 
   let started = 0;
