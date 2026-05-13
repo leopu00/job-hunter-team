@@ -120,13 +120,37 @@ describe('summarizeExistingConfig', () => {
     expect(summary).not.toMatch(/Workspace/);
   });
 
-  it('mostra Telegram configurato se presente', () => {
+  it('mostra Telegram 3/3 quando tutti i bot sono configurati', () => {
     const summary = summarizeExistingConfig({
       active_provider: 'claude',
       providers: { claude: { auth_method: 'api_key' } },
-      channels: { telegram: { bot_token: '123:ABC' } },
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: '111:AAA' },
+            capitano:   { bot_token: '222:BBB' },
+            mentor:     { bot_token: '333:CCC' },
+          },
+        },
+      },
     });
-    expect(summary).toMatch(/Telegram/);
+    expect(summary).toMatch(/Telegram: 3 bot configurati/);
+  });
+
+  it('mostra Telegram incompleto quando manca un bot', () => {
+    const summary = summarizeExistingConfig({
+      active_provider: 'claude',
+      providers: { claude: { auth_method: 'api_key' } },
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: '111:AAA' },
+            capitano:   { bot_token: '222:BBB' },
+          },
+        },
+      },
+    });
+    expect(summary).toMatch(/Telegram: incompleto \(2\/3 bot\)/);
   });
 
   it('ritorna stringa non vuota per config vuota', () => {
