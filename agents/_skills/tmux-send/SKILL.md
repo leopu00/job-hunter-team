@@ -6,7 +6,7 @@ allowed-tools: Bash(jht-tmux-send *)
 
 # tmux-send — inter-agent messaging
 
-Shell wrapper at `/app/agents/_tools/jht-tmux-send` (also on `PATH` via `/usr/local/bin` symlink).
+Shell wrapper colocated at `/app/agents/_skills/tmux-send/jht-tmux-send` (also on `PATH` via `/usr/local/bin` symlink, populated at image build).
 
 ## Why it exists
 

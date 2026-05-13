@@ -1,0 +1,110 @@
+# Canonical label set for JHT issues and pull requests.
+#
+# Source of truth — sync to the GitHub repo with:
+#   gh label create <name> --color <hex> --description "<desc>"
+# or in bulk via a label-sync action (not yet wired; see
+# docs/internal/triage.md).
+#
+# Conventions:
+#   - Surface labels (cli, web, desktop, …) tell us WHERE the bug lives.
+#   - Provider labels (provider:*) tell us which agent CLI is implicated.
+#   - State labels (triage, confirmed, …) drive the kanban board.
+#   - Outcome labels (wontfix, duplicate, …) close issues without a fix.
+
+# ── Surfaces (one per issue, ideally) ──────────────────────────────────────
+- name: installer
+  color: 1d76db
+  description: Installation, setup wizard, JHT Desktop installer
+- name: monitoring
+  color: 1d76db
+  description: Sentinel / Bridge / throttle / token usage
+- name: desktop
+  color: 1d76db
+  description: Electron desktop launcher (desktop/)
+- name: web
+  color: 1d76db
+  description: Next.js dashboard (web/)
+- name: cli
+  color: 1d76db
+  description: jht CLI command (cli/)
+- name: container
+  color: 1d76db
+  description: Docker image, compose, launcher (.launcher/)
+- name: agents
+  color: 1d76db
+  description: Agent prompts, skills, pipeline logic
+- name: docs
+  color: 1d76db
+  description: Documentation (README, docs/, ADRs)
+
+# ── Providers ──────────────────────────────────────────────────────────────
+- name: provider:claude
+  color: 5319e7
+  description: Claude Max / Claude Code provider
+- name: provider:kimi
+  color: 5319e7
+  description: Kimi K2 / Moonshot provider
+- name: provider:codex
+  color: 5319e7
+  description: Codex / OpenAI provider
+
+# ── State (kanban columns) ─────────────────────────────────────────────────
+- name: triage
+  color: fbca04
+  description: New, not yet reviewed by a maintainer
+- name: confirmed
+  color: fbca04
+  description: Reproduced by a maintainer or a second reporter
+- name: in-progress
+  color: 0e8a16
+  description: Actively being worked on
+- name: blocked
+  color: b60205
+  description: Waiting on a dependency, upstream fix, or design decision
+
+# ── Severity (set during triage) ───────────────────────────────────────────
+- name: severity:blocker
+  color: b60205
+  description: Hard blocker, no workaround
+- name: severity:major
+  color: d93f0b
+  description: Painful but workaround exists
+- name: severity:minor
+  color: fef2c0
+  description: Cosmetic or edge case
+
+# ── Type ───────────────────────────────────────────────────────────────────
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+- name: enhancement
+  color: a2eeef
+  description: New feature or improvement
+- name: security
+  color: b60205
+  description: Security-related (vuln, hardening, dependency CVE)
+- name: question
+  color: cc317c
+  description: Question / discussion, not necessarily actionable
+
+# ── Outcomes (close reasons) ───────────────────────────────────────────────
+- name: wontfix
+  color: ffffff
+  description: Out of scope, conflicts with a tracked ADR, or by design
+- name: duplicate
+  color: ededed
+  description: Already tracked in another issue
+- name: invalid
+  color: e4e669
+  description: Not reproducible / not a bug
+
+# ── Community ──────────────────────────────────────────────────────────────
+- name: good-first-issue
+  color: 7057ff
+  description: Small, well-scoped, friendly to first-time contributors
+- name: help-wanted
+  color: 008672
+  description: Maintainers don't have bandwidth; community pickups welcome
+- name: feedback:hn
+  color: c5def5
+  description: Direct feedback from the Hacker News launch thread
