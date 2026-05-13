@@ -731,6 +731,45 @@ app.whenReady().then(() => {
     vps.runInstall({ ...args, sender: event.sender })
   )
 
+  // Scrive un file di config sul container remoto via SshExec.writeFile.
+  // Pensato per `/root/.jht/jht.config.json` post-pairing (T4: il config
+  // contiene scelta provider + plan + lingua + active_provider, oggi
+  // costruita nel wizard locale, va riflessa sulla VPS).
+  //
+  // Args: { vpsIp, content, path?, mode?, atomic? }
+  // - path default '/root/.jht/jht.config.json'
+  // - mode default '0600' (config con secrets/token candidati)
+  // - atomic default true (tmp+chmod+mv, safe contro crash a metà write)
+  ipcMain.handle('vps:write-config', async (_event, args = {}) => {
+    const {
+      vpsIp,
+      content,
+      path: remotePath = '/root/.jht/jht.config.json',
+      mode = '0600',
+      atomic = true,
+    } = args
+    if (!vpsIp) return { ok: false, error: 'vpsIp required' }
+    if (typeof content !== 'string') {
+      return { ok: false, error: 'content must be a string (serialize JSON before)' }
+    }
+    const SshExec = require('./vps/ssh-exec')
+    // Mkdir -p del parent: la prima volta su VPS fresca /root/.jht
+    // potrebbe non esistere ancora (install.sh crea ~/.jht ma il config
+    // dentro non e' garantito).
+    const slash = remotePath.lastIndexOf('/')
+    if (slash > 0) {
+      const parent = remotePath.slice(0, slash)
+      // Company 140: rifiutiamo se il parent contiene apici (writeFile farebbe lo
+      // stesso, ma diamo errore più chiaro qui).
+      if (parent.includes("'")) {
+        return { ok: false, error: "remote path parent cannot contain single quotes" }
+      }
+      const mk = SshExec.run(vpsIp, `mkdir -p '${parent}'`)
+      if (!mk.ok) return { ok: false, stage: 'mkdir', error: mk.stderr || `mkdir exit ${mk.code}` }
+    }
+    return SshExec.writeFile(vpsIp, remotePath, content, { mode, atomic })
+  })
+
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
   ipcMain.handle('sync:get-status', () => sync.getStatus())
   ipcMain.handle('sync:setup', (_event, args = {}) => sync.setup(args))
@@ -931,9 +970,35 @@ app.whenReady().then(() => {
 
   const loginContainerNames = new Map()
 
-  ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
+  ipcMain.handle('terminal:start', (_event, { providerId, host = 'local', vpsIp } = {}) => {
     const meta = providerInstall.PROVIDERS[providerId]
     if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
+
+    // VPS mode: il TUI di login deve girare sul container REMOTO (lo
+    // OAuth deve atterrare nel ~/.claude del container sulla VPS, non
+    // sul Mac). Apriamo un PTY ssh -tt → docker exec -it jht <binary>
+    // e wrappiamo il ChildProcess come una sessione terminal "alla
+    // pari" di quelle locali, cosi' il renderer non se ne accorge.
+    if (host === 'vps') {
+      if (!vpsIp) return { ok: false, error: 'host=vps requires vpsIp' }
+      const r = providerInstall.openLoginViaSsh({ vpsIp, providerId })
+      if (!r.ok) return r
+      const id = terminal.adoptChild({
+        child: r.child,
+        onData: (data) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(`terminal:data:${id}`, data)
+          }
+        },
+        onExit: (exit) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(`terminal:exit:${id}`, exit)
+          }
+        },
+      })
+      return { ok: true, sessionId: id, host: 'vps' }
+    }
+
     if (!payload.isPayloadPresent(payloadDir)) {
       return { ok: false, error: 'payload not present — run container prep first' }
     }
@@ -1008,13 +1073,45 @@ app.whenReady().then(() => {
     return { ok: true }
   })
 
-  ipcMain.handle('setup:install-providers', async (_event, providerIds) => {
+  ipcMain.handle('setup:install-providers', async (_event, args) => {
+    // Back-compat: l'API vecchia accettava providerIds come array. La
+    // nuova accetta { providerIds, host, vpsIp }: host='vps' instrada
+    // l'install via SSH al container REMOTO sulla VPS, host omesso o
+    // 'local' resta sul container locale come prima.
+    let providerIds = []
+    let host = 'local'
+    let vpsIp = null
+    if (Array.isArray(args)) {
+      providerIds = args
+    } else if (args && typeof args === 'object') {
+      providerIds = Array.isArray(args.providerIds) ? args.providerIds : []
+      if (typeof args.host === 'string') host = args.host
+      if (typeof args.vpsIp === 'string') vpsIp = args.vpsIp
+    }
     try {
+      if (host === 'vps') {
+        if (!vpsIp) {
+          return { ok: false, stage: 'preflight', error: 'host=vps requires vpsIp' }
+        }
+        const result = await providerInstall.installViaSsh({
+          vpsIp,
+          providerIds,
+          onLog: broadcastProviderLog,
+        })
+        if (result.ok) {
+          // Persistiamo la selezione anche in VPS mode: il renderer la
+          // legge per mostrare "✓ installed" sul wizard. La verita' di
+          // chi e' realmente installato sta sul container remoto, ma
+          // quella probe la fa T3 quando affina inspectInstalledProviders.
+          providerStore.writeProviders(app.getPath('userData'), providerIds)
+        }
+        return result
+      }
       if (!payload.isPayloadPresent(payloadDir)) {
         return { ok: false, stage: 'payload', error: 'payload not present — run container prep first' }
       }
       const result = await providerInstall.installProviders({
-        providerIds: Array.isArray(providerIds) ? providerIds : [],
+        providerIds,
         payloadDir,
         onLog: broadcastProviderLog,
       })
