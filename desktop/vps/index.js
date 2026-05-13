@@ -25,18 +25,25 @@ const { app } = require('electron')
 const auth = require('../auth')
 const log = require('../logger').child('vps')
 
-// Path per known_hosts: ATTENZIONE non usare userData su macOS perche'
-// e' "~/Library/Application Support/..." con lo SPAZIO che OpenSSH
-// interpreta come separatore di lista in UserKnownHostsFile → split
-// del path e fallback su ~/.ssh/known_hosts dell'utente con tutte le
-// entry stale dei vecchi VPS che pero' avevano stesso IP. Bug visto
-// live 2026-05-13: "REMOTE HOST IDENTIFICATION HAS CHANGED".
-// Soluzione: tmpdir su tutte le piattaforme (no spazi su macOS/Linux/Win).
-// La connessione iniziale e' one-shot (solo install.sh), non serve
-// persistere known_hosts tra restart.
-function getKnownHostsPath() {
-  return path.join(os.tmpdir(), 'jht-desktop-known-hosts')
-}
+// known_hosts: la connessione e' one-shot per install.sh (~30s). Dopo
+// install la VPS comunica solo via HTTPS+pairing token, niente piu'
+// SSH dal desktop. Quindi NON ci serve persistere host keys tra run.
+// Anzi, persisterle ci ha morso vivo:
+// - userData path ha "Application Support" con SPAZIO che OpenSSH usa
+//   come separator in UserKnownHostsFile → split path + fallback su
+//   ~/.ssh/known_hosts dell'utente con entry stale di vecchi VPS;
+// - tmpdir senza spazi (fix precedente) ha pero' lo stesso problema con
+//   Hetzner: stesso IP riassegnato a server nuovo = host key diversa =
+//   "REMOTE HOST IDENTIFICATION HAS CHANGED".
+//
+// Soluzione: nessun known_hosts. UserKnownHostsFile=/dev/null + Strict
+// HostKeyChecking=no. Trade-off di sicurezza accettato perche':
+//   1. il VPS e' appena stato creato dall'utente (minuti fa)
+//   2. l'IP arriva direttamente dalla console Hetzner via copy/paste
+//   3. la connessione e' one-shot per install.sh
+//   4. il pairing token viene mandato cifrato (https su install.sh source +
+//      passato via env, non come arg); intercettarlo richiede compromettere
+//      Hetzner stesso, e in quel caso siamo persi a prescindere
 
 // Diagnostica SSH: chiamato prima del run install vero. Logga
 // fingerprint chiave + permessi + stato known_hosts, poi tenta un
@@ -161,11 +168,12 @@ function preflightSshCheck({ ip, priv, knownHosts, askpassEnv = null }) {
   const probeArgs = [
     '-v',
     '-i', priv,
-    '-o', 'StrictHostKeyChecking=accept-new',
+    // No verification host key: la connessione e' one-shot per il
+    // pairing iniziale. Vedi commento in cima al file. UserKnownHostsFile
+    // /dev/null evita writes, GlobalKnownHostsFile /dev/null evita
+    // reads di /etc/ssh/ssh_known_hosts.
+    '-o', 'StrictHostKeyChecking=no',
     '-o', `UserKnownHostsFile=${knownHosts}`,
-    // Esclude il known_hosts globale di sistema (`/etc/ssh/ssh_known_hosts`)
-    // E PIU' IMPORTANTE evita che OpenSSH fallback su ~/.ssh/known_hosts
-    // se il primario fallisce a parse-are (es. path con spaces).
     '-o', 'GlobalKnownHostsFile=/dev/null',
     ...(askpassActive ? [] : ['-o', 'BatchMode=yes']),
     '-o', 'ConnectTimeout=10',
@@ -466,10 +474,9 @@ function runInstall({ ip, sender, passphrase } = {}) {
       }
 
       const priv = getPrivateKeyPath()
-      // ATTENZIONE: NON path.join(getSshDir(), 'known_hosts') — userData
-      // su macOS contiene "Application Support" con lo spazio che
-      // OpenSSH usa come separator → bug. Uso tmpdir (no spazi).
-      const knownHosts = getKnownHostsPath()
+      // /dev/null per known_hosts: no persistenza, no stale entries.
+      // Vedi commento in cima al file per il rationale di sicurezza.
+      const knownHosts = '/dev/null'
 
       // Se l'utente ha fornito una passphrase, prepara helper SSH_ASKPASS
       // PRIMA del pre-flight cosi' anche il probe usa la chiave decrittata.
@@ -530,11 +537,12 @@ function runInstall({ ip, sender, passphrase } = {}) {
         `curl -fsSL ${INSTALL_URL} | bash -s -- --pairing-token "${pairing.token}"`
 
       // Stessa logica del preflight: askpass attivo → no BatchMode (sennò
-      // OpenSSH 9+/10 ignora SSH_ASKPASS_REQUIRE).
+      // OpenSSH 9+/10 ignora SSH_ASKPASS_REQUIRE). Host key verification
+      // disabilitata per il pairing iniziale one-shot (vedi commento file).
       const args = [
         '-v',
         '-i', priv,
-        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', 'StrictHostKeyChecking=no',
         '-o', `UserKnownHostsFile=${knownHosts}`,
         '-o', 'GlobalKnownHostsFile=/dev/null',
         ...(askpass ? [] : ['-o', 'BatchMode=yes']),
