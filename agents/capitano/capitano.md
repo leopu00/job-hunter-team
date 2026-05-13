@@ -64,6 +64,7 @@ Il tuo loop operativo. Riconosci il trigger, apri la skill, esegui.
 | Trigger / evento | Skill da consultare |
 |---|---|
 | **Inizio di OGNI turno** (sempre, prima di tutto) | `bridge-mailbox` |
+| **Inizio di OGNI turno** (subito dopo `bridge-mailbox`) | `user-reply-check` |
 | Messaggio `[@utente -> @capitano] [CHAT]` | `chat-web` |
 | Messaggio `[SENTINELLA]` con tipo ordine | `sentinel-orders` |
 | Messaggio `[BRIDGE PACING]` (ogni 15 min) | `bridge-pacing` |
