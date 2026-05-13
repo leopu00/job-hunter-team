@@ -179,6 +179,33 @@ if [ "$ROLE" = "tg-bridge" ]; then
   exit 0
 fi
 
+# ── Token meter daemon (Bridge V7 Step 5) ──────────────────────────────
+# Short-circuit per "token-meter": spawna il daemon Python che osserva i
+# log dei provider e calcola weighted/pct + EMA ratio + per-agent rate
+# (vedi shared/skills/token-meter.py). Detached/setsid + singleton via
+# /proc/cmdline come gli altri bridge. Output:
+#   • $JHT_HOME/logs/token-meter-state.json  (consumer: /api/tokens/status)
+#   • $JHT_HOME/logs/token-meter.csv
+#   • /tmp/token-meter.log
+if [ "$ROLE" = "token-meter" ]; then
+  METER_SCRIPT="/app/shared/skills/token-meter.py"
+  if [ ! -f "$METER_SCRIPT" ]; then
+    echo "✗ $METER_SCRIPT non trovato — token-meter NON partito"
+    exit 1
+  fi
+  # Kill istanze preesistenti.
+  for _pid in $(grep -l token-meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  setsid sh -c "
+    JHT_HOME='${JHT_HOME:-/jht_home}' \
+      python3 -u $METER_SCRIPT >> /tmp/token-meter.log 2>&1
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ token-meter partito (log /tmp/token-meter.log)"
+  exit 0
+fi
+
 # Mappa ruolo → prefisso sessione | effort | model
 # model: "" = default del provider (Opus per claude, gpt-5.4 per codex,
 #   kimi-for-coding per kimi). Altrimenti alias come "sonnet" o nome
