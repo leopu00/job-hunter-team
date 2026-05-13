@@ -341,6 +341,7 @@ async function handlePush(options) {
   let positions = [];
   let scores = [];
   let applications = [];
+  let pendingMessages = [];
   if (dbExists) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
@@ -364,6 +365,17 @@ async function handlePush(options) {
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
       ]);
+      // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
+      // righe ad ogni tick: l'upsert lato server e' idempotente su
+      // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
+      // sincronizzati a ritroso (web -> local) — vedi /api/cloud-sync/pull
+      // (futuro). Per ora il push e' write-only locale -> cloud.
+      pendingMessages = readSqliteTable(db, 'pending_user_messages', [
+        'id', 'agent', 'body', 'kind', 'related_position_id',
+        'delivered_via', 'delivered_at', 'acknowledged_at',
+        'user_reply', 'user_reply_at', 'agent_seen_reply_at',
+        'created_at',
+      ]);
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -375,16 +387,22 @@ async function handlePush(options) {
   const profileChunks = profilePayload
     ? `, profile (${profilePayload.yaml.length}B yaml + ${Object.keys(profilePayload.summaries).length} summaries)`
     : '';
+  const pendingChunks = pendingMessages.length > 0
+    ? `, ${pendingMessages.length} pending messages`
+    : '';
   console.log(
     pc.dim(
-      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${profileChunks}`
+      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
     console.log(pc.yellow('--dry-run: nulla viene pushato.'));
     return;
   }
-  if (positions.length === 0 && scores.length === 0 && applications.length === 0 && !profilePayload) {
+  if (
+    positions.length === 0 && scores.length === 0 &&
+    applications.length === 0 && pendingMessages.length === 0 && !profilePayload
+  ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
   }
@@ -400,6 +418,7 @@ async function handlePush(options) {
       },
       body: JSON.stringify({
         positions, scores, applications,
+        pending_user_messages: pendingMessages,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -419,9 +438,10 @@ async function handlePush(options) {
   }
 
   console.log(pc.green('✓ Push completato'));
-  console.log(pc.dim(`  positions:    ${body.positions?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  scores:       ${body.scores?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  applications: ${body.applications?.upserted ?? 0} upserted`));
+  console.log(pc.dim(`  positions:        ${body.positions?.upserted ?? 0} upserted`));
+  console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
+  console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
+  console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
 }
 
 async function handleDisable() {
