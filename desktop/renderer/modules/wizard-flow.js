@@ -11,6 +11,7 @@ import {
   STEP_WELCOME,
   STEP_LOCATION,
   STEP_SUPABASE_LOGIN,
+  STEP_TELEGRAM_TOKENS,
   STEP_VPS_PROVISION,
   STEP_SETUP,
   STEP_CONTAINER,
@@ -29,6 +30,11 @@ import {
 } from './constants.js'
 import { clearChildren, refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
 import { enterProviderLogin } from './terminal-login.js'
+import {
+  enterTelegramTokens,
+  getTelegramBotsForSave,
+  isTelegramTokensReady,
+} from './telegram-tokens.js'
 
 // Decide which step the user actually needs to see, based on what is
 // already set up on their machine. Jumps past steps whose prerequisite
@@ -223,12 +229,13 @@ if (dom.btnSupabaseContinue) {
 
 // After Supabase login the path forks:
 //   - Local → Docker check on this PC (STEP_SETUP)
-//   - VPS   → skip local Docker checks entirely, jump straight to
-//             the VPS provisioning wizard (decisione 2026-05-13: il
-//             container vive sulla VPS, niente Docker locale).
+//   - VPS   → collect the 3 Telegram bot tokens FIRST (required for the
+//             remote agents to talk to the user), then jump to the VPS
+//             provisioning wizard. Decisione 2026-05-13: il container
+//             vive sulla VPS, niente Docker locale.
 function advanceAfterSupabase() {
   if (state.location === LOCATION_VPS) {
-    enterVpsProvision()
+    enterTelegramTokens()
   } else {
     enterSetup()
   }
@@ -448,23 +455,101 @@ if (dom.btnVpsCopyPubkey) dom.btnVpsCopyPubkey.addEventListener('click', onVpsCo
 if (dom.btnVpsOpenHetzner) dom.btnVpsOpenHetzner.addEventListener('click', onVpsOpenHetzner)
 if (dom.btnVpsConnect) dom.btnVpsConnect.addEventListener('click', onVpsConnect)
 if (dom.vpsIp) dom.vpsIp.addEventListener('input', updateVpsConnectState)
-if (dom.btnVpsBack) dom.btnVpsBack.addEventListener('click', () => enterSupabaseLogin())
-if (dom.btnVpsContinue) {
-  dom.btnVpsContinue.addEventListener('click', () => {
-    if (!state.vps.installed) return
-    // VPS mode: il container sulla VPS ha gia' install.sh + pairing
-    // token. Il provider CLI vive DENTRO il container remoto (non sul
-    // Mac), il login OAuth e' deferred al primo accesso web dashboard.
-    // Quindi saltiamo subscription notice + model compare + provider
-    // choose/install/login (tutti pensati per il container locale) e
-    // andiamo direttamente al Ready summary. Vedi docs/internal/
-    // onboarding-flow.md § "Path 2 VPS".
+if (dom.btnVpsBack) {
+  // VPS path: back from VPS provisioning lands on the Telegram step
+  // (which sits between Supabase and VPS for vps mode). Local path
+  // doesn't reach this button because the VPS step is skipped.
+  dom.btnVpsBack.addEventListener('click', () => {
     if (state.location === LOCATION_VPS) {
+      enterTelegramTokens()
+    } else {
+      enterSupabaseLogin()
+    }
+  })
+}
+if (dom.btnVpsContinue) {
+  dom.btnVpsContinue.addEventListener('click', async () => {
+    if (!state.vps.installed) return
+    if (state.location === LOCATION_VPS) {
+      // VPS mode: il container sulla VPS ha gia' install.sh + pairing
+      // token. Prima di andare al Ready, scarichiamo i 3 token Telegram
+      // raccolti nel passo precedente in /root/.jht/jht.config.json
+      // sulla VPS — idempotente, merge sul file esistente. Senza
+      // questo passaggio i 3 bot user-facing non hanno credenziali sul
+      // container remoto.
+      const saved = await persistTelegramToVps()
+      if (!saved) return // error already surfaced; user can retry
       log.info('vps.continue.skip-to-ready', { reason: 'VPS mode — install/login lato container remoto' })
       enterReady()
       return
     }
     showStep(STEP_SUBSCRIPTION_NOTICE)
+  })
+}
+
+// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS to
+// /root/.jht/jht.config.json on the VPS. Returns true on success; false
+// surfaces the error in the VPS step's status area so the user can
+// retry the Continue click. No-op (returns true) outside VPS mode or
+// when there are no tokens to save — defensive, the path shouldn't
+// reach here otherwise.
+async function persistTelegramToVps() {
+  if (state.location !== LOCATION_VPS) return true
+  if (!isTelegramTokensReady()) {
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = 'Telegram bots not ready — go back and complete the 3-bot setup.'
+      dom.vpsStatus.hidden = false
+    }
+    return false
+  }
+  if (!state.vps.ip) {
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = 'Missing VPS IP — re-run the install step.'
+      dom.vpsStatus.hidden = false
+    }
+    return false
+  }
+  state.telegramSaveBusy = true
+  if (dom.vpsStatus) {
+    dom.vpsStatus.textContent = 'Saving Telegram bots to the VPS…'
+    dom.vpsStatus.hidden = false
+  }
+  let res
+  try {
+    res = await window.telegramApi.saveBotsToVps({
+      vpsIp: state.vps.ip,
+      bots: getTelegramBotsForSave(),
+    })
+  } catch (e) {
+    res = { ok: false, error: e?.message || 'unknown' }
+  }
+  state.telegramSaveBusy = false
+  if (!res?.ok) {
+    state.telegramSaveError = res?.error || 'unknown error'
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = `Failed to save Telegram bots: ${state.telegramSaveError}`
+      dom.vpsStatus.hidden = false
+    }
+    log.warn('telegram.save.failed', { error: state.telegramSaveError })
+    return false
+  }
+  state.telegramSaveError = null
+  if (dom.vpsStatus) {
+    dom.vpsStatus.textContent = `Telegram bots saved to ${res.path || '/root/.jht/jht.config.json'}.`
+    dom.vpsStatus.hidden = false
+  }
+  log.info('telegram.save.ok', { path: res.path })
+  return true
+}
+
+// ── Telegram-tokens step wiring (back/continue) ─────────────────────
+if (dom.btnTelegramBack) {
+  dom.btnTelegramBack.addEventListener('click', () => enterSupabaseLogin())
+}
+if (dom.btnTelegramContinue) {
+  dom.btnTelegramContinue.addEventListener('click', () => {
+    if (!isTelegramTokensReady()) return
+    enterVpsProvision()
   })
 }
 
