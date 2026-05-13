@@ -40,8 +40,16 @@ export async function refreshRunningStatus() {
   }
 }
 
+const _runningLog = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('running')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+
 export async function startTeam() {
-  if (state.starting) return
+  _runningLog.info('startTeam.click', { location: state.location, starting: state.starting })
+  if (state.starting) {
+    _runningLog.warn('startTeam.already-starting')
+    return
+  }
   // VPS mode: il team gira sulla VPS, non sul Mac. Il container li' si
   // e' gia' auto-pairing-ato via pairing token salvato da install.sh.
   // Il "Start team" sul Mac NON deve scaricare payload + spawn container
@@ -49,9 +57,12 @@ export async function startTeam() {
   // sincronizzato dalla VPS. Vedi docs/internal/onboarding-flow.md § Path 2.
   if (state.location === 'vps') {
     const dashboardUrl = 'https://jobhunterteam.ai/dashboard'
+    _runningLog.info('startTeam.vps.openExternal', { url: dashboardUrl })
     try {
       await window.launcherApi.openExternal(dashboardUrl)
+      _runningLog.info('startTeam.vps.openExternal.ok')
     } catch (e) {
+      _runningLog.error('startTeam.vps.openExternal.failed', { err: String(e?.message || e) })
       // fallback: prova openBrowser anche se non e' il caso d'uso
       try { await window.launcherApi.openBrowser() } catch { /* ignore */ }
     }
