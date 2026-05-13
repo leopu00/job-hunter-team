@@ -211,7 +211,7 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ✅ install.sh served via short URL
 ✅ 9 new pre-launch docs (STORY, PROVIDERS, AI-AGENT-INTEGRATION,
    VISION, MONITORING, RESULTS, BETA, MAINTAINERS,
-   agents/maestro spec)
+   agents/mentor spec)
 ⬜ Subdomain setup (app, docs, api)
 ⬜ Launcher screenshots in docs (soft BLOCKER pre-launch)
 ⬜ Visual FAQ
@@ -389,11 +389,11 @@ The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.
 
 Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports `_global/* + <its role>/*` and nothing else.
 
-### 🧙‍♂️ Maestro — career-coach agent (planned)
+### 🧙‍♂️ Mentor — career-coach agent (planned)
 
 The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
 
-→ Spec in [`agents/maestro/maestro.md`](../../agents/maestro/maestro.md). See [`docs/VISION.md`](VISION.md) for the rationale.
+→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale.
 
 ### 🗄️ Database schema optimization (priority)
 

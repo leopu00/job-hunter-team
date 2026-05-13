@@ -19,7 +19,7 @@ I prompt d'identità degli agenti JHT sommano oggi migliaia di righe in italiano
 | `agents/critico/critico.md` | ~250 |
 | `agents/sentinella/sentinella.md` | ~130 |
 | `agents/assistente/assistente.md` | ~200 |
-| `agents/maestro/maestro.md` | ~200 (planned) |
+| `agents/mentor/mentor.md` | ~200 (planned) |
 
 **Anthropic best practices** ([prompt-engineering docs](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)) chiariscono che Claude di norma risponde nella lingua dell'utente. Tuttavia il [Claude Lab — language switch fix](https://claudelab.net/en/articles/claude-ai/claude-japanese-response-english-switch-fix) documenta un pattern di "language drift":
 

@@ -55,7 +55,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 | 👨‍⚖️ | **Critic** | Blind review in 3 mandatory rounds before submission |
 | 👨‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
 | 🩺 | **Dottore** | One-shot health-check — auto-respawned every ~30 min, detects stuck agents and restarts them with context |
-| 🧙‍♂️ | **Maestro** *(planned)* | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
+| 🧙‍♂️ | **Mentor** *(planned)* | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
 
 ## Architecture
 
@@ -63,7 +63,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
                                        👤 User
                        ┌─────────────────┼─────────────────┐
                        ▼                 ▼                 ▼
-               🧙‍♂️ Maestro       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
+               🧙‍♂️ Mentor       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
                (career coach)    (platform copilot)        │       (event-driven)         (usage clock)
                 [planned]                                  │
                                                            │              🩺 Dottore ··health-check·· ▲
@@ -77,7 +77,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
                                                                    (3 blind rounds)
 ```
 
-The user has three entry points: **🧙‍♂️ Maestro** for career advice (planned), **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the four pipeline agents (Scout, Analyst, Scorer, Writer) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
+The user has three entry points: **🧙‍♂️ Mentor** for career advice (planned), **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the four pipeline agents (Scout, Analyst, Scorer, Writer) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
 
 Token usage is governed by a two-component monitoring stack: **📡 Bridge** runs on a fixed clock, fetches usage samples from the provider, and notifies the **💂 Sentinel**; the Sentinel stays event-driven and intervenes on the Captain only when the projection drifts toward the window limit. See [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
@@ -152,7 +152,7 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 - ✅ **Done** — 9-agent team (Captain + Sentinel + 4-stage pipeline + Critic + Assistant + Dottore), monitored by 📡 Bridge; CLI (34 commands) + TUI + web dashboard (115 pages wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 150+ test files; subscription tested end-to-end on Claude Max x20 for weeks
 - 🔨 **In progress** — Kimi €40 calibration (target mass-market tier) · Desktop installer onboarding polish · Sentinel token-consumption optimization
-- ⏭️ **Next** — 🧙‍♂️ Maestro agent (career coach) · Weekly-window monitoring · User-defined work hours · Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
+- ⏭️ **Next** — 🧙‍♂️ Mentor agent (career coach) · Weekly-window monitoring · User-defined work hours · Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 

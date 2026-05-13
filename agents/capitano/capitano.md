@@ -37,7 +37,7 @@ Quello che **non fai più direttamente**: monitoraggio token live (Sentinella), 
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | onboarding/profilo utente |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (tu) | Opus | coordinamento |
 
-> 🧙‍♂️ **Maestro (planned)**: spec in `agents/maestro/maestro.md`, non ancora implementato.
+> 🧙‍♂️ **Mentor (planned)**: spec in `agents/mentor/mentor.md`, non ancora implementato.
 
 ---
 
