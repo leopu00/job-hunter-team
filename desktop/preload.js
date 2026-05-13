@@ -10,6 +10,33 @@ contextBridge.exposeInMainWorld('platformInfo', {
   arch: process.arch,
 })
 
+// Logger esposto al renderer: ogni window.jhtLog.<level>(event, meta)
+// viene serializzato e mandato al main via canale `log:append`, che lo
+// scrive nello stesso file di log del processo main. Cosi' un bug report
+// contiene il flusso completo (click UI → IPC → modulo backend).
+//
+// Safe: fire-and-forget (ipcRenderer.send, no invoke), errori swallowati.
+function sendLog(level, event, meta, scope) {
+  try {
+    ipcRenderer.send('log:append', { level, event, meta, scope })
+  } catch {
+    // ignore — non vogliamo mai che il logger faccia crashare il renderer
+  }
+}
+contextBridge.exposeInMainWorld('jhtLog', {
+  debug: (event, meta) => sendLog('debug', event, meta),
+  info: (event, meta) => sendLog('info', event, meta),
+  warn: (event, meta) => sendLog('warn', event, meta),
+  error: (event, meta) => sendLog('error', event, meta),
+  // Helper per loggare con namespace (es. window.jhtLog.scope('wizard')).
+  scope: (name) => ({
+    debug: (event, meta) => sendLog('debug', event, meta, name),
+    info: (event, meta) => sendLog('info', event, meta, name),
+    warn: (event, meta) => sendLog('warn', event, meta, name),
+    error: (event, meta) => sendLog('error', event, meta, name),
+  }),
+})
+
 contextBridge.exposeInMainWorld('launcherApi', {
   getStatus: () => ipcRenderer.invoke('launcher:get-status'),
   inspectSetup: () => ipcRenderer.invoke('launcher:inspect-setup'),

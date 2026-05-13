@@ -22,6 +22,7 @@ const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { app } = require('electron')
 const auth = require('../auth')
+const log = require('../logger').child('vps')
 
 const INSTALL_URL = 'https://jobhunterteam.ai/install.sh'
 // Validated again on the renderer side; double-check before shelling out
@@ -79,6 +80,8 @@ async function getPublicKey() {
 // is implicit on -t ed25519.
 function generateKey({ passphrase = '' } = {}) {
   return new Promise((resolve) => {
+    const hasPassphrase = !!(passphrase && passphrase.length > 0)
+    log.info('generate-key.start', { dir: getSshDir(), hasPassphrase })
     try {
       ensureSshDir()
       const priv = getPrivateKeyPath()
@@ -99,10 +102,12 @@ function generateKey({ passphrase = '' } = {}) {
       let stderr = ''
       child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
       child.on('error', (err) => {
+        log.error('generate-key.spawn-failed', { err })
         resolve({ ok: false, error: `ssh-keygen not available: ${err.message}` })
       })
       child.on('close', (code) => {
         if (code !== 0) {
+          log.error('generate-key.exit-nonzero', { code, stderr: stderr.trim() })
           resolve({ ok: false, error: stderr.trim() || `ssh-keygen exited ${code}` })
           return
         }
@@ -113,12 +118,15 @@ function generateKey({ passphrase = '' } = {}) {
         }
         const pubkey = readPublicKey()
         if (!pubkey) {
+          log.error('generate-key.pubkey-missing')
           resolve({ ok: false, error: 'pubkey not found after generation' })
           return
         }
+        log.info('generate-key.success', { pubkeyLen: pubkey.length })
         resolve({ ok: true, pubkey })
       })
     } catch (err) {
+      log.error('generate-key.crashed', { err })
       resolve({ ok: false, error: err.message || String(err) })
     }
   })
@@ -145,12 +153,16 @@ function generateKey({ passphrase = '' } = {}) {
 // renderer fa `vpsApi.onInstallLog(cb)` per ricevere.
 function runInstall({ ip, sender } = {}) {
   return new Promise(async (resolve) => {
+    const startedAt = Date.now()
     try {
+      log.info('run-install.start', { ip })
       if (!IPV4_RE.test(String(ip || '').trim())) {
+        log.warn('run-install.invalid-ip', { ip })
         resolve({ ok: false, error: 'invalid IPv4' })
         return
       }
       if (!hasKey()) {
+        log.warn('run-install.no-key')
         resolve({ ok: false, error: 'SSH key not generated yet' })
         return
       }
@@ -160,6 +172,7 @@ function runInstall({ ip, sender } = {}) {
       // halfway.
       const pairing = await auth.getPairingToken()
       if (!pairing?.ok || !pairing.token) {
+        log.error('run-install.pairing-token-missing', { err: pairing?.error })
         resolve({ ok: false, error: `pairing token unavailable: ${pairing?.error || 'not signed in'}` })
         return
       }
@@ -182,14 +195,22 @@ function runInstall({ ip, sender } = {}) {
         `root@${ip}`,
         remoteCmd,
       ]
+      log.debug('run-install.ssh-spawn', { ip, installUrl: INSTALL_URL, knownHosts })
 
       const child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      let linesSent = 0
       const emit = (line) => {
+        linesSent += 1
         try {
           if (sender && !sender.isDestroyed?.()) {
             sender.send('vps:install-log', line)
           }
         } catch { /* renderer might be gone */ }
+        // Log line a livello debug — utili nei bug report. Tronchiamo a
+        // 500 char per non gonfiare il file con paste enormi.
+        log.debug('run-install.ssh-line', {
+          line: line.length > 500 ? line.slice(0, 500) + '…' : line,
+        })
       }
 
       // Line-buffer stdout/stderr (merge) so the renderer gets one
@@ -208,18 +229,23 @@ function runInstall({ ip, sender } = {}) {
       child.stderr.on('data', onChunk)
 
       child.on('error', (err) => {
+        log.error('run-install.spawn-failed', { err })
         emit(`ssh spawn error: ${err.message}`)
         resolve({ ok: false, error: err.message })
       })
       child.on('close', (code) => {
         if (buffer) emit(buffer)
+        const ms = Date.now() - startedAt
         if (code !== 0) {
+          log.error('run-install.exit-nonzero', { code, ms, linesSent })
           resolve({ ok: false, error: `ssh exited ${code}`, exitCode: code })
           return
         }
+        log.info('run-install.success', { ip, ms, linesSent })
         resolve({ ok: true, ip })
       })
     } catch (err) {
+      log.error('run-install.crashed', { err })
       resolve({ ok: false, error: err.message || String(err) })
     }
   })
