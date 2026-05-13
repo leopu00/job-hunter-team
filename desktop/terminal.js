@@ -69,6 +69,52 @@ function spawnSession({
   return id
 }
 
+// Adotta un ChildProcess gia' avviato altrove (es. SshExec.openPty per
+// il login provider remoto in VPS mode). Lo wrappa in una "sessione"
+// che espone la stessa API .write/.resize/.kill di un node-pty proc,
+// cosi' i call site di main.js (terminal:write, terminal:resize,
+// terminal:kill) funzionano identici tra local e VPS mode.
+//
+// Nota su resize: il ChildProcess di ssh non propaga SIGWINCH al lato
+// remoto. Per resize affidabile lato VPS servirebbe un canale separato
+// (es. window-change OpenSSH protocol) che node:child_process non
+// espone. Per il flow di login (1 schermata, no full-screen TUI) e'
+// accettabile che il resize sia no-op; T3 puo' decidere di passare a
+// node-pty + ssh come comando se la UX peggiora.
+function adoptChild({ child, onData, onExit }) {
+  if (!child) throw new Error('adoptChild: child required')
+  const id = nextSessionId()
+  const proc = {
+    write: (data) => {
+      try { if (child.stdin && !child.stdin.destroyed) child.stdin.write(data) } catch { /* closed */ }
+    },
+    resize: () => { /* no-op: ssh non propaga SIGWINCH sul remote */ },
+    kill: () => {
+      try { child.kill() } catch { /* already exited */ }
+    },
+  }
+  sessions.set(id, proc)
+
+  const fwd = (chunk) => {
+    if (onData) onData(chunk.toString())
+  }
+  if (child.stdout) child.stdout.on('data', fwd)
+  if (child.stderr) child.stderr.on('data', fwd)
+
+  child.on('error', (err) => {
+    sessions.delete(id)
+    if (onExit) onExit({ exitCode: -1, signal: null, error: err.message })
+  })
+  child.on('exit', (code, signal) => {
+    sessions.delete(id)
+    if (onExit) onExit({
+      exitCode: typeof code === 'number' ? code : -1,
+      signal: signal || null,
+    })
+  })
+  return id
+}
+
 function write(id, data) {
   const proc = sessions.get(id)
   if (!proc) return
@@ -107,6 +153,7 @@ function killAll() {
 module.exports = {
   isAvailable,
   spawnSession,
+  adoptChild,
   write,
   resize,
   kill,
