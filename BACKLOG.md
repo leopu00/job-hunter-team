@@ -441,6 +441,40 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Acceptance:** modify config on laptop A, install launcher + login on laptop B, config restored after passphrase entry. Server admin (us) cannot read VPS IP from raw DB.
 - **Dependency:** [JHT-DESKTOP-LOGIN].
 
+##### 🔄 [JHT-CLOUD-RESTORE] Bootstrap automatico al login su container vuoto
+
+- **Why:** la sync è push-only `local → cloud`. Quando l'utente fa login con stesso account su container nuovo/vuoto (nuova VPS post-install, nuovo PC dopo perdita del vecchio), l'app deve fare un **pull automatico** dal cloud per allineare il DB locale. Senza questo, il container parte vuoto e si perde la storia.
+- **Trigger automatico:**
+  1. Utente fa login Supabase nell'app (o nel container post-install via pairing token)
+  2. App rileva: container locale ha `jobs.db` vuoto / mai sincronizzato prima
+  3. App fa pull dei blob cifrati cloud → decifra con passphrase recovery → popola DB locale
+  4. Da lì in poi: push normale, niente più trigger automatici
+- **Comando esplicito CLI:** `jht cloud restore [--force]` — utile per debug, per reseed manuale, o per casi edge dove l'utente vuole sovrascrivere dati locali esistenti
+- **Guard rails:**
+  - Se container ha già dati e nessun `--force` → fallisce con messaggio chiaro ("container has local data — use --force to overwrite")
+  - Se cloud è vuoto (utente non ha mai sincronizzato prima) → no-op silenzioso
+- **Decisione doc:** vedi `docs/internal/INFRA.md` § Bootstrap automatico e memoria `project_cloud_sync_direction`.
+- **Dependency:** [JHT-DESKTOP-SYNC] (sync infrastructure), [JHT-DESKTOP-RECOVERY] (passphrase per decifrare).
+
+##### 👤 [JHT-CLOUD-SYNC-PROFILE] Aggiungere profilo utente al sync
+
+- **Why:** il profilo (`candidate_profile.yml` — nome, skills, experience, preferenze) è il dato più "personale" del team e quello che l'utente non vuole rifare da capo cambiando macchina. Oggi sincronizziamo solo positions/applications.
+- **Task:**
+  1. Aggiungere `candidate_profile.yml` al payload di push verso Supabase (cifrato user-side)
+  2. Aggiungere alla logica di pull in `[JHT-CLOUD-RESTORE]`
+  3. Migration: utenti esistenti con sync attiva → primo push successivo include automaticamente il profilo
+- **Acceptance:** modifica profilo su macchina A → 1 minuto dopo, login su macchina B → profilo presente.
+
+##### 🎨 [JHT-CLOUD-SYNC-THEME] Aggiungere tema/settings dashboard al sync
+
+- **Why:** la personalizzazione UI (dark/light, lingua, sidebar pinned, ecc.) è un piccolo ma significativo "rifare da capo" per l'utente che cambia macchina.
+- **Task:**
+  1. Verificare dove vivono i settings oggi (DB tabella `user_settings` o browser localStorage?)
+  2. Se localStorage: migrare a DB `user_settings` table (necessario per sync server-side)
+  3. Aggiungere al payload push e alla logica pull
+- **Acceptance:** cambio tema/lingua su macchina A → 1 minuto dopo, login su macchina B → stesso tema/lingua.
+- **Dependency:** [JHT-CLOUD-RESTORE].
+
 ##### 🔑 [JHT-DESKTOP-RECOVERY] Recovery passphrase generation + decrypt flow
 
 - **Why:** the encrypted cloud sync needs a passphrase that's NOT the OAuth password (which we don't have). This is the user's "vault key".
@@ -616,15 +650,28 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
   - ❌ Contenuti tradotti: **zero**. La branch parallela in corso ottimizza i file italiani — non li traduce. Quindi baseline `<role>.md` resta italiano nel prevedibile.
   - ⚠️ Inconsistenza attiva: `DEFAULT_LOCALE='en'` (settato stamattina per onboarding desktop) + baseline IT → drift mismatch reale per utenti default-EN.
 
-  **Decisioni aperte (vedi design doc per dettaglio):**
-  - 🅰️ Status quo + accettare drift fino a traduzione esplicita futura
-  - 🅱️ Rollback `DEFAULT_LOCALE='it'` (riallinea ma contraddice memory `feedback_lang_picker_default_english`)
-  - 🅲 RULE-T14 in `team-rules.md` ("respond in user's language") — neutralizza drift in 5 min, ma tocca file in lavorazione altra branch → da coordinare
+  **✅ Decisione lockata (2026-05-13) — policy "lingua utente unica"**
 
-  **Sprint futuri (oggi non assegnati a nessuno):**
-  - ⬜ Task esplicito traduzione `<role>.md` → EN (zero attività in corso)
+  L'utente sceglie una lingua al primo setup; tutto user-visible (chat, dashboard UI, messaggi inter-agente, commenti deliverable) è in quella lingua. Eccezione: JD content originale resta originale.
+
+  Implementazione:
+  - ✅ **RULE-T14** in `agents/_team/team-rules.md` (deployed 2026-05-13) — safeguard runtime: anche con baseline IT, locale=en → output EN
+  - ⬜ **[JHT-I18N-TRANSLATE]** (sotto) — traduzione vera dei baseline IT→EN (elimina costo "traduzione mentale" runtime)
   - ⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
   - ⬜ Community translation HU/ES/DE/FR (post-launch)
+
+##### 🌐 [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN
+
+- **Why HIGH:** RULE-T14 mitiga il drift ma l'agente fa "traduzione mentale" runtime → token overhead. Traduzione vera elimina il costo.
+- **Scope:** 10 file `<role>.md`, ~1650 righe totali (post-refactor).
+- **Procedura:**
+  1. `cp agents/<role>/<role>.md agents/<role>/<role>.it.md` (preserva IT come override)
+  2. Tradurre il baseline `<role>.md` in inglese
+  3. Preservare invariati: protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc. parsati per pattern dal Capitano), tmux session names (`CAPITANO`, `SCOUT-N`), comandi shell, path
+  4. Smoke test: team start con `locale=en` → verifica baseline EN caricato + risposte EN
+- **Acceptance:** 10 file EN, 10 file `<role>.it.md` con IT preservato, smoke test pass.
+- **Effort stimato:** 4-6 ore. Da fare pre-launch.
+- **Design doc:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md) § "Task traduzione esplicito".
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 

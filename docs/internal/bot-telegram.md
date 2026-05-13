@@ -3,7 +3,7 @@
 **Doc consolidato il 2026-05-13** unificando:
 - `2026-05-12-document-channels-decision.md` — scelta canale doc (Telegram = Opzione B primaria)
 - `2026-05-12-telegram-document-ingest-design.md` — spec implementazione `tg-bridge.py` + `jht-telegram-send`
-- Tema A di `2026-05-12-open-questions-bot-and-vps-setup.md` — design multi-agente + decisioni 2026-05-13
+- Tema A di `2026-05-12-open-questions-bot-and-vps-setup.md` (poi cancellato) — design multi-agente + decisioni 2026-05-13
 
 > Quando i 3 doc divergono, vince la decisione più recente.
 
@@ -347,7 +347,7 @@ Ordine post-fix:
 ## 🔗 Riferimenti
 
 - `docs/internal/vps.md` — design VPS (host/container split, providers, install UX)
-- `docs/internal/2026-05-12-open-questions-bot-and-vps-setup.md` — Tema B residuo: setup VPS via Desktop
+- `docs/internal/vps.md` § "Setup wizard decisions" — decisioni VPS setup desktop wizard lockate il 2026-05-13
 - `docs/internal/INFRA.md` — overview canali utente↔team
 - `docs/internal/2026-05-01-bridge-and-token-monitoring.md` — bridge attuale
 - `.launcher/tg-bridge.py` — implementazione bridge
