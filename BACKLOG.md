@@ -733,10 +733,14 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - ✅ Contributor Covenant 2.1 standard at root, contact `info@jobhunterteam.ai`
 - ✅ `.github/CONTRIBUTING.md` updated to link the new CoC
 
-#### 🎬 [JHT-LAUNCH-03] 30s demo video ⬜ BLOCKER
+#### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
 
-- Asciinema or screencast full pipeline
-- Embed in README above the fold
+- ✅ Storyboard + recording plan landed at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md): 6-beat shot list timed to 30s, asciinema record/convert commands (`.cast` → `.gif` via `agg`, ≤ 2.5 MB target), captions, README embed snippet, Show HN/press-kit reuse plan.
+- ⬜ Remaining (Leone-only — needs the live install + the demo SQLite snapshot):
+  - Add `--demo-profile` to `jht setup` and `--fixture` to `jht sentinella tail` (or drop beat 4 of the storyboard)
+  - Ship `docs/launch/demo-profile.yml` (anonymised) + `assets/demo-fixtures/` snapshot
+  - Record, convert, verify size, upload `.cast` to asciinema.org
+  - Replace the README "🚧 Coming soon" placeholder with the embed snippet, drop the URL into the Show HN draft
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
