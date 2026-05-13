@@ -50,27 +50,47 @@ describe("Schema — defaults e campi opzionali", () => {
   });
 });
 
-describe("Schema — TelegramChannelSchema edge cases", () => {
-  it("accetta webhook_url valido", () => {
-    const r = TelegramChannelSchema.safeParse({
-      bot_token: "123:ABC", webhook_url: "https://example.com/hook",
-    });
+describe("Schema — TelegramChannelSchema (3 bot dedicati)", () => {
+  const validBots = {
+    assistente: { bot_token: "111:AAA" },
+    capitano:   { bot_token: "222:BBB" },
+    mentor:     { bot_token: "333:CCC" },
+  };
+
+  it("accetta 3 bot configurati", () => {
+    const r = TelegramChannelSchema.safeParse({ bots: validBots });
     expect(r.success).toBe(true);
   });
 
-  it("rifiuta webhook_url non valido", () => {
+  it("accetta chat_id opzionale per ruolo", () => {
     const r = TelegramChannelSchema.safeParse({
-      bot_token: "123:ABC", webhook_url: "not-a-url",
+      bots: {
+        ...validBots,
+        capitano: { bot_token: "222:BBB", chat_id: "-100123456" },
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.bots.capitano.chat_id).toBe("-100123456");
+  });
+
+  it("rifiuta quando manca un ruolo (mentor)", () => {
+    const { mentor: _drop, ...incomplete } = validBots;
+    const r = TelegramChannelSchema.safeParse({ bots: incomplete });
+    expect(r.success).toBe(false);
+  });
+
+  it("rifiuta bot_token vuoto", () => {
+    const r = TelegramChannelSchema.safeParse({
+      bots: { ...validBots, assistente: { bot_token: "" } },
     });
     expect(r.success).toBe(false);
   });
 
-  it("accetta chat_id opzionale", () => {
+  it("rifiuta schema legacy single-bot (no bots wrapper)", () => {
     const r = TelegramChannelSchema.safeParse({
-      bot_token: "123:ABC", chat_id: "-100123456",
+      bot_token: "123:ABC", chat_id: "100",
     });
-    expect(r.success).toBe(true);
-    if (r.success) expect(r.data.chat_id).toBe("-100123456");
+    expect(r.success).toBe(false);
   });
 });
 
@@ -134,17 +154,27 @@ describe("validateConfig — tipi errati", () => {
 });
 
 describe("redactConfig — struttura completa", () => {
-  it("maschera tutti i campi sensibili in config reale", () => {
+  it("maschera tutti i campi sensibili in config reale (3 bot)", () => {
     const full = {
       version: 1, active_provider: "claude",
       providers: { claude: { name: "claude", auth_method: "api_key", api_key: "sk-ant-secret123" } },
-      channels: { telegram: { bot_token: "789012:XYZABC", chat_id: "123" } },
+      channels: {
+        telegram: {
+          bots: {
+            assistente: { bot_token: "789012:XYZABC", chat_id: "123" },
+            capitano:   { bot_token: "555666:CAPTAIN", chat_id: "123" },
+            mentor:     { bot_token: "777888:MENTORT", chat_id: "123" },
+          },
+        },
+      },
       workspace: "/tmp/jht",
     };
     const r = redactConfig(full);
     expect((r.providers as any).claude.api_key).toBe("sk-a****");
-    expect((r.channels as any).telegram.bot_token).toBe("7890****");
-    expect((r.channels as any).telegram.chat_id).toBe("123");
+    expect((r.channels as any).telegram.bots.assistente.bot_token).toBe("7890****");
+    expect((r.channels as any).telegram.bots.capitano.bot_token).toBe("5556****");
+    expect((r.channels as any).telegram.bots.mentor.bot_token).toBe("7778****");
+    expect((r.channels as any).telegram.bots.assistente.chat_id).toBe("123");
     expect(r.workspace).toBe("/tmp/jht");
   });
 

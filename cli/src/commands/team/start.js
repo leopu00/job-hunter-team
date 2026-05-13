@@ -28,19 +28,23 @@ function readSentinellaTickMinutes() {
 }
 
 // Bootstrap container del team — replica `/api/team/start-all` (web UI).
-// Sequenza V7 (rivista 2026-05-12, Telegram-inbound):
-//   0. ASSISTENTE: tmux + CLI boot + welcome Telegram (idempotente). Per
-//      PRIMO cosi' l'utente riceve subito un messaggio "Ciao, mandami il
-//      CV" sul telefono (canale primario su VPS headless).
-//   1. TG-BRIDGE: long-poll Bot API → tmux ASSISTENTE. Pre-delay 5s per
-//      dare tempo all'Assistente di bootare la TUI prima che arrivino i
-//      primi inbound.
+// Sequenza V7 (rivista 2026-05-13, 3 bot Telegram dedicati):
+//   0. ASSISTENTE: tmux + CLI boot + welcome Telegram. Per PRIMO cosi'
+//      l'utente riceve subito un messaggio "Ciao, mandami il CV" sul
+//      telefono (canale primario su VPS headless).
+//   1. TG-BRIDGE: spawna 3 long-poll Bot API (assistente, capitano, mentor),
+//      ciascuno → tmux corrispondente. Pre-delay 5s. Le tmux di Capitano e
+//      Mentor non esistono ancora al primo poll: se l'utente scrive prima
+//      che siano up, `jht-tmux-send` logga e drop — accettato (edge case
+//      ristretto al cold start; le sessioni partono entro 30s).
 //   2. SENTINELLA: tmux + CLI boot + kick-off, pronta a ricevere il primo
 //      [BRIDGE TICK] dal sentinel-bridge.
 //   3. BRIDGE (sentinel + pacing): processo Python background. Pre-delay
 //      20s per stabilizzazione CLI Sentinella.
-//   4. CAPITANO: tmux + CLI boot + kick-off, lanciato per ULTIMO cosi'
-//      quando parte il monitoring e' gia' stabile. Pre-delay 5s.
+//   4. MENTOR: tmux + CLI boot. User-facing always-on; il suo bridge era
+//      gia' partito ma la sessione tmux nasce qui.
+//   5. CAPITANO: per ULTIMO cosi' il monitoring (sentinel + pacing) e' gia'
+//      stabile quando inizia a operare.
 // Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li scala
 // il Capitano secondo le sue soglie, leggendo lo stato Bridge.
 function buildContainerBootstrap() {
@@ -48,14 +52,19 @@ function buildContainerBootstrap() {
   return [
     { role: 'assistente', session: 'ASSISTENTE' },
     {
+      // tg-bridge spawna internamente 3 processi (assistente/capitano/mentor),
+      // ciascuno legge channels.telegram.bots.<role> dal config e dispatch
+      // a tmux <ROLE>. Nessun env JHT_TG_TARGET_SESSION qui: lo script lo
+      // deriva dal ruolo.
       role: 'tg-bridge', session: 'TG-BRIDGE', notATmuxSession: true,
-      preDelayMs: 5000, env: { JHT_TG_TARGET_SESSION: 'ASSISTENTE' },
+      preDelayMs: 5000, env: {},
     },
     { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000 },
     {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
       preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' },
     },
+    { role: 'mentor', session: 'MENTOR', preDelayMs: 3000 },
     {
       role: 'capitano', session: 'CAPITANO',
       preDelayMs: 5000, env: { JHT_TICK_INTERVAL: String(tickMin) },

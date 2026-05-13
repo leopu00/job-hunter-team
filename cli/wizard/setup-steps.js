@@ -8,7 +8,6 @@ import {
   JHT_CONFIG_DIR,
   writeConfigFile,
   validateTelegramToken,
-  validateChatId,
   validateEmail,
 } from './setup-helpers.js';
 import { describeSecret } from './secret-ref.js';
@@ -80,27 +79,58 @@ async function tgWaitForFirstChat(token, deadlineMs) {
 }
 
 /**
- * Step Telegram OBBLIGATORIO (per VPS).
+ * Setup Telegram OBBLIGATORIO — 3 bot dedicati (decisione 2026-05-13 rev2).
  *
- * Niente prompt "vuoi configurarlo?": chiediamo direttamente token + chat_id.
- * L'utente DEVE fornire entrambi per uscire dal wizard. Per VPS, Telegram e'
- * l'unica via di interazione mobile col team senza SSH.
+ * L'utente crea su BotFather 3 bot separati (assistente, capitano, mentor) e
+ * per ognuno: token → getMe → deep-link → /start → cattura chat_id automatica.
+ * Tutti e 3 sono richiesti per uscire dal wizard.
+ *
+ * Ritorna: { bots: { assistente, capitano, mentor } } dove ogni voce e'
+ * { bot_token, chat_id }.
  */
 export async function promptTelegramRequired(prompter, baseChannels) {
-  const existing = baseChannels?.telegram || undefined;
+  const existing = baseChannels?.telegram?.bots || {};
 
   await prompter.note(
-    'Telegram e\' obbligatorio: e\' la tua via di interazione col team\n' +
-    'dal telefono (senza SSH).\n\n' +
-    'Come ottenere il token:\n' +
-    '  1. Apri Telegram → cerca @BotFather → scrivi /newbot\n' +
-    '  2. Segui le istruzioni (nome + username che finisce in "bot")\n' +
-    '  3. BotFather risponde con un token tipo "123456789:ABC..."',
-    'Setup Telegram (obbligatorio)',
+    'Telegram e\' obbligatorio: ogni agente user-facing ha il suo bot dedicato\n' +
+    '(notifiche separate, mute selettivo, contesto pulito).\n\n' +
+    'Devi creare 3 bot su @BotFather, uno per ogni agente:\n' +
+    '  1. Assistente — onboarding profilo, drop-zone documenti\n' +
+    '  2. Capitano   — direzione team, notifiche posizioni ready\n' +
+    '  3. Mentor     — mentore di crescita, posizionamento strategico\n\n' +
+    'Per ogni bot ripeti su @BotFather:\n' +
+    '  • /newbot → segui le istruzioni (nome libero + username che finisce in "bot")\n' +
+    '  • BotFather ti risponde con un token "123456789:ABC..."\n\n' +
+    'Tieni i 3 token a portata di mano: te li chiedo uno a uno.',
+    'Setup Telegram (3 bot obbligatori)',
+  );
+
+  const roles = [
+    { key: 'assistente', label: 'Assistente', hint: 'onboarding profilo + documenti' },
+    { key: 'capitano',   label: 'Capitano',   hint: 'direzione team + notifiche batch' },
+    { key: 'mentor',     label: 'Mentor',     hint: 'mentore di crescita' },
+  ];
+
+  const bots = {};
+  for (const role of roles) {
+    bots[role.key] = await promptSingleTelegramBot(prompter, role, existing[role.key]);
+  }
+  return { bots };
+}
+
+/**
+ * Wizard di un singolo bot Telegram: token → getMe → deep-link → wait /start.
+ * Riusa la logica precedente (un solo bot) parametrizzata sul ruolo.
+ */
+async function promptSingleTelegramBot(prompter, role, existing) {
+  await prompter.note(
+    `Adesso configuriamo il bot ${role.label} (${role.hint}).\n\n` +
+    `Su @BotFather: /newbot → segui le istruzioni → copia il token.`,
+    `Bot ${role.label} (${role.key})`,
   );
 
   const botToken = await prompter.text({
-    message: 'Token del bot Telegram',
+    message: `Token del bot ${role.label}`,
     placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
     initialValue: existing?.bot_token,
     validate: (v) => {
@@ -110,86 +140,38 @@ export async function promptTelegramRequired(prompter, baseChannels) {
   });
   const token = botToken.trim();
 
-  // ── Risoluzione username + cattura chat_id automatica ────────────────
-  // Sostituiamo lo step manuale "@userinfobot" con un flow attivo:
-  //   1. getMe → ricaviamo l'@username del bot
-  //   2. mostriamo deep-link `https://t.me/<username>?start=ok`
-  //   3. polling getUpdates → cattura il primo chat_id in inbound
-  //
-  // Bonus: l'utente DEVE aver fatto /start prima di proseguire, quindi
-  // il primo `jht-telegram-send` post-wizard non sbattera' contro l'errore
-  // "Bad Request: chat not found" (vedi root cause 2026-05-12).
   let botUsername = null;
-  const probe = prompter.progress('Verifico il bot...');
+  const probe = prompter.progress(`Verifico il bot ${role.label}...`);
   try {
     botUsername = await tgGetBotUsername(token);
-    probe.stop(`Bot riconosciuto: @${botUsername}`);
+    probe.stop(`Bot ${role.label} riconosciuto: @${botUsername}`);
   } catch (e) {
-    probe.stop(`Errore: ${e.message}`);
-    throw new Error(`Token Telegram non valido o rete irraggiungibile: ${e.message}`);
+    probe.stop(`Errore su ${role.label}: ${e.message}`);
+    throw new Error(`Token Telegram (${role.key}) non valido o rete irraggiungibile: ${e.message}`);
   }
 
   const deepLink = `https://t.me/${botUsername}?start=jht`;
   await prompter.note(
-    'Adesso apri il tuo bot e premi Start:\n\n' +
+    `Apri il bot ${role.label} e premi Start:\n\n` +
     `  ${deepLink}\n\n` +
-    '(Tap sul link dal telefono, o cerca @' + botUsername + ' su Telegram\n' +
-    'e premi "Start" / scrivi /start.)\n\n' +
-    'Sto monitorando il bot: appena ti vedo arrivare proseguo da solo.',
-    'Avvia la chat col bot',
+    `(Tap sul link dal telefono, o cerca @${botUsername} su Telegram e\n` +
+    `premi "Start" / scrivi /start.)\n\n` +
+    `Sto monitorando: appena vedo il tuo /start proseguo col prossimo bot.`,
+    `Avvia la chat con @${botUsername}`,
   );
 
-  const waitSpinner = prompter.progress('In attesa del tuo /start...');
+  const waitSpinner = prompter.progress(`In attesa del /start su ${role.label}...`);
   const deadline = Date.now() + 15 * 60 * 1000; // 15 min
   const chatId = await tgWaitForFirstChat(token, deadline);
   if (!chatId) {
-    waitSpinner.stop('Timeout (15 min): nessun messaggio dal bot.');
+    waitSpinner.stop(`Timeout (15 min) su ${role.label}: nessun messaggio.`);
     throw new Error(
-      'Non ho ricevuto un /start dal tuo bot. Rilancia: jht setup',
+      `Non ho ricevuto un /start dal bot ${role.label}. Rilancia: jht setup`,
     );
   }
-  waitSpinner.stop(`Chat rilevata: ${chatId}`);
+  waitSpinner.stop(`${role.label}: chat rilevata (${chatId})`);
 
   return { bot_token: token, chat_id: String(chatId) };
-}
-
-/**
- * Step Telegram: chiede bot token e chat ID (opzionale).
- */
-export async function promptTelegram(prompter, baseChannels) {
-  let telegramChannel = baseChannels?.telegram || undefined;
-
-  const setupTelegram = await prompter.confirm({
-    message: 'Configurare bot Telegram per le notifiche?',
-    initialValue: Boolean(telegramChannel?.bot_token),
-  });
-
-  if (!setupTelegram) return undefined;
-
-  await prompter.note(
-    'Crea un bot con @BotFather su Telegram e copia il token.\nFormato: 123456789:ABCdefGHI...',
-    'Telegram Bot',
-  );
-
-  const botToken = await prompter.text({
-    message: 'Token del bot Telegram',
-    placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
-    initialValue: telegramChannel?.bot_token,
-    validate: validateTelegramToken,
-  });
-
-  const chatId = await prompter.text({
-    message: 'Chat ID (opzionale)',
-    placeholder: '123456789',
-    initialValue: telegramChannel?.chat_id,
-    validate: validateChatId,
-  });
-
-  telegramChannel = { bot_token: botToken.trim() };
-  if (chatId && chatId.trim().length > 0) {
-    telegramChannel.chat_id = chatId.trim();
-  }
-  return telegramChannel;
 }
 
 /**
@@ -225,6 +207,7 @@ export async function assembleAndSaveConfig(prompter, params) {
     channels: {},
   };
 
+  // telegramChannel = { bots: { assistente, capitano, mentor } } (schema 2026-05-13)
   if (telegramChannel) config.channels.telegram = telegramChannel;
 
   writeConfigFile(config);
