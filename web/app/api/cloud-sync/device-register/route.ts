@@ -188,6 +188,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Segna lo stato di onboarding: il consume del pairing token = setup
+  // VPS completato. Il flag e' "primo successo" — pair successivi non
+  // sovrascrivono vps_setup_completed_at. Se la upsert fallisce, NON
+  // facciamo fallire la response: il device-register e' gia' andato
+  // e il flag e' un side-effect di telemetria/UX, non un invariante.
+  try {
+    const { data: existing } = await admin
+      .from("user_onboarding_state")
+      .select("vps_setup_completed_at")
+      .eq("user_id", verifiedUserId)
+      .maybeSingle();
+    if (!existing?.vps_setup_completed_at) {
+      const nowIso = new Date().toISOString();
+      await admin.from("user_onboarding_state").upsert(
+        {
+          user_id: verifiedUserId,
+          vps_setup_completed_at: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: "user_id" },
+      );
+    }
+  } catch {
+    // best-effort: il setup principale e' andato, il flag lo recupera
+    // al prossimo pairing oppure via backfill.
+  }
+
   return NextResponse.json(
     {
       ok: true,
