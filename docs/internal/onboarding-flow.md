@@ -45,10 +45,13 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
        └─ VPS:      skip (Docker arriva via install.sh sulla VPS)
 
 6. 🖥️  VPS provisioning              ←── solo path VPS
-       ├─ Wizard mostra step Hetzner inline
-       ├─ App genera SSH keypair locale (no passphrase)
+       ├─ Wizard mostra step Hetzner inline (tutorial)
+       ├─ App genera SSH keypair locale (passphrase opzionale)
+       │  └─ se utente la setta, app la salva in keychain OS
        ├─ Utente: copia pubkey → Hetzner → crea VPS → paste IP nell'app
-       ├─ App: ssh → curl install.sh → host pronto
+       ├─ App: ssh → curl install.sh --pairing-token <token-da-supabase-session>
+       │  └─ pairing token derivato dalla session Supabase già attiva → niente
+       │     `jht cloud login` interattivo dentro la VPS, OAuth fatto una volta sola
        └─ Reclaim "ho già la VPS": paste IP, app verifica match SSH key
 
 7. 🔑  Provider AI login              ←── ULTIMO, sul host finale
@@ -132,5 +135,4 @@ L'utente:
 
 - `docs/internal/bot-telegram.md` — decisione Telegram 3 bot obbligatori (2026-05-13 rev2)
 - `docs/internal/vps.md` — design VPS (provisioning, providers, install UX)
-- `docs/internal/2026-05-12-open-questions-bot-and-vps-setup.md` — Tema B: 3 path VPS setup (B1/B2/B3)
 - `BACKLOG.md` — `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`, `[JHT-DESKTOP-RECLAIM]`, `[JHT-VPS-FRIENDLY]`
