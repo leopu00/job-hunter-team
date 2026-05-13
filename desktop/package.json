@@ -53,6 +53,7 @@
       "terminal.js",
       "auth/**/*.js",
       "sync/**/*.js",
+      "vps/**/*.js",
       "docker-installer/**/*.js",
       "win-installer/**/*.js",
       "!**/*.test.js",
