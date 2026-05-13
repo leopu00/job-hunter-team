@@ -23,6 +23,7 @@ import {
 // wiring goes too.
 import { smartAdvanceFromWelcome } from './modules/wizard-flow.js'
 import './modules/terminal-login.js'
+import './modules/telegram-tokens.js'
 import { startTeam, stopTeam, refreshRunningStatus } from './modules/running.js'
 import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
