@@ -282,19 +282,30 @@ app.whenReady().then(() => {
   // wizard riparte da Welcome come prima volta. Utile per testare il
   // flow di onboarding senza dover cancellare a mano:
   //   - preferences.json (location, eventuali altri toggle)
+  //   - providers.json (THE discriminator setup-complete: se ha
+  //     provider.saved.length > 0 l'app salta il wizard e va in home —
+  //     vedi desktop/renderer/modules/home.js → isSetupComplete)
   //   - ssh/ (keypair Ed25519 generata dal passo VPS)
+  //   - session/ (storage Supabase auth in mode 'file', packaged-unsigned)
+  //   - sync/ (meta storage cloud sync in mode 'file')
   //   - logs/ (log delle sessioni precedenti)
   //
-  // Non tocca: session Supabase (in-memory in dev gia' volatile),
+  // Non tocca: session Supabase in-memory (dev — gia' volatile),
   // app-payload/ (download cache pesante, niente senso wipare).
-  // Storage memory NON viene toccato qui perche' e' gia' nuovo a ogni boot.
   if (process.env.JHT_DESKTOP_FRESH_SETUP === '1') {
     const fs = require('node:fs')
     const userData = app.getPath('userData')
     const targets = [
       path.join(userData, 'preferences.json'),
+      path.join(userData, 'providers.json'),
       path.join(userData, 'ssh'),
-      path.join(userData, 'logs'),  // wipato DOPO che il logger ha gia' aperto il file di questa sessione → safe
+      path.join(userData, 'session'),
+      path.join(userData, 'sync'),
+      // NOTA: NON wipiamo logs/ qui — il logger ha gia' aperto il file
+      // della sessione corrente e cancellare la dir → ENOENT al prossimo
+      // write (uncaughtException). La rotation interna gestisce i file
+      // vecchi (max 10). Per pulire i log a mano: rm -rf "<userData>/logs"
+      // PRIMA di lanciare l'app.
     ]
     for (const t of targets) {
       try {
