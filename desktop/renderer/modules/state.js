@@ -29,12 +29,6 @@ export const state = {
     ip: null,
     installed: false,
     busy: false,
-    // Passphrase della privkey, salvata al passo "Genera chiave" e
-    // riutilizzata al passo "Connetti e installa" per sbloccare la
-    // chiave via SSH_ASKPASS (vedi desktop/vps/index.js → createAskpassHelper).
-    // Resta in memoria del processo renderer finche' l'app vive (mai
-    // su disco). Vuota = chiave senza passphrase.
-    passphrase: '',
   },
   providerInstallBusy: false,
   providerInstallDone: false,
@@ -75,7 +69,6 @@ export const dom = {
   btnSupabaseBack: document.getElementById('btn-supabase-back'),
   btnSupabaseContinue: document.getElementById('btn-supabase-continue'),
   btnSupabaseSkip: document.getElementById('btn-supabase-skip'),
-  vpsPassphrase: document.getElementById('vps-passphrase'),
   btnVpsGenerateKey: document.getElementById('btn-vps-generate-key'),
   vpsStep2: document.getElementById('vps-step2'),
   vpsStep3: document.getElementById('vps-step3'),
