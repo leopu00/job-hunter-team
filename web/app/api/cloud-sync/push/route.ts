@@ -474,6 +474,30 @@ export async function POST(req: NextRequest) {
             profileError = pe.message;
           } else {
             profileUpserted = true;
+            // Segna lo stato di onboarding: primo upsert di candidate_profiles
+            // con successo = profilo configurato. Best-effort, non rompe la
+            // response del push se fallisce. Il flag e' "primo successo" —
+            // sync ripetuti non sovrascrivono profile_configured_at.
+            try {
+              const { data: existing } = await admin
+                .from("user_onboarding_state")
+                .select("profile_configured_at")
+                .eq("user_id", userId)
+                .maybeSingle();
+              if (!existing?.profile_configured_at) {
+                const nowIso = new Date().toISOString();
+                await admin.from("user_onboarding_state").upsert(
+                  {
+                    user_id: userId,
+                    profile_configured_at: nowIso,
+                    updated_at: nowIso,
+                  },
+                  { onConflict: "user_id" },
+                );
+              }
+            } catch {
+              // best-effort
+            }
           }
         } else {
           profileError = "yaml non e' un oggetto top-level";
