@@ -268,6 +268,120 @@ function inspectInstalledProviders({ bindHomeDir } = {}) {
   return { bindHomeDir: home, installed }
 }
 
+// ── VPS mode: install via SSH sul container remoto ─────────────────
+//
+// Quando state.location === 'vps' i CLI provider vanno installati DENTRO
+// il container `jht` che gira sulla VPS, non in quello locale. Il
+// comando equivalente di `docker compose run --rm ... jht <e> <args>`
+// per un container gia' up sulla VPS e' `docker exec [-e K=V]* jht <e>
+// <args>` (riusa il PID 1, niente container effimero).
+//
+// Lo step T1 implementa il routing minimal: itera providerIds, per ogni
+// step costruisce la command line bash-quoted e la manda via
+// SshExec.runStream. T2/T3 raffineranno (skip-probe pre-install,
+// retry, gestione kimi multi-step con cleanup intermedio, ecc).
+
+function _bashQuote(s) {
+  // Wrappa s in single-quote bash; escapa eventuali ' interni con la
+  // sequenza standard '\''. Niente $/backtick/etc da preoccuparsi
+  // perche' single-quote bash li tratta letterali.
+  return `'${String(s).replace(/'/g, "'\\''")}'`
+}
+
+function _stepToRemoteCmd(step, { container = 'jht' } = {}) {
+  // docker exec [-e K=V]* <container> <entrypoint> <args...>
+  // Ogni token quotato per resistere al passaggio ssh→bash.
+  const parts = ['docker', 'exec']
+  // -i per accettare stdin (non serve qui ma evita warning su tty).
+  parts.push('-i')
+  for (const [k, v] of Object.entries(step.env || {})) {
+    parts.push('-e', _bashQuote(`${k}=${v}`))
+  }
+  parts.push(_bashQuote(container))
+  parts.push(_bashQuote(step.entrypoint))
+  for (const arg of step.args || []) {
+    parts.push(_bashQuote(arg))
+  }
+  return parts.join(' ')
+}
+
+async function installViaSsh({
+  vpsIp,
+  providerIds,
+  container = 'jht',
+  onLog = () => {},
+} = {}) {
+  if (!vpsIp || typeof vpsIp !== 'string') {
+    return { ok: false, error: 'vpsIp required' }
+  }
+  if (!Array.isArray(providerIds) || providerIds.length === 0) {
+    return { ok: false, error: 'no providers selected' }
+  }
+  // require lazy: ssh-exec carica logger che assume electron app, va
+  // bene perche' siamo nel main process quando questa viene chiamata.
+  const SshExec = require('./vps/ssh-exec')
+  const ssh = SshExec.forIp(vpsIp)
+
+  const results = []
+  for (const providerId of providerIds) {
+    const provider = PROVIDERS[providerId]
+    if (!provider) {
+      results.push({ ok: false, providerId, error: `unknown provider: ${providerId}` })
+      return { ok: false, results, failedAt: providerId, error: `unknown provider: ${providerId}` }
+    }
+    onLog(`── Installing ${provider.displayName || providerId} (VPS ${vpsIp}) ──`)
+    // Skip se gia' installato. La probe gira nello stesso container, basta:
+    //   docker exec jht sh -c 'command -v <binary>'
+    const probeCmd =
+      `docker exec -i ${_bashQuote(container)} sh -c ${_bashQuote(`command -v ${provider.binary}`)}`
+    const probe = await ssh.runStream(probeCmd, () => {})
+    if (probe.ok) {
+      onLog(`[skip] ${provider.displayName} already installed in remote container`)
+      results.push({ ok: true, providerId, skipped: true })
+      continue
+    }
+    for (const step of provider.install) {
+      const remoteCmd = _stepToRemoteCmd(step, { container })
+      onLog(`$ ssh root@${vpsIp} ${remoteCmd}`)
+      const r = await ssh.runStream(remoteCmd, (line) => onLog(line))
+      if (!r.ok) {
+        results.push({ ok: false, providerId, error: `step exited ${r.code}` })
+        return { ok: false, results, failedAt: providerId, error: `step exited ${r.code}` }
+      }
+    }
+    results.push({ ok: true, providerId })
+  }
+  return { ok: true, results }
+}
+
+// PTY remoto per il login OAuth del provider sulla VPS. Stessi loginArgs
+// (--dangerously-skip-permissions / --yolo) della modalita' locale, ma
+// invece di `docker compose run -it ... <binary>` apriamo
+// `ssh -tt root@ip docker exec -it jht <binary> <loginArgs>`.
+//
+// Ritorna il ChildProcess wrappabile da xterm.js sul renderer (T3
+// completera' il routing terminal:start).
+function openLoginViaSsh({ vpsIp, providerId, container = 'jht' } = {}) {
+  if (!vpsIp || typeof vpsIp !== 'string') {
+    return { ok: false, error: 'vpsIp required' }
+  }
+  const provider = PROVIDERS[providerId]
+  if (!provider) return { ok: false, error: `unknown provider: ${providerId}` }
+  const SshExec = require('./vps/ssh-exec')
+
+  const loginArgs = Array.isArray(provider.loginArgs) ? provider.loginArgs : []
+  // docker exec -it (NB: -t serve per il TUI, non solo per echoing)
+  const remoteCmd = [
+    'docker', 'exec', '-it',
+    _bashQuote(container),
+    _bashQuote(provider.binary),
+    ...loginArgs.map(_bashQuote),
+  ].join(' ')
+
+  const child = SshExec.openPty(vpsIp, remoteCmd)
+  return { ok: true, child }
+}
+
 module.exports = {
   PROVIDERS,
   SUPPORTED_IDS,
@@ -276,5 +390,8 @@ module.exports = {
   inspectInstalledProviders,
   resolveHome,
   dockerEnv,
-  _internal: { runStreamed },
+  // VPS mode (T1 base, T2/T3 raffineranno)
+  installViaSsh,
+  openLoginViaSsh,
+  _internal: { runStreamed, _bashQuote, _stepToRemoteCmd },
 }
