@@ -417,19 +417,20 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 > Driven by VPS deployment design ([`docs/internal/vps.md`](../docs/internal/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
 
-##### 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher
+##### ✅ 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher — **DONE 2026-05-13**
 
+- **Stato implementazione (merge `8040a576` dev1 + commit `909566fe` desktop/auth):** OAuth login flow live in `desktop/auth/` (`browser-picker.js`, `callback-server.js`, `keyring-storage.js`, `supabase-client.js`, `index.js`). Pairing token derivato dalla session per bootstrap VPS.
 - **Why:** today the launcher is anonymous (no identity). VPS mode requires identity for cross-device recovery. Without login, user changing PC loses access to their VPS.
 - **Task:**
-  1. Login button in launcher → opens system browser to Supabase OAuth (Google/GitHub)
-  2. Callback to `http://localhost:<random-port>/auth/callback` with PKCE flow
-  3. Session token stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-  4. Two modes coexist: 🔓 **Guest** (today's behavior, local PC only) + 🔐 **Signed-in** (unlocks VPS, sync, multi-device)
+  1. ✅ Login button in launcher → opens system browser to Supabase OAuth (Google/GitHub)
+  2. ✅ Callback to `http://localhost:<random-port>/auth/callback` with PKCE flow
+  3. ✅ Session token stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+  4. ✅ Two modes coexist: 🔓 **Guest** (today's behavior, local PC only) + 🔐 **Signed-in** (unlocks VPS, sync, multi-device)
 - **Acceptance:** user clicks "Sign in", completes OAuth, session persists across launcher restarts, "Sign out" cleanly revokes.
-- **Dependency:** must land before [JHT-VPS-FRIENDLY].
 
-##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata
+##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata — **CORE DONE 2026-05-13**
 
+- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato; endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
 - **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
 - **Sync to cloud (Supabase, encrypted user-side with passphrase):**
   - Profile + preferences
@@ -541,8 +542,9 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 - **Depends on**: at least 1 adapter (CLOUD-04)
 - "Choose where the team runs", cloud credentials input, real-time cost estimate, one-click deploy/teardown, billing alerts
 
-#### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy
+#### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy — **CORE DONE 2026-05-13**
 
+- **Stato implementazione (merge dev2 `82bf4fc8` + commits `23a140cb/32a51766/43d94016`):** Path B3 (desktop diretto) cablato per beta 0. Componenti live: location picker (Local/VPS) come primo step (`desktop/renderer/modules/wizard-flow.js`); SSH keypair gen IPC vpsApi (`desktop/vps/index.js`); runInstall SSH remoto + log streaming; pairing-token derivato dalla session Supabase passato a `install.sh --pairing-token`. **Decisione lockata 2026-05-13**: niente Hetzner API automation in beta — utente crea la VPS manualmente e paste IP. Tailscale rimandato a v1+ (vedi `docs/internal/vps.md` § decisioni infra). I tre lifecycle button (⏸️/📸/💀) live (merge dev1 `cf09e483`).
 - **Depends on:** [JHT-CLOUD-04] Hetzner adapter + [JHT-CLOUD-05] Cloud UI
 - **Goal:** non-tech user provisions a VPS in <5 minutes without ever touching SSH or terminal.
 - **UX:**
@@ -589,7 +591,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
   - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
 - **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
-- **Stato implementazione esistente:** infrastruttura presente (`web/app/api/cloud-sync/{ping,push,tokens}/route.ts`, `cli/src/commands/cloud.js` con `enable/status/push/disable`, `web/app/(protected)/settings/cloud-sync/CloudSyncClient.tsx`). Il pezzo mancante e' SOLO il device flow OAuth-style + wizard onboarding empty-state.
+- **Stato implementazione (aggiornato 2026-05-13 sera):** ✅ pairing automatico via desktop app cablato (path B3). L'app desktop deriva il pairing token dalla session Supabase + lo passa a `install.sh --pairing-token`; `jht cloud pair --token <t>` chiama `POST /api/cloud-sync/device-register` che registra il device su Supabase. Zero copia-incolla per Path 2. Resta opzione 1 (`jht cloud login` device flow OAuth) per Path 3 / power-user senza desktop app — non bloccante per la beta.
 
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
