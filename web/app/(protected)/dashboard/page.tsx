@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server'
 import { isLocalRequestFromHeaders } from '@/lib/auth'
 import CloudDownloadLanding from '@/app/components/CloudDownloadLanding'
 import PendingMessagesCard from '@/app/components/PendingMessagesCard'
+import VpsLifecycleCard from '@/app/components/VpsLifecycleCard'
 
 const OnboardingWizard = dynamic(() => import('@/app/components/OnboardingWizard'))
 
@@ -151,6 +152,12 @@ export default async function DashboardPage() {
 
       {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
       <PendingMessagesCard initialMessages={pendingMessages} />
+
+      {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
+          Solo in VPS mode (JHT_HOST_TYPE=vps): in Local PC mode i
+          bottoni non hanno senso — niente "snapshot Hetzner" della
+          tua MacBook. Vedi docs/internal/vps.md § "Lifecycle". */}
+      <VpsLifecycleCard visible={process.env.JHT_HOST_TYPE === 'vps'} />
 
       {/* ── Onboarding (empty state) ──────────────────────────── */}
       {isEmpty && (
