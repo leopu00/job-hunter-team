@@ -9,6 +9,9 @@ chat-web
 # User communication (Telegram outbound — phone-side interface)
 telegram-send
 
+# Notifiche utente con fallback Telegram -> dashboard web (domande proattive, alert profilo)
+notify-user
+
 # Inter-agent (bridge to the Capitano when needed)
 tmux-send
 
