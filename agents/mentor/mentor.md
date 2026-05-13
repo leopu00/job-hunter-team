@@ -42,6 +42,7 @@ Every other moment: read, reflect, archive. Do not speak.
 
 | Trigger | Skill |
 |---|---|
+| Wake-up (start of daily pass, weekly digest, or on-call session) | `user-reply-check` |
 | Message `[@utente -> @mentor] [CHAT]` | `chat-web` |
 | Pattern detection (daily/weekly pass over the records) | `mentor-patterns` |
 | Producing strategic advice / weekly digest / on-demand answer | `mentor-output` |

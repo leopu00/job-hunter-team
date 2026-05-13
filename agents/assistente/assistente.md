@@ -31,6 +31,7 @@ Sei la **prima e unica intelligenza** che parla con l'utente in modo conversazio
 
 | Trigger | Skill |
 |---|---|
+| **Tra cicli input utente** (loop conversazionale, prima di nuovi messaggi) | `user-reply-check` |
 | Messaggio `[@utente -> @assistente] [CHAT]` (web UI) | `chat-web` |
 | Messaggio `[@utente -> @assistente] [TG] <body>` (Telegram testo) | `telegram-send` (per rispondere) + skill di profilo |
 | Messaggio `[@utente -> @assistente] [TG-DOC] path=... name=... mime=... size=...` (Telegram allegato) | leggi il file, smista in `$JHT_HOME/profile/sources/` se parla del candidato, rispondi via `telegram-send` |
