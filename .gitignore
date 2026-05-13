@@ -119,3 +119,8 @@ e2e-runs/
 # ── THROTTLE SANDBOX ─────────────────────────────────────────────────────────
 # Micro-ambiente per testare jht-throttle con kimi reale (repo separata dentro)
 seriea-sandbox/
+
+# Screenshot di test sessions con dati sensibili non ancora offuscati
+# (IP VPS, server IDs, IPv6, account names). Spostare in repo solo
+# dopo aver redatto le info sensibili.
+screenshots/
