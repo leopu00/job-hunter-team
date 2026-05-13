@@ -136,3 +136,120 @@ test('resolveHome never returns undefined', () => {
   assert.equal(typeof home, 'string')
   assert.ok(home.length > 0)
 })
+
+// ── VPS path (T2) ──────────────────────────────────────────────────
+//
+// Mock SshExec con un wrapper "forIp" che ritorna i metodi previsti
+// dal contract (run/runStream). Ogni test inietta i comportamenti
+// attesi via lookup map (cmd → result), cosi' verifichiamo che il
+// codice chiami i comandi giusti nell'ordine giusto senza toccare ssh.
+
+const { _internal: vpsInternal, installProvidersViaSsh } = require('./provider-install')
+const { _ensureContainerUpCompany, _ensureNpmDirsWritable } = vpsInternal
+
+function mockSsh(plan) {
+  // plan: array di { match: regex|string, ok, code?, stdout?, stderr?, stream?: lines[] }
+  // consumato in ordine. Se nessun match, fallback a { ok: true, code: 0 }.
+  const calls = []
+  const queue = [...plan]
+  const matchOne = (cmd) => {
+    const idx = queue.findIndex((q) => {
+      if (typeof q.match === 'string') return cmd.includes(q.match)
+      if (q.match instanceof RegExp) return q.match.test(cmd)
+      return true
+    })
+    if (idx === -1) return null
+    return queue.splice(idx, 1)[0]
+  }
+  return {
+    calls,
+    ssh: {
+      run: (cmd) => {
+        calls.push({ kind: 'run', cmd })
+        const m = matchOne(cmd) || { ok: true, code: 0 }
+        return { ok: m.ok, code: m.code ?? (m.ok ? 0 : 1), stdout: m.stdout || '', stderr: m.stderr || '' }
+      },
+      runStream: async (cmd, onLine) => {
+        calls.push({ kind: 'stream', cmd })
+        const m = matchOne(cmd) || { ok: true, code: 0 }
+        if (Array.isArray(m.stream)) {
+          for (const line of m.stream) onLine(line)
+        }
+        return { ok: m.ok, code: m.code ?? (m.ok ? 0 : 1) }
+      },
+    },
+  }
+}
+
+test('_ensureContainerUpCompany: container already running → alreadyUp=true, no compose up', async () => {
+  const { ssh, calls } = mockSsh([
+    { match: 'docker ps -q -f name=^jht$', ok: true, stdout: 'a1b2c3d4e5f6\n' },
+  ])
+  const r = await _ensureContainerUpCompany(ssh)
+  assert.equal(r.ok, true)
+  assert.equal(r.alreadyUp, true)
+  // Nessuna runStream (compose up) deve essere stata invocata.
+  assert.equal(calls.filter((c) => c.kind === 'stream').length, 0)
+})
+
+test('_ensureContainerUpCompany: container down → compose up + exec true → ok alreadyUp=false', async () => {
+  const { ssh, calls } = mockSsh([
+    { match: 'docker ps -q', ok: true, stdout: '' }, // no container
+    { match: 'docker compose up -d', ok: true },     // compose up
+    { match: 'docker exec -i \'jht\' true', ok: true }, // exec confirm
+  ])
+  const r = await _ensureContainerUpCompany(ssh)
+  assert.equal(r.ok, true)
+  assert.equal(r.alreadyUp, false)
+  // Verifica path hardcoded dell'install.sh runtime dir.
+  const upCmd = calls.find((c) => c.kind === 'stream')
+  assert.match(upCmd.cmd, /\/root\/\.jht\/runtime/)
+  assert.match(upCmd.cmd, /docker compose up -d/)
+})
+
+test('_ensureContainerUpCompany: compose up exits non-zero → ok=false con error', async () => {
+  const { ssh } = mockSsh([
+    { match: 'docker ps -q', ok: true, stdout: '' },
+    { match: 'docker compose up -d', ok: false, code: 1 },
+  ])
+  const r = await _ensureContainerUpCompany(ssh)
+  assert.equal(r.ok, false)
+  assert.match(r.error, /docker compose up exited 1/)
+})
+
+test('_ensureNpmDirsWritable: chown invocato come --user root con i 3 path attesi', async () => {
+  const { ssh, calls } = mockSsh([{ match: 'chown -R', ok: true }])
+  const r = await _ensureNpmDirsWritable(ssh)
+  assert.equal(r.ok, true)
+  assert.equal(calls.length, 1)
+  const cmd = calls[0].cmd
+  assert.match(cmd, /docker exec -i --user root 'jht'/)
+  assert.match(cmd, /mkdir -p \/jht_home\/\.npm-global \/jht_home\/\.npm \/jht_home\/\.local/)
+  assert.match(cmd, /chown -R jht:jht/)
+})
+
+test('_ensureNpmDirsWritable: chown fallisce → ok=false, error', async () => {
+  const { ssh } = mockSsh([{ match: 'chown -R', ok: false, code: 2, stderr: 'Operation not permitted' }])
+  const r = await _ensureNpmDirsWritable(ssh)
+  assert.equal(r.ok, false)
+  assert.match(r.error, /chown npm dirs/)
+})
+
+test('installProvidersViaSsh: vpsIp mancante → error', async () => {
+  const r = await installProvidersViaSsh({ providerIds: ['claude'] })
+  assert.equal(r.ok, false)
+  assert.match(r.error, /vpsIp/)
+})
+
+test('installProvidersViaSsh: providerIds vuoto → error', async () => {
+  const r = await installProvidersViaSsh({ vpsIp: '1.2.3.4', providerIds: [] })
+  assert.equal(r.ok, false)
+  assert.match(r.error, /no providers/)
+})
+
+// installProvidersViaSsh stessa NON e' iniettabile col mock (require
+// hardcoded di ./vps/ssh-exec dentro la funzione), ma le 3 funzioni
+// helper sopra coprono il path critico. Il smoke E2E reale via VPS
+// (test-e2e-vps-integration.js, TEMP-TEST-VPS-REFACTOR) fa il giro
+// completo lato production.
+
