@@ -266,15 +266,15 @@ Today Telegram is wired to the **Captain only**. Planned: per-agent chats + a "t
 ⬜ Backwards compatibility: plain messages still route to Captain
 ```
 
-### 🔄 Cloud sync direction (open architectural question)
+### 🔄 Cloud sync direction (decisione 2026-05-13)
 
-Today the sync flows **local → cloud only** (see `docs/internal/INFRA.md` § Optional managed storage). If the user changes machine (new PC, lost laptop, migration to VPS), they need to seed the new container from the cloud at least once. Possible approaches under evaluation:
+**Direzione**: push-only `local → cloud`, sempre. Il container è la fonte di verità, Supabase è il mirror.
 
-- A) Manual `jht cloud bootstrap` for one-time reverse seed
-- B) Bidirectional sync with conflict resolution
-- C) Container "freeze + export" workflow (no Supabase for the seed)
+**Bootstrap automatico**: quando l'utente fa login con lo stesso account su un container nuovo/vuoto (es. nuova VPS, nuovo PC), l'app rileva il DB locale vuoto e fa un pull automatico — DB allineato, sync normale da lì in poi. Niente comandi manuali.
 
-→ Will be filed as `[JHT-CLOUD-SEED-DIRECTION]` once decided.
+**Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard. Memoria agenti runtime e CV binari restano locali.
+
+→ Task di implementazione: `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`.
 
 ### 🛠️ Skill discovery — launcher-distributed isolation (priority)
 
