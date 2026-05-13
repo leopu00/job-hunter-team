@@ -510,12 +510,12 @@ def format_message(d: dict) -> str:
     # worker produttivi, throttllarli non serve a nulla. Caso 04:44:
     # share era 100% sentinella ma il vero problema era pipeline vuota.
     # Agenti NON throttle-target: monitoring (sentinella, sentinella-worker),
-    # coordinator (capitano), meta (maestro), unattributed (?unknown).
+    # coordinator (capitano), meta (mentor), unattributed (?unknown).
     # Throttllare il capitano rallenta l'intera orchestrazione, throttllare
     # sentinella ferma il monitoring. I throttle vanno SEMPRE su worker
     # produttivi: scout, analista, scorer, scrittore, critico.
     NON_PRODUCTIVE = {
-        "sentinella", "sentinella-worker", "capitano", "maestro", "?unknown",
+        "sentinella", "sentinella-worker", "capitano", "mentor", "?unknown",
     }
     top_consumer = None
     if d.get("agents"):
