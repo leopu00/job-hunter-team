@@ -103,8 +103,10 @@ contextBridge.exposeInMainWorld('setupApi', {
   },
   installProviders: (ids) => ipcRenderer.invoke('setup:install-providers', ids),
   getProviders: () => ipcRenderer.invoke('setup:get-providers'),
-  getAuthStates: () => ipcRenderer.invoke('setup:get-auth-states'),
-  logoutProvider: (providerId) => ipcRenderer.invoke('setup:logout-provider', providerId),
+  // Args: { host, vpsIp } opzionale. host='vps' + vpsIp → check via SSH.
+  getAuthStates: (args) => ipcRenderer.invoke('setup:get-auth-states', args),
+  // arg: stringa (back-compat local) o { providerId, host, vpsIp }.
+  logoutProvider: (arg) => ipcRenderer.invoke('setup:logout-provider', arg),
   getSelection: () => ipcRenderer.invoke('setup:get-selection'),
   saveSelection: (selection) => ipcRenderer.invoke('setup:save-selection', selection),
   onProviderLog: (callback) => {
