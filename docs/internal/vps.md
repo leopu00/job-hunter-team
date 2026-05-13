@@ -212,9 +212,9 @@ Test "utente totalmente nuovo" su VPS Hetzner fresca (Ubuntu 24.04, root), one-l
 **Fix**: separare `jht` (no args) = solo help, no side-effect; `jht up` = pull + start esplicito; `jht setup` = up + wizard con messaggio "avvio container al primo run".
 **File**: `scripts/jht-wrapper.sh` dispatcher.
 
-### 🟠 P1 — Help post-install troppo lunga
-**Stato**: 30+ sotto-comandi (`reset full`, `cron`, `webhooks`, `secrets`, ...). Spaventoso.
-**Fix**: livello "essential commands" mostrato di default:
+### ✅ 🟠 P1 — Help post-install troppo lunga (risolto)
+**Stato originale**: 30+ sotto-comandi (`reset full`, `cron`, `webhooks`, `secrets`, ...). Spaventoso.
+**Fix applicato (merge dev1, commit `3d832a3f`)**: `jht` / `jht --help` mostra il subset "essential commands"; la full help torna dietro `jht help` esplicito.
 ```
 Comandi essenziali:
   jht setup      Configurazione iniziale
@@ -225,7 +225,7 @@ Comandi essenziali:
 
 Per tutti i comandi: jht help
 ```
-**File**: `cli/bin/jht.js`.
+**File**: `cli/src/program.js`.
 
 ### 🟡 P2 — Verbosity install
 `apt-get install -y docker.io` stampa ~30 righe. Fix: `apt-get install -qq -y`, redirect verbose a `/tmp/jht-install.log`, mostrare singolo spinner `▸ Installazione Docker... ✓ (12s)`.
@@ -286,6 +286,8 @@ Fix (4 modifiche, 3 file): aggiungere `x-search` header in proxy, propagare `ret
 ---
 
 ## ⏸️ Lifecycle e shutdown UX: 3 livelli
+
+> **Stato implementazione (merge dev1, commit `5a628426` + `d705434f`)**: i 3 endpoint Hetzner sono live in `web/app/api/vps/{pause,snapshot-destroy,terminate}/route.ts` (con `web/lib/hetzner.ts` come client), e il componente `VpsLifecycleCard.tsx` è renderato in cima alla dashboard solo quando `JHT_HOST_TYPE='vps'` (in Local PC mode i 3 bottoni non avrebbero senso). Backup dati locale pre-terminate ancora da cablare lato UI (l'endpoint c'è).
 
 Hetzner ha una **trappola di billing**: server *powered off* **continuano a fatturare** (risorse allocate). Per risparmiare davvero serve `snapshot + delete`. Il launcher deve nascondere questa complessità in 3 bottoni:
 

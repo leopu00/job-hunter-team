@@ -52,6 +52,9 @@ Per chi usa già Claude Code/OpenClaw/Codex. L'AI agent dell'utente guida il set
        ├─ App: ssh → curl install.sh --pairing-token <token-da-supabase-session>
        │  └─ pairing token derivato dalla session Supabase già attiva → niente
        │     `jht cloud login` interattivo dentro la VPS, OAuth fatto una volta sola
+       │  └─ install.sh chiama `jht cloud pair --token <t>` che hit
+       │     POST /api/cloud-sync/device-register su Supabase
+       │     (merge dev2, commit `61a544aa` + `a4112d10`)
        └─ Reclaim "ho già la VPS": paste IP, app verifica match SSH key
 
 7. 🔑  Provider AI login              ←── ULTIMO, sul host finale
@@ -121,6 +124,8 @@ L'utente:
 5. Team avviato
 
 **Garanzia di equivalenza**: stesso identico backend del Path 1/2. Il `jht` CLI è la "verità", la desktop app è una GUI sopra.
+
+> ✅ **Runbook eseguibile** in `docs/guides/AI-AGENT-INTEGRATION.md` § "Setup runbook" (merge dev2, commit `bae27059`): contiene i passi esatti che un AI agent deve eseguire (Docker check, install CLI, location, sync opt-in, 3 token Telegram, `jht setup`, `jht team start`, `jht doctor`).
 
 ---
 
