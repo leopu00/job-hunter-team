@@ -52,16 +52,27 @@ export async function smartAdvanceFromWelcome() {
 async function enterLocation() {
   showStep(STEP_LOCATION)
   // Restore any persisted choice so the user sees the previous pick
-  // already selected when relaunching.
+  // already selected when relaunching. VPS is hard-disabled until
+  // gap 2 ships, so drop any stale 'vps' value rather than render a
+  // selected-but-disabled card.
   try {
     const saved = window.prefsApi?.get ? await window.prefsApi.get('location') : null
-    if (saved === LOCATION_LOCAL || saved === LOCATION_VPS) {
+    if (saved === LOCATION_LOCAL) {
+      state.location = saved
+    } else if (saved === LOCATION_VPS && !isVpsCardDisabled()) {
       state.location = saved
     }
   } catch {
     // no-op: missing prefsApi is fine, persistence lands in a later commit
   }
   renderLocationCards()
+}
+
+function isVpsCardDisabled() {
+  return Boolean(
+    dom.locationCardVps?.disabled ||
+    dom.locationCardVps?.getAttribute('aria-disabled') === 'true'
+  )
 }
 
 function renderLocationCards() {
@@ -89,7 +100,14 @@ if (dom.locationCardLocal) {
   dom.locationCardLocal.addEventListener('click', () => onLocationCardClick(LOCATION_LOCAL))
 }
 if (dom.locationCardVps) {
-  dom.locationCardVps.addEventListener('click', () => onLocationCardClick(LOCATION_VPS))
+  // Hard-disabled until the VPS provisioning wizard ships (gap 2).
+  // pointer-events:none in CSS already swallows clicks, but guard
+  // the handler too so a future code path that re-enables the
+  // button doesn't bypass the gating check.
+  dom.locationCardVps.addEventListener('click', () => {
+    if (dom.locationCardVps.disabled || dom.locationCardVps.getAttribute('aria-disabled') === 'true') return
+    onLocationCardClick(LOCATION_VPS)
+  })
 }
 if (dom.btnLocationBack) {
   dom.btnLocationBack.addEventListener('click', () => showStep(STEP_WELCOME))
