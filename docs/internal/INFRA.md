@@ -50,7 +50,7 @@ This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud stora
 Three channels today, each with a different audience:
 
 - **🌐 Browser** (web dashboard — `localhost:3000` for Local/Dedicated, public URL for self-hosted VPS) — the user can address **any agent** individually. Talking to the Captain is the recommended default (it coordinates the pipeline), but the user can reach any team member directly.
-- **💬 Telegram** — currently a bidirectional bridge to the **Captain only**. Planned upgrade ([`docs/ROADMAP.md`](../about/ROADMAP.md)): per-agent chats + a "team forum" channel where the user can join the whole team's conversation.
+- **💬 Telegram** — **3-bot bidirectional bridge** (decisione 2026-05-13 rev2): Assistente (orchestrator user-facing), Capitano (status + decisioni operative), Mentor (career coach always-on). Tutti e tre obbligatori nell'onboarding wizard, routing per ruolo via `tg-bridge` + skill `jht-telegram-send` distribuita. Roadmap futura ([`docs/about/ROADMAP.md`](../about/ROADMAP.md)): per-agent 1:1 chat (Scout/Critic/Writer/Scorer/Sentinel) + "team forum" channel.
 - **⌨️ CLI + tmux** *(technical users)* — `jht team attach <agent>` to drop directly into the agent's tmux session and watch it work live (raw model output, tool calls, decisions). Useful for debugging, for understanding what the agents are actually doing, and for power users who prefer the terminal.
 
 In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
