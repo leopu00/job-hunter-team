@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-04-27
+> Last updated: 2026-05-14
 >
 > 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
@@ -51,7 +51,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
   Phase 1            Phase 2            Phase 3            Phase 4            Phase 5            Phase 6
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  🔨 ~85%             🔨 ~70%             ⏳ 0%             🔨 ~30%            🔨 ~70%            ⏳ 0%
+  🔨 ~85%             🔨 ~70%             🔨 ~70%            🔨 ~30%            🔨 ~70%            🔨 ~65%
   Web Platform       Desktop Launcher    Cloud Multi-      Full              Public            🚢 Pre-Launch
   consolidation      + first-run UX      Provider          i18n              Website            (NEW)
 ```
@@ -118,19 +118,25 @@ For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥�
 > _"Click a button, the team runs on a self-hosted VPS."_
 
 ```
-⚪ Status: ROADMAP — 0%
-░░░░░░░░░░░░░░░░░░░░ 
+🟡 Status: IN PROGRESS — ~70%
+██████████████░░░░░░ 
 
-⬜ Abstraction layer shared/cloud/ (CloudProvider interface)
+✅ Desktop → VPS bring-up via SSH (T1: SshExec helper + IPC routing, commit a118cecb)
+✅ Remote provider install via SSH (T2: install.sh + chown npm dirs, commit 87601d2a)
+✅ Remote provider login PTY through SSH (T3: terminal-login VPS-aware, commit 187dbefb)
+✅ Telegram 3-bot tokens step via remote save (T4, commit fd1f7e6d)
+✅ Dashboard 3-way routing + VpsSetupCompleteLanding (commit eccd1158)
+✅ Cloud sync user onboarding state (migration 011, vps_setup + profile_configured)
+⬜ Abstraction layer shared/cloud/ (CloudProvider interface — multi-provider refactor)
 ⬜ 🇪🇺 Hetzner Cloud adapter ⭐ first (cheapest ~€4.5/mo, EU GDPR)
 ⬜ Cloud UI inside the desktop wizard (provider choice, cost estimate)
-⬜ Secure tunnel app ↔ cloud (Tailscale or WireGuard)
+⬜ Secure tunnel app ↔ cloud (today: raw SSH; planned: Tailscale or WireGuard)
 ⬜ 🌩️ AWS EC2 adapter
 ⬜ ☁️ Google Cloud GCE adapter
 ⬜ Billing alerts (cost threshold notifications)
 ```
 
-> 🌉 **Bridge to today**: until this phase ships, users can run JHT on a VPS via the manual path (see [`JHT-VPS-VALIDATE`](../BACKLOG.md) → `docs/VPS-SETUP.md` once published). PHASE 3 turns that manual SSH dance into a one-click experience.
+> 🌉 **Bridge to today**: power users can already bring up JHT on a self-hosted VPS through the desktop wizard (manual IP + SSH key, T1-T4 path). PHASE 3 generalises that one-VPS flow into a multi-provider, billing-aware one-click experience.
 
 For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁️-multi-provider-cloud-provisioning-future-post-10)
 
@@ -228,11 +234,11 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 > _"Get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists."_
 
 ```
-🟡 Status: IN PROGRESS — ~25%
-█████░░░░░░░░░░░░░░░ 
+🟡 Status: IN PROGRESS — ~65%
+█████████████░░░░░░░ 
 
-⬜ 🔐 SECURITY.md (BLOCKER) — root file with responsible disclosure (audit in docs/security/)
-⬜ 🤝 CODE_OF_CONDUCT.md (BLOCKER) — Contributor Covenant
+✅ 🔐 SECURITY.md — root file with responsible disclosure (audit in docs/security/)
+✅ 🤝 CODE_OF_CONDUCT.md — Contributor Covenant
 ⬜ 🎬 30s demo video (BLOCKER) — README above the fold
 ✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (3 gap residui: SSRF, resolve-system-bin, CSP prod)
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
@@ -252,18 +258,26 @@ For full task list → [BACKLOG · Phase 6](../BACKLOG.md#6️⃣-phase-6--🚢-
 
 These don't belong to a single phase — they ship progressively across multiple phases.
 
-### 💬 Telegram per-agent + team forum
+### 💬 Telegram 3-bot setup + per-agent future
 
-> _"A Telegram group where the user can DM a specific agent or follow the whole team's conversation."_
+> _"A bot per role today; a per-agent chat + team forum tomorrow."_
 
-Today Telegram is wired to the **Captain only**. Planned: per-agent chats + a "team forum" channel where the user joins the full conversation.
+**Shipped (decisione 2026-05-13 rev2, commits `f23df913` → `579d91e6`):** onboarding wizard configures **three mandatory bots** — Assistente, Capitano, Mentor — with `tg-bridge` routing per role and `jht-telegram-send` skill on all three. Notifiche batch ogni N ready. Mentor sempre user-facing.
 
 ```
-⬜ Telegram group with all agents as members
+✅ Setup 3 bot obbligatori in onboarding (Assistente / Capitano / Mentor)
+✅ tg-bridge multi-bot + routing per ruolo
+✅ jht-telegram-send skill su 3 agenti
+✅ Notifiche batch ogni N ready
+```
+
+Roadmap successivo — vero "team forum":
+
+```
+⬜ Per-agent chat 1:1 (Scout / Critic / Writer / Scorer / Sentinel)
 ⬜ Directed messages: `@scout find python jobs in EU`
-⬜ Broadcast mode for Captain announcements
+⬜ "Team forum" channel — utente segue la conversazione tra agenti
 ⬜ Per-agent mute / subscription preferences
-⬜ Backwards compatibility: plain messages still route to Captain
 ```
 
 ### 🔄 Cloud sync direction (decisione 2026-05-13)
