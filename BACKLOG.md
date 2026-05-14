@@ -1,6 +1,6 @@
 # BACKLOG — Job Hunter Team
 
-Last updated: 2026-04-27 (refresh after 16 days of intensive work + pre-launch docs)
+Last updated: 2026-05-14 (refresh: VPS T1-T4 shipped, Telegram 3-bot live, security/COC done)
 
 ---
 
@@ -25,14 +25,14 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - 💾 Cloud data backend (read-only metadata sync, optional) = Supabase
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
-- 💬 **Telegram** — today talks to the Captain only; planned: per-agent chat + a "team forum" channel where the user can join the whole team's conversation
+- 💬 **Telegram** — 3-bot setup shipped 2026-05-13 (Assistente + Capitano + Mentor, all mandatory in onboarding); roadmap: per-agent 1:1 chat + "team forum" channel where the user can join the whole team's conversation
 - 🧙‍♂️ **Mentor** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
 
-## 📊 CURRENT STATE (2026-04-27)
+## 📊 CURRENT STATE (2026-05-14)
 
-**Estimated maturity: ~78%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~67% on 04-11)
+**Estimated maturity: ~82%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~78% on 04-27; bumped by VPS T1-T4 shipping, Telegram 3-bot live, security review + SECURITY.md + COC complete, migration 011 onboarding-state)
 
 ### 🏗️ Infrastructure completed
 
@@ -523,7 +523,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 ### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning (future, post-1.0)
 
-> 🌉 **Bridge to today**: until this phase ships, users running on a VPS use the manual path documented in `docs/VPS-SETUP.md` (output of [JHT-VPS-VALIDATE] in PHASE 1). PHASE 3 turns that manual SSH dance into a one-click experience inside the desktop launcher.
+> 🌉 **Bridge to today**: il desktop launcher può già fare bring-up di una VPS via SSH (path T1-T4 shipped 2026-05-13: `SshExec` + IPC routing, install remoto, login PTY, telegram tokens). Phase 3 generalizza quel flusso single-VPS in un'esperienza one-click multi-provider con cost estimation e billing alerts.
 
 **Implementation order**: 01 (abstraction) → 04 (🇪🇺 Hetzner first — cheapest, EU GDPR, simplest API) → 05 (UI) → 06 (tunnel) → 02/03 (AWS/GCP last — bigger surface, more docs).
 
