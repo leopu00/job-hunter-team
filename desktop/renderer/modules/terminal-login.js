@@ -1,8 +1,13 @@
 import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
-import { STEP_PROVIDER_CHOOSE, STEP_READY, PROVIDER_OPTIONS } from './constants.js'
+import { STEP_PROVIDER_CHOOSE, STEP_PROVIDER_LOGIN, STEP_READY, PROVIDER_OPTIONS, LOCATION_VPS } from './constants.js'
 import { camelId } from './docker-card.js'
 import { enterReady } from './wizard-flow.js'
+
+// Logger renderer → main (preload espone window.jhtLog).
+const log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('terminal-login')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 
 // -------- Step: provider login (tmux/subscription auth) --------
 
@@ -51,15 +56,39 @@ function providerNeedsLoginContinue() {
 }
 
 export async function enterProviderLogin() {
-  showStep(STEP_PROVIDER_LOGIN)
-  await refreshAuthList()
+  log.info('enterProviderLogin.called')
+  try {
+    showStep(STEP_PROVIDER_LOGIN)
+    log.info('enterProviderLogin.step-shown')
+  } catch (e) {
+    log.error('enterProviderLogin.showStep-failed', { err: String(e?.message || e) })
+    throw e
+  }
+  try {
+    await refreshAuthList()
+    log.info('enterProviderLogin.refreshAuthList-done')
+  } catch (e) {
+    log.error('enterProviderLogin.refreshAuthList-failed', { err: String(e?.message || e) })
+  }
 }
 
 export async function refreshAuthList() {
+  log.debug('refreshAuthList.start', { location: state.location })
   try {
-    const res = await window.setupApi.getAuthStates()
+    // VPS mode: il check auth deve interrogare il container REMOTO
+    // (`docker exec jht test -s /jht_home/.kimi/...` via SSH), non i
+    // file in ~/.jht sul Mac. Vedi main.js → 'setup:get-auth-states'.
+    const args = state.location === LOCATION_VPS && state.vps?.ip
+      ? { host: 'vps', vpsIp: state.vps.ip }
+      : undefined
+    const res = await window.setupApi.getAuthStates(args)
+    log.debug('refreshAuthList.result', {
+      count: Array.isArray(res?.auth) ? res.auth.length : 0,
+      mode: args ? 'vps' : 'local',
+    })
     state.authStates = Array.isArray(res?.auth) ? res.auth : []
-  } catch {
+  } catch (e) {
+    log.error('refreshAuthList.failed', { err: String(e?.message || e) })
     state.authStates = []
   }
   renderAuthList()
@@ -142,7 +171,13 @@ function renderAuthList() {
       btnLogout.addEventListener('click', async () => {
         btnLogout.disabled = true
         try {
-          await window.setupApi.logoutProvider(entry.id)
+          // VPS mode: logout rimuove i file token DENTRO il container
+          // remoto via SSH+docker exec rm -f, non sul Mac. Vedi main.js
+          // → 'setup:logout-provider'.
+          const arg = state.location === LOCATION_VPS && state.vps?.ip
+            ? { providerId: entry.id, host: 'vps', vpsIp: state.vps.ip }
+            : entry.id
+          await window.setupApi.logoutProvider(arg)
         } finally {
           btnLogout.disabled = false
           await refreshAuthList()
@@ -381,9 +416,22 @@ async function openLoginTerminal(providerId, displayName) {
     } catch { /* ignore */ }
   })
 
+  // VPS mode: il TUI deve girare sul container REMOTO (oauth → ~/.claude
+  // dentro il container sulla VPS, non sul Mac). Passiamo host+vpsIp;
+  // main.js instrada via SshExec.openPty quando host==='vps' && vpsIp.
+  // Local mode (default): host='local', back-compat puro.
+  const isVps = state.location === LOCATION_VPS
+  const vpsIp = isVps ? (state.vps && state.vps.ip) || null : null
+  if (isVps && !vpsIp) {
+    log.warn('openLoginTerminal.vps-without-ip')
+  }
   let result
   try {
-    result = await window.terminalApi.start({ providerId })
+    result = await window.terminalApi.start({
+      providerId,
+      host: isVps ? 'vps' : 'local',
+      vpsIp,
+    })
   } catch (error) {
     term.writeln(`\r\n[error] ${error && error.message ? error.message : error}`)
     return

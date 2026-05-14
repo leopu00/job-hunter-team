@@ -103,8 +103,10 @@ contextBridge.exposeInMainWorld('setupApi', {
   },
   installProviders: (ids) => ipcRenderer.invoke('setup:install-providers', ids),
   getProviders: () => ipcRenderer.invoke('setup:get-providers'),
-  getAuthStates: () => ipcRenderer.invoke('setup:get-auth-states'),
-  logoutProvider: (providerId) => ipcRenderer.invoke('setup:logout-provider', providerId),
+  // Args: { host, vpsIp } opzionale. host='vps' + vpsIp → check via SSH.
+  getAuthStates: (args) => ipcRenderer.invoke('setup:get-auth-states', args),
+  // arg: stringa (back-compat local) o { providerId, host, vpsIp }.
+  logoutProvider: (arg) => ipcRenderer.invoke('setup:logout-provider', arg),
   getSelection: () => ipcRenderer.invoke('setup:get-selection'),
   saveSelection: (selection) => ipcRenderer.invoke('setup:save-selection', selection),
   onProviderLog: (callback) => {
@@ -155,6 +157,24 @@ contextBridge.exposeInMainWorld('vpsApi', {
     ipcRenderer.on('vps:install-log', listener)
     return () => ipcRenderer.removeListener('vps:install-log', listener)
   },
+  // Scrive un file di config sulla VPS via SSH (default
+  // /root/.jht/jht.config.json, mode 0600, atomic). Usato dal wizard
+  // step di sync config in VPS mode (T4).
+  writeConfig: (args) => ipcRenderer.invoke('vps:write-config', args),
+})
+
+// Telegram bot setup (VPS-only path): /getMe verification, chat_id
+// auto-capture via long-poll getUpdates, and atomic merge-then-write of
+// the 3 bots into /root/.jht/jht.config.json on the VPS. All HTTPS to
+// api.telegram.org and SSH writes happen in main — renderer stays
+// CSP-clean.
+contextBridge.exposeInMainWorld('telegramApi', {
+  verifyBot: (token) => ipcRenderer.invoke('telegram:verify-bot', token),
+  waitForChatId: (token, deadlineMs) =>
+    ipcRenderer.invoke('telegram:wait-for-chat', { token, deadlineMs }),
+  cancelWaitForChatId: (token) =>
+    ipcRenderer.invoke('telegram:cancel-wait-for-chat', token),
+  saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

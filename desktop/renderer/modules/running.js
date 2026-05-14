@@ -1,6 +1,7 @@
 import { state, dom, showStep, appendLog } from './state.js'
 import { t } from './i18n.js'
 import { STEP_RUNNING, STEP_READY } from './constants.js'
+import { showHome } from './home.js'
 
 export function updateRunningUI(status) {
   if (!status) return
@@ -40,8 +41,61 @@ export async function refreshRunningStatus() {
   }
 }
 
+const _runningLog = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('running')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+
 export async function startTeam() {
-  if (state.starting) return
+  if (state.starting) {
+    _runningLog.warn('startTeam.already-starting')
+    return
+  }
+  // state.location e' in-memory e si perde ad ogni restart Electron.
+  // Le preferences su disco invece persistono. Se la location manca
+  // dallo state ma e' nelle prefs (VPS scelta in setup precedente),
+  // caricala prima di decidere il ramo — sennò il restart cade
+  // sempre sul Local path (default undefined).
+  if (!state.location && window.prefsApi?.get) {
+    try {
+      const saved = await window.prefsApi.get('location')
+      if (saved === 'local' || saved === 'vps') {
+        state.location = saved
+        _runningLog.info('startTeam.location-restored-from-prefs', { location: saved })
+      }
+    } catch (e) {
+      _runningLog.warn('startTeam.prefs-read-failed', { err: String(e?.message || e) })
+    }
+  }
+  _runningLog.info('startTeam.click', { location: state.location, starting: state.starting })
+  // VPS mode: il team gira sulla VPS, non sul Mac. Il container li' si
+  // e' gia' auto-pairing-ato via pairing token salvato da install.sh.
+  // Il "Start team" sul Mac NON deve scaricare payload + spawn container
+  // locale — apre semplicemente la dashboard cloud che legge dal Supabase
+  // sincronizzato dalla VPS. Vedi docs/internal/onboarding-flow.md § Path 2.
+  if (state.location === 'vps') {
+    const dashboardUrl = 'https://jobhunterteam.ai/dashboard'
+    _runningLog.info('startTeam.vps.openExternal', { url: dashboardUrl })
+    try {
+      await window.launcherApi.openExternal(dashboardUrl)
+      _runningLog.info('startTeam.vps.openExternal.ok')
+    } catch (e) {
+      _runningLog.error('startTeam.vps.openExternal.failed', { err: String(e?.message || e) })
+      // fallback: prova openBrowser anche se non e' il caso d'uso
+      try { await window.launcherApi.openBrowser() } catch { /* ignore */ }
+    }
+    // Transitiona alla Home dell'app desktop (sidebar Team/Provider/...).
+    // L'utente ha appena completato il wizard: dopo il click Start non
+    // deve restare sullo step Ready (one-shot) ma vedere la dashboard
+    // locale del launcher. La dashboard cloud sul browser si gestisce
+    // da sola in parallelo.
+    try {
+      await showHome('team')
+      _runningLog.info('startTeam.vps.showHome.ok')
+    } catch (e) {
+      _runningLog.error('startTeam.vps.showHome.failed', { err: String(e?.message || e) })
+    }
+    return
+  }
   state.starting = true
   dom.btnStartTeam.disabled = true
   dom.btnStartTeam.textContent = t('running.startingBtn')

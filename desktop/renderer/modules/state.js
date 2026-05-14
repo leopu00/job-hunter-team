@@ -30,6 +30,14 @@ export const state = {
     installed: false,
     busy: false,
   },
+  // Telegram bot tokens collected in the VPS path. The actual per-role
+  // shape is populated lazily by telegram-tokens.js (one entry per
+  // assistente/capitano/mentor, each with token/botUsername/chatId/
+  // status/error). Kept null at boot so a stray Local-PC run doesn't
+  // hold a wide object that never gets used.
+  telegram: null,
+  telegramSaveBusy: false,
+  telegramSaveError: null,
   providerInstallBusy: false,
   providerInstallDone: false,
   authStates: [],
@@ -69,7 +77,6 @@ export const dom = {
   btnSupabaseBack: document.getElementById('btn-supabase-back'),
   btnSupabaseContinue: document.getElementById('btn-supabase-continue'),
   btnSupabaseSkip: document.getElementById('btn-supabase-skip'),
-  vpsPassphrase: document.getElementById('vps-passphrase'),
   btnVpsGenerateKey: document.getElementById('btn-vps-generate-key'),
   vpsStep2: document.getElementById('vps-step2'),
   vpsStep3: document.getElementById('vps-step3'),
@@ -82,6 +89,9 @@ export const dom = {
   vpsInstallLog: document.getElementById('vps-install-log'),
   btnVpsBack: document.getElementById('btn-vps-back'),
   btnVpsContinue: document.getElementById('btn-vps-continue'),
+  btnTelegramBack: document.getElementById('btn-tg-back'),
+  btnTelegramContinue: document.getElementById('btn-tg-continue'),
+  telegramSaveStatus: document.getElementById('tg-save-status'),
   devModeActions: document.getElementById('dev-mode-actions'),
   btnDevMode: document.getElementById('btn-dev-mode'),
   btnSetupBack: document.getElementById('btn-setup-back'),

@@ -124,6 +124,99 @@
         </div>
       </section>
 
+      <!-- Step: Telegram bot tokens (VPS path only).
+           Three dedicated bots (assistente/capitano/mentor) need to be
+           created on @BotFather and pasted here. Tokens validated via
+           /getMe; chat_id captured automatically when the user presses
+           Start on the deep-link. Saved on the VPS at
+           /root/.jht/jht.config.json after VPS provisioning. -->
+      <section class="step step--centered" id="step-telegram-tokens" data-step="telegram-tokens" hidden>
+        <div class="step__emoji" aria-hidden="true">💬</div>
+        <h1 class="step__title" data-i18n="telegram.title">Telegram bots</h1>
+        <p class="step__lead" data-i18n="telegram.lead">
+          Three dedicated Telegram bots — one per user-facing agent. Create them on
+          <a href="#" id="tg-link-botfather">@BotFather</a> and paste each token here.
+        </p>
+
+        <div class="tg-rows">
+          <div class="tg-row" id="tg-row-assistente" data-role="assistente" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title">Assistente</h2>
+              <p class="tg-row__hint" data-i18n="telegram.role.assistente">Profile onboarding · document drop-zone</p>
+            </div>
+            <div class="tg-row__form">
+              <input
+                type="password"
+                class="tg-row__input"
+                id="tg-input-assistente"
+                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+              />
+              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-assistente" disabled>
+                Verify
+              </button>
+            </div>
+            <p class="tg-row__status" id="tg-status-assistente" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-assistente" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+
+          <div class="tg-row" id="tg-row-capitano" data-role="capitano" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title">Capitano</h2>
+              <p class="tg-row__hint" data-i18n="telegram.role.capitano">Team direction · ready-position notifications</p>
+            </div>
+            <div class="tg-row__form">
+              <input
+                type="password"
+                class="tg-row__input"
+                id="tg-input-capitano"
+                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+              />
+              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-capitano" disabled>
+                Verify
+              </button>
+            </div>
+            <p class="tg-row__status" id="tg-status-capitano" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-capitano" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+
+          <div class="tg-row" id="tg-row-mentor" data-role="mentor" data-status="idle">
+            <div class="tg-row__head">
+              <h2 class="tg-row__title">Mentor</h2>
+              <p class="tg-row__hint" data-i18n="telegram.role.mentor">Growth coach · strategic positioning</p>
+            </div>
+            <div class="tg-row__form">
+              <input
+                type="password"
+                class="tg-row__input"
+                id="tg-input-mentor"
+                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+              />
+              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-mentor" disabled>
+                Verify
+              </button>
+            </div>
+            <p class="tg-row__status" id="tg-status-mentor" hidden></p>
+            <a class="tg-row__deeplink" id="tg-deeplink-mentor" href="#" target="_blank" rel="noopener" hidden></a>
+          </div>
+        </div>
+
+        <p class="step__hint" id="tg-save-status" hidden></p>
+
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-back" data-i18n="telegram.back">Back</button>
+          <button class="btn btn--primary" id="btn-tg-continue" data-i18n="telegram.continue" disabled>Continue</button>
+        </div>
+      </section>
+
       <!-- Step: VPS provisioning (Hetzner, manual + guided).
            Only shown when state.location === 'vps'.
            No Hetzner API token — user creates VPS on the portal,
@@ -138,14 +231,7 @@
         <div class="vps-step">
           <h2 class="vps-step__title" data-i18n="vps.step1.title">1. Generate your SSH key</h2>
           <p class="vps-step__body" data-i18n="vps.step1.body">
-            JHT keeps the private key on this PC, never in the cloud.
-          </p>
-          <div class="vps-step__row">
-            <label class="vps-step__label" for="vps-passphrase" data-i18n="vps.step1.passphraseLabel">Passphrase (optional)</label>
-            <input type="password" id="vps-passphrase" class="vps-step__input" autocomplete="new-password" />
-          </div>
-          <p class="vps-step__hint" data-i18n="vps.step1.passphraseHint">
-            Leave empty for no passphrase.
+            JHT keeps the private key on this PC (chmod 600), never in the cloud. It's used only for the one-shot install handshake — after that the VPS talks to JHT via HTTPS + pairing token.
           </p>
           <div class="vps-step__actions">
             <button class="btn btn--secondary" id="btn-vps-generate-key" data-i18n="vps.step1.generate">

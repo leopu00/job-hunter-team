@@ -11,6 +11,7 @@ import {
   STEP_WELCOME,
   STEP_LOCATION,
   STEP_SUPABASE_LOGIN,
+  STEP_TELEGRAM_TOKENS,
   STEP_VPS_PROVISION,
   STEP_SETUP,
   STEP_CONTAINER,
@@ -29,6 +30,11 @@ import {
 } from './constants.js'
 import { clearChildren, refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
 import { enterProviderLogin } from './terminal-login.js'
+import {
+  enterTelegramTokens,
+  getTelegramBotsForSave,
+  isTelegramTokensReady,
+} from './telegram-tokens.js'
 
 // Decide which step the user actually needs to see, based on what is
 // already set up on their machine. Jumps past steps whose prerequisite
@@ -223,12 +229,13 @@ if (dom.btnSupabaseContinue) {
 
 // After Supabase login the path forks:
 //   - Local → Docker check on this PC (STEP_SETUP)
-//   - VPS   → skip local Docker checks entirely, jump straight to
-//             the VPS provisioning wizard (decisione 2026-05-13: il
-//             container vive sulla VPS, niente Docker locale).
+//   - VPS   → collect the 3 Telegram bot tokens FIRST (required for the
+//             remote agents to talk to the user), then jump to the VPS
+//             provisioning wizard. Decisione 2026-05-13: il container
+//             vive sulla VPS, niente Docker locale.
 function advanceAfterSupabase() {
   if (state.location === LOCATION_VPS) {
-    enterVpsProvision()
+    enterTelegramTokens()
   } else {
     enterSetup()
   }
@@ -345,10 +352,14 @@ async function onVpsGenerateKey() {
     setVpsStatus('vps.status.error', { message: 'SSH backend not wired yet' }, 'error')
     return
   }
-  const passphrase = dom.vpsPassphrase?.value || ''
   if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.disabled = true
   try {
-    const res = await window.vpsApi.generateKey({ passphrase })
+    // Chiave SEMPRE senza passphrase: la privkey resta in
+    // app.getPath('userData')/ssh/ con chmod 600 → la protezione
+    // arriva dai permessi filesystem, non da una passphrase che
+    // complicava il flusso askpass su OpenSSH 10. Pattern usato da
+    // Slack/Discord/Cursor unsigned.
+    const res = await window.vpsApi.generateKey({})
     if (!res?.ok) {
       log.error('vps.generate-key.failed', { err: res?.error })
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
@@ -393,6 +404,12 @@ async function onVpsConnect() {
   }
   state.vps.busy = true
   state.vps.ip = ip
+  // Persisti vpsIp nelle prefs: state in-memory si perde al restart Electron
+  // ma il VPS rimane attivo. Dopo restart, il provider install / start team
+  // necessitano vpsIp per fare SSH+docker exec — letto qui se manca da state.
+  try { window.prefsApi?.set?.('vpsIp', ip) } catch (err) {
+    log.warn('vps.ip.persist-failed', { err: String(err) })
+  }
   updateVpsConnectState()
   setVpsStatus('vps.status.connecting', { ip }, 'info')
   if (dom.vpsInstallLog) {
@@ -408,7 +425,23 @@ async function onVpsConnect() {
     setVpsStatus('vps.status.installing', { ip }, 'info')
     const res = await window.vpsApi.runInstall({ ip })
     if (!res?.ok) {
-      log.error('vps.connect.failed', { ip, err: res?.error, exitCode: res?.exitCode })
+      log.error('vps.connect.failed', {
+        ip,
+        err: res?.error,
+        exitCode: res?.exitCode,
+        kind: res?.kind,
+        phase: res?.phase,
+      })
+      // Errore actionable: il backend ora ritorna {error, hint, kind, phase}
+      // quando ha categorizzato il fallimento (pre-flight SSH). Stampiamo
+      // sia titolo che hint nel pannello log cosi' l'utente capisce subito
+      // cosa fare senza dover scavare nei log.
+      const lines = []
+      if (res?.error) lines.push(`Errore: ${res.error}`)
+      if (res?.hint) lines.push(`Suggerimento: ${res.hint}`)
+      if (lines.length && dom.vpsInstallLog) {
+        dom.vpsInstallLog.textContent += '\n' + lines.join('\n') + '\n'
+      }
       setVpsStatus('vps.status.error', { message: res?.error || 'unknown' }, 'error')
       state.vps.installed = false
     } else {
@@ -428,11 +461,102 @@ if (dom.btnVpsCopyPubkey) dom.btnVpsCopyPubkey.addEventListener('click', onVpsCo
 if (dom.btnVpsOpenHetzner) dom.btnVpsOpenHetzner.addEventListener('click', onVpsOpenHetzner)
 if (dom.btnVpsConnect) dom.btnVpsConnect.addEventListener('click', onVpsConnect)
 if (dom.vpsIp) dom.vpsIp.addEventListener('input', updateVpsConnectState)
-if (dom.btnVpsBack) dom.btnVpsBack.addEventListener('click', () => enterSupabaseLogin())
+if (dom.btnVpsBack) {
+  // VPS path: back from VPS provisioning lands on the Telegram tokens
+  // step (which sits between Supabase and VPS in vps mode — T4). Local
+  // path doesn't reach this button because the VPS step is skipped.
+  dom.btnVpsBack.addEventListener('click', () => {
+    if (state.location === LOCATION_VPS) {
+      enterTelegramTokens()
+    } else {
+      enterSupabaseLogin()
+    }
+  })
+}
 if (dom.btnVpsContinue) {
-  dom.btnVpsContinue.addEventListener('click', () => {
+  dom.btnVpsContinue.addEventListener('click', async () => {
     if (!state.vps.installed) return
+    if (state.location === LOCATION_VPS) {
+      // VPS mode: prima di avanzare ai provider step, salviamo i 3
+      // token Telegram raccolti nel passo precedente (T4) sul container
+      // remoto via SshExec.writeFile su /root/.jht/jht.config.json
+      // (idempotente). Senza, i 3 bot user-facing non hanno credenziali
+      // sulla VPS al primo team start.
+      const saved = await persistTelegramToVps()
+      if (!saved) return // error already surfaced; user can retry
+    }
+    // Poi avanza al subscription notice → model compare → provider
+    // choose/install/login → ready. In VPS mode il backend e' SSH-aware
+    // (T2): provider-install/login lavorano sul container REMOTO. Vedi
+    // docs/internal/onboarding-flow.md § "Path 2 VPS" per la sequenza
+    // lockata.
     showStep(STEP_SUBSCRIPTION_NOTICE)
+  })
+}
+
+// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS to
+// /root/.jht/jht.config.json on the VPS. Returns true on success; false
+// surfaces the error in the VPS step's status area so the user can
+// retry the Continue click. No-op (returns true) outside VPS mode or
+// when there are no tokens to save — defensive, the path shouldn't
+// reach here otherwise.
+async function persistTelegramToVps() {
+  if (state.location !== LOCATION_VPS) return true
+  if (!isTelegramTokensReady()) {
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = 'Telegram bots not ready — go back and complete the 3-bot setup.'
+      dom.vpsStatus.hidden = false
+    }
+    return false
+  }
+  if (!state.vps.ip) {
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = 'Missing VPS IP — re-run the install step.'
+      dom.vpsStatus.hidden = false
+    }
+    return false
+  }
+  state.telegramSaveBusy = true
+  if (dom.vpsStatus) {
+    dom.vpsStatus.textContent = 'Saving Telegram bots to the VPS…'
+    dom.vpsStatus.hidden = false
+  }
+  let res
+  try {
+    res = await window.telegramApi.saveBotsToVps({
+      vpsIp: state.vps.ip,
+      bots: getTelegramBotsForSave(),
+    })
+  } catch (e) {
+    res = { ok: false, error: e?.message || 'unknown' }
+  }
+  state.telegramSaveBusy = false
+  if (!res?.ok) {
+    state.telegramSaveError = res?.error || 'unknown error'
+    if (dom.vpsStatus) {
+      dom.vpsStatus.textContent = `Failed to save Telegram bots: ${state.telegramSaveError}`
+      dom.vpsStatus.hidden = false
+    }
+    log.warn('telegram.save.failed', { error: state.telegramSaveError })
+    return false
+  }
+  state.telegramSaveError = null
+  if (dom.vpsStatus) {
+    dom.vpsStatus.textContent = `Telegram bots saved to ${res.path || '/root/.jht/jht.config.json'}.`
+    dom.vpsStatus.hidden = false
+  }
+  log.info('telegram.save.ok', { path: res.path })
+  return true
+}
+
+// ── Telegram-tokens step wiring (back/continue) ─────────────────────
+if (dom.btnTelegramBack) {
+  dom.btnTelegramBack.addEventListener('click', () => enterSupabaseLogin())
+}
+if (dom.btnTelegramContinue) {
+  dom.btnTelegramContinue.addEventListener('click', () => {
+    if (!isTelegramTokensReady()) return
+    enterVpsProvision()
   })
 }
 
@@ -786,7 +910,20 @@ dom.btnProviderInstallRetry.addEventListener('click', () => {
 })
 
 dom.btnProviderInstallContinue.addEventListener('click', () => {
-  if (state.providerInstallDone) enterProviderLogin()
+  log.info('provider-install.continue.click', {
+    providerInstallDone: state.providerInstallDone,
+    providerInstallBusy: state.providerInstallBusy,
+  })
+  if (state.providerInstallDone) {
+    log.info('provider-install.continue.enterProviderLogin')
+    try {
+      enterProviderLogin()
+    } catch (e) {
+      log.error('provider-install.continue.crashed', { err: String(e?.message || e) })
+    }
+  } else {
+    log.warn('provider-install.continue.gated', { reason: 'install not done' })
+  }
 })
 
 async function startProviderInstall() {
@@ -798,12 +935,40 @@ async function startProviderInstall() {
   dom.btnProviderInstallContinue.disabled = true
   setProgressState(dom.providerBar, dom.providerIcon, 'busy')
 
+  // Lazy load vpsIp dalle prefs se manca in state (perso ai restart Electron).
+  // Senza, host=vps fallisce con "vpsIp required" nel backend.
+  if (state.location === LOCATION_VPS && !state.vps?.ip && window.prefsApi?.get) {
+    try {
+      const saved = await window.prefsApi.get('vpsIp')
+      if (saved) {
+        state.vps = state.vps || {}
+        state.vps.ip = saved
+        log.info('provider-install.vps-ip-restored-from-prefs', { ip: saved })
+      }
+    } catch (err) {
+      log.warn('provider-install.prefs-read-failed', { err: String(err) })
+    }
+  }
+
   const ids = Array.from(state.selectedProviders)
   const firstName = providerLabel(ids[0]) || ids[0]
   dom.providerMessage.textContent = t('provider.installStatus.running', { name: firstName })
 
+  // VPS mode: il backend instrada l'install via SSH al container REMOTO.
+  // Local mode: omettiamo host/vpsIp, il main.js handler resta sul path
+  // back-compat (docker compose run --rm jht ...).
+  const installArgs = state.location === LOCATION_VPS
+    ? { providerIds: ids, host: 'vps', vpsIp: state.vps?.ip || null }
+    : { providerIds: ids }
+
+  log.info('provider-install.start', { providers: ids, host: installArgs.host || 'local' })
   try {
-    const result = await window.setupApi.installProviders(ids)
+    const result = await window.setupApi.installProviders(installArgs)
+    log.info('provider-install.result', {
+      ok: result?.ok,
+      failedAt: result?.failedAt,
+      err: result?.error,
+    })
     if (result?.ok) {
       state.providerInstallDone = true
       setProgressState(dom.providerBar, dom.providerIcon, 'ok')

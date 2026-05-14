@@ -23,6 +23,7 @@ import {
 // wiring goes too.
 import { smartAdvanceFromWelcome } from './modules/wizard-flow.js'
 import './modules/terminal-login.js'
+import './modules/telegram-tokens.js'
 import { startTeam, stopTeam, refreshRunningStatus } from './modules/running.js'
 import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
@@ -95,9 +96,24 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
 })()
 
 // Running step wiring (start/stop/open browser + status poller).
-dom.btnStartTeam.addEventListener('click', startTeam)
-dom.btnOpenBrowser.addEventListener('click', () => window.launcherApi.openBrowser())
-dom.btnStopTeam.addEventListener('click', stopTeam)
+const _bootLog = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
+  ? window.jhtLog.scope('boot')
+  : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+_bootLog.info('wiring.start', {
+  btnStartTeam: !!dom.btnStartTeam,
+  btnOpenBrowser: !!dom.btnOpenBrowser,
+  btnStopTeam: !!dom.btnStopTeam,
+})
+if (dom.btnStartTeam) {
+  dom.btnStartTeam.addEventListener('click', (e) => {
+    _bootLog.info('btnStartTeam.click-raw', { isTrusted: e.isTrusted, defaultPrevented: e.defaultPrevented })
+    startTeam()
+  })
+} else {
+  _bootLog.error('btnStartTeam.missing-at-wire-time')
+}
+if (dom.btnOpenBrowser) dom.btnOpenBrowser.addEventListener('click', () => window.launcherApi.openBrowser())
+if (dom.btnStopTeam) dom.btnStopTeam.addEventListener('click', stopTeam)
 
 window.launcherApi.onPayloadLog(appendLog)
 

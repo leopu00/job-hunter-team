@@ -53,6 +53,7 @@ const terminal = require('./terminal')
 const auth = require('./auth')
 const sync = require('./sync')
 const vps = require('./vps')
+const telegram = require('./telegram')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -276,6 +277,58 @@ app.whenReady().then(() => {
   app.on('window-all-closed', () => log.info('app.window-all-closed'))
   app.on('before-quit', () => log.info('app.before-quit'))
   app.on('will-quit', () => log.info('app.will-quit'))
+
+  // Modalita' "fresh setup": JHT_DESKTOP_FRESH_SETUP=1 al boot wipa le
+  // cache utente che fanno skippare step gia' completati, cosi' il
+  // wizard riparte da Welcome come prima volta. Utile per testare il
+  // flow di onboarding senza dover cancellare a mano:
+  //   - preferences.json (location, eventuali altri toggle)
+  //   - providers.json (THE discriminator setup-complete: se ha
+  //     provider.saved.length > 0 l'app salta il wizard e va in home —
+  //     vedi desktop/renderer/modules/home.js → isSetupComplete)
+  //   - ssh/ (keypair Ed25519 generata dal passo VPS)
+  //   - session/ (storage Supabase auth in mode 'file', packaged-unsigned)
+  //   - sync/ (meta storage cloud sync in mode 'file')
+  //   - logs/ (log delle sessioni precedenti)
+  //
+  // Non tocca: session Supabase in-memory (dev — gia' volatile),
+  // app-payload/ (download cache pesante, niente senso wipare).
+  if (process.env.JHT_DESKTOP_FRESH_SETUP === '1') {
+    const fs = require('node:fs')
+    const userData = app.getPath('userData')
+    const targets = [
+      path.join(userData, 'preferences.json'),
+      path.join(userData, 'providers.json'),
+      path.join(userData, 'ssh'),
+      path.join(userData, 'session'),
+      path.join(userData, 'sync'),
+      // NOTA: NON wipiamo logs/ qui — il logger ha gia' aperto il file
+      // della sessione corrente e cancellare la dir → ENOENT al prossimo
+      // write (uncaughtException). La rotation interna gestisce i file
+      // vecchi (max 10). Per pulire i log a mano: rm -rf "<userData>/logs"
+      // PRIMA di lanciare l'app.
+    ]
+    for (const t of targets) {
+      try {
+        const stat = fs.lstatSync(t)
+        if (stat.isDirectory()) {
+          fs.rmSync(t, { recursive: true, force: true })
+        } else {
+          fs.unlinkSync(t)
+        }
+        log.warn('fresh-setup.wiped', { path: t })
+      } catch (err) {
+        if (err && err.code === 'ENOENT') {
+          log.debug('fresh-setup.skip', { path: t, reason: 'not present' })
+        } else {
+          log.error('fresh-setup.failed', { path: t, err })
+        }
+      }
+    }
+    log.warn('fresh-setup.complete', {
+      hint: "unset JHT_DESKTOP_FRESH_SETUP per il prossimo run",
+    })
+  }
 
   // Canale IPC `log:append` — il renderer (wizard, dashboard) puo' mandare
   // log strutturati che finiscono nello stesso file del main, cosi' un
@@ -679,6 +732,46 @@ app.whenReady().then(() => {
     vps.runInstall({ ...args, sender: event.sender })
   )
 
+  // -------- Telegram bot setup (VPS path: 3-bot tokens + remote save) -- (T4)
+  ipcMain.handle('telegram:verify-bot', (_event, token) => telegram.verifyBot(token))
+  ipcMain.handle('telegram:wait-for-chat', (_event, args = {}) =>
+    telegram.waitForFirstChat(args.token, args.deadlineMs),
+  )
+  ipcMain.handle('telegram:cancel-wait-for-chat', (_event, token) =>
+    telegram.cancelWaitForFirstChat(token),
+  )
+  ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
+    telegram.saveBotsToVps(args.vpsIp, args.bots),
+  )
+
+  // -------- vps:write-config (T1: generic config writer remoto) ---------
+  // Scrive un file di config sul container remoto via SshExec.writeFile.
+  // Pensato per `/root/.jht/jht.config.json` post-pairing.
+  ipcMain.handle('vps:write-config', async (_event, args = {}) => {
+    const {
+      vpsIp,
+      content,
+      path: remotePath = '/root/.jht/jht.config.json',
+      mode = '0600',
+      atomic = true,
+    } = args
+    if (!vpsIp) return { ok: false, error: 'vpsIp required' }
+    if (typeof content !== 'string') {
+      return { ok: false, error: 'content must be a string (serialize JSON before)' }
+    }
+    const SshExec = require('./vps/ssh-exec')
+    const slash = remotePath.lastIndexOf('/')
+    if (slash > 0) {
+      const parent = remotePath.slice(0, slash)
+      if (parent.includes("'")) {
+        return { ok: false, error: "remote path parent cannot contain single quotes" }
+      }
+      const mk = SshExec.run(vpsIp, `mkdir -p '${parent}'`)
+      if (!mk.ok) return { ok: false, stage: 'mkdir', error: mk.stderr || `mkdir exit ${mk.code}` }
+    }
+    return SshExec.writeFile(vpsIp, remotePath, content, { mode, atomic })
+  })
+
   // -------- Cloud sync (encrypted, client-side, AES-256-GCM) --------
   ipcMain.handle('sync:get-status', () => sync.getStatus())
   ipcMain.handle('sync:setup', (_event, args = {}) => sync.setup(args))
@@ -858,19 +951,47 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('setup:get-auth-states', () => {
+  ipcMain.handle('setup:get-auth-states', (_event, args = {}) => {
     const saved = providerStore.readProviders(app.getPath('userData'))
+    // VPS mode: i CLI provider sono installati DENTRO il container
+    // sulla VPS (T2), e l'auth file scritto dal flow OAuth via PTY-
+    // SSH (T3) finisce in /jht_home/.{claude,codex,kimi} REMOTO, NON
+    // in ~/.jht sul Mac. Per dare il "Signed in" giusto serve un
+    // probe SSH+docker exec test -s. Vedi provider-auth.js →
+    // authStatesViaSsh. Stesso ragionamento per logoutProvider.
+    if (args.host === 'vps' && args.vpsIp) {
+      // Su VPS l'inspect "is provider installed" parte dal providers
+      // store locale: lo abbiamo gia' scritto a fine install (T2 fa
+      // writeProviders dopo successo). Skippiamo inspectInstalledProviders
+      // perche' guarda binari locali.
+      const auth = providerAuth.authStatesViaSsh({ providers: saved, vpsIp: args.vpsIp })
+      return { auth, installed: saved }
+    }
     const installed = providerInstall.inspectInstalledProviders().installed
     const relevant = saved.filter((id) => installed.includes(id))
     const auth = providerAuth.authStates({ providers: relevant, bindHomeDir: getBindHomeDir() })
     return { auth, installed: relevant }
   })
 
-  ipcMain.handle('setup:logout-provider', (_event, providerId) => {
+  ipcMain.handle('setup:logout-provider', (_event, ...rest) => {
+    // Back-compat: vecchia signature era (providerId) bare. Nuova
+    // signature: (args = { providerId, host, vpsIp }). Riconciliamo.
+    let providerId, host, vpsIp
+    const first = rest[0]
+    if (typeof first === 'string') {
+      providerId = first
+    } else if (first && typeof first === 'object') {
+      providerId = first.providerId
+      host = first.host
+      vpsIp = first.vpsIp
+    }
     if (typeof providerId !== 'string' || !providerId) {
       return { ok: false, error: 'providerId required' }
     }
     try {
+      if (host === 'vps' && vpsIp) {
+        return providerAuth.logoutProviderViaSsh(providerId, { vpsIp })
+      }
       return providerAuth.logoutProvider(providerId, { bindHomeDir: getBindHomeDir() })
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -879,9 +1000,35 @@ app.whenReady().then(() => {
 
   const loginContainerNames = new Map()
 
-  ipcMain.handle('terminal:start', (_event, { providerId } = {}) => {
+  ipcMain.handle('terminal:start', (_event, { providerId, host = 'local', vpsIp } = {}) => {
     const meta = providerInstall.PROVIDERS[providerId]
     if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
+
+    // VPS mode: il TUI di login deve girare sul container REMOTO (lo
+    // OAuth deve atterrare nel ~/.claude del container sulla VPS, non
+    // sul Mac). Apriamo un PTY ssh -tt → docker exec -it jht <binary>
+    // e wrappiamo il ChildProcess come una sessione terminal "alla
+    // pari" di quelle locali, cosi' il renderer non se ne accorge.
+    if (host === 'vps') {
+      if (!vpsIp) return { ok: false, error: 'host=vps requires vpsIp' }
+      const r = providerInstall.openLoginViaSsh({ vpsIp, providerId })
+      if (!r.ok) return r
+      const id = terminal.adoptChild({
+        child: r.child,
+        onData: (data) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(`terminal:data:${id}`, data)
+          }
+        },
+        onExit: (exit) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(`terminal:exit:${id}`, exit)
+          }
+        },
+      })
+      return { ok: true, sessionId: id, host: 'vps' }
+    }
+
     if (!payload.isPayloadPresent(payloadDir)) {
       return { ok: false, error: 'payload not present — run container prep first' }
     }
@@ -956,13 +1103,45 @@ app.whenReady().then(() => {
     return { ok: true }
   })
 
-  ipcMain.handle('setup:install-providers', async (_event, providerIds) => {
+  ipcMain.handle('setup:install-providers', async (_event, args) => {
+    // Back-compat: l'API vecchia accettava providerIds come array. La
+    // nuova accetta { providerIds, host, vpsIp }: host='vps' instrada
+    // l'install via SSH al container REMOTO sulla VPS, host omesso o
+    // 'local' resta sul container locale come prima.
+    let providerIds = []
+    let host = 'local'
+    let vpsIp = null
+    if (Array.isArray(args)) {
+      providerIds = args
+    } else if (args && typeof args === 'object') {
+      providerIds = Array.isArray(args.providerIds) ? args.providerIds : []
+      if (typeof args.host === 'string') host = args.host
+      if (typeof args.vpsIp === 'string') vpsIp = args.vpsIp
+    }
     try {
+      if (host === 'vps') {
+        if (!vpsIp) {
+          return { ok: false, stage: 'preflight', error: 'host=vps requires vpsIp' }
+        }
+        const result = await providerInstall.installViaSsh({
+          vpsIp,
+          providerIds,
+          onLog: broadcastProviderLog,
+        })
+        if (result.ok) {
+          // Persistiamo la selezione anche in VPS mode: il renderer la
+          // legge per mostrare "✓ installed" sul wizard. La verita' di
+          // chi e' realmente installato sta sul container remoto, ma
+          // quella probe la fa T3 quando affina inspectInstalledProviders.
+          providerStore.writeProviders(app.getPath('userData'), providerIds)
+        }
+        return result
+      }
       if (!payload.isPayloadPresent(payloadDir)) {
         return { ok: false, stage: 'payload', error: 'payload not present — run container prep first' }
       }
       const result = await providerInstall.installProviders({
-        providerIds: Array.isArray(providerIds) ? providerIds : [],
+        providerIds,
         payloadDir,
         onLog: broadcastProviderLog,
       })

@@ -268,6 +268,225 @@ function inspectInstalledProviders({ bindHomeDir } = {}) {
   return { bindHomeDir: home, installed }
 }
 
+// ── VPS mode: install via SSH sul container remoto ─────────────────
+//
+// Quando state.location === 'vps' i CLI provider vanno installati DENTRO
+// il container `jht` che gira sulla VPS, non in quello locale. Il
+// comando equivalente di `docker compose run --rm ... jht <e> <args>`
+// per un container gia' up sulla VPS e' `docker exec [-e K=V]* jht <e>
+// <args>` (riusa il PID 1, niente container effimero).
+//
+// Lo step T1 implementa il routing minimal: itera providerIds, per ogni
+// step costruisce la command line bash-quoted e la manda via
+// SshExec.runStream. T2/T3 raffineranno (skip-probe pre-install,
+// retry, gestione kimi multi-step con cleanup intermedio, ecc).
+
+function _bashQuote(s) {
+  // Wrappa s in single-quote bash; escapa eventuali ' interni con la
+  // sequenza standard '\''. Niente $/backtick/etc da preoccuparsi
+  // perche' single-quote bash li tratta letterali.
+  return `'${String(s).replace(/'/g, "'\\''")}'`
+}
+
+function _stepToCompanyCmd(step, { container = 'jht' } = {}) {
+  // docker exec [-e K=V]* <container> <entrypoint> <args...>
+  // Ogni token quotato per resistere al passaggio ssh→bash.
+  const parts = ['docker', 'exec']
+  // -i per accettare stdin (non serve qui ma evita warning su tty).
+  parts.push('-i')
+  for (const [k, v] of Object.entries(step.env || {})) {
+    parts.push('-e', _bashQuote(`${k}=${v}`))
+  }
+  parts.push(_bashQuote(container))
+  parts.push(_bashQuote(step.entrypoint))
+  for (const arg of step.args || []) {
+    parts.push(_bashQuote(arg))
+  }
+  return parts.join(' ')
+}
+
+// Pre-flight: assicura che il container `jht` sulla VPS sia in stato
+// "running" prima di provare a fare `docker exec`. install.sh scarica il
+// docker-compose.yml in /root/.jht/runtime/ ma NON lo avvia (l'utente
+// dovrebbe fare `jht up`); senza questo check il primo `docker exec` su
+// container assente fallisce con exit 1 e messaggio criptico
+// "Error response from daemon: No such container: jht", che il flow
+// install.sh→provider-install rende invisibile lato UI.
+//
+// Strategia:
+//   1. `docker ps -q -f name=^jht$` → se non vuoto, container gia' up, ok.
+//   2. Sennò `cd /root/.jht/runtime && docker compose up -d jht` (path
+//      hardcoded coerente con install.sh), poi `docker exec jht true` per
+//      confermare che parta davvero.
+//
+// Ritorna { ok, error? }. Loggato sul canale provider per visibilita' UI.
+async function _ensureContainerUpCompany(ssh, { container = 'jht', onLog = () => {} } = {}) {
+  const probe = await ssh.run(`docker ps -q -f name=^${container}$`)
+  if (probe.ok && probe.stdout.trim().length > 0) {
+    return { ok: true, alreadyUp: true }
+  }
+  onLog(`[preflight] container '${container}' non running su VPS, avvio via docker compose…`)
+  // -d background; jht e' il nome del servizio nel docker-compose.yml.
+  // Path /root/.jht/runtime/ e' hardcoded in install.sh download_runtime_files.
+  const upCmd = `cd /root/.jht/runtime && docker compose up -d ${_bashQuote(container)}`
+  const upRes = await ssh.runStream(upCmd, (line) => onLog(line))
+  if (!upRes.ok) {
+    return { ok: false, error: `docker compose up exited ${upRes.code}` }
+  }
+  // Conferma exec funzioni: il `up -d` ritorna prima che PID 1 abbia avuto
+  // tempo di stabilizzarsi; un retry secco con piccolo back-off copre il
+  // caso "container Created ma non Running" che dura tipicamente <2s.
+  let started = false
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const check = await ssh.run(`docker exec -i ${_bashQuote(container)} true`)
+    if (check.ok) { started = true; break }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  if (!started) {
+    return { ok: false, error: `container '${container}' avviato ma docker exec fallisce dopo 5 retry` }
+  }
+  return { ok: true, alreadyUp: false }
+}
+
+// Pre-flight permessi npm: `~/.jht` lato VPS e' creato da install.sh come
+// root, ma il container `jht` runna come uid 1001 (user 'jht' nel
+// Dockerfile). Senza chown, `npm install -g` falla con EACCES su mkdir
+// /jht_home/.npm-global. Lo eseguiamo prima di OGNI install (idempotente,
+// chown e mkdir -p sono no-op sui path gia' giusti). docker exec --user
+// root e' necessario perche' il default user del container NON puo'
+// chown-are file owned da root.
+async function _ensureNpmDirsWritable(ssh, { container = 'jht', user = 'jht', onLog = () => {} } = {}) {
+  // Dirs che npm/uv/claude/codex/kimi creano nella home utente al primo
+  // install/launch. Tutte sotto /jht_home (bind-mount ~/.jht dell'host).
+  // - .npm-global: NPM_CONFIG_PREFIX per `npm install -g`
+  // - .npm: cache npm
+  // - .local: pip --user + uv tool dir (storage Python tools)
+  // - .cache: uv usa /jht_home/.cache/uv come download cache (kimi-cli)
+  // - .config: claude/codex storano qui session token + config
+  // - .kimi / .claude / .codex: CLI-specific data dirs (potrebbero gia' esistere
+  //   come root da uno run precedente fallito a meta')
+  const dirs = [
+    '/jht_home/.npm-global',
+    '/jht_home/.npm',
+    '/jht_home/.local',
+    '/jht_home/.cache',
+    '/jht_home/.config',
+    '/jht_home/.kimi',
+    '/jht_home/.claude',
+    '/jht_home/.codex',
+  ]
+  const dirsArg = dirs.join(' ')
+  const remoteCmd = [
+    'docker', 'exec', '-i', '--user', 'root', _bashQuote(container),
+    'sh', '-c',
+    _bashQuote(
+      `mkdir -p ${dirsArg} && chown -R ${user}:${user} ${dirsArg}`,
+    ),
+  ].join(' ')
+  const r = await ssh.run(remoteCmd)
+  if (!r.ok) {
+    onLog(`[preflight-npm-perms] ${(r.stderr || '').trim() || `exit ${r.code}`}`)
+    return { ok: false, error: `chown npm dirs fallito: exit ${r.code}` }
+  }
+  return { ok: true }
+}
+
+async function installViaSsh({
+  vpsIp,
+  providerIds,
+  container = 'jht',
+  onLog = () => {},
+} = {}) {
+  if (!vpsIp || typeof vpsIp !== 'string') {
+    return { ok: false, error: 'vpsIp required' }
+  }
+  if (!Array.isArray(providerIds) || providerIds.length === 0) {
+    return { ok: false, error: 'no providers selected' }
+  }
+  // require lazy: ssh-exec carica logger che assume electron app, va
+  // bene perche' siamo nel main process quando questa viene chiamata.
+  const SshExec = require('./vps/ssh-exec')
+  const ssh = SshExec.forIp(vpsIp)
+
+  // Pre-flight container running: vedi commento _ensureContainerUpCompany.
+  const ensure = await _ensureContainerUpCompany(ssh, { container, onLog })
+  if (!ensure.ok) {
+    onLog(`[preflight-error] ${ensure.error}`)
+    return { ok: false, stage: 'preflight', error: ensure.error }
+  }
+  // Pre-flight permessi npm: chown delle cache dirs all'user del
+  // container. Vedi _ensureNpmDirsWritable per il rationale (EACCES su
+  // bind-mount root-owned). Idempotente: no-op se gia' OK.
+  const perms = await _ensureNpmDirsWritable(ssh, { container, onLog })
+  if (!perms.ok) {
+    return { ok: false, stage: 'preflight', error: perms.error }
+  }
+
+  const results = []
+  for (const providerId of providerIds) {
+    const provider = PROVIDERS[providerId]
+    if (!provider) {
+      results.push({ ok: false, providerId, error: `unknown provider: ${providerId}` })
+      return { ok: false, results, failedAt: providerId, error: `unknown provider: ${providerId}` }
+    }
+    onLog(`── Installing ${provider.displayName || providerId} (VPS ${vpsIp}) ──`)
+    // Skip se gia' installato. La probe gira nello stesso container, basta:
+    //   docker exec jht sh -c 'command -v <binary>'
+    const probeCmd =
+      `docker exec -i ${_bashQuote(container)} sh -c ${_bashQuote(`command -v ${provider.binary}`)}`
+    const probe = await ssh.runStream(probeCmd, () => {})
+    if (probe.ok) {
+      onLog(`[skip] ${provider.displayName} already installed in remote container`)
+      results.push({ ok: true, providerId, skipped: true })
+      continue
+    }
+    for (const step of provider.install) {
+      const remoteCmd = _stepToCompanyCmd(step, { container })
+      onLog(`$ ssh root@${vpsIp} ${remoteCmd}`)
+      const r = await ssh.runStream(remoteCmd, (line) => onLog(line))
+      if (!r.ok) {
+        results.push({ ok: false, providerId, error: `step exited ${r.code}` })
+        return { ok: false, results, failedAt: providerId, error: `step exited ${r.code}` }
+      }
+    }
+    results.push({ ok: true, providerId })
+  }
+  return { ok: true, results }
+}
+
+// Alias esplicito al nome usato nel brief T2 protocol-vps-refactor (dev1
+// ha ribattezzato `installViaSsh` per brevita' nel suo stub T1; teniamo
+// entrambi i nomi cosi' chi cerca la signature del brief la trova).
+const installProvidersViaSsh = installViaSsh
+
+// PTY remoto per il login OAuth del provider sulla VPS. Stessi loginArgs
+// (--dangerously-skip-permissions / --yolo) della modalita' locale, ma
+// invece di `docker compose run -it ... <binary>` apriamo
+// `ssh -tt root@ip docker exec -it jht <binary> <loginArgs>`.
+//
+// Ritorna il ChildProcess wrappabile da xterm.js sul renderer (T3
+// completera' il routing terminal:start).
+function openLoginViaSsh({ vpsIp, providerId, container = 'jht' } = {}) {
+  if (!vpsIp || typeof vpsIp !== 'string') {
+    return { ok: false, error: 'vpsIp required' }
+  }
+  const provider = PROVIDERS[providerId]
+  if (!provider) return { ok: false, error: `unknown provider: ${providerId}` }
+  const SshExec = require('./vps/ssh-exec')
+
+  const loginArgs = Array.isArray(provider.loginArgs) ? provider.loginArgs : []
+  // docker exec -it (NB: -t serve per il TUI, non solo per echoing)
+  const remoteCmd = [
+    'docker', 'exec', '-it',
+    _bashQuote(container),
+    _bashQuote(provider.binary),
+    ...loginArgs.map(_bashQuote),
+  ].join(' ')
+
+  const child = SshExec.openPty(vpsIp, remoteCmd)
+  return { ok: true, child }
+}
+
 module.exports = {
   PROVIDERS,
   SUPPORTED_IDS,
@@ -276,5 +495,9 @@ module.exports = {
   inspectInstalledProviders,
   resolveHome,
   dockerEnv,
-  _internal: { runStreamed },
+  // VPS mode (T1 base, T2 ha aggiunto pre-flight container up)
+  installViaSsh,
+  installProvidersViaSsh,
+  openLoginViaSsh,
+  _internal: { runStreamed, _bashQuote, _stepToCompanyCmd, _ensureContainerUpCompany, _ensureNpmDirsWritable },
 }
