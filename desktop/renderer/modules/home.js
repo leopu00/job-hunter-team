@@ -7,7 +7,25 @@ import {
   STEP_PROVIDER_LOGIN,
   PROVIDER_OPTIONS,
   PROVIDER_PLANS,
+  LOCATION_VPS,
 } from './constants.js'
+
+// Helper: location resolution dalle preferences (in-memory state si
+// perde tra restart). Tutti i check VPS della home passano per questo.
+async function isVpsMode() {
+  if (state.location === LOCATION_VPS) return true
+  if (state.location) return false
+  if (!window.prefsApi?.get) return false
+  try {
+    const saved = await window.prefsApi.get('location')
+    if (saved === LOCATION_VPS || saved === 'local') state.location = saved
+    return saved === LOCATION_VPS
+  } catch {
+    return false
+  }
+}
+
+const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
@@ -443,8 +461,43 @@ if (homeDom.btnAccountSignout) {
   homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
-function renderHomeTeamStatus(status) {
+function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   const mode = status?.mode
+  // In VPS mode il team gira sulla VPS remota, sempre "running" dal punto
+  // di vista del desktop launcher (il container e' stato installato e
+  // partito da install.sh sulla VPS). Il dot è verde, niente Start
+  // button locale, l'Open apre la dashboard cloud.
+  if (vps) {
+    homeDom.teamDot.dataset.state = 'running'
+    homeDom.teamStatus.textContent = t('home.team.statusVpsRunning')
+    homeDom.teamSubtitle.textContent = t('home.team.subtitleVps')
+    homeDom.btnStart.hidden = true
+    homeDom.btnOpen.hidden = false
+    homeDom.btnStop.hidden = true
+    homeDom.teamInfo.innerHTML = ''
+    const pushRow = (label, value) => {
+      if (!value) return
+      const row = document.createElement('div')
+      row.className = 'info-row'
+      const l = document.createElement('span')
+      l.className = 'info-row__label'
+      l.textContent = label
+      const v = document.createElement('span')
+      v.className = 'info-row__value'
+      v.textContent = value
+      row.append(l, v)
+      homeDom.teamInfo.appendChild(row)
+    }
+    pushRow(t('home.team.vpsIp'), vpsIp || '—')
+    pushRow(t('home.team.dashboardUrl'), VPS_DASHBOARD_URL)
+    homeDom.teamInfo.hidden = false
+    homeDom.teamAdvanced.hidden = true
+    homeDom.teamLog.textContent = ''
+    // Docker warning del Team panel: in VPS mode il Docker e' remoto,
+    // niente da segnalare lato launcher.
+    if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
+    return
+  }
   const running = !!status?.running && (mode === 'running' || mode === 'external')
   const starting = mode === 'starting' || mode === 'warming'
   const errored = mode === 'error'
@@ -554,7 +607,17 @@ function setActionButtonIdle(label, action) {
   homeDom.btnTeamDockerAction.dataset.action = action
 }
 
-async function refreshHomeTeamDockerGate(teamStatus) {
+async function refreshHomeTeamDockerGate(teamStatus, { vps = false } = {}) {
+  if (vps) {
+    // VPS mode: Docker gira sulla VPS, non sul desktop. Nessun gate.
+    if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
+    if (homeDom.btnStart) {
+      homeDom.btnStart.disabled = false
+      delete homeDom.btnStart.dataset.dockerBlocked
+    }
+    stopTeamDockerPolling()
+    return
+  }
   // Always evaluate Docker independently of team state: a "running"
   // team without a healthy Docker daemon is a misleading state — the
   // dashboard might still respond but the agents aren't working. The
@@ -604,6 +667,13 @@ async function refreshHomeTeamDockerGate(teamStatus) {
 
 async function refreshHomeTeam() {
   try {
+    const vps = await isVpsMode()
+    if (vps) {
+      const vpsIp = (await window.prefsApi?.get('vpsIp').catch(() => null)) || state.vps?.ip || null
+      renderHomeTeamStatus(null, { vps: true, vpsIp })
+      await refreshHomeTeamDockerGate(null, { vps: true })
+      return
+    }
     const status = await window.launcherApi.getStatus()
     renderHomeTeamStatus(status)
     await refreshHomeTeamDockerGate(status)
@@ -776,6 +846,19 @@ function renderDockerImageMetadata(image) {
 
 async function refreshHomeDocker() {
   try {
+    if (await isVpsMode()) {
+      // VPS mode: Docker e' remoto. Sostituisci stato locale con
+      // info VPS (IP + image registry link). Nascondi i bottoni che
+      // gestiscono il daemon locale (Open Docker Desktop / Colima).
+      const vpsIp = (await window.prefsApi?.get('vpsIp').catch(() => null)) || state.vps?.ip || '—'
+      homeDom.dockerState.textContent = t('home.docker.vpsRemote', { ip: vpsIp })
+      homeDom.dockerState.style.color = 'var(--success)'
+      homeDom.dockerImage.textContent = t('home.docker.vpsImageRemote')
+      homeDom.dockerImage.style.color = 'var(--text-dim)'
+      renderDockerImageMetadata(null)
+      homeDom.btnDockerOpen.hidden = true
+      return
+    }
     const dockerStatus = await window.setupApi.getDockerStatus()
     const s = dockerStatus?.check?.state
     if (s === 'ok') {
@@ -817,7 +900,17 @@ for (const btn of homeDom.navItems) {
 }
 homeDom.btnStart.addEventListener('click', startTeamFromHome)
 homeDom.btnStop.addEventListener('click', stopTeamFromHome)
-homeDom.btnOpen.addEventListener('click', () => window.launcherApi.openBrowser())
+homeDom.btnOpen.addEventListener('click', async () => {
+  // In VPS mode "Apri team" punta alla dashboard cloud, non al
+  // localhost:3000 del container desktop (che non esiste). In Local
+  // mode mantiene il comportamento storico (openBrowser → localhost).
+  if (await isVpsMode()) {
+    try { await window.launcherApi.openExternal(VPS_DASHBOARD_URL) }
+    catch (e) { appendLog(`btnOpen vps: ${e.message || e}`) }
+    return
+  }
+  window.launcherApi.openBrowser()
+})
 homeDom.btnTeamDockerAction.addEventListener('click', async () => {
   if (state.teamDockerPolling) return
   const action = homeDom.btnTeamDockerAction.dataset.action
@@ -906,6 +999,9 @@ async function refreshDevStatus() {
 
 ;(async () => {
   try {
+    // VPS mode: la dev-card e' next dev locale (web :3001 con bind-mount).
+    // Su VPS nessun container locale → la card non ha senso e confonde.
+    if (await isVpsMode()) return
     const probe = await window.launcherApi.devIsAvailable()
     if (!probe?.available) return
     homeDom.devCard.hidden = false
