@@ -1007,6 +1007,17 @@ window.setupApi.onProviderLog((line) => {
 // -------- Step: ready (summary) --------
 
 export async function enterReady() {
+  // VPS mode: skip STEP_READY (la schermata "All set" con Start button
+  // pensata per il flusso locale). L'utente VPS non avvia niente da qui
+  // — il team gira gia' sulla VPS remota dopo install.sh + pairing.
+  // Va direttamente alla home del launcher, dove vedra' i pannelli
+  // location-aware (Team, Provider, ...).
+  if (state.location === LOCATION_VPS) {
+    log.info('enterReady.vps.bypass-to-home')
+    const { showHome } = await import('./home.js')
+    await showHome('team')
+    return
+  }
   const status = state.lastStatus || (await safeGetStatus())
   renderSummary(status)
   showStep(STEP_READY)
