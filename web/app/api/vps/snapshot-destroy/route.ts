@@ -9,10 +9,11 @@ import {
 } from "@/lib/hetzner";
 
 export const dynamic = "force-dynamic";
-// Snapshot di un disco 80GB Hetzner puo' richiedere 2-4 minuti. Next
-// di default chiude la route handler a 10s su Vercel free tier — qui
-// gira self-hosted sulla VPS stessa, quindi alziamo esplicito.
-export const maxDuration = 360;
+// Snapshot di un disco 80GB Hetzner puo' richiedere 2-4 minuti. Vercel
+// Hobby plan cappa a 300s — alziamo al massimo consentito. In pratica
+// uno snapshot Hetzner standard sta sotto i 5min; se eccede il client
+// puo' ri-pollare lo stato dopo timeout.
+export const maxDuration = 300;
 
 /**
  * Bottone "📸 Snapshot + Elimina VPS" del lifecycle dashboard
