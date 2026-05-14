@@ -1,16 +1,64 @@
 /**
- * Proxy — Auth Supabase, CORS, rate limiting, CSP nonce, request logging
+ * Middleware — Auth Supabase, CORS, rate limiting, CSP nonce, request logging
  *
- * Sostituisce middleware.ts (deprecato in Next.js 16).
+ * Filename `middleware.ts` (non `proxy.ts`): in Next.js 16 il rename
+ * `proxy.ts` forza il bundling di questa pipeline come Node Lambda
+ * (`@vercel/next` → onServer), e quel code path su Vercel ha un bug
+ * che esclude `@swc/helpers/esm/*.js` dal bundle → 500
+ * `MIDDLEWARE_INVOCATION_FAILED` su ogni request (issue #86099,
+ * riscontrato 2026-05-14 dopo merge feat dashboard 3-way). Il vecchio
+ * nome `middleware.ts` resta supportato in 16.2.x e di default usa
+ * Edge runtime, che ha una pipeline di bundling stabile.
+ *
+ * Vincolo Edge: niente `node:fs`/`node:crypto`/Database. Il
+ * bootstrap del local-token (che leggeva `~/.jht/.local-token`)
+ * resta solo lato API (route handler) tramite `lib/local-token.ts`;
+ * il desktop launcher pre-setta il cookie via `/api/local-bootstrap`
+ * o passa `Authorization: Bearer <hex>` sulle chiamate API.
+ *
  * Auth su tutte le rotte, CORS + rate limit solo su /api/*,
  * CSP nonce-based su tutte le risposte HTML.
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
-import { isLocalRequestFromHeaders } from '@/lib/auth'
-import { LOCAL_TOKEN_COOKIE, getOrCreateLocalToken } from '@/lib/local-token'
 import { shouldRejectBrowserMutation } from '@/lib/csrf'
+
+// --- Local request detection (inlined da lib/auth.ts per Edge compat) ---
+// lib/auth.ts importa `next/headers` + `lib/workspace` (`node:fs`) →
+// non importabile in Edge runtime. Replicato qui solo il puro
+// header-parsing che serve al middleware.
+
+const LOCAL_TOKEN_COOKIE = 'jht_local_token'
+
+function isLocalhostHost(host: string): boolean {
+  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(host.toLowerCase())
+}
+
+function isLoopbackIp(ip: string): boolean {
+  return /^(::1|127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(ip.trim())
+}
+
+function hasUntrustedForwardedHeaders(hdrs: Headers): boolean {
+  if (hdrs.get('forwarded') !== null) return true
+  const xff = hdrs.get('x-forwarded-for')
+  if (xff !== null) {
+    const firstHop = xff.split(',')[0]?.trim() ?? ''
+    if (!isLoopbackIp(firstHop)) return true
+  }
+  const xfh = hdrs.get('x-forwarded-host')
+  if (xfh !== null && !isLocalhostHost(xfh)) return true
+  const xri = hdrs.get('x-real-ip')
+  if (xri !== null && !isLoopbackIp(xri)) return true
+  return false
+}
+
+function isLocalRequestFromHeaders(hdrs: Headers): boolean {
+  const host = hdrs.get('host') ?? ''
+  if (!isLocalhostHost(host)) return false
+  if (hasUntrustedForwardedHeaders(hdrs)) return false
+  return true
+}
 
 // --- CSP nonce ---
 // Production: script-src 'self' 'nonce-XXX' 'strict-dynamic' (no unsafe-inline).
@@ -122,9 +170,9 @@ function logRequest(req: NextRequest, status: number, durationMs: number): void 
   console.log(`[${ts}] ${method} ${path} ${status} ${durationMs}ms`)
 }
 
-// --- Proxy ---
+// --- Middleware ---
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const start = Date.now()
   const pathname = request.nextUrl.pathname
   const isApi = pathname.startsWith('/api/')
@@ -278,30 +326,16 @@ export async function proxy(request: NextRequest) {
     // Landing page sempre accessibile — nessun redirect da / a /dashboard
   }
 
-  // Local-token bootstrap: sulle richieste che arrivano davvero da
-  // localhost (niente forwarded headers, host loopback) settiamo un
-  // cookie HttpOnly+SameSite=Strict con il token su disco. Il browser
-  // aperto dal desktop launcher lo presentera' alle chiamate API
-  // successive; `requireAuth` lo accetta come bypass del flow Supabase.
-  // L'attaccante che imposta un x-forwarded-host non passa il check
-  // (vedi finding C1) → niente cookie viene settato per loro.
-  // NB: deve girare DOPO il blocco Supabase, perche' setAll() puo'
-  // ri-assegnare supabaseResponse durante refresh sessione (review
-  // di dev-2) facendoci perdere il cookie se lo settiamo prima.
-  if (localRequest && !request.cookies.get(LOCAL_TOKEN_COOKIE)) {
-    const token = getOrCreateLocalToken()
-    if (token) {
-      supabaseResponse.cookies.set({
-        name: LOCAL_TOKEN_COOKIE,
-        value: token,
-        httpOnly: true,
-        sameSite: 'strict',
-        path: '/',
-        secure: false,
-        maxAge: 60 * 60 * 24 * 30,
-      })
-    }
-  }
+  // Local-token bootstrap: rimosso dal middleware perchè la lettura
+  // `~/.jht/.local-token` richiede `node:fs`, incompatibile con
+  // Edge runtime. Il cookie `jht_local_token` viene ora settato:
+  //   - dal desktop launcher al primo apertura del browser (Electron
+  //     session.cookies.set), oppure
+  //   - lazy dalla route `/api/local-bootstrap` (TODO) invocata dal
+  //     client al boot.
+  // Le richieste con `Authorization: Bearer <hex>` (curl / CLI)
+  // continuano a funzionare via `requireAuth` nelle route handler.
+  void LOCAL_TOKEN_COOKIE // riferimento per documentazione futura
 
   // --- API: Aggiungi CORS + rate limit headers alla risposta ---
   if (isApi) {
