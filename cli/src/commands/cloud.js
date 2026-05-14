@@ -580,6 +580,11 @@ async function handlePair(options) {
     return;
   }
 
+  // Salvataggio aggiuntivo per il Realtime subscriber: il pairing token
+  // contiene supabase_url + refresh_token che servono al subscriber WS
+  // per autenticarsi con Supabase direttamente (auth.setSession +
+  // auto-refresh dell'access_token via SDK). Senza questi, il
+  // subscriber dovrebbe fare un endpoint custom roundtrip.
   await saveCloudConfig({
     enabled: true,
     base_url: baseUrl,
@@ -588,6 +593,8 @@ async function handlePair(options) {
     token_name: body.token_name ?? deviceName,
     enabled_at: new Date().toISOString(),
     paired_via: 'desktop-pairing-token',
+    supabase_url: payload.supabase_url || null,
+    supabase_refresh_token: payload.refresh_token || null,
   });
 
   // Cancella .pairing-token (one-shot): non ci serve piu' e non vogliamo
@@ -742,4 +749,16 @@ export function registerCloudCommand(program) {
     .description('Loop di push continuo (usato come PID 1 del container su VPS)')
     .option('--interval <sec>', 'Secondi tra un push e il successivo', '30')
     .action(handleDaemon);
+
+  // `realtime-listen` — long-running WebSocket subscriber su Supabase
+  // Realtime per ricevere comandi web in tempo reale (es. Start button
+  // sulla dashboard cloud → INSERT team_commands → questo handler).
+  // Co-spawnato da pid1 accanto a `cloud daemon`.
+  cloud
+    .command('realtime-listen')
+    .description('Subscriber Realtime per comandi team (start/stop) dal web')
+    .action(async () => {
+      const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
+      await runRealtimeSubscriber();
+    });
 }
