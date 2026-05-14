@@ -159,19 +159,23 @@ async function dispatch() {
 
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
+  const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
   pid1Log('starting dashboard (127.0.0.1:3000)');
   const dashboardChild = spawnLabeled('dashboard', process.execPath, dashCmd);
 
-  // ── Daemon: opzionale, hot-reloadable su cambio cloud.json.
+  // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
+  // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
+  let realtimeChild = null;
   let daemonRespawnTimer = null;
+  let realtimeRespawnTimer = null;
   let shuttingDown = false;
 
   const startDaemon = () => {
-    if (daemonChild && !daemonChild.killed) return;  // gia' attivo
+    if (daemonChild && !daemonChild.killed) return;
     pid1Log('starting cloud daemon (push ogni 30s verso jobhunterteam.ai)');
     daemonChild = spawnLabeled('daemon', process.execPath, daemonCmd);
     daemonChild.on('exit', (code, signal) => {
@@ -179,8 +183,6 @@ async function dispatch() {
       daemonChild = null;
       if (shuttingDown) return;
       pid1Log(`cloud daemon exited (code=${code} signal=${signal})`);
-      // Auto-restart se cloud e' ancora configurato (crash recovery).
-      // Debounce 5s per evitare crash-loop tight.
       if (daemonRespawnTimer) clearTimeout(daemonRespawnTimer);
       daemonRespawnTimer = setTimeout(async () => {
         if (shuttingDown) return;
@@ -189,7 +191,31 @@ async function dispatch() {
           startDaemon();
         }
       }, 5000);
-      void exitedChild;  // shut lint up
+      void exitedChild;
+    });
+  };
+
+  // Realtime subscriber: WebSocket subscriber su team_commands. Riceve
+  // comandi web e exec `jht team start/stop`. Stesso crash-recovery
+  // del daemon (debounce 5s).
+  const startRealtime = () => {
+    if (realtimeChild && !realtimeChild.killed) return;
+    pid1Log('starting realtime subscriber (team_commands WS)');
+    realtimeChild = spawnLabeled('realtime', process.execPath, realtimeCmd);
+    realtimeChild.on('exit', (code, signal) => {
+      const exitedChild = realtimeChild;
+      realtimeChild = null;
+      if (shuttingDown) return;
+      pid1Log(`realtime subscriber exited (code=${code} signal=${signal})`);
+      if (realtimeRespawnTimer) clearTimeout(realtimeRespawnTimer);
+      realtimeRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('realtime subscriber respawn dopo crash');
+          startRealtime();
+        }
+      }, 5000);
+      void exitedChild;
     });
   };
 
@@ -202,11 +228,20 @@ async function dispatch() {
       pid1Log(`stopping cloud daemon (${reason})`);
       daemonChild.kill('SIGTERM');
     }
+    if (realtimeRespawnTimer) {
+      clearTimeout(realtimeRespawnTimer);
+      realtimeRespawnTimer = null;
+    }
+    if (realtimeChild && !realtimeChild.killed) {
+      pid1Log(`stopping realtime subscriber (${reason})`);
+      realtimeChild.kill('SIGTERM');
+    }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon parte subito.
+  // Stato iniziale del cloud: se gia' paired, daemon + realtime partono.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
+    startRealtime();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -228,8 +263,9 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber');
           startDaemon();
+          startRealtime();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -247,6 +283,7 @@ async function dispatch() {
     shuttingDown = true;
     pid1Log(`shutdown (${sig}): killing children`);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
+    if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
