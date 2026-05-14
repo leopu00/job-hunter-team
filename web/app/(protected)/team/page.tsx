@@ -232,46 +232,68 @@ export default function TeamCompany() {
 
   /* ── Azioni bulk ─────────────────────────────────────────────── */
 
-  const startAll = async () => {
+  // Dispatch comando team via Realtime bus (team_commands DB row).
+  // Il subscriber sulla VPS riceve l'evento WS e esegue jht team
+  // start/stop. Fallback: chiama anche start-all/stop-all per la
+  // modalità local (no subscriber). In VPS mode start-all fa 500
+  // benigno (host non-Linux), ignorato.
+  const dispatchTeamCommand = async (
+    action: "start" | "stop",
+    legacyFallback: string,
+  ) => {
     if (bulkLoading) return;
-    setBulkLoading("start");
-    setStatuses((prev) => {
-      const next = { ...prev };
-      TEAM_AGENTS.forEach((a) => {
-        if (next[a.id] !== "running") next[a.id] = "pending";
+    setBulkLoading(action);
+    if (action === "start") {
+      setStatuses((prev) => {
+        const next = { ...prev };
+        TEAM_AGENTS.forEach((a) => {
+          if (next[a.id] !== "running") next[a.id] = "pending";
+        });
+        return next;
       });
-      return next;
-    });
+    }
+    let dispatchedRealtime = false;
     try {
-      const res = await fetch("/api/team/start-all", { method: "POST" });
+      const res = await fetch("/api/team/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
       const data = await res.json().catch(() => null);
-      if (!res.ok || (data && data.ok === false)) {
-        toast(data?.error ?? "Team start error", "error", 4000);
+      if (res.ok && data?.ok) {
+        dispatchedRealtime = true;
+      } else if (data?.error) {
+        // Non bloccante: log e tenta il fallback locale comunque.
+        console.warn("/api/team/command failed:", data.error);
+      }
+    } catch (e) {
+      console.warn("/api/team/command network error:", e);
+    }
+    // Legacy fallback locale (start-all/stop-all) — utile per setup
+    // local-mode senza subscriber Realtime. In VPS-mode è no-op /
+    // 500-benigno, ma non rompe lo UX (toast soppresso quando il
+    // realtime dispatch è andato a buon fine).
+    try {
+      const res = await fetch(legacyFallback, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!dispatchedRealtime && (!res.ok || (data && data.ok === false))) {
+        toast(
+          data?.error ?? `Team ${action} error`,
+          "error",
+          4000,
+        );
       }
     } catch {
-      toast("Team start error", "error");
-    } finally {
-      setBulkLoading(null);
-      fetchStatus();
+      if (!dispatchedRealtime) {
+        toast(`Team ${action} error`, "error");
+      }
     }
+    setBulkLoading(null);
+    fetchStatus();
   };
 
-  const stopAll = async () => {
-    if (bulkLoading) return;
-    setBulkLoading("stop");
-    try {
-      const res = await fetch("/api/team/stop-all", { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || (data && data.ok === false)) {
-        toast(data?.error ?? "Team stop error", "error", 4000);
-      }
-    } catch {
-      toast("Team stop error", "error");
-    } finally {
-      setBulkLoading(null);
-      fetchStatus();
-    }
-  };
+  const startAll = () => dispatchTeamCommand("start", "/api/team/start-all");
+  const stopAll = () => dispatchTeamCommand("stop", "/api/team/stop-all");
 
   /* ── Render ──────────────────────────────────────────────────── */
 
