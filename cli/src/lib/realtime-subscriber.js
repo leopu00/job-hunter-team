@@ -177,9 +177,19 @@ async function processCommand(baseUrl, token, command) {
   }
 
   const res = await execBusCommand(action, target);
+  // jht team start stampa errori user-facing su stdout (colori ANSI),
+  // non su stderr. Quando exit != 0, prefer stdout per dare un messaggio
+  // utile alla UI ("✗ ASSISTENTE — claude non trovato..."), fallback su
+  // stderr e exit code. Strip ANSI per leggibilità.
+  const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+  let errMsg;
+  if (!res.ok) {
+    const raw = res.stdout?.trim() || res.stderr?.trim() || `exit code ${res.exitCode}`;
+    errMsg = stripAnsi(raw).slice(-2000);
+  }
   await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
     status: res.ok ? 'done' : 'error',
-    error: res.ok ? undefined : (res.stderr || `exit code ${res.exitCode}`).slice(0, 2000),
+    error: errMsg,
   }).catch((err) => {
     log('error', 'command.update-failed', { id, err: err.message });
   });
