@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { isLocalRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,9 @@ function getAgentInfo(session: string) {
 }
 
 export async function GET() {
+  if (!(await isLocalRequest())) {
+    return NextResponse.json({ agents: [], isLocalhost: false, remote: true });
+  }
   try {
     const { stdout } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',

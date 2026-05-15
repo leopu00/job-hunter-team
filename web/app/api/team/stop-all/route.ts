@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { enqueueIfCompany } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 const KEEP_ALIVE = new Set(["ASSISTENTE"]);
 
 export async function POST() {
+  const remote = await enqueueIfCompany("stop", "all");
+  if (remote) return remote;
   try {
     // Lista dinamica via `tmux ls`: prende tutte le sessioni live,
     // inclusi gli spawn dinamici del Capitano (SCOUT-2, ANALISTA-2, ...).

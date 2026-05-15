@@ -3,6 +3,7 @@ import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import { runBash } from "@/lib/shell";
 import { requireAuth } from "@/lib/auth";
+import { blockIfCompany } from "@/lib/team-bus";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -41,6 +42,10 @@ const ATTACH_CMD = dockerContainer
 export async function POST() {
   const authError = await requireAuth();
   if (authError) return authError;
+  const blocked = await blockIfCompany(
+    "Apertura terminale richiede un terminale nativo. Usa l'app desktop o `tmux attach -t CAPITANO` via SSH alla VPS.",
+  );
+  if (blocked) return blocked;
 
   try {
     // Verifica che la sessione CAPITANO esista
