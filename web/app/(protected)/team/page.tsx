@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../../components/Toast";
+import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 import TeamOrgChart from "./_components/TeamOrgChart";
 import UsageChart from "./_components/UsageChart";
 import UsageTokensChart from "./_components/UsageTokensChart";
@@ -135,8 +136,7 @@ export default function TeamPage() {
     });
     return init;
   });
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [bulkLoading, setBulkLoading] = useState<"start" | "stop" | null>(null);
+  const [actionTarget, setActionTarget] = useState<string | null>(null);
   const prevStatusesRef = useRef<Record<string, AgentStatus> | null>(null);
 
   // Assistente vive sempre (lifecycle legato al container Desktop, non
@@ -207,93 +207,102 @@ export default function TeamPage() {
 
   /* ── Start/Stop ──────────────────────────────────────────────── */
 
-  const handleAction = async (agentId: string, action: "start" | "stop") => {
-    setActionLoading(agentId);
+  const agentActionCmd = useTeamCommandPoller();
+
+  const handleAction = (agentId: string, action: "start" | "stop") => {
+    setActionTarget(agentId);
     if (action === "start") {
       setStatuses((prev) => ({ ...prev, [agentId]: "pending" }));
     }
-    try {
-      const res = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId, action }),
-      });
-      const data = await res.json();
-      if (!data.ok && data.error) {
-        toast(data.error, "error", 4000);
-      }
-      // Refresh status dopo l'azione
-      setTimeout(fetchStatus, 1500);
-    } catch {
-      toast("Network error", "error", 4000);
-    }
-    setActionLoading(null);
+    agentActionCmd.run("/api/agents", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, action }),
+    });
   };
+
+  useEffect(() => {
+    if (
+      agentActionCmd.state === "done" ||
+      agentActionCmd.state === "local"
+    ) {
+      fetchStatus();
+      setActionTarget(null);
+    } else if (
+      agentActionCmd.state === "error" ||
+      agentActionCmd.state === "timeout"
+    ) {
+      toast(
+        agentActionCmd.error ?? "Errore esecuzione comando agente",
+        "error",
+        6000,
+      );
+      setActionTarget(null);
+    }
+  }, [agentActionCmd.state, agentActionCmd.error, fetchStatus, toast]);
+
+  // actionLoading retrocompat: i bottoni leggono questo per disabilitarsi.
+  const actionLoading: string | null =
+    agentActionCmd.state === "posting" ||
+    agentActionCmd.state === "pending" ||
+    agentActionCmd.state === "running"
+      ? actionTarget
+      : null;
 
   /* ── Azioni bulk ─────────────────────────────────────────────── */
 
-  // Dispatch comando team via Realtime bus (team_commands DB row).
-  // Il subscriber sulla VPS riceve l'evento WS e esegue jht team
-  // start/stop. Fallback: chiama anche start-all/stop-all per la
-  // modalità local (no subscriber). In VPS mode start-all fa 500
-  // benigno (host non-Linux), ignorato.
-  const dispatchTeamCommand = async (
-    action: "start" | "stop",
-    legacyFallback: string,
-  ) => {
-    if (bulkLoading) return;
-    setBulkLoading(action);
-    if (action === "start") {
-      setStatuses((prev) => {
-        const next = { ...prev };
-        TEAM_AGENTS.forEach((a) => {
-          if (next[a.id] !== "running") next[a.id] = "pending";
-        });
-        return next;
-      });
-    }
-    let dispatchedRealtime = false;
-    try {
-      const res = await fetch("/api/team/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.ok) {
-        dispatchedRealtime = true;
-      } else if (data?.error) {
-        // Non bloccante: log e tenta il fallback locale comunque.
-        console.warn("/api/team/command failed:", data.error);
-      }
-    } catch (e) {
-      console.warn("/api/team/command network error:", e);
-    }
-    // Legacy fallback locale (start-all/stop-all) — utile per setup
-    // local-mode senza subscriber Realtime. In VPS-mode è no-op /
-    // 500-benigno, ma non rompe lo UX (toast soppresso quando il
-    // realtime dispatch è andato a buon fine).
-    try {
-      const res = await fetch(legacyFallback, { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!dispatchedRealtime && (!res.ok || (data && data.ok === false))) {
-        toast(
-          data?.error ?? `Team ${action} error`,
-          "error",
-          4000,
-        );
-      }
-    } catch {
-      if (!dispatchedRealtime) {
-        toast(`Team ${action} error`, "error");
-      }
-    }
-    setBulkLoading(null);
-    fetchStatus();
-  };
+  // start-all e stop-all dispatchano via `enqueueIfRemote` lato server:
+  // su cloud writeranno una riga in team_commands (consumata dal subscriber
+  // VPS), su local eseguono shell direttamente. L'hook gestisce POST →
+  // polling /api/team/command/[id] → done|error, così il bottone resta
+  // disabled finché il subscriber non risponde davvero.
+  const teamStartCmd = useTeamCommandPoller();
+  const teamStopCmd = useTeamCommandPoller();
 
-  const startAll = () => dispatchTeamCommand("start", "/api/team/start-all");
-  const stopAll = () => dispatchTeamCommand("stop", "/api/team/stop-all");
+  const startAll = () => {
+    setStatuses((prev) => {
+      const next = { ...prev };
+      TEAM_AGENTS.forEach((a) => {
+        if (next[a.id] !== "running") next[a.id] = "pending";
+      });
+      return next;
+    });
+    teamStartCmd.run("/api/team/start-all");
+  };
+  const stopAll = () => teamStopCmd.run("/api/team/stop-all");
+
+  // Aggiorno status quando il bus arriva a terminal + mostra toast errori.
+  useEffect(() => {
+    if (teamStartCmd.state === "done" || teamStartCmd.state === "local") {
+      fetchStatus();
+    } else if (
+      teamStartCmd.state === "error" ||
+      teamStartCmd.state === "timeout"
+    ) {
+      toast(teamStartCmd.error ?? "Team start error", "error", 6000);
+    }
+  }, [teamStartCmd.state, teamStartCmd.error, fetchStatus, toast]);
+  useEffect(() => {
+    if (teamStopCmd.state === "done" || teamStopCmd.state === "local") {
+      fetchStatus();
+    } else if (
+      teamStopCmd.state === "error" ||
+      teamStopCmd.state === "timeout"
+    ) {
+      toast(teamStopCmd.error ?? "Team stop error", "error", 6000);
+    }
+  }, [teamStopCmd.state, teamStopCmd.error, fetchStatus, toast]);
+
+  // bulkLoading retrocompat: i bottoni esistenti leggono questa var.
+  const bulkLoading: "start" | "stop" | null =
+    teamStartCmd.state === "posting" ||
+    teamStartCmd.state === "pending" ||
+    teamStartCmd.state === "running"
+      ? "start"
+      : teamStopCmd.state === "posting" ||
+          teamStopCmd.state === "pending" ||
+          teamStopCmd.state === "running"
+        ? "stop"
+        : null;
 
   /* ── Render ──────────────────────────────────────────────────── */
 
