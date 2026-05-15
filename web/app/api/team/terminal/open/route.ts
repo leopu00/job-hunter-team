@@ -3,6 +3,7 @@ import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import { runBash } from "@/lib/shell";
 import { requireAuth } from "@/lib/auth";
+import { blockIfRemote } from "@/lib/team-bus";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -49,6 +50,10 @@ function attachCmd(session: string): string {
 export async function POST(req: NextRequest) {
   const authError = await requireAuth();
   if (authError) return authError;
+  const blocked = await blockIfRemote(
+    "Apertura terminale richiede un terminale nativo. Usa l'app desktop o `tmux attach -t <session>` via SSH alla VPS.",
+  );
+  if (blocked) return blocked;
 
   const session = req.nextUrl.searchParams.get("session") ?? "";
   if (!SESSION_RE.test(session)) {
