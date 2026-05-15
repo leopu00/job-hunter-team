@@ -35,6 +35,27 @@ if [ "${JHT_SKIP_HOST_SETUP:-0}" = "1" ]; then
   exit 0
 fi
 
+# ── Flag parser ──────────────────────────────────────────────────────────
+# --host-type=vps|local salta sia la lingua picker sia la detection prompt.
+# Usato da install.sh quando viene invocato con --pairing-token: il flusso
+# desktop VPS sa già che si tratta di una VPS, non c'è utente al terminale.
+FORCED_HOST_TYPE=""
+NON_INTERACTIVE=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --host-type=*) FORCED_HOST_TYPE="${1#*=}" ;;
+    --host-type)   FORCED_HOST_TYPE="$2"; shift ;;
+    --non-interactive) NON_INTERACTIVE=1 ;;
+    *) warn "Argomento ignorato: $1" ;;
+  esac
+  shift
+done
+case "$FORCED_HOST_TYPE" in
+  ""|vps|local) : ;;
+  *) warn "--host-type non valido ($FORCED_HOST_TYPE) — ignorato"; FORCED_HOST_TYPE="" ;;
+esac
+[ -n "$FORCED_HOST_TYPE" ] && NON_INTERACTIVE=1
+
 # ── Language picker (first prompt) ───────────────────────────────────────
 # Default English (allineato con la regola lang_picker_default_english
 # del desktop): la grande maggioranza degli utenti non e' italiana, ed
@@ -53,7 +74,7 @@ if [ -f "$HOST_ENV_PATH" ]; then
   fi
 fi
 JHT_LANG="$JHT_LANG_DEFAULT"
-if [ -t 0 ]; then
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   printf "\n${CYAN}━━━ Setup host (preflight) ━━━${RESET}\n\n"
   printf "Choose your language / Scegli la lingua:\n\n"
   if [ "$JHT_LANG_DEFAULT" = "it" ]; then
@@ -125,7 +146,12 @@ printf "Rilevato: %b\n" "$DETECTED_LABEL"
 # Niente finta-checkbox `[V]`/`[ ]`: era ambigua (sembrava interattiva).
 # Il default va tra parentesi quadre nel prompt, premere Invio lo accetta.
 HOST_TYPE="$DETECTED"
-if [ -t 0 ]; then
+# Override esplicito via --host-type: il flusso desktop VPS lo passa per
+# evitare la prompt (non c'è utente al terminale durante install.sh remoto).
+if [ -n "$FORCED_HOST_TYPE" ]; then
+  HOST_TYPE="$FORCED_HOST_TYPE"
+fi
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   if [ "$DETECTED" = "vps" ]; then
     DEFAULT_NUM=2
   else
@@ -197,7 +223,7 @@ printf "\n${DIM}Con %d GB di RAM il team puo' andare in OOM sotto carico.${RESET
 printf "Configuro %d GB di swap in %s? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
 
 DO_SWAP=1
-if [ -t 0 ]; then
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   read -r ANSWER
   case "$ANSWER" in
     n|N|no|NO) DO_SWAP=0 ;;
