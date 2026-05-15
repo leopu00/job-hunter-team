@@ -808,6 +808,16 @@ run_host_setup_vps() {
   else
     warn "host-setup VPS uscito con errore — proseguo (pair manuale potrebbe servire)"
   fi
+  # Allinea ownership di ~/.jht al UID del container `jht` (1001, vedi
+  # Dockerfile `useradd jht`). Senza questo, il container parte come UID
+  # 1001 e non riesce a creare cloud.json in /jht_home (bind-mount di
+  # /root/.jht che è root:root). pid1 → cloud pair → EACCES.
+  local jht_home="$HOME/.jht"
+  if command -v chown >/dev/null 2>&1; then
+    chown -R 1001:1001 "$jht_home" 2>/dev/null && \
+      ok "Ownership $jht_home → 1001:1001 (container UID)" || \
+      warn "chown $jht_home fallito — il pair potrebbe richiedere fix manuale"
+  fi
 }
 
 maybe_onboard() {
