@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDevMode } from "@/components/SettingsMenu";
+import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 
 type Status = { active: boolean; output: string };
 type ChatMsg = { role: "user" | "assistant"; text: string; ts: number };
@@ -48,8 +49,8 @@ function renderMarkdown(text: string) {
 
 export default function AssistentePage() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [startMsg, setStartMsg] = useState<string | null>(null);
+  const startCmd = useTeamCommandPoller();
+  const stopCmd = useTeamCommandPoller();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -133,20 +134,47 @@ export default function AssistentePage() {
       termRef.current.scrollTop = termRef.current.scrollHeight;
   }, [status?.output, showTerminal]);
 
-  const handleStart = async () => {
-    setStarting(true);
-    setStartMsg(null);
-    try {
-      const res = await fetch("/api/assistente/start", { method: "POST" });
-      const data = await res.json();
-      setStartMsg(data.message ?? (data.ok ? "Avviato" : data.error));
-      await fetchStatus();
-    } catch {
-      setStartMsg("Errore di rete");
-    } finally {
-      setStarting(false);
+  const handleStart = () => startCmd.run("/api/assistente/start");
+  const handleStop = () => stopCmd.run("/api/assistente/stop");
+
+  // Quando un comando arriva a stato terminal positivo, aggiorna subito
+  // lo status (no need to wait il polling 5s). Su error/timeout lascio
+  // il messaggio visibile finché l'utente non riprova.
+  useEffect(() => {
+    if (startCmd.state === "done" || startCmd.state === "local") {
+      fetchStatus();
     }
-  };
+  }, [startCmd.state, fetchStatus]);
+  useEffect(() => {
+    if (stopCmd.state === "done" || stopCmd.state === "local") {
+      fetchStatus();
+    }
+  }, [stopCmd.state, fetchStatus]);
+
+  const startBusy =
+    startCmd.state === "posting" ||
+    startCmd.state === "pending" ||
+    startCmd.state === "running";
+  const stopBusy =
+    stopCmd.state === "posting" ||
+    stopCmd.state === "pending" ||
+    stopCmd.state === "running";
+  const startLabel =
+    startCmd.state === "posting"
+      ? "Invio…"
+      : startCmd.state === "pending"
+        ? "In coda sulla VPS…"
+        : startCmd.state === "running"
+          ? "Avvio in corso…"
+          : "Avvia Assistente";
+  const startBanner =
+    startCmd.error ||
+    (startCmd.state === "timeout"
+      ? "Timeout: il subscriber sulla VPS non risponde."
+      : null) ||
+    startCmd.message ||
+    stopCmd.error ||
+    stopCmd.message;
 
   const handleSend = async () => {
     if ((!input.trim() && attachedFiles.length === 0) || sending) return;
@@ -339,38 +367,51 @@ export default function AssistentePage() {
               {!isActive && (
                 <button
                   onClick={handleStart}
-                  disabled={starting || status == null}
+                  disabled={startBusy || status == null}
                   className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
                   style={{
                     background:
-                      starting || status == null
+                      startBusy || status == null
                         ? "var(--color-border)"
                         : "var(--color-green)",
                     color:
-                      starting || status == null ? "var(--color-dim)" : "#000",
+                      startBusy || status == null ? "var(--color-dim)" : "#000",
                     cursor:
-                      starting || status == null ? "not-allowed" : "pointer",
-                    opacity: starting ? 0.7 : 1,
+                      startBusy || status == null ? "not-allowed" : "pointer",
+                    opacity: startBusy ? 0.7 : 1,
                   }}
                 >
-                  {starting ? "Avvio in corso…" : "Avvia Assistente"}
+                  {startLabel}
                 </button>
               )}
               {isActive && (
                 <button
-                  onClick={async () => {
-                    await fetch("/api/assistente/stop", { method: "POST" });
-                    await fetchStatus();
-                  }}
+                  onClick={handleStop}
+                  disabled={stopBusy}
                   className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
-                  style={{ color: "var(--color-red)", cursor: "pointer" }}
+                  style={{
+                    color: "var(--color-red)",
+                    cursor: stopBusy ? "not-allowed" : "pointer",
+                    opacity: stopBusy ? 0.6 : 1,
+                  }}
                 >
-                  Ferma
+                  {stopBusy ? "Fermando…" : "Ferma"}
                 </button>
               )}
-              {startMsg && (
-                <span className="text-[11px] text-[var(--color-muted)]">
-                  {startMsg}
+              {startBanner && (
+                <span
+                  className="text-[11px]"
+                  style={{
+                    color:
+                      startCmd.state === "error" ||
+                      startCmd.state === "timeout" ||
+                      stopCmd.state === "error" ||
+                      stopCmd.state === "timeout"
+                        ? "var(--color-red)"
+                        : "var(--color-muted)",
+                  }}
+                >
+                  {startBanner}
                 </span>
               )}
             </div>
@@ -730,7 +771,7 @@ export default function AssistentePage() {
       </div>
 
       {/* Empty state */}
-      {!isActive && status != null && !startMsg && (
+      {!isActive && status != null && !startBanner && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="text-4xl mb-4 opacity-30">👨‍💼</div>
           <p className="text-[var(--color-muted)] text-[13px]">
