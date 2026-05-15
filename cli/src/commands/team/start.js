@@ -97,6 +97,7 @@ async function startActionContainer(agentArg, options = {}) {
 
   let started = 0;
   let skipped = 0;
+  let errored = 0;
 
   if (useBootstrap) {
     for (const item of bootstrap) {
@@ -107,24 +108,35 @@ async function startActionContainer(agentArg, options = {}) {
       const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
+      else errored++;
     }
   } else {
     const parsed = parseAgentArg(agentArg);
     if (!parsed) {
       console.log(`  ${c.red('✗')} ${agentArg} — ruolo non riconosciuto`);
+      errored++;
     } else {
       const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
+      else errored++;
     }
   }
 
   console.log('');
-  console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}`);
+  console.log(`Risultato: ${c.green(started + ' avviati')}, ${c.yellow(skipped + ' gia attivi')}${errored ? `, ${c.red(errored + ' errori')}` : ''}`);
   if (useBootstrap) {
     console.log(c.dim('  Il Capitano scalera' + ' gli altri agenti secondo le soglie del Bridge.'));
   }
   console.log('');
+
+  // Exit 1 quando nessun agente è stato avviato e nessuno era già attivo:
+  // il subscriber (cli/src/lib/realtime-subscriber.js) usa l'exit code per
+  // marcare team_commands.status='error' invece di 'done' silent. Skipped
+  // (= già attivo) conta come success per l'utente.
+  if (started === 0 && skipped === 0) {
+    process.exit(1);
+  }
 }
 
 function launchInContainer({ role, instance, mode, env, notATmuxSession, sessionLabel }) {
