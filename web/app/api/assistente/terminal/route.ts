@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { runBash } from "@/lib/shell";
 import { requireAuth } from "@/lib/auth";
+import { blockIfRemote } from "@/lib/team-bus";
 
 const execAsync = promisify(exec);
 
@@ -12,6 +13,10 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const authError = await requireAuth();
   if (authError) return authError;
+  const blocked = await blockIfRemote(
+    "Apertura terminale richiede un terminale nativo. Usa l'app desktop o `tmux attach -t ASSISTENTE` via SSH alla VPS.",
+  );
+  if (blocked) return blocked;
 
   try {
     // Verifica che la sessione ASSISTENTE esista

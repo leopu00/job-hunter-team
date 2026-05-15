@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { isLocalRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,9 @@ export async function GET(req: NextRequest) {
   const session = req.nextUrl.searchParams.get("session") ?? "";
   if (!VALID_SESSION.test(session)) {
     return NextResponse.json({ error: "invalid session" }, { status: 400 });
+  }
+  if (!(await isLocalRequest())) {
+    return NextResponse.json({ output: "", remote: true });
   }
 
   try {
