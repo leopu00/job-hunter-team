@@ -7,6 +7,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 
 type Entry = {
   ts: string;
@@ -320,8 +321,7 @@ export default function SentinellaCompany() {
 
   // Stato operativo tmux (active + output terminale)
   const [op, setOp] = useState<OpStatus | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [startMsg, setStartMsg] = useState<string | null>(null);
+  const startCmd = useTeamCommandPoller();
   const termRef = useRef<HTMLDivElement>(null);
 
   // Intervallo tick (min) — persistito in jht.config.json via /api/sentinella/config.
@@ -387,20 +387,41 @@ export default function SentinellaCompany() {
       termRef.current.scrollTop = termRef.current.scrollHeight;
   }, [op?.output]);
 
-  const handleStart = async () => {
-    setStarting(true);
-    setStartMsg(null);
-    try {
-      const r = await fetch("/api/sentinella/start", { method: "POST" });
-      const j = await r.json();
-      setStartMsg(j.message ?? (j.ok ? "Avviata" : j.error));
-      await loadOp();
-    } catch {
-      setStartMsg("Errore di rete");
-    } finally {
-      setStarting(false);
-    }
-  };
+  // Niente /api/sentinella/start dedicato: usiamo il bus team_commands
+  // direttamente. Su cloud → INSERT in team_commands; su local mode il
+  // backend non c'è per single-target sentinella, quindi questo path è
+  // pensato per VPS.
+  const handleStart = () =>
+    startCmd.run("/api/team/command", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        payload: { target: "sentinella" },
+      }),
+    });
+
+  useEffect(() => {
+    if (startCmd.state === "done" || startCmd.state === "local") loadOp();
+  }, [startCmd.state, loadOp]);
+
+  const startBusy =
+    startCmd.state === "posting" ||
+    startCmd.state === "pending" ||
+    startCmd.state === "running";
+  const startLabel =
+    startCmd.state === "posting"
+      ? "Invio…"
+      : startCmd.state === "pending"
+        ? "In coda sulla VPS…"
+        : startCmd.state === "running"
+          ? "Avvio in corso…"
+          : "Avvia Sentinella";
+  const startMsg =
+    startCmd.error ||
+    (startCmd.state === "timeout"
+      ? "Timeout: il subscriber sulla VPS non risponde."
+      : null) ||
+    startCmd.message;
 
   const handleSaveTick = async () => {
     setSavingTick(true);
@@ -524,17 +545,17 @@ export default function SentinellaCompany() {
         {!isActive && (
           <button
             onClick={handleStart}
-            disabled={starting || op == null}
+            disabled={startBusy || op == null}
             className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
             style={{
               background:
-                starting || op == null ? "var(--color-border)" : "#607d8b",
-              color: starting || op == null ? "var(--color-dim)" : "#fff",
-              cursor: starting || op == null ? "not-allowed" : "pointer",
-              opacity: starting ? 0.7 : 1,
+                startBusy || op == null ? "var(--color-border)" : "#607d8b",
+              color: startBusy || op == null ? "var(--color-dim)" : "#fff",
+              cursor: startBusy || op == null ? "not-allowed" : "pointer",
+              opacity: startBusy ? 0.7 : 1,
             }}
           >
-            {starting ? "Avvio in corso…" : "Avvia Sentinella"}
+            {startLabel}
           </button>
         )}
 
@@ -554,7 +575,15 @@ export default function SentinellaCompany() {
         )}
 
         {startMsg && (
-          <span className="text-[11px] text-[var(--color-muted)]">
+          <span
+            className="text-[11px]"
+            style={{
+              color:
+                startCmd.state === "error" || startCmd.state === "timeout"
+                  ? "var(--color-red)"
+                  : "var(--color-muted)",
+            }}
+          >
             {startMsg}
           </span>
         )}
