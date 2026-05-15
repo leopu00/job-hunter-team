@@ -56,11 +56,41 @@ async function loadCloudConfig() {
   }
 }
 
-function execTeamAction(action) {
+const VALID_TARGETS = new Set([
+  'all',
+  'assistente',
+  'capitano',
+  'sentinella',
+  'scout',
+  'scorer',
+  'analista',
+  'scrittore',
+  'critico',
+  'mentor',
+  'bridge',
+]);
+
+// Map (action, target) → { cmd, args } per spawn.
+// 'all' = team-wide via `jht team <action>`.
+// Single agent = `jht team <action> <agente>` (team.js gestisce già il caso).
+// 'bridge' = script dedicato in .launcher/.
+function resolveCommand(action, target) {
+  if (target === 'bridge') {
+    return {
+      cmd: '/bin/bash',
+      args: ['/app/.launcher/bridge-control.sh', action === 'start' ? 'start' : 'stop'],
+    };
+  }
+  const jhtArgs = ['team', action];
+  if (target && target !== 'all') jhtArgs.push(target);
+  return { cmd: process.execPath, args: [JHT_BIN, ...jhtArgs] };
+}
+
+function execBusCommand(action, target) {
   return new Promise((resolve) => {
-    const args = [JHT_BIN, 'team', action];
-    log('info', 'exec.start', { args });
-    const child = spawn(process.execPath, args, {
+    const { cmd, args } = resolveCommand(action, target);
+    log('info', 'exec.start', { cmd, args, action, target });
+    const child = spawn(cmd, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, IS_CONTAINER: '1' },
     });
@@ -74,7 +104,7 @@ function execTeamAction(action) {
     });
     child.on('exit', (code) => {
       const ok = code === 0;
-      log(ok ? 'info' : 'error', 'exec.exit', { code, action });
+      log(ok ? 'info' : 'error', 'exec.exit', { code, action, target });
       resolve({ ok, exitCode: code, stdout, stderr });
     });
   });
@@ -105,8 +135,11 @@ async function apiPatch(baseUrl, token, path, payload) {
 }
 
 async function processCommand(baseUrl, token, command) {
-  const { id, action } = command;
-  log('info', 'command.received', { id, action });
+  const { id, action, payload } = command;
+  const target = ((payload && typeof payload === 'object' && payload.target) || 'all')
+    .toString()
+    .toLowerCase();
+  log('info', 'command.received', { id, action, target });
 
   // Atomic claim: pending → running. Se altro subscriber ha gia'
   // preso, 404 → skip senza errore.
@@ -126,8 +159,24 @@ async function processCommand(baseUrl, token, command) {
     log('error', 'command.invalid-action', { id, action });
     return;
   }
+  if (!VALID_TARGETS.has(target)) {
+    await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
+      status: 'error',
+      error: `invalid target: ${target}`,
+    }).catch(() => {});
+    log('error', 'command.invalid-target', { id, target });
+    return;
+  }
+  // bridge non ha restart; mappiamo a stop+start sarebbe out-of-scope qui.
+  if (target === 'bridge' && action === 'restart') {
+    await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
+      status: 'error',
+      error: 'bridge non supporta restart; usa stop+start',
+    }).catch(() => {});
+    return;
+  }
 
-  const res = await execTeamAction(action);
+  const res = await execBusCommand(action, target);
   await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
     status: res.ok ? 'done' : 'error',
     error: res.ok ? undefined : (res.stderr || `exit code ${res.exitCode}`).slice(0, 2000),
@@ -137,6 +186,7 @@ async function processCommand(baseUrl, token, command) {
   log(res.ok ? 'info' : 'error', 'command.processed', {
     id,
     action,
+    target,
     ok: res.ok,
     exitCode: res.exitCode,
   });
