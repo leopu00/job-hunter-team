@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import { runBash, runScript, toWslPath } from "@/lib/shell";
+import { enqueueIfCompany } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const remote = await enqueueIfCompany("start", "assistente");
+  if (remote) return remote;
   try {
     const { stdout: sessions } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',

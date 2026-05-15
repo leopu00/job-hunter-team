@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import { runBash, runScript, toWslPath } from "@/lib/shell";
+import { enqueueIfCompany } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const remote = await enqueueIfCompany("start", "capitano");
+  if (remote) return remote;
   try {
     // Controlla se CAPITANO è già attivo
     const { stdout: sessions } = await runBash(

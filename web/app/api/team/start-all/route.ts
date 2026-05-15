@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import { runBash, runScript, toWslPath } from "@/lib/shell";
 import { requireAuth } from "@/lib/auth";
+import { enqueueIfCompany } from "@/lib/team-bus";
 import { JHT_CONFIG_PATH } from "@/lib/jht-paths";
 import path from "path";
 
@@ -121,6 +122,8 @@ const shellQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 export async function POST() {
   const authError = await requireAuth();
   if (authError) return authError;
+  const remote = await enqueueIfCompany("start", "all");
+  if (remote) return remote;
 
   try {
     const repoRoot = path.resolve(process.cwd(), "..");
