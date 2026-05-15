@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, isLocalRequest } from "@/lib/auth";
+import { enqueueIfRemote } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,14 @@ async function activeSessions(): Promise<Set<string>> {
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
+  // Su cloud (Vercel) tmux non esiste: ritorna stub con agenti stopped
+  // invece di sprecare un syscall che catch-and-empty-set ogni 5s.
+  if (!(await isLocalRequest())) {
+    return NextResponse.json({
+      agents: AGENTS.map((a) => ({ ...a, status: "stopped", instances: 0 })),
+      remote: true,
+    });
+  }
   const active = await activeSessions();
   const agents = AGENTS.map((agent) => {
     // Conta le istanze attive: il nome esatto della sessione oppure i
@@ -101,6 +110,15 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
   }
+
+  // Cloud dispatch: la dashboard prod chiama questo endpoint da Vercel
+  // (no tmux). Inoltriamo al bus team_commands con target=agent.id; il
+  // subscriber sulla VPS esegue `jht team start/stop <agent>`. Local: shell.
+  const remote = await enqueueIfRemote(
+    action as "start" | "stop",
+    agent.id,
+  );
+  if (remote) return remote;
 
   const active = await activeSessions();
   const running =
