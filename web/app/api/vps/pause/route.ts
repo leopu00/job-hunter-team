@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { runBash } from "@/lib/shell";
+import { blockIfRemote } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,13 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const denied = await requireAuth();
   if (denied) return denied;
+  // Pause da cloud è semanticamente non-sense: senza container il bus
+  // smette di rispondere e non si può riaccendere via cloud (servirebbe
+  // SSH alla VPS). Lo bocchiamo da Vercel con messaggio chiaro.
+  const blocked = await blockIfRemote(
+    "Pause team disponibile solo dall'app desktop (richiede docker locale). Da cloud, usa Stop team team-wide.",
+  );
+  if (blocked) return blocked;
 
   const container = (process.env.JHT_CONTAINER_NAME || "jht").trim();
   // Sanity check: niente caratteri shell pericolosi nel container name.
