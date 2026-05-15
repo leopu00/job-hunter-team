@@ -16,7 +16,10 @@ const NOT_CLOUD = NextResponse.json(
 // Cap 6/min per IP: lascia spazio a retry su rete instabile, blocca abuso.
 const REGISTER_LIMIT_PER_MIN = 6;
 
-const REFRESH_TOKEN_RE = /^[A-Za-z0-9_\-.]{16,2048}$/;
+// I refresh_token emessi dal nuovo auth Supabase sono stringhe opaque
+// brevi (~12 char, es. "7q436frro2yw"), non JWT. Il vecchio minimo 16
+// rifiutava i token reali con HTTP 400 "refresh_token malformato".
+const REFRESH_TOKEN_RE = /^[A-Za-z0-9_\-.]{8,2048}$/;
 const USER_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
