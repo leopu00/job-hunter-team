@@ -4,19 +4,36 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-// Dispatch comando team via Supabase Realtime bus. Inserisce una riga
-// in team_commands; il subscriber sulla VPS (shared/daemon/realtime-
-// subscriber.js) riceve l'evento via WebSocket Realtime e esegue
-// `jht team start/stop/restart` dentro il container. Il client può
-// fare SELECT sulla stessa riga (RLS=own) per il feedback di
-// processing (status: pending → running → done|error).
+// Dispatch comando team via team_commands bus. Inserisce una riga
+// in DB; il subscriber sulla VPS (cli/src/lib/realtime-subscriber.js)
+// polla l'endpoint /api/cloud-sync/team-commands e esegue il comando
+// dentro il container. Il client può SELECT sulla stessa riga (RLS=own)
+// per il feedback di processing (pending → running → done|error).
 //
-// Body: { action: 'start' | 'stop' | 'restart', payload?: object }
+// Body:
+//   { action: 'start' | 'stop' | 'restart',
+//     payload?: { target?: 'all' | '<agent>' | 'bridge' } }
+//
+//   - target='all' (default) → team-wide (`jht team <action>`)
+//   - target='<agent>' → single agent (assistente, capitano, ...)
+//   - target='bridge' → sentinel-bridge.py control
+//
 // Response: { ok: true, command: { id, status, requested_at } }
-//
-// Vedi migration 012_team_commands.sql per lo schema.
 
 const VALID_ACTIONS = new Set(['start', 'stop', 'restart'])
+const VALID_TARGETS = new Set([
+  'all',
+  'assistente',
+  'capitano',
+  'sentinella',
+  'scout',
+  'scorer',
+  'analista',
+  'scrittore',
+  'critico',
+  'mentor',
+  'bridge',
+])
 
 export async function POST(req: NextRequest) {
   const authBlock = await requireAuth()
@@ -45,12 +62,24 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const rawPayload = (body.payload && typeof body.payload === 'object') ? body.payload : {}
+  const target = String((rawPayload as Record<string, unknown>).target ?? 'all')
+    .trim()
+    .toLowerCase()
+  if (!VALID_TARGETS.has(target)) {
+    return NextResponse.json(
+      { ok: false, error: `invalid target: must be one of ${[...VALID_TARGETS].join(', ')}` },
+      { status: 400 },
+    )
+  }
+  const normalizedPayload = { ...rawPayload, target }
+
   const { data, error } = await supabase
     .from('team_commands')
     .insert({
       user_id: user.id,
       action,
-      payload: body.payload || {},
+      payload: normalizedPayload,
     })
     .select('id, status, requested_at')
     .single()
