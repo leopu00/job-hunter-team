@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { requireAuth } from "@/lib/auth";
+import { blockIfCompany } from "@/lib/team-bus";
 import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,10 @@ export async function GET() {
 export async function POST(req: Request) {
   const denied = await requireAuth();
   if (denied) return denied;
+  const blocked = await blockIfCompany(
+    "Backup richiede filesystem locale (tar+gzip). Crea il backup dall'app desktop o via `jht backup create` su SSH alla VPS.",
+  );
+  if (blocked) return blocked;
   try {
     const body = await req.json().catch(() => ({}));
     const sources: string[] = body.sources?.length
@@ -129,6 +134,10 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const denied = await requireAuth();
   if (denied) return denied;
+  const blocked = await blockIfCompany(
+    "Restore richiede filesystem locale. Usa l'app desktop o `jht backup restore <id>` via SSH alla VPS.",
+  );
+  if (blocked) return blocked;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id)
@@ -161,6 +170,10 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   const denied = await requireAuth();
   if (denied) return denied;
+  const blocked = await blockIfCompany(
+    "Delete backup richiede filesystem locale. Usa l'app desktop o `jht backup delete <id>` via SSH alla VPS.",
+  );
+  if (blocked) return blocked;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id)

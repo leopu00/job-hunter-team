@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { isLocalRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // Su Vercel (no tmux) skippiamo subito invece di lasciare runBash
+  // crashare in catch silenzioso ogni 5s: risparmio CPU + log puliti.
+  if (!(await isLocalRequest())) {
+    return NextResponse.json({ active: false, output: "", remote: true });
+  }
   try {
     const { stdout: sessions } = await runBash(
       'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
