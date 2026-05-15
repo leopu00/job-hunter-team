@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { enqueueIfRemote } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const remote = await enqueueIfRemote("stop", "capitano");
+  if (remote) return remote;
   try {
     await runBash("tmux kill-session -t CAPITANO 2>/dev/null");
     return NextResponse.json({ ok: true });

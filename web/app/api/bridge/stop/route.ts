@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { runScript } from "@/lib/shell";
+import { enqueueIfRemote } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 // POST /api/bridge/stop — uccide sentinel-bridge.py + rimuove pidfile.
 export async function POST() {
+  const remote = await enqueueIfRemote("stop", "bridge");
+  if (remote) return remote;
   try {
     await runScript("/app/.launcher/bridge-control.sh", "stop");
     return NextResponse.json({ ok: true });
