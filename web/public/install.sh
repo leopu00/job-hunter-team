@@ -777,10 +777,37 @@ save_pairing_token() {
     info "dry-run: salverei pairing token in $token_file"
     return 0
   fi
-  umask 077
   printf '%s' "$PAIRING_TOKEN" > "$token_file"
-  chmod 600 "$token_file" 2>/dev/null || true
-  ok "Pairing token salvato in $token_file (mode 0600)"
+  # 0644: il container gira come UID non-root (jht/1001) e deve poter
+  # leggere il token al primo boot. Su VPS l'unico user host è root,
+  # quindi il rischio "altri user dell'host leggono" è nullo. Inoltre
+  # il file viene cancellato da `jht cloud pair` subito dopo il consumo.
+  chmod 644 "$token_file" 2>/dev/null || true
+  ok "Pairing token salvato in $token_file (mode 0644)"
+}
+
+run_host_setup_vps() {
+  # Quando install.sh arriva con --pairing-token, la macchina è una VPS
+  # provisionata dal desktop launcher: nessun utente al terminale, host-setup
+  # va lanciato non-interattivo per scrivere ~/.jht/host.env con
+  # JHT_HOST_TYPE=vps. Senza questo file il container parte in mode=local
+  # (default backwards-compat del compose) e pid1 salta il pair-on-boot.
+  [ -z "$PAIRING_TOKEN" ] && return 0
+  local hostsetup="$RUNTIME_DIR/host-setup.sh"
+  if [ ! -x "$hostsetup" ]; then
+    warn "host-setup.sh non disponibile in $hostsetup — skip preflight VPS"
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: eseguirei $hostsetup --host-type=vps"
+    return 0
+  fi
+  info "Eseguo host-setup.sh in modalità VPS (scrive host.env + swap)..."
+  if "$hostsetup" --host-type=vps </dev/null; then
+    ok "host-setup VPS completato"
+  else
+    warn "host-setup VPS uscito con errore — proseguo (pair manuale potrebbe servire)"
+  fi
 }
 
 maybe_onboard() {
@@ -852,6 +879,7 @@ main() {
     main_native
   fi
   save_pairing_token
+  run_host_setup_vps
   final_message
   maybe_onboard
 }
