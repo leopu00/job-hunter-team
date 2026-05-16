@@ -260,17 +260,22 @@ fi
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  # Agenti singoli — nessun numero
-  SESSION="$session_prefix"
-else
-  # Agenti multipli — richiede istanza
-  if [ -z "$INSTANCE" ]; then
-    INSTANCE="1"
-    echo "Nota: istanza non specificata, uso $ROLE $INSTANCE"
-  fi
-  SESSION="${session_prefix}-${INSTANCE}"
-fi
+# Agenti singoli (multi:false in AGENTS): tmux ha nome = prefix (no
+# suffix). Il tg-bridge per assistente/capitano/mentor punta a queste
+# session esatte, senza -1, quindi mentor DEVE essere qui.
+case "$ROLE" in
+  capitano|critico|sentinella|assistente|mentor)
+    SESSION="$session_prefix"
+    ;;
+  *)
+    # Agenti multipli — richiede istanza
+    if [ -z "$INSTANCE" ]; then
+      INSTANCE="1"
+      echo "Nota: istanza non specificata, uso $ROLE $INSTANCE"
+    fi
+    SESSION="${session_prefix}-${INSTANCE}"
+    ;;
+esac
 
 # Determina effort in base al mode
 if [ "$MODE" = "fast" ]; then
