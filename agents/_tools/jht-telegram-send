@@ -64,6 +64,16 @@ if [ $# -lt 1 ]; then
 fi
 
 text="$*"
+# Gli agenti tendono a scrivere `\n\n` come separatore paragrafi (è la
+# convenzione naturale in stringhe singole), confidando che venga
+# interpretato come newline. In bash NON è automatico: senza
+# trasformazione, Telegram riceve i 4 caratteri letterali `\`, `n`, `\`,
+# `n` (vedi screenshot 2026-05-16: messaggi welcome con `\n\n` visibili).
+# Interpretiamo solo le escape comuni (\n, \t, \r, \\) — niente printf
+# '%b' che processerebbe anche \c (stop output) e altre fragili.
+text="${text//\\n/$'\n'}"
+text="${text//\\t/$'\t'}"
+text="${text//\\r/$'\r'}"
 jht_home="${JHT_HOME:-$HOME/.jht}"
 config_path="$jht_home/jht.config.json"
 creds_path="$jht_home/credentials/telegram_bot.json"
