@@ -260,17 +260,22 @@ fi
 IFS='|' read -r session_prefix effort model_override <<< "$AGENT_INFO"
 
 # Costruisci nome sessione tmux
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  # Agenti singoli — nessun numero
-  SESSION="$session_prefix"
-else
-  # Agenti multipli — richiede istanza
-  if [ -z "$INSTANCE" ]; then
-    INSTANCE="1"
-    echo "Nota: istanza non specificata, uso $ROLE $INSTANCE"
-  fi
-  SESSION="${session_prefix}-${INSTANCE}"
-fi
+# Agenti singoli (multi:false in AGENTS): tmux ha nome = prefix (no
+# suffix). Il tg-bridge per assistente/capitano/mentor punta a queste
+# session esatte, senza -1, quindi mentor DEVE essere qui.
+case "$ROLE" in
+  capitano|critico|sentinella|assistente|mentor)
+    SESSION="$session_prefix"
+    ;;
+  *)
+    # Agenti multipli — richiede istanza
+    if [ -z "$INSTANCE" ]; then
+      INSTANCE="1"
+      echo "Nota: istanza non specificata, uso $ROLE $INSTANCE"
+    fi
+    SESSION="${session_prefix}-${INSTANCE}"
+    ;;
+esac
 
 # Determina effort in base al mode
 if [ "$MODE" = "fast" ]; then
@@ -441,14 +446,19 @@ fi
 mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
-# Directory di lavoro dell'agente nella zona nascosta
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
-  AGENT_NAME="$ROLE"
-else
-  AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
-  AGENT_NAME="${ROLE}-${INSTANCE}"
-fi
+# Directory di lavoro dell'agente nella zona nascosta. Stesso set di
+# "agenti singoli" usato sopra per il SESSION name — devono restare
+# allineati (multi:false in AGENTS).
+case "$ROLE" in
+  capitano|critico|sentinella|assistente|mentor)
+    AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
+    AGENT_NAME="$ROLE"
+    ;;
+  *)
+    AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
+    AGENT_NAME="${ROLE}-${INSTANCE}"
+    ;;
+esac
 mkdir -p "$AGENT_DIR"
 # Workspace layout (RULE-T12): agents must use these subdirs instead of
 # scattering files at the root of $AGENT_DIR. tools/ holds helper
@@ -630,6 +640,13 @@ send_env_vars() {
   # esportiamo sempre (anche quando il provider non è kimi) perché è
   # innocuo se il binario non lo legge.
   tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
+  # KIMI_SHARE_DIR esplicito: kimi-cli risolve di default a $HOME/.kimi,
+  # ma quando lanciato in tmux/subprocess in una work_dir diversa da
+  # quella del primo /login risulta "LLM not set" (issue osservato
+  # 2026-05-16, vedi github.com/MoonshotAI/kimi-cli issue #1983 sui
+  # subagents/sibling processes). Settare la env esplicita forza il
+  # path della share dir e le credentials OAuth diventano visibili.
+  tmux send-keys -t "$SESSION" "export KIMI_SHARE_DIR='$JHT_HOME/.kimi'" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
@@ -769,45 +786,41 @@ _kickoff() {
   ' </dev/null &
 }
 
-if [ "$ROLE" = "capitano" ]; then
-  _msg="[@utente -> @capitano] [MSG] Avvio. Esegui il boot e parti."
-  _kickoff "$SESSION" "$_msg"
-
-  # Nota V5: il sentinel-bridge.py NON viene più spawnato qui. È un ruolo
-  # separato (`start-agent.sh bridge`) lanciato esplicitamente da
-  # /api/team/start-all dopo che CAPITANO e SENTINELLA sono già attivi,
-  # per garantire che il primo [BRIDGE TICK] arrivi alla SENTINELLA quando
-  # è già pronta a riceverlo. Il SENTINELLA-WORKER (Claude TUI fallback)
-  # è creato lazy dalla skill check_usage.py quando serve.
-fi
-
-if [ "$ROLE" = "assistente" ]; then
-  # Su VPS l'utente non ha dashboard aperta: il primo contatto e' via
-  # Telegram. L'Assistente, al primo boot, manda un welcome al chat_id
-  # del config e marca $JHT_HOME/profile/welcomed.flag per non rispammare
-  # ai boot successivi. Vedi skill `telegram-send` per il wrapper CLI.
-  _welcome_flag="${JHT_HOME:-/jht_home}/profile/welcomed.flag"
-  _welcome_dir="${JHT_HOME:-/jht_home}/profile"
-  _msg=$(printf '%s\n' \
-    "[@system -> @assistente] [BOOT] Avvio Assistente." \
+# ── Welcome kickoff helper ──────────────────────────────────────────────
+# Marker [WELCOME-USER] (decisione utente 2026-05-16): l'agente deve
+# inviare il welcome SOLO se riceve questo marker preciso. Niente reazione
+# a "ciao" generici, niente reazione a [CHAT] vuoti, niente rispamma a
+# restart con context pieno. Il prompt nel role .md ribadisce la regola.
+#
+# Lo stesso messaggio viene re-iniettato dal watchdog se il flag non
+# appare (3 retry × 90s) — copre boot lenti / trust dialog / contesto
+# pieno che ha ignorato il primo prompt.
+_welcome_kickoff() {
+  local role="$1" flag_name="$2" body="$3"
+  local welcome_flag="${JHT_HOME:-/jht_home}/profile/${flag_name}"
+  local welcome_dir="${JHT_HOME:-/jht_home}/profile"
+  local welcome_log="/tmp/welcome-watchdog-${role}.log"
+  local msg
+  msg=$(printf '%s\n' \
+    "[@system -> @${role}] [WELCOME-USER]" \
     "" \
-    "Protocollo welcome — idempotente:" \
+    "Protocollo welcome utente — idempotente:" \
     "" \
-    "1. Se ${_welcome_flag} esiste, NON fare nulla — sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa." \
+    "1. Se ${welcome_flag} esiste: NON inviare nulla. Sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa di [CHAT] / [TG] reali." \
     "" \
-    "2. Altrimenti: manda un welcome via il comando shell jht-telegram-send — skill telegram-send — al chat_id configurato. Tono amichevole, in italiano. Presentati come Assistente del Job Hunter Team, chiedi all'utente di mandare il suo CV o documenti utili — PDF/DOC va benissimo — come allegato su Telegram, spiega in due righe che da li' costruirai il profilo per il team. Una sola sequenza coerente di messaggi, breve." \
+    "2. Altrimenti: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, italiano, formattato con righe vuote vere (\\n\\n). Reagisci a questo marker [WELCOME-USER] e SOLO a questo — non rispondere con welcome ad altri prefissi come [CHAT] o [TG]." \
     "" \
-    "3. Quando il send ritorna ok, esegui: mkdir -p ${_welcome_dir} && touch ${_welcome_flag}" \
+    "Contenuto del welcome da inviare:" \
+    "${body}" \
     "" \
-    "4. Resta in attesa di nuovi messaggi: web [CHAT] o Telegram [TG]."
+    "3. Quando jht-telegram-send ritorna ok: mkdir -p ${welcome_dir} && touch ${welcome_flag}" \
+    "" \
+    "4. Ack al system con riga unica '[@${role} -> @system] [WELCOME-ACK] inviato + flag creato' e resta in attesa."
   )
-  _kickoff "$SESSION" "$_msg"
+  _kickoff "$SESSION" "$msg"
 
-  # Watchdog: se entro 90s il welcomed.flag non e' apparso, re-inietta
-  # il prompt. Max 3 retry, totale ~4.5 min. Coprire i casi in cui il CLI
-  # era ancora in boot, un trust dialog aveva intercettato il primo send,
-  # o l'Assistente era impegnato in un'altra azione e ha perso il prompt.
-  JHT_WELCOME_SESS="$SESSION" JHT_WELCOME_FLAG="$_welcome_flag" JHT_WELCOME_MSG="$_msg" JHT_WELCOME_LOG="/tmp/welcome-watchdog.log" \
+  # Watchdog: 3 retry × 90s. Stesso pattern usato prima del refactor.
+  JHT_WELCOME_SESS="$SESSION" JHT_WELCOME_FLAG="$welcome_flag" JHT_WELCOME_MSG="$msg" JHT_WELCOME_LOG="$welcome_log" \
   setsid sh -c '
     exec >"$JHT_WELCOME_LOG" 2>&1
     echo "[$(date +%H:%M:%S)] welcome watchdog start (flag=$JHT_WELCOME_FLAG)"
@@ -815,7 +828,7 @@ if [ "$ROLE" = "assistente" ]; then
     for retry in 1 2 3; do
       sleep 90
       if [ -f "$JHT_WELCOME_FLAG" ]; then
-        echo "[$(date +%H:%M:%S)] welcome flag rilevato dopo retry=$retry-1, watchdog exit"
+        echo "[$(date +%H:%M:%S)] flag presente dopo retry=$retry-1, exit"
         exit 0
       fi
       echo "[$(date +%H:%M:%S)] flag mancante (retry $retry/3): re-injection"
@@ -823,9 +836,38 @@ if [ "$ROLE" = "assistente" ]; then
         echo "[$(date +%H:%M:%S)] tui_send_verified fallito"
     done
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
-      echo "[$(date +%H:%M:%S)] watchdog give up: 3 retry esauriti, welcome non confermato"
+      echo "[$(date +%H:%M:%S)] watchdog give up: welcome non confermato"
     fi
   ' </dev/null &
+}
+
+if [ "$ROLE" = "assistente" ]; then
+  _welcome_kickoff "assistente" "welcomed.flag" \
+"Ciao! 👋
+
+Sono l'Assistente di Job Hunter Team — il tuo punto di contatto con il team AI che ti cercherà lavoro.
+
+Per partire ho bisogno di conoscerti. Mandami qui su Telegram il tuo CV (PDF, DOC, anche una foto del cartaceo va benissimo), oppure raccontami in due righe cosa cerchi — ruolo, settore, città. Da lì costruisco il profilo e il resto del team si mette al lavoro per te.
+
+Anche un draft o degli appunti grezzi vanno benissimo, non serve niente di pronto. 📄 Parto da quello che hai."
+fi
+
+if [ "$ROLE" = "capitano" ]; then
+  _welcome_kickoff "capitano" "capitano-welcomed.flag" \
+"Sono il Capitano. 👨‍✈️
+
+Coordino il team che si occuperà di te: c'è chi cerca posizioni, chi le analizza, chi calcola il match col tuo profilo, chi scrive il CV su misura, chi fa la review finale prima di candidarti.
+
+Per ora resto in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti scrivo quando ho qualcosa di concreto: un lotto di posizioni interessanti, una candidatura pronta da rivedere insieme, oppure un blocco che vale la pena segnalarti. A presto. 🎯"
+fi
+
+if [ "$ROLE" = "mentor" ]; then
+  _welcome_kickoff "mentor" "mentor-welcomed.flag" \
+"Sono il Mentor. 🧙‍♂️
+
+Mi occupo del quadro generale della tua ricerca: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, ti scrivo solo quando c'è qualcosa che merita davvero la tua attenzione.
+
+Per ora resto in ascolto. Quando avrò dati abbastanza per dirti qualcosa di utile, ti scrivo. 📊"
 fi
 
 if [ "$ROLE" = "sentinella" ]; then

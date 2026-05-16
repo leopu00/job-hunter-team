@@ -11,6 +11,7 @@ interface Counts {
 interface SyncStatus {
   local: boolean;
   logged_in: boolean;
+  remote?: boolean;
   last_sync: { at: string } | null;
   local_counts: Counts;
   cloud_counts: Counts;
@@ -78,6 +79,10 @@ export default function CloudSyncStatusBanner() {
 
   // Nasconde se non loggato (banner ha senso solo per utenti che possono syncare).
   if (!status || !status.logged_in) return null;
+  // Nasconde su cloud (Vercel): non c'è SQLite locale da sincronizzare,
+  // la pagina sta già guardando direttamente Supabase. Il banner "Da
+  // sincronizzare" qui era un falso positivo (vedi /api/local/sync/status).
+  if (status.remote) return null;
 
   const inSync = status.in_sync;
   const accent = inSync ? "var(--color-green)" : "var(--color-yellow, #d4a85a)";

@@ -78,7 +78,7 @@ class TestCapitanoStopCodebase:
 
     def test_capitano_page_has_stop_button(self):
         """La pagina capitano deve avere il bottone Ferma."""
-        page = QA_WEB_ROOT / "app" / "(protected)" / "capitano" / "page.tsx"
+        page = QA_WEB_ROOT / "app" / "(protected)" / "team" / "capitano" / "page.tsx"
         assert page.exists(), "page.tsx del capitano non trovato"
         content = page.read_text()
         assert "/api/capitano/stop" in content, \

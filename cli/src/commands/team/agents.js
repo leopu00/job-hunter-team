@@ -26,6 +26,8 @@ export const AGENTS = [
   { role: 'scrittore',  prefix: 'SCRITTORE',   multi: true,  effort: 'high',   desc: 'Scrive CV e cover letter' },
   { role: 'critico',    prefix: 'CRITICO',     multi: false, effort: 'high',   desc: 'Revisione qualita CV' },
   { role: 'assistente', prefix: 'ASSISTENTE',  multi: false, effort: 'medium', desc: 'Aiuta utente a navigare la piattaforma' },
+  { role: 'mentor',     prefix: 'MENTOR',      multi: false, effort: 'medium', desc: 'Nudge strategici settimanali user-facing' },
+  { role: 'sentinella', prefix: 'SENTINELLA',  multi: false, effort: 'medium', desc: 'Monitoraggio salute rate-limit + bridge' },
 ];
 
 // Nota: il monitoraggio rate-limit e' gestito dal bridge Python

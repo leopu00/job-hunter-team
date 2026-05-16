@@ -46,6 +46,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 WORKTREES = [
     'scrittore-1', 'scrittore-2', 'scrittore-3',
     'critico',
+    'capitano',
     'alfa',
     'scorer',
     'analista-1', 'analista-2',

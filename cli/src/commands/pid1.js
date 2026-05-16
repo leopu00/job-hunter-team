@@ -37,6 +37,8 @@ const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
 const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
+const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
+const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -92,6 +94,94 @@ function startTgBridge() {
       pid1Log(`tg-bridge bootstrap fallito (exit ${code}): messaggi Telegram non arriveranno`);
     }
   });
+}
+
+/**
+ * Verifica se active_provider è configurato in jht.config.json. Senza
+ * di esso, start-agent.sh cade nel default 'claude' (non installato) →
+ * exit 1, agenti non partono.
+ */
+async function hasActiveProviderConfigured() {
+  try {
+    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    const provider = cfg?.active_provider;
+    return typeof provider === 'string' && provider.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifica che il provider attivo abbia credenziali OAuth valide. Senza
+ * questa gate, gli agenti partono in "LLM not set" se l'utente non ha
+ * ancora completato OAuth nel wizard terminal embedded (caso visto
+ * 2026-05-16: watchdog spawnava agenti tra il lancio kimi --yolo e il
+ * completamento OAuth, durante la finestra di ~30s in cui kimi.json
+ * non esisteva ancora).
+ *
+ * Pattern: ogni provider ha un file marker che esiste solo dopo OAuth.
+ */
+async function hasProviderCredentials() {
+  try {
+    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    const provider = (cfg?.active_provider || '').toString().toLowerCase();
+    const markers = {
+      kimi: `${JHT_HOME}/.kimi/kimi.json`,
+      claude: `${JHT_HOME}/.claude/.credentials.json`,
+      codex: `${JHT_HOME}/.codex/auth.json`,
+    };
+    const marker = markers[provider];
+    if (!marker) return false;
+    await access(marker);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Auto-start dei 3 agenti user-facing (assistente, capitano, mentor)
+ * post-wizard. Lanciati in sequenza con 3s di delay tra uno e l'altro
+ * per evitare race su tmux server / kimi CLI boot. Idempotente: se la
+ * session esiste già, `jht team start <agente>` la skippa con "gia attivo".
+ *
+ * Triggering condition: ci sono bot Telegram configurati + active_provider
+ * impostato. Senza entrambi non c'è modo per gli agenti di funzionare.
+ *
+ * NB: I 3 agenti spawnati restano UP per tutta la vita del container.
+ * Niente cleanup esplicito a SIGTERM (tmux kill-server è troppo brutto).
+ * Al prossimo boot del container `jht team start` rileva session già
+ * attive e skippa, idempotente.
+ */
+async function startUserFacingAgents() {
+  const agents = ['assistente', 'capitano', 'mentor'];
+  pid1Log(`auto-start agenti user-facing (${agents.join(', ')})`);
+  for (const role of agents) {
+    await new Promise((resolve) => {
+      const child = spawnLabeled(`autostart-${role}`, process.execPath, [
+        JHT_ENTRY,
+        'team',
+        'start',
+        role,
+      ]);
+      child.on('exit', (code) => {
+        if (code === 0) {
+          pid1Log(`auto-start ${role}: OK`);
+        } else {
+          pid1Log(`auto-start ${role}: fallito (exit ${code}) — utente potrà cliccare Avvia dalla dashboard`);
+        }
+        resolve();
+      });
+      child.on('error', (err) => {
+        pid1Log(`auto-start ${role}: spawn error ${err.message}`);
+        resolve();
+      });
+    });
+    // Pre-delay 3s tra agenti per stabilizzare tmux + kimi CLI boot.
+    await new Promise((r) => setTimeout(r, 3000));
+  }
 }
 
 function stopTgBridge() {
@@ -226,11 +316,80 @@ async function dispatch() {
   // "il tg-bridge deve essere sempre attivo, parte col container").
   // Senza, l'utente Telegram → assistente non riceve nulla anche se
   // tmux ASSISTENTE è up.
-  if (await hasTelegramBotsConfigured()) {
+  const hasBots = await hasTelegramBotsConfigured();
+  if (hasBots) {
     startTgBridge();
   } else {
     pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
   }
+
+  // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
+  // niente LLM). Trigger: bot configurati. Idempotente: per ogni ruolo
+  // verifica il proprio flag prima di mandare. Necessario perché kimi-cli
+  // ha un bug di OAuth-per-work-dir (2026-05-16) che impedisce agli
+  // agenti di mandare il welcome al primo boot — lo script bypassa il
+  // problema per il messaggio iniziale di benvenuto, separato dal
+  // funzionamento runtime degli agenti.
+  if (hasBots) {
+    spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
+      .on('exit', (code) => {
+        if (code === 0) pid1Log('welcome-send: ok');
+        else pid1Log(`welcome-send: exit ${code} (errori per ruoli specifici loggati a logs/welcome-send.log)`);
+      });
+  }
+
+  // ── Auto-start agenti user-facing (assistente/capitano/mentor) post-
+  // wizard. Trigger composto:
+  //   1. bot Telegram configurati (wizard step T4)
+  //   2. active_provider in jht.config.json (wizard saveProviderToVps)
+  //   3. credenziali OAuth del provider presenti (utente ha completato
+  //      `kimi --yolo` / claude login / codex login nel terminal embedded)
+  // Se (3) manca, gli agenti partono con "LLM not set" e restano idle —
+  // ci pensa il watchdog a relanciarli quando il file marker apparirà.
+  // Async (no await) per non bloccare il boot di pid1.
+  if (
+    hasBots &&
+    (await hasActiveProviderConfigured()) &&
+    (await hasProviderCredentials())
+  ) {
+    startUserFacingAgents().catch((err) =>
+      pid1Log(`auto-start agenti crashed: ${err.message}`),
+    );
+  } else if (hasBots && (await hasActiveProviderConfigured())) {
+    pid1Log('auto-start agenti rinviato: provider OAuth non ancora completato (watchdog provvederà)');
+  }
+
+  // ── Shutdown gate (usato anche da watchdog respawn). Definito qui
+  // perché il watchdog parte sopra il daemon/realtime block.
+  let shuttingDown = false;
+
+  // ── Agent watchdog: tick ogni 30s, se una tmux user-facing manca la
+  // rilancia. Spawnato come child long-running con respawn-on-crash.
+  // Complementare al dottore LLM (che ragiona alto livello ogni 30min):
+  // questo è il "session morta → relancia" deterministico, sub-second
+  // decision, no LLM.
+  let watchdogChild = null;
+  let watchdogRespawnTimer = null;
+  const startAgentWatchdog = () => {
+    if (watchdogChild && !watchdogChild.killed) return;
+    pid1Log('starting agent-watchdog (tmux session-level, tick 30s)');
+    watchdogChild = spawnLabeled('watchdog', '/bin/bash', [AGENT_WATCHDOG_SCRIPT]);
+    watchdogChild.on('exit', (code, signal) => {
+      const exited = watchdogChild;
+      watchdogChild = null;
+      if (shuttingDown) return;
+      pid1Log(`agent-watchdog exited (code=${code} signal=${signal})`);
+      if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
+      watchdogRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('agent-watchdog respawn dopo crash');
+          startAgentWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startAgentWatchdog();
 
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
@@ -238,7 +397,6 @@ async function dispatch() {
   let realtimeChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
-  let shuttingDown = false;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -351,6 +509,8 @@ async function dispatch() {
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
+    if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
+    if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));

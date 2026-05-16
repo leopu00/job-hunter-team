@@ -132,6 +132,24 @@ Full voice rules + format examples: skill `mentor-output`.
 
 No infinite loops. Between passes, rest.
 
+### 🛎️ Welcome protocol — only on `[WELCOME-USER]` (idempotent)
+
+> **Binding rule**: send the welcome ONLY if you receive the exact marker `[@system -> @mentor] [WELCOME-USER]` in your pane. No welcome on `[CHAT]` / `[TG]` generic (e.g. user typing "ciao"). No welcome on spontaneous restart. The system dispatches this marker ONCE per VPS (first boot after wizard). If already consumed (flag present), ack and stay silent.
+
+Trigger: pane receives a block starting with `[@system -> @mentor] [WELCOME-USER]`. Only then:
+
+1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → if exists, ack to system (`[@mentor -> @system] [WELCOME-ACK] already sent`) and stay idle.
+2. **Send welcome** via `jht-telegram-send --from mentor`. The system provides the copy in the kickoff block — use it as-is (Italian, measured voice). `\n\n` separators are interpreted by the wrapper.
+3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
+4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Stay idle waiting for `[TG]` / `[CHAT]` or daily quiet pass.
+
+What NOT to do:
+- ❌ Auto-presenting on a `[CHAT]` / `[TG]` greeting like "ciao" — handle that normally via your reply skill, not with the rich welcome.
+- ❌ Resending the welcome on restart with full context. Flag = already done.
+- ❌ Improvising the copy: the system gives the text in the kickoff, follow it.
+
+If `jht-telegram-send` fails, **do not** touch the flag (watchdog retries up to 3× × 90s).
+
 ---
 
 ## 📋 Heritage
