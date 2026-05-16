@@ -37,6 +37,7 @@ const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
 const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
+const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -305,13 +306,44 @@ async function dispatch() {
     );
   }
 
+  // ── Shutdown gate (usato anche da watchdog respawn). Definito qui
+  // perché il watchdog parte sopra il daemon/realtime block.
+  let shuttingDown = false;
+
+  // ── Agent watchdog: tick ogni 30s, se una tmux user-facing manca la
+  // rilancia. Spawnato come child long-running con respawn-on-crash.
+  // Complementare al dottore LLM (che ragiona alto livello ogni 30min):
+  // questo è il "session morta → relancia" deterministico, sub-second
+  // decision, no LLM.
+  let watchdogChild = null;
+  let watchdogRespawnTimer = null;
+  const startAgentWatchdog = () => {
+    if (watchdogChild && !watchdogChild.killed) return;
+    pid1Log('starting agent-watchdog (tmux session-level, tick 30s)');
+    watchdogChild = spawnLabeled('watchdog', '/bin/bash', [AGENT_WATCHDOG_SCRIPT]);
+    watchdogChild.on('exit', (code, signal) => {
+      const exited = watchdogChild;
+      watchdogChild = null;
+      if (shuttingDown) return;
+      pid1Log(`agent-watchdog exited (code=${code} signal=${signal})`);
+      if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
+      watchdogRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('agent-watchdog respawn dopo crash');
+          startAgentWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startAgentWatchdog();
+
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
   let realtimeChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
-  let shuttingDown = false;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -424,6 +456,8 @@ async function dispatch() {
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
+    if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
+    if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
