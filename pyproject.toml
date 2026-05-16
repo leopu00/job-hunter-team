@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+  ".agents",
+  ".git",
+  "desktop",
+  "node_modules",
+  "shared",
+]
+markers = [
+  "slow: test che creano risorse reali (venv, processi pesanti)",
+]
