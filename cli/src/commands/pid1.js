@@ -112,6 +112,35 @@ async function hasActiveProviderConfigured() {
 }
 
 /**
+ * Verifica che il provider attivo abbia credenziali OAuth valide. Senza
+ * questa gate, gli agenti partono in "LLM not set" se l'utente non ha
+ * ancora completato OAuth nel wizard terminal embedded (caso visto
+ * 2026-05-16: watchdog spawnava agenti tra il lancio kimi --yolo e il
+ * completamento OAuth, durante la finestra di ~30s in cui kimi.json
+ * non esisteva ancora).
+ *
+ * Pattern: ogni provider ha un file marker che esiste solo dopo OAuth.
+ */
+async function hasProviderCredentials() {
+  try {
+    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    const provider = (cfg?.active_provider || '').toString().toLowerCase();
+    const markers = {
+      kimi: `${JHT_HOME}/.kimi/kimi.json`,
+      claude: `${JHT_HOME}/.claude/.credentials.json`,
+      codex: `${JHT_HOME}/.codex/auth.json`,
+    };
+    const marker = markers[provider];
+    if (!marker) return false;
+    await access(marker);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Auto-start dei 3 agenti user-facing (assistente, capitano, mentor)
  * post-wizard. Lanciati in sequenza con 3s di delay tra uno e l'altro
  * per evitare race su tmux server / kimi CLI boot. Idempotente: se la
@@ -294,16 +323,24 @@ async function dispatch() {
   }
 
   // ── Auto-start agenti user-facing (assistente/capitano/mentor) post-
-  // wizard. Decisione 2026-05-16: "una volta finito il login devono
-  // partire subito, senza che l'utente clicchi Avvia". Trigger: bot
-  // Telegram + active_provider entrambi configurati = il wizard ha
-  // chiuso provider-install + telegram-tokens.
-  // Async (no await) per non bloccare il boot di pid1: gli agenti partono
-  // in background sequenzialmente con 3s delay tra uno e l'altro.
-  if (hasBots && (await hasActiveProviderConfigured())) {
+  // wizard. Trigger composto:
+  //   1. bot Telegram configurati (wizard step T4)
+  //   2. active_provider in jht.config.json (wizard saveProviderToVps)
+  //   3. credenziali OAuth del provider presenti (utente ha completato
+  //      `kimi --yolo` / claude login / codex login nel terminal embedded)
+  // Se (3) manca, gli agenti partono con "LLM not set" e restano idle —
+  // ci pensa il watchdog a relanciarli quando il file marker apparirà.
+  // Async (no await) per non bloccare il boot di pid1.
+  if (
+    hasBots &&
+    (await hasActiveProviderConfigured()) &&
+    (await hasProviderCredentials())
+  ) {
     startUserFacingAgents().catch((err) =>
       pid1Log(`auto-start agenti crashed: ${err.message}`),
     );
+  } else if (hasBots && (await hasActiveProviderConfigured())) {
+    pid1Log('auto-start agenti rinviato: provider OAuth non ancora completato (watchdog provvederà)');
   }
 
   // ── Shutdown gate (usato anche da watchdog respawn). Definito qui
