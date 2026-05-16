@@ -743,6 +743,9 @@ app.whenReady().then(() => {
   ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
     telegram.saveBotsToVps(args.vpsIp, args.bots),
   )
+  ipcMain.handle('provider:save-to-vps', (_event, args = {}) =>
+    telegram.saveProviderToVps(args.vpsIp, args.provider, args.authMethod),
+  )
 
   // -------- vps:write-config (T1: generic config writer remoto) ---------
   // Scrive un file di config sul container remoto via SshExec.writeFile.
