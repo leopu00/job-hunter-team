@@ -52,6 +52,7 @@ def ensure_schema(conn: sqlite3.Connection):
     """
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
+    _migrate_positions_status_review(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,10 +93,11 @@ def ensure_schema(conn: sqlite3.Connection):
         found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deadline TEXT,
         status TEXT DEFAULT 'new' CHECK (status IN (
-            'new','checked','scored','writing','ready','applied','response','excluded'
+            'new','checked','scored','writing','review','ready','applied','response','excluded'
         )),
         notes TEXT,
         last_checked TIMESTAMP,
+        last_actor TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id)
@@ -426,7 +428,7 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
             found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             deadline TEXT,
             status TEXT DEFAULT 'new' CHECK (status IN (
-                'new','checked','scored','writing','ready','applied','response','excluded'
+                'new','checked','scored','writing','review','ready','applied','response','excluded'
             )),
             notes TEXT,
             last_checked TIMESTAMP,
@@ -447,6 +449,115 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(row['name'] == column for row in rows)
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
+def _migrate_positions_status_review(conn: sqlite3.Connection) -> None:
+    """Allow the pipeline's review status and add last_actor to positions.
+
+    `db_update.py` has accepted `status=review` and writes `last_actor`, so
+    older/fresh schemas without those fields break the normal agent flow.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+
+    schema_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'"
+    ).fetchone()
+    schema_sql = schema_row['sql'] or '' if schema_row else ''
+    has_review_status = "'review'" in schema_sql or '"review"' in schema_sql
+    has_last_actor = _column_exists(conn, 'positions', 'last_actor')
+
+    if has_review_status and has_last_actor:
+        return
+
+    existing_columns = {
+        row['name'] for row in conn.execute("PRAGMA table_info(positions)").fetchall()
+    }
+    desired_columns = [
+        'id',
+        'title',
+        'company',
+        'company_id',
+        'location',
+        'remote_type',
+        'salary_declared_min',
+        'salary_declared_max',
+        'salary_declared_currency',
+        'salary_estimated_min',
+        'salary_estimated_max',
+        'salary_estimated_currency',
+        'salary_estimated_source',
+        'url',
+        'source',
+        'jd_text',
+        'requirements',
+        'found_by',
+        'found_at',
+        'deadline',
+        'status',
+        'notes',
+        'last_checked',
+        'last_actor',
+        'created_at',
+        'updated_at',
+    ]
+    select_columns = [
+        column if column in existing_columns else 'NULL' for column in desired_columns
+    ]
+
+    conn.execute("DROP TABLE IF EXISTS positions_new")
+    conn.execute("""
+        CREATE TABLE positions_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            company TEXT NOT NULL,
+            company_id INTEGER,
+            location TEXT,
+            remote_type TEXT,
+            salary_declared_min INTEGER,
+            salary_declared_max INTEGER,
+            salary_declared_currency TEXT DEFAULT 'EUR',
+            salary_estimated_min INTEGER,
+            salary_estimated_max INTEGER,
+            salary_estimated_currency TEXT DEFAULT 'EUR',
+            salary_estimated_source TEXT,
+            url TEXT,
+            source TEXT,
+            jd_text TEXT,
+            requirements TEXT,
+            found_by TEXT,
+            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deadline TEXT,
+            status TEXT DEFAULT 'new' CHECK (status IN (
+                'new','checked','scored','writing','review','ready','applied','response','excluded'
+            )),
+            notes TEXT,
+            last_checked TIMESTAMP,
+            last_actor TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id)
+        )
+    """)
+    conn.execute(
+        f"""
+        INSERT INTO positions_new ({', '.join(desired_columns)})
+        SELECT {', '.join(select_columns)} FROM positions
+        """
+    )
+    conn.execute("DROP TABLE positions")
+    conn.execute("ALTER TABLE positions_new RENAME TO positions")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url)")
 
 
 def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
