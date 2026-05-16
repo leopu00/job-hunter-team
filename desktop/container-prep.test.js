@@ -17,6 +17,8 @@ function fakeRun(plan) {
   }
 }
 
+const noLocalImage = () => ({ present: false, image: 'ghcr.io/leopu00/jht:latest' })
+
 test('ensureContainerImage resolves when pull succeeds', async () => {
   const { run, calls } = fakeRun([{ result: { ok: true, code: 0 } }])
   const logs = []
@@ -24,6 +26,7 @@ test('ensureContainerImage resolves when pull succeeds', async () => {
     payloadDir: '/tmp/payload',
     onLog: (l) => logs.push(l),
     run,
+    inspect: noLocalImage,
   })
   assert.equal(result.ok, true)
   assert.equal(result.stage, 'pulled')
@@ -41,6 +44,7 @@ test('ensureContainerImage falls back to build when pull fails', async () => {
     payloadDir: '/tmp/payload',
     onLog: (l) => logs.push(l),
     run,
+    inspect: noLocalImage,
   })
   assert.equal(result.ok, true)
   assert.equal(result.stage, 'built')
@@ -57,10 +61,27 @@ test('ensureContainerImage reports error when both pull and build fail', async (
     payloadDir: '/tmp/payload',
     onLog: () => {},
     run,
+    inspect: noLocalImage,
   })
   assert.equal(result.ok, false)
   assert.equal(result.stage, 'build')
   assert.match(result.error, /build/i)
+})
+
+test('ensureContainerImage skips pull when the image already exists locally', async () => {
+  const { run, calls } = fakeRun([{ result: { ok: true, code: 0 } }])
+  const logs = []
+  const result = await ensureContainerImage({
+    payloadDir: '/tmp/payload',
+    onLog: (l) => logs.push(l),
+    run,
+    inspect: () => ({ present: true, image: 'ghcr.io/leopu00/jht:latest' }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.stage, 'local-existing')
+  assert.equal(result.source, 'local')
+  assert.equal(calls.length, 0)
+  assert.match(logs.join('\n'), /Using existing local image/)
 })
 
 test('ensureContainerImage requires payloadDir', async () => {
