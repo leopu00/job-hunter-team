@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { requireAuth, isLocalRequest } from "@/lib/auth";
 import { enqueueIfRemote } from "@/lib/team-bus";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -44,13 +45,42 @@ async function activeSessions(): Promise<Set<string>> {
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
-  // Su cloud (Vercel) tmux non esiste: ritorna stub con agenti stopped
-  // invece di sprecare un syscall che catch-and-empty-set ogni 5s.
+  // Su cloud (Vercel) tmux non esiste: deduco lo stato di ogni agente
+  // dallo storico team_commands (ultimo done con target=<id> o 'all'
+  // decide running/stopped).
   if (!(await isLocalRequest())) {
-    return NextResponse.json({
-      agents: AGENTS.map((a) => ({ ...a, status: "stopped", instances: 0 })),
-      remote: true,
-    });
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({
+        agents: AGENTS.map((a) => ({ ...a, status: "stopped", instances: 0 })),
+        remote: true,
+      });
+    }
+    const { data: cmds } = await supabase
+      .from("team_commands")
+      .select("action, payload, processed_at")
+      .eq("user_id", user.id)
+      .eq("status", "done")
+      .order("processed_at", { ascending: false })
+      .limit(50);
+    const lastFor: Record<string, "start" | "stop"> = {};
+    for (const c of cmds || []) {
+      const target = String((c.payload as { target?: string })?.target ?? "all").toLowerCase();
+      const act = c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
+      if (!act) continue;
+      if (target === "all") {
+        for (const a of AGENTS) if (!lastFor[a.id]) lastFor[a.id] = act;
+      } else if (!lastFor[target]) {
+        lastFor[target] = act;
+      }
+    }
+    const agents = AGENTS.map((a) => ({
+      ...a,
+      status: lastFor[a.id] === "start" ? "running" : "stopped",
+      instances: lastFor[a.id] === "start" ? 1 : 0,
+    }));
+    return NextResponse.json({ agents, remote: true });
   }
   const active = await activeSessions();
   const agents = AGENTS.map((agent) => {
