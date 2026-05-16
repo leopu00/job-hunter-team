@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { isLocalRequest } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,41 @@ function getAgentInfo(session: string) {
 
 export async function GET() {
   if (!(await isLocalRequest())) {
-    return NextResponse.json({ agents: [], isLocalhost: false, remote: true });
+    // Cloud: inferisco active per ogni agente dallo storico team_commands.
+    // Per ogni target (capitano/scout/...) o per 'all', l'ultimo done con
+    // action='start' significa attivo, 'stop' significa inattivo.
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ agents: [], isLocalhost: false, remote: true });
+    }
+    const { data: cmds } = await supabase
+      .from("team_commands")
+      .select("action, payload, processed_at")
+      .eq("user_id", user.id)
+      .eq("status", "done")
+      .order("processed_at", { ascending: false })
+      .limit(50);
+    const lastFor: Record<string, "start" | "stop"> = {};
+    for (const c of cmds || []) {
+      const target = String((c.payload as { target?: string })?.target ?? "all").toLowerCase();
+      const act = c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
+      if (!act) continue;
+      if (target === "all") {
+        // team-wide: setta tutti gli agenti che non hanno già un override più recente
+        for (const k of Object.keys(JH_AGENTS)) {
+          if (!lastFor[k.toLowerCase()]) lastFor[k.toLowerCase()] = act;
+        }
+      } else if (!lastFor[target]) {
+        lastFor[target] = act;
+      }
+    }
+    const agents = Object.entries(JH_AGENTS).map(([prefix, info]) => ({
+      ...info,
+      session: prefix,
+      active: lastFor[prefix.toLowerCase()] === "start",
+    }));
+    return NextResponse.json({ agents, isLocalhost: false, remote: true });
   }
   try {
     const { stdout } = await runBash(
