@@ -33,17 +33,27 @@ log() {
 }
 
 config_ready() {
-  # active_provider + almeno 1 bot Telegram con bot_token.
-  python3 - "$CONFIG" 2>/dev/null <<'PYEOF'
-import json, sys
+  # active_provider + almeno 1 bot Telegram con bot_token + credenziali
+  # OAuth del provider presenti (es. kimi.json scritto da `kimi --yolo`
+  # post-OAuth). Senza credenziali, l'agente parte ma kimi mostra "LLM
+  # not set" e resta inutilizzabile (visto 2026-05-16 in cold fresh test).
+  python3 - "$CONFIG" "$JHT_HOME" 2>/dev/null <<'PYEOF'
+import json, os, sys
+cfg_path, jht_home = sys.argv[1], sys.argv[2]
 try:
-  d = json.load(open(sys.argv[1]))
+  d = json.load(open(cfg_path))
 except Exception:
   sys.exit(1)
-prov = (d.get('active_provider') or '').strip()
+prov = (d.get('active_provider') or '').strip().lower()
 bots = (d.get('channels') or {}).get('telegram', {}).get('bots') or {}
 has_bot = any((b or {}).get('bot_token','').strip() for b in bots.values())
-sys.exit(0 if (prov and has_bot) else 1)
+markers = {
+  'kimi':   f'{jht_home}/.kimi/kimi.json',
+  'claude': f'{jht_home}/.claude/.credentials.json',
+  'codex':  f'{jht_home}/.codex/auth.json',
+}
+has_creds = bool(prov) and os.path.exists(markers.get(prov, ''))
+sys.exit(0 if (prov and has_bot and has_creds) else 1)
 PYEOF
 }
 
