@@ -248,7 +248,7 @@ async function saveBotsToVps(vpsIp, bots) {
   const serialized = JSON.stringify(remote, null, 2) + '\n'
   try {
     const writeRes = await SshExec.writeFile(vpsIp, REMOTE_CONFIG_PATH, serialized, {
-      mode: '0600',
+      mode: '0644',
       atomic: true,
     })
     if (!writeRes.ok) {
@@ -257,6 +257,16 @@ async function saveBotsToVps(vpsIp, bots) {
     }
   } catch (e) {
     return { ok: false, error: 'ssh-write-error', detail: e.message }
+  }
+
+  // Chown a 1001:1001 (UID del container jht). Senza, il file resta
+  // root:root e il container non può leggerlo (jht-telegram-send + pid1
+  // cadono nei default). install.sh fa il chown della dir ma il nostro
+  // write-then-rename via SSH ricrea il file con owner root.
+  try {
+    await SshExec.run(vpsIp, `chown 1001:1001 '${REMOTE_CONFIG_PATH}'`, { timeout: 10000 })
+  } catch (e) {
+    log.warn('saveBotsToVps.chown-failed', { err: e.message })
   }
 
   log.info('saveBotsToVps.ok', { vpsIp, botKeys: Object.keys(bots) })
@@ -321,7 +331,7 @@ async function saveProviderToVps(vpsIp, provider, authMethod) {
   const serialized = JSON.stringify(remote, null, 2) + '\n'
   try {
     const writeRes = await SshExec.writeFile(vpsIp, REMOTE_CONFIG_PATH, serialized, {
-      mode: '0600',
+      mode: '0644',
       atomic: true,
     })
     if (!writeRes.ok) {
@@ -329,6 +339,14 @@ async function saveProviderToVps(vpsIp, provider, authMethod) {
     }
   } catch (e) {
     return { ok: false, error: 'ssh-write-error', detail: e.message }
+  }
+
+  // Vedi nota in saveBotsToVps: chown a 1001 perché il container deve
+  // leggere il file (active_provider letto da start-agent.sh come UID 1001).
+  try {
+    await SshExec.run(vpsIp, `chown 1001:1001 '${REMOTE_CONFIG_PATH}'`, { timeout: 10000 })
+  } catch (e) {
+    log.warn('saveProviderToVps.chown-failed', { err: e.message })
   }
 
   log.info('saveProviderToVps.ok', { vpsIp, provider, authMethod: method })
