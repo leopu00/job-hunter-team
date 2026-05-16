@@ -446,14 +446,19 @@ fi
 mkdir -p "$JHT_HOME" "$JHT_AGENTS_DIR" "$JHT_LOGS_DIR"
 mkdir -p "$JHT_USER_DIR/cv" "$JHT_USER_DIR/critiche" "$JHT_USER_DIR/allegati" "$JHT_USER_DIR/output"
 
-# Directory di lavoro dell'agente nella zona nascosta
-if [ "$ROLE" = "capitano" ] || [ "$ROLE" = "critico" ] || [ "$ROLE" = "sentinella" ] || [ "$ROLE" = "assistente" ]; then
-  AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
-  AGENT_NAME="$ROLE"
-else
-  AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
-  AGENT_NAME="${ROLE}-${INSTANCE}"
-fi
+# Directory di lavoro dell'agente nella zona nascosta. Stesso set di
+# "agenti singoli" usato sopra per il SESSION name — devono restare
+# allineati (multi:false in AGENTS).
+case "$ROLE" in
+  capitano|critico|sentinella|assistente|mentor)
+    AGENT_DIR="$JHT_AGENTS_DIR/$ROLE"
+    AGENT_NAME="$ROLE"
+    ;;
+  *)
+    AGENT_DIR="$JHT_AGENTS_DIR/${ROLE}-${INSTANCE}"
+    AGENT_NAME="${ROLE}-${INSTANCE}"
+    ;;
+esac
 mkdir -p "$AGENT_DIR"
 # Workspace layout (RULE-T12): agents must use these subdirs instead of
 # scattering files at the root of $AGENT_DIR. tools/ holds helper
@@ -838,5 +843,50 @@ if [ "$ROLE" = "sentinella" ]; then
   # Tutto il protocollo sta nel suo prompt (agents/sentinella/sentinella.md).
   _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
+fi
+
+if [ "$ROLE" = "mentor" ]; then
+  # Stesso pattern dell'Assistente: welcome idempotente al primo boot,
+  # flag dedicato per non rispammare a restart. Tono Mentor (in inglese
+  # come da agents/mentor/mentor.md): misurato, breve. La logica della
+  # presentazione è nel prompt del Mentor — qui kickoff + watchdog di
+  # garanzia (3 retry × 90s).
+  _welcome_flag="${JHT_HOME:-/jht_home}/profile/mentor-welcomed.flag"
+  _welcome_dir="${JHT_HOME:-/jht_home}/profile"
+  _msg=$(printf '%s\n' \
+    "[@system -> @mentor] [BOOT] Avvio Mentor." \
+    "" \
+    "Welcome protocol — idempotent:" \
+    "" \
+    "1. If ${_welcome_flag} exists, do NOT send anything — you've already greeted on a previous boot. Ack to system and stay idle." \
+    "" \
+    "2. Otherwise: send a single brief greeting via the shell command jht-telegram-send --from mentor — skill telegram-send. Voice: measured, weighty, brief, in Italian. Introduce yourself as the career Mentor; explain you have no data yet and will speak when you do." \
+    "" \
+    "3. When the send returns ok: mkdir -p ${_welcome_dir} && touch ${_welcome_flag}" \
+    "" \
+    "4. Stay idle waiting for [TG] or [CHAT] or the next daily quiet pass."
+  )
+  _kickoff "$SESSION" "$_msg"
+
+  # Welcome watchdog parallelo a quello dell'Assistente: 3 retry × 90s.
+  JHT_WELCOME_SESS="$SESSION" JHT_WELCOME_FLAG="$_welcome_flag" JHT_WELCOME_MSG="$_msg" JHT_WELCOME_LOG="/tmp/mentor-welcome-watchdog.log" \
+  setsid sh -c '
+    exec >"$JHT_WELCOME_LOG" 2>&1
+    echo "[$(date +%H:%M:%S)] mentor welcome watchdog start (flag=$JHT_WELCOME_FLAG)"
+    . /app/.launcher/tui-helpers.sh
+    for retry in 1 2 3; do
+      sleep 90
+      if [ -f "$JHT_WELCOME_FLAG" ]; then
+        echo "[$(date +%H:%M:%S)] welcome flag found after retry=$retry-1, exit"
+        exit 0
+      fi
+      echo "[$(date +%H:%M:%S)] flag missing (retry $retry/3): re-injection"
+      tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" || \
+        echo "[$(date +%H:%M:%S)] tui_send_verified failed"
+    done
+    if [ ! -f "$JHT_WELCOME_FLAG" ]; then
+      echo "[$(date +%H:%M:%S)] watchdog give up: mentor welcome not confirmed"
+    fi
+  ' </dev/null &
 fi
 
