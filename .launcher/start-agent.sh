@@ -842,25 +842,25 @@ Sono l'Assistente di Job Hunter Team — il tuo punto di contatto con il team AI
 
 Per partire ho bisogno di conoscerti. Mandami qui su Telegram il tuo CV (PDF, DOC, anche una foto del cartaceo va benissimo), oppure raccontami in due righe cosa cerchi — ruolo, settore, città. Da lì costruisco il profilo e il resto del team si mette al lavoro per te.
 
-Quando vuoi mandami pure un draft di CV o appunti grezzi, non serve sia perfetto. 📄 Inizio da quello che hai."
+Anche un draft o degli appunti grezzi vanno benissimo, non serve niente di pronto. 📄 Parto da quello che hai."
 fi
 
 if [ "$ROLE" = "capitano" ]; then
   _welcome_kickoff "capitano" "capitano-welcomed.flag" \
 "Sono il Capitano. 👨‍✈️
 
-Coordino il team che ti cercherà lavoro: Scout, Analista, Scorer, Scrittore, Critico. Quando l'Assistente avrà raccolto il tuo profilo, prendo le redini io — decido quando partire, su quali settori puntare, quali posizioni meritano una candidatura su misura, quando rallentare se siamo a posto.
+Coordino il team che si occuperà di te: c'è chi cerca posizioni, chi le analizza, chi calcola il match col tuo profilo, chi scrive il CV su misura, chi fa la review finale prima di candidarti.
 
-Per ora osservo in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti aggiorno solo quando ho qualcosa di operativo da dirti. Buon lavoro all'Assistente. 🎯"
+Per ora resto in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti scrivo quando ho qualcosa di concreto: un lotto di posizioni interessanti, una candidatura pronta da rivedere insieme, oppure un blocco che vale la pena segnalarti. A presto. 🎯"
 fi
 
 if [ "$ROLE" = "mentor" ]; then
   _welcome_kickoff "mentor" "mentor-welcomed.flag" \
 "Sono il Mentor. 🧙‍♂️
 
-Mi occupo del quadro generale della tua ricerca lavoro: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, niente rumore inutile.
+Mi occupo del quadro generale della tua ricerca: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, ti scrivo solo quando c'è qualcosa che merita davvero la tua attenzione.
 
-Per ora resto in ascolto. Appena l'Assistente avrà il tuo profilo e il Capitano avrà fatto qualche giro di ricerca, arriverà il primo digest. Alla prossima. 📊"
+Per ora resto in ascolto. Quando avrò dati abbastanza per dirti qualcosa di utile, ti scrivo. 📊"
 fi
 
 if [ "$ROLE" = "sentinella" ]; then
