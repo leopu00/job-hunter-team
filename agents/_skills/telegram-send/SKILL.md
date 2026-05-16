@@ -69,6 +69,18 @@ jht-telegram-send --from mentor --html "<b>Step di crescita</b> della settimana:
 jht-telegram-send --html "<b>CV per Acme — Senior FE</b> pronto.\nLo trovi in <code>~/Documents/Job Hunter Team/output/2026-05-12/acme-senior-fe/</code>."
 ```
 
+## Escape sequences (`\n`, `\t`, `\r`)
+
+The wrapper interprets `\n`, `\t`, `\r` in your message as **real newlines/tabs/CRs** before sending to Telegram. So you can write:
+
+```bash
+jht-telegram-send "Ciao!\n\nTi aiuto a configurare il profilo."
+```
+
+and the user receives a proper paragraph break — not the literal `\n\n` text. Same applies to `--html` (Telegram renders a newline as a line break in the HTML stream).
+
+If you need a literal backslash followed by `n` (rare), pre-escape it: `\\n` → wrapper turns it into `\n` (since the first `\\` becomes `\` only in your shell string; inside the wrapper there's no double-substitution).
+
 ## Long messages
 
 The Bot API truncates at 4096 chars. The wrapper splits on `\n` / spaces and sends multiple messages. The user receives a sequence — keep tone consistent across chunks.
