@@ -836,61 +836,31 @@ _welcome_kickoff() {
 
 if [ "$ROLE" = "assistente" ]; then
   _welcome_kickoff "assistente" "welcomed.flag" \
-"Ciao 👋 Sono l'Assistente di Job Hunter Team.
+"Ciao! 👋
 
-Mi occupo di te in prima persona: leggo il tuo CV (o qualsiasi cosa mi mandi — PDF, DOC, una foto del cartaceo, anche solo un appunto) e costruisco il profilo che il resto del team userà per cercarti lavoro.
+Sono l'Assistente di Job Hunter Team — il tuo punto di contatto con il team AI che ti cercherà lavoro.
 
-📝 Cosa faccio:
-• Estraggo info dal tuo CV / documenti
-• Capisco cosa cerchi: ruolo, settore, città, stipendio target
-• Aggiorno il profilo man mano che mi dai più dettagli
+Per partire ho bisogno di conoscerti. Mandami qui su Telegram il tuo CV (PDF, DOC, anche una foto del cartaceo va benissimo), oppure raccontami in due righe cosa cerchi — ruolo, settore, città. Da lì costruisco il profilo e il resto del team si mette al lavoro per te.
 
-🚫 Cosa NON faccio (lo fanno gli altri):
-• Cercare posizioni → ci pensa lo Scout
-• Decidere quali candidature inviare → il Capitano
-• Scrivere CV personalizzato per ogni job → lo Scrittore
-• Riflessioni di carriera nel lungo periodo → il Mentor
-
-Per partire, mandami il CV qui su Telegram. Se non ce l'hai pronto, scrivimi solo cosa cerchi e ricostruiamo insieme."
+Quando vuoi mandami pure un draft di CV o appunti grezzi, non serve sia perfetto. 📄 Inizio da quello che hai."
 fi
 
 if [ "$ROLE" = "capitano" ]; then
   _welcome_kickoff "capitano" "capitano-welcomed.flag" \
-"Sono il Capitano 👨‍✈️.
+"Sono il Capitano. 👨‍✈️
 
-Coordino il team che ti cerca lavoro. Lavoro dietro le quinte: l'Assistente raccoglie il tuo profilo, io decido quando il team parte, quanti Scout mandare, su quali settori puntare, quando fermare la macchina.
+Coordino il team che ti cercherà lavoro: Scout, Analista, Scorer, Scrittore, Critico. Quando l'Assistente avrà raccolto il tuo profilo, prendo le redini io — decido quando partire, su quali settori puntare, quali posizioni meritano una candidatura su misura, quando rallentare se siamo a posto.
 
-🎯 Cosa decido:
-• Quando avviare la ricerca posizioni (Scout)
-• Soglie di match / score (Scorer + Critico)
-• Quali job meritano un CV personalizzato (Scrittore)
-• Quando rallentare o fermare il team
-
-🚫 Cosa NON faccio:
-• Parlare con te del profilo → lo fa l'Assistente
-• Riflessioni strategiche sulla tua carriera → le fa il Mentor
-• Cercare posizioni / scrivere CV manualmente → lo fanno gli agenti specifici
-
-Per ora aspetto: appena l'Assistente ha il profilo completo, parto. Mi vedrai solo quando ho qualcosa di operativo da dirti — niente chiacchiere."
+Per ora osservo in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti aggiorno solo quando ho qualcosa di operativo da dirti. Buon lavoro all'Assistente. 🎯"
 fi
 
 if [ "$ROLE" = "mentor" ]; then
   _welcome_kickoff "mentor" "mentor-welcomed.flag" \
-"Sono il Mentor 🧙‍♂️.
+"Sono il Mentor. 🧙‍♂️
 
-Non cerco posizioni e non scrivo CV. Il mio lavoro è guardare i numeri della tua ricerca lavoro a distanza — mese su mese — e dirti quando qualcosa cambia, in modo che le tue decisioni di carriera siano informate.
+Mi occupo del quadro generale della tua ricerca lavoro: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, niente rumore inutile.
 
-📊 Cosa guardo:
-• Pattern: settori che ti ignorano, soglie stipendio realistiche per il tuo profilo, città dove sei più competitivo
-• Digest settimanali (sabato): cosa è successo + cosa cambierei
-• Trend: dove sta andando la tua ricerca rispetto al mercato
-
-🚫 Cosa NON faccio:
-• Chiacchierare ogni giorno → parla con l'Assistente
-• Decidere a quale lavoro candidarsi → lo fa il Capitano
-• Scrivere il tuo CV → lo Scrittore
-
-Oggi non ho ancora dati. Quando ne avrò abbastanza, ti scriverò. Silenzio è il mio default — se ti parlo, è perché vale la pena."
+Per ora resto in ascolto. Appena l'Assistente avrà il tuo profilo e il Capitano avrà fatto qualche giro di ricerca, arriverà il primo digest. Alla prossima. 📊"
 fi
 
 if [ "$ROLE" = "sentinella" ]; then
