@@ -640,6 +640,13 @@ send_env_vars() {
   # esportiamo sempre (anche quando il provider non è kimi) perché è
   # innocuo se il binario non lo legge.
   tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
+  # KIMI_SHARE_DIR esplicito: kimi-cli risolve di default a $HOME/.kimi,
+  # ma quando lanciato in tmux/subprocess in una work_dir diversa da
+  # quella del primo /login risulta "LLM not set" (issue osservato
+  # 2026-05-16, vedi github.com/MoonshotAI/kimi-cli issue #1983 sui
+  # subagents/sibling processes). Settare la env esplicita forza il
+  # path della share dir e le credentials OAuth diventano visibili.
+  tmux send-keys -t "$SESSION" "export KIMI_SHARE_DIR='$JHT_HOME/.kimi'" C-m
   tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
   tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
