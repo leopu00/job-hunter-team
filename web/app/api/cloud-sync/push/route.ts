@@ -88,11 +88,35 @@ interface PendingMessageIn {
   created_at?: string | null;
 }
 
+interface SentinelTickIn {
+  sample_key?: string | null;
+  ts: string;
+  provider: string;
+  usage: number;
+  delta?: number | null;
+  velocity?: number | null;
+  velocity_smooth?: number | null;
+  velocity_ideal?: number | null;
+  projection?: number | null;
+  projection_naive?: number | null;
+  velocity_decreasing?: boolean | null;
+  status?: string | null;
+  throttle?: number | null;
+  reset_at?: string | null;
+  weekly_usage?: number | null;
+  source?: string | null;
+  session_id?: string | null;
+  host?: Record<string, unknown> | null;
+  host_level?: string | null;
+  raw?: Record<string, unknown> | null;
+}
+
 interface PushBody {
   positions?: PositionIn[];
   scores?: ScoreIn[];
   applications?: ApplicationIn[];
   pending_user_messages?: PendingMessageIn[];
+  sentinel_ticks?: SentinelTickIn[];
   profile?: ProfileIn;
 }
 
@@ -206,6 +230,22 @@ function normalizeCriticVerdict(v: string | null | undefined): string | null {
   return ALLOWED_CRITIC_VERDICT.has(v) ? v : null;
 }
 
+function finiteNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function finiteInteger(v: unknown): number | null {
+  return typeof v === "number" && Number.isInteger(v) ? v : null;
+}
+
+function cleanText(v: unknown, fallback: string | null = null): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : fallback;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured) {
     return NextResponse.json(
@@ -253,11 +293,15 @@ export async function POST(req: NextRequest) {
   const pendingMessages = Array.isArray(body.pending_user_messages)
     ? body.pending_user_messages
     : [];
+  const sentinelTicks = Array.isArray(body.sentinel_ticks)
+    ? body.sentinel_ticks.slice(-1000)
+    : [];
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
   let applicationsUpserted = 0;
   let pendingMessagesUpserted = 0;
+  let sentinelTicksUpserted = 0;
   const legacyToUuid = new Map<number, string>();
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -452,6 +496,67 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3c. Upsert sentinel bridge ticks. Questi arrivano dal JSONL
+  // /jht_home/logs/sentinel-data.jsonl sulla VPS e alimentano i grafici
+  // rate-budget anche su jobhunterteam.ai, dove non esiste filesystem locale.
+  if (sentinelTicks.length > 0) {
+    const payload = sentinelTicks
+      .map((t) => {
+        const tsMs = Date.parse(t.ts);
+        const usage = finiteNumber(t.usage);
+        const provider = cleanText(t.provider);
+        if (!Number.isFinite(tsMs) || usage === null || !provider) return null;
+        const isoTs = new Date(tsMs).toISOString();
+        const source = cleanText(t.source);
+        const sessionId = cleanText(t.session_id);
+        const sampleKey =
+          cleanText(t.sample_key) ??
+          `${isoTs}|${provider}|${source ?? ""}|${sessionId ?? ""}`;
+        return {
+          user_id: userId,
+          sample_key: sampleKey,
+          ts: isoTs,
+          provider,
+          usage,
+          delta: finiteNumber(t.delta),
+          velocity: finiteNumber(t.velocity),
+          velocity_smooth: finiteNumber(t.velocity_smooth),
+          velocity_ideal: finiteNumber(t.velocity_ideal),
+          projection: finiteNumber(t.projection),
+          projection_naive: finiteNumber(t.projection_naive),
+          velocity_decreasing:
+            typeof t.velocity_decreasing === "boolean"
+              ? t.velocity_decreasing
+              : null,
+          status: cleanText(t.status, "OK"),
+          throttle: finiteInteger(t.throttle),
+          reset_at: cleanText(t.reset_at),
+          weekly_usage: finiteNumber(t.weekly_usage),
+          source,
+          session_id: sessionId,
+          host: isPlainObject(t.host) ? t.host : null,
+          host_level: cleanText(t.host_level),
+          raw: isPlainObject(t.raw) ? t.raw : t,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from("sentinel_ticks")
+        .upsert(payload, { onConflict: "user_id,sample_key" })
+        .select("id");
+
+      if (error) {
+        return NextResponse.json(
+          { error: `sentinel_ticks upsert: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      sentinelTicksUpserted = upserted?.length ?? 0;
+    }
+  }
+
   // 4. Profile upsert (opzionale, indipendente da positions/scores/apps)
   let profileUpserted = false;
   let profileError: string | null = null;
@@ -514,6 +619,7 @@ export async function POST(req: NextRequest) {
     scores: { upserted: scoresUpserted },
     applications: { upserted: applicationsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },
+    sentinel_ticks: { upserted: sentinelTicksUpserted },
     profile: { upserted: profileUpserted, error: profileError },
   });
 }
