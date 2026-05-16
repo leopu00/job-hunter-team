@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { isLocalRequest } from "@/lib/auth";
+import { inferAgentActiveFromBus } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Su Vercel (no tmux) skippiamo subito invece di lasciare runBash
-  // crashare in catch silenzioso ogni 5s: risparmio CPU + log puliti.
+  // Su Vercel (no tmux) deduciamo l'active state dallo storico del bus
+  // team_commands. Il polling UI così vede subito "ATTIVO" dopo che il
+  // subscriber sulla VPS ha completato il start, senza dover prendere
+  // info da una /tmux che non esiste sul cloud.
   if (!(await isLocalRequest())) {
-    return NextResponse.json({ active: false, output: "", remote: true });
+    const inferred = await inferAgentActiveFromBus("assistente");
+    if (!inferred) {
+      return NextResponse.json({ active: false, output: "", remote: true });
+    }
+    return NextResponse.json({
+      active: inferred.active,
+      output: "",
+      remote: true,
+    });
   }
   try {
     const { stdout: sessions } = await runBash(

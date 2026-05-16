@@ -95,3 +95,45 @@ export async function remoteStatusStub<T>(
   if (await isLocalRequest()) return null;
   return NextResponse.json({ ok: true, remote: true, status: "unknown", ...stub });
 }
+
+/**
+ * Inferenza dello stato active di un agente quando girimo su cloud (no
+ * accesso a tmux della VPS). Logica: l'ultimo comando con
+ * `status='done'` sul bus che ha target `<agent>` o `all` decide. Se
+ * action='start' → active=true, se action='stop' → false. Errori
+ * (status='error') vengono ignorati (non cambiano lo stato precedente).
+ *
+ * Limitazione nota: se la VPS crasha l'utente vedrà ancora "attivo"
+ * finché non riavvia. Per uno stato di salute reale serve un push dal
+ * container (futuro: tabella agent_status aggiornata dal cloud daemon).
+ *
+ * Ritorna null se non c'è auth (caller restituisce 401) o se non ci sono
+ * comandi storici (interpretato come inactive). Altrimenti boolean.
+ */
+export async function inferAgentActiveFromBus(
+  agent: "assistente" | "capitano" | "sentinella" | "scout" | "scorer" |
+         "analista" | "scrittore" | "critico" | "mentor" | "bridge",
+): Promise<{ active: boolean; userId: string } | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // Ultimo comando done che impatta questo agente: o target=<agent> o
+  // target='all' (team-wide). Order by processed_at DESC, limit 1.
+  const { data, error } = await supabase
+    .from("team_commands")
+    .select("action, payload, processed_at")
+    .eq("user_id", user.id)
+    .eq("status", "done")
+    .or(`payload->>target.eq.${agent},payload->>target.eq.all`)
+    .order("processed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { active: false, userId: user.id };
+  }
+  return { active: data.action === "start", userId: user.id };
+}
