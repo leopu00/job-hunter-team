@@ -974,6 +974,26 @@ async function startProviderInstall() {
       setProgressState(dom.providerBar, dom.providerIcon, 'ok')
       dom.providerMessage.textContent = t('provider.installStatus.allDone')
       dom.btnProviderInstallContinue.disabled = false
+      // VPS mode: scrive active_provider in /root/.jht/jht.config.json
+      // così al primo boot del container pid1+start-agent.sh non
+      // ripiegano sul default 'claude' (che non è installato). Niente
+      // fallback su exception: il pair sarebbe inutile senza questo.
+      if (state.location === LOCATION_VPS && state.vps?.ip && window.providerApi?.saveToVps) {
+        try {
+          const saveRes = await window.providerApi.saveToVps({
+            vpsIp: state.vps.ip,
+            provider: ids[0],
+            authMethod: 'oauth',
+          })
+          if (!saveRes?.ok) {
+            log.warn('provider-install.save-active-failed', { err: saveRes?.error })
+          } else {
+            log.info('provider-install.save-active-ok', { provider: ids[0] })
+          }
+        } catch (err) {
+          log.warn('provider-install.save-active-crashed', { err: String(err) })
+        }
+      }
     } else {
       setProgressState(dom.providerBar, dom.providerIcon, 'error')
       const name = providerLabel(result?.failedAt) || result?.failedAt || '?'
