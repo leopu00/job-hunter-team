@@ -63,10 +63,11 @@ CLAUDE_PATTERNS = [
 ]
 
 # Prefissi sessioni agenti Job Hunter da monitorare
-# Nomi reali: ALFA, SCOUT-1, SCOUT-2, ANALISTA-1, ANALISTA-2,
+# Nomi reali: CAPITANO/ALFA, SCOUT-1, SCOUT-2, ANALISTA-1, ANALISTA-2,
 #   SCORER-1, SCRITTORE-1/2/3, CRITICO, SENTINELLA
 # NON include le sessioni dev (JHT-BACKEND, JHT-FRONTEND, ecc.)
 JH_AGENT_PREFIXES = [
+    "CAPITANO",        # Capitano (coordinatore pipeline)
     "ALFA",            # Capitano (coordinatore pipeline)
     "SCOUT",           # Scout (cerca posizioni)
     "ANALISTA",        # Analista (analizza job description)

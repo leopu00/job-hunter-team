@@ -153,7 +153,9 @@ fi
 step 6 "Installazione dipendenze web (npm install)"
 
 WEB_DIR="$REPO_DIR/web"
-if [ -f "$WEB_DIR/node_modules/.package-lock.json" ]; then
+if [ ! -d "$WEB_DIR" ]; then
+  warn "web/ non trovato — salto npm install della web app"
+elif [ -f "$WEB_DIR/node_modules/.package-lock.json" ]; then
   ok "node_modules/ già presente"
 else
   if command -v npm &>/dev/null; then
