@@ -263,9 +263,82 @@ async function saveBotsToVps(vpsIp, bots) {
   return { ok: true, path: REMOTE_CONFIG_PATH }
 }
 
+// Scrive `active_provider` + `providers.<name>.auth_method` nel
+// jht.config.json remoto, preservando channels e altre chiavi esistenti.
+// Stesso pattern di saveBotsToVps (read → merge → atomic write).
+//
+// Senza questo step, start-agent.sh sulla VPS cade nel default 'claude'
+// (provider non riconosciuto → fallback claude), trova `claude` non
+// installata → exit 1 con "In alternativa, modifica jht.config.json".
+// Il fix manuale era patchare il file via SSH; questo step elimina il
+// workaround per ogni nuova VPS.
+async function saveProviderToVps(vpsIp, provider, authMethod) {
+  if (!vpsIp) return { ok: false, error: 'vps-ip-missing' }
+  if (!provider || typeof provider !== 'string') {
+    return { ok: false, error: 'provider-missing' }
+  }
+  const method = (authMethod || 'oauth').toString()
+
+  let remote = {}
+  try {
+    const readRes = await SshExec.run(
+      vpsIp,
+      `cat '${REMOTE_CONFIG_PATH}' 2>/dev/null || true`,
+      { timeout: 15000 },
+    )
+    if (readRes.ok && readRes.stdout && readRes.stdout.trim()) {
+      try {
+        remote = JSON.parse(readRes.stdout)
+      } catch (parseErr) {
+        log.warn('saveProviderToVps.remote-config-malformed', { err: parseErr.message })
+        return { ok: false, error: 'remote-config-malformed', detail: parseErr.message }
+      }
+    } else if (!readRes.ok) {
+      log.warn('saveProviderToVps.read-failed', { code: readRes.code, stderr: readRes.stderr })
+      return { ok: false, error: 'ssh-read-failed', stderr: readRes.stderr }
+    }
+  } catch (e) {
+    return { ok: false, error: 'ssh-read-error', detail: e.message }
+  }
+
+  if (!remote || typeof remote !== 'object') remote = {}
+  remote.active_provider = provider
+  if (!remote.providers || typeof remote.providers !== 'object') remote.providers = {}
+  remote.providers[provider] = {
+    ...(remote.providers[provider] || {}),
+    auth_method: method,
+  }
+
+  try {
+    const mkdirRes = await SshExec.run(vpsIp, `mkdir -p '${REMOTE_CONFIG_DIR}'`, { timeout: 15000 })
+    if (!mkdirRes.ok) {
+      return { ok: false, error: 'ssh-mkdir-failed', stderr: mkdirRes.stderr }
+    }
+  } catch (e) {
+    return { ok: false, error: 'ssh-mkdir-error', detail: e.message }
+  }
+
+  const serialized = JSON.stringify(remote, null, 2) + '\n'
+  try {
+    const writeRes = await SshExec.writeFile(vpsIp, REMOTE_CONFIG_PATH, serialized, {
+      mode: '0600',
+      atomic: true,
+    })
+    if (!writeRes.ok) {
+      return { ok: false, error: 'ssh-write-failed', detail: writeRes.err }
+    }
+  } catch (e) {
+    return { ok: false, error: 'ssh-write-error', detail: e.message }
+  }
+
+  log.info('saveProviderToVps.ok', { vpsIp, provider, authMethod: method })
+  return { ok: true, path: REMOTE_CONFIG_PATH }
+}
+
 module.exports = {
   verifyBot,
   waitForFirstChat,
   cancelWaitForFirstChat,
   saveBotsToVps,
+  saveProviderToVps,
 }
