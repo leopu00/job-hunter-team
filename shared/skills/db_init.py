@@ -32,7 +32,6 @@ def check_profile_warnings():
 def main():
     conn = get_db()
     ensure_schema(conn)
-    conn.execute("PRAGMA user_version = 2")
     conn.commit()
     print(f"Database inizializzato: {os.path.abspath(DB_PATH)}")
     check_profile_warnings()
