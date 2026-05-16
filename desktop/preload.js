@@ -177,6 +177,14 @@ contextBridge.exposeInMainWorld('telegramApi', {
   saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
 })
 
+// Provider config writer (active_provider + providers.<name>.auth_method)
+// remoto. Chiamato dal wizard subito dopo che provider-install si chiude
+// con successo, così pid1+start-agent.sh trovano già `active_provider`
+// al primo boot del container (fix bug "provider non riconosciuto").
+contextBridge.exposeInMainWorld('providerApi', {
+  saveToVps: (args) => ipcRenderer.invoke('provider:save-to-vps', args),
+})
+
 contextBridge.exposeInMainWorld('syncApi', {
   getStatus: () => ipcRenderer.invoke('sync:get-status'),
   setup: (args) => ipcRenderer.invoke('sync:setup', args),
