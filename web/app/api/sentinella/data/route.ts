@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -32,6 +33,13 @@ type Entry = {
     | string;
   throttle?: number;
   reset_at?: string;
+  weekly_usage?: number;
+  projection_naive?: number;
+  velocity_decreasing?: boolean;
+  source?: string;
+  session_id?: string;
+  host?: Record<string, unknown> | null;
+  host_level?: string | null;
 };
 
 function resolveDataFile(): string {
@@ -44,9 +52,116 @@ function resolveDataFile(): string {
   return path.join(jhtHome, "logs", "sentinel-data.jsonl");
 }
 
+function trimCurrentSession(entries: Entry[]): Entry[] {
+  // Mostra solo la sessione corrente: dal piu' recente RESET in poi.
+  // Senza questo filtro il grafico trascina sample di sessioni vecchie
+  // (anche di giorni fa) comprimendo l'asse x su gap enormi.
+  let lastResetIdx = -1;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].status === "RESET") {
+      lastResetIdx = i;
+      break;
+    }
+  }
+  const sessionEntries =
+    lastResetIdx >= 0 ? entries.slice(lastResetIdx) : entries;
+  return sessionEntries.slice(-500);
+}
+
+function numberOrUndefined(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+
 export async function GET() {
   const authError = await requireAuth();
   if (authError) return authError;
+
+  if (!(await isLocalRequest())) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({
+        ok: true,
+        entries: [],
+        count: 0,
+        remote: true,
+        note: "not authenticated",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("sentinel_ticks")
+      .select(
+        [
+          "ts",
+          "provider",
+          "usage",
+          "delta",
+          "velocity",
+          "velocity_smooth",
+          "velocity_ideal",
+          "projection",
+          "projection_naive",
+          "velocity_decreasing",
+          "status",
+          "throttle",
+          "reset_at",
+          "weekly_usage",
+          "source",
+          "session_id",
+          "host",
+          "host_level",
+        ].join(","),
+      )
+      .eq("user_id", user.id)
+      .order("ts", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message, remote: true },
+        { status: 500 },
+      );
+    }
+
+    const entries: Entry[] = (data ?? [])
+      .slice()
+      .reverse()
+      .map((row: any) => ({
+        ts: row.ts,
+        provider: row.provider,
+        usage: Number(row.usage),
+        delta: numberOrUndefined(row.delta),
+        velocity: numberOrUndefined(row.velocity),
+        velocity_smooth: numberOrUndefined(row.velocity_smooth),
+        velocity_ideal: numberOrUndefined(row.velocity_ideal),
+        projection: numberOrUndefined(row.projection),
+        projection_naive: numberOrUndefined(row.projection_naive),
+        velocity_decreasing:
+          typeof row.velocity_decreasing === "boolean"
+            ? row.velocity_decreasing
+            : undefined,
+        status: row.status,
+        throttle: numberOrUndefined(row.throttle),
+        reset_at: row.reset_at ?? undefined,
+        weekly_usage: numberOrUndefined(row.weekly_usage),
+        source: row.source ?? undefined,
+        session_id: row.session_id ?? undefined,
+        host: row.host ?? null,
+        host_level: row.host_level ?? null,
+      }));
+
+    const trimmed = trimCurrentSession(entries);
+    return NextResponse.json({
+      ok: true,
+      entries: trimmed,
+      count: trimmed.length,
+      remote: true,
+      source: "supabase",
+    });
+  }
 
   const file = resolveDataFile();
   let raw: string;
@@ -78,19 +193,7 @@ export async function GET() {
     }
   }
 
-  // Mostra solo la sessione corrente: dal piu' recente RESET in poi.
-  // Senza questo filtro il grafico trascina sample di sessioni vecchie
-  // (anche di giorni fa) comprimendo l'asse x su gap enormi.
-  let lastResetIdx = -1;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].status === "RESET") {
-      lastResetIdx = i;
-      break;
-    }
-  }
-  const sessionEntries =
-    lastResetIdx >= 0 ? entries.slice(lastResetIdx) : entries;
-  const trimmed = sessionEntries.slice(-500);
+  const trimmed = trimCurrentSession(entries);
   return NextResponse.json({
     ok: true,
     entries: trimmed,
