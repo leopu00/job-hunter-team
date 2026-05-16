@@ -94,6 +94,65 @@ function startTgBridge() {
   });
 }
 
+/**
+ * Verifica se active_provider è configurato in jht.config.json. Senza
+ * di esso, start-agent.sh cade nel default 'claude' (non installato) →
+ * exit 1, agenti non partono.
+ */
+async function hasActiveProviderConfigured() {
+  try {
+    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    const provider = cfg?.active_provider;
+    return typeof provider === 'string' && provider.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Auto-start dei 3 agenti user-facing (assistente, capitano, mentor)
+ * post-wizard. Lanciati in sequenza con 3s di delay tra uno e l'altro
+ * per evitare race su tmux server / kimi CLI boot. Idempotente: se la
+ * session esiste già, `jht team start <agente>` la skippa con "gia attivo".
+ *
+ * Triggering condition: ci sono bot Telegram configurati + active_provider
+ * impostato. Senza entrambi non c'è modo per gli agenti di funzionare.
+ *
+ * NB: I 3 agenti spawnati restano UP per tutta la vita del container.
+ * Niente cleanup esplicito a SIGTERM (tmux kill-server è troppo brutto).
+ * Al prossimo boot del container `jht team start` rileva session già
+ * attive e skippa, idempotente.
+ */
+async function startUserFacingAgents() {
+  const agents = ['assistente', 'capitano', 'mentor'];
+  pid1Log(`auto-start agenti user-facing (${agents.join(', ')})`);
+  for (const role of agents) {
+    await new Promise((resolve) => {
+      const child = spawnLabeled(`autostart-${role}`, process.execPath, [
+        JHT_ENTRY,
+        'team',
+        'start',
+        role,
+      ]);
+      child.on('exit', (code) => {
+        if (code === 0) {
+          pid1Log(`auto-start ${role}: OK`);
+        } else {
+          pid1Log(`auto-start ${role}: fallito (exit ${code}) — utente potrà cliccare Avvia dalla dashboard`);
+        }
+        resolve();
+      });
+      child.on('error', (err) => {
+        pid1Log(`auto-start ${role}: spawn error ${err.message}`);
+        resolve();
+      });
+    });
+    // Pre-delay 3s tra agenti per stabilizzare tmux + kimi CLI boot.
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+
 function stopTgBridge() {
   // I tg-bridge.py sono detached: kill via pgrep+kill in spawn separato.
   // Su SIGTERM del container abbiamo ~10s grace, basta abbondantemente.
@@ -226,10 +285,24 @@ async function dispatch() {
   // "il tg-bridge deve essere sempre attivo, parte col container").
   // Senza, l'utente Telegram → assistente non riceve nulla anche se
   // tmux ASSISTENTE è up.
-  if (await hasTelegramBotsConfigured()) {
+  const hasBots = await hasTelegramBotsConfigured();
+  if (hasBots) {
     startTgBridge();
   } else {
     pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
+  }
+
+  // ── Auto-start agenti user-facing (assistente/capitano/mentor) post-
+  // wizard. Decisione 2026-05-16: "una volta finito il login devono
+  // partire subito, senza che l'utente clicchi Avvia". Trigger: bot
+  // Telegram + active_provider entrambi configurati = il wizard ha
+  // chiuso provider-install + telegram-tokens.
+  // Async (no await) per non bloccare il boot di pid1: gli agenti partono
+  // in background sequenzialmente con 3s delay tra uno e l'altro.
+  if (hasBots && (await hasActiveProviderConfigured())) {
+    startUserFacingAgents().catch((err) =>
+      pid1Log(`auto-start agenti crashed: ${err.message}`),
+    );
   }
 
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
