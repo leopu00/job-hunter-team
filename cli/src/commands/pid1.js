@@ -34,7 +34,9 @@ const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
 const HOST_ENV_PATH = `${JHT_HOME}/host.env`;
 const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
+const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
+const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -49,6 +51,59 @@ async function readHostType() {
     // file mancante e' normale (utente che salta host-setup)
   }
   return 'local';
+}
+
+/**
+ * Verifica se ci sono bot Telegram configurati in jht.config.json.
+ * Il tg-bridge serve a inoltrare i messaggi Telegram → tmux degli agenti
+ * (assistente, capitano, mentor). Senza bot configurati, niente bridge.
+ */
+async function hasTelegramBotsConfigured() {
+  try {
+    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
+    const cfg = JSON.parse(raw);
+    const bots = cfg?.channels?.telegram?.bots;
+    if (!bots || typeof bots !== 'object') return false;
+    return Object.values(bots).some(
+      (b) => b && typeof b.bot_token === 'string' && b.bot_token.trim().length > 0,
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Spawna il tg-bridge (3 process python long-poll, uno per ogni bot user-
+ * facing). Idempotente: lo script killa istanze esistenti prima di
+ * rispawn, così la chiamata ripetuta non duplica i process. Non rimane
+ * un child pid1: i 3 python sono detached via setsid e vivono per conto
+ * loro, pid1 li trova via /proc cmdline scan allo shutdown per pulirli.
+ */
+function startTgBridge() {
+  pid1Log('starting tg-bridge (Telegram → tmux long-poll, 3 bots)');
+  const child = spawnLabeled('tg-bridge-launcher', '/bin/bash', [
+    TG_BRIDGE_LAUNCHER,
+    'tg-bridge',
+  ]);
+  child.on('exit', (code) => {
+    if (code === 0) {
+      pid1Log('tg-bridge bootstrap OK (3 process detached)');
+    } else {
+      pid1Log(`tg-bridge bootstrap fallito (exit ${code}): messaggi Telegram non arriveranno`);
+    }
+  });
+}
+
+function stopTgBridge() {
+  // I tg-bridge.py sono detached: kill via pgrep+kill in spawn separato.
+  // Su SIGTERM del container abbiamo ~10s grace, basta abbondantemente.
+  try {
+    const killer = spawn('/bin/sh', [
+      '-c',
+      "for pid in $(grep -l tg-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do kill -TERM \"$pid\" 2>/dev/null || true; done",
+    ], { stdio: 'ignore' });
+    killer.unref();
+  } catch { /* best-effort cleanup */ }
 }
 
 /**
@@ -165,6 +220,17 @@ async function dispatch() {
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
   pid1Log('starting dashboard (127.0.0.1:3000)');
   const dashboardChild = spawnLabeled('dashboard', process.execPath, dashCmd);
+
+  // ── Telegram bridge: long-poll Bot API → tmux corrispondente. Parte
+  // sempre al boot se ci sono bot configurati (decisione 2026-05-16:
+  // "il tg-bridge deve essere sempre attivo, parte col container").
+  // Senza, l'utente Telegram → assistente non riceve nulla anche se
+  // tmux ASSISTENTE è up.
+  if (await hasTelegramBotsConfigured()) {
+    startTgBridge();
+  } else {
+    pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
+  }
 
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
@@ -285,6 +351,7 @@ async function dispatch() {
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
+    stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
   process.on('SIGINT', () => forwardSignal('SIGINT'));
