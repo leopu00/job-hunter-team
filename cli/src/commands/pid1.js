@@ -38,6 +38,7 @@ const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
+const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -320,6 +321,21 @@ async function dispatch() {
     startTgBridge();
   } else {
     pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
+  }
+
+  // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
+  // niente LLM). Trigger: bot configurati. Idempotente: per ogni ruolo
+  // verifica il proprio flag prima di mandare. Necessario perché kimi-cli
+  // ha un bug di OAuth-per-work-dir (2026-05-16) che impedisce agli
+  // agenti di mandare il welcome al primo boot — lo script bypassa il
+  // problema per il messaggio iniziale di benvenuto, separato dal
+  // funzionamento runtime degli agenti.
+  if (hasBots) {
+    spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
+      .on('exit', (code) => {
+        if (code === 0) pid1Log('welcome-send: ok');
+        else pid1Log(`welcome-send: exit ${code} (errori per ruoli specifici loggati a logs/welcome-send.log)`);
+      });
   }
 
   // ── Auto-start agenti user-facing (assistente/capitano/mentor) post-
