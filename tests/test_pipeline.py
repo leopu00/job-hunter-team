@@ -576,15 +576,15 @@ class TestDbMigrateVerify:
 
 
 # ---------------------------------------------------------------------------
-# Test 9: db_init.py setta PRAGMA user_version = 3 (schema V3 con CHECK)
+# Test 9: db_init.py lascia PRAGMA user_version alla versione corrente
 # ---------------------------------------------------------------------------
 
 class TestDbInitUserVersion:
 
-    def test_user_version_set_to_3(self, tmp_db, tmp_path):
+    def test_user_version_set_to_current_schema(self, tmp_db, tmp_path):
         """
-        Dopo db_init.py, PRAGMA user_version deve essere 3 (schema V3,
-        che aggiunge CHECK su positions.status).
+        Dopo db_init.py, PRAGMA user_version deve restare allineato allo
+        schema corrente dichiarato da ensure_schema().
         """
         run_cli(DB_INIT, [], tmp_db, tmp_path)
 
@@ -592,8 +592,8 @@ class TestDbInitUserVersion:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
 
-        assert version == 3, (
-            f"PRAGMA user_version dovrebbe essere 3 (schema V3), trovato: {version}"
+        assert version == 5, (
+            f"PRAGMA user_version dovrebbe essere 5 (schema corrente), trovato: {version}"
         )
 
 
