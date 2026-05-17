@@ -1702,13 +1702,22 @@ ultimo step:
    WHERE id=<app_id>
 ```
 
-**Raccomandazione**: **Opzione A** — il Critic è il "gate" naturale
-(PASS/FAIL), e la promotion è semanticamente "il Critic approva il
-draft". Coerente con il flusso di approvazione.
+**Raccomandazione RIVISTA** (decisione utente ripasso 17 mag):
+**Opzione B** — lo Scrittore all'ultimo passaggio aggiorna i dati.
+
+> *"Lo Scrittore, all'ultimo passaggio, dovrebbe semplicemente
+> aggiornare i dati correttamente. Basta."*
+
+Motivazione: lo Scrittore è il "proprietario" dell'application
+(la inserisce, gira il critic-loop, genera il PDF). Far chiudere il
+ciclo a lui — Critic dà solo voto, Scrittore decide il fate finale.
+Coerente con `application-flow` skill che già mette lo Scrittore come
+owner del DB record.
 
 **Aggiunta a `db-update` SKILL.md**: regola esplicita
-*"applications.status='ready' è SOLO impostabile dal Critic, mai
-direttamente dallo Scrittore"* — gate single-writer.
+*"`applications.status='ready'` è SOLO impostabile dallo Scrittore,
+DOPO aver ricevuto Critic PASS dal 3° round. Mai direttamente dal
+Critic"* — gate single-writer.
 
 **Dipendenze**:
 - Bug **#14** (state-event log): se attivo, la transition
