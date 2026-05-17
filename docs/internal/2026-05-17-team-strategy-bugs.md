@@ -695,6 +695,87 @@ i 6 PNG che hanno reso visibile il problema (5 + 1 host).
 
 ---
 
+## 🐛 15. Timezone confusion — agenti comunicano in UTC, utente legge in CEST
+
+**Sintomo** (sessione 01:19 → 01:22 UTC):
+
+L'utente alle 01:19:09 UTC chiede: *"ok rifammi grafico usage temporale"*.
+Il Capitano genera `budget_chart_late.png` con tutti i timestamp in UTC.
+Subtitle: *"Now 01:14 — usage 63 % — proj 92.2 %"*. Reset annotato a
+"03:11" (sottinteso UTC).
+
+Alle 01:21:17 UTC l'utente, confuso, scrive: *"solo le 3.21 qui..."*.
+Capitano (01:21:38): *"Non ho capito — ti riferisci al grafico budget?"*.
+
+Alle 01:22:10 UTC l'utente chiarisce: *"l'ora qui è 3.21 e te dici che
+reset è alle 3.11 . ."* — vede l'inconsistenza temporale dal suo punto
+di vista CEST (UTC+2).
+
+Risposta Capitano (01:22:36, dopo aver fatto i calcoli):
+> *"Reset e' alle 03:11 UTC. Ora server: 01:22 UTC. Se li' sono le 3:21,
+> siamo UTC+2 (CEST). Reset fra ~1h50m (alle 5:11 tue)."*
+
+**Causa**:
+- Container Docker gira in **UTC** (default Linux).
+- Tutti gli script Python (`sentinel-bridge.py`, `matplotlib`, log
+  Capitano) usano `datetime.utcnow()` o `time.time()` → output in UTC.
+- L'utente è in **Italia (CEST = UTC+2)** in maggio (CEST attivo dal
+  ultimo domenica di marzo al ultimo domenica di ottobre).
+- Nessuna conversione automatica nei messaggi user-facing né nei
+  grafici. L'utente deve mentalmente sommare +2 ogni volta.
+
+**Impatti**:
+1. **Grafici budget/pipeline** mostrano tutti orari UTC senza suffix
+   esplicito — utente non sa se "03:11" è ora locale o UTC.
+2. **Messaggi Telegram** del Capitano (*"reset alle 03:11"*, *"tick
+   00:45"*, *"chiusura sessione alle 22:11"*) sono tutti UTC impliciti.
+3. **Notifiche Sentinella** stesso problema.
+4. **Ogni richiesta utente** che usa l'ora locale (*"alle 3:21 qui"*)
+   richiede uno step di conversione manuale dal Capitano (potenziale
+   fonte di errori).
+
+**Fix proposto** — 2 opzioni complementari:
+
+**Opzione A** (UX migliore, più invasiva): legge il timezone utente da
+`candidate_profile.yml`:
+```yaml
+timezone: Europe/Rome  # default per nuovi profili in IT
+```
+Helper Python condiviso `agents/_skills/format-time/`:
+```python
+def fmt_user(dt_utc: datetime) -> str:
+    """Restituisce orario in fuso utente con suffix."""
+    import zoneinfo
+    tz = zoneinfo.ZoneInfo(profile.timezone or "UTC")
+    local = dt_utc.replace(tzinfo=zoneinfo.ZoneInfo("UTC")).astimezone(tz)
+    suffix = local.tzname()  # "CEST" / "CET" / "UTC"
+    return local.strftime(f"%H:%M {suffix}")
+```
+Tutti gli script che producono output user-facing (telegram, matplotlib
+xtick) usano `fmt_user(...)` invece di `dt.strftime("%H:%M")`.
+
+**Opzione B** (veloce, meno invasiva): suffix UTC esplicito ovunque +
+mostra anche orario locale come riferimento secondario:
+- Telegram Capitano: *"Tick 00:45 UTC (02:45 CEST tuo)"*
+- Matplotlib subtitle: *"Now 01:14 UTC (03:14 CEST)"* e asse X con `UTC`
+  in `xlabel`.
+
+**Raccomandazione**: combinare A+B — convertire al fuso utente come
+default per la UX (Opzione A) ma mostrare anche UTC nei contesti tecnici
+(grafici operativi, log) per evitare ambiguità (Opzione B).
+
+**Priorità**: media. Bug ricorrente e fonte di confusione UX, ma non
+blocca operatività. Risolverlo migliora drasticamente la leggibilità di
+tutti i messaggi agenti.
+
+**Effort**: piccolo (1 helper Python + retrofit ~10 callsite negli
+script chart/telegram).
+
+**Riferimento**: `docs/sessions/2026-05-17-budget-windows/budget_chart_late.png`
+mostra l'esempio del bug nel subtitle e nei tick X.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -707,6 +788,7 @@ i 6 PNG che hanno reso visibile il problema (5 + 1 host).
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
+| 15 | Timezone confusion (agenti in UTC, utente in CEST) | media | piccolo |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
 | 10 | Mentor → Capitano channel (irrilevante se #9 fatto) | bassa | piccolo |
