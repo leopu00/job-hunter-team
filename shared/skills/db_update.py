@@ -368,7 +368,7 @@ def main():
     # application
     a = sub.add_parser('application')
     a.add_argument('position_id', type=int)
-    a.add_argument('--status', choices=['draft', 'review', 'approved', 'applied', 'response'])
+    a.add_argument('--status', choices=['draft', 'review', 'ready', 'approved', 'applied', 'response'])
     a.add_argument('--critic-verdict', choices=['PASS', 'NEEDS_WORK', 'REJECT'])
     a.add_argument('--critic-score', type=float)
     a.add_argument('--critic-notes')

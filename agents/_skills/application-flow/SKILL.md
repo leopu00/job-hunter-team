@@ -112,15 +112,27 @@ When recording the path in the DB (`--cv-path`, `--cv-pdf-path`), record the `$J
 
 ## Step 7 — Final gate (after `critic-loop` reaches round 3)
 
-The `critic-loop` skill records each round's score; here you persist the verdict and flip the position status.
+The `critic-loop` skill records each round's score; here you persist the verdict, flip the application status, and align the position status.
+
+> ⚠️ **Single-writer rule (bug #21).** `applications.status='ready'` is set **only here, by you, after Critic PASS**. The Critic never writes `applications.status` directly — its only output is `critic_verdict` + `critic_score`. You own the final transition.
 
 ```bash
-# Final UPSERT on the application
-python3 /app/shared/skills/db_update.py application "$ID" \
-  --critic-verdict <PASS|FAIL> \
-  --critic-score <X.X> \
-  --critic-round 3 \
-  --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]"
+# Final UPSERT on the application — verdict + score + ready/draft promotion
+if [[ <final_verdict> == "PASS" ]]; then
+  python3 /app/shared/skills/db_update.py application "$ID" \
+    --critic-verdict PASS \
+    --critic-score <X.X> \
+    --critic-round 3 \
+    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --status ready
+else
+  python3 /app/shared/skills/db_update.py application "$ID" \
+    --critic-verdict <NEEDS_WORK|REJECT> \
+    --critic-score <X.X> \
+    --critic-round 3 \
+    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]"
+  # status resta 'draft' — l'application non è pronta per l'utente.
+fi
 
 # Position status — automatic from final score
 if [[ <final_score>_int >= 5 ]]; then
@@ -129,6 +141,8 @@ else
   python3 /app/shared/skills/db_update.py position "$ID" --status excluded
 fi
 ```
+
+The `applications.status='ready'` promotion is what makes the CV visible on the user's `/ready` dashboard. Skipping it leaves the row in `'draft'` forever — Capitano reports a ready count that the DB and the dashboard don't agree with.
 
 Then notify Capitano with a `[REPORT]` (skill `tmux-send`).
 
