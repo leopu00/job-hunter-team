@@ -1841,6 +1841,169 @@ volatili"*.
 
 ---
 
+## 🐛 24. Sentinella troppo invadente in regime normale + comandi a 4 livelli grezzi — Capitano poca autonomia fine
+
+**Sintomo apparente** (sessione 14:27→15:00 UTC):
+
+Scout-2 in 33 min ha cambiato stato **3 volte**: kill → respawn →
+kill di nuovo. Sembrava bug del Capitano "controllore bang-bang".
+
+**Indagine**: estrazione cronologica di tutti gli ordini
+`@sentinella -> @capitano` dalla giornata (16-17 maggio) da
+`messages.jsonl`. **L'ipotesi è ribaltata** — il bang-bang nasce a
+monte, nella Sentinella, non nel Capitano.
+
+### 📋 I 4 "comandi grezzi" della Sentinella
+
+| Tipo ordine | Quando scatta | Capitano esegue |
+|---|---|---|
+| `ORDINE: ACCELERARE` | proj < target band | spawn nuovi worker + throttle 0 |
+| `URG RALLENTARE` | proj > target | throttle **300s** o **600s** |
+| `[EMERGENZA] FREEZATO IL TEAM` | proj molto alto | `freeze_team.py` = **kill totale** worker |
+| `RECOVERY TRACKING` | post-freeze | info-only, no azione |
+
+**Granuli troppo grossi**: i valori di throttle che la Sentinella
+"ordina" sono solo {0, 300, 600} e `kill`. Nessun intermedio.
+Esempio osservato:
+
+```
+16-05 18:03  proj=27%  → ORDINE ACCELERARE (throttle 0)
+16-05 18:18  proj=130% → EMERGENZA FREEZE (throttle 600 + kill)
+16-05 19:04  proj=149% → URG RALLENTARE (throttle 300)
+16-05 19:50  proj=183% → URG RALLENTARE CRITICO 2 (throttle 600)
+16-05 22:47  proj=232% → EMERGENZA FREEZE (kill totale)
+16-05 23:48  proj=128% → PEGGIORAMENTO POST-FREEZE (kill anche Sonnet)
+```
+
+In 6 ordini consecutivi la Sentinella ha alternato `freeze_team.py
+kill` con `throttle 300/600`. Nessun ordine intermedio tipo
+*"throttle 120s"* o *"throttle 90s"* — i graniglia di controllo
+saltano da 0 a 600 senza valori intermedi.
+
+### 🎯 Conferma dall'utente (verbatim, questa sessione)
+
+> *"Il mio sospetto, che mi è venuto durante i test, è che il capitano
+> ascoltasse molto la sentinella, cioè quello che gli dice la sentinella
+> sono comandi inrompibili, e quindi penso che la sentinella sia un po'
+> troppo binaria. Mentre il capitano calibra, gli arriva un messaggio
+> 'freeze' e lui 'freeza tutti' o 'kill all', che effettivamente funziona,
+> ma sarebbe più efficiente aumentare il throttle fino a 600 secondi
+> per vedere effettivamente come scende lo usage."*
+
+> *"Se non è una soluzione, potrebbe essere di lasciare il capitano
+> decidere un po' più per conto suo. La sentinella ci serve più alla
+> fine delle finestre, quando la proiezione dello usage supera i 100
+> prima della chiusura, quindi il momento critico dove dovrebbe operare
+> la sentinella, più alla chiusura della finestra. Per rendere il
+> monitoraggio più smooth e meno frenetico, su e giù, su e giù, ma più
+> omogeneo."*
+
+### ✅ Cosa funziona già (da NON toccare)
+
+Confermato dai grafici `docs/sessions/2026-05-17-budget-windows/`:
+- **Freeze pre-chiusura funziona**: ogni finestra la Sentinella ha
+  freezato 30-60 min prima del reset, chiusura nel target G-spot
+  90-95% in 4/4 finestre Kimi.
+- **Recovery tracking funziona**: il Capitano riceve segnali sul calo
+  proj e riprende controllo.
+- **Sentinella sa chiudere bene la finestra** — questo è il suo
+  valore aggiunto.
+
+### 🔧 Fix proposto — Suddividere ruoli Sentinella/Capitano per fase
+
+#### Fase 1 — Regime normale (proj < 100% E > 30 min al reset)
+
+**Sentinella in modalità INFO-only**:
+- Manda solo `[BRIDGE TICK]` con dati raw
+- NESSUN ordine `ACCELERARE` / `RALLENTARE` / `FREEZE`
+- Lascia il Capitano libero di modulare
+
+**Capitano gestisce throttle fine-grained autonomamente**:
+- Calcola `vel_needed = (target_pct - current_pct) / hours_to_reset`
+- Confronta con `vel_actual`
+- Adatta throttle in **valori continui** (es. 30s, 60s, 90s, 120s,
+  180s, 240s, 300s)
+- Spawn/kill **solo** quando code vuote o saturate, non per modulare velocità
+
+#### Fase 2 — Regime critico (proj > 100% O ultimi 30 min finestra)
+
+**Sentinella si attiva**:
+- `URG RALLENTARE` con valore throttle proporzionale (non solo 300/600)
+- Esempio scala throttle continuo:
+  ```
+  100% < proj ≤ 110%  →  throttle 120s
+  110% < proj ≤ 130%  →  throttle 240s
+  130% < proj ≤ 150%  →  throttle 360s
+  150% < proj ≤ 200%  →  throttle 600s
+  proj > 200%          →  freeze_team.py
+  ```
+- `EMERGENZA freeze + kill` riservato solo a proj > 200% O persistente >150% per 3 tick
+
+#### Fase 3 — Chiusura finestra (ultimi 30 min)
+
+**Sentinella domina** (comportamento attuale OK):
+- Ordina freeze a 90-95% per chiudere finestra in target
+- Conferma trend con `RECOVERY TRACKING`
+
+### 📊 Implementazione concreta — 3 modifiche
+
+1. **`/app/launcher/sentinel-bridge.py`** o equivalente:
+   - Aggiungere logica "Fase 1/2/3" (lookup time_to_reset + proj)
+   - Sostituire ordini binari con scala throttle continua
+   - Rimuovere `kill -9` dai default, riservarlo a soglie estreme
+
+2. **`agents/sentinella/sentinella.md`**:
+   - Regola **S-04** *"In Fase 1 (regime normale), invia solo
+     `[BRIDGE TICK]` info. NESSUN comando operativo."*
+   - Regola **S-05** *"Quando suggerisci throttle, usa scala continua
+     30-600s proporzionale a proj, non solo {0, 300, 600}."*
+
+3. **`agents/capitano/capitano.md`**:
+   - Regola **C-07** *"In Fase 1 hai autonomia piena sul throttle. Non
+     aspettare ordini Sentinella per modulare velocità. Adatta in
+     valori continui ad ogni tick."*
+   - Mantenere C-01 (obbedienza Sentinella) **solo** durante Fase 2/3.
+
+### 🎯 Priorità: **alta** (decisione utente)
+
+L'utente ha confermato: *"Per rendere il monitoraggio più smooth e
+meno frenetico, su e giù, su e giù, ma più omogeneo, possiamo
+ottimizzare questa parte"*. È una fonte di stress operativo (9 episodi
+URG+EMERGENZA su 100 messaggi recenti, vedi audit VPS health).
+
+### ⏱️ Effort: **medio**
+
+- Logica fasi in `sentinel-bridge.py` (~50 righe)
+- Scala throttle continua (~20 righe)
+- 2 regole prompt in `sentinella.md` (S-04, S-05)
+- 1 regola prompt in `capitano.md` (C-07)
+- Test su 2-3 finestre Kimi per validare smoothness
+
+### 🔗 Bug collegati
+
+- **#2** (Sentinella ipersensibile freeze): è la **versione originale**
+  di questo bug. Bug #24 lo amplia con la separazione di responsabilità
+  Sentinella↔Capitano in fasi.
+- **#3** (Capitano paralizzato da C-01): risolto in parte da C-07 (in
+  Fase 1 il Capitano ha autonomia).
+- **#17** (Capitano passivo davanti a code vuote): il bug #24 dà al
+  Capitano autonomia operativa, sblocca anche #17.
+- **#4** (Performance band 85-95% non rispettata): il smoothing
+  proposto da #24 dovrebbe portare più finestre in target stabile.
+
+### 📈 Validazione post-fix
+
+Misurare su 3-5 finestre Kimi consecutive:
+- Numero di `[URG]` e `[EMERGENZA]` per finestra → atteso ↓ (oggi
+  ~9 in 100 msg, target ~2-3)
+- Numero di kill/respawn worker per finestra → atteso ↓
+  (oggi 3 in 33 min su Scout-2, target ≤ 1)
+- Smoothness della curva usage (varianza intra-finestra) → atteso ↓
+- Hit rate target G-spot 90-95% → atteso mantenuto o ↑ (oggi 4/4
+  finestre, baseline molto alta)
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -1853,6 +2016,7 @@ volatili"*.
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
 | 21 | 🚨 **`applications.status` mai promosso draft→ready** dopo Critic PASS | **alta** | piccolo |
+| 24 | **Sentinella troppo invadente in regime normale** (fasi + scala throttle continua) | **alta** | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
