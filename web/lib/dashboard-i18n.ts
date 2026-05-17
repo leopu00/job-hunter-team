@@ -33,10 +33,10 @@ const T = {
     // Pipeline
     pipeline:             'Pipeline',
     p_new:                'Nuove',
-    p_checked:            'Verificate',
+    p_checked:            'Analizzate',
     p_scored:             'Valutate',
     p_writing:            'Scrittura',
-    p_review:             'Revisione',
+    p_review:             'Revisionate',
     p_ready:              'Pronte',
     p_applied:            'Inviate',
 
@@ -99,12 +99,12 @@ const T = {
 
     pipeline:             'Pipeline',
     p_new:                'New',
-    p_checked:            'Checked',
+    p_checked:            'Analyzed',
     p_scored:             'Scored',
     p_writing:            'Writing',
-    p_review:             'Review',
+    p_review:             'Reviewed',
     p_ready:              'Ready',
-    p_applied:            'Applied',
+    p_applied:            'Sent',
 
     score_distribution:   'Score Distribution',
     score_footer:         (w: number, t: number) => `${w} of ${t} with score · ${t - w} without`,
@@ -162,10 +162,10 @@ const T = {
 
     pipeline:             'Folyamat',
     p_new:                'Új',
-    p_checked:            'Ellenőrzött',
+    p_checked:            'Elemzett',
     p_scored:             'Értékelt',
     p_writing:            'Írás',
-    p_review:             'Áttekintés',
+    p_review:             'Áttekintett',
     p_ready:              'Kész',
     p_applied:            'Elküldve',
 
