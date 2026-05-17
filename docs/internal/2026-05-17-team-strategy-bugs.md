@@ -1668,12 +1668,176 @@ attualmente in `draft`.
 DB locale `/jht_home/jobs.db` ispezionato via SSH.
 
 **Bug collegati / catena**:
-- **#21 sblocca #9**: senza promotion, submit-application non ha cosa spedire.
+- ~~**#21 sblocca #9**~~ (smentito): apply è user-curated by design.
 - **#21 sblocca #20**: senza promotion, /reports vede 0 ready ovunque.
 - **#14**: se attivo, registra la promotion come event log.
 - **#17** (Capitano passivo): il Capitano avrebbe dovuto notare la
   divergenza tra "12 ready" detto a voce e "0 ready" nel DB, ma non
   ha mai fatto query di verifica `SELECT status FROM applications`.
+
+---
+
+## 🐛 22. Assistente hallucina "messaggi non consegnati" — naming DB ambiguo `pending_user_messages`
+
+**Sintomo** (13:40 UTC):
+
+L'utente chiede all'Assistente *"come procede il sistema?"*. Risposta:
+> *"⚠️ Ho anche trovato **2 messaggi di stato del Capitano che non ti
+> sono mai arrivati** (uno del 16 maggio). Vuoi che te li recupero?"*
+
+**Verifica fattuale** sul DB:
+```
+id=1 'Motore acceso. 🚀...'  delivered_via='telegram'  delivered_at='2026-05-16 17:12:20' ✅
+id=2 'CV pronto per Rinse...' delivered_via='telegram'  delivered_at='2026-05-16 18:57:20' ✅
+```
+**Entrambi consegnati** 22h e 19h prima. **Zero messaggi pending realmente non recapitati**.
+
+**Causa**: l'Assistente ha letto la tabella `pending_user_messages` e
+assumed dal nome "tutto qui è pending". Avrebbe dovuto filtrare
+`WHERE delivered_at IS NULL` → 0 risultati. Triplo strato di problema:
+
+- **A. Naming tabella ambiguo**: si chiama `pending_user_messages` ma
+  contiene tutti i messaggi (consegnati + non).
+- **B. Query incompleta**: l'Assistente ha fatto `SELECT *` invece di
+  filtrare sui campi `delivered_via`/`delivered_at` già popolati.
+- **C. Output presentato come fatto, non come ipotesi**: nessun
+  qualificatore ("forse"), affermazione confidente sbagliata =
+  hallucination classica.
+
+**Decisione utente** (verbatim, questa sessione):
+> *"questo bug è abbastanza irrilevante: si potrebbe ottimizzare il
+> naming delle tabelle o quant'altro, ma è di **bassa rilevanza**.
+> Comunque, si potrebbe ottimizzare qualcosetta, ma non è gravissimo."*
+
+**Fix proposto** (se mai si volesse, 3 livelli):
+1. Rinominare tabella: `ALTER TABLE pending_user_messages RENAME TO
+   user_messages_log`
+2. Aggiungere `delivery_status` enum esplicito (pending/delivered/failed)
+3. Regola **T15** in `_team/team-rules.md`: *"quando interroghi
+   tabelle log di messaggi, NON limitarti a SELECT *. Filtra
+   esplicitamente delivered_at IS NULL"*
+
+**Priorità**: **bassa** (utente conferma: non gravissimo).
+**Effort**: piccolo (~30 min se prioritizzato).
+
+**Famiglia**: simile a #19 (Capitano "non lo so" sui weekly reset),
+opposto al pattern #11 (Mentor che fa sempre query DB esplicite e
+cita numeri raw senza allucinare).
+
+---
+
+## 🐛 23. Agenti user-facing non condividono stato live → consigli contraddittori all'utente
+
+**Sintomo** (sequenza 13:40-13:56 UTC, ricostruita da `messages.jsonl`):
+
+| Ora | Agente | Messaggio |
+|---|---|---|
+| 13:40:54 | Tu → Assistente | *"usage settimanale com'è messo? quando si resetta?"* |
+| 13:41:36 | Assistente → Tu | *"⚠️ Stato: ATTENZIONE. Il sistema **consiglia di rallentare nuovi agenti**. Vuoi che dica al Capitano di metterli in pausa?"* |
+| 13:55:53 | Tu → Capitano | *"dovete andare a tutta manetta - alle 17.10 dovete avere..."* |
+| 13:55:53 | Capitano → Sentinella | *"[ORDINE UFFICIALE UTENTE] no freeze fino 17:10"* |
+| 13:56:06 | Capitano → Tu | *"🚀 ORDINE ESEGUITO — **tutta manetta!**"* |
+| 13:56:28 | Sentinella → Capitano | *"[ACK] ORDINE UFFICIALE UTENTE ricevuto. Override NO-FREEZE attivo."* |
+
+L'Assistente alle 13:41 consiglia **RALLENTARE**. 14 min dopo il
+Capitano esegue **ACCELERARE** su ordine utente. Due agenti
+user-facing che dicono cose **opposte** nello stesso quarto d'ora.
+
+Se l'utente alle 14:00 avesse richiesto status all'Assistente,
+sentirebbe ancora "rallenta" perché l'Assistente non sa nulla
+dell'ordine eseguito dal Capitano. **Stato disallineato**.
+
+**Causa** — Tre layer di disallineamento:
+
+### A. Nessun "live state" condiviso
+
+I 3 agenti user-facing (Capitano, Assistente, Mentor) leggono
+indipendentemente:
+- File diversi (`sentinel-data.jsonl`, `pacing-bridge-state.json`,
+  DB SQLite, pane scrollback)
+- Snapshot a tempi diversi (Assistente alle 13:40 ammette di vedere
+  snapshot "di ieri notte" nel pacing-bridge-state.json)
+- Nessun broadcast inter-agente per eventi importanti (ordini utente,
+  override Sentinella, decisioni Capitano)
+
+### B. Assistente non legge cronologia inter-agente
+
+`messages.jsonl` ha tutto: Capitano↔Sentinella, ordini utente,
+override. L'Assistente potrebbe leggere le ultime 20 entry per capire
+"cosa sta succedendo adesso" — non lo fa.
+
+### C. Manca canale "broadcast" per ordini straordinari
+
+Quando il Capitano riceve ordine speciale utente (tutta manetta /
+freeza tutto / ignora Sentinella fino a X), lo esegue ma **non
+broadcast** all'Assistente e Mentor. Per loro è come se non fosse
+successo niente.
+
+**Impatto**:
+1. **Confusione utente**: due agenti, due consigli opposti nel
+   medesimo minuto. Chi seguire?
+2. **Decisione utente sbagliata possibile**: se avesse chiesto prima
+   all'Assistente, avrebbe seguito "rallentare" e perso la finestra
+   pre-reset settimanale.
+3. **Trust erosion**: l'utente impara che alcuni agenti dicono cose
+   obsolete, smette di fidarsi delle loro risposte rapide.
+
+**Fix proposto** — 3 componenti coordinati:
+
+### Componente A — Helper `team-live-state` (lookup unificato)
+
+Nuovo `agents/_skills/team-live-state/check.py` che esegue:
+
+```python
+{
+  "sentinel": json.load(open("/jht_home/logs/sentinel-bridge-state.json")),
+  "last_capitano_orders": tail(messages.jsonl, type="ORDINE_UTENTE", limit=3),
+  "last_sentinella_ticks": tail(messages.jsonl, from="sentinella", limit=5),
+  "active_override": detect_no_freeze_window(),
+  "agents_running": tmux_list_sessions(),
+  "db_summary": {pending_apps, ready_apps, last_pass}
+}
+```
+
+### Componente B — Regola **T16** in `_team/team-rules.md`
+
+```
+## T16 — Live state lookup obbligatorio per domande "come va / stato"
+
+Quando l'utente chiede stato del sistema, prima di rispondere ESEGUI:
+  python3 /app/shared/skills/team_live_state.py
+
+Restituisce: stato Sentinella corrente, ordini speciali in vigore,
+agenti attivi, DB summary. NON basarti su snapshot point-in-time
+o file statici — sempre live.
+```
+
+### Componente C — Broadcast inter-agente per ordini speciali
+
+Quando il Capitano riceve ordine straordinario utente, esegue anche:
+```bash
+jht-tmux-send ASSISTENTE "[@capitano -> @assistente] [OVERRIDE-ACTIVE] \
+  Ordine utente: tutta manetta fino 17:10. Se ti chiede stato, dillo."
+jht-tmux-send MENTOR "[@capitano -> @mentor] [OVERRIDE-ACTIVE] ..."
+```
+
+**Raccomandazione**: A + B insieme (C è elegante ma fragile).
+
+**Priorità**: **media-alta**. Tocca direttamente la trust utente sui 3
+agenti user-facing. Meno tecnico di altri bug ma più visibile nella UX
+quotidiana.
+
+**Effort**: medio (~80 righe helper + regola T16 + test).
+
+**Bug collegati**:
+- **#16** (auto-report + bridge orders): la regola C-04 di
+  reportistica proattiva risolve parzialmente — se l'Assistente fa
+  report ogni 2h, vede stato live ogni volta.
+- **#11** (Mentor reference positivo): il Mentor in 6 risposte ha
+  sempre fatto query DB prima di rispondere. Pattern già corretto, da
+  estendere ad Assistente + Capitano.
+- **#22** (declassato): stessa famiglia "agente risponde su snapshot
+  incompleti".
 
 ---
 
@@ -1695,10 +1859,12 @@ DB locale `/jht_home/jobs.db` ispezionato via SSH.
 | 12 | **Scout hit-rate** (SC-05/T14 nei prompt base, no skill) | media | piccolo |
 | 15 | Timezone confusion (agenti in UTC, utente in CEST) | media | piccolo |
 | 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
+| 23 | **Agenti user-facing non condividono stato live** (T16 + helper) | media-alta | medio |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
 | 10 | Mentor → Capitano channel | bassa | piccolo |
 | 13 | Capitano invia template shell non espanso a Telegram | bassa | piccolo |
+| 22 | Hallucination "msg non consegnati" — naming `pending_user_messages` ambiguo | bassa | piccolo |
 | 8 | ~~Generate PNG/grafico~~ — **falso bug, già funziona** | — | — |
 | 9 | ~~Submit-application skill~~ — **falso bug, design "user-curated apply"** | — | — |
 | 11 | ✨ Mentor stile conversazionale = reference positiva | — | — |
