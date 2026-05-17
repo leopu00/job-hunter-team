@@ -39,6 +39,7 @@ const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
+const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
 async function readHostType() {
@@ -433,6 +434,38 @@ async function dispatch() {
   };
   startAgentWatchdog();
 
+  // ── Auto-report loop: panoramica grafica + PNG via Telegram ogni 2h
+  // (decisione utente 2026-05-17 — bug #16 / task #52 / F-1.D). Loop
+  // bash che ogni 5 min chiama auto_report.py; lo script throttle
+  // interno garantisce 1 invio reale ogni JHT_AUTO_REPORT_INTERVAL_MIN.
+  // Pattern identico a doctor-watchdog: respawn 5s on crash.
+  let autoReportChild = null;
+  let autoReportRespawnTimer = null;
+  const startAutoReportLoop = () => {
+    if (autoReportChild && !autoReportChild.killed) return;
+    pid1Log('starting auto-report-loop (Telegram panoramic + PNG ogni 2h)');
+    autoReportChild = spawnLabeled('auto-report', '/bin/bash', [AUTO_REPORT_LOOP_SCRIPT]);
+    autoReportChild.on('exit', (code, signal) => {
+      const exited = autoReportChild;
+      autoReportChild = null;
+      if (shuttingDown) return;
+      pid1Log(`auto-report-loop exited (code=${code} signal=${signal})`);
+      if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
+      autoReportRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('auto-report-loop respawn dopo crash');
+          startAutoReportLoop();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  if (hasBots) {
+    startAutoReportLoop();
+  } else {
+    pid1Log('auto-report-loop skip: nessun bot Telegram configurato');
+  }
+
   // ── Doctor watchdog: loop bash che ogni 30 min spawna una sessione
   // tmux DOTTORE (one-shot LLM ~30 min, prune cache + py-audit + liveness
   // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
@@ -584,6 +617,8 @@ async function dispatch() {
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
     if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+    if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
+    if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));

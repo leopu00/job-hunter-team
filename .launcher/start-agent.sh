@@ -108,10 +108,16 @@ if [ "$ROLE" = "bridge" ]; then
   # Kill bridge preesistenti via /proc/*/cmdline (pkill non è installato
   # nell'immagine busybox slim). Matching su 'sentinel-bridge.py' copre
   # setsid wrapper + python + eventuali figli.
+  # Bug 2026-05-17 20:42: dopo recreate restavano 2 coppie process vive
+  # perché SIGTERM + sleep 1 era troppo permissivo. Doppio kill TERM→KILL.
   for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill "$_pid" 2>/dev/null || true
+    kill -TERM "$_pid" 2>/dev/null || true
   done
   sleep 1
+  for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill -KILL "$_pid" 2>/dev/null || true
+  done
+  sleep 0.5
   setsid sh -c "
     JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
       python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
@@ -127,9 +133,13 @@ if [ "$ROLE" = "bridge" ]; then
   PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
   if [ -f "$PACING_SCRIPT" ]; then
     for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill "$_pid" 2>/dev/null || true
+      kill -TERM "$_pid" 2>/dev/null || true
     done
     sleep 1
+    for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -KILL "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
     # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
     # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
     # le env vars del parent. Setting PATH a single-quoted lo aveva
