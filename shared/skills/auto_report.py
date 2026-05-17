@@ -90,6 +90,30 @@ def _fmt_local_time() -> str:
         return _now().strftime("%H:%M UTC")
 
 
+def _fmt_hhmm_user(hhmm_utc: str | None) -> str:
+    """Bug #15: converti 'HH:MM' UTC dal bridge nel fuso utente.
+
+    Se l'orario UTC è già passato oggi, assumiamo domani (i reset
+    sliding-window non scadono nello stesso giorno calendario UTC).
+    """
+    if not hhmm_utc or ":" not in hhmm_utc:
+        return hhmm_utc or "?"
+    try:
+        hh, mm = [int(x) for x in hhmm_utc.strip().split(":")[:2]]
+    except (ValueError, TypeError):
+        return hhmm_utc
+    from datetime import timedelta
+    now = _now()  # tz=UTC
+    target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if target < now:
+        target = target + timedelta(days=1)
+    try:
+        from format_time import fmt_user_with_utc  # type: ignore
+        return fmt_user_with_utc(target, "%H:%M")
+    except Exception:
+        return target.strftime("%H:%M UTC")
+
+
 def _read_pipeline() -> dict:
     if not DB_PATH.exists():
         return {"positions": {}, "applications": {}, "transitions_24h": 0,
@@ -207,9 +231,12 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
         proj_s = f"{proj:.0f}%" if isinstance(proj, (int, float)) else "?"
         phase_s = f"Fase {phase}" if phase else "?"
         lines.append(f"⏱️ Budget     {usage}% (proj {proj_s} · {phase_s} · {_html_escape(str(status))})")
-        lines.append(f"📅 Reset finestra {_html_escape(str(reset_at))} UTC")
+        # Bug #15: converti reset HH:MM UTC → fuso utente.
+        reset_user = _html_escape(_fmt_hhmm_user(reset_at))
+        lines.append(f"📅 Reset finestra {reset_user}")
         if weekly is not None:
-            wr = f" · reset {weekly_reset}" if weekly_reset else ""
+            wr_user = _fmt_hhmm_user(weekly_reset) if weekly_reset else ""
+            wr = f" · reset {wr_user}" if wr_user else ""
             lines.append(f"📆 Settimana  {weekly}%{_html_escape(wr)}")
 
     transitions = pipeline.get("transitions_24h", 0)
