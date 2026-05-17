@@ -392,3 +392,28 @@ solo URG, non più ACK su INFO.
 - Logs: `~/.jht/logs/sentinel-data.jsonl`, `sentinel-bridge-state.json`,
   `token-meter.csv`, `token-analysis.png`, `token-by-agent.png`,
   `token-by-agent-rate.png`
+
+---
+
+## 📈 Update 2026-05-17 — conferma G-spot 90-95% su 2 finestre consecutive
+
+La pipeline V6 documentata sopra è stata validata in una sessione operativa
+di 2 finestre Kimi consecutive:
+
+| Finestra | Chiusura / proj | Target | Verdict |
+|---|---|---|---|
+| 17:11 → 22:11 | 90 % chiusa con RESET | 95 % | ✅ dentro G-spot |
+| 22:11 → 03:11 | 95.0 % proj @ 03:11 | 95 % | ✅ perfetto |
+
+Conferma empirica: la media stimata sopra (91 %) regge anche su finestre
+reali con team a pieno regime (5 user-facing + Scout/Analista/Scorer/
+Scrittore/Critico). Grafici matplotlib generati runtime dal Capitano in
+`docs/sessions/2026-05-17-budget-windows/`.
+
+Nota di processo: il **freeze Sentinella alle 22:45** della finestra
+22:11→03:11 ha causato 30-60 min di rallentamento (proj momentaneamente
+207 %, reazione binaria). Il team ha recuperato ma solo grazie alla
+pressione dell'utente sul Capitano via Telegram. In autonomia il freeze
+sarebbe rimasto attivo. Bug strategico aperto: vedi
+[`2026-05-17-team-strategy-bugs.md`](./2026-05-17-team-strategy-bugs.md)
+#2 (Sentinella throttle progressivo) e #3 (gerarchia user > Sentinella).

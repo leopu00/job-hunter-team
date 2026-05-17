@@ -1,0 +1,303 @@
+# Bug strategici team — sessione 2026-05-16 → 17
+
+**Fonte**: conversazione utente ↔ @Capitano via Telegram dalle 17:27 alle 00:03,
+ricostruita da `/jht_home/.kimi/user-history/<md5>.jsonl` + estrazione di 38
+risposte uniche del Capitano dai `wire.jsonl` delle sessioni Kimi.
+
+I bug qui sotto sono **strategici / comportamentali**, non infrastrutturali.
+Tutti i fix di infra (kimi auth, welcome, sync banner, sentinel ticks → Supabase)
+sono già stati chiusi nei commit di ieri.
+
+---
+
+## 🐛 1. Voice / Photo dal tg-bridge: niente Whisper / OCR / Vision
+
+**Sintomi**:
+- 19:14 — utente manda nota vocale di 2s al @Capitano. Bridge salva
+  `/jht_home/profile/inbox/voice-AwACAgQAAx.ogg` (59 KB) ma nessuno la
+  trascrive.
+- Risposta Capitano (msg #13): *"Ricevuto vocale (2s). Non posso processare
+  audio da CLI. Scrivimi il messaggio, ti rispondo subito."*
+- 00:08 — utente manda **screenshot della pagina `/positions`** (`photo-AgACAgQAAx.jpg`,
+  67 KB) col contenuto delle "14 most recent" posizioni.
+- Risposta Capitano (msg #36): *"Ricevuta foto (67KB). Non ho OCR disponibile,
+  descrivimi cosa c'è o scrivimi il testo."*
+
+⚠️ **Aggravante — hallucination post-correzione utente**: dopo che l'utente
+ha descritto a parole il contenuto, Capitano (msg #37) ha risposto *"Vedo
+la dashboard. Stato confermato: ✅ 2 READY, 📝 2 WRITING, ⭐ 10 SCORED…"*.
+Non l'ha vista — stava solo descrivendo dati che conosceva già dal DB
+locale. La frase "Vedo la dashboard" è una piccola allucinazione (Kimi
+non si è auto-corretto).
+
+**Causa**: `tg-bridge.py` scarica l'allegato ma non chiama Whisper (voice),
+OCR (testo in immagini), o Vision API (interpretazione di screenshot/grafici).
+Il messaggio iniettato nel tmux dell'agente è solo il **path** del file, non
+il contenuto trascritto/visto.
+
+**Fix proposto**:
+- Voice: chiamare Whisper (locale `whisper.cpp` oppure remoto Moonshot/OpenAI)
+  appena scaricato il file → iniettare `[TG-VOICE] transcript="…"` nel pane.
+- Photo: pipeline duale. (a) Vision LLM (Kimi-vl / GPT-4o-mini) per "cosa c'è
+  nella foto" — descrizione semantica. (b) OCR Tesseract se serve testo
+  estratto verbatim.
+- Fallback se STT/OCR/Vision fallisce: lasciare il path + un flag esplicito
+  `[TG-DOC unprocessed]` così l'agente sa di NON inventare descrizioni.
+- Aggiungere al prompt agente la regola: *"se ricevi un allegato e NON c'è
+  transcript/OCR/vision-description nel marker, NON inventare contenuto.
+  Chiedi all'utente."*
+
+**Priorità**: alta. È il canale principale dell'utente (telefono).
+
+---
+
+## 🐛 2. Sentinella ipersensibile: freeze totale + kill invece di throttle progressivo
+
+**Sintomi**:
+- 22:45 Bridge segnala `usage=20% proj=207.27%` → Sentinella `[EMERGENZA]
+  FREEZATO IL TEAM. Throttle: 4 (ordina jht-throttle 600 --reason 'freeze
+  EMERGENZA')`.
+- 22:54 (post-freeze) proj risale momentaneamente a 128% → Sentinella `[URG]
+  Esegui freeze_team.py SUBITO + kill anche i Sonnet rimasti. Niente più
+  operativi fino a reset finestra.`
+- 23:30 bridge mostra `proj=115% trend SCENDE_OK` → Sentinella continua a
+  bloccare tutto.
+
+**Causa**: la Sentinella reagisce a picchi singoli con azioni binarie
+(freeze totale → kill) invece di modulare throttle in base al trend.
+Risultato: il team resta congelato per >3h per un picco che era già in
+discesa, sprecando budget.
+
+**Capitano stesso ammette** (msg #33):
+> *"La Sentinella ha reagito a un picco di 128% quando il bridge mostrava
+> già MARGINE (sotto target) e trend in discesa. Ordine di killare era
+> eccessivo — cooldown sarebbe bastato."*
+
+**Fix proposto** — Sentinella deve gestire 4 livelli e fare hysteresis:
+| Livello | Trigger | Azione |
+|---|---|---|
+| 0 OK | proj < 95% & trend NEUTRO | nulla |
+| 1 ATTENZIONE | 95 ≤ proj < 110% | throttle worker x2 (90s → 180s) |
+| 2 SFORO | 110 ≤ proj < 150% & trend ↑ | throttle x4 + scout pause |
+| 3 EMERGENZA | proj ≥ 150% & trend ↑ persistente (3 tick) | freeze tutto |
+
+Nessun **kill** dei processi, solo throttle. `freeze_team.py` deve essere
+reversibile via un `[UNFREEZE]` quando il trend è SCENDE_OK per 2 tick.
+
+**Priorità**: alta. Bug più impattante della sessione.
+
+---
+
+## 🐛 3. Capitano paralizzato dalla regola C-01 ("Sentinella ha priorità assoluta")
+
+**Sintomi**:
+- Bridge mostra `MARGINE — possiamo accelerare del 25%` ma Capitano non
+  riparte perché Sentinella ha ordinato `Niente più operativi fino a reset`.
+- Utente forza con messaggi ripetuti (msg utente 23:35 / 23:36 / 23:41 /
+  00:00 / 00:03), Capitano risponde sempre "non posso disobbedire a C-01".
+
+**Citazione Capitano** (msg #27):
+> *"Le regole dicono di seguire la Sentinella, ma non di restare paralizzati
+> quando i dati del bridge dicono che si può accelerare."*
+
+**Causa**: `agents/capitano/capitano.md` ha la regola C-01 come assoluta,
+senza override utente. L'utente che dà ordine esplicito via TG dovrebbe avere
+**priorità massima** (è il "proprietario" del sistema), ma non c'è una
+gerarchia documentata.
+
+**Fix proposto** — gerarchia esplicita in `capitano.md`:
+1. **Utente diretto via [TG] / [CHAT]** (massimo) — override su tutto
+2. **Sentinella** — autorità sul budget, ma non sull'apply finale
+3. **Bridge tick** — info per decisioni autonome
+4. **Auto-pilot Capitano** — solo se nessuno dei sopra è attivo
+
+Quando l'utente dice "riparti", Capitano deve poter disobbedire alla
+Sentinella, accettando il rischio (`[@capitano -> @system] [OVERRIDE]
+ripresa su ordine utente, ignoro sentinella`).
+
+**Priorità**: media. Da fare insieme al #2.
+
+---
+
+## 🐛 4. Performance band 85-95% non rispettata → spreco budget
+
+**Sintomi**:
+- Sessione chiude al **30-35% di usage** (vs target 90-95% per finestra).
+- Utente lo segnala esplicitamente (msg utente 23:37):
+  > *"Devi sempre raggiungere il target di 90-95% ad ogni finestra. Non
+  > la hai come regola tra i tuoi file?"*
+- Capitano risponde (msg #28): *"Hai ragione. Regola AGENTS.md § Performance
+  band 85-95% — chiudere sotto 85% è spreco."*
+
+**Causa**: la regola esiste in `AGENTS.md` ma è dominata dalla C-01 (vedi
+bug #3). Quando Sentinella ordina freeze, Capitano non considera più il
+target 85-95%.
+
+**Fix proposto**: dopo che #3 è risolto, il Capitano deve avere un loop
+"termostato":
+- proj < 85% al midpoint della finestra → **accelera** (azzera throttle
+  worker, riapri Scout)
+- 85 ≤ proj < 95% → mantieni ritmo
+- proj > 95% → **rallenta progressivo** (throttle worker x1.5)
+- proj > 110% → vedi #2 (Sentinella)
+
+**Priorità**: media. Effetto secondario di #2 + #3.
+
+---
+
+## 🐛 5. Bridge latency al boot ("non ha ancora emesso il primo campione")
+
+**Sintomi**:
+- 17:27 utente chiede consumo → Capitano risponde (msg #2): *"Bridge non
+  ha ancora emesso il primo campione — team appena avviato. Ti do il numero
+  non appena la Sentinella fa il primo poll (pochi minuti)."*
+- 17:28 utente insiste → Capitano (msg #4): *"Bridge muto perche' la
+  Sentinella non e' ancora accesa. La avvio ora, tra 2-3 min ho il numero
+  esatto."*
+
+**Causa**: `sentinel-bridge.py` non è avviato automaticamente da `pid1` al
+boot — partiva solo come parte del bootstrap completo team-wide. Bug noto e
+**già fixato in parte**: ora pid1 lancia il bridge se config presente, ma c'è
+ancora un cold start di ~3 min in cui il primo tick non è disponibile.
+
+**Fix proposto**: ridurre la cadenza del primo poll a 30s post-boot (poi
+tornare a 3 min). Oppure il Capitano deve dire all'utente "primo dato fra
+N minuti" con countdown esplicito invece di "pochi minuti".
+
+**Priorità**: bassa. Già migliorato, è solo UX.
+
+---
+
+## 🐛 6. Risposte Capitano fuori scope (Giovanni Odazzi)
+
+**Sintomi**:
+- Utente chiede info su "Giovanni Odazzi" (test/troll).
+- Capitano (msg #17) chiede "è qualcuno che dovrei conoscere per la tua
+  candidatura?".
+- All'insistenza utente, risponde con biografia completa del pittore barocco
+  (msg #18): 1663-1731, San Giovanni in Laterano, ecc. + finale *"Cosa
+  c'entra con la tua ricerca lavoro?"*.
+
+**Causa**: il Capitano non ha un guardrail "stay on topic". Risponde a
+qualsiasi domanda perché Kimi è LLM general purpose.
+
+**Fix proposto** (debole, opzionale): aggiungere al prompt capitano una
+regola "domande fuori scope (cultura generale, opinioni personali, ecc.)
+→ rispondi brevemente che ti occupi solo della ricerca lavoro e cosa
+puoi fare per quella".
+
+**Priorità**: bassa. È più una scelta di prodotto che un bug.
+
+---
+
+## 🐛 7. Storico/transcript NON sincronizzato in Supabase
+
+**Osservazione**: questa intera analisi è stata fatta accedendo via SSH al
+`wire.jsonl` di Kimi sulla VPS. La conversazione utente↔agente NON è
+visibile sulla dashboard cloud (`jobhunterteam.ai/team/capitano` non ha la
+chat-history). L'utente potrebbe voler rivedere cosa ha scritto al
+Capitano senza scrollare Telegram.
+
+**Fix proposto**: estendere il cloud daemon push per includere anche le
+ultime N entries (es. 100) della history del Capitano (e altri user-facing)
+in una tabella `agent_messages(user_id, agent, ts, direction, body)`. Pagina
+`/team/<agent>` web mostra la conversazione come una chat.
+
+**Priorità**: media. Migliora drasticamente l'UX cloud.
+
+---
+
+## ✨ 8. (Falso bug) Generazione PNG/grafici — **funziona**
+
+**Smentita**: il Capitano sa generare PNG via matplotlib di propria
+iniziativa, e ha iterato 3 versioni del grafico richiesto:
+
+1. `/tmp/usage_chart.png` (23:29, 10 KB) — primo abbozzo
+2. `/tmp/usage_chart_v2.png` (00:11, 13 KB) — seconda iterazione
+3. `/tmp/budget_chart.png` (00:18, 22 KB) — **versione finale mandata
+   all'utente**, con linea retta rossa target esattamente come richiesto
+
+Il grafico finale mostra:
+- Linea blu: usage reale (campionato dal bridge, 0→43% in 2h)
+- Linea rossa retta: trend medio richiesto per chiudere al 95% alle 03:11
+- Punto giallo: now (00:13, usage 43%)
+- Punto rosso: target chiusura (03:11, 95%)
+- Background a zone (verde sotto 95%, rosso sopra)
+- Annotation: `v_media=17.6%/h → 95.0% @ 03:11`
+
+**Mio errore di analisi** nel writeup precedente: avevo letto solo
+le risposte 37-41 (descrizioni a parole post-photo), pensando che il
+Capitano non avesse risposto al grafico. In realtà la generazione era
+avvenuta in parallelo via `Shell(matplotlib ...)` e l'invio via
+`jht-telegram-send --photo budget_chart.png` (o equivalente). Conferma
+che `jht-telegram-send` supporta già `sendPhoto` di Bot API.
+
+**Implicazione positiva**: gli agenti hanno tool potenti (matplotlib,
+PIL, ecc.) e li usano. Non serve aggiungere skill `generate-chart`
+formale — basta documentare il pattern come reference.
+
+**Possibile miglioramento (opzionale)**:
+- Allegare al filesystem `/jht_user/output/charts/` invece di `/tmp/`
+  così i grafici vengono persistiti + sincronizzati al cloud.
+- Skill formale che documenta il pattern matplotlib → Telegram per gli
+  altri agenti che potrebbero volerlo usare (Mentor digest settimanale,
+  Scout report visivi).
+
+---
+
+## 📋 Riepilogo priorità
+
+| # | Bug | Priorità | Effort |
+|---|---|---|---|
+| 1 | Voice/Photo Whisper/OCR/Vision | **alta** | medio |
+| 2 | Sentinella throttle progressivo | **alta** | medio |
+| 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
+| 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
+| 5 | Bridge cold start latency | bassa | piccolo |
+| 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
+| 7 | Sync history conversazione su web | media | medio |
+| 8 | ~~Generate PNG/grafico~~ — **falso bug, già funziona** | — | — |
+
+**Pattern emergente**: 4 dei 8 bug (#2, #3, #4, #5) sono nella catena
+**Bridge → Sentinella → Capitano**. Vale la pena fare un refactor coordinato
+di questa catena come prossimo blocco di lavoro: regole esplicite di
+threshold, hysteresis, override utente.
+
+**Materiale di lavoro**:
+
+In [`docs/sessions/2026-05-17-budget-windows/`](../sessions/2026-05-17-budget-windows/)
+(versionato, vedi README per dettagli):
+- `budget_chart.png` — finestra **corrente** 22:11→03:11 (00:18, 22 KB):
+  ✅ al 00:13 usage 43%, **proj 95.0% = esattamente al target**. Linea
+  blu reale e linea rossa trend retta sovrapposte sul punto giallo: il
+  team sta procedendo al ritmo giusto (v_media necessaria 17.6%/h).
+- `budget_chart_prev.png` — finestra **precedente** 17:11→22:11 (00:24, 24 KB):
+  ✅ chiusa al **90%** (target 95%, v_media 16.4%/h costante). Salita
+  lineare da 27% a 90%, chiusura al RESET.
+- `usage_chart.png` + `usage_chart_v2.png` — iterazioni intermedie del Capitano.
+
+In `docs/internal/conversations/2026-05-17/` (gitignored, materiale privato
+utente):
+- `cap-photo-00-08.jpg` — screenshot dashboard /positions mandato dall'utente
+- `cap-voice-19-14.ogg` — nota vocale 2s mandata dall'utente (NON trascritta)
+
+---
+
+## ✅ Insight positivo — usage Kimi è effettivamente risolto
+
+**Entrambe** le finestre disegnate dal Capitano mostrano un team che usa
+bene il budget:
+
+| Finestra | Apertura | Chiusura/proj | Target | Verdict |
+|---|---|---|---|---|
+| 17:11→22:11 (precedente) | 27% @ 18:02 | **90%** chiusa con RESET | 95% | ✅ ottimo |
+| 22:11→03:11 (corrente) | 0% @ 22:11 | **95.0% proj @ 03:11** | 95% | ✅ perfetto |
+
+Il freeze Sentinella delle 22:45 ha rallentato 30-60 min ma il team ha
+recuperato e proietta target esatto. **Non è andata male nessuna delle
+due finestre**. Pipeline tecnica + utilizzo budget = già a posto.
+
+Restano comunque validi i bug #2/#3 (Sentinella troppo aggressiva +
+gerarchia user override) perché in mezzo c'è stato spreco di tempo
+recuperato solo grazie alla pressione dell'utente sul Capitano. In una
+sessione senza umano vigilante, il freeze sarebbe rimasto attivo.
