@@ -97,7 +97,7 @@ Il punteggio (0-100) è la somma di questi componenti basati sul profilo candida
 | Stack match | 35 | `stack_match` | Match tra skills richieste e stack candidato |
 | Seniority fit | 25 | `experience_fit` | Alignment anni exp candidato vs richiesti |
 | Remote/location | 20 | `remote_fit` | Fit con preferenze location candidato |
-| Salary fit | 10 | `salary_fit` | Range offerto vs target candidato |
+| Salary fit | 10 | `salary_fit` | Range offerto vs target candidato. **Pre-passa SEMPRE da skill `salary-estimate`** (bug #27): se la posizione non ha range dichiarato, la skill cerca in cache locale (TTL 30gg) o ricade su default neutrale + nota `no_data_default`. Lo Scorer popola anche `positions.salary_estimated_*` se la skill ritorna un range stimato. Mai usare `5` come default nascosto: marca esplicitamente `no_data_default` in `score.notes`. |
 | Stack bonus | 10 | `strategic_fit` | Tech bonus (es. AI, cybersec, fintech se sono aree forti) |
 
 **Penalità:**
