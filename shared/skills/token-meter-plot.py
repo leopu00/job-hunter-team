@@ -21,6 +21,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+# Bug #15: subtitle e label ora nel fuso utente (CEST/CET) invece di UTC
+# implicito. Import opzionale: se manca, fallback a UTC esplicito.
+try:
+    from format_time import fmt_user_with_utc as _fmt_ts
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from format_time import fmt_user_with_utc as _fmt_ts  # type: ignore
+    except ImportError:
+        def _fmt_ts(dt):  # type: ignore
+            return dt.strftime("%H:%M UTC")
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_SESSIONS = JHT_HOME / ".kimi" / "sessions"
 DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
@@ -172,7 +184,7 @@ def main():
     fig = plt.figure(figsize=(14, 12))
     gs = fig.add_gridspec(4, 1, height_ratios=[2.2, 1.5, 1.5, 2], hspace=0.45)
     fig.suptitle(
-        f"JHT Token Analysis — da {TEAM_START.strftime('%H:%M UTC')} a {events[-1][0].strftime('%H:%M UTC')} "
+        f"JHT Token Analysis — da {_fmt_ts(TEAM_START)} a {_fmt_ts(events[-1][0])} "
         f"({len(events)} kimi events, {len(bridge)} bridge ticks)",
         fontsize=14, fontweight="bold", y=0.995
     )
