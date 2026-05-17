@@ -129,3 +129,7 @@ screenshots/
 
 # Materiale conversazioni private utente (voice, screenshot, ecc.)
 docs/internal/conversations/
+
+# Export /export di Claude Code (chat completa, materiale privato)
+*-local-command-caveat*.txt
+2026-*-local-command-caveat*.txt
