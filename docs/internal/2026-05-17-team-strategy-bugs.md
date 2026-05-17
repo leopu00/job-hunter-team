@@ -1067,16 +1067,26 @@ helper `auto-triage-check.py` che esegue le 4 query in 1 colpo.
 
 **Riferimento conversazionale**: 01:45:44, 01:49:16 UTC.
 
+**Pattern cross-provider osservato (decisione utente ripasso #17)**:
+Il problema è **molto più acuto su Kimi** rispetto a Claude/Codex:
+- **Claude** agiva più correttamente, autonomia spontanea
+- **Codex** intermedio
+- **Kimi** (attuale): passivo, aspetta sempre input umano
+
+Conferma anche cross-provider su accesso fonti web (vedi F-2):
+LinkedIn accessibile da Claude, parziale Codex, bloccato Kimi.
+
 **Collegamento con altri bug**:
 - **#3** (Capitano gerarchia C-01 Sentinella): stesso pattern di
-  paralisi, ma diverso trigger. #3 = freeze ordinato → Capitano paralizza.
-  #17 = code vuote → Capitano paralizza. Causa comune: Capitano sente
+  paralisi, diverso trigger. Causa comune: Capitano (Kimi) sente
   che ogni azione non-richiesta è una violazione di regola.
-- **#16** (auto-report proattivo): manca proattività di reporting.
-  #17 = manca proattività di azione operativa.
-- ~~**#9** (submit-application)~~ — smentito post-revisione. L'apply
-  manuale è by design. Le 4 ready (Bending, Rinse, Gr4vy, Company 033)
-  aspettano correttamente l'utente che scelga manualmente quale spedire.
+- **#16** (auto-report proattivo, ora F-1.D): manca proattività di
+  reporting. #17 = manca proattività di azione operativa.
+- **F-2** (Scout web access): cross-provider Kimi blocked + fonti
+  esaurite → C-05 deve permettere a Capitano di ingegnarsi
+  (attivare 4 Scout coordinati, cambiare approccio) senza aspettare
+  che l'utente lo dica.
+- ~~**#9** (submit-application)~~ — smentito post-revisione.
 
 ---
 
@@ -2647,6 +2657,172 @@ Possibile **selling point feature** del prodotto.
 
 ---
 
+## ✨ F-2 (NEW). Scout web access — cross-provider + anti-bot + email forwarding + multi-Scout coordination
+
+**Decisione utente questa sessione** (ripasso #17, espansione su tema correlato Scout):
+
+> *"Kimi ha proprio il Capitano che ha annunciato che non riescono ad
+> accedere a LinkedIn per via dei cookies. Codex riusciva ad accedere
+> a LinkedIn ma non la prendeva come fonte dati principale. Claude
+> all'avvio del team da zero offriva solo opzioni da LinkedIn → Claude
+> è quello che agiva più correttamente."*
+>
+> *"Bisogna anche ingegnarsi una volta che si esaurisca la fonte di
+> base: avviare più scout possibili (4) e farli coordinare insieme.
+> Cambiare approccio, creare script di web scraping Python. Bisogna
+> stare attenti perché ci sono sempre fonti che non si stanno
+> guardando, ma le offerte principali stanno il 90% su LinkedIn,
+> Glassdoor o Indeed."*
+
+### 🎯 5 componenti coordinati
+
+#### A. Cross-provider LinkedIn access
+
+**Sintomo osservato** (sessione 17 mag, screenshot `scout2_linkedin_*.png`):
+3 sweep Scout-2 su LinkedIn (canonical, yo, mbg) tutti bloccati da
+cookie wall + login form. Budget Kimi sprecato per nulla.
+
+**Pattern cross-provider osservato dall'utente**:
+- **Claude** (precedente): LinkedIn fonte principale by default ✅
+- **Codex**: accede ma non come fonte principale 🟡
+- **Kimi** (attuale): cookie wall ❌
+
+**Causa probabile**: Claude ha skill/MCP per browser stateful con
+session persistence; Codex ha tool simili ma non li usa
+spontaneamente; Kimi non ha proprio strumenti adatti.
+
+**Fix**: skill `linkedin-access` per agenti Scout/Analista:
+- Browser session persistente (Playwright headless + cookies
+  preservati in `~/.jht/.cache/playwright/linkedin-session/`)
+- Login one-shot al boot (credenziali utente da
+  `~/.jht/credentials/linkedin.json`)
+- Search via API non-pubblica (es. `linkedin.com/jobs/search`
+  con filtri keyword+location)
+- Estrazione job details + url canonico per dedup (collegato bug #25)
+
+#### B. Anti-bot mitigation skill
+
+**Sintomo**: tanti job board hanno protezioni (Cloudflare, reCAPTCHA,
+rate-limit IP, user-agent detection). Scout fallisce senza segnalarlo.
+
+**Fix**: skill `web-scrape-robust`:
+- **Playwright** con browser stealth plugin (no `navigator.webdriver`)
+- **Rotate user-agent** da lista realistica
+- **Cookie management** stateful
+- **Rate-limit awareness**: backoff esponenziale se 429/403
+- **Fallback parsing**: BeautifulSoup4 / lxml se Playwright fallisce
+- **Detection patterns**: identifica "Cloudflare challenge",
+  "Just a moment...", "Access denied" → marca source come bloccato
+  + alert al Capitano
+
+**Strumenti pubblici da valutare** (decisione utente):
+> *"Io ricordo di aver visto una repository pubblica su GitHub, uno
+> strumento CLI per estrarre tutte le informazioni necessarie dal web
+> con un semplicissimo comando."*
+
+Candidate da indagare:
+- `firecrawl` (Mendable) — API SaaS, scraping+parsing
+- `crawl4ai` — open source Python, gestisce anti-bot
+- `playwright-stealth` — plugin Python anti-detection
+- `requests-html` — render JS lite
+- `scrapingbee` / `brightdata` — API SaaS con proxy rotation
+
+#### C. Email forwarding feature (2 fasi)
+
+**Decisione utente verbatim**:
+> *"Sarebbe creare un email solo per il team, dargli tutte le
+> credenziali, quindi possono accedere all'email. Avevo le notifiche
+> di LinkedIn che mi arrivavano un paio di volte al giorno, gia'
+> filtrate sul mio target. Avevo fatto automaticamente il forward
+> all'email del JHT. Gli scout andavano a vedere l'email e prendevano
+> i link delle offerte di LinkedIn tramite l'email."*
+
+> *"Migliora di tantissimo, di un'enorme percentuale, la ricerca sul
+> web."*
+
+**Fase 1 — Manual forward (utente attivo)**:
+- Wizard: utente crea email dedicata (es. `jobs+jht@user.com`)
+- Configura forward rules nel client email principale: *"ogni email
+  da LinkedIn Company / Glassdoor / Indeed → forward a jobs+jht@"*
+- JHT ha credenziali IMAP/Gmail API
+- Scout `email-monitor` skill: poll inbox ogni 30 min, estrae
+  job links dai forward, push in `positions` DB
+
+**Fase 2 — Auto-subscribe (utente passivo)**:
+- JHT subscribe automaticamente alle alert LinkedIn/Glassdoor/Indeed
+  con keyword utente
+- Email arrivano direttamente all'email del team
+- Stesso `email-monitor` parsing
+
+#### D. Multi-Scout coordination
+
+**Decisione utente verbatim** (msg 16:19 UTC):
+> *"Devi attivare più scout possibili (4), incentivare la coordinazione
+> tra di loro, loro si parlano tra di loro in modo tale che lavorando
+> di squadra inizino a trovare alternative."*
+
+Oggi Scout-1 + Scout-2 lavorano in parallelo ma **non si parlano**.
+Risultato: stessa azienda riscoperta più volte (bug #25 — 14 Company 033
+duplicati).
+
+**Fix**: regola **S-08** in `scout.md`:
+```
+Prima di sweep, scrivi su /jht_home/agents/_team/scout_workspace.json:
+  { "agent": "scout-2", "claimed_sources": ["linkedin:python:IT",
+    "github:hiring"], "claimed_at": ts }
+
+Altri Scout PRIMA di lavorare leggono workspace, evitano sorgenti
+già claimed da agenti vivi.
+
+Comunicazione attiva: ogni 10 min, ogni Scout manda al Capitano
+[INFO] su cosa ha scoperto + cosa lascia agli altri.
+```
+
+Capitano coordina assegnando "territori" iniziali (Scout-1 = LinkedIn,
+Scout-2 = Glassdoor, Scout-3 = email, Scout-4 = niche board).
+
+#### E. Limite naturale "fonte finita" + freshness focus
+
+**Decisione utente**:
+> *"Se il team è attivo per un mese, magari a fine mese si esauriscono
+> le nuove posizioni. Ogni giorno, le nuove sono perché pubblicate quel
+> giorno → gli scout cercano sui nuovi annunci, non quelli già
+> scannerizzati."*
+
+Aggiungere a `scout.md` regola **S-09**:
+```
+- Default sweep: filter "posted in last 7 days"
+- Polling: posizioni nuove ogni 6h (non scan completo)
+- Tracking last_scan_at per source — riprendi da dove eri arrivato
+- Quando saturate fonti note → Capitano alert al Mentor: "fonti
+  esaurite, valutiamo espansione" (S-10 future)
+```
+
+### 🎯 Priorità: **alta**
+
+L'utente lo ha messo come tema fondamentale: *"È molto importante
+questo tema, perché è la fonte base di tutto."* Senza fonti, tutto il
+team a valle non ha materiale.
+
+### ⏱️ Effort: **grande** (1-2 settimane)
+
+- A) `linkedin-access` skill: ~200 righe Playwright + credential mgmt
+- B) `web-scrape-robust`: ~150 righe + eval librerie GitHub
+- C) `email-monitor`: ~100 righe + wizard email setup
+- D) `scout_workspace.json` + S-08: ~80 righe
+- E) S-09 freshness: ~30 righe regola prompt + helper last_scan_at
+
+### 🔗 Bug collegati
+
+- **#12** (Scout learning loop): F-2 fornisce **input più ricco** per
+  il learning loop. SC-05/T14 di #12 si applicano sopra le nuove fonti.
+- **#17** (C-05 Capitano passivo): cross-provider problem più acuto su
+  Kimi → C-05 più urgente perché Capitano deve auto-decidere su fonti
+  esaurite, non aspettare utente.
+- **#25** (dedup): D coordination Scout riduce il dup upstream.
+
+---
+
 ## ✨ F-1 (task #50). Telegram UX completa — slash commands + bottoni persistenti + inline keyboard + auto-report
 
 **Non è un bug, è una feature request** dalla sessione 17 mag.
@@ -2824,6 +3000,7 @@ funziona solo per il creatore.
 | 2 | Sentinella throttle progressivo | **alta** | medio |
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
 | 16 | ✨ ~~Auto-report periodici~~ → **merged in F-1.D** (task #50) | — | — |
+| F-2 | ✨ **Scout web access** — cross-provider+anti-bot+email forward+coord (NEW) | **alta** | grande |
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
