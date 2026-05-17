@@ -17,6 +17,10 @@ import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
+import {
+  getDemoDashboardData,
+  isDashboardDemoMode,
+} from "@/lib/dashboard-demo";
 import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
 import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
@@ -64,7 +68,8 @@ export default async function DashboardPage() {
   // which is nonsense for the desktop flow.
   const hdrs = await headers();
   const localRequest = isLocalRequestFromHeaders(hdrs);
-  const useCloudAuth = isSupabaseConfigured && !localRequest;
+  const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
+  const useCloudAuth = isSupabaseConfigured && !localRequest && !demoMode;
 
   // Cloud mode: 3-way routing in base allo stato di onboarding.
   // Tabella user_onboarding_state (migration 011) traccia il funnel:
@@ -91,94 +96,137 @@ export default async function DashboardPage() {
         return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
       }
     }
-  } else {
+  } else if (!demoMode) {
     // Local mode (or localhost bypass): se non esiste un profilo
     // valido in ~/.jht/profile/, canalizza l'utente verso l'onboarding
     // split-screen invece di una dashboard vuota.
     if (readWorkspaceProfile() === null) redirect("/onboarding");
   }
 
-  const [stats, positions, scoreDist, sourceDist, pendingMessages] =
-    await Promise.all([
-      getDashboardStats(),
-      getRecentPositions(15),
-      getScoreDistribution(),
-      getSourceDistribution(),
-      getPendingMessages(20),
-    ]);
+  const demoData = demoMode ? getDemoDashboardData() : null;
+  const [stats, positions, scoreDist, sourceDist, pendingMessages] = demoData
+    ? [
+        demoData.stats,
+        demoData.positions,
+        demoData.scoreDistribution,
+        demoData.sourceDistribution,
+        demoData.pendingMessages,
+      ]
+    : await Promise.all([
+        getDashboardStats(),
+        getRecentPositions(15),
+        getScoreDistribution(),
+        getSourceDistribution(),
+        getPendingMessages(20),
+      ]);
 
   const activeTotal = stats.total - stats.excluded;
 
   // Check if profile exists for onboarding status
   let hasProfile = false;
-  if (isSupabaseConfigured) {
+  if (demoMode) {
+    hasProfile = true;
+  } else if (isSupabaseConfigured) {
     hasProfile = false;
   } else {
     hasProfile = readWorkspaceProfile() !== null;
   }
 
   // Check if team is active (tmux JHT sessions)
-  let teamActive = false;
-  try {
-    const { stdout } = await runBash(
-      'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
-    );
-    const sessions = stdout.trim().split("\n").filter(Boolean);
-    const JH_PREFIXES = [
-      "CAPITANO",
-      "SCOUT",
-      "ANALISTA",
-      "SCORER",
-      "SCRITTORE",
-      "CRITICO",
-      "SENTINELLA",
-    ];
-    teamActive = sessions.some((s) =>
-      JH_PREFIXES.some(
-        (p) => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`),
-      ),
-    );
-  } catch {}
+  let teamActive = demoMode;
+  if (!demoMode) {
+    try {
+      const { stdout } = await runBash(
+        'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
+      );
+      const sessions = stdout.trim().split("\n").filter(Boolean);
+      const JH_PREFIXES = [
+        "CAPITANO",
+        "SCOUT",
+        "ANALISTA",
+        "SCORER",
+        "SCRITTORE",
+        "CRITICO",
+        "SENTINELLA",
+      ];
+      teamActive = sessions.some((s) =>
+        JH_PREFIXES.some(
+          (p) => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`),
+        ),
+      );
+    } catch {}
+  }
 
   const isEmpty = stats.total === 0;
 
   const pipeline = [
-    { key: "new", label: t.p_new, count: stats.new, color: STATUS_COLORS.new },
+    {
+      key: "found",
+      label: t.found,
+      count: stats.total,
+      color: "var(--color-blue)",
+      href: "/positions",
+      basis: stats.total,
+      note:
+        stats.excluded > 0
+          ? `${stats.excluded} ${t.status_excluded.toLowerCase()}`
+          : undefined,
+    },
+    {
+      key: "new",
+      label: t.p_new,
+      count: stats.new,
+      color: STATUS_COLORS.new,
+      href: "/positions?status=new",
+      basis: activeTotal,
+    },
     {
       key: "checked",
       label: t.p_checked,
       count: stats.checked,
       color: STATUS_COLORS.checked,
+      href: "/positions?status=checked",
+      basis: activeTotal,
     },
     {
       key: "scored",
       label: t.p_scored,
       count: stats.scored,
       color: STATUS_COLORS.scored,
+      href: "/positions?status=scored",
+      basis: activeTotal,
     },
     {
       key: "writing",
       label: t.p_writing,
       count: stats.writing,
       color: STATUS_COLORS.writing,
+      href: "/positions?status=writing",
+      basis: activeTotal,
     },
     {
       key: "review",
       label: t.p_review,
       count: stats.review,
       color: STATUS_COLORS.review,
+      href: "/positions?status=review",
+      basis: activeTotal,
     },
     {
       key: "ready",
       label: t.p_ready,
       count: stats.ready,
       color: STATUS_COLORS.ready,
+      href: "/positions?status=ready",
+      basis: activeTotal,
     },
     {
       key: "applied",
       label: t.p_applied,
       count: stats.applied,
       color: STATUS_COLORS.applied,
+      href: "/positions?status=applied",
+      basis: activeTotal,
     },
   ];
 
@@ -204,7 +252,7 @@ export default async function DashboardPage() {
               color: teamActive ? "var(--color-green)" : "var(--color-dim)",
             }}
           >
-            {teamActive ? t.live : t.data_updated}
+            {demoMode ? "DEMO DATA" : teamActive ? t.live : t.data_updated}
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
@@ -328,93 +376,57 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ── Stats ───────────────────────────────────────────────── */}
-      <div className="section-label mb-4">{t.overview}</div>
-      <div
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8"
-        style={{ animation: "fade-in 0.35s ease both" }}
-      >
-        {[
-          { label: t.found, val: stats.total, color: "var(--color-blue)" },
-          {
-            label: t.analyzed,
-            val: stats.checked,
-            color: "var(--color-purple)",
-          },
-          { label: t.scored, val: stats.scored, color: "var(--color-yellow)" },
-          {
-            label: t.cvs_written,
-            val: stats.writing,
-            color: "var(--color-orange)",
-          },
-          { label: t.ready, val: stats.ready, color: "#7fffb2" },
-          { label: t.sent, val: stats.applied, color: "var(--color-green)" },
-        ].map(({ label, val, color }, i) => (
-          <div
-            key={label}
-            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
-            style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}
-          >
-            <div
-              className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-2"
-              style={{ color: "var(--color-dim)" }}
-            >
-              {label}
-            </div>
-            <div
-              className="text-3xl font-bold leading-none tracking-tight"
-              style={{ color }}
-            >
-              {val}
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">{t.pipeline}</div>
       <div
-        className="overflow-x-auto mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.05s" }}
+        className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 mb-8"
+        style={{ animation: "fade-in 0.35s ease both" }}
       >
-        <div className="flex min-w-max border border-[var(--color-border)] rounded-lg overflow-hidden">
-          {pipeline.map((step, i) => (
+        {pipeline.map((step, i) => {
+          const percent =
+            step.basis > 0 ? Math.round((step.count / step.basis) * 100) : 0;
+
+          return (
             <Link
               key={step.key}
-              href={`/positions?status=${step.key}`}
-              className="flex-1 min-w-[90px] flex flex-col items-center px-4 py-4 bg-[var(--color-card)] hover:bg-[var(--color-row)] transition-colors text-center no-underline"
-              style={{
-                borderRight:
-                  i < pipeline.length - 1
-                    ? "1px solid var(--color-border)"
-                    : "none",
-              }}
+              href={step.href}
+              className="min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] transition-colors text-left no-underline"
+              style={{ animation: `fade-in 0.4s ease ${i * 0.04}s both` }}
             >
-              <span className="text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-dim)] mb-2">
-                {step.label}
-              </span>
-              <span
-                className="text-2xl font-bold leading-none tracking-tight"
-                style={{ color: step.color }}
-              >
-                {step.count}
-              </span>
+              <div>
+                <div
+                  className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 truncate"
+                  style={{ color: "var(--color-dim)" }}
+                  title={step.label}
+                >
+                  {step.label}
+                </div>
+                <div
+                  className="text-3xl font-bold leading-none tracking-tight"
+                  style={{ color: step.color }}
+                >
+                  {step.count}
+                </div>
+              </div>
               <div
-                className="w-full h-0.5 rounded-full mt-2.5 mb-1"
-                style={{ background: step.color, opacity: 0.7 }}
-              />
-              <span
-                className="text-[9px]"
-                style={{ color: "var(--color-dim)" }}
+                className="h-0.5 rounded-full mt-3 mb-1 overflow-hidden"
+                style={{ background: "var(--color-border)" }}
               >
-                {activeTotal > 0
-                  ? Math.round((step.count / activeTotal) * 100)
-                  : 0}
-                %
-              </span>
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(percent, 100)}%`,
+                    background: step.color,
+                    opacity: 0.8,
+                  }}
+                />
+              </div>
+              <div className="text-[9px] text-[var(--color-dim)]">
+                {step.note ?? `${percent}%`}
+              </div>
             </Link>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       {/* ── Charts ──────────────────────────────────────────────── */}
