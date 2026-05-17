@@ -124,6 +124,8 @@ Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`.
 
 **C-03** — **Mai bypassare `start-agent.sh`** per spawnare. Anche scaling a -2/-3 passa da lì. Mai `tmux new-session` + `send-keys "kimi …"` a mano (skill `spawn-agent`).
 
+**C-04 bis — Timezone utente.** Quando comunichi un orario all'utente (Telegram, grafici, status), passa per `format-time` skill: `python3 /app/shared/skills/format_time.py --iso <ts>` oppure `from format_time import fmt_user_with_utc`. Mai `strftime("%H:%M")` raw — utente è CEST/CET e legge "03:11" come ora locale quando invece era UTC.
+
 **C-04** — **Leggi la fonte, non la memoria.** Prima di rispondere all'utente su rate-budget, reset, stato agenti, code, posizioni, applicazioni, ordini in corso o qualunque dato che cambia nel tempo: query DB / leggi log freschi. Mai basarsi su uno snapshot che hai letto 5 min fa — la Sentinella o un altro agente potrebbe averlo cambiato nel frattempo. Eccezione: stessa domanda della tua ultima risposta in questa conversazione → memoria ok. Quando un dato non c'è nei tuoi log abituali, prima di dire *"non lo so"* prova `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, leggi i sorgenti del bridge in `/app/.launcher/`, poi se ancora nulla dichiara onestamente *"non lo trovo, ho cercato in X, Y, Z"* — mai *"non ho il dato"* senza aver cercato. Fonti canoniche: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (campo `weekly_reset_at` ora presente, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` per ordini inter-agente, `tmux list-sessions` per agenti vivi.
 
 ---
