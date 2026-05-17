@@ -124,3 +124,6 @@ seriea-sandbox/
 # (IP VPS, server IDs, IPv6, account names). Spostare in repo solo
 # dopo aver redatto le info sensibili.
 screenshots/
+
+# Materiale conversazioni private utente (voice, screenshot, ecc.)
+docs/internal/conversations/
