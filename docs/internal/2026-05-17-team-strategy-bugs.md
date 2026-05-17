@@ -2292,6 +2292,144 @@ Doppio impatto: spreco token (ROI immediato) + data corruption CV
 
 ---
 
+## 🐛 26. Gap disk↔DB sui CV: 2 PASS top-score invisibili + 3 CV generati per posizioni excluded/reject
+
+**Evidenza** (snapshot DB+disk 15:50 UTC):
+
+```
+PDF sul disk:           27
+PDF unique in DB:       22
+Gap: 5 PDF orfani (su disk ma DB non li conosce)
+```
+
+### A. 2 PASS top-score "invisibili" nella dashboard
+
+| app | Azienda | Critic | Verdict | cv_pdf_path DB | File su disk |
+|---|---|---|---|---|---|
+| **#20** | **Sisal — Data Analytics Trainee** | **7.5/10** ⭐ | **PASS** | `NULL` ❌ | `CV_LeoneEmanuelPuglisi_Sisal.pdf` (28KB, 04:43 UTC) ✅ |
+| **#19** | **Leadtech — Junior Data Eng. Mobile** | 5.5/10 | **PASS** | `NULL` ❌ | `CV_LeoneEmanuelPuglisi_Leadtech.pdf` (29KB, 04:30 UTC) ✅ |
+| #21 | Canonical Commercial Systems | 5.5/10 | PASS | `NULL` ❌ | n/d |
+
+**Sisal è il PASS con il critic_score più alto in assoluto della sessione** (7.5/10) ed è **invisibile** nella dashboard `/ready` perché `cv_pdf_path=NULL`. L'utente non lo vede tra i 13 CV pronti. Opportunità potenzialmente persa.
+
+### B. 3 CV generati per posizioni EXCLUDED/REJECT (spreco)
+
+```
+CV_LeoneEmanuelPuglisi_Canonical_ContainerImages.pdf  →  pos #34 EXCLUDED
+CV_LeoneEmanuelPuglisi_Canonical_K8s.pdf              →  pos #35 EXCLUDED
+CV_LeoneEmanuelPuglisi_Deloitte.pdf                   →  REJECT Critic
+```
+
+Lo Scrittore ha generato CV per posizioni che **non avrebbero dovuto
+entrare nella sua coda** (status `excluded` dall'Analista upstream)
+oppure ha proceduto **dopo** il REJECT del Critic (Deloitte).
+
+### 🧠 Cause sospette
+
+**Causa A — Race condition Scrittore ↔ DB**: il flusso *"Scrittore
+genera PDF → UPDATE applications SET cv_pdf_path"* ha 2 step
+atomicamente separati. Se l'UPDATE fallisce (lock SQLite, throttle
+Sentinella che killa mid-write, freeze EMERGENZA) il PDF resta orfano.
+
+Sisal/Leadtech generati 04:30-04:43 UTC = finestra F3 con
+**EMERGENZA freeze alle 07:42**. Plausibile che processi Scrittore
+siano stati killati durante operazioni di scrittura → mv PDF eseguito,
+UPDATE SQL no.
+
+**Causa B — Scrittore non rispetta status filter pre-generazione**:
+l'Analista marca `positions.status='excluded'` ma lo Scrittore lavora
+comunque su queste posizioni (o le porta `excluded` AFTER aver
+generato il CV). Bug di ordering del flow (collegato a #21).
+
+### 💥 Impatto
+
+1. **2 opportunità lavoro nascoste**, incluso il top PASS (Sisal 7.5)
+2. **3 CV sprecati** (~84KB + budget Kimi per generazione + Critic
+   review). Stima: 3-5% di una finestra Kimi (5h)
+3. **Trust UX**: dashboard mostra dati incompleti
+4. **Difficile da scoprire**: serve query SQL+disk per accorgersi
+
+### 🔧 Fix proposto
+
+#### W-03 — Atomic write CV PDF + DB UPDATE (in `cv-generate/SKILL.md`)
+
+```
+1. Genera PDF in tempfile: /tmp/cv_<app_id>_<ts>.pdf
+2. Solo se PDF valido (size > 5KB, render OK):
+   a. mv tempfile  /jht_user/cv/<final_name>.pdf
+   b. UPDATE applications SET cv_pdf_path=?, cv_generated_at=NOW()
+      WHERE id=?  -- stesso transaction
+3. Se UPDATE fallisce → rm il file finale (no orfani)
+4. Se size < 5KB o render fail → no mv, no UPDATE, log errore
+```
+
+#### W-04 — Verifica status prima di generare CV
+
+```
+Prima di iniziare PDF generation:
+  SELECT status FROM positions WHERE id=?
+Se status IN ('excluded','rejected') → ABORT con log
+  "position #N is in status=X, skipping CV generation"
+Mai generare CV per posizioni già scartate.
+```
+
+#### Cleanup retroattivo (one-shot)
+
+```sql
+-- Ricollegare Sisal e Leadtech (sono PASS validi)
+UPDATE applications SET
+  cv_pdf_path='/jht_user/cv/CV_LeoneEmanuelPuglisi_Sisal.pdf',
+  cv_generated_at='2026-05-17 04:43:00'
+WHERE id=20;
+UPDATE applications SET
+  cv_pdf_path='/jht_user/cv/CV_LeoneEmanuelPuglisi_Leadtech.pdf',
+  cv_generated_at='2026-05-17 04:30:00'
+WHERE id=19;
+```
+
+```bash
+# Archiviare i 3 CV sprecati (no cancellare per audit)
+mkdir -p /jht_user/cv/_excluded
+mv /jht_user/cv/CV_*_Canonical_ContainerImages.pdf /jht_user/cv/_excluded/
+mv /jht_user/cv/CV_*_Canonical_K8s.pdf /jht_user/cv/_excluded/
+mv /jht_user/cv/CV_*_Deloitte.pdf /jht_user/cv/_excluded/
+```
+
+#### Healthcheck periodico (Dottore, bug #18)
+
+`agents/_skills/cv-disk-audit/check.py`:
+```python
+disk_pdfs = set(glob("/jht_user/cv/*.pdf"))
+db_pdfs  = set(query("SELECT cv_pdf_path FROM applications WHERE cv_pdf_path IS NOT NULL"))
+orphans_on_disk = disk_pdfs - db_pdfs
+ghosts_in_db    = db_pdfs - disk_pdfs
+if orphans_on_disk or ghosts_in_db:
+    notify_user(f"CV inconsistency: {len(orphans_on_disk)} orfani, {len(ghosts_in_db)} ghost")
+```
+
+Il Dottore lo esegue ogni 30 min (quando finalmente girerà, bug #18).
+
+### 🎯 Priorità: **alta**
+
+Impatto utente diretto: PASS top-score (Sisal 7.5) invisibile.
+Sistema user-curated apply (#9) → utente non vede l'opportunità →
+opportunità persa.
+
+### ⏱️ Effort: **piccolo-medio**
+
+- W-03 + W-04 (~30 righe in `cv-generate/SKILL.md`)
+- Cleanup retroattivo (~30 righe SQL+bash, one-shot)
+- cv-disk-audit (~50 righe, dipende #18)
+
+### 🔗 Bug collegati
+
+- **#25** (dedup): stessa famiglia "file management broken"
+- **#21** (draft→ready promotion): stesso pattern "DB non riflette stato reale"
+- **#9 declassato** (user-curated apply): se utente non vede Sisal, non può fare apply manuale
+- **#18** (Dottore): healthcheck cv-disk-audit lo eseguirà il Dottore
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -2306,6 +2444,7 @@ Doppio impatto: spreco token (ROI immediato) + data corruption CV
 | 21 | 🚨 **`applications.status` mai promosso draft→ready** dopo Critic PASS | **alta** | piccolo |
 | 24 | **Sentinella troppo invadente in regime normale** (fasi + scala throttle continua) | **alta** | medio |
 | 25 | 🚨 **Deduplicazione mancante** Scout/DB/CV — spreco token + data corruption | **alta** | medio |
+| 26 | 🚨 **Gap disk↔DB sui CV** — 2 PASS top invisibili (Sisal 7.5) + 3 CV sprecati | **alta** | piccolo-medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
