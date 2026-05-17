@@ -1782,62 +1782,62 @@ successo niente.
 3. **Trust erosion**: l'utente impara che alcuni agenti dicono cose
    obsolete, smette di fidarsi delle loro risposte rapide.
 
-**Fix proposto** — 3 componenti coordinati:
+**Fix proposto — molto più semplice di quanto sembri** (decisione utente):
 
-### Componente A — Helper `team-live-state` (lookup unificato)
+> *"Nelle loro istruzioni non hanno il comandamento principale: leggere
+> sempre i dati prima di rispondere. Ovviamente, se aprono una
+> conversazione live con l'utente, non è che a ogni risposta deve
+> rileggere gli stessi file. Se ha già in memoria quello che chiede
+> l'utente, non rilegge ogni volta. Però se chiede qualcosa di nuovo
+> o che nel frattempo potrebbe essere aggiornato, deve andare a
+> leggere la fonte."*
 
-Nuovo `agents/_skills/team-live-state/check.py` che esegue:
+### Unica modifica necessaria — regola base nei prompt dei 3 agenti
 
-```python
-{
-  "sentinel": json.load(open("/jht_home/logs/sentinel-bridge-state.json")),
-  "last_capitano_orders": tail(messages.jsonl, type="ORDINE_UTENTE", limit=3),
-  "last_sentinella_ticks": tail(messages.jsonl, from="sentinella", limit=5),
-  "active_override": detect_no_freeze_window(),
-  "agents_running": tmux_list_sessions(),
-  "db_summary": {pending_apps, ready_apps, last_pass}
-}
-```
-
-### Componente B — Regola **T16** in `_team/team-rules.md`
+Aggiungere ad `agents/{assistente,capitano,mentor}/*.md` un
+comandamento:
 
 ```
-## T16 — Live state lookup obbligatorio per domande "come va / stato"
+## Comandamento dati: leggi la fonte, non la memoria
 
-Quando l'utente chiede stato del sistema, prima di rispondere ESEGUI:
-  python3 /app/shared/skills/team_live_state.py
+Prima di rispondere all'utente, valuta:
 
-Restituisce: stato Sentinella corrente, ordini speciali in vigore,
-agenti attivi, DB summary. NON basarti su snapshot point-in-time
-o file statici — sempre live.
+1. **Stessa domanda della tua ultima risposta in questa conversazione?**
+   → Usa la memoria conversazionale, non rileggere.
+
+2. **Domanda nuova OPPURE potenzialmente staleness > 1 min?**
+   (stato sistema, budget, agenti, code, posizioni, applicazioni,
+   ordini in corso, override Sentinella, ecc.)
+   → **Sempre** query DB / leggi log freschi prima di rispondere.
+   Mai basarsi su snapshot che hai letto 5 min fa.
+
+3. **Domanda fattuale (numeri, conteggi, timestamp)?**
+   → Query DB sempre. Nessuna eccezione.
+
+Fonti canoniche da consultare:
+- DB: `/jht_home/jobs.db` (positions, applications, scores)
+- Sentinella: `/jht_home/logs/sentinel-bridge-state.json` (live state)
+- Inter-agente: `tail -20 /jht_home/logs/messages.jsonl` (ordini recenti)
+- tmux: `tmux list-sessions` (agenti effettivamente attivi)
 ```
 
-### Componente C — Broadcast inter-agente per ordini speciali
+**Niente helper unificato. Niente T16 complicata. Niente broadcast.**
+Solo regola prompt che dice: *"non fidarti della memoria per dati
+volatili"*.
 
-Quando il Capitano riceve ordine straordinario utente, esegue anche:
-```bash
-jht-tmux-send ASSISTENTE "[@capitano -> @assistente] [OVERRIDE-ACTIVE] \
-  Ordine utente: tutta manetta fino 17:10. Se ti chiede stato, dillo."
-jht-tmux-send MENTOR "[@capitano -> @mentor] [OVERRIDE-ACTIVE] ..."
-```
+**Priorità**: **media-alta** (resta).
 
-**Raccomandazione**: A + B insieme (C è elegante ma fragile).
-
-**Priorità**: **media-alta**. Tocca direttamente la trust utente sui 3
-agenti user-facing. Meno tecnico di altri bug ma più visibile nella UX
-quotidiana.
-
-**Effort**: medio (~80 righe helper + regola T16 + test).
+**Effort**: **piccolissimo** (~15 righe in 3 file di prompt).
 
 **Bug collegati**:
-- **#16** (auto-report + bridge orders): la regola C-04 di
-  reportistica proattiva risolve parzialmente — se l'Assistente fa
-  report ogni 2h, vede stato live ogni volta.
-- **#11** (Mentor reference positivo): il Mentor in 6 risposte ha
-  sempre fatto query DB prima di rispondere. Pattern già corretto, da
-  estendere ad Assistente + Capitano.
+- **#11** (Mentor reference positivo): già applica questo pattern
+  spontaneamente — fa sempre query DB prima di rispondere. Vale la
+  pena copiare la sezione di prompt del Mentor in Assistente e
+  Capitano per uniformare.
 - **#22** (declassato): stessa famiglia "agente risponde su snapshot
-  incompleti".
+  incompleti" — risolto dal comandamento sopra.
+- **#19** (Capitano "non lo so" sul weekly reset): risolto in parte
+  dal comandamento + C-06 *"indaga prima"*.
 
 ---
 
@@ -1859,7 +1859,7 @@ quotidiana.
 | 12 | **Scout hit-rate** (SC-05/T14 nei prompt base, no skill) | media | piccolo |
 | 15 | Timezone confusion (agenti in UTC, utente in CEST) | media | piccolo |
 | 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
-| 23 | **Agenti user-facing non condividono stato live** (T16 + helper) | media-alta | medio |
+| 23 | **Agenti user-facing non rileggono dati freschi** (comandamento prompt) | media-alta | piccolo |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
 | 10 | Mentor → Capitano channel | bassa | piccolo |
