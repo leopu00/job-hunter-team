@@ -1263,7 +1263,22 @@ Dopo restart container:
 
 ---
 
-## 🐛 19. Capitano non sa reset finestra settimanale Kimi — dato non loggato + Capitano passivo sulla ricerca
+## 🐛 19. Capitano non sa reset settimanale + monitoraggio weekly assente → SCOMPOSTO in 3
+
+> **Revisione 17 mag (ripasso utente)**: il bug originale si scompone:
+>
+> - **Fix A** (log `weekly_reset_at`) resta valido, piccolo (~10 righe)
+> - **Fix B** (regola C-06 "indaga") cugino di **#23** (leggi fonte
+>   non memoria), cross-link, non duplicato
+> - **Vera scoperta**: il monitoraggio settimanale **NON è implementato
+>   per design** ("intenzionale fino adesso perché stiamo allenando
+>   il team a gestire le finestre"). Ora che il team gestisce bene le
+>   finestre (90-95% target raggiunto in 4/5 finestre), è il momento
+>   di passare al budget settimanale dinamico → tracciato come
+>   nuova **F-3** sotto.
+> - **Sub-feature emersa**: tracking scadenze offerte → **F-4**
+
+
 
 **Sintomo** (sessione 13:45-13:50 UTC):
 
@@ -2703,6 +2718,174 @@ Possibile **selling point feature** del prodotto.
 
 ---
 
+## ✨ F-3 (NEW). Weekly budget distribution dinamica + user preferences orarie
+
+**Decisione utente** (ripasso #19, decisione strategica chiave):
+
+> *"Il team monitora solo finestre, non settimanale. È intenzionale fino
+> adesso perché stiamo allenando il team a gestire le finestre. Una
+> volta che sanno gestire le finestre, saranno in grado di gestire
+> anche il budget settimanale. Basterà calcolarsi quanto consuma una
+> finestra, avere una proporzione e dire: 'quante finestre facciamo
+> per arrivare al 100% del budget settimanale nel tempo richiesto'."*
+
+**Stato attuale validato**: monitoraggio finestra-by-finestra **funziona**
+(4/5 finestre chiuse in G-spot 90-95%, vedi
+`docs/sessions/2026-05-17-budget-windows/`). Possiamo salire di livello.
+
+### 🎯 Modello concettuale
+
+```
+Budget settimanale Kimi = 100% (= 1 "credito settimanale")
+1 finestra 5h al 95% target = ~14% credito settimanale (= 1/7)
+Quindi N finestre possibili nella settimana:
+  100% / 14% ≈ 7 finestre × 5h = 35h "lavorate" totali
+```
+
+Questi 35h vanno **distribuiti** secondo le preferenze utente.
+
+### 📅 4 scenari distribuzione utente (esempi)
+
+| Scenario utente | Distribuzione | Target finestra |
+|---|---|---|
+| **Sprint massimo** | 35h continuo = 1.5 giorni | 95% ognuna |
+| **Solo notte** (4 giorni × 8h notte) | 8h/notte → 4 finestre da 5h + 1 da 3h | 95-60% dinamico |
+| **Settimana spalmata** (7gg × 5h/sera) | 1 finestra/sera × 7 | 100% / 7 ≈ 70% target |
+| **Pomeriggio + sera weekday** | 5 giorni × 2 finestre/giorno = 10 finestre | 70% / 10 ≈ 50% target |
+
+### 🔧 Componenti da implementare
+
+#### 1. Wizard preferenze utente
+In `candidate_profile.yml`:
+```yaml
+work_schedule:
+  mode: "spalmato_7gg" | "sprint" | "solo_notte" | "weekday_eve" | "custom"
+  custom_slots:  # solo se mode=custom
+    - day: monday    | from: 18:00 | to: 23:00
+    - day: wednesday | from: 09:00 | to: 13:00
+    - day: friday    | from: 18:00 | to: 23:00
+  timezone: Europe/Rome  # dipende da #15 timezone
+```
+
+#### 2. Helper `weekly-distribute.py`
+
+Calcola dinamicamente, ad ogni reset settimanale:
+```python
+{
+  "weekly_budget_total": 100,
+  "current_week_used": 76,
+  "windows_left_in_week": 4,
+  "next_window_target": 60,  # %, calcolato per chiudere 100% entro fine settimana
+  "schedule": [
+    {"window_id": "...", "start": "2026-05-17T18:00Z", "target_pct": 60},
+    {"window_id": "...", "start": "2026-05-18T18:00Z", "target_pct": 65},
+    ...
+  ]
+}
+```
+
+#### 3. Sentinella usa target dinamico, non più G-spot fissa
+
+In `sentinella.md` regola **S-06**:
+```
+G-spot non è più fissa a 90-95%. Per ogni finestra leggi:
+  weekly_distribute.next_window_target
+
+Esempio: se target=60, G-spot = 55-65%. Freeze a chiusura su 60%, non 95%.
+```
+
+#### 4. Capitano comunica all'utente la distribuzione
+
+Mentor o Capitano notifica via Telegram inizio settimana:
+> *"📅 Piano settimanale (modalità solo_notte): 4 sessioni notturne di
+> 5h, target 70% ognuna. Prossima: lunedì 22:00 Europe/Rome."*
+
+### 🎯 Priorità: **alta**
+
+L'utente l'ha indicata come "prossimo passaggio naturale" ora che
+finestre funzionano. Sblocca **user control completo** sul ritmo del
+team.
+
+### ⏱️ Effort: **medio-grande** (3-5 giorni)
+
+- Helper `weekly-distribute.py` (~120 righe)
+- Schema `candidate_profile.work_schedule` + wizard editing (~80 righe)
+- S-06 Sentinella target dinamico (~30 righe regola + helper integration)
+- Notifiche Capitano/Mentor settimanali (~50 righe)
+- Test su 1 settimana reale per validare distribuzione
+
+### 🔗 Bug collegati
+
+- **#15** (timezone): F-3 richiede timezone utente per slot orari
+- **#19** (Fix A) `weekly_reset_at` log: dato base necessario
+- **#24** (Sentinella fasi): F-3 cambia anche il target di Fase 3
+  (chiusura finestra) da 95% fisso a dinamico
+
+---
+
+## ✨ F-4 (NEW). Job offer expiration tracking + utente alerts
+
+**Decisione utente** (ripasso #19, sub-feature):
+
+> *"Magari l'utente è attivamente in colloquio con il team e ha 50 CV
+> scritti, tra cui importantissimi. Però si scorda di monitorare e
+> passano due giorni: anche quelle importantissime magari scadono.
+> Bisogna farlo notare all'utente, in modo tale da incentivarlo a
+> mandare subito l'applicazione."*
+
+### 🎯 3 componenti
+
+#### A. Estrazione `deadline` dal JD (Scout/Analista)
+
+In Scout/Analista skill: parsare il JD cercando:
+- "apply by 2026-06-15"
+- "deadline: June 15"
+- "closes in 30 days"
+- "expires Friday"
+
+Popolare `positions.deadline` (campo già nello schema). Se non
+specificato → NULL.
+
+#### B. Re-check periodica positions vecchie (Analista)
+
+Già parzialmente implementato (skill `liveness-check`?). Estensione:
+```
+Analista ogni 6h:
+  SELECT id, url FROM positions
+   WHERE status IN ('scored', 'ready')
+     AND last_checked < NOW() - 12h
+Per ciascuna: refetch URL, check HTTP status, parse "no longer
+available" patterns. Se scaduta → status='expired' + notes.
+```
+
+#### C. Alert utente proattivo
+
+Mentor/Capitano notifica:
+- *"⚠️ CV Sisal (PASS 7.5) — scadenza tra 2 giorni (2026-05-19). Spedisci o perdi l'opportunità."*
+- Trigger: `applications.status='ready' AND positions.deadline < NOW()+72h`
+- Idempotenza: 1 alert per (app, deadline) — non spammare
+
+### 🎯 Priorità: **media**
+
+Bug latente che si manifesta solo se utente è inattivo qualche giorno.
+Importante per UX (perdere PASS top per scadenza = peggio del bug #26
+che era "non visibile").
+
+### ⏱️ Effort: **medio** (2-3 giorni)
+
+- A) Regex/parsing deadline (~40 righe Scout/Analista)
+- B) Re-check loop in Analista (~80 righe)
+- C) Alert logic in Mentor/Capitano (~30 righe + idempotenza state)
+
+### 🔗 Bug collegati
+
+- **#26** (CV PASS invisibili): se non vedi il PASS, non sai che sta
+  per scadere — F-4 depend on #26 fix
+- **#9 declassato** (user-curated apply): F-4 protegge l'utente che
+  fa apply manuale dal "ho dimenticato"
+
+---
+
 ## ✨ F-2 (NEW). Scout web access — cross-provider + anti-bot + email forwarding + multi-Scout coordination
 
 **Decisione utente questa sessione** (ripasso #17, espansione su tema correlato Scout):
@@ -3060,7 +3243,9 @@ funziona solo per il creatore.
 | 7 | Sync history conversazione su web | media | medio |
 | 12 | **Scout hit-rate** (SC-05/T14 nei prompt base, no skill) | media | piccolo |
 | 15 | Timezone confusion (agenti in UTC, utente in CEST) | media | piccolo |
-| 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
+| 19 | **Capitano non sa weekly reset** → scomposto in Fix A (log) piccolo + Fix B (C-06 cugino #23) + **F-3** | media | piccolo |
+| F-3 | ✨ **Weekly budget distribution dinamica** + user schedule preferences (NEW) | **alta** | medio-grande |
+| F-4 | ✨ **Job offer expiration tracking** + alert utente (NEW) | media | medio |
 | 23 | **Agenti user-facing non rileggono dati freschi** (comandamento prompt) | media-alta | piccolo |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
