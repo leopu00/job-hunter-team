@@ -1457,6 +1457,143 @@ file `web/app/api/reports/route.ts` (89 righe, 100% mock).
 
 ---
 
+## 🐛 21. `applications.status` mai promosso da `draft` a `ready` dopo Critic PASS
+
+**Sintomo** (rilevato 2026-05-17 ~14:30 UTC dalla pagina `/ready`):
+
+| Fonte | Cosa dice |
+|---|---|
+| Pagina `/ready` cloud | CV PRONTI: **0** / IN ATTESA CV: 13 |
+| Capitano via Telegram | *"12 CV ready"* (msg 13:14) / *"4 CV ready (Bending, Rinse, Gr4vy, Company 033)"* (00:58) |
+| `pipeline_overview.png` (Capitano) | Ready: **12** |
+| **DB SQLite locale `/jht_home/jobs.db`** | `applications` = 31 totali, **TUTTE `status='draft'`** ❌ |
+| Stessa query | `positions` = 62 excluded, 13 ready, 10 scored |
+
+Tre "verità" diverse:
+- **Capitano** dice 12 ready (e ha ragione concettualmente: 12 CV con
+  Critic PASS, PDF pronto)
+- **DB** dice 0 ready (e ha ragione tecnicamente: nessuna application
+  ha `status='ready'`)
+- **Cloud `/ready`** dice 0 ready (riflette il DB)
+
+La pagina web è corretta; il bug è a monte: **nessuno aggiorna
+`applications.status` da `'draft'` a `'ready'` quando il Critic dà PASS
+e il PDF viene generato**.
+
+**Causa** — manca lo step di promotion. Flow attuale:
+
+```
+1. Scrittore-1 crea draft        → INSERT applications (status='draft')
+2. Critic legge draft + dà voto  → write critic_score, critic_notes
+3. Critic 5.5/10 PASS            → ???
+4. Scrittore-1 genera PDF        → UPDATE applications SET cv_path=..., cv_pdf_path=...
+5. PDF ready                     → 🚨 NESSUNO esegue: UPDATE applications SET status='ready'
+```
+
+L'evidenza: nei `wire.jsonl` Capitano/Scrittore di `_skills/critic-loop/`
+e `_skills/db-update/` probabilmente la transizione `status='ready'`
+non è scritta da nessuna parte. Il Critic riconosce visivamente "PASS"
+nel suo report, ma quel concetto non viene tradotto in DB update.
+
+**Conseguenze a cascata**:
+
+1. **Bug #20 (`/reports` mock)** difficile da fixare a metà strada:
+   anche se sostituiamo i mock con query Supabase reali, mostreranno
+   sempre 0 perché `applications.status='ready'` è 0.
+2. **Pagina `/applications`** probabilmente mostra 31 draft tutti
+   "incompleti" — l'utente non vede mai uno stato "pronto".
+3. **Bug #9 (`submit-application` skill mancante)** auto-bloccato:
+   anche se aggiungiamo la skill, dovrebbe pescare solo
+   `WHERE status='ready'` → 0 record → niente da spedire mai. Il bug
+   #9 non si può manifestare finché #21 non è chiuso.
+4. **Trust del Capitano**: il Capitano dice *"ready"* nei suoi report
+   ma il DB lo smentisce. Manuale del Capitano e schema DB non sono
+   allineati semanticamente.
+
+**Fix proposto** — aggiungere lo step di promotion in 1 di 2 punti:
+
+### Opzione A — Critic chiude con UPDATE atomic
+
+In `agents/_skills/critic-loop/SKILL.md` aggiungere step finale:
+
+```
+4. Dopo verdetto:
+   - Se PASS:  UPDATE applications SET status='ready', ready_at=NOW(),
+                   critic_score=X, critic_verdict='PASS'
+               WHERE id=<app_id>
+   - Se FAIL:  UPDATE applications SET status='draft' (resta),
+                   critic_score=X, critic_verdict='FAIL',
+                   critic_notes='<motivo>'
+               WHERE id=<app_id>
+   - Se REWRITE: UPDATE applications SET status='rewrite_requested'
+               WHERE id=<app_id> (per Scrittore loop)
+```
+
+### Opzione B — Scrittore promuove dopo PDF generation
+
+In `agents/_skills/cv-generate/SKILL.md` (o pdf-generate) aggiungere
+ultimo step:
+
+```
+5. Dopo generazione PDF + Critic PASS confermato:
+   UPDATE applications
+   SET status='ready', cv_pdf_path=<path>, ready_at=NOW()
+   WHERE id=<app_id>
+```
+
+**Raccomandazione**: **Opzione A** — il Critic è il "gate" naturale
+(PASS/FAIL), e la promotion è semanticamente "il Critic approva il
+draft". Coerente con il flusso di approvazione.
+
+**Aggiunta a `db-update` SKILL.md**: regola esplicita
+*"applications.status='ready' è SOLO impostabile dal Critic, mai
+direttamente dallo Scrittore"* — gate single-writer.
+
+**Dipendenze**:
+- Bug **#14** (state-event log): se attivo, la transition
+  `draft → ready` viene loggata automaticamente con `by_agent='critico-s1'`.
+- Bug **#9** (submit-application): si sblocca DOPO il fix di #21 — la
+  skill `submit-application` deve filtrare `WHERE status='ready'` e
+  promuovere a `'sent'` dopo invio.
+- Bug **#20** (`/reports` mock): si sblocca dopo #21 perché la pagina
+  potrà finalmente mostrare numeri reali invece di mock.
+
+**Priorità**: **alta**. È il **gate stato-tabella** che disallinea
+Capitano/Critic concettuali dal DB. Sblocca contemporaneamente #9, #20,
+e parzialmente #14.
+
+**Effort**: piccolo. ~10-20 righe in `critic-loop/SKILL.md` + 1 regola
+in `db-update/SKILL.md` + retrofit eventuale: una query SQL
+`UPDATE applications SET status='ready' WHERE id IN (...)` per
+promuovere retroattivamente le 12 application con `critic_verdict='PASS'`
+attualmente in `draft`.
+
+**Validazione**:
+- Dopo fix: nuovo flow Scrittore→Critic deve risultare in
+  `applications.status='ready'` per i PASS.
+- Query SQL di verifica:
+  ```sql
+  SELECT status, critic_verdict, COUNT(*)
+  FROM applications
+  Company BY status, critic_verdict;
+  ```
+  Atteso: tutte le righe con `critic_verdict='PASS'` hanno
+  `status='ready'`. Nessun `status='draft'` con `critic_verdict='PASS'`.
+- Pagina `/ready` deve mostrare 12 CV PRONTI (corrispondenti ai 12 PASS).
+
+**Riferimento conversazionale**: snapshot pagina `/ready` 2026-05-17,
+DB locale `/jht_home/jobs.db` ispezionato via SSH.
+
+**Bug collegati / catena**:
+- **#21 sblocca #9**: senza promotion, submit-application non ha cosa spedire.
+- **#21 sblocca #20**: senza promotion, /reports vede 0 ready ovunque.
+- **#14**: se attivo, registra la promotion come event log.
+- **#17** (Capitano passivo): il Capitano avrebbe dovuto notare la
+  divergenza tra "12 ready" detto a voce e "0 ready" nel DB, ma non
+  ha mai fatto query di verifica `SELECT status FROM applications`.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -1471,6 +1608,7 @@ file `web/app/api/reports/route.ts` (89 righe, 100% mock).
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
+| 21 | 🚨 **`applications.status` mai promosso draft→ready** dopo Critic PASS | **alta** | piccolo |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
