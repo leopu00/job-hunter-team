@@ -853,7 +853,15 @@ mostra l'esempio del bug nel subtitle e nei tick X.
 
 ---
 
-## ✨ 16. Auto-report periodici + auto-grafici via Bridge orders (feature mancante)
+## ✨ 16. Auto-report periodici + auto-grafici via Bridge orders → **MERGED in F-1.D** (task #50)
+
+> **NOTA REVISIONE 17 mag**: questa voce è confluita nel componente
+> **D** della feature F-1 (task #50 "Telegram UX completa"). Per evitare
+> duplicati, il task originale #52 è stato cancellato. La descrizione
+> tecnica resta qui per riferimento storico (motivazione + opzioni A/B
+> + regola C-04), ma il **lavoro effettivo è tracciato in F-1.D**.
+
+
 
 **Osservazione utente** (verbatim, questa sessione):
 > *"dovremmo mettere dei bridge che ordina a capitano di produrre dei
@@ -2815,7 +2823,7 @@ funziona solo per il creatore.
 | 1 | Voice/Photo Whisper/OCR/Vision | **alta** | medio |
 | 2 | Sentinella throttle progressivo | **alta** | medio |
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
-| 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
+| 16 | ✨ ~~Auto-report periodici~~ → **merged in F-1.D** (task #50) | — | — |
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
