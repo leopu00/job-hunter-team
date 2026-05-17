@@ -38,6 +38,7 @@ const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
+const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
 async function readHostType() {
@@ -391,6 +392,35 @@ async function dispatch() {
   };
   startAgentWatchdog();
 
+  // ── Doctor watchdog: loop bash che ogni 30 min spawna una sessione
+  // tmux DOTTORE (one-shot LLM ~30 min, prune cache + py-audit + liveness
+  // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
+  // e poi perso al rebuild perché esisteva solo come `tmux new-session`
+  // manuale. Pattern identico ad agent-watchdog ma cadenza interna allo
+  // script (sleep 1800s). Vedi docs/internal/2026-05-17-team-strategy-bugs.md §18.
+  let doctorWatchdogChild = null;
+  let doctorWatchdogRespawnTimer = null;
+  const startDoctorWatchdog = () => {
+    if (doctorWatchdogChild && !doctorWatchdogChild.killed) return;
+    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE ogni 30min)');
+    doctorWatchdogChild = spawnLabeled('doctor-watchdog', '/bin/bash', [DOCTOR_WATCHDOG_SCRIPT]);
+    doctorWatchdogChild.on('exit', (code, signal) => {
+      const exited = doctorWatchdogChild;
+      doctorWatchdogChild = null;
+      if (shuttingDown) return;
+      pid1Log(`doctor-watchdog exited (code=${code} signal=${signal})`);
+      if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+      doctorWatchdogRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('doctor-watchdog respawn dopo crash');
+          startDoctorWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startDoctorWatchdog();
+
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
@@ -511,6 +541,8 @@ async function dispatch() {
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
+    if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
+    if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
     stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
