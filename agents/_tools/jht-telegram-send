@@ -31,6 +31,7 @@ parse_mode=""
 chat_id_override=""
 role="${JHT_TG_BOT_ROLE:-assistente}"
 keyboard_role=""
+photo_path=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -47,6 +48,11 @@ while [ $# -gt 0 ]; do
       # (assistente|capitano|mentor) — definisce il layout dei bottoni.
       # Se vuoto/role mismatch, ignorato silenziosamente.
       keyboard_role="${2:-}"; shift 2 ;;
+    --photo)
+      # F-1.D bug #16: invia foto via sendPhoto. Il `<text>` posizionale
+      # diventa caption (max 1024 char, Telegram cap). Photo > 10MB
+      # restituisce errore Telegram, nessun fallback automatico.
+      photo_path="${2:-}"; shift 2 ;;
     --)
       shift; break ;;
     -*)
@@ -121,6 +127,40 @@ fi
 if [ -z "$chat_id" ]; then
   echo "jht-telegram-send: chat_id non trovato per ruolo '$role' (env TELEGRAM_CHAT_ID, --chat-id, o channels.telegram.bots.$role.chat_id in $config_path)" >&2
   exit 3
+fi
+
+# ── F-1.D bug #16: sendPhoto multipart se --photo presente ─────────────
+# Esce subito dopo il photo upload — il caller usa il `<text>` come
+# caption, niente chunking secondario. Per testo lungo + photo, mandare
+# il photo prima (caption breve) e il resto del testo in chiamate
+# separate.
+if [ -n "$photo_path" ]; then
+  if [ ! -f "$photo_path" ]; then
+    echo "jht-telegram-send: --photo file non trovato: $photo_path" >&2
+    exit 1
+  fi
+  # Caption massima Telegram = 1024 chars. Tronchiamo se necessario.
+  caption="${text:0:1000}"
+  resp=$(mktemp)
+  http_code=$(curl --silent --show-error --max-time 30 \
+    --output "$resp" --write-out '%{http_code}' \
+    -F "chat_id=$chat_id" \
+    -F "photo=@${photo_path}" \
+    -F "caption=$caption" \
+    ${parse_mode:+-F "parse_mode=$parse_mode"} \
+    "https://api.telegram.org/bot${token}/sendPhoto" || echo "000")
+  body=$(cat "$resp"); rm -f "$resp"
+  if [ "$http_code" != "200" ]; then
+    echo "jht-telegram-send: sendPhoto HTTP $http_code — $body" >&2
+    exit 4
+  fi
+  ok=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('ok'))" "$body" 2>/dev/null || echo "False")
+  if [ "$ok" != "True" ]; then
+    echo "jht-telegram-send: sendPhoto Bot API ok=false — $body" >&2
+    exit 5
+  fi
+  echo "jht-telegram-send: photo ok ($(wc -c < "$photo_path") B, caption ${#caption} chars, chat $chat_id)"
+  exit 0
 fi
 
 # ── Chunking 4096 (limite Bot API) ─────────────────────────────────────
