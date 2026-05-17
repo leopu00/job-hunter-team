@@ -1,12 +1,29 @@
 ---
 name: pipeline-triage
-description: Decide WHICH role to spawn / pause / kill based on backlog state, not gut feel. Open this skill EVERY TIME a scaling decision is needed — `SCALA UP`, `PIPELINE VUOTA + UNDERSHOOT`, `MARGINE` from bridge-pacing, cold start, idle queues, or whenever you are tempted to "just spawn another Scout". Spawning at the head of the pipeline when the bottleneck is downstream wastes budget and worsens projections. The whole point: read 4 numbers, pick the one role that breaks the bottleneck, hand off to `spawn-agent`.
+description: Decide WHICH role to spawn / pause / kill based on backlog state, not gut feel. Open this skill EVERY TIME you observe — vel team < 50% target, OR any role queue = 0, OR Scout sources exhausted, OR [SCALA UP] from Sentinella, OR `PIPELINE VUOTA + UNDERSHOOT`, OR `MARGINE` from bridge-pacing, OR cold start, OR whenever you are tempted to "just spawn another Scout". Do NOT wait for an explicit [SCALA UP] from Sentinella when the conditions are already visible to you in the metrics. The whole point: read 4 numbers, pick the one role that breaks the bottleneck, hand off to `spawn-agent`.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
 
 # pipeline-triage — data-driven scaling
 
 The pipeline is a dynamic system. Each role consumes very differently per task — adding a 2nd Writer costs much more than adding a 2nd Scout. Scaling at the head when the bottleneck is at the tail produces *more* backlog, not more output. Always start from the data.
+
+## When to open this skill (bug #17)
+
+You open it on **observed conditions**, not only on explicit Sentinella
+orders. Triggers:
+
+- Velocity team below 50% of target
+- Any role queue at 0 (Scout exhausted, Scorer/Writer idle)
+- Scout sources reported exhausted ("bebee, indeed, glassdoor — nothing new")
+- `[SCALA UP]` from Sentinella
+- `MARGINE` / `PIPELINE VUOTA + UNDERSHOOT` from bridge-pacing
+- Cold start of a window
+
+The historical anti-pattern: Capitano sees `SCRITTORE_QUEUE=0` +
+`PROMOTABLE_40_49=6`, **describes** the situation perfectly to the
+user, **does not** run the promotion. This skill is *active*, not
+*advisory* — when conditions match, you execute.
 
 ## Step 1 — read the backlog (always, before any spawn)
 
