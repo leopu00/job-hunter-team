@@ -84,9 +84,23 @@ def insert_position(args):
           args.salary_estimated_source,
           args.url, args.source, args.jd_text,
           args.requirements, args.found_by, args.deadline, args.notes))
+
+    # Bug #14: log la transizione iniziale (None → 'new') con by_agent =
+    # JHT_AGENT_NAME (es. scout-1). Senza questa entry il funnel parte
+    # da "scored" come stato visibile più antico — pessimo per metriche
+    # di throughput a livello pipeline.
+    position_id = cur.lastrowid
+    actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
+    conn.execute(
+        "INSERT INTO position_state_transitions "
+        "(position_id, from_state, to_state, by_agent, notes) "
+        "VALUES (?, NULL, 'new', ?, ?)",
+        (position_id, actor, 'initial INSERT'),
+    )
+
     conn.commit()
     cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — azienda non in DB)"
-    print(f"Posizione inserita con ID: {cur.lastrowid}{cid_info}")
+    print(f"Posizione inserita con ID: {position_id}{cid_info}")
     conn.close()
 
 

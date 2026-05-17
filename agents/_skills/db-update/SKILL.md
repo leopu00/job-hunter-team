@@ -53,6 +53,19 @@ python3 /app/shared/skills/db_update.py application 42 --applied true
 python3 /app/shared/skills/db_update.py application 42 --response "rejected" --response-at now
 ```
 
+### Position state transitions are auto-logged (bug #14)
+
+Every call to `db_update.py position <id> --status <s>` that actually
+changes `positions.status` inserts a row in `position_state_transitions`
+with `from_state`, `to_state`, `ts`, `by_agent` (from `JHT_AGENT_NAME`),
+and the `--notes` you passed (if any). Same goes for the initial
+`db_insert.py position` (logged as `NULL → 'new'`).
+
+You don't have to do anything — the wrapper handles it. Don't bypass it
+with raw SQL: a `python3 -c "import sqlite3; UPDATE positions SET
+status=..."` workaround skips the transition log and makes throughput /
+funnel charts undercount.
+
 ### Single-writer gate on `applications.status='ready'` (bug #21)
 
 `applications.status='ready'` is **set exclusively by the Scrittore** in
