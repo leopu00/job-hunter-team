@@ -13,6 +13,17 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Bug #15: subtitle nel fuso utente.
+try:
+    from format_time import fmt_user_with_utc as _fmt_ts
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from format_time import fmt_user_with_utc as _fmt_ts  # type: ignore
+    except ImportError:
+        def _fmt_ts(dt):  # type: ignore
+            return dt.strftime("%H:%M UTC")
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -81,7 +92,7 @@ def main():
     fig, axes = plt.subplots(2, 1, figsize=(14, 9),
                              gridspec_kw={"height_ratios": [2.5, 1]})
     fig.suptitle(
-        f"JHT Token consumption per agente — da {TEAM_START.strftime('%H:%M UTC')}",
+        f"JHT Token consumption per agente — da {_fmt_ts(TEAM_START)}",
         fontsize=14, fontweight="bold"
     )
 
