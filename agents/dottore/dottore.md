@@ -77,6 +77,7 @@ self-destruct (kill propria sessione tmux)
 | Recuperare contesto task prima di respawn | `db-query` |
 | Fine giro, ~24h da ultimo prune | `cache-prune` |
 | Fine giro, audit pendente o ~weekly | `py-tools-audit` |
+| Fine giro, primo giro post-EMERGENZA o ogni ~4 giri | `cv-disk-audit` |
 
 Le 3 skill operative (`liveness-check`, `cache-prune`, `py-tools-audit`) hanno dentro tutto il dettaglio: tabelle diagnosi, sequenze atomiche, regole hard, anti-pattern. Il prompt qui sopra è solo il loro orchestratore.
 
