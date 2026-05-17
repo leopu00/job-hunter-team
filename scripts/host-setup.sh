@@ -174,15 +174,61 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   esac
 fi
 
+# ── Timezone utente (bug #15) ────────────────────────────────────────────
+# Il container Linux gira sempre in UTC; l'utente sta da qualche parte
+# nel mondo. Senza una timezone esplicita, il Capitano scrive "reset alle
+# 23:11" e l'utente legge i suoi 23:22 locali pensando "11 min fa" quando
+# in realtà il reset è fra 2h. Per evitare hardcoding (es. Europe/Rome
+# default sbagliato per chi sta in CN/US), chiediamo all'utente. Detect
+# euristica dal sistema host come proposta di default; l'utente conferma
+# o sostituisce.
+JHT_USER_TZ_DEFAULT="UTC"
+# 1. host /etc/timezone (Linux/Mac container host)
+if [ -r /etc/timezone ]; then
+  _tz=$(tr -d '[:space:]' < /etc/timezone 2>/dev/null || true)
+  [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
+fi
+# 2. host /etc/localtime symlink (più affidabile su macOS host)
+if [ -L /etc/localtime ]; then
+  _tz=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
+  [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
+fi
+# 3. Esiste già in host.env? Skip prompt, riusa.
+if [ -f "$HOST_ENV_PATH" ]; then
+  EXISTING_TZ=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_USER_TZ:-}")
+  if [ -n "$EXISTING_TZ" ]; then
+    JHT_USER_TZ_DEFAULT="$EXISTING_TZ"
+  fi
+fi
+
+JHT_USER_TZ="$JHT_USER_TZ_DEFAULT"
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+  printf "\n${CYAN}━━━ Timezone utente ━━━${RESET}\n\n"
+  printf "Dove ti trovi (timezone IANA, es. Europe/Rome, America/New_York, Asia/Shanghai)?\n"
+  printf "Il Capitano la usa per convertire gli orari nei messaggi Telegram e nei grafici.\n\n"
+  printf "Timezone [%s]: " "$JHT_USER_TZ_DEFAULT"
+  read -r TZ_CHOICE
+  if [ -n "$TZ_CHOICE" ]; then
+    # Validate: python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('XXX')"
+    if python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('$TZ_CHOICE')" 2>/dev/null; then
+      JHT_USER_TZ="$TZ_CHOICE"
+    else
+      warn "Timezone '$TZ_CHOICE' non valida — uso default ($JHT_USER_TZ_DEFAULT)"
+    fi
+  fi
+fi
+ok "Timezone: $JHT_USER_TZ"
+
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
 # Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
-# Riscriviamo l'intero file mantenendo JHT_LANG (gia' scritto sopra in
-# questo stesso script) per non perderlo. Se in futuro si aggiungono
-# altre chiavi, usare un piccolo helper di merge invece di sovrascrivere.
+# Riscriviamo l'intero file mantenendo JHT_LANG + JHT_USER_TZ. Se in
+# futuro si aggiungono altre chiavi, usare un piccolo helper di merge
+# invece di sovrascrivere.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 {
   printf 'JHT_LANG=%s\n' "$JHT_LANG"
   printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
+  printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
 } > "$HOST_ENV_PATH"
 
 if [ "$HOST_TYPE" = "local" ]; then

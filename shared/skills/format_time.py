@@ -34,11 +34,22 @@ except ImportError:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
 
-DEFAULT_TZ = "Europe/Rome"
+# Default UTC: niente assumption geografiche. La timezone va settata
+# esplicitamente dal setup wizard (host-setup.sh → host.env::JHT_USER_TZ).
+# Fallback su UTC se mai configurata = orari consistenti col container,
+# l'utente capisce che deve completare il setup.
+DEFAULT_TZ = "UTC"
 
-# Locations dove guardare `candidate_profile.yml` in ordine. Manteniamo
-# pochi candidati per non rallentare il lookup. Il container monta
-# $JHT_HOME (=/jht_home), il profilo vive sotto profile/.
+# Cascade di lookup per la timezone utente (in ordine di precedenza):
+#   1. env var JHT_USER_TZ          (esposta dal wrapper jht da host.env)
+#   2. ~/.jht/host.env::JHT_USER_TZ  (scritto da host-setup.sh interattivo)
+#   3. candidate_profile.yml::timezone  (legacy, ancora supportato)
+#   4. fallback hardcoded DEFAULT_TZ = "UTC"
+_HOST_ENV_CANDIDATES = [
+    Path(os.environ.get("JHT_HOST_ENV_FILE", "")) if os.environ.get("JHT_HOST_ENV_FILE") else None,
+    Path(os.environ.get("JHT_HOME", "/jht_home")) / "host.env",
+    Path.home() / ".jht" / "host.env",
+]
 _PROFILE_CANDIDATES = [
     Path(os.environ.get("JHT_HOME", "/jht_home")) / "profile" / "candidate_profile.yml",
     Path(os.environ.get("JHT_HOME", "/jht_home")) / "candidate_profile.yml",
@@ -46,15 +57,39 @@ _PROFILE_CANDIDATES = [
 ]
 
 
+def _read_kv_file(path: Path, key: str) -> str | None:
+    """Legge `KEY=value` da un file shell-style. None se file/chiave mancanti."""
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith(f"{key}="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    return val or None
+    except (OSError, UnicodeDecodeError, AttributeError):
+        return None
+    return None
+
+
 @lru_cache(maxsize=1)
 def _read_profile_timezone() -> str:
-    """Legge timezone dal profile YAML. Default Europe/Rome se mancante.
+    """Cascade lookup (vedi docstring modulo). Default UTC se niente settato."""
+    # 1. env var diretta (priorità massima, usata dal wrapper jht)
+    env_tz = (os.environ.get("JHT_USER_TZ") or "").strip()
+    if env_tz:
+        return env_tz
 
-    Non importa PyYAML — il YAML del profilo è grep-friendly e ci basta
-    matchare `^timezone:` per evitare una dipendenza extra (YAML è già
-    nei reqs ma vogliamo che questo helper funzioni anche in container
-    minimal di test).
-    """
+    # 2. host.env in vari path candidati
+    for path in _HOST_ENV_CANDIDATES:
+        if path is None:
+            continue
+        val = _read_kv_file(path, "JHT_USER_TZ")
+        if val:
+            return val
+
+    # 3. candidate_profile.yml (legacy)
     for path in _PROFILE_CANDIDATES:
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -68,6 +103,10 @@ def _read_profile_timezone() -> str:
                             return val
         except (OSError, UnicodeDecodeError):
             continue
+
+    # 4. fallback: UTC (niente Europe/Rome hardcoded — l'utente potrebbe
+    # essere in qualsiasi continente). Se vede UTC, sa che il setup non
+    # è completo.
     return DEFAULT_TZ
 
 
