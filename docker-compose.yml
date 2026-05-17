@@ -44,6 +44,12 @@ services:
       # I componenti che hanno bisogno della lingua (wizard, futuri
       # messaggi degli agenti, dashboard intelligence) leggono questa.
       - JHT_LANG=${JHT_LANG:-en}
+      # Bug #15: timezone utente (IANA, es. Europe/Rome, Asia/Shanghai).
+      # Chiesta nel setup wizard (host-setup.sh), salvata in
+      # ~/.jht/host.env. Default UTC: niente assunzione geografica
+      # (utenti in CN/US/EU/AU). Letta da format_time skill per
+      # convertire timestamp nei messaggi Telegram/grafici user-facing.
+      - JHT_USER_TZ=${JHT_USER_TZ:-UTC}
       # IS_CONTAINER=1 abilita il passthrough in cli/src/utils/container-proxy.js:
       # le funzioni che oggi farebbero `docker exec jht ...` eseguono
       # comandi locali (siamo gia' nel posto giusto). Vedi
