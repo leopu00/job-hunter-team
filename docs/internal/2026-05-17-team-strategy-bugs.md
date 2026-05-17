@@ -776,6 +776,106 @@ mostra l'esempio del bug nel subtitle e nei tick X.
 
 ---
 
+## ✨ 16. Auto-report periodici + auto-grafici via Bridge orders (feature mancante)
+
+**Osservazione utente** (verbatim, questa sessione):
+> *"dovremmo mettere dei bridge che ordina a capitano di produrre dei
+> grafici e cartine del genere ogni tanto senza che utente chieda. Anche
+> report ogni tanto della situazione ad utente tramite telegram — lui mi
+> aggiorna spesso attualmente visto che l'ho detto di fare ma se no non
+> avrebbe fatto — dovrebbe avercelo come una delle istruzioni principali"*
+
+**Contesto**: nella sessione 17 maggio il Capitano ha prodotto:
+- 4 grafici budget (`budget_chart*.png`, `usage_chart*.png`)
+- 4 grafici pipeline temporali (`pipeline_chart.png`, `pipeline_stock_chart*.png`)
+- 9 grafici candle snapshot (`pipeline_candle_*.png`)
+- 2 mappe geografiche con tile OSM (`positions_map_europe.png`,
+  `positions_map_italy.png`) → reazione utente *"fantastico"*
+
+**Tutto generato solo perché l'utente l'ha chiesto esplicitamente**.
+Senza richiesta, il Capitano resta in loop operativo (spawn agenti,
+ack tick Sentinella, monitorare coda CV) e **non produce mai
+visualizzazioni o report di stato proattivamente**.
+
+**Causa**: in `agents/capitano/capitano.md` la sezione "loop operativo"
+è reattiva. Le uniche cose che il Capitano fa autonomamente sono:
+1. Rispondere a `[BRIDGE TICK]` ogni ~5 min con un ACK alla Sentinella
+2. Rispondere a `[CHAT]` o `[TG]` quando arrivano
+3. Triage pipeline (`pipeline-triage`) quando Sentinella ordina scaling
+
+**Manca**: nessun loop di "report all'utente / produrre grafici" senza
+trigger esterno.
+
+**Fix proposto** — 2 componenti:
+
+### A. Bridge orders periodici per auto-grafici
+
+Aggiungere nuovi tipi di tick nel bridge `pid1.js` / `sentinel-bridge.py`:
+
+| Order type | Frequenza | Azione Capitano |
+|---|---|---|
+| `[CHART-BUDGET-WINDOW]` | A metà finestra Kimi e a 30 min dal reset | Genera `budget_chart_<window_id>.png` e invia all'utente |
+| `[CHART-PIPELINE-DAILY]` | 1x al giorno (es. 09:00 UTC) | Genera `pipeline_stock_chart.png` ultimi 24h |
+| `[MAP-POSITIONS-WEEKLY]` | 1x a settimana (es. domenica 18:00 user-local) | Genera `positions_map_<region>.png` per regioni con posizioni nuove |
+| `[CANDLES-3-WINDOW]` | A chiusura finestra Kimi | 3 candle snapshot (inizio/mezzo/fine) della finestra appena chiusa |
+
+Implementazione: nuova skill `agents/_skills/bridge-orders/SKILL.md` che
+documenta i tipi di order, il Capitano la consuma e per ogni order esegue
+la generazione + invio via `jht-telegram-send --photo`. Idempotenza con
+flag tipo `/jht_home/profile/last_chart_<type>.flag` per evitare doppie
+generazioni.
+
+### B. Report periodici proattivi via Telegram
+
+Aggiungere come **regola principale** del Capitano (subito dopo C-01, C-02,
+C-03) una nuova **C-04**:
+
+> *"**C-04 — Report proattivo all'utente**. Almeno una volta ogni 2 ore
+> attive (cioè quando il team non è in freeze), invia all'utente un
+> riepilogo Telegram non richiesto: budget attuale + proj, top
+> posizioni nuove dalla scorsa volta, draft pronti, eventuali blocker.
+> Formato breve (3-5 righe), italiano, tono operativo. Idempotenza:
+> non rispedire se l'ultimo report è < 1 ora fa. Skip in finestra di
+> notte utente (00:00-08:00 local user time)."*
+
+Lookup notturno: legge `timezone: Europe/Rome` da `candidate_profile.yml`
+(dipende dal bug #15 timezone resolution).
+
+Implementazione tecnica:
+- Helper bash/python `agents/_skills/proactive-report/check.py` che il
+  Capitano chiama ad ogni `[BRIDGE TICK]` per decidere se è "ora di un
+  report".
+- Persistenza last-report timestamp in
+  `/jht_home/profile/last_proactive_report.ts`.
+
+### Dipendenze
+
+- **Bug #15** (timezone): per la regola "skip 00-08 utente" serve sapere
+  il fuso utente.
+- **Bug #14** (state-event log): i grafici stock/candle saranno
+  *finalmente corretti* solo dopo aver loggato le transizioni.
+- **Task #50** (slash command + bottoni): se utente può chiedere chart
+  on-demand con un bottone, lo schedule periodico serve **meno** (ma
+  resta utile per "primo trigger" di settimana).
+
+**Priorità**: **alta** — l'utente l'ha esplicitamente chiesta come
+"istruzione principale". Sblocca il valore d'uso del JHT come *"team
+che lavora per te e ti tiene aggiornato"* invece di *"tool che devi
+chiedere ogni volta"*.
+
+**Effort**: medio. Componenti:
+- ~50 righe in `pid1.js` o `sentinel-bridge.py` per nuovi tick types
+- Nuova skill `bridge-orders` (~100 righe + esempi matplotlib/OSM)
+- Nuova regola C-04 in `capitano.md` (~20 righe)
+- Helper `proactive-report/check.py` (~80 righe)
+- Documentazione: aggiornare `agents/_manual/` + reference per chart types
+
+**Riferimento**: vedi `docs/sessions/2026-05-17-pipeline-snapshot/` per i 9
+PNG già generati on-demand dal Capitano nella sessione — sono il
+template visivo per i grafici auto-generati.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -785,6 +885,7 @@ mostra l'esempio del bug nel subtitle e nei tick X.
 | 9 | **Skill `submit-application` mancante** — nessuno spedisce | **alta** | grande |
 | 12 | **Scout hit-rate non migliora** (loop Critic→Scout) | **alta** | medio |
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
+| 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
