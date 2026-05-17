@@ -2639,6 +2639,175 @@ Possibile **selling point feature** del prodotto.
 
 ---
 
+## ✨ F-1 (task #50). Telegram UX completa — slash commands + bottoni persistenti + inline keyboard + auto-report
+
+**Non è un bug, è una feature request** dalla sessione 17 mag.
+Tracciata in task #50.
+
+### 🎯 Motivazione (decisione utente, questa sessione)
+
+> *"Questo aumenta la user experience di tantissimo, perché io sono il
+> creatore della piattaforma e so le domande da chiedere, ma magari un
+> utente totalmente nuovo non sa chiedere queste cose. Quindi sì,
+> bisognerebbe automatizzarlo. Però dobbiamo rendere anche l'utente
+> abilitato a richiedere un report con un paio di click."*
+
+8 round di iterazione utente↔Capitano sui grafici candle nella sessione
+pipeline-snapshot. Senza UX strutturata, ogni utente nuovo dovrebbe
+imparare a chiedere "fammi 5 png finestre con timeline agenti". Inadatto
+al pubblico target (non-tech).
+
+### 🔧 4 componenti coordinati
+
+#### A. Slash commands via Telegram Bot API `setMyCommands`
+
+```
+/budget         Grafico budget finestra corrente
+/budget_prev    Grafico finestra precedente
+/budget_week    Andamento settimanale
+/pipeline       Stato pipeline (overview dashboard)
+/candles        3 candle inizio/mezzo/fine ultima finestra
+/mappa          Mappa posizioni (Europa)
+/mappa_it       Mappa posizioni Italia
+/stato          Stato rapido team (testuale)
+/help           Lista comandi
+```
+
+Registrazione: 1 chiamata API server-side al boot del bot:
+```
+POST https://api.telegram.org/bot<TOKEN>/setMyCommands
+{ "commands": [ {"command":"budget", "description":"..."}, ... ] }
+```
+
+Compaiono nel menu **"/" sticky** del client Telegram. Utente vede
+lista cliccabile.
+
+#### B. Bottoni persistenti (reply keyboard)
+
+Sotto ogni risposta del bot, una **keyboard persistente 2×3** sempre
+visibile (mai scompare):
+
+```
+┌─────────────┬─────────────┐
+│ 📊 Budget   │ 📈 Pipeline │
+├─────────────┼─────────────┤
+│ 🗺️ Mappa    │ ⭐ Top CV   │
+├─────────────┼─────────────┤
+│ 📅 Reset    │ ❓ Help     │
+└─────────────┴─────────────┘
+```
+
+In `sendMessage`:
+```json
+{
+  "text": "...",
+  "reply_markup": {
+    "keyboard": [
+      [{"text":"📊 Budget"}, {"text":"📈 Pipeline"}],
+      [{"text":"🗺️ Mappa"}, {"text":"⭐ Top CV"}],
+      [{"text":"📅 Reset"}, {"text":"❓ Help"}]
+    ],
+    "is_persistent": true,
+    "resize_keyboard": true
+  }
+}
+```
+
+Quando utente preme un bottone, il bot riceve il testo del bottone
+come messaggio normale (`📊 Budget` → triggera lo stesso flow di
+`/budget`).
+
+#### C. Inline keyboard contestuale (one-shot)
+
+Sotto messaggi specifici, bottoni che producono callback queries:
+
+```
+[Mentor] Ho 3 CV PASS top oggi. Quale vuoi vedere?
+  ┌──────────────┐
+  │ 1. Sisal 7.5 │
+  ├──────────────┤
+  │ 2. Prima 7.5 │
+  ├──────────────┤
+  │ 3. Gr4vy 6.5 │
+  └──────────────┘
+```
+
+```json
+"reply_markup": {
+  "inline_keyboard": [
+    [{"text":"1. Sisal 7.5", "callback_data":"show_cv:20"}],
+    [{"text":"2. Prima 7.5", "callback_data":"show_cv:31"}],
+    [{"text":"3. Gr4vy 6.5", "callback_data":"show_cv:29"}]
+  ]
+}
+```
+
+Webhook riceve `callback_query` con `data:"show_cv:20"` → trigger CV
+download/anteprima. Risponde con `answerCallbackQuery` (toast veloce).
+
+#### D. Auto-report periodico (cross-ref bug #16 / task #52)
+
+Bridge Python che ricorda al Capitano di mandare panoramiche ogni
+2-4 ore senza prompt utente. **Già coperto da bug #16 + task #52**,
+non duplicare lo sforzo.
+
+### 🤔 Come gestire il fatto che il bot è dell'utente
+
+**Open question chiarito**:
+
+> *"Visto che l'utente crea il bot, poi non so come andremo a
+> implementare questi pulsanti per i bot degli utenti."*
+
+**Risposta tecnica**: l'utente crea il bot via **BotFather** solo per
+ottenere il **token**. Da lì in poi tutto è automatico server-side:
+
+1. **Wizard onboarding** (già esistente, vedi
+   [`docs/guides/VPS-SETUP-WIZARD.md`](../guides/VPS-SETUP-WIZARD.md)):
+   - Utente fa `/newbot` su BotFather, ottiene token
+   - Incolla token nel wizard JHT
+   - JHT salva token in `~/.jht/credentials/telegram_bot.json`
+
+2. **Bootstrap commands** (nuovo, in `pid1.js` o startup script):
+   - Al primo boot del tg-bridge per quel bot, chiama:
+     ```
+     POST /bot<TOKEN>/setMyCommands       (registra menu /)
+     POST /bot<TOKEN>/setMyDescription    (bio bot)
+     POST /bot<TOKEN>/setMyShortDescription (subtitle)
+     POST /bot<TOKEN>/setChatMenuButton   (pulsante menu apertura)
+     ```
+   - Idempotente: re-chiama solo se la lista commands è cambiata
+     (hash check)
+
+3. **Keyboard persistente**: ogni `sendMessage` del bot include il
+   `reply_markup.keyboard`. Persiste per l'utente finché non viene
+   esplicitamente rimosso.
+
+**Niente intervento manuale utente** dopo il wizard. Tutto via API
+del token che l'utente ha già fornito.
+
+### ⏱️ Effort: medio (1-2 giorni)
+
+- A) `setMyCommands` boot — 30 righe in `tg-bridge.py` o nuovo `tg-bot-setup.py`
+- B) Keyboard persistente — 10 righe (wrap `sendMessage`)
+- C) Inline keyboard + callback handler — 50 righe (handler per
+  callback_data come `show_cv:X`, `budget`, `pipeline`)
+- D) Già task #52
+
+### 🎯 Priorità: **alta** (UX critico per non-tech users)
+
+L'utente lo ha messo come priorità esplicita. Senza, il prodotto
+funziona solo per il creatore.
+
+### 🔗 Bug/feature collegati
+
+- **#16** + task **#52**: auto-report periodico (D sopra)
+- **#26** atomic CV: il bottone "show_cv:X" richiede che cv_pdf_path
+  sia popolato (fix #21 promotion + #26 atomic write)
+- **#23** stato live: bottoni "📊 Budget" devono mostrare stato
+  attuale, applicare il comandamento "leggi fonte, non memoria"
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
