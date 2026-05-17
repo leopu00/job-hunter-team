@@ -1257,6 +1257,206 @@ livello di UX.
 
 ---
 
+## 🐛 20. Pagina `/reports` 100% mock — zero query Supabase, dati hardcoded
+
+**Sintomo** (rilevato dall'utente via screenshot 2026-05-17):
+
+La pagina pubblica `jobhunterteam.ai/reports` mostra KPI fittizi:
+- 9 candidature
+- 33% tasso risposta
+- 2 colloqui
+- 1 offerta
+- 5.4g tempo risposta medio
+- Top aziende: **TechFlow, Acme Corp, DataWise S.r.l., CloudBase,
+  CodeLab S.p.A., NetPrime**
+
+**Nessuna di queste aziende esiste nel team**. Le aziende REALI
+processate sono: Bending Spoons, Rinse, Gr4vy, Canonical, MLabs, JUMO,
+INDI, ION, Dacomat, SerpApi, ION Berry, Bitpanda, Fliff, Revenue
+Analytics, RedCarbon, Blackshark, Initialize, DID, Sisal,
+Immobiliare.it, IT Partner Italia, Haoborn, Deloitte, LC Service,
+LeadTech.
+
+**Causa** — `web/app/api/reports/route.ts` è 100% mock:
+
+```typescript
+function buildMonthly(days: number): MonthData[] {
+  // ...
+  const sent = 8 + Math.abs(Math.round(Math.sin(seed * 1.7) * 12));
+  const responses = Math.round(
+    sent * (0.25 + Math.abs(Math.sin(seed * 2.3)) * 0.35),
+  );
+  // ...
+}
+
+function buildPhaseTimes(): PhaseTime[] {
+  return [
+    { phase: "Screening CV", avgDays: 3.2 },
+    { phase: "Primo colloquio", avgDays: 8.5 },
+    { phase: "Colloquio tecnico", avgDays: 14.1 },
+    { phase: "Offerta", avgDays: 21.7 },
+    { phase: "Rifiuto", avgDays: 12.3 },
+  ];
+}
+
+function buildTopCompanies(): TopCompany[] {
+  return [
+    { company: "TechFlow", applications: 4, responses: 3 },
+    { company: "Acme Corp", applications: 3, responses: 2 },
+    { company: "DataWise S.r.l.", applications: 3, responses: 1 },
+    { company: "CloudBase", applications: 2, responses: 2 },
+    { company: "CodeLab S.p.A.", applications: 2, responses: 1 },
+    { company: "NetPrime", applications: 2, responses: 0 },
+  ];
+}
+
+export async function GET(req: NextRequest) {
+  // ...zero await supabase.from(...).select(...)
+  const kpi = {
+    totalApplications: totalSent,           // mock
+    responseRate: ...,                       // mock
+    interviewsScheduled: Math.round(totalResponses * 0.6),    // mock
+    offersReceived: Math.max(1, Math.round(totalResponses * 0.15)), // mock
+    avgResponseDays: 5.4,                    // HARDCODED
+  };
+  return NextResponse.json({ period, days, kpi, monthly,
+                              phaseTimes: buildPhaseTimes(),
+                              topCompanies: buildTopCompanies() });
+}
+```
+
+Zero `createClient()`, zero `.from("applications")`, zero
+`.from("responses")`. Dati totalmente disconnessi dal sistema reale.
+
+**Stato reale** (dal team JHT su VPS):
+- 12 CV `applications.status = 'ready'`
+- **0** `applications.status = 'sent'` (bug #9: nessuno spedisce)
+- **0** risposte HR (perché 0 inviati)
+- **0** colloqui
+- **0** offerte
+
+Il report dovrebbe mostrare tutto **0** con messaggio *"Nessuna
+candidatura inviata ancora — vedi `/applications` per i 12 draft
+pronti"*. Invece mostra metriche fittizie credibili.
+
+**Impatti**:
+
+1. **Falsifica UX prodotto**: un utente che apre `/reports` crede di
+   avere un track record reale (33% response rate è in linea con
+   benchmark industry). Inganno involontario ma totale.
+2. **Maschera il bug #9** (`submit-application` mancante): se l'utente
+   credesse al report, non avrebbe motivo di chiedersi *"perché non
+   sono stato chiamato?"*. Il bug #9 si auto-nasconde dietro le fake
+   metriche.
+3. **Discredita il sistema quando scoperto**: come è successo qui —
+   l'utente nota i nomi aziende inventati e perde fiducia.
+4. **Blocca decisioni reali**: il Mentor potrebbe analizzare i pattern
+   delle aziende che rispondono di più → ma se i dati sono fake, anche
+   l'analisi è fake.
+
+**Fix proposto** — riscrittura `route.ts` con query Supabase reali:
+
+```typescript
+import { createClient } from "@/lib/supabase/server";
+
+export async function GET(req: NextRequest) {
+  const periodKey = req.nextUrl.searchParams.get("period") ?? "30d";
+  const days = PERIODS[periodKey] ?? 30;
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  // KPI principali
+  const [
+    { count: totalApplications },
+    { count: totalResponses },
+    { count: interviewsScheduled },
+    { count: offersReceived },
+  ] = await Promise.all([
+    supabase.from("applications").select("id", { count: "exact", head: true })
+            .eq("user_id", user.id).eq("status", "sent").gte("sent_at", since),
+    supabase.from("responses").select("id", { count: "exact", head: true })
+            .eq("user_id", user.id).gte("received_at", since),
+    supabase.from("interviews").select("id", { count: "exact", head: true })
+            .eq("user_id", user.id).gte("scheduled_at", since),
+    supabase.from("offers").select("id", { count: "exact", head: true })
+            .eq("user_id", user.id).gte("offered_at", since),
+  ]);
+
+  // Tempo medio risposta
+  const { data: respTimes } = await supabase
+    .from("responses")
+    .select("received_at, application:applications(sent_at)")
+    .eq("user_id", user.id).gte("received_at", since);
+  const avgResponseDays = respTimes?.length
+    ? respTimes.reduce((s, r) => s + daysBetween(r.application.sent_at, r.received_at), 0) / respTimes.length
+    : null;
+
+  // Monthly aggregation
+  const monthly = await monthlyFromDb(supabase, user.id, days);
+
+  // Phase times (richiede event log → vedi bug #14)
+  const phaseTimes = await phaseTimesFromDb(supabase, user.id, days);
+
+  // Top companies
+  const { data: topCompanies } = await supabase
+    .from("applications")
+    .select("company, status")
+    .eq("user_id", user.id).gte("sent_at", since);
+  // Group + count manualmente
+
+  return NextResponse.json({ period, days, kpi: { ... },
+                              monthly, phaseTimes, topCompanies });
+}
+```
+
+**Dipendenze**:
+- **Bug #9** (`submit-application` mancante): senza apply che spedisce,
+  `applications.status='sent'` è sempre 0. Bug #20 può essere fixato
+  ma il report mostrerà solo `0`.
+- **Bug #14** (state-event log): `phaseTimes` (Screening → Primo
+  colloquio → Tecnico → Offerta) richiede transitions log. Senza, la
+  metrica resta non calcolabile e va nascosta dall'UI.
+- **Schema DB**: serve tabelle `responses`, `interviews`, `offers`
+  (verificare se esistono — probabilmente no, da creare).
+
+**Priorità**: **alta**. È un bug di **integrità del prodotto**, non
+solo UX. Un utente che vede metriche fake potrebbe prendere decisioni
+sbagliate (es. non chiedersi perché non viene chiamato).
+
+**Effort**:
+- **Minimo** (1-2h): sostituire mock con query Supabase, accettare
+  che molti numeri saranno 0 finché bug #9 non è chiuso. Aggiungere
+  empty state UI: *"Nessuna candidatura inviata ancora"*.
+- **Completo** (1 giorno): migrazione DB per `responses`, `interviews`,
+  `offers` + form/UI per registrare risposte HR + integrazione con
+  bug #14 per phase times.
+
+**Validazione**: dopo fix, la pagina `/reports` deve mostrare:
+- 0 candidature inviate (finché bug #9 aperto)
+- 0% tasso risposta
+- 0 colloqui, 0 offerte
+- Lista vuota top aziende
+- Empty state UI esplicito
+
+E **mai** TechFlow / Acme Corp / DataWise — quei nomi non devono più
+apparire nella codebase.
+
+**Riferimento**: screenshot utente 2026-05-17 della pagina `/reports`,
+file `web/app/api/reports/route.ts` (89 righe, 100% mock).
+
+**Bug collegati**:
+- **#9** (submit-application): vero collo di bottiglia upstream — finché
+  non è chiuso, anche un /reports onesto mostra solo 0.
+- **#14** (state-event log): necessario per phase times reali.
+- **Famiglia "fake data in prod"**: probabilmente altre pagine
+  (`/responses`, `/growth`, `/applications`) potrebbero avere lo
+  stesso problema — da audit.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -1270,6 +1470,7 @@ livello di UX.
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
+| 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
