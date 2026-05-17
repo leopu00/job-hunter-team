@@ -262,6 +262,46 @@ def compute_metrics(parsed, last, history=None):
     else:
         status, throttle = "OK", 0
 
+    # ── Bug #24: fase Sentinella/Capitano + scala throttle continua ──
+    #
+    # Fase 1 (normale): proj < 100% e time-to-reset > 30 min → Sentinella
+    #                   solo INFO, Capitano modula throttle in autonomia.
+    # Fase 2 (critico): proj > 100% O time-to-reset ≤ 30 min con proj alto
+    #                   → Sentinella suggerisce throttle scala continua.
+    # Fase 3 (chiusura): time-to-reset ≤ 30 min → Sentinella domina
+    #                   (freeze in target G-spot 90-95%, comportamento OK
+    #                   già attuale).
+    #
+    # `suggested_throttle_s` è scala continua (vs i 3 valori discreti
+    # {0, 300, 600} del passato). Mappatura dalla doc bug #24:
+    #   100 < proj ≤ 110 → 120s
+    #   110 < proj ≤ 130 → 240s
+    #   130 < proj ≤ 150 → 360s
+    #   150 < proj ≤ 200 → 600s
+    #   proj > 200       → freeze (-1 sentinel value)
+    if hours_to_reset is not None and hours_to_reset <= 0.5:
+        phase = 3
+    elif projection is not None and projection > 100:
+        phase = 2
+    else:
+        phase = 1
+
+    suggested_throttle_s = 0
+    if projection is not None:
+        p = projection
+        if p > 200:
+            suggested_throttle_s = -1  # freeze
+        elif p > 150:
+            suggested_throttle_s = 600
+        elif p > 130:
+            suggested_throttle_s = 360
+        elif p > 110:
+            suggested_throttle_s = 240
+        elif p > 100:
+            suggested_throttle_s = 120
+        elif p > PROJ_HIGH:  # 95-100 zona ATTENZIONE soft
+            suggested_throttle_s = 60
+
     return {
         "ts": ts,
         "provider": provider,
@@ -276,6 +316,12 @@ def compute_metrics(parsed, last, history=None):
         "velocity_decreasing": velocity_decreasing,
         "status": status,
         "throttle": throttle,
+        # Bug #24: scala throttle continua + fase (1/2/3). Sentinella e
+        # Capitano leggono questi due campi per separare le responsabilità
+        # in Fase 1 (Capitano modula in autonomia) vs Fase 2/3 (Sentinella
+        # comanda). Vedi sentinella.md S-04/S-05 + capitano.md C-07.
+        "phase": phase,
+        "suggested_throttle_s": suggested_throttle_s,
         "reset_at": parsed.get("reset_at"),
         "weekly_usage": parsed.get("weekly_usage"),
         # Bug #19A: reset weekly disponibile per Capitano/Sentinella senza

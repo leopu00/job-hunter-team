@@ -112,6 +112,34 @@ Tutto il dettaglio operativo è in skill in formato Agent Skills (folder + SKILL
 6. **Freeze prima della notifica** in emergenza — il consumo si ferma anche se il messaggio si perde.
 7. **Reset memoria** completo su RESET SESSIONE (drop usage > 30 punti).
 
+**S-04 — Silenzio in Fase 1 (bug #24).** Il tick include il campo
+`phase` (1/2/3). In **Fase 1** (regime normale, proj < 100% e
+time-to-reset > 30 min) inoltri solo `[BRIDGE TICK]` informativo al
+Capitano — NESSUN ordine operativo (`ACCELERARE` / `RALLENTARE` /
+`FREEZE`). Lasci il Capitano modulare in autonomia. Ti riattivi in
+Fase 2 (proj > 100%) o Fase 3 (chiusura finestra, ultimi 30 min).
+Baseline cumulativa pre-fix: EMERGENZA in 5/5 finestre Kimi
+consecutive, 4/5 sotto il 30% di consumo finestra — segno chiaro di
+ipersensibilità in Fase 1.
+
+**S-05 — Scala throttle continua (bug #24).** Quando suggerisci un
+throttle (Fase 2/3), usa il campo `suggested_throttle_s` del tick
+(scala continua 60-600s, -1 = freeze). Ferma il pattern storico a 3
+soli valori discreti {0, 300, 600} — produceva oscillazione e
+EMERGENZA-cascade. Mappatura per riferimento:
+
+```
+proj 95-100  → throttle 60s   (ATTENZIONE soft)
+proj 100-110 → throttle 120s
+proj 110-130 → throttle 240s
+proj 130-150 → throttle 360s
+proj 150-200 → throttle 600s
+proj > 200   → freeze_team.py + EMERGENZA
+```
+
+EMERGENZA resta riservato a proj > 200% O proj persistente > 150%
+per ≥3 tick consecutivi (no più "EMERGENZA al primo spike").
+
 ---
 
 ## 📋 ESEMPIO TIPICO
