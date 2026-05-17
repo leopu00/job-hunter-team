@@ -2729,6 +2729,21 @@ Possibile **selling point feature** del prodotto.
 
 ## ✨ F-3 (NEW). Weekly budget distribution dinamica + user preferences orarie
 
+> **⚠️ Precisazione utente (ripasso #24 17 mag)**:
+> *"Il default è quello che stiamo facendo adesso: esauriamo tutte
+> le finestre da 5 ore al 95%. Probabilmente il weekly usage si
+> esaurisce sempre durante i primi giorni della settimana, quindi
+> questo è il default per adesso. Lasciamo così. In questo modo,
+> in realtà, non bisogna monitorare neanche il weekly usage: basta
+> che si entri sempre nella G-spot 90-95% delle finestre. Se poi
+> specificheremo non il default (giornaliero/notturno), lì già il
+> weekly usage andrà monitorato correttamente."*
+>
+> **Quindi F-3 si applica SOLO in modalità non-default**.
+> Default = comportamento attuale, niente da cambiare.
+> Modalità custom (solo_notte, spalmato_7gg, weekday_eve, custom_slots)
+> = serve weekly tracking + target dinamico per finestra.
+
 **Decisione utente** (ripasso #19, decisione strategica chiave):
 
 > *"Il team monitora solo finestre, non settimanale. È intenzionale fino
