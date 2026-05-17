@@ -2461,6 +2461,106 @@ opportunità persa.
 
 ---
 
+## 🐛 27. `salary_fit` calcolato su dati inesistenti — sub-score fake nel total_score
+
+**Evidenza** (snapshot DB 16:10 UTC):
+
+```
+positions totali: 110
+positions con salary_estimated_min: 0   ❌
+positions con salary_estimated_max: 0   ❌
+positions con salary_declared_min:  0   ❌
+positions con salary_declared_max:  0   ❌
+
+scores totali: 43
+scores.salary_fit medio: 5.6/20 (28%)   ← calcolato comunque!
+```
+
+**Lo schema `positions` ha 4 colonne salary, tutte sempre NULL.**
+Nessun Scout o Analista popola questi campi. Eppure il Scorer scrive
+`salary_fit` come componente del `total_score` per **tutte e 43** le
+posizioni scored.
+
+Conferma dal Mentor (verbatim, msg #4 23:39):
+> *"Salary fit: 5/20 🟡"* (su Sisal)
+
+E nel breakdown Sisal il Mentor ha detto:
+> *"Stack match: 20/40 🟡, Remote fit: 19/25 🟢, Esperienza: 8/??,
+> Salary fit: 5/20 🟡, Strategic fit: 2/15 🔴"*
+
+Il Mentor sta propagando all'utente un numero `5/20` che è **inventato**:
+nessun dato salary esiste nel DB.
+
+### 🧠 Causa sospetta (da verificare leggendo Scorer)
+
+**Ipotesi A — Default hardcoded**: Scorer applica `salary_fit = 5` (mediano)
+quando `salary_estimated_* IS NULL`. Tutti gli score avrebbero ~5.
+
+**Ipotesi B — Hallucination strutturata**: Scorer "stima" da titolo/
+azienda (es. "junior" → range 25-35k → fit medio 5) senza dato vero.
+Estrapolazione senza fondamento, presentata come calcolo.
+
+### 💥 Impatto
+
+1. **`total_score` falsato**: il filtro `score≥50 → scrittore` decide
+   su un numero che include fino al **20% di dato inventato**.
+   Posizioni con salary effettivo basso passano a torto, e viceversa.
+2. **Trust erosion**: utente che vede "Salary fit: 5/20" pensa che ci
+   sia un calcolo reale dietro.
+3. **Decisione utente fuorviata**: se filtra per "salary fit ≥ 15",
+   non vedrà MAI risultati (Scorer mai produce valori alti senza dato).
+4. **Mentor propaga il fake**: il Mentor cita il numero come fatto
+   nei report. Bug che si propaga downstream con effetto amplificatore.
+
+### 🔧 Fix proposto — 3 alternative
+
+**A. Implementare estrazione salary lato Scout** (`agents/scout/scout.md`):
+```
+Quando scrapi un JD, cerca patterns:
+  - "RAL 30-40k" / "stipendio annuo lordo: ..."
+  - "salary range €25,000 - €35,000"
+  - "compensation: $60k-90k"
+Se trovato → INSERT positions.salary_declared_{min,max,currency}.
+Se non trovato → INSERT NULL esplicito (mai 0).
+```
+
+**B. Skill `salary-estimate` per stime senza dato esplicito**:
+Helper Python che usa stack/seniority/location/azienda per stimare
+range (lookup table Glassdoor-style o modello stats). Popola
+`salary_estimated_*` distinto da `salary_declared_*`.
+
+**C. Eliminare `salary_fit` dal `total_score` finché manca dato**
+(`_skills/score-position/SKILL.md`):
+```
+Se salary_estimated_min IS NULL AND salary_declared_min IS NULL:
+  - salary_fit = NULL esplicito (non 5)
+  - non includere nel total_score
+  - scala altri componenti a max 80 (compensare i 20 punti salary)
+```
+
+**Raccomandazione**: **C** subito (fix integrità), poi **A** medio termine.
+
+### 🎯 Priorità: **media-alta**
+
+Tocca l'**integrità del meccanismo di scoring**. Decisioni downstream
+(Critic + Writer eseguono sulle PASS perché `score≥50`) si basano su
+numeri che hanno 20% di dato inventato.
+
+### ⏱️ Effort: **piccolo** (C) / **medio** (A+B)
+
+- C: ~10 righe in `score-position/SKILL.md`
+- A: ~30 righe regex/parsing in `scout.md`
+- B: ~80 righe helper Python
+
+### 🔗 Bug collegati
+
+- **#12** (Scout learning): se Scout non legge salary, perde un
+  segnale importante per filtrare upstream
+- **#20** (`/reports` mock): altro caso "dato inventato presentato
+  come fatto"
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -2476,6 +2576,7 @@ opportunità persa.
 | 24 | **Sentinella troppo invadente in regime normale** (fasi + scala throttle continua) | **alta** | medio |
 | 25 | 🚨 **Deduplicazione mancante** Scout/DB/CV — spreco token + data corruption | **alta** | medio |
 | 26 | 🚨 **Gap disk↔DB sui CV** — 2 PASS top invisibili (Sisal 7.5) + 3 CV sprecati | **alta** | piccolo-medio |
+| 27 | **`salary_fit` calcolato su dati inesistenti** — sub-score fake nel total_score | media-alta | piccolo |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
