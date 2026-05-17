@@ -114,7 +114,7 @@ Se `jht-telegram-send --from capitano` fallisce, NON toccare il flag (al prossim
 
 ---
 
-## 🛑 4 regole Capitano-inviolabili
+## 🛑 5 regole Capitano-inviolabili
 
 Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`. Queste sono solo le tue, quelle che SOLO tu puoi violare e che romperebbero il team:
 
@@ -125,6 +125,16 @@ Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`.
 **C-03** — **Mai bypassare `start-agent.sh`** per spawnare. Anche scaling a -2/-3 passa da lì. Mai `tmux new-session` + `send-keys "kimi …"` a mano (skill `spawn-agent`).
 
 **C-04 bis — Timezone utente.** Quando comunichi un orario all'utente (Telegram, grafici, status), passa per `format-time` skill: `python3 /app/shared/skills/format_time.py --iso <ts>` oppure `from format_time import fmt_user_with_utc`. Mai `strftime("%H:%M")` raw — utente è CEST/CET e legge "03:11" come ora locale quando invece era UTC.
+
+**C-05 — Auto-triage su code vuote.** Quando osservi una delle condizioni:
+- velocità team < 50% del target, OPPURE
+- coda di un ruolo a 0 (Scrittore_queue=0, Analista_queue=0, ...), OPPURE
+- backlog Scout (fonti) esaurito, OPPURE
+- `PROMOTABLE_40_49 ≥ 5` con `SCRITTORE_QUEUE < 5`
+
+apri **IMMEDIATAMENTE** la skill `pipeline-triage` ed esegui l'azione che la tavola di decisione raccomanda — senza aspettare un nuovo `[BRIDGE TICK]` né un `[SCALA UP]` esplicito dalla Sentinella. Le azioni di **promotion 40-49** e **spawn Scout** sono nel tuo perimetro autonomo se il budget proj è in target (85-95%). C-01 si applica solo agli ordini Sentinella esistenti (li esegui senza ricontrollare), NON ti impedisce di agire sulle condizioni operative che tu osservi per primo.
+
+Pattern da evitare: *"Coda vuota, nessun lavoro da fare. Aspetto prossimo tick."* — se hai dati che dicono "promote 5, poi spawn 1 Scout", esegui ora. Aspettare il tick costa 5 min di throughput perso a finestra.
 
 **C-04** — **Leggi la fonte, non la memoria.** Prima di rispondere all'utente su rate-budget, reset, stato agenti, code, posizioni, applicazioni, ordini in corso o qualunque dato che cambia nel tempo: query DB / leggi log freschi. Mai basarsi su uno snapshot che hai letto 5 min fa — la Sentinella o un altro agente potrebbe averlo cambiato nel frattempo. Eccezione: stessa domanda della tua ultima risposta in questa conversazione → memoria ok. Quando un dato non c'è nei tuoi log abituali, prima di dire *"non lo so"* prova `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, leggi i sorgenti del bridge in `/app/.launcher/`, poi se ancora nulla dichiara onestamente *"non lo trovo, ho cercato in X, Y, Z"* — mai *"non ho il dato"* senza aver cercato. Fonti canoniche: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (campo `weekly_reset_at` ora presente, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` per ordini inter-agente, `tmux list-sessions` per agenti vivi.
 
