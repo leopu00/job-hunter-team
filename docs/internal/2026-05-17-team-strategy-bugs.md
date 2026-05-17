@@ -1154,66 +1154,112 @@ stato mai cablato nel watchdog né in alcun bridge alternativo.
    potrebbe distinguere "processo zombie" (kill ok) da "processo
    normale" (throttle ok).
 
-**Fix proposto** (3 opzioni, scegliere in base alla filosofia):
+### 🔧 Fix proposto — CORREZIONE post-indagine git history
 
-### (A) Estendere `agent-watchdog` per spawn periodico
+**Decisione utente** (ripasso 17 mag):
+> *"Il dottore dovrebbe essere spawnato proprio allo startup del
+> container. Però non è lui che andrebbe a essere spawnato: è il suo
+> bridge che lo spawna automaticamente. È il bridge che dobbiamo
+> avviare una volta che si avvia il container."*
 
-In `pid1.js` o `agent-watchdog`:
-```js
-// per i 3 long-lived agents
-const LONG_LIVED = ['assistente', 'capitano', 'mentor'];
-LONG_LIVED.forEach(a => watchdogRestartIfDead(a));
+> *"Noi il bridge per il dottore già l'avevamo implementato e già
+> l'avevamo testato. Anzi, sta anche proprio nei nostri report che il
+> dottore ha lavorato correttamente. Controlla meglio."*
 
-// nuovo: per il Dottore (one-shot periodico)
-setInterval(() => {
-  if (!tmuxSessionExists('DOTTORE')) {
-    spawnAgent('dottore', { mode: 'one-shot', autoExit: '30m' });
-  }
-}, 30 * 60 * 1000);  // ogni 30 min
+#### Indagine git history (decisiva)
+
+Commit `d4bb2ca2 feat(dottore): agente health-check ogni 30min con
+auto-respawn` (8 maggio 2026) ha introdotto **2 file**:
+
+```
+.launcher/spawn-doctor.sh      ← spawn singolo DOTTORE, idempotente
+.launcher/doctor-watchdog.sh   ← loop infinito ogni 30min che chiama spawn-doctor.sh
 ```
 
-### (B) Bridge order dedicato (collegato a #16)
+Conferma operativa storica: **decine di entries**
+`{"src":"spawn-doctor.sh","event":"spawn"}` nei session reports dell'**8 maggio**
+ogni 30 min (07:00, 07:33, 08:03, 08:33, ..., 18:03). Il sistema **ha
+funzionato perfettamente** quel giorno.
 
-Aggiungere ai bridge orders del bug #16 anche `[SPAWN-DOTTORE]` ogni
-30 min. Il Capitano riceve l'order, esegue `spawn-agent dottore`, e il
-Dottore fa il suo lavoro one-shot di 30 min e si chiude.
+Patch successivo: `f6c7f759 fix(spawn-doctor): timing piu' generoso
+per Codex Ink`. Quindi anche mantenimento attivo.
 
-Vantaggio: il Capitano sa quando il Dottore è spawnato (può ricevere
-report del Dottore via `[REPORT-FROM-DOTTORE]`). Centralizza la
-governance.
+#### Causa vera del bug
 
-### (C) Self-spawn via cron Docker
+`doctor-watchdog.sh` esiste, è eseguibile, è collaudato. **Manca solo
+l'integrazione con `pid1.js`** che lo avvii automaticamente al boot.
 
-Aggiungere a `pid1.js` un mini-cron interno che alle :00 e :30 di ogni
-ora spawna il Dottore se non già attivo. Più semplice di (A) ma meno
-integrato con il workflow Capitano.
+Header del file rivela il "setup manuale" che era richiesto:
+```
+# Avvio (una volta sola):
+#   tmux new-session -d -s DOCTOR-WATCHDOG \
+#     "bash /app/.launcher/doctor-watchdog.sh"
+```
 
-**Raccomandazione**: **(B)** — riusa l'infrastruttura del bug #16
-(bridge orders periodici) ed esplicita la gerarchia "Capitano
-orchestratore di tutti gli agenti, inclusi quelli one-shot". Più pulito
-architetturalmente.
+Quel `tmux new-session` è stato eseguito **una volta sola l'8 maggio**.
+Al successivo rebuild del container la sessione è morta e nessuno
+l'ha più riavviata. Da allora il Dottore è assente.
 
-**Priorità**: **alta**. Bug critico di completezza: un intero agente
-del team **non esiste in pratica**. Più tempo passa, più il rischio si
-accumula (disk full, zombie non rilevati, ecc.).
+In `pid1.js` (`/app/cli/src/commands/pid1.js`):
+- ✅ avvia `tg-bridge` (linea 85+)
+- ✅ avvia `sentinel-bridge` (similar)
+- ✅ avvia `pacing-bridge` (similar)
+- ❌ **nessuna riga** spawna `doctor-watchdog.sh`
+- Solo commento riferimento al dottore-LLM (linea 368) ma non integration
 
-**Effort**: piccolo-medio (5-30 righe in `pid1.js` + nuovo bridge order
-se opzione B + verifica skill `liveness-check` ancora valida).
+#### Fix vero — ~5 righe in `pid1.js`
 
-**Validazione**: dopo il fix, controllare che dopo 60 min compaia almeno
-1 sessione `DOTTORE` in `tmux list-sessions` + entries in
-`/jht_home/logs/agent-watchdog.log` con timestamp Dottore.
+```js
+// Aggiungere accanto al blocco tg-bridge / sentinel-bridge esistenti:
+pid1Log('starting doctor-watchdog (auto-spawn DOTTORE every 30min)');
+spawnLabeled('doctor-watchdog', '/bin/bash',
+  ['/app/.launcher/doctor-watchdog.sh']);
+```
 
-**Riferimento conversazionale**: pane scrollback ASSISTENTE linee
-755-983, 2026-05-17 01:20-01:29 UTC.
+**Niente file nuovi da creare**. Il watchdog esiste e funziona.
+Niente coinvolgimento Capitano. Niente bridge orders. Solo
+**riconnettere** il watchdog al bootstrap del container che
+qualcuno aveva dimenticato di fare nell'integrazione finale.
 
-**Bug collegati**:
-- **#16**: usare i bridge orders per spawnare Dottore (opzione B).
+### 🎯 Priorità: **alta**
+
+Bug critico di **regressione** (funzionava, è stato perso). Più
+tempo passa, più il rischio si accumula (disk full, zombie non
+rilevati, ecc.).
+
+### ⏱️ Effort: **piccolissimo** (~15 min)
+
+- 3 righe in `pid1.js` per spawnarlo al boot
+- Test: rebuild container, verifica `ps aux | grep doctor-watchdog`
+  e `tmux list-sessions` dopo qualche minuto
+
+### 📈 Validazione
+
+Dopo restart container:
+- `ps aux | grep doctor-watchdog` → 1 process bash attivo
+- `tmux list-sessions` → mostra `DOTTORE` (spawn immediato al boot
+  perché lo script fa "spawn IMMEDIATAMENTE al primo giro")
+- `/jht_home/logs/doctor-watchdog.log` con entries di auto-spawn
+- File di session reports del Dottore in `/jht_home/logs/...` come 8 mag
+
+### 🔗 Bug collegati
+
+- ~~**#16/F-1.D**~~: l'opzione "bridge orders esterni" era totalmente
+  off-topic. Niente a che vedere.
 - **#2**: Sentinella aggressiva — Dottore come secondo controllo
-  permette throttle progressivo invece di kill.
-- **#17**: Capitano passivo — anche qui, il Capitano riceve l'order
-  dal bridge ma deve effettivamente eseguirlo (auto-azione, non
-  segnalazione all'utente).
+  permette di distinguere zombie da normali.
+- **Lezione meta**: la regressione passa inosservata se non c'è
+  monitoring "is doctor-watchdog process alive?" — magari aggiungere
+  a healthcheck del container.
+
+### 📜 Riferimenti
+
+- Pane ASSISTENTE 2026-05-17 01:20-01:29 UTC (diagnosi iniziale,
+  inconsapevole che il watchdog esistesse già)
+- Git commit `d4bb2ca2` 2026-05-08 (introduzione)
+- Git commit `f6c7f759` (fix timing Codex)
+- Session reports `docs/sessions/codex-12h-2026-05-08-pm/` (evidenza
+  funzionamento)
 
 ---
 
