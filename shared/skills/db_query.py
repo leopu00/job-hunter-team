@@ -451,6 +451,7 @@ def main():
     # position detail
     pd = sub.add_parser('position')
     pd.add_argument('id', type=int)
+    pd.add_argument('--field', help='Stampa solo il valore di una colonna (bug #26): es. --field status. No header, plain stdout.')
 
     # companies
     c = sub.add_parser('companies')
@@ -478,12 +479,28 @@ def main():
     cu = sub.add_parser('check-url')
     cu.add_argument('url', help='URL o job ID numerico LinkedIn')
 
+    # cv-pdf-paths (bug #26 cv-disk-audit): 1 path per riga, script-friendly
+    sub.add_parser('cv-pdf-paths')
+
     args = parser.parse_args()
 
     if args.cmd == 'positions':
         query_positions(args)
     elif args.cmd == 'position':
-        query_position_detail(args.id)
+        # --field mode (bug #26): scriptable lookup. Bypassa il print
+        # umano e stampa solo il valore della colonna richiesta.
+        if getattr(args, 'field', None):
+            conn = get_db()
+            ensure_schema(conn)
+            row = conn.execute(
+                "SELECT * FROM positions WHERE id = ?", (args.id,)
+            ).fetchone()
+            if not row:
+                sys.exit(1)
+            val = row[args.field] if args.field in row.keys() else None
+            print('' if val is None else val)
+        else:
+            query_position_detail(args.id)
     elif args.cmd == 'companies':
         query_companies(args)
     elif args.cmd == 'company':
@@ -496,6 +513,16 @@ def main():
         return query_application(args.position_id)
     elif args.cmd == 'check-url':
         check_url(args.url)
+    elif args.cmd == 'cv-pdf-paths':
+        # Bug #26 cv-disk-audit: stampa 1 path per riga, niente header.
+        # Path NULL e stringhe vuote esclusi a monte (DB-side WHERE).
+        conn = get_db()
+        ensure_schema(conn)
+        for r in conn.execute(
+            "SELECT cv_pdf_path FROM applications "
+            "WHERE cv_pdf_path IS NOT NULL AND TRIM(cv_pdf_path) != ''"
+        ):
+            print(r['cv_pdf_path'])
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
         next_for_role(role)
