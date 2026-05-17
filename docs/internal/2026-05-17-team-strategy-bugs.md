@@ -1123,6 +1123,140 @@ se opzione B + verifica skill `liveness-check` ancora valida).
 
 ---
 
+## 🐛 19. Capitano non sa reset finestra settimanale Kimi — dato non loggato + Capitano passivo sulla ricerca
+
+**Sintomo** (sessione 13:45-13:50 UTC):
+
+| Ora | Utente | Capitano |
+|---|---|---|
+| 13:45:57 | *"usage settimanale a che punto sta?"* | *"📊 Consumo settimanale kimi: 76%. Finestra corrente (13:11→18:11): 17% / 4.4h rimanenti."* ✅ |
+| 13:46:51 | *"quanto manca al reset settimanale?"* | *"📅 Reset finestra giornaliera: 18:11 UTC (~4.4h). **Reset settimanale: non ho il dato preciso nel log. Weekly usage è a 76% e non ho rilevato un reset settimanale recente. Se lo conosci tu, dimmelo e lo traccio.**"* ❌ |
+| 13:48:30 | *"indaga e trovalo - hai le skill per falro"* | (silenzio per ~2 min, poi grep nel codebase) |
+| 13:50:12 | — | *"🚨 SCOPERTA — Reset settimanale kimi: **17:11 UTC** (tra ~3h 21m)! Cap principale (weekly): 76/100 — reset 17:11 UTC. Finestra 5h: 17/100 — reset 18:11 UTC."* ✅ |
+
+Quindi: il dato esiste, le skill per recuperarlo esistono, ma il Capitano
+di default risponde *"non ho il dato"* e si ferma. Solo dopo la spinta
+dell'utente *"indaga e trovalo - hai le skill"* il Capitano cerca e
+trova.
+
+**Doppia faccia del bug**:
+
+### A. Manca persistenza `weekly_reset_at` in `sentinel-data.jsonl`
+
+Schema attuale di ogni tick:
+```json
+{
+  "ts": "2026-05-16T18:02:26.837365+00:00",
+  "usage": 27,                    // % finestra 5h ✅
+  "reset_at": "22:11",            // HH:MM reset 5h ✅
+  "weekly_usage": 8,              // % finestra settimanale ✅ ESISTE!
+  // ❌ MANCA: "weekly_reset_at": "17:11"
+  // ❌ MANCA: "weekly_reset_iso": "2026-05-17T17:11:00Z"
+  "throttle": 0,
+  "projection": 27.0,
+  "status": "SOTTOUTILIZZO",
+  ...
+}
+```
+
+Il bridge ha già `weekly_usage` (ottimo) ma non logga il timestamp di
+reset weekly. Senza quel dato, la Sentinella e il Capitano possono
+sapere "quanto sta bruciando" ma non "quanto manca al reset".
+
+### B. Capitano non interroga proattivamente le skill di lookup
+
+Il Capitano ha accesso a 2 skill che potevano dare la risposta subito:
+- `/app/shared/skills/check_usage.py` (linee 205-216): regex su UI Kimi
+  che estrae il blocco weekly. Probabilmente fornisce `weekly_remaining_hours`.
+- `/app/shared/skills/usage_record.py` (linee 200-235): API per
+  registrare/leggere usage incluse stime weekly.
+
+Eppure alla domanda diretta *"quanto manca al reset settimanale?"* il
+Capitano:
+1. Cerca in `sentinel-data.jsonl` (il suo log abituale)
+2. Non trova `weekly_reset_at`
+3. **Si ferma** e dichiara *"non ho il dato preciso nel log"*
+4. **NON tenta**: grep nelle skill, lettura sorgenti bridge, query UI Kimi diretta, calcolo retroattivo da quando `weekly_usage` è saltato a 0
+
+Pattern già visto: bug **#17** (Capitano passivo davanti a code vuote),
+bug **#3** (paralisi C-01), bug **#9** (apply non spedisce). Famiglia
+comune: *Capitano riconosce limite, segnala all'utente, non scava da
+solo*.
+
+**Fix proposto** — 2 componenti coordinati:
+
+### Fix A — Bridge aggiunge `weekly_reset_at` ai tick
+
+In `agents/_skills/check_usage.py` (o `bridge.py`) la funzione che
+parsea la UI Kimi deve estrarre anche il timestamp reset weekly e
+includerlo nel JSON tick:
+
+```python
+def parse_kimi_usage(text: str) -> dict:
+    # ...existing parsing...
+    m_weekly_reset = re.search(
+        r"Weekly cap resets? at\s+(\d{2}:\d{2})\s+UTC",
+        text,
+    )
+    weekly_reset_at = m_weekly_reset.group(1) if m_weekly_reset else None
+    # OR calcolare da next-Monday-09:00 se Moonshot usa rolling weekly
+    return {
+        "weekly_usage": weekly_pct,
+        "weekly_reset_at": weekly_reset_at,
+        "weekly_reset_iso": iso_from_hhmm_next_match(weekly_reset_at),
+        ...
+    }
+```
+
+Poi `sentinel-bridge.py` scrive `weekly_reset_at` e `weekly_reset_iso`
+in ogni entry del `sentinel-data.jsonl`. Disponibile per Sentinella +
+Capitano + visualizzazioni.
+
+### Fix B — Regola C-06 Capitano: "indaga sempre prima di dichiarare 'non lo so'"
+
+In `agents/capitano/capitano.md` aggiungere regola:
+
+> *"**C-06 — Investiga prima di dichiarare 'non lo so'**. Quando l'utente
+> chiede un dato di sistema (rate-budget, reset, stato agente, configurazione)
+> e non lo trovi nei tuoi log abituali, prima di rispondere *"non ho il
+> dato"* esegui almeno questi 4 fallback in ordine:*
+> *1. `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`*
+> *2. `find /app /jht_home -name '*<keyword>*'`*
+> *3. Leggi sorgenti bridge in `/app/launcher/` per capire dove
+>    quel dato viene calcolato*
+> *4. Se ancora nulla, allora dichiara onestamente 'non lo trovo nei
+>    log né nei sorgenti, ecco cosa ho cercato:' con la lista dei tentativi"*
+
+L'utente non dovrebbe mai dover scrivere *"indaga"* — il Capitano deve
+indagare di default.
+
+**Priorità**: media-alta. Il dato weekly è importante per planning
+(quando posso accelerare?), e il pattern di passività è impattante a
+livello di UX.
+
+**Effort**:
+- Fix A: piccolo (~10-20 righe nel parser bridge + 1 colonna in
+  `sentinel-data.jsonl`)
+- Fix B: piccolo (regola prompt + ~3 esempi di fallback nel manuale
+  Capitano)
+
+**Validazione**:
+- Dopo Fix A: ogni nuovo entry in `sentinel-data.jsonl` ha `weekly_reset_at`.
+- Dopo Fix B: la domanda *"quanto manca al reset settimanale?"* riceve
+  risposta corretta al primo turno, senza spinta utente.
+
+**Riferimento conversazionale**: 13:45-13:50 UTC, sequenza 4 messaggi.
+
+**Bug collegati**:
+- **#17** (Capitano passivo davanti a code vuote): identica famiglia
+  "riconosce ma non agisce". #19 è la variante "non sa ma non cerca".
+- **#3** (paralisi C-01): variante "ha l'autorizzazione ma teme di usarla".
+- **#11** (Mentor stile reference): il Mentor in 6 risposte non ha mai
+  detto *"non ho il dato"* — quando non sapeva, faceva subito query
+  DB. Il Capitano potrebbe imparare quel pattern.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -1135,6 +1269,7 @@ se opzione B + verifica skill `liveness-check` ancora valida).
 | 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
+| 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
