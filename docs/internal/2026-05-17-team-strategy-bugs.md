@@ -1,8 +1,11 @@
 # Bug strategici team — sessione 2026-05-16 → 17
 
-**Fonte**: conversazione utente ↔ @Capitano via Telegram dalle 17:27 alle 00:03,
-ricostruita da `/jht_home/.kimi/user-history/<md5>.jsonl` + estrazione di 38
-risposte uniche del Capitano dai `wire.jsonl` delle sessioni Kimi.
+**Fonti**:
+- conversazione utente ↔ @Capitano via Telegram dalle 17:27 alle 00:03, ricostruita
+  da `/jht_home/.kimi/user-history/<md5>.jsonl` + estrazione di 38 risposte uniche
+  del Capitano dai `wire.jsonl` delle sessioni Kimi.
+- conversazione utente ↔ @Mentor dalle 23:38 alle 00:28 (6 messaggi utente, 6
+  risposte Mentor), stessa pipeline di estrazione su md5 di `/jht_home/agents/mentor`.
 
 I bug qui sotto sono **strategici / comportamentali**, non infrastrutturali.
 Tutti i fix di infra (kimi auth, welcome, sync banner, sentinel ticks → Supabase)
@@ -245,23 +248,409 @@ formale — basta documentare il pattern come reference.
 
 ---
 
+## 🐛 9. Nessun agente invia le candidature — skill `submit-application` mancante
+
+**Sintomi** (emerso 2x dal Mentor):
+- Msg Mentor #2 (23:39): *"9 candidature generate, nessuna inviata."*
+- Msg Mentor #5 (00:17): *"Un punto operativo: 9 candidature generate, 0
+  inviate. Il Critic dice PASS su Bending Spoons e Rinse, ma i draft restano
+  fermi. Questo non è un problema tuo — è un problema di pipeline."*
+- Msg Mentor #6 (00:31): *"Azione immediata sui 3 draft pronti. Bending Spoons,
+  Rinse, MLabs: il Critic ha detto PASS o è alto. Chiedi al Capitano perché
+  non sono partite."*
+
+Il Mentor identifica due volte lo stesso bottleneck: **dopo il PASS del
+Critic, i draft con `status=ready` restano nel DB e nessuno li spedisce
+mai**. Mentor dice "parlane col Capitano" — ma il Capitano stesso non ha
+strumenti per agire.
+
+**Causa**: verifica su `/app/agents/capitano/skills.list`:
+
+```
+tmux-send chat-web telegram-send notify-user user-reply-check
+db-query db-update spawn-agent sentinel-orders bridge-pacing
+bridge-mailbox pipeline-triage throttle rate-budget
+```
+
+Nessuna skill `submit-application` / `apply-to-position` /
+`send-cv-via-email`. La skill `notify-user` esiste solo per **notificare**
+l'utente che ci sono batch ready, non per spedire. Anche `pipeline-triage`
+si ferma al concetto di `DRAFT_BLOCKED` (loop Writer↔Critic stallato), non
+copre il post-PASS. Il workflow finisce a `applications.status=ready` e da
+lì in poi è "manuale utente".
+
+**Conferma dall'utente** (questa sessione, decidendo se aggiungere il bug):
+> *"dovrebbe farlo il capitano autonomamente no? NON HA ISTRUZIONI PER FARLO?"*
+
+Risposta: corretto, **non le ha**. È un gap di sistema, non disobbedienza.
+
+**Fix proposto** (scelte da fare):
+1. Skill `submit-application` con backend variabile per canale:
+   - **Email**: leggere indirizzo HR da `positions.contact_email`, comporre
+     mail con PDF allegato, inviare via SMTP autenticato (credenziali utente
+     in `~/.jht/credentials/smtp.json`).
+   - **Form ATS web**: Playwright headless che compila i campi standard
+     (nome, email, CV upload, cover letter). Richiede credenziali per portal
+     specifici (Greenhouse, Lever, Workday).
+   - **LinkedIn Easy Apply**: skill separata `linkedin-apply` (richiede
+     sessione browser autenticata già esistente nel repo).
+2. Aggiungere `applications.status` valori: `ready` → `sent` → `confirmed`
+   (con timestamp + canale usato).
+3. Capitano loop autonomo: ogni `[BRIDGE TICK]` legge `SELECT * FROM
+   applications WHERE status='ready'` e per ciascuno: (a) verifica canale
+   disponibile, (b) chiama `submit-application`, (c) aggiorna `status=sent`.
+4. **Safety gate** (raccomandato): in modalità default, prima dell'invio,
+   Capitano chiede conferma all'utente via Telegram (1 messaggio per draft).
+   Modalità "autopilot" attivabile via flag `~/.jht/profile/auto-apply.flag`.
+
+**Priorità**: **alta** (è il vero collo di bottiglia di sistema: tutto il
+team produce CV che poi non parte).
+
+**Effort**: grande (richiede skill nuova + integrazione credenziali +
+gestione errori di rete + sandbox per non spammare HR durante test).
+
+---
+
+## 🐛 10. Mentor identifica problemi ma non ha canale verso Capitano
+
+**Sintomi**: Mentor scrive 3 volte (msg #2, #5, #6) *"parlane con il
+Capitano"* riferendosi alla pipeline. Ma il Mentor stesso non ha modo di
+inviare un `[REQ]` o `[INFO]` al pane CAPITANO — può solo parlare con
+l'utente via Telegram.
+
+**Causa**: nel prompt del Mentor (`agents/mentor/mentor.md`) la skill
+`tmux-send` non è inclusa. Confronto skill list:
+
+| Agente | tmux-send? |
+|---|---|
+| capitano | ✅ |
+| analista, scorer, critico, scrittore | ✅ (intra-pipeline) |
+| mentor | ❌ (solo `telegram-send` + `chat-web`) |
+| sentinella | ✅ (manda ordini al capitano) |
+
+Mentor è isolato per design — è un **osservatore strategico**, non un
+operatore — ma la conseguenza è che insight come *"i draft non partono"*
+muoiono se l'utente non agisce da middleware.
+
+**Trade-off di design**:
+- **Pro separazione attuale**: Mentor non interferisce con loop operativo,
+  utente resta in controllo, evita "echo chamber" tra agenti.
+- **Contro**: insight cronicamente persi (utente non sempre online,
+  Telegram facile da scrollare via).
+
+**Fix proposto** (ipotesi alternative):
+- **(a)** Aggiungere skill `tmux-send` al Mentor MA limitata a un solo
+  destinatario: `CAPITANO`, e solo tipo `[INFO]` (mai `[REQ]` o `[URG]`).
+  Capitano può ignorare se in conflitto con direttive utente.
+- **(b)** Non toccare il Mentor, ma **risolvere il bug #9** (Capitano
+  autonomamente legge `applications.ready` e spedisce). Così l'insight
+  Mentor diventa ridondante perché il sistema agisce da solo.
+- **(c)** Lasciare così, documentare il pattern: *"Mentor produce solo
+  testo, l'utente è il transport layer"*.
+
+**Priorità**: bassa-media. Risolvere #9 rende questo bug irrilevante.
+
+---
+
+## ✨ 11. Insight positivo — Mentor è il miglior agente conversazionale
+
+**Osservazione neutra dalla sessione**: zero spam, 6 risposte ognuna densa
+di valore numerico, sempre nome utente "Leone", silenzio M-01 dopo emoji
+di ack, accetta reframe utente (msg #6 "dimmi cosa migliorare non cosa non
+va bene") senza moralismi mantenendo il proprio stile *"misurato, numeri
+prima delle opinioni"*.
+
+Pattern emergente: il Mentor ha lo **stile conversazionale più
+allineato alla regola M-01/M-02** del team. Vale la pena studiarne il
+prompt come reference per migliorare Capitano (msg #17/#18 con
+Giovanni Odazzi mostrano che il Capitano è meno disciplinato sullo
+stay-on-topic, vedi bug #6).
+
+**Non un bug**, è un piccolo paragone di reference per future iterazioni
+del prompt Capitano.
+
+---
+
+## 🐛 12. Hit-rate Scout non migliora nel tempo (loop feedback Critic→Scout mancante)
+
+**Sintomi quantitativi** (sessione 16-17 maggio, dati dal Mentor):
+- Scout ha trovato **27 posizioni** totali
+- **13 escluse** subito dall'Analista (48% di scarto upstream)
+- 9 candidature generate dal Writer, **6 bocciate dal Critic** (66% bocciature)
+- **Hit-rate complessivo: ~18%** (solo 2 PASS netti su 27 = Bending Spoons + Rinse)
+
+Le bocciature Critic seguono pattern stabilissimo (vedi Mentor msg #4):
+- **Laurea** richiesta (4/6 bocciature: Canonical, JUMO, Revenue Analytics, RedCarbon)
+- **Stack esotico** non in profilo (Dacomat: React+TS+FastAPI+Docker+Azure;
+  SerpApi: Ruby+Mongo+JS)
+- **AWS/Docker/CI-CD** mancanti (4/6 bocciature)
+
+Eppure lo Scout, alla finestra successiva, **continuerà a portare lo stesso
+tipo di posizioni** perché non c'è feedback strutturato Critic → Scout.
+Il Critic giudica → DB → fine. Lo Scout non legge mai *"che tipo di
+posizione viene bocciata"* per restringere le query future.
+
+**Causa**: `agents/scout/scout.md` definisce le query in modo statico
+(parole chiave + sorgenti). Manca:
+1. Skill `feedback-loop-read` che query `applications WHERE status='rejected'
+   GROUP BY rejection_reason` per estrarre pattern.
+2. Logica Scout per **adattare le query** (es: se "laurea richiesta" è
+   il 67% delle bocciature, escludi `graduate program` da target o aggiungi
+   filtro `no-degree-required` nelle query).
+
+**MA ⚠️ — costraint dell'utente (questa sessione)**:
+> *"NON LIMITARE TROPPO GLI SCOUT VISTO CHE MAGARI POI NON VANNO A CERCARE
+> DEI POSTI DOVE POTREBBERO TROVARE OFFERTE VALIDE"*
+
+Punto giustissimo: è il classico **exploration vs exploitation tradeoff**
+(multi-armed bandit). Se lo Scout filtra solo posizioni che assomigliano
+ai 2 PASS già noti, perde opportunità in:
+- **Sorgenti nuove** non ancora testate (mercati geografici, board ATS,
+  community vertical es. Hacker News "Who's Hiring", Otta, Wellfound)
+- **Forme di lavoro adiacenti** che potrebbero passare il Critic
+  (es: posizioni "Data Analyst" se il candidato ha skill SQL+Python)
+- **Outlier statistici**: aziende che non richiedono laurea anche se
+  il loro settore di solito sì
+
+**Fix proposto — strategia ε-greedy / UCB1**:
+
+Lo Scout opera con due budget temporali separati per ogni tick:
+| Modalità | Budget | Comportamento |
+|---|---|---|
+| **Exploit** (70-80%) | usa pattern PASS noti | Cerca posizioni con stessa
+forma dei 2 PASS storici (junior/graduate Python, full remote, no degree). |
+| **Explore** (20-30%) | budget esplorativo | Cerca in domini/sorgenti
+non ancora testati o con campioni < 5 posizioni. Anche se score atteso basso. |
+
+Aggiornare la skill `pipeline-triage` del Capitano per leggere queste 2
+metriche e bilanciare:
+- Se `exploit_hit_rate > 40%` (target medio-alto), riduci budget explore
+  a 20%.
+- Se `exploit_hit_rate < 20%` (sotto soglia), AUMENTA explore a 30-40%
+  (sta esplodendo: serve diversificare).
+- Mai sotto 15% explore (altrimenti collassa su 1 cluster e perde diversità).
+
+Inoltre **target dinamico**: la metrica chiave è
+`hit_rate(N) = PASS_critic_30d / posizioni_trovate_30d`. Deve **salire
+nel tempo** (apprendimento del sistema). Se non sale dopo 3 finestre
+consecutive, scattare alert al Mentor ("lo Scout non sta imparando").
+
+**Priorità**: **alta** (è il secondo gap di prodotto dopo #9: il
+flusso può anche essere fixato a valle ma se a monte arriva spazzatura,
+i token vengono bruciati).
+
+**Effort**: medio. Richiede:
+- Migrazione DB: aggiungere `applications.rejection_reason` (enum: degree,
+  stack_mismatch, cloud_devops, seniority, location, other) — il Critic
+  già produce questo dato in `critic_notes` text ma in forma libera.
+- Skill nuova `scout-strategy` che decide explore vs exploit.
+- Loop nel Capitano (`pipeline-triage` esteso) che adatta i parametri.
+
+**Riferimenti**: vedi Mentor msg #5 — il Mentor stesso suggerisce
+"filtra meglio" come leva veloce. Questo bug formalizza il suggerimento.
+
+---
+
+## 🐛 13. Capitano invia template shell non espanso a Telegram
+
+**Sintomo** (00:41:51 UTC, msg Capitano #27 estratto dal wire):
+
+L'utente alle 00:40 chiede *"leggiti tutta la mia conversazione con il
+mentore — ci sono dei miglioramenti che ha proposto per la pipeline — li
+stai applicando?"*. Il Capitano risponde 1 minuto dopo con questo body
+letterale:
+
+```
+$(cat /tmp/telegram_msg.txt)
+```
+
+Cioè invia all'utente il **template shell non espanso** invece del
+contenuto del file. Bug di quoting: probabilmente ha eseguito qualcosa
+come `jht-telegram-send --from capitano "$(cat /tmp/telegram_msg.txt)"`
+ma le quote esterne erano single-quote, oppure il file conteneva newline
+non gestite dal sub-shell escape di Kimi.
+
+**Recupero**: 30s dopo (msg #28, 00:42:25) il Capitano si è accorto del
+problema e ha rimandato il messaggio corretto (589 chars, vedi sotto).
+L'utente comunque ha visto entrambi.
+
+**Causa probabile**: pattern Kimi che genera comando `Shell(...)` con
+quoting misto (single vs double, nested `$()`) — il wrapper bash di
+`jht-telegram-send` non eval-a la sub-shell se la stringa arriva già
+processata.
+
+**Fix proposto**:
+- In `jht-telegram-send`, aggiungere un check: se il body inizia con `$(`
+  o contiene `\${`, rifiutare con errore *"refusing to send unexpanded
+  shell template, looks like a quoting bug"*.
+- In `agents/_skills/telegram-send/SKILL.md` documentare il pattern
+  sicuro: scrivere body in heredoc e leggerlo come argomento posizionale,
+  evitare `cat` in command substitution.
+
+**Priorità**: bassa-media. Bug raro ma confonde l'utente.
+
+**Effort**: piccolo (5-10 righe in `jht-telegram-send`).
+
+---
+
+## 📝 Risposta del Capitano alla domanda "stai applicando i suggerimenti del Mentor?" (00:42:25 UTC)
+
+Dopo il template bug #13 sopra, il Capitano ha rimandato la risposta vera.
+**Verbatim**:
+
+> *Correzione su filtri Scout: SC-04 regola inviolabile — Scout ha SOLO 4
+> skip (seniority, work-auth, dominio, exp+3). Non posso aggiungere
+> filtri upstream senza rompere architettura. Le esclusioni vanno a valle
+> (Analista/Scorer) e stanno gia funzionando: 13/27 escluse.*
+>
+> *Cosa posso fare davvero:*
+> 1. *Aggiornare profilo con vincoli piu chiari — influenza Scorer gap penalty*
+> 2. *Accelerare coda scored → CV — in corso*
+> 3. *Sbloccare apply sui 2 draft ready — dipende da te*
+>
+> *Il Mentor ha ragione sul profilo (metriche + AWS) e sullo sblocco
+> operativo. Su filtri Scout il sistema gia filtra a valle.*
+
+**Validazioni empiriche di questo file**:
+
+1. **Conferma del bug #9** (skill `submit-application` mancante) —
+   citazione letterale: *"Sbloccare apply sui 2 draft ready — **dipende
+   da te**"*. Il Capitano stesso dichiara di non avere lo strumento per
+   spedire e rimanda l'azione all'utente.
+
+2. **Conferma del bug #12** (loop Critic→Scout assente) — il Capitano
+   dice *"SC-04 regola inviolabile — Scout ha SOLO 4 skip"*. Cioè
+   l'architettura attuale **vieta esplicitamente** allo Scout di
+   imparare/restringere le query in base ai feedback del Critic. Le
+   esclusioni "vanno a valle" — esattamente il problema documentato in
+   #12: filtrare a valle costa token (Analista + Scorer girano su materiale
+   che verrà scartato comunque).
+
+3. **Conferma dell'approccio Mentor (#11 insight positivo)** — il
+   Capitano riconosce esplicitamente *"Il Mentor ha ragione sul profilo
+   (metriche + AWS) e sullo sblocco operativo"*. La qualità dei consigli
+   Mentor è validata anche dall'agente downstream.
+
+**Implicazioni per #12 (Scout learning loop)**:
+
+La regola **SC-04** va riesaminata. Se vogliamo che lo Scout impari, dobbiamo:
+- **Opzione A**: emendare SC-04 per permettere skip aggiuntivi *dinamici*
+  basati su critic-feedback persistito (es: nuovo skip "degree_required"
+  attivato quando >50% bocciature contengono "degree" in `critic_notes`).
+  Mantenere i 4 skip statici come fondamenta, aggiungere 2-4 skip dinamici
+  con flag `learned=true` e dashboard utente per controllarli.
+- **Opzione B**: lasciare Scout intoccabile, mettere il feedback loop
+  nell'**Analista** (gate downstream). L'Analista già esclude — può
+  imparare quali pattern escludere prima a partire dal critic_notes.
+
+Entrambe rispettano lo spirito SC-04 (Scout = recall alto, filtro = a
+valle) ma aggiungono auto-tuning del filtro a valle, mai esistito prima.
+
+---
+
+## 📊 Update operativi finestra 22:11 → 03:11 (Capitano msg #29-#30)
+
+Subito dopo la risposta strategica sopra, il Capitano ha continuato il
+loop operativo. Due update consecutivi dimostrano che il **termostato
+Capitano + pipeline funzionano bene in questa finestra**:
+
+### Msg #29 — Tick bridge 00:45 UTC (00:45:26)
+> *"Tick 00:45: proj 91% (sotto target 92). Vel team leggermente sopra
+> target (+0.31%/h). Rallento scrittore-1 di 10s per centrare meglio.
+> Nessun freeze."*
+
+**Lettura**: il Capitano ha imparato la lezione del freeze 22:45 e ora
+modula con micro-aggiustamenti (10s di throttle in più sullo Scrittore-1)
+invece di freeze totali. **Proj 91% < target 92% = perfettamente in
+banda 85-95%**. Verbatim aderenza alla regola Performance band (bug #4
+sta scalando da media a "comportamento osservato"). ✅
+
+### Msg #30 — Critic PASS su Gr4vy (00:46:57)
+> *"Scrittore-1: #26 Gr4vy — Critic 5.5/10 PASS. PDF pronto. Prossima
+> in coda: #22 Canonical (score 50)."*
+
+**Lettura**: **terza candidatura PASS della sessione**. La lista dei
+PASS noti si aggiorna:
+
+| # | Azienda | Score | Status |
+|---|---|---|---|
+| 1 | Bending Spoons | 70/100 | Ready (non inviato — bug #9) |
+| 2 | Rinse | 62/100 | Ready (non inviato — bug #9) |
+| 3 | **Gr4vy** | 62/100 + Critic 5.5/10 | **Ready** appena prodotto, non inviato |
+
+Il pattern dei PASS è coerente con l'analisi Mentor (msg #3): tutti e 3
+sono **junior/graduate Python full remote senza laurea obbligatoria**.
+Bending Spoons, Rinse, Gr4vy — stack puro Python backend, no React/Ruby/
+AWS forzati. Il Critic premia in modo consistente.
+
+**Implicazione per bug #9**: ora ci sono **3 draft pronti che nessuno
+spedisce**. Il problema cresce di urgenza ad ogni finestra. Ogni nuovo
+PASS Critic = 1 lavoro buttato senza skill `submit-application`.
+
+**Implicazione per bug #12**: il pattern PASS è così stabile (3/3 = stessa
+forma) che il loop Critic→Scout sarebbe banale da iniziare. Anche solo
+una soglia *"se 3+ PASS condividono `tech_stack=python_pure AND
+seniority=junior_or_graduate AND remote=true AND degree_required=false`,
+aggiungi al briefing Scout next-cycle"* basterebbe a salire dal 18% di
+hit-rate attuale.
+
+### Stato finestra corrente alle 00:47
+
+- Budget: proj 91% al tick 00:45 — **on track** per chiudere ~95%
+  (target G-spot vedi `docs/sessions/2026-05-17-budget-windows/`).
+- Pipeline: 3 ready, prossimo in coda #22 Canonical (score 50, ma Mentor
+  aveva flaggato Canonical come probabile FAIL per laurea — vedi msg #4).
+- Operatività Capitano: micro-aggiustamenti corretti, **0 freeze post
+  22:45**. Lezione SC-04/C-01 metabolizzata almeno per questa finestra.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
 |---|---|---|---|
 | 1 | Voice/Photo Whisper/OCR/Vision | **alta** | medio |
 | 2 | Sentinella throttle progressivo | **alta** | medio |
+| 9 | **Skill `submit-application` mancante** — nessuno spedisce | **alta** | grande |
+| 12 | **Scout hit-rate non migliora** (loop Critic→Scout) | **alta** | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
+| 7 | Sync history conversazione su web | media | medio |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
-| 7 | Sync history conversazione su web | media | medio |
+| 10 | Mentor → Capitano channel (irrilevante se #9 fatto) | bassa | piccolo |
+| 13 | Capitano invia template shell non espanso a Telegram | bassa | piccolo |
 | 8 | ~~Generate PNG/grafico~~ — **falso bug, già funziona** | — | — |
+| 11 | ✨ Mentor stile conversazionale = reference positiva | — | — |
 
-**Pattern emergente**: 4 dei 8 bug (#2, #3, #4, #5) sono nella catena
+**Pattern emergente A**: 4 dei bug (#2, #3, #4, #5) sono nella catena
 **Bridge → Sentinella → Capitano**. Vale la pena fare un refactor coordinato
 di questa catena come prossimo blocco di lavoro: regole esplicite di
 threshold, hysteresis, override utente.
+
+**Pattern emergente B — i 2 gap di prodotto critici sono in testa e coda
+della pipeline**:
+- **#12 a monte**: lo Scout porta materiale con hit-rate 18% e non
+  migliora — feedback Critic→Scout assente.
+- **#9 a valle**: il Writer/Critic producono CV PASS ma nessuno li
+  spedisce — skill `submit-application` assente.
+
+Il middle del team (Analista, Scorer, Writer, Critic) funziona benissimo
+in entrambe le finestre Kimi (vedi grafici budget). Lo sforzo migliore di
+prodotto è **chiudere il loop**:
+
+```
+Scout (#12 explore/exploit ε-greedy)
+  → Analista → Scorer → Writer → Critic
+    → submit-application (#9)
+      → applications.status='sent'
+        → response tracking
+          → feedback al Scout (loop #12 chiude su dati reali HR)
+```
+
+Risolti #9 + #12 il sistema diventa **auto-correttivo end-to-end**: trova
+posizioni → spedisce CV → impara da risposte/silenzi HR → cerca meglio
+la prossima finestra.
 
 **Materiale di lavoro**:
 
