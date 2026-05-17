@@ -996,6 +996,133 @@ helper `auto-triage-check.py` che esegue le 4 query in 1 colpo.
 
 ---
 
+## 🐛 18. Dottore mai spawnato — watchdog non lo include, bridge mancante
+
+**Sintomo** (conversazione utente ↔ @Assistente 01:20-01:29 UTC, 4 messaggi):
+
+| Ora | Utente | Assistente |
+|---|---|---|
+| 01:20:40 | *"il dottore sta operando ogni tanto?"* | (prima interpreta come battuta sarcastica, poi capisce) |
+| 01:26:05 | *"sto parlando dell'agente dottore che è incaricato di monitorare il team"* | grep nel codebase → trova `/app/agents/dottore/` + skill `liveness-check` |
+| 01:27:06 | *"riesci a controllare i log se è mai stato attivo o a..."* | controlla 4 fonti log → *"Il Dottore esiste come ruolo ma non è mai stato attivato"* |
+| 01:29:20 | *"ci dovrebbe essere un bridge che lo attiva ogni tanto - controlla se riesci a vedere se è attivo il bridge"* | controlla pacing-bridge, sentinel-bridge, tg-bridge, watchdog → diagnosi finale ↓ |
+
+**Diagnosi finale dell'Assistente** (verbatim dal pane scrollback, linee 956-974):
+
+> *"1. I bridge (pacing, sentinel, tg) sono attivi e funzionanti
+> 2. Non c'è nessun bridge specifico per il Dottore
+> 3. Il file `dottore.md` dice chiaramente: 'Un altro Dottore verrà
+>    spawnato fra ~30 min dal watchdog'
+> 4. Il watchdog è `agent-watchdog.log` — ma guardando quel log,
+>    **monitora solo assistente, capitano, mentor. NON il Dottore**.
+>
+> Quindi il Dottore esiste come ruolo ma il watchdog attuale non lo
+> spawn. Forse in una versione precedente o successiva del sistema il
+> watchdog dovrebbe spawnarlo, ma attualmente non lo fa."*
+
+**Verifica indipendente** (questa sessione):
+
+```
+$ tmux list-sessions
+ASSISTENTE   ✅
+CAPITANO     ✅
+CRITICO-S1   ✅
+MENTOR       ✅
+SCRITTORE-1  ✅
+SENTINELLA   ✅
+              ← NESSUN DOTTORE
+```
+
+Niente in `/jht_home/.kimi/sessions/` per dottore. Niente PID. Niente log.
+
+**Causa**: `pid1.js` / `agent-watchdog` ha hardcoded la lista dei 3
+agenti user-facing (assistente, capitano, mentor) da rilanciare in caso
+di morte CLI. Il Dottore è un agente **one-shot a periodicità** (~30
+min, durata ~30 min) — pattern diverso dai 3 long-lived — e non è
+stato mai cablato nel watchdog né in alcun bridge alternativo.
+
+**Impatti dell'assenza del Dottore**:
+
+1. **Nessun liveness-check sistematico** dei pane tmux degli agenti.
+   Quando una CLI Kimi/Sonnet va in "zombie" (token consumati senza
+   prompt) nessuno se ne accorge finché un utente non scrolla
+   manualmente il pane.
+2. **Cache prune non eseguita**: `.kimi/cache/`, `/tmp/*.png`,
+   `~/.local/share/uv/` crescono indefinitamente. Rischio disk full a
+   medio termine.
+3. **py-audit non eseguito**: vulnerabilità nelle dependenze Python
+   non rilevate.
+4. **Sentinella senza secondo controllo**: la Sentinella vede solo
+   metriche di rate-budget, non lo stato di salute dei processi.
+   Pane "vivo ma in loop assurdo" non viene rilevato.
+5. **Bug #2 (Sentinella aggressiva) più difficile da chiudere**:
+   se la Sentinella avesse il Dottore come secondo paio di occhi,
+   potrebbe distinguere "processo zombie" (kill ok) da "processo
+   normale" (throttle ok).
+
+**Fix proposto** (3 opzioni, scegliere in base alla filosofia):
+
+### (A) Estendere `agent-watchdog` per spawn periodico
+
+In `pid1.js` o `agent-watchdog`:
+```js
+// per i 3 long-lived agents
+const LONG_LIVED = ['assistente', 'capitano', 'mentor'];
+LONG_LIVED.forEach(a => watchdogRestartIfDead(a));
+
+// nuovo: per il Dottore (one-shot periodico)
+setInterval(() => {
+  if (!tmuxSessionExists('DOTTORE')) {
+    spawnAgent('dottore', { mode: 'one-shot', autoExit: '30m' });
+  }
+}, 30 * 60 * 1000);  // ogni 30 min
+```
+
+### (B) Bridge order dedicato (collegato a #16)
+
+Aggiungere ai bridge orders del bug #16 anche `[SPAWN-DOTTORE]` ogni
+30 min. Il Capitano riceve l'order, esegue `spawn-agent dottore`, e il
+Dottore fa il suo lavoro one-shot di 30 min e si chiude.
+
+Vantaggio: il Capitano sa quando il Dottore è spawnato (può ricevere
+report del Dottore via `[REPORT-FROM-DOTTORE]`). Centralizza la
+governance.
+
+### (C) Self-spawn via cron Docker
+
+Aggiungere a `pid1.js` un mini-cron interno che alle :00 e :30 di ogni
+ora spawna il Dottore se non già attivo. Più semplice di (A) ma meno
+integrato con il workflow Capitano.
+
+**Raccomandazione**: **(B)** — riusa l'infrastruttura del bug #16
+(bridge orders periodici) ed esplicita la gerarchia "Capitano
+orchestratore di tutti gli agenti, inclusi quelli one-shot". Più pulito
+architetturalmente.
+
+**Priorità**: **alta**. Bug critico di completezza: un intero agente
+del team **non esiste in pratica**. Più tempo passa, più il rischio si
+accumula (disk full, zombie non rilevati, ecc.).
+
+**Effort**: piccolo-medio (5-30 righe in `pid1.js` + nuovo bridge order
+se opzione B + verifica skill `liveness-check` ancora valida).
+
+**Validazione**: dopo il fix, controllare che dopo 60 min compaia almeno
+1 sessione `DOTTORE` in `tmux list-sessions` + entries in
+`/jht_home/logs/agent-watchdog.log` con timestamp Dottore.
+
+**Riferimento conversazionale**: pane scrollback ASSISTENTE linee
+755-983, 2026-05-17 01:20-01:29 UTC.
+
+**Bug collegati**:
+- **#16**: usare i bridge orders per spawnare Dottore (opzione B).
+- **#2**: Sentinella aggressiva — Dottore come secondo controllo
+  permette throttle progressivo invece di kill.
+- **#17**: Capitano passivo — anche qui, il Capitano riceve l'order
+  dal bridge ma deve effettivamente eseguirlo (auto-azione, non
+  segnalazione all'utente).
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -1007,6 +1134,7 @@ helper `auto-triage-check.py` che esegue le 4 query in 1 colpo.
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
 | 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
+| 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
