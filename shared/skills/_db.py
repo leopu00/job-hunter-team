@@ -189,6 +189,31 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
 
+    -- Bug #14: event-log delle transizioni di stato delle positions.
+    -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
+    -- gli stati transitori (es. 'checked' < 5 min prima di passare a
+    -- 'scored') sono invisibili a un SELECT COUNT(*) WHERE status=...
+    -- Logghiamo ogni transizione qui per snapshot retroattivo, throughput
+    -- per stato, drop-off funnel e tempo medio di permanenza per stato.
+    --
+    -- L'INSERT è fatto dal wrapper db_update.py update_position quando
+    -- rileva un cambio di status. Mai scrivere qui a mano da altri
+    -- script: il wrapper enforça invariants (from_state coerente con il
+    -- previous row, by_agent da JHT_AGENT_NAME).
+    CREATE TABLE IF NOT EXISTS position_state_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        by_agent TEXT NOT NULL,
+        notes TEXT,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pst_position_ts ON position_state_transitions(position_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_ts ON position_state_transitions(ts);
+    CREATE INDEX IF NOT EXISTS idx_pst_to_state ON position_state_transitions(to_state, ts);
+
     -- Trigger educativi: rifiutano la stringa letterale 'now' nei timestamp
     -- e suggeriscono il pattern corretto. Audit 2026-05-02 mostro' 8 record
     -- con written_at='now' (stringa di 3 caratteri) finiti nel DB perche'
