@@ -42,6 +42,9 @@ python3 /app/shared/skills/db_update.py application 42 --critic-verdict NEEDS_WO
 # CV/cover letter committed (Writer marks as written)
 python3 /app/shared/skills/db_update.py application 42 --written-at now
 
+# Promote to ready after Critic PASS — Writer only, in application-flow Step 7
+python3 /app/shared/skills/db_update.py application 42 --status ready
+
 # User confirmed the application was sent
 python3 /app/shared/skills/db_update.py application 42 --applied-at "2026-02-28" --applied-via linkedin
 python3 /app/shared/skills/db_update.py application 42 --applied true
@@ -49,6 +52,20 @@ python3 /app/shared/skills/db_update.py application 42 --applied true
 # Response received (interview / rejection / ghosted)
 python3 /app/shared/skills/db_update.py application 42 --response "rejected" --response-at now
 ```
+
+### Single-writer gate on `applications.status='ready'` (bug #21)
+
+`applications.status='ready'` is **set exclusively by the Scrittore** in
+`application-flow` Step 7, **only after** Critic PASS on the 3rd round.
+This is the gate that makes the CV visible on the user's `/ready`
+dashboard. Other agents:
+
+- **Critic**: writes `critic_verdict` + `critic_score` only. Never `status`.
+- **Capitano**: never writes `applications.status`. May read it.
+- **Mentor / Assistente**: read-only on `applications`.
+
+Without this gate, the Capitano can report "12 ready" verbally while the
+DB still shows 0 — exactly the divergence that bug #21 fixed.
 
 ## Safety rules
 
