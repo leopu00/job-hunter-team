@@ -248,66 +248,76 @@ formale — basta documentare il pattern come reference.
 
 ---
 
-## 🐛 9. Nessun agente invia le candidature — skill `submit-application` mancante
+## ✅ 9. ~~Submit-application skill mancante~~ — **FALSO BUG, decisione di design "user-curated apply"**
 
-**Sintomi** (emerso 2x dal Mentor):
-- Msg Mentor #2 (23:39): *"9 candidature generate, nessuna inviata."*
-- Msg Mentor #5 (00:17): *"Un punto operativo: 9 candidature generate, 0
-  inviate. Il Critic dice PASS su Bending Spoons e Rinse, ma i draft restano
-  fermi. Questo non è un problema tuo — è un problema di pipeline."*
-- Msg Mentor #6 (00:31): *"Azione immediata sui 3 draft pronti. Bending Spoons,
-  Rinse, MLabs: il Critic ha detto PASS o è alto. Chiedi al Capitano perché
-  non sono partite."*
+> **STATUS: NON È UN BUG.** Smentito dall'utente in revisione 2026-05-17:
+>
+> *"Le applicazioni non le manderemo mai in automatico, ma le manda
+> sempre l'utente. Ha il CV, ha il link per la candidatura, e dovrà fare
+> lui la parte della candidatura. Così non vengono mandate troppe
+> candidature massivamente, ma solo quelle selezionate che sono su
+> misura per l'utente che sceglierà lui quale mandare."*
 
-Il Mentor identifica due volte lo stesso bottleneck: **dopo il PASS del
-Critic, i draft con `status=ready` restano nel DB e nessuno li spedisce
-mai**. Mentor dice "parlane col Capitano" — ma il Capitano stesso non ha
-strumenti per agire.
+### 🎯 Filosofia di prodotto
 
-**Causa**: verifica su `/app/agents/capitano/skills.list`:
+JHT è un **CV-tailoring assistant**, NON un **auto-applier massivo**.
+Differenza intenzionale rispetto a tool come Sonara/LazyApply che
+spammano centinaia di candidature/giorno con CV generici:
 
-```
-tmux-send chat-web telegram-send notify-user user-reply-check
-db-query db-update spawn-agent sentinel-orders bridge-pacing
-bridge-mailbox pipeline-triage throttle rate-budget
-```
+| JHT (design intenzionale) | Auto-applier massivi (anti-pattern) |
+|---|---|
+| 12 CV su misura, utente sceglie chi mandare | 200 CV generici al giorno |
+| Risposte HR di qualità (CV calibrato) | Risposte = ghost o spam filter |
+| Reputazione candidato intatta | Reputazione spam su LinkedIn/ATS |
+| Utente controlla il funnel | Utente perde controllo del proprio brand |
 
-Nessuna skill `submit-application` / `apply-to-position` /
-`send-cv-via-email`. La skill `notify-user` esiste solo per **notificare**
-l'utente che ci sono batch ready, non per spedire. Anche `pipeline-triage`
-si ferma al concetto di `DRAFT_BLOCKED` (loop Writer↔Critic stallato), non
-copre il post-PASS. Il workflow finisce a `applications.status=ready` e da
-lì in poi è "manuale utente".
+### 📋 Comportamento corretto del team
 
-**Conferma dall'utente** (questa sessione, decidendo se aggiungere il bug):
-> *"dovrebbe farlo il capitano autonomamente no? NON HA ISTRUZIONI PER FARLO?"*
+Il team **deve** fermarsi a `applications.status='ready'`. Da lì
+l'utente:
+1. Apre `/ready` sulla dashboard web
+2. Scarica CV + cover letter (PDF già pronti su Drive o locale)
+3. Clicca link offerta → fa apply manuale sul portal/form/email
+4. Marca manualmente come "inviata" sul JHT (futura UI / o auto-detect
+   via Gmail tracking)
 
-Risposta: corretto, **non le ha**. È un gap di sistema, non disobbedienza.
+### ⚠️ Implicazioni per altri bug
 
-**Fix proposto** (scelte da fare):
-1. Skill `submit-application` con backend variabile per canale:
-   - **Email**: leggere indirizzo HR da `positions.contact_email`, comporre
-     mail con PDF allegato, inviare via SMTP autenticato (credenziali utente
-     in `~/.jht/credentials/smtp.json`).
-   - **Form ATS web**: Playwright headless che compila i campi standard
-     (nome, email, CV upload, cover letter). Richiede credenziali per portal
-     specifici (Greenhouse, Lever, Workday).
-   - **LinkedIn Easy Apply**: skill separata `linkedin-apply` (richiede
-     sessione browser autenticata già esistente nel repo).
-2. Aggiungere `applications.status` valori: `ready` → `sent` → `confirmed`
-   (con timestamp + canale usato).
-3. Capitano loop autonomo: ogni `[BRIDGE TICK]` legge `SELECT * FROM
-   applications WHERE status='ready'` e per ciascuno: (a) verifica canale
-   disponibile, (b) chiama `submit-application`, (c) aggiorna `status=sent`.
-4. **Safety gate** (raccomandato): in modalità default, prima dell'invio,
-   Capitano chiede conferma all'utente via Telegram (1 messaggio per draft).
-   Modalità "autopilot" attivabile via flag `~/.jht/profile/auto-apply.flag`.
+Bug che erano stati documentati come "bloccati da #9" vanno ripensati:
 
-**Priorità**: **alta** (è il vero collo di bottiglia di sistema: tutto il
-team produce CV che poi non parte).
+- **#20** (`/reports` mock): NON serve attendere submit-application. Il
+  report deve mostrare il funnel reale: CV generati / scaricati /
+  cliccato link offerta / utente ha marcato "inviata". Necessità di
+  tracking lato utente (mark-as-sent button + Gmail integration
+  futura).
+- **#21** (draft→ready promotion): resta **valido e prioritario** —
+  serve comunque per mostrare correttamente CV PRONTI all'utente, anche
+  in modalità user-curated apply.
+- **#10** (Mentor → Capitano channel): resta valido — utile per
+  insight strategici inter-agente anche senza auto-apply.
 
-**Effort**: grande (richiede skill nuova + integrazione credenziali +
-gestione errori di rete + sandbox per non spammare HR durante test).
+### 🔧 Eventuali skill **lato dashboard** (non bug, future feature)
+
+Se in futuro si volesse aiutare l'utente nel manual apply senza
+automatizzarlo, possibili UI affordances:
+
+- **Bottone "Apri link offerta"** già visibile su `/ready`
+- **Bottone "Download CV + CL"** in 1 click
+- **Bottone "Marca come inviata"** che cambia status a `sent` (manuale)
+- **Pre-fill template email** (mailto: con subject/body precompilato
+  dal Critic)
+
+Tutto **lato UI**, niente sul backend agente.
+
+### 🗑️ Cancellazione bug
+
+Il bug #9 originale richiedeva: nuova skill backend, credenziali SMTP,
+Playwright ATS, LinkedIn cookies, schema `applications.status` esteso,
+safety gate Telegram, modalità autopilot. **Tutto da cancellare** —
+nessuna di queste implementazioni va fatta.
+
+**Lezione**: il "fix" più potente per un bug è scoprire che non è un
+bug. Riduce backlog di ~2 settimane di lavoro inutile.
 
 ---
 
@@ -342,13 +352,16 @@ muoiono se l'utente non agisce da middleware.
 - **(a)** Aggiungere skill `tmux-send` al Mentor MA limitata a un solo
   destinatario: `CAPITANO`, e solo tipo `[INFO]` (mai `[REQ]` o `[URG]`).
   Capitano può ignorare se in conflitto con direttive utente.
-- **(b)** Non toccare il Mentor, ma **risolvere il bug #9** (Capitano
-  autonomamente legge `applications.ready` e spedisce). Così l'insight
-  Mentor diventa ridondante perché il sistema agisce da solo.
+- **(b)** ~~Non toccare il Mentor, ma risolvere il bug #9~~ —
+  **smentito**: per design l'apply è user-curated, non automatizzato
+  (vedi #9 declassato). L'insight Mentor resta utile, deve arrivare
+  all'utente via Telegram (già funziona).
 - **(c)** Lasciare così, documentare il pattern: *"Mentor produce solo
   testo, l'utente è il transport layer"*.
 
-**Priorità**: bassa-media. Risolvere #9 rende questo bug irrilevante.
+**Priorità**: bassa-media. Resta valido come canale di insight Mentor
+verso Capitano per micro-azioni operative (es: "promuovi 5 posizioni
+40-49 in parking"). Non è urgente.
 
 ---
 
@@ -371,83 +384,145 @@ del prompt Capitano.
 
 ---
 
-## 🐛 12. Hit-rate Scout non migliora nel tempo (loop feedback Critic→Scout mancante)
+## 🐛 12. Hit-rate Scout — comportamento da inserire nelle istruzioni base agenti (REVISIONE 14:30 UTC)
 
-**Sintomi quantitativi** (sessione 16-17 maggio, dati dal Mentor):
-- Scout ha trovato **27 posizioni** totali
-- **13 escluse** subito dall'Analista (48% di scarto upstream)
-- 9 candidature generate dal Writer, **6 bocciate dal Critic** (66% bocciature)
-- **Hit-rate complessivo: ~18%** (solo 2 PASS netti su 27 = Bending Spoons + Rinse)
+### 📊 Nuova misura empirica (snapshot DB 14:30 UTC, +13h dal Mentor)
 
-Le bocciature Critic seguono pattern stabilissimo (vedi Mentor msg #4):
-- **Laurea** richiesta (4/6 bocciature: Company 033, JUMO, Revenue Analytics, RedCarbon)
-- **Stack esotico** non in profilo (Dacomat: React+TS+FastAPI+Docker+Azure;
-  SerpApi: Ruby+Mongo+JS)
-- **AWS/Docker/CI-CD** mancanti (4/6 bocciature)
+| Metrica | Mentor 00:12 UTC | Adesso 14:30 UTC | Delta |
+|---|---|---|---|
+| `positions` totali | 27 | **90** | +233% |
+| `applications` create | 9 | **31** | +244% |
+| Critic PASS | 2 | **13** | **+550% ⬆️** |
+| Aziende PASS distinte | 2 (Bending, Rinse) | **11** | +450% |
+| `hit_rate(PASS/positions)` | 7% | **14%** | **×2 ⬆️** |
+| `hit_rate(PASS/applications)` | 22% | **42%** | **×2 ⬆️** |
 
-Eppure lo Scout, alla finestra successiva, **continuerà a portare lo stesso
-tipo di posizioni** perché non c'è feedback strutturato Critic → Scout.
-Il Critic giudica → DB → fine. Lo Scout non legge mai *"che tipo di
-posizione viene bocciata"* per restringere le query future.
+**Aziende PASS attuali** (DB live, ordine score Critic):
+1. Sisal — Trainee Data Analytics ⭐ 7.5/10 (NUOVO)
+2. Prima — Junior Software Engineer ⭐ 7.5/10 (NUOVO)
+3. Bending Spoons — Graduate SWE 6.5
+4. LC-Service — Sviluppatore Python-SQL 6.5 (NUOVO)
+5. Gr4vy — Python Backend Junior 6.5
+6. Rinse — Software Engineer 6.0
+7. Company 033 × 3 (Data Engineer, Observability, Commercial) 5.5 (NUOVO)
+8. MLabs, Gr4vy #2, Leadtech, HAOBORN, Initialize — tutti 5.5/5.0 (NUOVI)
 
-**Causa**: `agents/scout/scout.md` definisce le query in modo statico
-(parole chiave + sorgenti). Manca:
-1. Skill `feedback-loop-read` che query `applications WHERE status='rejected'
-   Company BY rejection_reason` per estrarre pattern.
-2. Logica Scout per **adattare le query** (es: se "laurea richiesta" è
-   il 67% delle bocciature, escludi `graduate program` da target o aggiungi
-   filtro `no-degree-required` nelle query).
+### 🤔 Conclusione: il sistema STA migliorando da solo
 
-**MA ⚠️ — costraint dell'utente (questa sessione)**:
-> *"NON LIMITARE TROPPO GLI SCOUT VISTO CHE MAGARI POI NON VANNO A CERCARE
-> DEI POSTI DOVE POTREBBERO TROVARE OFFERTE VALIDE"*
+L'ipotesi originale del bug *"hit-rate non migliora, manca loop
+Critic→Scout"* è **smentita dai numeri**. In 13h il sistema ha:
+- raddoppiato hit-rate posizione (7% → 14%)
+- raddoppiato hit-rate application (22% → 42%)
+- decuplicato aziende PASS distinte (2 → 11)
+- aggiunto sorgenti nuove (Scout-2 autorizzato LinkedIn alle 13:23
+  post-RESET, ha sweep 3 fonti)
 
-Punto giustissimo: è il classico **exploration vs exploitation tradeoff**
-(multi-armed bandit). Se lo Scout filtra solo posizioni che assomigliano
-ai 2 PASS già noti, perde opportunità in:
-- **Sorgenti nuove** non ancora testate (mercati geografici, board ATS,
-  community vertical es. Hacker News "Who's Hiring", Otta, Wellfound)
-- **Forme di lavoro adiacenti** che potrebbero passare il Critic
-  (es: posizioni "Data Analyst" se il candidato ha skill SQL+Python)
-- **Outlier statistici**: aziende che non richiedono laurea anche se
-  il loro settore di solito sì
+Senza alcun loop esplicito di feedback Critic→Scout. Probabili cause:
+1. **Pool size effect**: + posizioni = + chance statistica di PASS
+2. **Auto-correzione utente**: utente ha spinto Capitano *"devi
+   riempire la coda"* (10:28) → Capitano ha autorizzato fonti nuove
+3. **Regression to mean**: le aziende che producono PASS sono quelle
+   "standard" (Python junior senza laurea/stack esotico) — emergono
+   naturalmente all'aumentare del pool
 
-**Fix proposto — strategia ε-greedy / UCB1**:
+### 📋 Pattern rejection attuale (16 REJECT analizzati dal DB)
 
-Lo Scout opera con due budget temporali separati per ogni tick:
-| Modalità | Budget | Comportamento |
+| Categoria esclusione | Conteggio | % |
 |---|---|---|
-| **Exploit** (70-80%) | usa pattern PASS noti | Cerca posizioni con stessa
-forma dei 2 PASS storici (junior/graduate Python, full remote, no degree). |
-| **Explore** (20-30%) | budget esplorativo | Cerca in domini/sorgenti
-non ancora testati o con campioni < 5 posizioni. Anche se score atteso basso. |
+| `[STACK]` mismatch (Go, K8s, Company 106, Docker, AWS, Rust, FastAPI) | 9 | 56% |
+| `[LAUREA]` (Master STEM, degree obbligatorio) | 2 | 13% |
+| `[SENIORITY]` (Graduate programs, anni esp.) | 2 | 13% |
+| `[LINK]` morto | 1 | 6% |
+| TEST insert (debug Scout-2) | 1 | 6% |
+| Generico (`ESPERIENZA_RICHIESTA: non specificato`) | 1 | 6% |
 
-Aggiornare la skill `pipeline-triage` del Capitano per leggere queste 2
-metriche e bilanciare:
-- Se `exploit_hit_rate > 40%` (target medio-alto), riduci budget explore
-  a 20%.
-- Se `exploit_hit_rate < 20%` (sotto soglia), AUMENTA explore a 30-40%
-  (sta esplodendo: serve diversificare).
-- Mai sotto 15% explore (altrimenti collassa su 1 cluster e perde diversità).
+**Insight**: STACK domina al 56%. L'Analista upstream **sta già usando**
+questo segnale per filtrare, perché le esclusioni sono coerenti con i
+verdetti Critic. C'è già un loop implicito, anche se non strutturato.
 
-Inoltre **target dinamico**: la metrica chiave è
-`hit_rate(N) = PASS_critic_30d / posizioni_trovate_30d`. Deve **salire
-nel tempo** (apprendimento del sistema). Se non sale dopo 3 finestre
-consecutive, scattare alert al Mentor ("lo Scout non sta imparando").
+### ✏️ Riformulazione del bug — istruzioni base, non skill ad-hoc
 
-**Priorità**: **alta** (è il secondo gap di prodotto dopo #9: il
-flusso può anche essere fixato a valle ma se a monte arriva spazzatura,
-i token vengono bruciati).
+**Decisione utente** (verbatim, questa sessione):
+> *"comunque l'abbiamo comunicato a noi, quindi dovrebbe essere nelle
+> loro istruzioni di base questo comportamento, senza che noi lo
+> diciamo"*
 
-**Effort**: medio. Richiede:
-- Migrazione DB: aggiungere `applications.rejection_reason` (enum: degree,
-  stack_mismatch, cloud_devops, seniority, location, other) — il Critic
-  già produce questo dato in `critic_notes` text ma in forma libera.
-- Skill nuova `scout-strategy` che decide explore vs exploit.
-- Loop nel Capitano (`pipeline-triage` esteso) che adatta i parametri.
+Il bug si trasforma da **"manca skill scout-strategy ε-greedy"** a
+**"il comportamento exploration↔exploitation deve essere nelle
+istruzioni di base degli agenti, non una skill esterna"**.
 
-**Riferimenti**: vedi Mentor msg #5 — il Mentor stesso suggerisce
-"filtra meglio" come leva veloce. Questo bug formalizza il suggerimento.
+### 🔧 Fix proposto (rivisto)
+
+#### A. Aggiungere a `agents/scout/scout.md` (regola base Scout)
+
+```
+## Exploration vs Exploitation (regola SC-05)
+
+Per ogni sweep:
+- 70-80% tempo: cerca pattern PASS noti (query la tabella `applications
+  WHERE critic_verdict='PASS'` per stack/seniority/remote tipici e
+  riproduci forma)
+- 20-30% tempo: cerca in sorgenti/aziende non ancora viste o con
+  campione < 5 posizioni nel DB
+- Mai sotto 15% explore (evita collasso su 1 cluster)
+
+Il bilanciamento NON va chiesto al Capitano: esegui questa regola
+in autonomia ad ogni sweep.
+```
+
+#### B. Aggiungere a `agents/_team/team-rules.md` (regola team-wide)
+
+```
+## T14 — Auto-tuning su feedback Critic
+
+Gli agenti che leggono dal DB (Scout, Analista, Scorer) devono SEMPRE
+considerare le ultime 30 entry `applications.critic_verdict` e adattare
+il proprio output:
+- Se "STACK mismatch" è > 50% delle FAIL → stringere stack target
+- Se "LAUREA obbligatoria" è > 30% delle FAIL → escludere graduate
+  programs/AI shops che richiedono laurea
+- Se "SENIORITY" è > 30% → restringere a "junior" / "graduate"
+
+Aggiorna il filtro ad ogni sweep, non solo quando un umano te lo dice.
+```
+
+#### C. Naming canonico delle `rejection_reason` (raccomandato)
+
+Standardizzare `critic_notes` con tag riconoscibili a inizio stringa:
+- `[STACK]`, `[LAUREA]`, `[SENIORITY]`, `[LINK]`, `[GEO]`, `[OTHER]`
+- Già parzialmente in uso (vedi DB: il Critic usa `[STACK]`, `[LAUREA]`,
+  ecc.) — formalizzare in `critic-loop/SKILL.md` come obbligatorio.
+
+Questo permette query semplice `WHERE critic_notes LIKE '[STACK]%'`
+senza NLP, e abilita il pattern detection nelle regole SC-05 e T14.
+
+### 🎯 Priorità rivista: **media** (non più alta)
+
+Il sistema già migliora — i numeri lo dimostrano. Aggiungere SC-05 +
+T14 ai prompt base accelera l'apprendimento e lo rende auto-correttivo
+**senza intervento utente**. Ma non è un bug bloccante: è un
+ottimizzazione.
+
+### ⏱️ Effort: **piccolo** (rivisto da medio)
+
+Non serve skill nuova né migrazione DB. Solo:
+- ~30 righe di regola in `scout/scout.md` (SC-05)
+- ~30 righe in `_team/team-rules.md` (T14)
+- ~10 righe di guideline in `critic-loop/SKILL.md` (tag canonici)
+- Snapshot test dopo 1-2 finestre Kimi per validare miglioramento.
+
+### 📈 Validazione post-fix
+
+Re-eseguire la query DB di questa sessione tra 7 giorni:
+```sql
+SELECT COUNT(*) FROM applications WHERE critic_verdict='PASS';
+SELECT COUNT(DISTINCT p.company) FROM applications a
+  JOIN positions p ON p.id=a.position_id
+  WHERE a.critic_verdict='PASS';
+```
+Atteso: trend di crescita continua (es. 13 → 25 in 7gg, da 11 a 20
+aziende distinte). Senza fix, il trend dovrebbe stabilizzarsi
+naturalmente per saturazione.
 
 ---
 
@@ -513,10 +588,10 @@ Dopo il template bug #13 sopra, il Capitano ha rimandato la risposta vera.
 
 **Validazioni empiriche di questo file**:
 
-1. **Conferma del bug #9** (skill `submit-application` mancante) —
-   citazione letterale: *"Sbloccare apply sui 2 draft ready — **dipende
-   da te**"*. Il Capitano stesso dichiara di non avere lo strumento per
-   spedire e rimanda l'azione all'utente.
+1. **~~Conferma del bug #9~~** (smentito post-revisione utente):
+   citazione letterale del Capitano: *"Sbloccare apply sui 2 draft ready
+   — dipende da te"*. **In realtà comportamento corretto by design**:
+   l'apply manuale dall'utente è intenzionale. Vedi #9 declassato a falso bug.
 
 2. **Conferma del bug #12** (loop Critic→Scout assente) — il Capitano
    dice *"SC-04 regola inviolabile — Scout ha SOLO 4 skip"*. Cioè
@@ -574,18 +649,20 @@ PASS noti si aggiorna:
 
 | # | Azienda | Score | Status |
 |---|---|---|---|
-| 1 | Bending Spoons | 70/100 | Ready (non inviato — bug #9) |
-| 2 | Rinse | 62/100 | Ready (non inviato — bug #9) |
-| 3 | **Gr4vy** | 62/100 + Critic 5.5/10 | **Ready** appena prodotto, non inviato |
+| 1 | Bending Spoons | 70/100 | Ready (utente non ha ancora applicato) |
+| 2 | Rinse | 62/100 | Ready (utente non ha ancora applicato) |
+| 3 | **Gr4vy** | 62/100 + Critic 5.5/10 | **Ready** appena prodotto, in attesa di apply utente |
 
 Il pattern dei PASS è coerente con l'analisi Mentor (msg #3): tutti e 3
 sono **junior/graduate Python full remote senza laurea obbligatoria**.
 Bending Spoons, Rinse, Gr4vy — stack puro Python backend, no React/Ruby/
 AWS forzati. Il Critic premia in modo consistente.
 
-**Implicazione per bug #9**: ora ci sono **3 draft pronti che nessuno
-spedisce**. Il problema cresce di urgenza ad ogni finestra. Ogni nuovo
-PASS Critic = 1 lavoro buttato senza skill `submit-application`.
+**Aggiornamento post-revisione utente**: ~~Implicazione per bug #9~~ —
+non è un problema. L'apply è intenzionalmente user-curated (vedi #9
+declassato). Il vero gap qui è #21 (status non promosso da `draft` a
+`ready`) + #20 (`/reports` mock) per mostrare correttamente i CV
+all'utente sulla dashboard.
 
 **Implicazione per bug #12**: il pattern PASS è così stabile (3/3 = stessa
 forma) che il loop Critic→Scout sarebbe banale da iniziare. Anche solo
@@ -989,10 +1066,9 @@ helper `auto-triage-check.py` che esegue le 4 query in 1 colpo.
   che ogni azione non-richiesta è una violazione di regola.
 - **#16** (auto-report proattivo): manca proattività di reporting.
   #17 = manca proattività di azione operativa.
-- **#9** (submit-application mancante): le 4 apply pronte (Bending, Rinse,
-  Gr4vy, Company 033) sono lì da ore e nessuno le spedisce — bug #17
-  evidenzia anche questo (Capitano elenca "4 apply pronti" senza prendere
-  azione).
+- ~~**#9** (submit-application)~~ — smentito post-revisione. L'apply
+  manuale è by design. Le 4 ready (Bending, Rinse, Gr4vy, Company 033)
+  aspettano correttamente l'utente che scelga manualmente quale spedire.
 
 ---
 
@@ -1179,7 +1255,7 @@ Capitano:
 4. **NON tenta**: grep nelle skill, lettura sorgenti bridge, query UI Kimi diretta, calcolo retroattivo da quando `weekly_usage` è saltato a 0
 
 Pattern già visto: bug **#17** (Capitano passivo davanti a code vuote),
-bug **#3** (paralisi C-01), bug **#9** (apply non spedisce). Famiglia
+bug **#3** (paralisi C-01), bug **#21** (status non promosso). Famiglia
 comune: *Capitano riconosce limite, segnala all'utente, non scava da
 solo*.
 
@@ -1330,8 +1406,9 @@ Zero `createClient()`, zero `.from("applications")`, zero
 
 **Stato reale** (dal team JHT su VPS):
 - 12 CV `applications.status = 'ready'`
-- **0** `applications.status = 'sent'` (bug #9: nessuno spedisce)
-- **0** risposte HR (perché 0 inviati)
+- **0** `applications.status = 'sent'` (utente non ha ancora applicato
+  manualmente — by design, vedi #9 declassato)
+- **0** risposte HR (perché 0 inviati dall'utente)
 - **0** colloqui
 - **0** offerte
 
@@ -1344,10 +1421,11 @@ pronti"*. Invece mostra metriche fittizie credibili.
 1. **Falsifica UX prodotto**: un utente che apre `/reports` crede di
    avere un track record reale (33% response rate è in linea con
    benchmark industry). Inganno involontario ma totale.
-2. **Maschera il bug #9** (`submit-application` mancante): se l'utente
-   credesse al report, non avrebbe motivo di chiedersi *"perché non
-   sono stato chiamato?"*. Il bug #9 si auto-nasconde dietro le fake
-   metriche.
+2. **Nasconde il problema di trazione reale**: se l'utente credesse al
+   report, non vedrebbe che ha 12 CV pronti aspettando il suo apply
+   manuale. Anche con design user-curated apply (vedi #9), un report
+   onesto deve mostrare il funnel: trovate → ready → cliccato link →
+   marcato come inviato.
 3. **Discredita il sistema quando scoperto**: come è successo qui —
    l'utente nota i nomi aziende inventati e perde fiducia.
 4. **Blocca decisioni reali**: il Mentor potrebbe analizzare i pattern
@@ -1413,9 +1491,11 @@ export async function GET(req: NextRequest) {
 ```
 
 **Dipendenze**:
-- **Bug #9** (`submit-application` mancante): senza apply che spedisce,
-  `applications.status='sent'` è sempre 0. Bug #20 può essere fixato
-  ma il report mostrerà solo `0`.
+- ~~**Bug #9**~~ (smentito): apply è user-curated by design.
+  `applications.status='sent'` sarà popolato da bottone "Marca come
+  inviata" sulla dashboard (UI da aggiungere). Il report #20 deve
+  mostrare anche stati intermedi: `ready` → `cliccato_link` →
+  `marcato_inviato` (manuale utente).
 - **Bug #14** (state-event log): `phaseTimes` (Screening → Primo
   colloquio → Tecnico → Offerta) richiede transitions log. Senza, la
   metrica resta non calcolabile e va nascosta dall'UI.
@@ -1435,7 +1515,8 @@ sbagliate (es. non chiedersi perché non viene chiamato).
   bug #14 per phase times.
 
 **Validazione**: dopo fix, la pagina `/reports` deve mostrare:
-- 0 candidature inviate (finché bug #9 aperto)
+- 0 candidature inviate (finché utente non marca manualmente "inviata"
+  via dashboard, secondo design user-curated apply)
 - 0% tasso risposta
 - 0 colloqui, 0 offerte
 - Lista vuota top aziende
@@ -1448,8 +1529,9 @@ apparire nella codebase.
 file `web/app/api/reports/route.ts` (89 righe, 100% mock).
 
 **Bug collegati**:
-- **#9** (submit-application): vero collo di bottiglia upstream — finché
-  non è chiuso, anche un /reports onesto mostra solo 0.
+- ~~**#9** (submit-application)~~: smentito, l'apply è user-curated.
+  Il /reports onesto deve mostrare il funnel reale incluso lo step
+  "in attesa di apply utente" che oggi non è visualizzato.
 - **#14** (state-event log): necessario per phase times reali.
 - **Famiglia "fake data in prod"**: probabilmente altre pagine
   (`/responses`, `/growth`, `/applications`) potrebbero avere lo
@@ -1502,10 +1584,10 @@ nel suo report, ma quel concetto non viene tradotto in DB update.
    sempre 0 perché `applications.status='ready'` è 0.
 2. **Pagina `/applications`** probabilmente mostra 31 draft tutti
    "incompleti" — l'utente non vede mai uno stato "pronto".
-3. **Bug #9 (`submit-application` skill mancante)** auto-bloccato:
-   anche se aggiungiamo la skill, dovrebbe pescare solo
-   `WHERE status='ready'` → 0 record → niente da spedire mai. Il bug
-   #9 non si può manifestare finché #21 non è chiuso.
+3. **Dashboard `/ready` per utente** bloccata: l'utente non vede mai
+   i 12 CV PRONTI per fare apply manuale (vedi design user-curated
+   #9). Anche solo per scegliere quale spedire, deve vedere lo status
+   corretto.
 4. **Trust del Capitano**: il Capitano dice *"ready"* nei suoi report
    ma il DB lo smentisce. Manuale del Capitano e schema DB non sono
    allineati semanticamente.
@@ -1552,15 +1634,16 @@ direttamente dallo Scrittore"* — gate single-writer.
 **Dipendenze**:
 - Bug **#14** (state-event log): se attivo, la transition
   `draft → ready` viene loggata automaticamente con `by_agent='critico-s1'`.
-- Bug **#9** (submit-application): si sblocca DOPO il fix di #21 — la
-  skill `submit-application` deve filtrare `WHERE status='ready'` e
-  promuovere a `'sent'` dopo invio.
+- ~~Bug **#9** (submit-application)~~: smentito post-revisione (apply
+  manuale by design). Dopo fix #21, dashboard mostra correttamente CV
+  ready all'utente che può fare apply scegliendo manualmente.
 - Bug **#20** (`/reports` mock): si sblocca dopo #21 perché la pagina
   potrà finalmente mostrare numeri reali invece di mock.
 
 **Priorità**: **alta**. È il **gate stato-tabella** che disallinea
-Capitano/Critic concettuali dal DB. Sblocca contemporaneamente #9, #20,
-e parzialmente #14.
+Capitano/Critic concettuali dal DB. Sblocca contemporaneamente la
+dashboard `/ready` (utente vede CV pronti per apply manuale), #20
+(report onesto), e parzialmente #14.
 
 **Effort**: piccolo. ~10-20 righe in `critic-loop/SKILL.md` + 1 regola
 in `db-update/SKILL.md` + retrofit eventuale: una query SQL
@@ -1600,24 +1683,24 @@ DB locale `/jht_home/jobs.db` ispezionato via SSH.
 |---|---|---|---|
 | 1 | Voice/Photo Whisper/OCR/Vision | **alta** | medio |
 | 2 | Sentinella throttle progressivo | **alta** | medio |
-| 9 | **Skill `submit-application` mancante** — nessuno spedisce | **alta** | grande |
-| 12 | **Scout hit-rate non migliora** (loop Critic→Scout) | **alta** | medio |
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
 | 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
 | 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 18 | **Dottore mai spawnato** (watchdog non lo include) | **alta** | piccolo-medio |
-| 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
 | 21 | 🚨 **`applications.status` mai promosso draft→ready** dopo Critic PASS | **alta** | piccolo |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
+| 12 | **Scout hit-rate** (SC-05/T14 nei prompt base, no skill) | media | piccolo |
 | 15 | Timezone confusion (agenti in UTC, utente in CEST) | media | piccolo |
+| 19 | **Capitano non sa weekly reset Kimi** (dato + C-06 indaga) | media-alta | piccolo |
 | 5 | Bridge cold start latency | bassa | piccolo |
 | 6 | Capitano stay-on-topic | bassa | piccolo (prompt) |
-| 10 | Mentor → Capitano channel (irrilevante se #9 fatto) | bassa | piccolo |
+| 10 | Mentor → Capitano channel | bassa | piccolo |
 | 13 | Capitano invia template shell non espanso a Telegram | bassa | piccolo |
 | 8 | ~~Generate PNG/grafico~~ — **falso bug, già funziona** | — | — |
+| 9 | ~~Submit-application skill~~ — **falso bug, design "user-curated apply"** | — | — |
 | 11 | ✨ Mentor stile conversazionale = reference positiva | — | — |
 
 **Pattern emergente A**: 4 dei bug (#2, #3, #4, #5) sono nella catena
@@ -1625,29 +1708,41 @@ DB locale `/jht_home/jobs.db` ispezionato via SSH.
 di questa catena come prossimo blocco di lavoro: regole esplicite di
 threshold, hysteresis, override utente.
 
-**Pattern emergente B — i 2 gap di prodotto critici sono in testa e coda
-della pipeline**:
-- **#12 a monte**: lo Scout porta materiale con hit-rate 18% e non
-  migliora — feedback Critic→Scout assente.
-- **#9 a valle**: il Writer/Critic producono CV PASS ma nessuno li
-  spedisce — skill `submit-application` assente.
+**Pattern emergente B — il vero gap di prodotto è il GATE di stato DB,
+non la chiusura del loop end-to-end**:
 
-Il middle del team (Analista, Scorer, Writer, Critic) funziona benissimo
-in entrambe le finestre Kimi (vedi grafici budget). Lo sforzo migliore di
-prodotto è **chiudere il loop**:
+(Aggiornato 2026-05-17 14:30 UTC dopo revisione utente — bug #9
+declassato a falso bug per decisione di design "user-curated apply",
+bug #12 declassato a media perché i numeri mostrano miglioramento
+spontaneo)
+
+- **#21 il vero collo di bottiglia**: `applications.status` mai
+  promosso da `draft` a `ready` → tutta la dashboard mostra 0 CV pronti
+  anche se il Critic ha dato 13 PASS. Fix piccolo (5-10 righe).
+- **#12 come auto-tuning di base**: lo Scout sta già migliorando da solo
+  (hit-rate 7% → 14% in 13h). Le regole SC-05/T14 nei prompt base
+  formalizzano il comportamento auto-correttivo senza skill esterna.
+- **L'utente fa l'apply manualmente** (design): JHT è
+  CV-tailoring assistant, non auto-applier massivo. Il team si ferma
+  giustamente a `applications.status='ready'`.
+
+Flow corretto end-to-end:
 
 ```
-Scout (#12 explore/exploit ε-greedy)
-  → Analista → Scorer → Writer → Critic
-    → submit-application (#9)
-      → applications.status='sent'
-        → response tracking
-          → feedback al Scout (loop #12 chiude su dati reali HR)
+Scout (SC-05 nei prompt: explore/exploit auto-tuning su feedback Critic)
+  → Analista (T14: filtra in base a rejection patterns recenti)
+  → Scorer → Writer → Critic
+  → Critic PASS chiude con: applications.status='ready' (fix #21)
+  → Dashboard /ready mostra 12 CV PRONTI con bottoni "Apri offerta",
+    "Download CV", "Marca come inviata"
+  → 👤 UTENTE sceglie e fa apply manualmente (NO auto-submit, by design)
+  → user click "marca inviata" → status='sent' + timestamp
+  → /reports mostra funnel reale: trovate → ready → cliccato → inviato
 ```
 
-Risolti #9 + #12 il sistema diventa **auto-correttivo end-to-end**: trova
-posizioni → spedisce CV → impara da risposte/silenzi HR → cerca meglio
-la prossima finestra.
+Risolti #21 + #20 + #12 (prompt) il sistema **mostra correttamente
+il valore prodotto e si auto-migliora**, mantenendo l'utente al centro
+della decisione finale di apply.
 
 **Materiale di lavoro**:
 
