@@ -2461,103 +2461,181 @@ opportunità persa.
 
 ---
 
-## 🐛 27. `salary_fit` calcolato su dati inesistenti — sub-score fake nel total_score
+## 🐛 27. `salary_fit` inerte al 95% — dato mancante a 2 punti + manca stima market-based con cache locale
 
-**Evidenza** (snapshot DB 16:10 UTC):
+**Aggiornamento post-indagine** (interrogazione diretta Scorer-1 via tmux):
+
+L'ipotesi originale "sub-score fake" era **parzialmente sbagliata**.
+Lo Scorer-1 ha risposto in modo onesto e trasparente:
+
+### 📊 Numeri verificati (snapshot DB 16:10 UTC)
 
 ```
 positions totali: 110
-positions con salary_estimated_min: 0   ❌
-positions con salary_estimated_max: 0   ❌
-positions con salary_declared_min:  0   ❌
-positions con salary_declared_max:  0   ❌
-
+positions con salary_estimated/declared: 0/110 ❌
 scores totali: 43
-scores.salary_fit medio: 5.6/20 (28%)   ← calcolato comunque!
+scores.salary_fit medio: 5.6/10 (NON /20!)
+
+PESO REALE salary_fit nel total_score: 10/100 (non 20)
+Componenti scoring corretti:
+  Stack match     35 → stack_match
+  Seniority fit   25 → experience_fit
+  Remote/location 20 → remote_fit
+  Salary fit      10 → salary_fit    ← peso minore di quanto pensato
+  Stack bonus     10 → strategic_fit
 ```
 
-**Lo schema `positions` ha 4 colonne salary, tutte sempre NULL.**
-Nessun Scout o Analista popola questi campi. Eppure il Scorer scrive
-`salary_fit` come componente del `total_score` per **tutte e 43** le
-posizioni scored.
+### 🗣️ Risposta dello Scorer-1 verbatim (16:30 UTC)
 
-Conferma dal Mentor (verbatim, msg #4 23:39):
-> *"Salary fit: 5/20 🟡"* (su Sisal)
+> *"1. **Correzione peso**: salary_fit pesa 10/100 nel total_score,
+> non 20. Remote/location è il 20, forse quello hai confuso."*
+>
+> *"2. **Algoritmo reale**:*
+>   - *Caso A — nessun dato (95% posizioni): default neutrale **5/10**.
+>     Profilo candidato `salary_annual_eur: ""` (vuoto) + posizione
+>     senza range. Non premio né penalizzo, "no data → no bias".*
+>   - *Caso B — range dichiarato nella posizione: confronto con market
+>     junior del ruolo/location. Range basso → 3-4/10, medio → 5/10,
+>     alto → 6-7/10. Esempi reali:*
+>     - *#66 Gr4vy: range entry-level £30k-48k → **6/10***
+>     - *#70 Almanak: range $72k-$148k → **7/10***
+>
+> *"3. **Non faccio assunzioni nascoste**. Non inferisco stipendio
+> dal titolo/stack/seniority. Non uso 'Canonical paga bene quindi 7'
+> né 'startup seed paga poco quindi 3'. Solo dati oggettivi nel range
+> dichiarato/stimato."*
+>
+> *"4. **Problema strutturale**: con `salary_annual_eur=""` nel profilo
+> + zero posizioni con range popolato, salary_fit è **de facto inerte**
+> nella maggior parte dei casi. Diventa discriminante solo quando il
+> candidato dichiarerà un target O lo Scout/Analista popolerà i campi."*
+>
+> *"5. **In sintesi**: no data → no bias → 5/10. Se vuoi che calibri
+> diversamente (default più basso quando N/D, o stimo da
+> Glassdoor/levels.fyi), dammi istruzione esplicita."*
 
-E nel breakdown Sisal il Mentor ha detto:
-> *"Stack match: 20/40 🟡, Remote fit: 19/25 🟢, Esperienza: 8/??,
-> Salary fit: 5/20 🟡, Strategic fit: 2/15 🔴"*
+### ✅ Riconcettualizzazione del bug
 
-Il Mentor sta propagando all'utente un numero `5/20` che è **inventato**:
-nessun dato salary esiste nel DB.
+**NON è hallucination**: il Scorer è onesto e usa un default neutrale
+documentato (5/10 con "no data no bias"). Su 43 score, 41 sono 5
+(default), 2 sono 6-7 (basato su dato vero da JD).
 
-### 🧠 Causa sospetta (da verificare leggendo Scorer)
+**È un bug di completezza dati a 2 punti**:
+1. **Profilo candidato**: `candidate_profile.yml` ha `salary_annual_eur: ""`
+   vuoto. Lo Scorer non sa il target dell'utente.
+2. **Posizioni**: 110/110 con `salary_*=NULL`. Nessuno popola.
 
-**Ipotesi A — Default hardcoded**: Scorer applica `salary_fit = 5` (mediano)
-quando `salary_estimated_* IS NULL`. Tutti gli score avrebbero ~5.
+**Conseguenza**: salary_fit è **inerte al 95%** — un componente di
+peso 10/100 che contribuisce con valore fisso 5/100 per quasi tutte
+le posizioni. Non discrimina nulla. Spazio decisionale ridotto da
+100 a 95.
 
-**Ipotesi B — Hallucination strutturata**: Scorer "stima" da titolo/
-azienda (es. "junior" → range 25-35k → fit medio 5) senza dato vero.
-Estrapolazione senza fondamento, presentata come calcolo.
+### 💥 Impatto reale (rivisto)
 
-### 💥 Impatto
+1. **Variabile salariale persa**: 10% del segnale potenziale (peso 10)
+   non viene usato. Il filtro `score≥50` è meno preciso di quanto
+   potrebbe essere.
+2. **Mentor propaga il "5"**: nei report all'utente dice *"Salary
+   fit: 5/20 🟡"* — col peso reale è 5/10 (50%, neutrale), non 25%
+   come suggerito. Bug di reporting downstream.
+3. **Trust comunque OK**: lo Scorer è trasparente, non inventa.
 
-1. **`total_score` falsato**: il filtro `score≥50 → scrittore` decide
-   su un numero che include fino al **20% di dato inventato**.
-   Posizioni con salary effettivo basso passano a torto, e viceversa.
-2. **Trust erosion**: utente che vede "Salary fit: 5/20" pensa che ci
-   sia un calcolo reale dietro.
-3. **Decisione utente fuorviata**: se filtra per "salary fit ≥ 15",
-   non vedrà MAI risultati (Scorer mai produce valori alti senza dato).
-4. **Mentor propaga il fake**: il Mentor cita il numero come fatto
-   nei report. Bug che si propaga downstream con effetto amplificatore.
+### 🔧 Fix proposto (decisione utente, questa sessione)
 
-### 🔧 Fix proposto — 3 alternative
+> *"Se non c'è stima del salario (90% dell'offerta), lo Scorer in
+> base all'offerta deve fare una stima media di quanto potrebbe essere.
+> Se non conosce la media di mercato per quella posizione in quel
+> continente/paese, può fare una ricerca web veloce. Bisogna stare
+> attenti a non sovrastimare o sottostimare. Non fare ricerche continue
+> per ogni posizione, perché se ci sta uno sviluppatore Python in
+> Italia da un'altra offerta, anche rifare la stessa ricerca sul web
+> sprecherebbe token. Quindi costruire un **database interno** per
+> gli Scorer, che non serve sincronizzare col remoto, ma serve solo
+> a loro. I salari non cambiano di settimana in settimana né di mese
+> in mese, ma di anno in anno."*
 
-**A. Implementare estrazione salary lato Scout** (`agents/scout/scout.md`):
+#### Strategia gerarchica `salary-estimate`
+
+Nuova skill `agents/_skills/salary-estimate/SKILL.md`:
+
 ```
-Quando scrapi un JD, cerca patterns:
-  - "RAL 30-40k" / "stipendio annuo lordo: ..."
-  - "salary range €25,000 - €35,000"
-  - "compensation: $60k-90k"
-Se trovato → INSERT positions.salary_declared_{min,max,currency}.
-Se non trovato → INSERT NULL esplicito (mai 0).
+## salary-estimate — stima salario con cache locale
+
+Quando il Scorer valuta salary_fit:
+
+LIVELLO 1 — Range dichiarato nella posizione
+  Se positions.salary_declared_{min,max} IS NOT NULL:
+    → usa quello, no stima.
+
+LIVELLO 2 — Cache locale (no sync remoto)
+  File: /jht_home/.cache/salary_estimates.json
+  Key: tupla (stack_primary, seniority, country, mode)
+       es. ("python", "junior", "IT", "full-time")
+  Value: {
+    "min": 28000, "max": 38000, "currency": "EUR",
+    "source": "glassdoor|levels.fyi|web_search",
+    "fetched_at": "2026-05-17", "ttl_days": 30
+  }
+  Se cache hit valida → usa quel range, popola positions.salary_estimated_*
+
+LIVELLO 3 — Web search (solo se cache miss)
+  Query: "average salary {stack} {seniority} {country} {mode}"
+  Estrai range mediano dai primi 3-5 risultati Glassdoor/Levels/Indeed.
+  Salva in cache locale + popola positions.salary_estimated_*.
+  Marca source=web_search.
+
+LIVELLO 4 — Default neutrale (fallback estremo)
+  Se anche web search fallisce → salary_fit = 5 + flag
+  "estimation_failed" in notes.
 ```
 
-**B. Skill `salary-estimate` per stime senza dato esplicito**:
-Helper Python che usa stack/seniority/location/azienda per stimare
-range (lookup table Glassdoor-style o modello stats). Popola
-`salary_estimated_*` distinto da `salary_declared_*`.
+**Cache locale**:
+- Path: `/jht_home/.cache/salary_estimates.json`
+- **NO sync Supabase**: solo locale agli Scorer
+- TTL 30 giorni (salari cambiano lentamente, no over-refresh)
+- Refresh on-demand quando entry > 30gg
 
-**C. Eliminare `salary_fit` dal `total_score` finché manca dato**
-(`_skills/score-position/SKILL.md`):
-```
-Se salary_estimated_min IS NULL AND salary_declared_min IS NULL:
-  - salary_fit = NULL esplicito (non 5)
-  - non includere nel total_score
-  - scala altri componenti a max 80 (compensare i 20 punti salary)
-```
+**Esempio cache hit**: nuova posizione "Python junior IT remote" →
+cache già ha entry da ricerca 5 giorni fa → riusa, 0 token web search,
+0 chiamate API esterne.
 
-**Raccomandazione**: **C** subito (fix integrità), poi **A** medio termine.
+#### Compilazione `candidate_profile.salary_annual_eur`
 
-### 🎯 Priorità: **media-alta**
+**Side-fix obbligatorio**: l'utente deve dichiarare il target
+salariale nel profilo. Senza, anche con salary posizione popolato,
+il confronto resta unilaterale. Se utente non vuole dichiarare un
+target rigido, supportare anche `salary_range_eur: {min: X, max: Y}`
+oppure `salary_preference: any`.
 
-Tocca l'**integrità del meccanismo di scoring**. Decisioni downstream
-(Critic + Writer eseguono sulle PASS perché `score≥50`) si basano su
-numeri che hanno 20% di dato inventato.
+#### Eliminazione `5 passivo` dal Mentor reporting
 
-### ⏱️ Effort: **piccolo** (C) / **medio** (A+B)
+Quando Mentor mostra breakdown, se `salary_fit=5 AND notes` contiene
+"no_data_default", **non mostrare** il sub-score. Mostra invece
+*"Salary: N/D"* per evitare propagazione del default come dato.
 
-- C: ~10 righe in `score-position/SKILL.md`
-- A: ~30 righe regex/parsing in `scout.md`
-- B: ~80 righe helper Python
+### 🎯 Priorità: **media**
+
+Bug di **completezza dati** + **opportunità di valore aggiunto**: una
+volta implementato, la dashboard mostra stime salariali per tutte le
+posizioni → utente filtra meglio, vede mercato in trasparenza.
+Possibile **selling point feature** del prodotto.
+
+### ⏱️ Effort: **medio**
+
+- Skill `salary-estimate` con 4 livelli + cache JSON (~150 righe Python)
+- Web search integration (esistente skill o nuovo helper requests+BS4)
+- `candidate_profile.yml` schema esteso + UI desktop per editing
+- Reporting Mentor: hide il "5 passivo" (~5 righe in `mentor-output`)
 
 ### 🔗 Bug collegati
 
-- **#12** (Scout learning): se Scout non legge salary, perde un
-  segnale importante per filtrare upstream
-- **#20** (`/reports` mock): altro caso "dato inventato presentato
-  come fatto"
+- **#12** (Scout learning): Scout potrebbe pre-popolare
+  `salary_declared_*` parsando JD (regex pattern) — sinergico con #27.
+- **#20** (`/reports` mock): la dashboard salary-aware diventa
+  possibile solo dopo #27 fix.
+- **#11** (Mentor reference positivo): Mentor sta facendo bene il suo
+  lavoro nel propagare numeri, ma propaga anche dati neutrali come
+  fatti — fix downstream.
 
 ---
 
@@ -2576,7 +2654,7 @@ numeri che hanno 20% di dato inventato.
 | 24 | **Sentinella troppo invadente in regime normale** (fasi + scala throttle continua) | **alta** | medio |
 | 25 | 🚨 **Deduplicazione mancante** Scout/DB/CV — spreco token + data corruption | **alta** | medio |
 | 26 | 🚨 **Gap disk↔DB sui CV** — 2 PASS top invisibili (Sisal 7.5) + 3 CV sprecati | **alta** | piccolo-medio |
-| 27 | **`salary_fit` calcolato su dati inesistenti** — sub-score fake nel total_score | media-alta | piccolo |
+| 27 | **`salary_fit` inerte 95%** — manca target candidato + skill salary-estimate con cache locale | media | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
