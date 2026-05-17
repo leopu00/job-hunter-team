@@ -25,6 +25,9 @@ const AGENTS = [
   { id: "assistente", name: "Assistente", session: "ASSISTENTE" },
 ];
 
+const REMOTE_ACTIVITY_ACTIVE_MS = 30 * 60 * 1000;
+type SupabaseLike = Awaited<ReturnType<typeof createClient>>;
+
 /** Set delle sessioni tmux attive (una sola chiamata shell per GET). */
 async function activeSessions(): Promise<Set<string>> {
   try {
@@ -42,12 +45,61 @@ async function activeSessions(): Promise<Set<string>> {
   }
 }
 
+async function latestTimestamp(
+  supabase: SupabaseLike,
+  table: string,
+  column: string,
+): Promise<number | null> {
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select(column)
+      .not(column, "is", null)
+      .order(column, { ascending: false })
+      .limit(1);
+    if (error) return null;
+    const row = Array.isArray(data)
+      ? (data[0] as Record<string, unknown>)
+      : null;
+    const ts = typeof row?.[column] === "string" ? row[column] : null;
+    if (!ts) return null;
+    const ms = Date.parse(ts);
+    return Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
+async function inferCompanyActivity(supabase: SupabaseLike) {
+  const [scout, analista, scorer, scrittore, critico] = await Promise.all([
+    latestTimestamp(supabase, "positions", "found_at"),
+    latestTimestamp(supabase, "positions", "last_checked"),
+    latestTimestamp(supabase, "scores", "scored_at"),
+    latestTimestamp(supabase, "applications", "written_at"),
+    latestTimestamp(supabase, "applications", "critic_reviewed_at"),
+  ]);
+  const activity: Record<string, number | null> = {
+    scout,
+    analista,
+    scorer,
+    scrittore,
+    critico,
+  };
+
+  const pipelineActivity = Object.values(activity).filter(
+    (v): v is number => typeof v === "number",
+  );
+  activity.capitano =
+    pipelineActivity.length > 0 ? Math.max(...pipelineActivity) : null;
+  return activity;
+}
+
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
-  // Su cloud (Vercel) tmux non esiste: deduco lo stato di ogni agente
-  // dallo storico team_commands (ultimo done con target=<id> o 'all'
-  // decide running/stopped).
+  // Su cloud (Vercel) tmux non esiste: deduco lo stato dagli ultimi
+  // team_commands e, quando il team e' stato avviato direttamente sulla VPS,
+  // dall'attivita' recente sincronizzata nel DB Supabase.
   if (!(await isLocalRequest())) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -57,28 +109,56 @@ export async function GET() {
         remote: true,
       });
     }
-    const { data: cmds } = await supabase
-      .from("team_commands")
-      .select("action, payload, processed_at")
-      .eq("user_id", user.id)
-      .eq("status", "done")
-      .order("processed_at", { ascending: false })
-      .limit(50);
-    const lastFor: Record<string, "start" | "stop"> = {};
+    const [{ data: cmds }, activity] = await Promise.all([
+      supabase
+        .from("team_commands")
+        .select("action, payload, processed_at")
+        .eq("user_id", user.id)
+        .eq("status", "done")
+        .order("processed_at", { ascending: false })
+        .limit(50),
+      inferCompanyActivity(supabase),
+    ]);
+    const lastFor: Record<
+      string,
+      { action: "start" | "stop"; processedAt: number }
+    > = {};
     for (const c of cmds || []) {
-      const target = String((c.payload as { target?: string })?.target ?? "all").toLowerCase();
-      const act = c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
+      const target = String(
+        (c.payload as { target?: string })?.target ?? "all",
+      ).toLowerCase();
+      const act =
+        c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
       if (!act) continue;
+      const processedAt = c.processed_at ? Date.parse(c.processed_at) : 0;
       if (target === "all") {
-        for (const a of AGENTS) if (!lastFor[a.id]) lastFor[a.id] = act;
+        for (const a of AGENTS) {
+          if (!lastFor[a.id]) lastFor[a.id] = { action: act, processedAt };
+        }
       } else if (!lastFor[target]) {
-        lastFor[target] = act;
+        lastFor[target] = { action: act, processedAt };
       }
     }
     const agents = AGENTS.map((a) => ({
       ...a,
-      status: lastFor[a.id] === "start" ? "running" : "stopped",
-      instances: lastFor[a.id] === "start" ? 1 : 0,
+      ...(() => {
+        const cmd = lastFor[a.id];
+        const activityAt = activity[a.id];
+        const hasFreshActivity =
+          typeof activityAt === "number" &&
+          Date.now() - activityAt <= REMOTE_ACTIVITY_ACTIVE_MS;
+        const activityAfterCommand =
+          hasFreshActivity && (!cmd || activityAt > cmd.processedAt);
+        const running =
+          cmd?.action === "start" || activityAfterCommand ? true : false;
+        return {
+          status: running ? "running" : "stopped",
+          instances: running ? 1 : 0,
+          last_activity_at: activityAt
+            ? new Date(activityAt).toISOString()
+            : null,
+        };
+      })(),
     }));
     return NextResponse.json({ agents, remote: true });
   }
