@@ -2153,43 +2153,96 @@ per app#30. **Data corruption silente.**
 
 ### 🔧 Fix proposto — 3 modifiche
 
-#### A. Scout: regola SC-06 estrazione `external_id` canonico
+#### A. Scout: regola SC-06 — dedup gerarchica one-shot pre-insert
 
-In `agents/scout/scout.md`:
+**Strategia gerarchica** (decisione utente, questa sessione):
+
+> *"Magari dovremmo dargli un ID in base all'azienda, perché si può
+> filtrare meglio. Però ci stanno grandi aziende che offrono la stessa
+> posizione in città diverse, quindi anche qui non stiamo filtrando.
+> Il link non esclude il duplicato, perché magari una è un'offerta da
+> un provider e l'altra da un altro provider, però è sempre la stessa
+> offerta."*
+>
+> *"Controllare prima il link, poi controllare se l'azienda è già
+> stata trovata lì. Si capisce un sacco di cose: in realtà un'azienda
+> non è che ha più annunci dello stesso tipo della stessa offerta di
+> lavoro, quindi già la si capisce tantissimo. Poi si va a controllare
+> il nome dell'offerta: se il ruolo è lo stesso, già lì si dovrebbe
+> escludere."*
+
+In `agents/scout/scout.md` (regola SC-06):
+
 ```
-## SC-06 — Deduplicazione pre-insert
+## SC-06 — Deduplicazione gerarchica pre-insert (one-shot)
 
-Per ogni job trovato:
-1. Estrai external_id canonico dal URL:
-   - canonical.com/careers/(\d+)       → "canonical:$1"
-   - greenhouse.io/<co>/jobs/(\d+)     → "<co>:$1"
-   - lever.co/<co>/(\w+)               → "<co>-lever:$1"
-   - per board che fanno reskinning (euremotejobs, etc):
-     fetch + scraping per estrarre real source URL
-     oppure flag is_reskin=true
-2. Prima dell'INSERT:
-   SELECT 1 FROM positions WHERE external_id=?
-   Se esiste → skip + log "duplicate skipped:<external_id>"
-3. INSERT solo se external_id non esiste.
+Per ogni job trovato, PRIMA di INSERT, esegui 3 query in cascata.
+Se UNA matcha → SKIP (log "duplicate:<level>:<existing_id>").
+Se NESSUNA matcha → INSERT.
+
+LIVELLO 1 — Match URL esatto (più rigoroso)
+  SELECT id FROM positions WHERE url = ?
+  → Se match: dup certo (stesso link). Skip.
+
+LIVELLO 2 — Match azienda + titolo (semantico)
+  SELECT id FROM positions
+   WHERE LOWER(company) = LOWER(?)
+     AND LOWER(title)   = LOWER(?)
+  → Se match: probabile dup (stesso ruolo dalla stessa azienda).
+    Assunto: un'azienda non duplica internamente lo stesso annuncio.
+    Skip — anche se URL diverso (è solo riskinning su altro provider).
+
+LIVELLO 3 — Match azienda + ruolo simile + stessa location
+  (graduale, per filtrare riskinning con titoli leggermente diversi)
+  SELECT id FROM positions
+   WHERE LOWER(company) = LOWER(?)
+     AND title_similarity(title, ?) > 0.85
+     AND COALESCE(location,'') = COALESCE(?,'')
+  → Se match: probabile dup. Skip.
+
+Note importanti:
+- Stessa azienda + stesso titolo MA city diversa (es. "Canonical
+  Junior Python" Milano vs Berlino) → NON skip. Sono offerte distinte.
+  Per questo il LIVELLO 2 cattura solo il caso city uguale (o entrambe
+  null). Se city differiscono → procedi all'INSERT.
+- title_similarity() può essere semplice ratio Levenshtein o token
+  Jaccard. Soglia 0.85 = stessa offerta con piccole variazioni
+  ("Junior Software Engineer" vs "Software Engineer, Junior").
+- Logging obbligatorio: ogni skip = una riga in
+  /jht_home/logs/scout-dedup.log con i 4 campi
+  {now, scout_id, level, existing_position_id, skipped_url}.
+- Persiste external_id solo come campo opzionale (per debugging/audit),
+  non come chiave UNIQUE — la combo URL/company+title è più affidabile.
 ```
 
-#### B. DB: UNIQUE constraint + dedup retroattivo
+#### B. DB: indici di supporto + dedup retroattivo
 
 ```sql
-ALTER TABLE positions ADD COLUMN external_id TEXT;
-CREATE UNIQUE INDEX idx_positions_external_id
-  ON positions(external_id) WHERE external_id IS NOT NULL;
+-- Indici per accelerare le 3 query SC-06 (no UNIQUE — solo lookup veloce)
+CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
+CREATE INDEX IF NOT EXISTS idx_positions_company_title
+  ON positions(LOWER(company), LOWER(title));
 
--- One-shot retroattivo
+-- Cleanup retroattivo: marca i duplicati esistenti come excluded
+-- (non DELETE per preservare history e poter riprenderli se serve)
 WITH dups AS (
-  SELECT MIN(id) AS keep_id, company, title
-  FROM positions GROUP BY company, title HAVING COUNT(*) > 1
+  SELECT MIN(id) AS keep_id, LOWER(company) AS co, LOWER(title) AS ti
+  FROM positions
+  GROUP BY LOWER(company), LOWER(title), COALESCE(location,'')
+  HAVING COUNT(*) > 1
 )
-UPDATE positions SET status='excluded',
-   notes=COALESCE(notes,'')||' [DEDUP] superseded by id='||(SELECT keep_id FROM dups d WHERE d.company=positions.company AND d.title=positions.title)
+UPDATE positions SET
+  status='excluded',
+  notes=COALESCE(notes,'')||' [DEDUP] superseded by id='||(
+    SELECT keep_id FROM dups d
+    WHERE d.co=LOWER(positions.company) AND d.ti=LOWER(positions.title)
+  )
 WHERE id NOT IN (SELECT keep_id FROM dups)
-  AND (company, title) IN (SELECT company, title FROM dups);
+  AND (LOWER(company), LOWER(title)) IN (SELECT co, ti FROM dups);
 ```
+
+Niente UNIQUE constraint — i 3 livelli applicativi in SC-06 sono più
+flessibili (es. permettono stesso ruolo in city diverse).
 
 #### C. Scrittore: naming file con position_id
 
