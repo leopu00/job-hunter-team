@@ -55,6 +55,26 @@ Storia della finestra:
   [bug #3 Capitano gerarchia](../../internal/2026-05-17-team-strategy-bugs.md))
 - 00:13 ritmo normalizzato, proj 95 % esatto
 
+### `budget_chart_late.png` — Stessa finestra, snapshot tardivo (01:14 UTC)
+
+![Budget kimi finestra corrente, snapshot tardivo](./budget_chart_late.png)
+
+Stesso grafico richiesto dall'utente 1h dopo (01:19 UTC: *"ok rifammi
+grafico usage temporale"*) per verificare l'andamento prima della chiusura.
+
+- Subtitle: `Now 01:14 — usage 63 % — proj 92.2 % — target 92.0 %`
+- Annotation: `v_media = 14.9 %/h → 92.0 % @ 03:11`
+- Trend confermato: la finestra chiuderà in target. v_media scesa da
+  17.6 a 14.9 %/h (più lenta della prima metà) ma proiezione dentro G-spot.
+
+⚠️ **Bug visibile**: tutti i timestamp del grafico sono in **UTC** ma
+l'utente è in **CEST** (UTC+2). Non è specificato esplicitamente — ha
+generato confusione (01:22 UTC: utente *"l'ora qui è 3.21 e te dici che
+reset è alle 3.11 . ."* → Capitano *"Reset e' alle 03:11 UTC. Ora server:
+01:22 UTC. Se li' sono le 3:21, siamo UTC+2 (CEST). Reset fra ~1h50m (alle
+5:11 tue)."*). Vedi bug #15 in
+[`team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md).
+
 ### `usage_chart.png` e `usage_chart_v2.png` — iterazioni intermedie
 
 I 2 abbozzi del Capitano (23:29 e 00:11) prima della versione finale. Solo
@@ -85,6 +105,48 @@ Poi invio via `jht-telegram-send --from capitano --photo /tmp/budget_chart.png`
 pattern funziona già out-of-the-box per qualsiasi agente che voglia
 mandare visualization all'utente. Si potrebbe documentare come reference
 per Mentor (digest settimanale visivo) e Scout (report ricerca posizioni).
+
+## 🏁 Confronto con run precedenti — salto, non miglioramento marginale
+
+Cambiando lente dal post-mortem fix-centric al verdetto operativo:
+
+| Aspetto | Run precedenti (impressione) | Questo run (misurato) |
+|---|---|---|
+| Chiusura finestra | spesso fuori G-spot (30-40 % o >100 %) | **2/2 in G-spot 90-95 %** |
+| Freeze Sentinella | quando scattava, finestra persa | scattato e **recuperato** in 30-60 min |
+| v_media | erratica, spike + idle | **costante 16-17 %/h** su entrambe |
+| Pipeline self-sustaining | richiedeva babysitting | **5 CV senza toccare il motore** |
+
+Non è un miglioramento marginale: è il primo run dove il team **sa correre da
+solo** dentro la finestra di budget, mantiene una velocity stabile, e quando la
+Sentinella sbaglia il freno, recupera invece di arrendersi.
+
+### ⚠️ Caveat: il coach umano
+
+Il recupero della finestra 2 è avvenuto grazie alla **pressione utente** via
+Telegram (8 messaggi tra 23:28 e 00:03 al Capitano sulla v_media e sul target
+92.5 %). Senza umano vigilante che spinge il Capitano oltre la regola C-01
+(`Sentinella ha priorità assoluta`), il freeze sentinella sarebbe rimasto
+attivo e la finestra 2 sarebbe chiusa sotto target.
+
+Cioè: **il team sa correre, ma ha bisogno di un coach quando la Sentinella
+sbaglia il freno**. Risolti i bug strategici #2 (Sentinella throttle
+progressivo) e #3 (Capitano override utente) — vedi
+[team-strategy-bugs.md](../../internal/2026-05-17-team-strategy-bugs.md) — il
+coach non serve più, e i prossimi run dovrebbero essere puliti anche senza
+pressione TG dell'utente.
+
+### 🎯 Voto operativo (solo run, scollegato dal setup E2E)
+
+**8/10** — l'unico punto perso è la dipendenza dal coach umano per il recupero
+post-freeze. Tutto il resto (velocity, pipeline, recupero, output) è qualità
+professionale.
+
+> **Nota**: il voto medio 6/10 in
+> [`docs/sessions/2026-05-17-vps-path2-e2e/README.md`](../2026-05-17-vps-path2-e2e/README.md#-self-assessment)
+> include il costo del setup (4 wipe, ~10 patch manuali, diagnosi sbagliata Kimi).
+> Isolando il solo run runtime — cioè "il team che ha lavorato dopo che è partito"
+> — il voto sale a 8/10. Le due metriche dicono cose diverse e complementari.
 
 ## Connessione con altri documenti
 
