@@ -145,15 +145,67 @@ Banned in cover letters:
 - "Please find attached my CV…" → it's an application, of course it's attached
 - "I would be honoured…" → corporate cliché
 
-## PDF generation
+## PDF generation — atomic write + DB UPDATE (W-03, bug #26)
+
+The historical anti-pattern: generate the PDF straight into
+`$JHT_USER_DIR/cv/`, then run `db_update.py application --cv-pdf-path
+...` separately. If the Sentinel killed the Writer between the two
+steps (EMERGENZA freeze 2026-05-17 04:43), the PDF stayed on disk but
+the DB had `cv_pdf_path=NULL`. Sisal 7.5/10 PASS became *"CV da
+scrivere"* on the dashboard for the user — invisible top opportunity.
+
+Fix: tempfile + size gate + atomic mv + single-shot UPDATE. If the
+UPDATE fails, remove the final file so we don't leave an orphan.
 
 ```bash
-pandoc "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md" \
-       -o "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf" \
+# Final filename includes position_id so 2 openings @ same company don't collide (bug #25)
+FINAL_PDF="$JHT_USER_DIR/cv/CV_${CANDIDATO}_${POSITION_ID}_${COMPANY_SLUG}_${TITLE_SLUG}.pdf"
+TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
+
+# 1. Render in tempfile
+pandoc "$JHT_USER_DIR/cv/CV_${CANDIDATO}_${POSITION_ID}_${COMPANY_SLUG}_${TITLE_SLUG}.md" \
+       -o "$TMP_PDF" \
        --pdf-engine=typst
+
+# 2. Validity gate (size + 2-page cap)
+if [ ! -s "$TMP_PDF" ] || [ "$(stat -c%s "$TMP_PDF" 2>/dev/null || stat -f%z "$TMP_PDF")" -lt 5000 ]; then
+  echo "[cv-structure] PDF rendering failed o file < 5KB, abort senza UPDATE DB"
+  rm -f "$TMP_PDF"
+  exit 1
+fi
+
+# 3. Atomic move + UPDATE in sequence; rollback se UPDATE fallisce
+mv "$TMP_PDF" "$FINAL_PDF"
+if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
+        --cv-pdf-path "$FINAL_PDF" --written-at now; then
+  echo "[cv-structure] UPDATE DB fallita, rimuovo PDF per non lasciare orfani"
+  rm -f "$FINAL_PDF"
+  exit 1
+fi
 ```
 
-Verify the PDF opens cleanly (size > 0, page count ≤ 2) before invoking `critic-loop`.
+Verify the PDF opens cleanly (size > 5KB, page count ≤ 2) before
+invoking `critic-loop`. If the kernel kills the process between `mv`
+and the `db_update`, the orphan stays — il Dottore (bug #18) lo
+ricollegherà via `cv-disk-audit` healthcheck.
+
+## Pre-generation status gate (W-04, bug #26)
+
+Before running pandoc, verify the position is still scoring-grade.
+Sometimes the Analyst marks `excluded` *after* the Writer has claimed
+the position (race condition) and the Writer keeps writing — 3 CV
+sprecati su Company 033 ContainerImages / K8s / Deloitte nei dump del
+2026-05-17.
+
+```bash
+status=$(python3 /app/shared/skills/db_query.py position "$POSITION_ID" --field status)
+case "$status" in
+  excluded|rejected)
+    echo "[cv-structure] position #$POSITION_ID is $status, skipping CV generation"
+    exit 0
+    ;;
+esac
+```
 
 ## Hard rules
 
