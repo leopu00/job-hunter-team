@@ -118,12 +118,28 @@ A score that drops between rounds 1 and 2 is **fine** — a fresh Critic is more
 
 ## After the 3rd round — final gate
 
+Two writes on the application row: verdict + score (always), and the
+status promotion to `ready` (only on PASS). The promotion is what the
+user's `/ready` dashboard reads; skipping it leaves the row in `draft`
+and the CV invisible (bug #21).
+
 ```bash
-python3 /app/shared/skills/db_update.py application <POSITION_ID> \
-  --critic-verdict <PASS|FAIL> \
-  --critic-score <final> \
-  --critic-round 3 \
-  --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]"
+if [[ "<final_verdict>" == "PASS" ]]; then
+  # PASS → application becomes user-visible
+  python3 /app/shared/skills/db_update.py application <POSITION_ID> \
+    --critic-verdict PASS \
+    --critic-score <final> \
+    --critic-round 3 \
+    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --status ready
+else
+  # FAIL → critic data persists, status stays 'draft'
+  python3 /app/shared/skills/db_update.py application <POSITION_ID> \
+    --critic-verdict FAIL \
+    --critic-score <final> \
+    --critic-round 3 \
+    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]"
+fi
 ```
 
 Position status:
