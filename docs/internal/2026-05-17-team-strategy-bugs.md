@@ -1848,37 +1848,98 @@ volatili"*.
 Scout-2 in 33 min ha cambiato stato **3 volte**: kill → respawn →
 kill di nuovo. Sembrava bug del Capitano "controllore bang-bang".
 
-**Indagine**: estrazione cronologica di tutti gli ordini
-`@sentinella -> @capitano` dalla giornata (16-17 maggio) da
-`messages.jsonl`. **L'ipotesi è ribaltata** — il bang-bang nasce a
-monte, nella Sentinella, non nel Capitano.
+**Indagine cumulativa**: estrazione di TUTTI gli ordini
+`@sentinella -> @capitano` dalle **5 finestre Kimi 16-17 maggio**
+(F1-F5) da `messages.jsonl`. Script
+`/tmp/sentinella_analysis.py` riproducibile.
 
-### 📋 I 4 "comandi grezzi" della Sentinella
+### 📊 Statistiche aggregate su 5 finestre Kimi (~25h operative)
 
-| Tipo ordine | Quando scatta | Capitano esegue |
+```
+Totale ordini Sentinella → Capitano:   30
+Totale ACK Capitano → Sentinella:      33
+
+Categorie ordini (totale 30):
+  RECOVERY (info)         6  ██████
+  EMERGENZA/FREEZE        5  █████   ← 1 per ogni finestra!
+  URG RALLENTARE          4  ████
+  RESET                   4  ████
+  INFO                    4  ████
+  ACCELERARE              3  ███
+  PEGGIORAMENTO           1  █
+  PUSH G-SPOT             1  █
+  BRIDGE TICK             1  █
+```
+
+### 🚨 Pattern aggregato #1: EMERGENZA in TUTTE e 5 le finestre
+
+**100% delle finestre Kimi hanno avuto almeno 1 EMERGENZA + freeze
+totale**. Nessuna finestra è mai stata "smooth". È normalizzato.
+
+### 🚨 Pattern aggregato #2: EMERGENZA scattano TROPPO PRESTO
+
+Distribuzione temporale: in quale percentuale della finestra è
+arrivato il freeze EMERGENZA?
+
+| Finestra | Quando scatta EMERGENZA | % finestra |
 |---|---|---|
-| `ORDINE: ACCELERARE` | proj < target band | spawn nuovi worker + throttle 0 |
-| `URG RALLENTARE` | proj > target | throttle **300s** o **600s** |
-| `[EMERGENZA] FREEZATO IL TEAM` | proj molto alto | `freeze_team.py` = **kill totale** worker |
-| `RECOVERY TRACKING` | post-freeze | info-only, no azione |
+| F1 (16/05 17:11-22:11) | +67min dall'inizio | **22%** |
+| F2 (16/05 22:11-03:11) | +36min dall'inizio | **12%** |
+| F3 (17/05 03:11-08:11) | +271min dall'inizio | 90% ✅ |
+| F4 (17/05 08:11-13:11) | +21min dall'inizio | **7%** |
+| F5 (17/05 13:11-18:11) | +19min dall'inizio | **6%** |
 
-**Granuli troppo grossi**: i valori di throttle che la Sentinella
-"ordina" sono solo {0, 300, 600} e `kill`. Nessun intermedio.
-Esempio osservato:
+**4 finestre su 5 hanno avuto EMERGENZA freeze entro il primo 22%
+della finestra** (cioè nei primi 65 min su 300). Solo F3 ha avuto
+freeze "ben piazzato" vicino alla chiusura (90%).
 
+**Conferma totale dell'ipotesi utente**: la Sentinella sta freezando
+in panico precoce sull'iniziale spike di velocity dei worker (tipico
+"warmup"), invece che riservare il freeze al momento critico
+(chiusura finestra).
+
+### 🚨 Pattern aggregato #3: EMERGENZA non risolutiva — cascade
+
+Cosa succede DOPO un EMERGENZA freeze?
+
+| Finestra | Δt al prossimo ordine | Tipo successivo |
+|---|---|---|
+| F1 | +46min | URG RALLENTARE ← serve di nuovo! |
+| F2 | +61min | PEGGIORAMENTO ← peggiora ancora! |
+| F3 | +35min | RESET (fine finestra) ✅ |
+| F4 | +16min | URG RALLENTARE ← serve di nuovo! |
+| F5 | +27min | ACK loop (override utente NO-FREEZE) |
+
+**3 finestre su 5** (F1, F2, F4): dopo EMERGENZA il sistema ha avuto
+bisogno di **un altro ordine RALLENTARE/PEGGIORAMENTO**. Il freeze
+non risolve, è solo il primo di una cascata.
+
+### 🚨 Pattern aggregato #4: throttle a 3 valori discreti
+
+Valori di throttle applicati dal Capitano sull'intero periodo:
 ```
-16-05 18:03  proj=27%  → ORDINE ACCELERARE (throttle 0)
-16-05 18:18  proj=130% → EMERGENZA FREEZE (throttle 600 + kill)
-16-05 19:04  proj=149% → URG RALLENTARE (throttle 300)
-16-05 19:50  proj=183% → URG RALLENTARE CRITICO 2 (throttle 600)
-16-05 22:47  proj=232% → EMERGENZA FREEZE (kill totale)
-16-05 23:48  proj=128% → PEGGIORAMENTO POST-FREEZE (kill anche Sonnet)
+600s:   3 volte  (max stop)
+300s:   1 volta  (medio stop)
+0s:     1 volta  (full speed)
 ```
 
-In 6 ordini consecutivi la Sentinella ha alternato `freeze_team.py
-kill` con `throttle 300/600`. Nessun ordine intermedio tipo
-*"throttle 120s"* o *"throttle 90s"* — i graniglia di controllo
-saltano da 0 a 600 senza valori intermedi.
+Solo **3 valori distinti** in 25h di operatività. Tra 0 e 300 non
+c'è MAI un "throttle 60", "throttle 120", "throttle 180". Tra 300 e
+600 non c'è "throttle 400" o "450". La curva di controllo è
+discontinua: salti enormi, mai modulazione fine.
+
+### ⏱️ Pattern aggregato #5: frequenza ordini
+
+- N ordini operativi totali (esclusi BRIDGE TICK puri e RECOVERY info): **24**
+- Gap medio tra ordini: **50.7 min**
+- Gap mediano: **30 min**
+- Gap min/max: 13.7 / 208 min
+- Ordini ravvicinati (<10 min, = oscillazione rapida): **0/23** ✅
+
+**Nota positiva**: la frequenza ordini in sé NON è alta (gap mediano
+30 min). Il bang-bang non è "oscillazione rapida" ma è "swing
+ampio" — quando la Sentinella ordina, l'effetto è massimo (freeze o
+kill). Pochi ordini, ma molto invasivi.
 
 ### 🎯 Conferma dall'utente (verbatim, questa sessione)
 
@@ -1991,16 +2052,19 @@ URG+EMERGENZA su 100 messaggi recenti, vedi audit VPS health).
 - **#4** (Performance band 85-95% non rispettata): il smoothing
   proposto da #24 dovrebbe portare più finestre in target stabile.
 
-### 📈 Validazione post-fix
+### 📈 Validazione post-fix (baseline cumulativa)
 
-Misurare su 3-5 finestre Kimi consecutive:
-- Numero di `[URG]` e `[EMERGENZA]` per finestra → atteso ↓ (oggi
-  ~9 in 100 msg, target ~2-3)
-- Numero di kill/respawn worker per finestra → atteso ↓
-  (oggi 3 in 33 min su Scout-2, target ≤ 1)
-- Smoothness della curva usage (varianza intra-finestra) → atteso ↓
-- Hit rate target G-spot 90-95% → atteso mantenuto o ↑ (oggi 4/4
-  finestre, baseline molto alta)
+Misurare su 5 finestre Kimi consecutive (stesso scope dell'indagine):
+
+| Metrica | Baseline attuale (5 finestre 16-17 mag) | Target post-fix |
+|---|---|---|
+| EMERGENZA per finestra | **1.0 (100%, 5/5 finestre)** | **0.2 (1/5)** |
+| EMERGENZA scattate < 30% finestra | **4/5 (80%)** | **0/5** |
+| EMERGENZA seguite da cascade RALLENTARE/PEGGIORAMENTO | **3/5 (60%)** | **0/5** |
+| Valori throttle distinti applicati | **3** (0, 300, 600) | **≥7** (es. 30, 60, 120, 180, 240, 300, 600) |
+| Kill/respawn worker per finestra | media 1-2 | ≤ 1 (solo loop confusi) |
+| Hit rate target G-spot 90-95% | 4/4 osservate ✅ | mantenuto |
+| Gap mediano tra ordini operativi | 30 min | accettabile, no target |
 
 ---
 
