@@ -96,17 +96,28 @@ python3 /app/shared/skills/db_insert.py application \
 
 Then write the CV (skill `cv-structure`) → generate PDF → run `critic-loop`.
 
-## Step 6 — Path discipline (T11)
+## Step 6 — Path discipline (T11) + unique naming (bug #25)
 
-Final deliverables MUST live under `$JHT_USER_DIR`, NEVER under `$JHT_AGENT_DIR`:
+Final deliverables MUST live under `$JHT_USER_DIR`, NEVER under `$JHT_AGENT_DIR`. **Filename must include `position_id`** so 2+ openings at the same company don't overwrite each other:
 
-| Artifact                       | Path                                                                  |
-|--------------------------------|-----------------------------------------------------------------------|
-| CV markdown                    | `$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md`                        |
-| CV PDF                         | `$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf`                       |
-| Cover Letter (only if asked)   | `$JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<Company>.{md,pdf}`   |
+| Artifact                       | Path                                                                                |
+|--------------------------------|--------------------------------------------------------------------------------------|
+| CV markdown                    | `$JHT_USER_DIR/cv/CV_<Candidato>_<position_id>_<CompanySlug>_<TitleSlug>.md`         |
+| CV PDF                         | `$JHT_USER_DIR/cv/CV_<Candidato>_<position_id>_<CompanySlug>_<TitleSlug>.pdf`        |
+| Cover Letter (only if asked)   | `$JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<position_id>_<CompanySlug>.{md,pdf}` |
 
-`<Candidato>` = `Nome_Cognome` from profile. `<Company>` = company normalised PascalCase.
+- `<Candidato>` = `Nome_Cognome` from profile.
+- `<position_id>` = `positions.id` (integer, monotonic, unique).
+- `<CompanySlug>` = company lowercased, non-alphanumeric → `-`. Es. `canonical`, `bending-spoons`.
+- `<TitleSlug>` = title lowercased + truncated to ~30 chars. Es. `observability`, `junior-ubuntu`.
+
+Example for 2 Canonical openings (bug #25 case):
+```
+CV_LeoneEmanuelPuglisi_28_canonical_observability.pdf
+CV_LeoneEmanuelPuglisi_62_canonical_junior-ubuntu.pdf
+```
+
+Before bug #25 fix both saved as `CV_LeoneEmanuelPuglisi_Canonical.pdf` → second overwrote first → DB had 2 application rows pointing to the same file → silent data corruption visible only when the user opened the PDF and read content from the *other* application.
 
 When recording the path in the DB (`--cv-path`, `--cv-pdf-path`), record the `$JHT_USER_DIR/...` path. Never a path under `$JHT_AGENT_DIR` (that's scratch — see workspace below).
 
