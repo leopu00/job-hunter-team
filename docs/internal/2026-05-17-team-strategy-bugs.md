@@ -2068,6 +2068,177 @@ Misurare su 5 finestre Kimi consecutive (stesso scope dell'indagine):
 
 ---
 
+## 🐛 25. Deduplicazione mancante a 3 livelli — Scout + DB + file CV (spreco token + data corruption)
+
+**Sintomi quantitativi** (snapshot DB `/jht_home/jobs.db` 15:50 UTC):
+
+```
+Aziende con duplicati: 14 (Canonical 14x!, altre 9 con 2x)
+URL esatti duplicati nel DB: 1
+title+company duplicati: 4
+CV PDF sovrascritti (path identici per app diverse): ≥1
+```
+
+### 14 Canonical scoperti = 15% di tutto il pool (90 posizioni)
+
+```
+#4   excluded  Graduate SWE                  scout-1  canonical.com/careers/7814327
+#22  ready     Junior Data Engineer          scout-2  canonical.com/careers/6642917
+#27  excluded  SE Python Ubuntu Pro          scout-2  bebee.com/it/jobs/...
+#28  ready     Junior SW Developer Observ.   scout-1  canonical.com/careers/2166631
+#33  ready     Python SE Commercial Systems  scout-2  canonical.com/careers/6401160
+#34  excluded  SE Python Container Images    scout-2  canonical.com/careers/6222476
+#35  excluded  SE Python/Golang K8s          scout-2  canonical.com/careers/2928962
+#62  excluded  Junior Ubuntu SE              scout-1  canonical.com/careers/6707669
+#67  excluded  SE Data Infrastructure        scout-1  greenhouse.io/canonical/jobs/3014391
+#68  excluded  Python Ubuntu Pro graduate    scout-1  greenhouse.io/canonicaljobs/jobs/6908672
+#72  scored    Graduate SWE                  scout-1  greenhouse.io/canonical/jobs/7814327   ← DUP #4!
+#74  scored    Python+K8s SE Data Workflows  scout-2  greenhouse.io/canonical/jobs/5703396
+#79  scored    SE Python/Linux/Packaging     scout-2  greenhouse.io/canonical/jobs/2413329
+#102 new       Junior SW Developer Observ.   scout-2  euremotejobs.com/job/...               ← DUP #28!
+```
+
+**Duplicati confermati** (stesso job, URL diversi):
+- `7814327` (Graduate SWE) trovato 2× in 21h
+- `2166631` (Observability) trovato 2× in 12h, secondo via re-skinning su euremotejobs
+
+### 3 livelli di bug
+
+**Livello A — Scout non normalizza URL/job_id**
+
+Stesso job riskinned su 3 board (company website + Greenhouse + euremotejobs)
+viene inserito come 3 posizioni distinte. Causa: nessuna estrazione di
+`external_id` canonico (es. `canonical:2166631`) prima dell'INSERT.
+
+**Livello B — DB senza UNIQUE constraint**
+
+`positions` non ha `UNIQUE (company, title)` né `UNIQUE (external_id)`.
+INSERT duplicati passano sempre. Esempio:
+`https://job-boards.eu.greenhouse.io/remotepeople/jobs/4803615101`
+salvato 2 volte come record distinti.
+
+**Livello C — Scrittore naming file collidente**
+
+Pattern attuale `CV_<name>_<company>.pdf`. Se 2+ app per stessa azienda
+→ secondo PDF **sovrascrive** primo. Sul disk c'è 1 file, nel DB 2
+application puntano allo stesso path.
+
+Verificato:
+```
+app#17 (pos#28 Canonical Observability) →
+  /jht_user/cv/CV_LeoneEmanuelPuglisi_Canonical.pdf
+app#30 (pos#62 Canonical Junior Ubuntu) →
+  /jht_user/cv/CV_LeoneEmanuelPuglisi_Canonical.pdf  ← STESSO PATH!
+```
+
+Quando l'utente apre il PDF "per app#17" legge il contenuto scritto
+per app#30. **Data corruption silente.**
+
+### 💥 Impatto
+
+1. **Spreco token Kimi massivo**: 14 Canonical = 10-14× lo stesso lavoro
+   upstream (Analista verifica + Scorer score + se passa anche Scrittore
+   + Critic loop). Stima: 50-70% di **una finestra Kimi (5h)** sprecata
+   su Canonical only. Sui 5 dump 16-17 mag impatto cumulativo equivalente
+   a probabilmente **1 finestra intera sprecata**.
+
+2. **Data corruption CV silente**: utente fa apply manuale (vedi #9
+   user-curated). Se carica il CV "sbagliato" su Canonical Observability
+   ma il file ha il testo di Junior Ubuntu, manda candidatura con
+   esperienza/keyword non aderenti. **Rischio reputazionale.**
+
+3. **Confusione UX dashboard**: "3 PASS Canonical" mostrato in `/ready`
+   → utente pensa "3 opportunità diverse", in realtà 2-3 versioni dello
+   stesso job riskinned. Trust erosion.
+
+### 🔧 Fix proposto — 3 modifiche
+
+#### A. Scout: regola SC-06 estrazione `external_id` canonico
+
+In `agents/scout/scout.md`:
+```
+## SC-06 — Deduplicazione pre-insert
+
+Per ogni job trovato:
+1. Estrai external_id canonico dal URL:
+   - canonical.com/careers/(\d+)       → "canonical:$1"
+   - greenhouse.io/<co>/jobs/(\d+)     → "<co>:$1"
+   - lever.co/<co>/(\w+)               → "<co>-lever:$1"
+   - per board che fanno reskinning (euremotejobs, etc):
+     fetch + scraping per estrarre real source URL
+     oppure flag is_reskin=true
+2. Prima dell'INSERT:
+   SELECT 1 FROM positions WHERE external_id=?
+   Se esiste → skip + log "duplicate skipped:<external_id>"
+3. INSERT solo se external_id non esiste.
+```
+
+#### B. DB: UNIQUE constraint + dedup retroattivo
+
+```sql
+ALTER TABLE positions ADD COLUMN external_id TEXT;
+CREATE UNIQUE INDEX idx_positions_external_id
+  ON positions(external_id) WHERE external_id IS NOT NULL;
+
+-- One-shot retroattivo
+WITH dups AS (
+  SELECT MIN(id) AS keep_id, company, title
+  FROM positions GROUP BY company, title HAVING COUNT(*) > 1
+)
+UPDATE positions SET status='excluded',
+   notes=COALESCE(notes,'')||' [DEDUP] superseded by id='||(SELECT keep_id FROM dups d WHERE d.company=positions.company AND d.title=positions.title)
+WHERE id NOT IN (SELECT keep_id FROM dups)
+  AND (company, title) IN (SELECT company, title FROM dups);
+```
+
+#### C. Scrittore: naming file con position_id
+
+Cambiare pattern da `CV_<name>_<company>.pdf` a:
+```
+CV_<name>_<position_id>_<company-slug>_<title-slug>.pdf
+
+Esempio:
+CV_LeoneEmanuelPuglisi_28_canonical_observability.pdf
+CV_LeoneEmanuelPuglisi_62_canonical_junior-ubuntu.pdf
+```
+
+`position_id` garantisce unicità assoluta. Slug aiuta utente a
+riconoscere il file dal nome.
+
+### 🎯 Priorità: **alta**
+
+Doppio impatto: spreco token (ROI immediato) + data corruption CV
+(rischio reputazionale per utente che fa apply manuale, vedi #9).
+
+### ⏱️ Effort: **medio**
+
+- Regola SC-06 + helper `extract_external_id()` (~30 righe Python)
+- Migrazione DB UNIQUE + cleanup retroattivo (~20 righe SQL)
+- Modifica naming Scrittore (~5 righe + retrofit 31 file PDF esistenti)
+- Test su 2 finestre Kimi per verificare riduzione duplicati
+
+### 📈 Validazione post-fix
+
+| Metrica | Baseline | Target |
+|---|---|---|
+| `SELECT external_id, COUNT(*) FROM positions GROUP BY 1 HAVING COUNT(*)>1` | non query-abile (campo mancante) | 0 risultati |
+| Aziende con >5 positions | 1 (Canonical 14x) | 0 |
+| URL esatti duplicati | 1 | 0 |
+| CV PDF con path collidenti | ≥1 | 0 |
+
+### 🔗 Bug collegati
+
+- **#12** (Scout learning loop): la source-blacklist proposta in #12 è
+  un sovrainsieme della dedup di #25. Possono essere implementati
+  insieme.
+- **#21** (draft→ready promotion): se le applications hanno path file
+  collidenti, anche la promotion mostra dati sbagliati nella dashboard.
+- **#9 declassato** (user-curated apply): l'utente che fa apply manuale
+  ha più che mai bisogno che il CV scaricato sia quello giusto. Bug
+  #25 amplifica il danno potenziale di #9.
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -2081,6 +2252,7 @@ Misurare su 5 finestre Kimi consecutive (stesso scope dell'indagine):
 | 20 | 🚨 **`/reports` 100% mock** — zero query Supabase | **alta** | piccolo-medio |
 | 21 | 🚨 **`applications.status` mai promosso draft→ready** dopo Critic PASS | **alta** | piccolo |
 | 24 | **Sentinella troppo invadente in regime normale** (fasi + scala throttle continua) | **alta** | medio |
+| 25 | 🚨 **Deduplicazione mancante** Scout/DB/CV — spreco token + data corruption | **alta** | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
