@@ -30,6 +30,7 @@ set -euo pipefail
 parse_mode=""
 chat_id_override=""
 role="${JHT_TG_BOT_ROLE:-assistente}"
+keyboard_role=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,6 +42,11 @@ while [ $# -gt 0 ]; do
       chat_id_override="${2:-}"; shift 2 ;;
     --from)
       role="${2:-}"; shift 2 ;;
+    --keyboard)
+      # F-1.B: allega reply keyboard persistente. Valore = ruolo
+      # (assistente|capitano|mentor) — definisce il layout dei bottoni.
+      # Se vuoto/role mismatch, ignorato silenziosamente.
+      keyboard_role="${2:-}"; shift 2 ;;
     --)
       shift; break ;;
     -*)
@@ -123,6 +129,26 @@ fi
 # UTF-8 sarebbe Python; per ora awk + cut byte-safe.
 MAX_LEN=4000
 
+# F-1.B: layout reply-keyboard per ruolo. Compatto 2-cols, emoji-prefixed
+# così i bottoni sono leggibili anche su mobile in light theme.
+keyboard_json_for() {
+  case "$1" in
+    assistente) cat <<'EOF'
+{"keyboard":[[{"text":"📊 Budget"},{"text":"📈 Pipeline"}],[{"text":"🗺️ Mappa"},{"text":"⭐ Top CV"}],[{"text":"📅 Reset"},{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
+EOF
+      ;;
+    capitano) cat <<'EOF'
+{"keyboard":[[{"text":"📈 Pipeline"},{"text":"📊 Budget"}],[{"text":"👥 Team"},{"text":"⭐ Ready"}],[{"text":"🛠 Triage"},{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
+EOF
+      ;;
+    mentor) cat <<'EOF'
+{"keyboard":[[{"text":"📋 Digest"},{"text":"🔁 Patterns"}],[{"text":"⭐ Top"},{"text":"💰 Salary"}],[{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
+EOF
+      ;;
+    *) echo "" ;;
+  esac
+}
+
 send_one() {
   local body="$1"
   local http_code
@@ -140,6 +166,14 @@ send_one() {
   )
   if [ -n "$parse_mode" ]; then
     args+=( --data-urlencode "parse_mode=$parse_mode" )
+  fi
+  # F-1.B: keyboard solo nell'ultimo chunk (Telegram mostra il reply_markup
+  # dell'ULTIMO message del thread). Decideremo nel caller quale chunk è
+  # l'ultimo via la variabile `is_last_chunk`. Per ora il send_one allega
+  # SEMPRE se KEYBOARD_JSON è settata (caller responsabile di settarla
+  # solo per l'ultimo chunk).
+  if [ -n "${KEYBOARD_JSON:-}" ]; then
+    args+=( --data-urlencode "reply_markup=$KEYBOARD_JSON" )
   fi
 
   http_code=$(curl "${args[@]}" "https://api.telegram.org/bot${token}/sendMessage" || echo "000")
@@ -168,8 +202,19 @@ except Exception:
   return 0
 }
 
-# Split semplice su newline rispettando MAX_LEN.
-python3 - "$text" "$MAX_LEN" <<'PYEOF' | while IFS= read -r -d '' chunk; do
+# Risolvi il JSON della keyboard una volta sola fuori dal loop chunks.
+keyboard_json_resolved=""
+if [ -n "$keyboard_role" ]; then
+  keyboard_json_resolved="$(keyboard_json_for "$keyboard_role" | tr -d '\n')"
+  if [ -z "$keyboard_json_resolved" ]; then
+    echo "jht-telegram-send: --keyboard '$keyboard_role' sconosciuto, ignorato" >&2
+  fi
+fi
+
+# Split semplice su newline rispettando MAX_LEN. Conta gli chunks per
+# decidere quale è l'ultimo (la reply_markup va solo lì, altrimenti il
+# 1° messaggio mostra la keyboard che poi sparisce al 2°).
+mapfile -d '' -t _chunks < <(python3 - "$text" "$MAX_LEN" <<'PYEOF'
 import sys
 text, max_len = sys.argv[1], int(sys.argv[2])
 def chunks(s, n):
@@ -188,7 +233,15 @@ def chunks(s, n):
 for c in chunks(text, max_len):
     sys.stdout.write(c + '\0')
 PYEOF
-  send_one "$chunk" || exit $?
+)
+
+_total=${#_chunks[@]}
+for _i in "${!_chunks[@]}"; do
+  if [ "$((_i + 1))" -eq "$_total" ] && [ -n "$keyboard_json_resolved" ]; then
+    KEYBOARD_JSON="$keyboard_json_resolved" send_one "${_chunks[$_i]}" || exit $?
+  else
+    send_one "${_chunks[$_i]}" || exit $?
+  fi
 done
 
 echo "jht-telegram-send: ok (${#text} chars to chat $chat_id)"
