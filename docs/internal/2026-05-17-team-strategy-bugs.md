@@ -876,6 +876,126 @@ template visivo per i grafici auto-generati.
 
 ---
 
+## 🐛 17. Capitano passivo davanti a code vuote — non applica la sua stessa skill `pipeline-triage`
+
+**Sintomo** (sessione 01:45-01:49 UTC):
+
+Tick bridge 01:45 — Capitano riconosce esplicitamente il problema:
+> *"Tick 01:45: proj 92.7% (vicino target 92). **Vel team crollata a
+> 5.5%/h, troppo lenta. Ridotto throttle scrittore-1 20s→10s. Coda
+> vuota, nessun lavoro da fare. Aspetto prossimo tick per valutare se
+> spawnare.**"*
+
+L'utente alle 01:49:02 incalza: *"Dove è vuota la coda?"*. Capitano
+risponde 01:49:16 con diagnosi puntuale:
+
+> *"Code vuote:*
+> - *Scout: fonti esaurite, nessuna posizione nuova*
+> - *Analista: 0 posizioni new da verificare*
+> - *Scorer: 0 posizioni checked da valutare*
+> - *Scrittore: 0 posizioni scored>=50 da scrivere*
+>
+> *Coda piena:*
+> - *Apply pronti: 4 (Bending Spoons 70, Rinse 62, Gr4vy 62, Company 033 50)*
+> - **Scored 40-49 in parking: 6 posizioni (triage Capitano)**
+>
+> *Il bottleneck e' upstream: nessuna nuova posizione da processare."*
+
+L'utente alle 01:49:37 esplicitamente: *"Devi agire di conseguenza per
+non lasciare la coda vuota"*.
+
+**Causa**: la skill `agents/_skills/pipeline-triage/SKILL.md` contiene
+**già la regola esatta** che il Capitano dovrebbe applicare:
+
+```
+| PROMOTABLE_40_49 ≥ 5    | promote the best 5 by raising the score
+|                         | (db_query.py + direct UPDATE), then treat
+|                         | as SCRITTORE_QUEUE.                       |
+| SCRITTORE_QUEUE < 5 AND | Only now spawn 1 SCOUT-N for new positions.
+| PROMOTABLE_40_49 < 5    |                                            |
+```
+
+Stato attuale (auto-diagnosticato dal Capitano):
+- `SCRITTORE_QUEUE = 0` (< 5 ✅)
+- `PROMOTABLE_40_49 = 6` (≥ 5 ✅)
+- → la regola dice **promote the best 5**
+
+Eppure il Capitano:
+1. **Vede** la situazione e la descrive perfettamente
+2. **Identifica** che ci sono 6 posizioni in parking 40-49
+3. **NON ESEGUE** la promotion + spawn Scout
+
+Il problema è **inazione/passività**: il Capitano è in modalità
+"aspetta tick + report all'utente" invece di "applica triage attivo".
+Conferma il pattern del bug #16 (manca proattività) ma con un twist
+diverso: qui il Capitano **ha** la regola scritta, semplicemente non
+la esegue al momento giusto.
+
+**Sub-ipotesi sulla causa profonda**:
+
+- **(a)** Skill `pipeline-triage` letta solo quando arriva `[SCALA UP]`
+  o `[BRIDGE TICK]` con segnale esplicito, non quando il Capitano stesso
+  osserva `vel crollata` o `coda vuota`.
+- **(b)** Capitano teme di toccare il DB autonomamente (`db_query.py +
+  direct UPDATE`) perché nessuna regola gli dice *"se vedi
+  PROMOTABLE_40_49 ≥ 5, esegui sempre la promotion"*. La skill descrive
+  COSA fare ma non l'OBBLIGO di farlo.
+- **(c)** Le regole C-01/C-02/C-03 enfatizzano *"aspetta ordine
+  Sentinella"* — il Capitano evita azioni spontanee per non violarle,
+  anche quando l'azione è chiaramente nel suo perimetro.
+
+**Fix proposto** — 3 cambiamenti coordinati:
+
+1. **Aggiungere C-04 OPERATIVA** in `capitano.md` (distinta da C-04
+   "report proattivo" del bug #16):
+
+   > *"**C-05 — Auto-triage su code vuote**. Quando velocità team < 50%
+   > del target O coda Scrittore < 5 O backlog Scout (fonti) esaurito,
+   > applica IMMEDIATAMENTE la skill `pipeline-triage` senza aspettare
+   > un nuovo `[BRIDGE TICK]`. Le azioni di promotion 40-49 e spawn
+   > Scout non richiedono autorizzazione Sentinella se il budget proj
+   > è in target (85-95%)."*
+
+2. **Aggiornare `pipeline-triage` SKILL.md**: cambiare la prima riga
+   *"Open this skill EVERY TIME a scaling decision is needed"* in
+   *"Open this skill EVERY TIME you observe: vel < 50% target, OR
+   any role queue = 0, OR Scout sources exhausted, OR [SCALA UP] from
+   Sentinella. Do NOT wait for an explicit trigger if conditions are
+   met."*. Aggiungere esempi di "code vuote → cosa fare" come decision
+   tree.
+
+3. **Loop di check ogni `[BRIDGE TICK]`**: il Capitano deve, ad ogni
+   tick, controllare automaticamente le 4 metriche di backlog (UNSCORED,
+   DRAFT_BLOCKED, SCRITTORE_QUEUE, PROMOTABLE_40_49) e applicare la
+   triage table. Oggi probabilmente lo fa solo se `[BRIDGE TICK]` ha
+   il flag `SCALA UP`.
+
+**Priorità**: **alta**. È un bug di "decisione → esecuzione" che si
+ripete in ogni finestra: il Capitano riconosce il problema ma non
+agisce. Senza fix, il pattern *"utente vede stallo, spinge il Capitano,
+Capitano agisce"* sostituisce il pattern desiderato *"team si
+auto-organizza"*. Stesso filone di #16 ma operativo, non di reporting.
+
+**Effort**: piccolo-medio. Modifiche concentrate in `capitano.md`
+(regola C-05) + `pipeline-triage/SKILL.md` (trigger esteso) + eventuale
+helper `auto-triage-check.py` che esegue le 4 query in 1 colpo.
+
+**Riferimento conversazionale**: 01:45:44, 01:49:16 UTC.
+
+**Collegamento con altri bug**:
+- **#3** (Capitano gerarchia C-01 Sentinella): stesso pattern di
+  paralisi, ma diverso trigger. #3 = freeze ordinato → Capitano paralizza.
+  #17 = code vuote → Capitano paralizza. Causa comune: Capitano sente
+  che ogni azione non-richiesta è una violazione di regola.
+- **#16** (auto-report proattivo): manca proattività di reporting.
+  #17 = manca proattività di azione operativa.
+- **#9** (submit-application mancante): le 4 apply pronte (Bending, Rinse,
+  Gr4vy, Company 033) sono lì da ore e nessuno le spedisce — bug #17
+  evidenzia anche questo (Capitano elenca "4 apply pronti" senza prendere
+  azione).
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -886,6 +1006,7 @@ template visivo per i grafici auto-generati.
 | 12 | **Scout hit-rate non migliora** (loop Critic→Scout) | **alta** | medio |
 | 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
 | 16 | ✨ **Auto-report periodici + auto-grafici via Bridge orders** | **alta** | medio |
+| 17 | **Capitano passivo davanti a code vuote** (C-05 auto-triage) | **alta** | piccolo-medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
