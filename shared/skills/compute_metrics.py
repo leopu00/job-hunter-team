@@ -278,6 +278,10 @@ def compute_metrics(parsed, last, history=None):
         "throttle": throttle,
         "reset_at": parsed.get("reset_at"),
         "weekly_usage": parsed.get("weekly_usage"),
+        # Bug #19A: reset weekly disponibile per Capitano/Sentinella senza
+        # grep nei sorgenti del bridge. None se il provider non lo espone.
+        "weekly_reset_at": parsed.get("weekly_reset_at"),
+        "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
     }
 
 
