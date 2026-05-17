@@ -605,6 +605,96 @@ hit-rate attuale.
 
 ---
 
+## 🐛 14. Stati pipeline transitori non loggati → snapshot invisibili
+
+**Sintomo** (sessione candle chart, 01:08-01:15 UTC):
+
+L'utente chiede al Capitano *"3 grafici candle, inizio/mezzo/fine della
+finestra, con candela per ogni stato"*. Il Capitano produce
+`pipeline_candle_*.png` ma in tutti e 9 i grafici (3 finestre × 3 iter)
+le candele **"verificate"** e **"nuove"** sono sempre **0**.
+
+Domanda utente (01:15:30):
+> *"ora non ci sta mai candela verificate - come mai?"*
+
+Risposta Capitano (01:15:46, msg #31 verbatim):
+> *"Perche nel DB lo stato e' transitorio. L'Analista verifica JD e
+> azienda, poi lo Scorer immediatamente promuove a `scored` o `excluded`.
+> La posizione non resta mai in stato 'checked' — passa istantaneamente
+> da `new` a `scored/excluded`. Quindi `checked=0` in ogni snapshot."*
+
+**Causa**: il DB SQLite ha **una sola colonna `status` per posizione**,
+sovrascritta ad ogni transizione. Nessun log delle transizioni storiche.
+Conseguenze:
+
+1. **Snapshot stati transitori = 0**. `checked`, `writing`, e qualsiasi
+   altro stato che dura < interval tick Sentinel (~5 min) non viene mai
+   "visto" da un `SELECT COUNT(*) WHERE status='checked'`.
+2. **Tempo medio per stato non calcolabile**. Quanto ci mette in media
+   una posizione da `new` a `scored`? Impossibile rispondere senza log.
+3. **Bottleneck detection cieco**. La `pipeline-triage` skill ragiona
+   su numeri di stato corrente, non sui throughput. Se l'Analista fosse
+   lento per 30 min e poi velocissimo, lo snapshot non lo coglie.
+4. **Bug #12 (Scout learning loop) più difficile da chiudere**: per
+   capire dove si perdono posizioni serve guardare `transitions.from
+   → to`, non solo lo stato finale.
+
+**Conclusione utente** (verbatim, questa sessione):
+> *"ci sono dei nuovi messaggi - i quali portano alla conclusione che
+> dovremmo loggare anche il cambio di stato"*
+
+**Fix proposto** — event log delle transizioni:
+
+```sql
+CREATE TABLE position_state_transitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  position_id INTEGER NOT NULL REFERENCES positions(id),
+  from_state TEXT,         -- NULL per la transizione iniziale (insert)
+  to_state TEXT NOT NULL,
+  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  by_agent TEXT NOT NULL,  -- 'scout-1', 'analista-1', 'scorer-1', ecc.
+  notes TEXT               -- ragione transizione (es. 'GEO mismatch')
+);
+CREATE INDEX idx_pst_position_ts ON position_state_transitions(position_id, ts);
+CREATE INDEX idx_pst_ts          ON position_state_transitions(ts);
+```
+
+Tutte le UPDATE su `positions.status` devono passare per uno **stored
+procedure / wrapper Python `db_update.transition_state(...)`** che:
+1. Aggiorna `positions.status = to_state`
+2. INSERT in `position_state_transitions(position_id, from_state,
+   to_state, ts=now, by_agent)`
+
+**Visualizzazioni che diventano possibili dopo il fix**:
+
+- **Stock retroattivo per intervallo**: per ogni minuto T, conta le
+  posizioni che alle T erano in stato S =
+  `SELECT COUNT(DISTINCT position_id) FROM transitions WHERE ts <= T
+   AND NOT EXISTS (SELECT 1 FROM transitions t2 WHERE t2.position_id
+   = transitions.position_id AND t2.ts > transitions.ts AND t2.ts <= T)
+   AND to_state = S`. Stock corretto anche per stati transitori.
+- **Throughput per stato**: posizioni/h che entrano in S nell'ultima h.
+- **Tempo medio di permanenza per stato**: media di
+  `(next_transition.ts - current_transition.ts)` per ogni `to_state=S`.
+- **Drop-off funnel**: percentuale di posizioni che scendono di stato
+  in stato (trovate → valutate → scrittura → pronte → inviate).
+
+**Priorità**: **alta**. Sblocca tutte le visualizzazioni che il Capitano
+sta già provando a generare, e fornisce il dato base per i feedback loop
+del bug #12 (Scout learning) e per le metriche di prodotto generali.
+
+**Effort**: medio. Migrazione SQLite + wrapper Python + retrofit di
+tutte le UPDATE esistenti. ~2-3 file da toccare:
+- `shared/data/migrations/00X_state_transitions.sql` (nuovo)
+- `shared/skills/db-update/*.py` (wrapper transition_state)
+- `agents/_skills/db-update/SKILL.md` (aggiorna doc, regola: mai UPDATE
+  diretto su `positions.status`, sempre `transition_state(...)`)
+
+**Riferimento**: vedi `docs/sessions/2026-05-17-pipeline-snapshot/` per
+i 6 PNG che hanno reso visibile il problema (5 + 1 host).
+
+---
+
 ## 📋 Riepilogo priorità
 
 | # | Bug | Priorità | Effort |
@@ -613,6 +703,7 @@ hit-rate attuale.
 | 2 | Sentinella throttle progressivo | **alta** | medio |
 | 9 | **Skill `submit-application` mancante** — nessuno spedisce | **alta** | grande |
 | 12 | **Scout hit-rate non migliora** (loop Critic→Scout) | **alta** | medio |
+| 14 | **Stati pipeline transitori non loggati** (state-event log) | **alta** | medio |
 | 3 | Capitano gerarchia utente > Sentinella | media | piccolo (prompt) |
 | 4 | Performance band 85-95% rispettata | media | piccolo (post #2+#3) |
 | 7 | Sync history conversazione su web | media | medio |
