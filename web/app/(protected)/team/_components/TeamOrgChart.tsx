@@ -1149,14 +1149,16 @@ export default function TeamOrgChart({
   // Reagiamo a (agent, key): la `key` numerica cambia anche se l'agente
   // resta lo stesso, così due scritture consecutive dello stesso ruolo
   // generano due animazioni distinte.
+  const lastDbAnimKeyRef = useRef<number | null>(null);
   useEffect(() => {
     if (!dbWriteSignal) return;
+    if (lastDbAnimKeyRef.current === dbWriteSignal.key) return;
     const agent = dbWriteSignal.agent;
     const path = arrowOverlay.dbPaths.find((p) => p.id === `db-from-${agent}`);
     if (!path) return;
+    lastDbAnimKeyRef.current = dbWriteSignal.key;
     pushAnim(path.id, { color: colorFor(agent) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbWriteSignal?.key]);
+  }, [dbWriteSignal?.key, dbWriteSignal?.agent, arrowOverlay.dbPaths]);
 
   // Re-measure quando cambia il set di nodi visibili in hideStopped:
   // un pipeline che passa da display:none a flex ottiene un nuovo span
