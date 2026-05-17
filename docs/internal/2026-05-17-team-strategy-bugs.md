@@ -2302,15 +2302,46 @@ PDF unique in DB:       22
 Gap: 5 PDF orfani (su disk ma DB non li conosce)
 ```
 
-### A. 2 PASS top-score "invisibili" nella dashboard
+### A. 3 PASS con `cv_pdf_path=NULL` (file su disk ma DB non lo sa)
 
-| app | Azienda | Critic | Verdict | cv_pdf_path DB | File su disk |
-|---|---|---|---|---|---|
-| **#20** | **Sisal — Data Analytics Trainee** | **7.5/10** ⭐ | **PASS** | `NULL` ❌ | `CV_LeoneEmanuelPuglisi_Sisal.pdf` (28KB, 04:43 UTC) ✅ |
-| **#19** | **Leadtech — Junior Data Eng. Mobile** | 5.5/10 | **PASS** | `NULL` ❌ | `CV_LeoneEmanuelPuglisi_Leadtech.pdf` (29KB, 04:30 UTC) ✅ |
-| #21 | Canonical Commercial Systems | 5.5/10 | PASS | `NULL` ❌ | n/d |
+**Correzione importante** (revisione utente con screenshot dashboard):
+Sisal **non è invisibile**, è **mal-categorizzata**. Verifica via DB:
 
-**Sisal è il PASS con il critic_score più alto in assoluto della sessione** (7.5/10) ed è **invisibile** nella dashboard `/ready` perché `cv_pdf_path=NULL`. L'utente non lo vede tra i 13 CV pronti. Opportunità potenzialmente persa.
+```
+SISAL (pos #30):
+  positions.status    = 'ready'   ✅ (è nella lista 13 visibili)
+  applications.status = 'draft'   ❌ ← bug #21 (mai promosso a ready)
+  critic_score=7.5  verdict=PASS  ✅
+  cv_pdf_path = NULL              ❌ ← bug #26
+  File CV su disk: ✅ (28KB, 04:43 UTC)
+```
+
+Nella dashboard `/ready` Sisal **compare** nella sezione *"POSIZIONI
+READY — CV DA SCRIVERE (13)"*, NON in *"CV PRONTI DA INVIARE (0)"*.
+Per l'utente: *"Sisal CV ancora da scrivere"* — falso, il CV esiste già.
+
+| app | Azienda | Critic | Verdict | app.status | cv_pdf_path | File su disk |
+|---|---|---|---|---|---|---|
+| **#20** | **Sisal Data Analytics Trainee** | **7.5/10** ⭐ | **PASS** | draft | `NULL` ❌ | ✅ (28KB) |
+| **#19** | Leadtech Junior Data Eng. Mobile | 5.5/10 | PASS | draft | `NULL` ❌ | ✅ (29KB) |
+| #21 | Canonical Commercial Systems | 5.5/10 | PASS | draft | `NULL` ❌ | n/d (probabile collisione bug #25) |
+
+**Effetto reale**: utente vede *"CV da scrivere"* per posizioni il cui
+CV è già stato scritto. UI ingannevole. Rischio aggiuntivo: utente
+preme "rigenera CV" (se esiste in futuro), team rifa il lavoro
+inutilmente sprecando budget.
+
+### A-bis. Cascade con bug #21 (causa principale dashboard 0/13)
+
+**Tutte le 13 PASS hanno `applications.status='draft'`** (bug #21). La
+sezione "CV PRONTI DA INVIARE" della dashboard mostra **0** non solo
+per le 3 con cv_pdf_path NULL, ma per **TUTTE** perché la query è
+`WHERE applications.status='ready'` → 0 risultati.
+
+Quindi:
+- Bug **#21** è la causa principale del "0 CV pronti" visibile
+- Bug **#26** è secondario ma reale: anche dopo fix #21, le 3 app
+  Sisal/Leadtech/Canonical#33 resterebbero senza file collegato
 
 ### B. 3 CV generati per posizioni EXCLUDED/REJECT (spreco)
 
