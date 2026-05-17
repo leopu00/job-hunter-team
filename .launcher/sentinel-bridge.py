@@ -359,11 +359,23 @@ def fetch_codex_rollout():
         if isinstance(resets_unix, (int, float)):
             reset_at = datetime.fromtimestamp(resets_unix, timezone.utc).astimezone().strftime("%H:%M")
             reset_at_unix = float(resets_unix)
+        # Weekly window reset (bug #19A): se il rate-limit secondary espone
+        # un proprio resets_at (rolling-7d Codex), lo registriamo. Capitano
+        # e Sentinella possono così rispondere "quanto manca al reset settimanale?"
+        # senza grep nei sorgenti.
+        weekly_reset_at = None
+        weekly_reset_at_unix = None
+        weekly_resets_unix = secondary.get("resets_at")
+        if isinstance(weekly_resets_unix, (int, float)):
+            weekly_reset_at = datetime.fromtimestamp(weekly_resets_unix, timezone.utc).astimezone().strftime("%H:%M")
+            weekly_reset_at_unix = float(weekly_resets_unix)
         return {
             "usage": usage,
             "reset_at": reset_at,
             "reset_at_unix": reset_at_unix,
             "weekly_usage": weekly,
+            "weekly_reset_at": weekly_reset_at,
+            "weekly_reset_at_unix": weekly_reset_at_unix,
         }
     except (OSError, json.JSONDecodeError):
         return None
@@ -439,6 +451,11 @@ def fetch_claude_api():
         "reset_at": _iso_to_hhmm(five_h.get("resets_at")),
         "reset_at_unix": _iso_to_unix(five_h.get("resets_at")),
         "weekly_usage": weekly,
+        # Weekly reset (bug #19A): /oauth/usage espone seven_day.resets_at
+        # come ISO timestamp del prossimo reset weekly. Era già nei dati,
+        # mancava solo la riesposizione downstream.
+        "weekly_reset_at": _iso_to_hhmm(seven_d.get("resets_at")),
+        "weekly_reset_at_unix": _iso_to_unix(seven_d.get("resets_at")),
     }
 
 
@@ -500,11 +517,18 @@ def fetch_kimi_api():
         weekly_used = int(weekly.get("used", 0)) if weekly.get("used") is not None else None
     except (TypeError, ValueError):
         return None
+    # Weekly reset (bug #19A): la rotta /coding/v1/usages espone data.usage
+    # come la finestra settimanale. Kimi mette qui un resetTime ISO per il
+    # rolling weekly. Se Moonshot in futuro lo rinomina (es. resets_at), la
+    # get-with-fallback resta safe (None se assente).
+    weekly_reset_iso = weekly.get("resetTime") or weekly.get("resets_at")
     return {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
         "reset_at_unix": _iso_to_unix(five_h.get("resetTime")),
         "weekly_usage": weekly_used,
+        "weekly_reset_at": _iso_to_hhmm(weekly_reset_iso),
+        "weekly_reset_at_unix": _iso_to_unix(weekly_reset_iso),
     }
 
 
@@ -611,6 +635,8 @@ def _compute_metrics_via_skill(parsed, last, history):
             "usage": parsed.get("usage"),
             "reset_at": parsed.get("reset_at"),
             "weekly_usage": parsed.get("weekly_usage"),
+            "weekly_reset_at": parsed.get("weekly_reset_at"),
+            "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
             "status": "OK",
         }
     spec = importlib.util.spec_from_file_location("compute_metrics", skill_path)
