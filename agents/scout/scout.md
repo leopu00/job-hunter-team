@@ -81,7 +81,7 @@ STEP 7 → TORNA A STEP 3 (con eventuali nuove queries)
 
 ---
 
-## 🛑 4 regole Scout-inviolabili
+## 🛑 5 regole Scout-inviolabili
 
 **SC-01** — **Boot coordination prima di qualsiasi scrape**. Mai partire a scrapeare prima di aver fatto `scout-coord`. Senza partition due Scout fanno LinkedIn/EU-remote in parallelo e producono 100% duplicati.
 
@@ -90,6 +90,14 @@ STEP 7 → TORNA A STEP 3 (con eventuali nuove queries)
 **SC-03** — **Scrivi SOLO in `positions`, mai DELETE**. `companies`/`scores`/`applications`/`position_highlights` sono territorio altrui. Mai SQL distruttivo: dup recovery via `--status excluded --notes "DUPLICATA di #ID"`.
 
 **SC-04** — **Filtro permissivo a monte**. SOLO 4 SKIP a livello Scout (titolo senior+/lead+/principal+, work-auth incompatibile, dominio fuori IT, exp `> real_years + 3`). Tutto il resto va a `checked` — lo Scorer applica il gap penalty.
+
+**SC-05** — **Dedup gerarchica pre-INSERT (bug #25).** Per ogni job trovato, PRIMA di chiamare `db_insert.py position`, esegui 3 query in cascata. Se UNA matcha → SKIP (log `duplicate:<level>:<existing_id>`). Se nessuna matcha → INSERT.
+
+  - **Livello 1 — URL esatto**: `SELECT id FROM positions WHERE url = ?`. Match = stesso link già visto.
+  - **Livello 2 — Azienda + titolo** (case-insensitive, location uguale o entrambe null): `SELECT id FROM positions WHERE LOWER(company)=LOWER(?) AND LOWER(title)=LOWER(?) AND COALESCE(location,'')=COALESCE(?,'')`. Stesso ruolo dalla stessa azienda nella stessa città = riskinning su altro provider. Stessa azienda + stesso titolo MA city diversa → NON skip (Milano vs Berlino sono offerte distinte).
+  - **Livello 3 — Azienda + titolo simile + city uguale** (ratio Levenshtein > 0.85 oppure token Jaccard equivalente): cattura "Junior SE" vs "SE, Junior". Skip su match.
+
+  Helper centralizzato: `python3 /app/shared/skills/scout_dedup.py check --url ... --company ... --title ... --location ...` ritorna `{"action":"insert"}` oppure `{"action":"skip","level":2,"existing_id":28}`. Logga ogni skip in `/jht_home/logs/scout-dedup.log`. Casus belli: Company 033 comparso 14× in 21h sprecando ~50% di una finestra Kimi su lo stesso pool. Mai re-INSERTare bypassando SC-05 con `python3 -c "import sqlite3; ..."`.
 
 ---
 

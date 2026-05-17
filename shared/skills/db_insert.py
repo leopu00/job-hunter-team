@@ -30,26 +30,108 @@ def extract_linkedin_job_id(url):
     return match.group(1) if match else None
 
 
-def check_duplicate(conn, url, company, title):
-    """Controlla duplicati per LinkedIn job ID e company+title. Ritorna posizione esistente o None."""
-    # Check 1: LinkedIn job ID (più affidabile)
+def _title_similarity(a, b):
+    """Ratio Levenshtein via difflib (stdlib). 1.0 = identico, 0.0 = nessun overlap."""
+    try:
+        from difflib import SequenceMatcher
+    except ImportError:
+        return 0.0
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def _log_dedup_skip(level, existing_id, skipped_url, company, title):
+    """Append-only JSONL audit dei skip dedup (bug #25).
+
+    Mai bloccare l'INSERT su errore di logging: se /jht_home/logs/ non
+    esiste o non è scrivibile, prosegui silenzioso. La policy dedup è
+    nell'exit code di check_duplicate, non in questa append.
+    """
+    try:
+        import json
+        from datetime import datetime, timezone
+        log_dir = os.path.join(os.environ.get('JHT_HOME', '/jht_home'), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "scout": os.environ.get('JHT_AGENT_NAME', 'unknown'),
+            "level": level,
+            "existing_id": existing_id,
+            "skipped_url": skipped_url or "",
+            "company": company or "",
+            "title": title or "",
+        }
+        with open(os.path.join(log_dir, 'scout-dedup.log'), 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + "\n")
+    except (OSError, ValueError):
+        pass
+
+
+def check_duplicate(conn, url, company, title, location=None):
+    """Dedup gerarchica a 3 livelli (bug #25 / SC-05).
+
+    Ritorna (existing_row, match_type) — sys.exit gestito dal caller.
+    Manteniamo `LinkedIn job ID` come Livello 0 (era già attivo prima
+    del fix): è la regola più affidabile quando l'URL è LinkedIn-shaped.
+
+    Livello 1 — URL esatto.
+    Livello 2 — Azienda + titolo identici + location uguale (o entrambe NULL/'').
+                Stesso ruolo dalla stessa azienda nella stessa città =
+                riskinning su altro provider. NON skip se city differisce
+                (Milano vs Berlino sono offerte distinte).
+    Livello 3 — Azienda + titolo SIMILE (ratio difflib > 0.85) + location uguale.
+                Cattura "Junior Software Engineer" vs "Software Engineer, Junior".
+
+    Match include positions con status='excluded': re-inserirne una è
+    spreco di token Scout (la verifica + dedup ripartirebbero da zero).
+    """
+    # Livello 0 (storico) — LinkedIn job ID
     linkedin_id = extract_linkedin_job_id(url)
     if linkedin_id:
         existing = conn.execute(
-            "SELECT id, title, company FROM positions WHERE url LIKE ? AND status != 'excluded'",
+            "SELECT id, title, company FROM positions WHERE url LIKE ?",
             (f'%{linkedin_id}%',)
         ).fetchone()
         if existing:
+            _log_dedup_skip(0, existing['id'], url, company, title)
             return existing, f"LinkedIn job ID {linkedin_id}"
 
-    # Check 2: company + title esatto (case-insensitive)
-    if company and title:
+    # Livello 1 — URL esatto
+    if url:
         existing = conn.execute(
-            "SELECT id, title, company FROM positions WHERE LOWER(company) = LOWER(?) AND LOWER(title) = LOWER(?) AND status != 'excluded'",
-            (company, title)
+            "SELECT id, title, company FROM positions WHERE url = ?",
+            (url,)
         ).fetchone()
         if existing:
-            return existing, "company+title"
+            _log_dedup_skip(1, existing['id'], url, company, title)
+            return existing, "URL esatto"
+
+    # Livello 2 — azienda + titolo + location uguale (o entrambe ''/NULL)
+    loc_norm = (location or '').strip()
+    if company and title:
+        existing = conn.execute(
+            "SELECT id, title, company, location FROM positions "
+            "WHERE LOWER(company) = LOWER(?) AND LOWER(title) = LOWER(?) "
+            "  AND COALESCE(LOWER(TRIM(location)),'') = LOWER(?)",
+            (company, title, loc_norm)
+        ).fetchone()
+        if existing:
+            _log_dedup_skip(2, existing['id'], url, company, title)
+            return existing, "azienda+titolo+location"
+
+    # Livello 3 — azienda + titolo simile (>0.85) + location uguale
+    if company and title:
+        candidates = conn.execute(
+            "SELECT id, title, company, location FROM positions "
+            "WHERE LOWER(company) = LOWER(?) "
+            "  AND COALESCE(LOWER(TRIM(location)),'') = LOWER(?)",
+            (company, loc_norm)
+        ).fetchall()
+        for cand in candidates:
+            if _title_similarity(title, cand['title']) > 0.85:
+                _log_dedup_skip(3, cand['id'], url, company, title)
+                return cand, "azienda+titolo simile+location"
 
     return None, None
 
@@ -58,8 +140,10 @@ def insert_position(args):
     conn = get_db()
     ensure_schema(conn)
 
-    # Check duplicati PRIMA dell'inserimento
-    existing, match_type = check_duplicate(conn, args.url, args.company, args.title)
+    # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 3 livelli)
+    existing, match_type = check_duplicate(
+        conn, args.url, args.company, args.title, getattr(args, 'location', None),
+    )
     if existing:
         print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
         conn.close()
