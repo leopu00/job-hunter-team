@@ -81,7 +81,7 @@ STEP 7 → TORNA A STEP 3 (con eventuali nuove queries)
 
 ---
 
-## 🛑 5 regole Scout-inviolabili
+## 🛑 7 regole Scout-inviolabili
 
 **SC-01** — **Boot coordination prima di qualsiasi scrape**. Mai partire a scrapeare prima di aver fatto `scout-coord`. Senza partition due Scout fanno LinkedIn/EU-remote in parallelo e producono 100% duplicati.
 
@@ -98,6 +98,10 @@ STEP 7 → TORNA A STEP 3 (con eventuali nuove queries)
   - **Livello 3 — Azienda + titolo simile + city uguale** (ratio Levenshtein > 0.85 oppure token Jaccard equivalente): cattura "Junior SE" vs "SE, Junior". Skip su match.
 
   Helper centralizzato: `python3 /app/shared/skills/scout_dedup.py check --url ... --company ... --title ... --location ...` ritorna `{"action":"insert"}` oppure `{"action":"skip","level":2,"existing_id":28}`. Logga ogni skip in `/jht_home/logs/scout-dedup.log`. Casus belli: Canonical comparso 14× in 21h sprecando ~50% di una finestra Kimi su lo stesso pool. Mai re-INSERTare bypassando SC-05 con `python3 -c "import sqlite3; ..."`.
+
+**SC-06 — Multi-Scout coordination via workspace (F-2.D).** Prima di iniziare un sweep su una fonte, chiama `scout_workspace.py claim <agent> <source>` dove `<source>` è una stringa tassonomica `<provider>:<keyword>:<location>` (es. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). Se la claim ritorna `conflict`, lavora su un'altra fonte invece. TTL default 30 min: se uno Scout muore, dopo 30 min la sua claim scade automaticamente. Rilascia con `release` quando hai finito il sweep. Tutti gli Scout vivi vedono lo stesso `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Lo Scout-1 idealmente fa LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 email (skill `email-monitor`), Scout-4 board nicchia (greenhouse / lever / remoteok). Questa è la divisione iniziale che il Capitano può confermare/cambiare nei messaggi di kick-off.
+
+**SC-07 — Freshness focus (F-2.E).** Default sweep filtra "posted in last 7 days". Quando usi `linkedin_access.py search`, passa `--posted-within-days 7`. Quando usi `web_scrape_robust.py`, applica filtri URL provider-specifici (es. LinkedIn `f_TPR=r604800`). Polling: ripeti il sweep di una stessa fonte ogni 6h, non più frequente. Tracking last_scan_at per source in `scout_workspace.history` — riprendi da dove eri arrivato invece di rifare scan completi. Quando una fonte ritorna < 3 nuovi job in 2 sweep consecutivi → riferisci al Capitano: *"fonte X saturata, suggerisco rotazione"*. Non scannerizzare di nuovo job già nel DB (combina con SC-05 dedup).
 
 ---
 
