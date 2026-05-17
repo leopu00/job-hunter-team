@@ -17,6 +17,8 @@ architetturale del DB (vedi `2026-05-17-team-strategy-bugs.md` bug #14).
 | `candle_window_mezzo.png` | Snapshot 19:41 UTC (mezzo finestra 17:11→22:11) | ✅ visualmente ok, ma "verificate"=0 |
 | `candle_window_fine.png` | Snapshot 21:21 UTC (fine finestra 17:11→22:11) | ✅ visualmente ok, ma "verificate"=0 |
 | `host_budget_chart.png` | Budget host-side (Mac dell'utente, non Kimi) | ✅ |
+| `positions_map_europe.png` | Mappa Europa con pin posizioni | ✨ |
+| `positions_map_italy.png` | Mappa Italia zoom con nomi aziende | ✨ |
 
 ## Storia delle richieste utente (verbatim, da `/jht_home/logs/messages.jsonl`)
 
@@ -30,6 +32,9 @@ architetturale del DB (vedi `2026-05-17-team-strategy-bugs.md` bug #14).
 | 01:08:50 | *"verificate e pronte hanno stesso colore"* | `pipeline_candle_max_*.png` (v2) | ⚠️ colori ok ma "verificate"=0 in tutti e 3 |
 | 01:11 | *"in nessuno dei 3 grafici vedo nuove o verificate - come mai? correggi"* | `pipeline_candle_snap_*.png` (v3) ⭐ | ⚠️ versione finale di layout ma stesso bug "verificate"=0 |
 | 01:15 | *"ora non ci sta mai candela verificate - come mai?"* | (msg testuale #31) | 💡 **Capitano scopre la causa**: stato DB transitorio |
+| 01:19 | *"ok rifammi grafico usage temporale"* | `budget_chart_late.png` (in `2026-05-17-budget-windows/`) | ✅ proj 92.2% on-target |
+| 01:23 | *"fammi png on mappa geografica con pin location delle posizioni trovate"* | `positions_map_europe.png` | ✨ mappa Europa con tile OSM + pin colorati per stato |
+| 01:28 | *"fantastico ora fammi solo per italia e metti i nomi"* | `positions_map_italy.png` | ✨ mappa Italia zoom con label aziende |
 
 ## Risposta chiave del Capitano (msg #31, 01:15:46 UTC)
 
@@ -100,6 +105,51 @@ finito e tutto è andato in revisione/pronto.
 Grafico inviato dal Capitano alle 00:23 prima della serie pipeline.
 Mostra l'usage budget host-side (Mac dell'utente, non Kimi). Diverso
 contesto dai grafici pipeline, ma stessa pipeline matplotlib.
+
+### `positions_map_europe.png` ✨ — mappa Europa con pin posizioni
+
+![Mappa Europa posizioni](./positions_map_europe.png)
+
+Generata 01:26 UTC su richiesta utente *"fammi png on mappa geografica
+con pin location delle posizioni trovate"*. Il Capitano ha:
+
+1. **Scaricato 9 tile OSM** (OpenStreetMap) per coprire Europa Z=5
+   (`tile_15-17_10-12.png`).
+2. **Mosaico le tile** con PIL/matplotlib per creare un'unica immagine
+   base (~752 KB).
+3. **Geocodificato** le città delle posizioni nel DB (Milano, Torino,
+   Pisa, Roma, Pesaro, Madrid, Barcelona, Utrecht) con lat/lon hardcoded
+   o cache locale (l'utente NON ha menzionato chiamate Nominatim — quindi
+   probabilmente coordinate hardcoded nel codice generato).
+4. **Plot pin colorati** per stato posizione (excluded/scored/ready)
+   sopra il tile mosaicato.
+5. **Legenda** in alto a destra con icona+stato.
+
+Pattern emergente: il Capitano sa orchestrare **download HTTP + tile
+mosaicing + matplotlib overlay** senza skill formali. Esegue tutto in
+~3 minuti dalla richiesta.
+
+### `positions_map_italy.png` ✨ — mappa Italia zoom + label aziende
+
+![Mappa Italia posizioni](./positions_map_italy.png)
+
+Generata 01:30 UTC su richiesta utente *"fantastico ora fammi solo per
+italia e metti i nomi"*. Iterazione:
+
+1. **Bounding box ristretto** all'Italia (12 tile `it_tile_66-69_45-47.png`
+   a zoom Z=6, ~360 KB di tile scaricati).
+2. **Mosaico Italia** con scala lat/lon ricalcolata per zoom maggiore.
+3. **Pin con label aziende** invece di soli colori: vedi "Bending Spoons
+   Milano", "ION", "ION Berry", "Gr4vy", "MLabs", ecc.
+4. **Legenda dettagliata** in alto a destra con tutte le posizioni
+   visibili nella mappa, ordinate per stato/score.
+
+Reazione utente verbatim a positions_map_europe: **"fantastico"** ⭐
+
+Take-away: il Capitano è capace di produrre **visualizzazioni geo
+production-grade** out-of-the-box, senza una skill `geo-map` formale.
+Bug strategico associato: vedi #16 (auto-generation periodica) per
+sfruttare meglio questa capacità.
 
 ## Iterazioni intermedie (non versionate)
 
