@@ -16,33 +16,53 @@ cross-provider verificato:
 - **Codex**: accede ma non spontaneamente 🟡
 - **Kimi** (attuale): cookie wall ❌
 
-Questa skill chiude il gap per **tutti** i provider passando da un
-livello applicativo uniforme (Playwright stealth + persistent profile)
-invece di affidarsi alle capability nativi del modello.
+Questa skill chiude il gap **senza login** sfruttando l'endpoint guest
+di LinkedIn (`jobs-guest/jobs/api/seeMoreJobPostings/search`) e l'URL
+pubblico `/jobs/view/<ID>` (entrambi ri-confermati 2026-05-17, già
+documentati nel repo legacy `job-hunter/scout-3/`). Funziona uguale su
+qualsiasi provider perché lavora a livello shell HTTP, non LLM browser.
 
 ## I 5 componenti
 
-### 🌐 A. `linkedin_access.py` — LinkedIn search + JD fetch
+### 🌐 A. `linkedin_access.py` — LinkedIn senza login (metodo legacy ri-confermato)
 
-Sessione Playwright persistente in `$JHT_HOME/.cache/playwright/linkedin-session/`.
-Login one-shot manuale (l'utente apre il browser una volta sola, da lì
-i cookies persistono).
+**Niente Playwright, niente login.** Metodo documentato nel repo legacy
+(`job-hunter/scout-3/FRIK.md:71`, `docs/architettura.md:89-90`) e ri-verificato 2026-05-17:
+
+```
+/comm/jobs/view/<ID>   →  /jobs/view/<ID>   = endpoint PUBBLICO
+```
+
+Search via guest endpoint `linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search`
+(no auth required) che ritorna cards HTML con `data-entity-urn="urn:li:jobPosting:<ID>"`.
 
 ```bash
-# Verifica sessione
-python3 /app/shared/skills/linkedin_access.py login-check
-# → {"logged_in": true, ...} oppure {"logged_in": false, "hint": "..."}
-
 # Cerca jobs ultimi 7 giorni
 python3 /app/shared/skills/linkedin_access.py search \
     --keywords "python junior" --location "Italy" \
     --limit 25 --posted-within-days 7
 # → stdout JSONL, 1 job per riga {job_id, url, title, company, location, source}
 
-# Fetch dettaglio JD + auto-extract deadline (F-4)
-python3 /app/shared/skills/linkedin_access.py fetch-job https://www.linkedin.com/jobs/view/4381470286
-# → {"url":"...","title":"...","company":"...","jd_text":"...","deadline":"2026-06-15"}
+# Fetch dettaglio JD (accetta URL completo, /comm/jobs/view/<ID>, o solo <ID>)
+python3 /app/shared/skills/linkedin_access.py fetch-job 4402474915
+# → {"job_id":"...","title":"Python Developer (Data-Focused)",
+#    "company":"ManpowerGroup Talent Solutions",
+#    "location":"Genoa, Liguria, Italy",
+#    "jd_text":"...1863 chars...",
+#    "seniority":"Associate","employment_type":"Full-time",
+#    "job_function":"Analyst","industries":"...",
+#    "deadline":"" (popolato se trovato nel JD via F-4 deadline_extract)}
+
+# Converte URL email → URL pubblico
+python3 /app/shared/skills/linkedin_access.py convert-url \
+    "https://www.linkedin.com/comm/jobs/view/4402474915?utm=email"
+# → https://www.linkedin.com/jobs/view/4402474915
 ```
+
+**Quando il job è scaduto**: LinkedIn redirige a una SERP generica
+("476 Python jobs in Italy"). La skill rileva il pattern e ritorna
+`{"expired": true, "note": "redirect a SERP — job scaduto"}` — usa
+questo flag per marcare la position `excluded` con tag `[LINK_MORTO]`.
 
 ### 🛡️ B. `web_scrape_robust.py` — anti-bot cascade
 
@@ -122,22 +142,30 @@ if ! python3 /app/shared/skills/scout_workspace.py available "$SOURCE" --agent "
 fi
 python3 /app/shared/skills/scout_workspace.py claim "$MY_ID" "$SOURCE" >/dev/null
 
-# 2. Search (LinkedIn freshness 7gg)
+# 2. Search LinkedIn (no login, guest endpoint, freshness 7gg)
 python3 /app/shared/skills/linkedin_access.py search \
     --keywords "python junior" --location "Italy" \
     --limit 25 --posted-within-days 7 > /tmp/scout_results.jsonl
 
-# 3. Per ogni risultato: dedup (SC-05) + fetch JD + INSERT
+# 3. Per ogni risultato: dedup (SC-05) + fetch JD pubblico + INSERT
 while IFS= read -r line; do
-  url=$(echo "$line" | python3 -c "import sys,json;print(json.load(sys.stdin)['url'])")
-  detail=$(python3 /app/shared/skills/linkedin_access.py fetch-job "$url")
-  title=$(echo "$detail" | python3 -c "import sys,json;print(json.load(sys.stdin)['title'])")
+  jid=$(echo "$line" | python3 -c "import sys,json;print(json.load(sys.stdin)['job_id'])")
+  detail=$(python3 /app/shared/skills/linkedin_access.py fetch-job "$jid")
+  expired=$(echo "$detail" | python3 -c "import sys,json;print(json.load(sys.stdin).get('expired',False))")
+  if [ "$expired" = "True" ]; then
+    echo "[scout] $jid expired (redirect SERP), skip" >&2
+    continue
+  fi
+  title=$(echo "$detail"   | python3 -c "import sys,json;print(json.load(sys.stdin)['title'])")
   company=$(echo "$detail" | python3 -c "import sys,json;print(json.load(sys.stdin)['company'])")
-  jd=$(echo "$detail" | python3 -c "import sys,json;print(json.load(sys.stdin)['jd_text'])")
-  deadline=$(echo "$detail" | python3 -c "import sys,json;print(json.load(sys.stdin).get('deadline',''))")
+  jd=$(echo "$detail"      | python3 -c "import sys,json;print(json.load(sys.stdin)['jd_text'])")
+  loc=$(echo "$detail"     | python3 -c "import sys,json;print(json.load(sys.stdin).get('location',''))")
+  deadline=$(echo "$detail"| python3 -c "import sys,json;print(json.load(sys.stdin).get('deadline',''))")
   python3 /app/shared/skills/db_insert.py position \
-    --title "$title" --company "$company" --url "$url" \
-    --jd-text "$jd" --source linkedin --found-by "$MY_ID" \
+    --title "$title" --company "$company" \
+    --url "https://www.linkedin.com/jobs/view/$jid" \
+    --location "$loc" --jd-text "$jd" \
+    --source linkedin --found-by "$MY_ID" \
     ${deadline:+--deadline "$deadline"}
 done < /tmp/scout_results.jsonl
 
