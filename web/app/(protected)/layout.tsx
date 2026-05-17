@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
+import { isDashboardDemoMode } from "@/lib/dashboard-demo";
 import Navbar from "@/components/NavbarChrome";
 import MainChrome from "@/components/MainChrome";
 
@@ -21,13 +22,19 @@ export default async function ProtectedLayout({
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const pathname = hdrs.get("x-pathname") ?? "";
   const search = hdrs.get("x-search") ?? "";
+  const demoMode = isDashboardDemoMode(search);
 
   // Onboarding gate: finché il profilo locale non è completo l'utente
   // può stare solo su /onboarding. Qualsiasi altra route del gruppo
   // protetto lo rispedisce indietro, così non può saltare il setup
   // cambiando l'URL a mano. Il check gira solo in local mode, dove
   // readWorkspaceProfile() ha senso (in cloud il profilo è su Supabase).
-  if (localRequest && pathname && !pathname.startsWith("/onboarding")) {
+  if (
+    localRequest &&
+    pathname &&
+    !pathname.startsWith("/onboarding") &&
+    !demoMode
+  ) {
     if (!isProfileComplete(readWorkspaceProfile())) {
       redirect("/onboarding");
     }
