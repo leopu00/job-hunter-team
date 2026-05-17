@@ -98,6 +98,30 @@ function startTgBridge() {
 }
 
 /**
+ * Auto-spawn dei 2 bridge Python (sentinel + pacing) tramite
+ * `start-agent.sh bridge`. Senza, dopo ogni `docker compose up -d` il
+ * sentinel-bridge resta morto e il Capitano va in "team in standby"
+ * cieco — caso osservato 2026-05-17 20:02 con utente arrabbiato a
+ * ragione. Pattern identico a startTgBridge: lo script bash è
+ * idempotente (kill+respawn via /proc cmdline scan), setsid detached,
+ * exit immediato del launcher = OK.
+ */
+function startSentinelBridges() {
+  pid1Log('starting sentinel-bridge + pacing-bridge (Python detached)');
+  const child = spawnLabeled('bridge-launcher', '/bin/bash', [
+    TG_BRIDGE_LAUNCHER,
+    'bridge',
+  ]);
+  child.on('exit', (code) => {
+    if (code === 0) {
+      pid1Log('sentinel/pacing bridge bootstrap OK (2 process detached)');
+    } else {
+      pid1Log(`sentinel/pacing bridge bootstrap fallito (exit ${code}): nessun BRIDGE TICK al Capitano`);
+    }
+  });
+}
+
+/**
  * Verifica se active_provider è configurato in jht.config.json. Senza
  * di esso, start-agent.sh cade nel default 'claude' (non installato) →
  * exit 1, agenti non partono.
@@ -157,7 +181,13 @@ async function hasProviderCredentials() {
  * attive e skippa, idempotente.
  */
 async function startUserFacingAgents() {
-  const agents = ['assistente', 'capitano', 'mentor'];
+  // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza
+  // sentinella tmux il Capitano non riceve [BRIDGE TICK] e all'utente
+  // risponde generico ("team in standby") perché non ha dati freschi.
+  // La sentinella va in questa lista insieme ai 3 user-facing perché
+  // anche lei è un agente LLM long-lived necessario al funzionamento
+  // normale del team — non un worker spawnato on-demand dal Capitano.
+  const agents = ['assistente', 'capitano', 'mentor', 'sentinella'];
   pid1Log(`auto-start agenti user-facing (${agents.join(', ')})`);
   for (const role of agents) {
     await new Promise((resolve) => {
@@ -322,6 +352,17 @@ async function dispatch() {
     startTgBridge();
   } else {
     pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
+  }
+
+  // Bridge Python (sentinel + pacing): partono SEMPRE indipendentemente
+  // dai bot Telegram. Senza il Capitano non riceve [BRIDGE TICK] e si
+  // bloccca pensando che la pipeline sia in standby. Il provider Kimi
+  // deve essere configurato per generare tick utili (default OK se
+  // active_provider è set, lo script legge il config a runtime).
+  if (await hasActiveProviderConfigured()) {
+    startSentinelBridges();
+  } else {
+    pid1Log('sentinel/pacing bridge: active_provider mancante, skip — riprova dopo wizard');
   }
 
   // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
