@@ -45,6 +45,8 @@ shared/telegram/*.session
 !web/app/**/*.png
 !assets/banner.png
 !desktop/assets/icon.png
+# Session reports versionati (analisi grafici budget, throttle, ecc.)
+!docs/sessions/**/*.png
 
 # Gap report e dati analisi personali
 shared/data/gap-report.json
