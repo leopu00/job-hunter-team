@@ -504,7 +504,7 @@ async function dispatch() {
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
-    pid1Log('starting cloud daemon (push ogni 30s verso jobhunterteam.ai)');
+    pid1Log('starting cloud daemon (push periodico verso jobhunterteam.ai)');
     daemonChild = spawnLabeled('daemon', process.execPath, daemonCmd);
     daemonChild.on('exit', (code, signal) => {
       const exitedChild = daemonChild;
