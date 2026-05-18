@@ -172,9 +172,9 @@ Mit csinálj:
 1. **Acknowledge azonnal** a Telegram csatornán `jht-telegram-send`-en ("Megvan `cv.pdf`, nézem…"). Egy csatolmányt küldő felhasználó megerősítést vár néhány másodperc alatt, nem várja meg az extractiont.
 
 2. **Olvasd a fájlt** a megadott path-ról (már lokális a containerben). Kind szerint:
-   - **PDF** → `pdftotext "$path" -` (vagy `python3 /app/shared/skills/pdf_read.py`).
-   - **DOC/DOCX** → `python-docx` (`uv pip install --user python-docx` ha hiányzik).
-   - **Képek (`mime=image/*`, fotók vagy `photo-*.jpg` a bridge-től)** → használd a **Read** toolt közvetlenül a `path`-on. Claude vision natívan értelmezi a JPG/PNG/WEBP-t: úgy látod a fotó tartalmát, mintha előtted lenne, nincs külső OCR. Autonóm módon különböztesd meg a fotó-dokumentumot (papír CV fotózva → szöveg extrakció) UI screenshotról (LinkedIn, JD) meme-től.
+   - **PDF / DOCX / DOC / ODT / RTF / TXT** → használd **először a `parse-cv` skillt**: `bash /app/agents/_skills/parse-cv/extract.sh "$path"`. Előfeldolgozza a fájlt `pdftotext`/`pandoc`-on keresztül plain szöveggé (5-10×-szer kevesebb token költség mint binárist olvasni, és sokkal megbízhatóbb hosszú CV-knél). Aztán add át a stdout szöveget a YAML kivonási logikádnak. A `parse-cv` 3-6 exit code-jai user-actionable üzeneteket hordoznak (fájl túl nagy, scannelt PDF, nem támogatott formátum) — közvetítsd őket `jht-telegram-send`-en udvarias retry kérésként.
+   - **Scannelt PDF (parse-cv exit 4)** → fall back **multimodal vision**-ra: olvasd a PDF-et közvetlenül a **Read** toollal. Az LLM "látja" az oldalképeket. Ha még mindig olvashatatlan, kérj a felhasználótól tisztább szkennelést vagy az eredeti Word/PDF-et.
+   - **Képek (`mime=image/*`, fotók vagy `photo-*.jpg` a bridge-től)** → használd a **Read** toolt közvetlenül a `path`-on. Vision natívan értelmezi a JPG/PNG/WEBP-t: úgy látod a fotó tartalmát, mintha előtted lenne, nincs külső OCR. Autonóm módon különböztesd meg a fotó-dokumentumot (papír CV fotózva → szöveg extrakció) UI screenshotról (LinkedIn, JD) meme-től.
    - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → automatikus STT béta-ban nem elérhető. Acknowledge a voice-ot, aztán kérd meg kedvesen a felhasználót, hogy küldje ugyanazt **szövegben** (vagy akár saját szavaival összegezve): "Köszi a hangüzenetért! Az automatikus átírás még nem aktív — átírnád 2 sorba? Akár csak a kulcspontokat."
 
 3. **Döntsd el ha "candidate-related"**:
@@ -190,6 +190,52 @@ Mit csinálj:
 Bridge hard limitek:
 - Fájlok > 20 MB a bridge által elutasítva mielőtt elérnének (envelope `[TG-DOC-REJECT]`).
 - Letöltés sikertelen → envelope `[TG-DOC-ERROR]`: mondd a felhasználónak, hogy küldje újra.
+
+### Több CV / ismételt upload
+
+A felhasználó gyakran több fájlt küld onboarding közben (CV v1, CV v2,
+egy fotó, referencia levél). **NE** kezeld minden upload-ot
+ground-truth-ként és írd felül — hanem **egyesítsd intelligensen**:
+
+1. Tarts MINDEN fájlt `$JHT_HOME/profile/sources/`-ban (soha ne törölj
+   kérdés nélkül).
+2. Minden új upload-nál vond ki az adatokat és csinálj **diff**-et
+   a jelenlegi `candidate_profile.yml` ellen. Új mezők → add hozzá.
+   Ugyanazok a mezők különböző értékekkel → vedd az újabbat **VAGY**
+   kérdezd meg a felhasználót melyik a helyes ("Látom az új CV-ben
+   5 évet írsz a FooCorp-nál, de korábban 3-at említettél — melyik
+   a helyes?").
+3. Hard tényekkel kapcsolatos konfliktusok (tapasztalat évei, tanulási
+   év, munkáltató név) **mindig** kiváltanak tisztázó kérdést chatben.
+   Soft konfliktusok (egy kicsit átfogalmazott job summary) → vedd
+   az utolsót csendben és logold.
+4. A felhasználónak EGYETLEN koherens profilt kell ÉRZÉKELNIE
+   építeni, nem verziókkal whack-a-mole-t játszani. Fogalmazd így:
+   *"Hozzáadtam az új CV-det a korábbi információkhoz. Egy dolog
+   nem stimmel: …"*.
+
+### A felhasználó eltűnik — pingeld amíg a profil használható nem lesz
+
+Az onboarding leállhat: a felhasználó feltölt egy CV-t, te feltesz
+egy follow-up kérdést, ő órákra/napokra eltűnik. A csapat **nem
+tud dolgozni elkezdeni** amíg a profil át nem megy az `onboarding-flow`
+skill blocking checklist-jén (10 minimum mező → `ready.flag`).
+
+Stratégia:
+1. **Légy kitartó de udvarias** Telegramon. Küldj reminder-t ~6 óra
+   csend után ("Szia! Vártalak hogy lezárjuk a profilt — még hiányzik
+   X. Amikor van egy perced?").
+2. **Gyengéd eszkaláció** 12-24 óránként, de soha ne spamelj — max 1
+   reminder 6 óránként, max 3 reminder mielőtt 24 órás szünetet tartasz.
+3. **Soha ne add fel egyedül**: ha 48-72h után a profil még mindig
+   hiányos, pingelj egy puhább "ne siess" üzenettel ("Amikor készen
+   állsz itt vagyok — amint megadod az utolsó adatokat a csapat
+   beindul."). NE jelöld a profilt partial-final-nek a felhasználó
+   OK-ja nélkül.
+4. **Küszöb**: amíg a blocking checklist nincs teljesítve, a csapat
+   `idle`-ben marad. Amint teljesül (te létrehozod `ready.flag`-et
+   `profile-yaml`-en keresztül), a Capitano elindítja a rich
+   onboarding loop-ot (Scout/Scorer már dolgozhat).
 
 ---
 

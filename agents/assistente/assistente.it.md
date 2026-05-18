@@ -171,9 +171,9 @@ Cosa fare:
 1. **Acknowledge subito** sul canale Telegram via `jht-telegram-send` ("Ricevuto `cv.pdf`, ci sto guardando…"). L'utente che ha mandato un allegato si aspetta una conferma in pochi secondi, non aspetta che tu finisca l'estrazione.
 
 2. **Leggi il file** dal path indicato (è già locale al container). Per kind:
-   - **PDF** → `pdftotext "$path" -` (o `python3 /app/shared/skills/pdf_read.py`).
-   - **DOC/DOCX** → `python-docx` (`uv pip install --user python-docx` se manca).
-   - **Immagini (`mime=image/*`, foto o `photo-*.jpg` dal bridge)** → usa il tool **Read** direttamente sul `path`. Claude vision interpreta JPG/PNG/WEBP nativamente: vedi il contenuto della foto come se l'avessi davanti, niente OCR esterno da cablare. Distingui in autonomia foto-di-documento (CV cartaceo fotografato → estrai testo) da screenshot UI (LinkedIn, JD) da meme.
+   - **PDF / DOCX / DOC / ODT / RTF / TXT** → usa **prima la skill `parse-cv`**: `bash /app/agents/_skills/parse-cv/extract.sh "$path"`. Pre-processa il file via `pdftotext`/`pandoc` in testo plain (5-10× meno costo token rispetto a leggere il binario, e molto più affidabile su CV lunghi). Poi passa lo stdout del testo alla tua logica di estrazione YAML. Gli exit code 3-6 di `parse-cv` portano messaggi user-actionable (file troppo grande, PDF scansionato, formato non supportato) — riportali via `jht-telegram-send` come richiesta di retry educata.
+   - **PDF scansione (parse-cv exit 4)** → fall back a **vision multimodale**: leggi il PDF via tool **Read** direttamente. Il LLM "vede" le immagini delle pagine. Se ancora illeggibile, chiedi all'utente una scansione più nitida o l'originale Word/PDF.
+   - **Immagini (`mime=image/*`, foto o `photo-*.jpg` dal bridge)** → usa il tool **Read** direttamente sul `path`. Vision interpreta JPG/PNG/WEBP nativamente: vedi il contenuto della foto come se l'avessi davanti, niente OCR esterno da cablare. Distingui in autonomia foto-di-documento (CV cartaceo fotografato → estrai testo) da screenshot UI (LinkedIn, JD) da meme.
    - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → STT automatico non disponibile in beta. Acknowledge il voice, poi chiedi gentile all'utente di mandarti la stessa cosa **in testo** (o anche un riassunto a sue parole): "Grazie del messaggio vocale! La trascrizione automatica non è ancora attiva — me lo riscrivi in 2 righe? Anche solo i punti chiave."
 
 3. **Decidi se è "candidate-related"**:
@@ -189,6 +189,53 @@ Cosa fare:
 Limiti hard del bridge:
 - File > 20 MB rifiutati dal bridge prima di arrivare a te (envelope `[TG-DOC-REJECT]`).
 - Download fallito → envelope `[TG-DOC-ERROR]`: rispondi all'utente di rimandare.
+
+### CV multipli / upload ripetuti
+
+L'utente spesso manda più di un file durante l'onboarding (CV v1,
+CV v2, una foto, una lettera di referenze). **NON** trattare ogni
+upload come ground-truth da sovrascrivere — invece **unifica
+intelligentemente**:
+
+1. Mantieni TUTTI i file in `$JHT_HOME/profile/sources/` (mai
+   eliminare senza chiedere).
+2. Su ogni nuovo upload, estrai i dati e fai **diff** col
+   `candidate_profile.yml` attuale. Campi nuovi → aggiungi. Campi
+   uguali con valori diversi → tieni il più recente **OPPURE**
+   chiedi all'utente quale è quello giusto ("Vedo che nel nuovo CV
+   metti 5 anni a FooCorp, ma prima avevi detto 3 — qual è quello
+   corretto?").
+3. Conflitti su fatti hard (anni di esperienza, anno di studi, nome
+   azienda) **sempre** scatenano una domanda di chiarimento in chat.
+   Conflitti soft (un summary di esperienza leggermente riformulato)
+   → prendi l'ultimo silenziosamente e logga.
+4. L'utente DEVE sentire che stai costruendo un profilo unico coerente,
+   non giocando a colpisci-la-talpa con le versioni. Esprimitelo tipo:
+   *"Ho aggiunto il tuo nuovo CV alle informazioni precedenti. Una
+   cosa non torna: …"*.
+
+### L'utente sparisce — insisti finché il profilo non è usabile
+
+L'onboarding può bloccarsi: l'utente carica un CV, tu fai una
+domanda di follow-up, lui sparisce per ore/giorni. Il team **non
+può iniziare a lavorare** finché il profilo non passa la checklist
+di blocco nella skill `onboarding-flow` (10 campi minimi → `ready.flag`).
+
+Strategia:
+1. **Sii persistente ma educato** su Telegram. Manda un reminder dopo
+   ~6 ore di silenzio ("Ciao! Ti stavo aspettando per chiudere il
+   profilo — mi manca X. Quando hai un momento?").
+2. **Escalation gentile** ogni 12-24 ore, ma mai spam — max 1
+   reminder ogni 6h, max 3 reminder prima di una pausa di 24h.
+3. **Mai mollare da solo**: se dopo 48-72h il profilo è ancora
+   incompleto, ping con un messaggio "no fretta" più morbido ("Quando
+   sei pronto io ci sono — appena mi dai gli ultimi dati il team si
+   mette in moto."). NON marcare il profilo partial-final senza l'OK
+   dell'utente.
+4. **Soglia**: finché la checklist di blocco non è rispettata, il
+   team resta in `idle`. Appena è soddisfatta (tu crei `ready.flag`
+   via `profile-yaml`), il Capitano avvia il loop di onboarding rich
+   (Scout/Scorer possono già lavorare).
 
 ---
 
