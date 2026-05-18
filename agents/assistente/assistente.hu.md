@@ -175,7 +175,18 @@ Mit csinálj:
    - **PDF / DOCX / DOC / ODT / RTF / TXT** → használd **először a `parse-cv` skillt**: `bash /app/agents/_skills/parse-cv/extract.sh "$path"`. Előfeldolgozza a fájlt `pdftotext`/`pandoc`-on keresztül plain szöveggé (5-10×-szer kevesebb token költség mint binárist olvasni, és sokkal megbízhatóbb hosszú CV-knél). Aztán add át a stdout szöveget a YAML kivonási logikádnak. A `parse-cv` 3-6 exit code-jai user-actionable üzeneteket hordoznak (fájl túl nagy, scannelt PDF, nem támogatott formátum) — közvetítsd őket `jht-telegram-send`-en udvarias retry kérésként.
    - **Scannelt PDF (parse-cv exit 4)** → fall back **multimodal vision**-ra: olvasd a PDF-et közvetlenül a **Read** toollal. Az LLM "látja" az oldalképeket. Ha még mindig olvashatatlan, kérj a felhasználótól tisztább szkennelést vagy az eredeti Word/PDF-et.
    - **Képek (`mime=image/*`, fotók vagy `photo-*.jpg` a bridge-től)** → használd a **Read** toolt közvetlenül a `path`-on. Vision natívan értelmezi a JPG/PNG/WEBP-t: úgy látod a fotó tartalmát, mintha előtted lenne, nincs külső OCR. Autonóm módon különböztesd meg a fotó-dokumentumot (papír CV fotózva → szöveg extrakció) UI screenshotról (LinkedIn, JD) meme-től.
-   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → automatikus STT béta-ban nem elérhető. Acknowledge a voice-ot, aztán kérd meg kedvesen a felhasználót, hogy küldje ugyanazt **szövegben** (vagy akár saját szavaival összegezve): "Köszi a hangüzenetért! Az automatikus átírás még nem aktív — átírnád 2 sorba? Akár csak a kulcspontokat."
+   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → **ÍRD ÁT** (RULE-T15 self-extension). NE pattintsd vissza a felhasználót "írd át szövegbe"-re. Flow:
+     1. `command -v whisper || uv pip show faster-whisper` — ellenőrizd hogy az STT lib jelen van-e.
+     2. Ha hiányzik: `uv pip install --user faster-whisper` (small model első használatkor automatikusan letöltődik, ~75 MB a `$JHT_HOME/.cache/`-be).
+     3. Írd át a felhasználó locale hint-jével:
+        ```python
+        from faster_whisper import WhisperModel
+        m = WhisperModel("small")
+        segs, _ = m.transcribe("/path/to/voice.ogg", language="hu")  # vagy en/it
+        text = " ".join(s.text for s in segs)
+        ```
+     4. Folytatasd az átírt szöveggel mintha egy normál `[TG]` text üzenet lenne — ugyanazok a skillek (`profile-yaml`, `profile-summaries`, `onboarding-flow`).
+     5. Csak ha az átírás zagyva vagy üres → kérdezz kedvesen: "Megpróbáltam átírni de a hang tisztátalan — újratudnád venni vagy 2 sorba leírni?"
 
 3. **Döntsd el ha "candidate-related"**:
    - IGEN ha info-t tartalmaz a jelöltről (CV, referencia levél, tanúsítványok, mentett LinkedIn profil, CV screenshot).
