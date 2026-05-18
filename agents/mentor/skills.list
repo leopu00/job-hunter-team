@@ -24,3 +24,9 @@ db-query
 # Mentor-only operative skills
 mentor-patterns
 mentor-output
+
+# Emergency: spawn fresh DOTTORE quando in un digest settimanale rilevi
+# pattern infrastrutturali anomali (es. token spike, agente che non ha
+# prodotto nulla negli ultimi N giorni). Post-mortem
+# 2026-05-18-capitano-zombie-night.
+spawn-doctor

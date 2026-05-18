@@ -17,7 +17,13 @@ JHT_HOME="${JHT_HOME:-/jht_home}"
 LOGS_DIR="$JHT_HOME/logs"
 mkdir -p "$LOGS_DIR"
 
-INTERVAL_SEC="${DOCTOR_WATCHDOG_INTERVAL:-1800}"  # 30 min default
+INTERVAL_SEC="${DOCTOR_WATCHDOG_INTERVAL:-7200}"  # 2h default
+# Decisione 2026-05-18 (post-mortem capitano-zombie-night): 30 min era
+# troppo aggressivo — 20 spawn a vuoto in 11h notturne, ~3-5% budget Kimi
+# bruciato per giri vuoti. Con cadenza 2h: 12 spawn/giorno invece di 48.
+# Per casi urgenti (es. l'utente chiede "fai partire il dottore"), i
+# coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la skill
+# `spawn-doctor` che invoca questo script on-demand.
 SPAWNER="/app/.launcher/spawn-doctor.sh"
 
 log() {
