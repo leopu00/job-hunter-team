@@ -18,6 +18,12 @@ user-reply-check
 # Inter-agent (bridge to the Capitano when needed)
 tmux-send
 
+# Emergency: spawn fresh DOTTORE quando l'utente chiede via Telegram
+# "fai partire il dottore" / "dottora" / "controlla il team". Tra i
+# cicli auto-watchdog (2h) la sessione DOTTORE è bash residua: scriverle
+# è inutile, va spawnata ex-novo. Post-mortem 2026-05-18-capitano-zombie-night.
+spawn-doctor
+
 # Profile maintenance — the Assistente's daily loop
 profile-yaml
 profile-summaries

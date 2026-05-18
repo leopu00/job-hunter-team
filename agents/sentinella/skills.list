@@ -7,3 +7,9 @@
 tmux-send
 rate-budget
 throttle
+
+# Emergency: spawn fresh DOTTORE quando rilevi che un agente smette di
+# consumare token in piena finestra (sospetta zombie). Post-mortem
+# 2026-05-18-capitano-zombie-night — la Sentinella vede usage=0% e
+# può escalare al Dottore senza aspettare i 2h del watchdog.
+spawn-doctor
