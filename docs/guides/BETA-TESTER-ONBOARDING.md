@@ -187,6 +187,14 @@ Per **monitorare il beta tester in tempo reale** durante i primi giorni (vedere 
 - ✅ Pairing token in `install.sh` — già funziona per legare VPS a account JHT
 - ✅ Loader `<role>.<locale>.md` in `start-agent.sh` — già scaffolded dal 2026-05-06
 - ✅ `agents/_team/*` e `agents/_manual/*` già in EN
+- ✅ **CV upload robusto** — skill `parse-cv` (pdftotext+pandoc) pre-process,
+  fallback vision multimodal su scansioni, gestione formati .pdf/.docx/.odt/.rtf
+- ✅ **Multiple CV uploads** — Assistente unifica, chiede chiarimenti su
+  discrepanze hard (years, employer), take-latest silent su soft conflicts
+- ✅ **User silence** — Assistente fa reminder ~6h, escalation gentile,
+  team idle finché blocking checklist 10 campi non soddisfatta
+- ✅ **Random username bot** — wizard genera 3 suffix indipendenti
+  `<role>_<tag>_<random>_bot` con regen-on-collision se BotFather rifiuta
 
 ---
 
