@@ -130,6 +130,50 @@ Aggiornare la guida pubblica per riflettere il modello "beta tester invia chiave
 
 **Effort stimato**: 15 min (solo doc)
 
+### 🟠 DA FARE AL KICK-OFF (durante setup del beta tester)
+
+#### Shadow observer mode sui bot Telegram di Leone
+
+Per **monitorare il beta tester in tempo reale** durante i primi giorni (vedere auto-report Capitano, risposte agli agenti, errori) senza che il beta tester sappia di essere osservato.
+
+**Pattern scelto**: Scenario C "shadow observer" — auto-report broadcast a tutti i chat_id whitelisted, ma risposte agli utenti sticky (= solo chi ha scritto riceve la reply). Beta tester e Leone hanno conversation paralleli che non si vedono.
+
+**Cosa serve modificare** (effort ~2h):
+
+1. **Schema config** (`jht.config.json`): aggiungere `observer_chat_ids: []` accanto a `chat_id`:
+   ```json
+   {
+     "channels": { "telegram": { "bots": {
+       "capitano": {
+         "bot_token": "...",
+         "chat_id": "<beta_tester_chat>",
+         "observer_chat_ids": ["<leone_chat>"]
+       }
+     }}}
+   }
+   ```
+
+2. **Whitelist** (`.launcher/tg-bridge.py:288-329`): set `allowed_chats = {primary} + observers` e usare `chat_id not in allowed_chats` per il filtro.
+
+3. **Outbound broadcast** (`agents/_tools/jht-telegram-send`):
+   - Auto-report / welcome / notifiche team-wide → loop su `chat_id + observer_chat_ids`
+   - Risposta a un messaggio in arrivo → solo al chat_id mittente (sticky)
+
+4. **Setup**: beta tester crea i 3 bot via wizard standard → Leone aggiunge a mano il proprio chat_id in `observer_chat_ids` via SSH:
+   ```bash
+   ssh -i ... root@<vps-ip>
+   docker exec jht jq '.channels.telegram.bots |= map_values(.observer_chat_ids = ["<leone_chat>"])' \
+     ~/.jht/jht.config.json > /tmp/c.json && mv /tmp/c.json ~/.jht/jht.config.json
+   docker exec jht jht team restart  # ricarica config
+   ```
+
+**Trade-off accettato** (vedi `docs/sessions/2026-05-18-supabase-disk-io-investigation/README.md` per dettagli architettura simili):
+- ✅ Trasparenza totale per Leone
+- ✅ Beta tester non vede Leone scrivere
+- ⚠️ Beta tester potrebbe notare che gli auto-report arrivano "altrove" (improbabile, dichiarare nel patto beta che Leone monitora)
+
+**Riferimento implementazione**: vedere conversazione 2026-05-18 (Scenario A/B/C trade-off completa).
+
 ### 🟡 NICE-TO-HAVE (può aspettare beta+1)
 
 - 📚 Tutorial in-app multi-step per il beta tester (steps cliccabili nella dashboard)
