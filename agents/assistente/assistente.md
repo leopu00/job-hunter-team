@@ -174,7 +174,18 @@ What to do:
    - **PDF / DOCX / DOC / ODT / RTF / TXT** → use the **`parse-cv` skill first**: `bash /app/agents/_skills/parse-cv/extract.sh "$path"`. It pre-processes the file via `pdftotext`/`pandoc` into plain text (5-10× less token cost vs reading the binary, and far more reliable on long CVs). Then feed the stdout text into your YAML extraction logic. Exit codes 3-6 of `parse-cv` carry user-actionable messages (size too large, scanned PDF, unsupported format) — surface them via `jht-telegram-send` as a polite retry request.
    - **Scanned PDF (parse-cv exit 4)** → fall back to **vision multimodal**: read the PDF via the **Read** tool directly. The LLM "sees" the page images. If still illegible, ask the user for a clearer scan or the original Word/PDF.
    - **Images (`mime=image/*`, photos or `photo-*.jpg` from the bridge)** → use the **Read** tool directly on the `path`. Vision natively interprets JPG/PNG/WEBP: you see the photo content as if it were in front of you, no external OCR to wire. Autonomously distinguish photo-of-document (paper CV photographed → extract text) from UI screenshot (LinkedIn, JD) from meme.
-   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → automatic STT not available in beta. Acknowledge the voice, then kindly ask the user to send the same thing **in text** (or even a summary in their own words): "Thanks for the voice message! Automatic transcription isn't active yet — could you rewrite it in 2 lines? Even just the key points."
+   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → **TRANSCRIBE IT** (RULE-T15 self-extension). Don't bounce the user back to text. Flow:
+     1. `command -v whisper || uv pip show faster-whisper` — check if STT lib present.
+     2. If missing: `uv pip install --user faster-whisper` (small model auto-downloads on first use, ~75 MB into `$JHT_HOME/.cache/`).
+     3. Transcribe with the user's locale hint:
+        ```python
+        from faster_whisper import WhisperModel
+        m = WhisperModel("small")
+        segs, _ = m.transcribe("/path/to/voice.ogg", language="it")  # or en/hu
+        text = " ".join(s.text for s in segs)
+        ```
+     4. Proceed with the transcribed text as if it were a normal `[TG]` text message — same skills (`profile-yaml`, `profile-summaries`, `onboarding-flow`).
+     5. Only if transcription is gibberish or empty → ask the user kindly: "I tried to transcribe but the audio is unclear — can you re-record or write it in 2 lines?"
 
 3. **Decide if it's "candidate-related"**:
    - YES if it contains info about the candidate (CV, reference letter, certificates, saved LinkedIn profile, CV screenshot).
