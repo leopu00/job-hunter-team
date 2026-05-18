@@ -38,6 +38,8 @@ const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
+const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
+const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
 async function readHostType() {
@@ -92,6 +94,30 @@ function startTgBridge() {
       pid1Log('tg-bridge bootstrap OK (3 process detached)');
     } else {
       pid1Log(`tg-bridge bootstrap fallito (exit ${code}): messaggi Telegram non arriveranno`);
+    }
+  });
+}
+
+/**
+ * Auto-spawn dei 2 bridge Python (sentinel + pacing) tramite
+ * `start-agent.sh bridge`. Senza, dopo ogni `docker compose up -d` il
+ * sentinel-bridge resta morto e il Capitano va in "team in standby"
+ * cieco — caso osservato 2026-05-17 20:02 con utente arrabbiato a
+ * ragione. Pattern identico a startTgBridge: lo script bash è
+ * idempotente (kill+respawn via /proc cmdline scan), setsid detached,
+ * exit immediato del launcher = OK.
+ */
+function startSentinelBridges() {
+  pid1Log('starting sentinel-bridge + pacing-bridge (Python detached)');
+  const child = spawnLabeled('bridge-launcher', '/bin/bash', [
+    TG_BRIDGE_LAUNCHER,
+    'bridge',
+  ]);
+  child.on('exit', (code) => {
+    if (code === 0) {
+      pid1Log('sentinel/pacing bridge bootstrap OK (2 process detached)');
+    } else {
+      pid1Log(`sentinel/pacing bridge bootstrap fallito (exit ${code}): nessun BRIDGE TICK al Capitano`);
     }
   });
 }
@@ -156,7 +182,13 @@ async function hasProviderCredentials() {
  * attive e skippa, idempotente.
  */
 async function startUserFacingAgents() {
-  const agents = ['assistente', 'capitano', 'mentor'];
+  // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza
+  // sentinella tmux il Capitano non riceve [BRIDGE TICK] e all'utente
+  // risponde generico ("team in standby") perché non ha dati freschi.
+  // La sentinella va in questa lista insieme ai 3 user-facing perché
+  // anche lei è un agente LLM long-lived necessario al funzionamento
+  // normale del team — non un worker spawnato on-demand dal Capitano.
+  const agents = ['assistente', 'capitano', 'mentor', 'sentinella'];
   pid1Log(`auto-start agenti user-facing (${agents.join(', ')})`);
   for (const role of agents) {
     await new Promise((resolve) => {
@@ -323,6 +355,17 @@ async function dispatch() {
     pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
   }
 
+  // Bridge Python (sentinel + pacing): partono SEMPRE indipendentemente
+  // dai bot Telegram. Senza il Capitano non riceve [BRIDGE TICK] e si
+  // bloccca pensando che la pipeline sia in standby. Il provider Kimi
+  // deve essere configurato per generare tick utili (default OK se
+  // active_provider è set, lo script legge il config a runtime).
+  if (await hasActiveProviderConfigured()) {
+    startSentinelBridges();
+  } else {
+    pid1Log('sentinel/pacing bridge: active_provider mancante, skip — riprova dopo wizard');
+  }
+
   // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
   // niente LLM). Trigger: bot configurati. Idempotente: per ogni ruolo
   // verifica il proprio flag prima di mandare. Necessario perché kimi-cli
@@ -390,6 +433,67 @@ async function dispatch() {
     });
   };
   startAgentWatchdog();
+
+  // ── Auto-report loop: panoramica grafica + PNG via Telegram ogni 2h
+  // (decisione utente 2026-05-17 — bug #16 / task #52 / F-1.D). Loop
+  // bash che ogni 5 min chiama auto_report.py; lo script throttle
+  // interno garantisce 1 invio reale ogni JHT_AUTO_REPORT_INTERVAL_MIN.
+  // Pattern identico a doctor-watchdog: respawn 5s on crash.
+  let autoReportChild = null;
+  let autoReportRespawnTimer = null;
+  const startAutoReportLoop = () => {
+    if (autoReportChild && !autoReportChild.killed) return;
+    pid1Log('starting auto-report-loop (Telegram panoramic + PNG ogni 2h)');
+    autoReportChild = spawnLabeled('auto-report', '/bin/bash', [AUTO_REPORT_LOOP_SCRIPT]);
+    autoReportChild.on('exit', (code, signal) => {
+      const exited = autoReportChild;
+      autoReportChild = null;
+      if (shuttingDown) return;
+      pid1Log(`auto-report-loop exited (code=${code} signal=${signal})`);
+      if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
+      autoReportRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('auto-report-loop respawn dopo crash');
+          startAutoReportLoop();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  if (hasBots) {
+    startAutoReportLoop();
+  } else {
+    pid1Log('auto-report-loop skip: nessun bot Telegram configurato');
+  }
+
+  // ── Doctor watchdog: loop bash che ogni 30 min spawna una sessione
+  // tmux DOTTORE (one-shot LLM ~30 min, prune cache + py-audit + liveness
+  // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
+  // e poi perso al rebuild perché esisteva solo come `tmux new-session`
+  // manuale. Pattern identico ad agent-watchdog ma cadenza interna allo
+  // script (sleep 1800s). Vedi docs/internal/2026-05-17-team-strategy-bugs.md §18.
+  let doctorWatchdogChild = null;
+  let doctorWatchdogRespawnTimer = null;
+  const startDoctorWatchdog = () => {
+    if (doctorWatchdogChild && !doctorWatchdogChild.killed) return;
+    pid1Log('starting doctor-watchdog (auto-spawn DOTTORE ogni 30min)');
+    doctorWatchdogChild = spawnLabeled('doctor-watchdog', '/bin/bash', [DOCTOR_WATCHDOG_SCRIPT]);
+    doctorWatchdogChild.on('exit', (code, signal) => {
+      const exited = doctorWatchdogChild;
+      doctorWatchdogChild = null;
+      if (shuttingDown) return;
+      pid1Log(`doctor-watchdog exited (code=${code} signal=${signal})`);
+      if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+      doctorWatchdogRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('doctor-watchdog respawn dopo crash');
+          startDoctorWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startDoctorWatchdog();
 
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
@@ -511,6 +615,10 @@ async function dispatch() {
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
+    if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
+    if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+    if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
+    if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();
   };
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));

@@ -66,7 +66,12 @@ esac
 JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
 HOST_ENV_PATH="$JHT_HOME_HOST/host.env"
 JHT_LANG_DEFAULT=en
-if [ -f "$HOST_ENV_PATH" ]; then
+# Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
+# perché il desktop wizard la passa esplicitamente quando rilancia
+# host-setup non-interactive (la scelta lingua viene fatta nel desktop).
+if [ -n "${JHT_LANG:-}" ]; then
+  JHT_LANG_DEFAULT="$JHT_LANG"
+elif [ -f "$HOST_ENV_PATH" ]; then
   # shellcheck disable=SC1090
   EXISTING_LANG=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_LANG:-}")
   if [ -n "$EXISTING_LANG" ]; then
@@ -75,32 +80,51 @@ if [ -f "$HOST_ENV_PATH" ]; then
 fi
 JHT_LANG="$JHT_LANG_DEFAULT"
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+  # Picker trilingue: il prompt resta in 3 lingue perché ovviamente
+  # prima della scelta non sappiamo cosa renderizzare.
+  case "$JHT_LANG_DEFAULT" in
+    it) DEFAULT_LABEL="[2]" ;;
+    hu) DEFAULT_LABEL="[3]" ;;
+    *)  DEFAULT_LABEL="[1]" ;;
+  esac
   printf "\n${CYAN}━━━ Setup host (preflight) ━━━${RESET}\n\n"
-  printf "Choose your language / Scegli la lingua:\n\n"
-  if [ "$JHT_LANG_DEFAULT" = "it" ]; then
-    printf "  1) ${BOLD}English${RESET}\n"
-    printf "  2) ${BOLD}Italiano${RESET}\n\n"
-    printf "Choice / Scelta [2]: "
-  else
-    printf "  1) ${BOLD}English${RESET}\n"
-    printf "  2) ${BOLD}Italiano${RESET}\n\n"
-    printf "Choice / Scelta [1]: "
-  fi
+  printf "Choose your language / Scegli la lingua / Válassz nyelvet:\n\n"
+  printf "  1) ${BOLD}English${RESET}\n"
+  printf "  2) ${BOLD}Italiano${RESET}\n"
+  printf "  3) ${BOLD}Magyar${RESET}\n\n"
+  printf "Choice / Scelta / Választás %s: " "$DEFAULT_LABEL"
   read -r LANG_CHOICE
   case "$LANG_CHOICE" in
     1) JHT_LANG=en ;;
     2) JHT_LANG=it ;;
+    3) JHT_LANG=hu ;;
     "") : ;;  # accept default already in JHT_LANG
-    *) warn "Invalid / non valido — uso default ($JHT_LANG)" ;;
+    *) warn "Invalid / non valido / érvénytelen — using default ($JHT_LANG)" ;;
   esac
 fi
-ok "Language / Lingua: $JHT_LANG"
+ok "Language / Lingua / Nyelv: $JHT_LANG"
 
 # Persist subito cosi' se host-setup viene interrotto/relaunchato la
 # scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+
+# ── i18n: source catalogo locales dopo scelta lingua ────────────────────
+# Da qui in poi tutti i prompt utente passano per t()/tf() che leggono
+# shared/locales/<JHT_LANG>.json. Se il catalogo non c'è (es. checkout
+# parziale), fallback a IT hardcoded inline.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
+if [ -f "$_REPO_ROOT/shared/i18n.sh" ]; then
+  export JHT_LANG
+  # shellcheck disable=SC1091
+  source "$_REPO_ROOT/shared/i18n.sh"
+fi
+# Helper safe: usa t() se disponibile, altrimenti ritorna il default IT inline.
+ts() {
+  if declare -F t >/dev/null 2>&1; then t "$1"; else printf '%s' "$2"; fi
+}
 
 # ── Detect VPS ───────────────────────────────────────────────────────────
 # Heuristica: linux + (root OR no display) + (no battery OR cloud-init present)
@@ -132,14 +156,14 @@ detect_vps() {
 
 if detect_vps; then
   DETECTED="vps"
-  DETECTED_LABEL="${BOLD}server remoto / VPS${RESET}"
+  DETECTED_LABEL="${BOLD}$(ts host_setup.host.vps 'server remoto / VPS')${RESET}"
 else
   DETECTED="local"
-  DETECTED_LABEL="${BOLD}computer locale${RESET}"
+  DETECTED_LABEL="${BOLD}$(ts host_setup.host.local 'computer locale')${RESET}"
 fi
 
-printf "\n${CYAN}━━━ Setup host (preflight) ━━━${RESET}\n\n"
-printf "Rilevato: %b\n" "$DETECTED_LABEL"
+printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.section_header 'Setup host (preflight)')"
+printf "%s %b\n" "$(ts host_setup.detected 'Rilevato:')" "$DETECTED_LABEL"
 
 # ── Conferma utente ──────────────────────────────────────────────────────
 # Bash read; se stdin non e' TTY (es. curl|bash) usa il default detected.
@@ -157,40 +181,86 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   else
     DEFAULT_NUM=1
   fi
-  printf "\n%s\n\n" "Dove stai eseguendo JHT?"
-  printf "  1) ${BOLD}Computer locale${RESET}\n"
-  printf "     ${DIM}Stai usando JHT sul tuo PC, accessibile solo da te in rete locale.${RESET}\n"
-  printf "     ${DIM}La dashboard web si apre automaticamente.${RESET}\n\n"
-  printf "  2) ${BOLD}Server remoto / VPS${RESET}\n"
-  printf "     ${DIM}JHT gira su un server cloud raggiungibile via IP pubblico.${RESET}\n"
-  printf "     ${DIM}Servono passi extra per esporre la dashboard in sicurezza.${RESET}\n\n"
-  printf "Scelta [%d]: " "$DEFAULT_NUM"
+  printf "\n%s\n\n" "$(ts host_setup.where_running 'Dove stai eseguendo JHT?')"
+  printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Computer locale')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'Stai usando JHT sul tuo PC, accessibile solo da te in rete locale.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'La dashboard web si apre automaticamente.')"
+  printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'Server remoto / VPS')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'JHT gira su un server cloud raggiungibile via IP pubblico.')"
+  printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'Servono passi extra per esporre la dashboard in sicurezza.')"
+  printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Scelta')" "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
     1) HOST_TYPE="local" ;;
     2) HOST_TYPE="vps" ;;
     "") HOST_TYPE="$DETECTED" ;;
-    *) warn "Scelta non valida — uso default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
+    *) warn "$(ts error.invalid_input 'Scelta non valida') — default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
   esac
 fi
 
+# ── Timezone utente (bug #15) ────────────────────────────────────────────
+# Il container Linux gira sempre in UTC; l'utente sta da qualche parte
+# nel mondo. Senza una timezone esplicita, il Capitano scrive "reset alle
+# 23:11" e l'utente legge i suoi 23:22 locali pensando "11 min fa" quando
+# in realtà il reset è fra 2h. Per evitare hardcoding (es. Europe/Rome
+# default sbagliato per chi sta in CN/US), chiediamo all'utente. Detect
+# euristica dal sistema host come proposta di default; l'utente conferma
+# o sostituisce.
+JHT_USER_TZ_DEFAULT="UTC"
+# 1. host /etc/timezone (Linux/Mac container host)
+if [ -r /etc/timezone ]; then
+  _tz=$(tr -d '[:space:]' < /etc/timezone 2>/dev/null || true)
+  [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
+fi
+# 2. host /etc/localtime symlink (più affidabile su macOS host)
+if [ -L /etc/localtime ]; then
+  _tz=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
+  [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
+fi
+# 3. Esiste già in host.env? Skip prompt, riusa.
+if [ -f "$HOST_ENV_PATH" ]; then
+  EXISTING_TZ=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_USER_TZ:-}")
+  if [ -n "$EXISTING_TZ" ]; then
+    JHT_USER_TZ_DEFAULT="$EXISTING_TZ"
+  fi
+fi
+
+JHT_USER_TZ="$JHT_USER_TZ_DEFAULT"
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+  printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.timezone_header 'Timezone utente')"
+  printf "%s\n" "$(ts host_setup.timezone_prompt 'Dove ti trovi (timezone IANA, es. Europe/Rome, America/New_York, Asia/Shanghai)?')"
+  printf "%s\n\n" "$(ts host_setup.timezone_explain 'Il Capitano la usa per convertire gli orari nei messaggi Telegram e nei grafici.')"
+  printf "Timezone [%s]: " "$JHT_USER_TZ_DEFAULT"
+  read -r TZ_CHOICE
+  if [ -n "$TZ_CHOICE" ]; then
+    # Validate: python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('XXX')"
+    if python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('$TZ_CHOICE')" 2>/dev/null; then
+      JHT_USER_TZ="$TZ_CHOICE"
+    else
+      warn "$(ts host_setup.timezone_invalid "Timezone non valida — uso default") ($JHT_USER_TZ_DEFAULT)"
+    fi
+  fi
+fi
+ok "Timezone: $JHT_USER_TZ"
+
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
 # Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
-# Riscriviamo l'intero file mantenendo JHT_LANG (gia' scritto sopra in
-# questo stesso script) per non perderlo. Se in futuro si aggiungono
-# altre chiavi, usare un piccolo helper di merge invece di sovrascrivere.
+# Riscriviamo l'intero file mantenendo JHT_LANG + JHT_USER_TZ. Se in
+# futuro si aggiungono altre chiavi, usare un piccolo helper di merge
+# invece di sovrascrivere.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 {
   printf 'JHT_LANG=%s\n' "$JHT_LANG"
   printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
+  printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
 } > "$HOST_ENV_PATH"
 
 if [ "$HOST_TYPE" = "local" ]; then
-  ok "Host: computer locale — nessuna configurazione swap richiesta"
+  ok "Host: $(ts host_setup.host.local 'computer locale') — $(ts host_setup.swap_not_needed 'nessuna configurazione swap richiesta')"
   exit 0
 fi
 
-ok "Host: server remoto / VPS"
+ok "Host: $(ts host_setup.host.vps 'server remoto / VPS')"
 
 # ── Check RAM e swap esistente ───────────────────────────────────────────
 RAM_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)

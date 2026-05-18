@@ -60,6 +60,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # di secondi. File/jq/unzip coprono il 90% dei casi. Sudo + passwordless
       # (più sotto) permette di installare il resto on-demand.
       poppler-utils ripgrep file jq unzip sudo \
+      # Multimodal user input: l'utente puo' mandare voice notes (ogg/mp3)
+      # e foto/scansioni di documenti (CV cartacei, certificati). ffmpeg per
+      # decodificare audio in formato Whisper-compatibile, tesseract-ocr per
+      # fallback OCR su scansioni a bassa qualita' (quando il LLM multimodal
+      # non basta). Whisper STT NON pre-installato (~1GB modelli): l'Assistente
+      # lo installa on-demand via `uv pip install faster-whisper` alla prima
+      # voice note (vedi RULE-T15 self-extension principle).
+      ffmpeg tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

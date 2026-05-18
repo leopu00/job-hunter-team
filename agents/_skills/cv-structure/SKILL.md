@@ -145,15 +145,134 @@ Banned in cover letters:
 - "Please find attached my CV…" → it's an application, of course it's attached
 - "I would be honoured…" → corporate cliché
 
-## PDF generation
+## PDF generation — engine + atomic write + DB UPDATE (W-03, bug #26)
+
+### Engine: `wkhtmltopdf` (NON typst, NON fpdf2)
+
+Decisione tecnica 2026-05-18 dopo indagine "CV estetica semplificata":
+
+- **`wkhtmltopdf 0.12.6` (Qt 5.15.8)** → engine ufficiale, già installato
+  nel container. Produce CV professionali HTML+CSS, 2 pagine, ~30 KB
+  (output identico ai CV "belli" del 16 maggio).
+- ❌ **NON usare `--pdf-engine=typst`**: typst non è disponibile in
+  pandoc 2.17 del container (richiederebbe pandoc 3.x). Errore
+  storico nella skill, segnalato 2026-05-18.
+- ❌ **NON usare `pdf_gen.py` (fpdf2)** per CV: è solo fallback
+  minimalista 80% casi semplici. Per CV user-facing produce layout
+  spartano 1 pagina, niente CSS, niente spacing fine.
+
+The historical anti-pattern: generate the PDF straight into
+`$JHT_USER_DIR/cv/`, then run `db_update.py application --cv-pdf-path
+...` separately. If the Sentinel killed the Writer between the two
+steps (EMERGENZA freeze 2026-05-17 04:43), the PDF stayed on disk but
+the DB had `cv_pdf_path=NULL`. Sisal 7.5/10 PASS became *"CV da
+scrivere"* on the dashboard for the user — invisible top opportunity.
+
+Fix: tempfile + size gate + atomic mv + single-shot UPDATE. If the
+UPDATE fails, remove the final file so we don't leave an orphan.
 
 ```bash
-pandoc "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md" \
-       -o "$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.pdf" \
-       --pdf-engine=typst
+# Final filename includes position_id so 2 openings @ same company don't collide (bug #25)
+SRC_MD="$JHT_USER_DIR/cv/CV_${CANDIDATO}_${POSITION_ID}_${COMPANY_SLUG}_${TITLE_SLUG}.md"
+FINAL_PDF="$JHT_USER_DIR/cv/CV_${CANDIDATO}_${POSITION_ID}_${COMPANY_SLUG}_${TITLE_SLUG}.pdf"
+TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
+
+# ── PREFLIGHT ─────────────────────────────────────────────────────────
+# Verifica esplicita che l'engine sia disponibile PRIMA di pandoc.
+# Senza, in caso di skill obsoleta (typst che non c'è, pandoc 3.x che
+# manca, …) lo Scrittore eseguiva il comando, fallba, improvvisava
+# fallback random → CV brutti del 2026-05-18 mattina.
+if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+  echo "[cv-structure] ABORT preflight: wkhtmltopdf non disponibile."
+  echo "  Engine alternativi accettabili: weasyprint (pandoc --pdf-engine=weasyprint)."
+  echo "  NEVER fallback a pdf_gen.py / fpdf2 per CV (output brutto)."
+  echo "  Riportare il problema al Capitano via [REPORT] e ABORT."
+  exit 2
+fi
+
+# 1. Render via pandoc → html → wkhtmltopdf (engine vincente, 32 KB / 2 pag).
+#    --metadata title=... evita il warning di wkhtmltopdf "no title element".
+pandoc "$SRC_MD" -o "$TMP_PDF" \
+       --pdf-engine=wkhtmltopdf \
+       --metadata title="CV $CANDIDATO"
+
+# ── GATE POST-RENDER: size + Producer ─────────────────────────────────
+# DUE check obbligatori. NESSUNO dei due è opzionale.
+#
+# Check A) size: < 20 KB indica engine sbagliato (fpdf2 ~22 KB ma 1 pag
+# spartana, wkhtmltopdf ≥30 KB con HTML+CSS pieno). Soglia 20 KB OK per
+# distinguere.
+size=$(stat -c%s "$TMP_PDF" 2>/dev/null || stat -f%z "$TMP_PDF")
+if [ ! -s "$TMP_PDF" ] || [ "$size" -lt 20000 ]; then
+  echo "[cv-structure] ABORT post-render: PDF $size B sospetto (atteso ≥20 KB)."
+  echo "  Probabile engine sbagliato (fpdf2 minimalista invece di wkhtmltopdf)."
+  rm -f "$TMP_PDF"
+  exit 3
+fi
+
+# Check B) Producer: deve essere wkhtmltopdf (= 'Qt 5.15.8' o simile).
+# Se è 'fpdf2' / vuoto / '?', l'engine NON era wkhtmltopdf — il PDF
+# uscirà comunque ma sarà brutto. ABORT loud così il Capitano vede.
+producer=$(python3 -c "
+from pypdf import PdfReader
+import sys
+try:
+    r = PdfReader('$TMP_PDF')
+    m = r.metadata or {}
+    print(m.get('/Producer', ''))
+except Exception as e:
+    print('?'); sys.exit(1)
+" 2>/dev/null)
+case "$producer" in
+  *Qt*)
+    : # OK, wkhtmltopdf ha lavorato
+    ;;
+  *)
+    echo "[cv-structure] ABORT post-render: Producer='$producer' (atteso 'Qt 5.x.x')."
+    echo "  L'engine reale NON era wkhtmltopdf — output non professionale."
+    rm -f "$TMP_PDF"
+    exit 4
+    ;;
+esac
+
+# 3. Atomic move + UPDATE in sequence; rollback se UPDATE fallisce
+mv "$TMP_PDF" "$FINAL_PDF"
+if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
+        --cv-pdf-path "$FINAL_PDF" --written-at now; then
+  echo "[cv-structure] UPDATE DB fallita, rimuovo PDF per non lasciare orfani"
+  rm -f "$FINAL_PDF"
+  exit 1
+fi
 ```
 
-Verify the PDF opens cleanly (size > 0, page count ≤ 2) before invoking `critic-loop`.
+Exit codes:
+- `0` → CV OK, DB aggiornato, pronto per critic-loop
+- `2` → preflight FAIL (engine non disponibile) — segnala al Capitano
+- `3` → post-render FAIL (size < 20 KB, output minimalista) — engine sbagliato
+- `4` → post-render FAIL (Producer != Qt) — engine sbagliato
+- `1` → DB UPDATE FAIL (rollback file)
+
+Il Dottore via `cv-disk-audit` healthcheck (bug #18) ricollega eventuali
+orfani disk↔DB; in più ora segnala anche i CV con Producer non-Qt come
+"engine sbagliato — rigenerare".
+
+## Pre-generation status gate (W-04, bug #26)
+
+Before running pandoc, verify the position is still scoring-grade.
+Sometimes the Analyst marks `excluded` *after* the Writer has claimed
+the position (race condition) and the Writer keeps writing — 3 CV
+sprecati su Company 033 ContainerImages / K8s / Deloitte nei dump del
+2026-05-17.
+
+```bash
+status=$(python3 /app/shared/skills/db_query.py position "$POSITION_ID" --field status)
+case "$status" in
+  excluded|rejected)
+    echo "[cv-structure] position #$POSITION_ID is $status, skipping CV generation"
+    exit 0
+    ;;
+esac
+```
 
 ## Hard rules
 

@@ -807,6 +807,47 @@ All 5 tasks from 04-22 have been implemented:
 
 ## 🐛 KNOWN BUGS
 
+### ✅ Team strategy bugs sprint 2026-05-17/18 (13 bug + 3 feature chiusi)
+
+Dettaglio completo + riepilogo numerico in
+[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
+
+**Bug strategici / comportamentali** (tutti FIXED, commit specifico per ognuno):
+- ✅ **#14** state-event log positions transitions — bug del tracking pipeline (`2ceb0a17`)
+- ✅ **#15** timezone CEST/UTC — setup wizard chiede TZ + cascade format_time (`78004470`, `eb4cad5d`)
+- ✅ **#17** Capitano C-05 auto-triage attivo (`426f1865`)
+- ✅ **#18** Dottore mai spawnato (regressione storica) + post-mortem zombie night chiuso con pane_check + cadenza 2h + skill spawn-doctor (`db2c2d47`, `dad3c94a`, `d012b75c`)
+- ✅ **#19A** weekly_reset_at log nei tick bridge (`dca5a614`)
+- ✅ **#19B** Capitano "indaga prima di non lo so" — confluito in C-04 (`43cf5072`)
+- ✅ **#20** `/reports` query reali — sostituiti mock con Supabase + migration 014 (`964afc4d`)
+- ✅ **#21** Scrittore promuove `applications.status='ready'` (Opzione B utente) (`5c9c5042`)
+- ✅ **#23** "Leggi fonte non memoria" — regole A-04/C-04/M-05 (`43cf5072`)
+- ✅ **#24** Sentinella 3 fasi + scala throttle continua (`d6c1c646`)
+- ✅ **#25** Dedup 3 livelli + naming CV con position_id (`22aaeb72`)
+- ✅ **#26** Atomic CV write + status gate + cv-disk-audit + CV engine wkhtmltopdf (`b1b5145f`, `f695b503`)
+- ✅ **#27** Salary cache locale + skill salary-estimate gerarchica (`16f55be2`)
+
+**Feature**:
+- ✅ **F-1** Telegram UX: A (setMyCommands) + B (reply keyboard) + D (auto-report PNG ogni 2h) (`d019f192`, `39169b46`). C (inline keyboard show_cv) deferred.
+- ✅ **F-2** Scout web access: 5 componenti (anti-bot cascade, LinkedIn no-login via `/jobs/view/<id>`, email-monitor IMAP, multi-Scout workspace, freshness SC-07) (`3b3e93eb`, `f4695cec`)
+- ⏭️ **F-3** Weekly budget distribution — DEFERRED (utente: default attuale 95% G-spot OK, non serve weekly tracking)
+- ✅ **F-4** Expiration tracking: A (deadline parser) + C (alert utente idempotente) (`69a7c117`). B (re-check periodica Analista) deferred.
+
+**Effetto cumulativo** (vedi sessione review):
+- EMERGENZA Sentinella: **−96%** (25 → 1)
+- URG msg: **−71%** ; FREEZE menzioni: **−82%**
+- CV con engine corretto: 27 → **71** (97%)
+- applications status='ready': **0 → 19** visibili all'utente
+- state_transitions: **0 → 243** tracciate
+
+**Debt residuo identificato** (non blocking):
+- 🟡 Capitano context bloat (83.7k tokens/turn vs 50k storico) — soluzione proposta: refresh contesto periodico dei coordinatori long-lived
+- 🟡 Scout sweep alto context (116k/turn) — cap parziale in linkedin_access.py, retrofit web_scrape_robust.py
+- 🟡 2 CV stragglers engine sbagliato (pre-guard)
+
+---
+
 ### ✅ [BUG-TUI-BUILD] `tui/` build fail su master — RISOLTO 2026-05-06
 
 - **File:** `tui/src/oauth/storage.ts:9` importava `../../../shared/credentials/passphrase.js`, ma `tui/tsconfig.json` aveva `rootDir: "src"` → `error TS6059: File '/app/shared/credentials/passphrase.ts' is not under 'rootDir' '/app/tui/src'`.

@@ -29,6 +29,17 @@ def update_position(args):
     conn = get_db()
     ensure_schema(conn)
 
+    # Bug #14: cattura lo stato corrente PRIMA dell'UPDATE per registrare
+    # la transizione. Se status non cambia (es. solo notes aggiornate),
+    # nessuna entry viene scritta nel transition log.
+    previous_status = None
+    if args.status:
+        row = conn.execute(
+            "SELECT status FROM positions WHERE id = ?", (args.id,)
+        ).fetchone()
+        if row is not None:
+            previous_status = row[0] if not hasattr(row, "keys") else row["status"]
+
     updates = []
     params = []
     changed = []  # campi leggibili per output
@@ -137,6 +148,22 @@ def update_position(args):
         print(f"⚠️  ERRORE: nessuna posizione trovata con id={args.id}!")
         conn.close()
         sys.exit(1)
+
+    # Bug #14: log transition se status è cambiato. La INSERT è
+    # idempotente per (position_id, ts) — due UPDATE consecutivi con lo
+    # stesso status producono una sola entry perché previous_status sarà
+    # uguale a args.status al secondo turno. notes opzionale: passiamo le
+    # notes della UPDATE se rilevanti (es. 'GEO mismatch' nel caso
+    # excluded), altrimenti None.
+    if args.status and previous_status != args.status:
+        transition_notes = args.notes if args.notes else None
+        conn.execute(
+            "INSERT INTO position_state_transitions "
+            "(position_id, from_state, to_state, by_agent, notes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (args.id, previous_status, args.status, actor, transition_notes),
+        )
+
     conn.commit()
     print(f"Posizione {args.id} aggiornata: {', '.join(changed)}")
     conn.close()
@@ -368,7 +395,7 @@ def main():
     # application
     a = sub.add_parser('application')
     a.add_argument('position_id', type=int)
-    a.add_argument('--status', choices=['draft', 'review', 'approved', 'applied', 'response'])
+    a.add_argument('--status', choices=['draft', 'review', 'ready', 'approved', 'applied', 'response'])
     a.add_argument('--critic-verdict', choices=['PASS', 'NEEDS_WORK', 'REJECT'])
     a.add_argument('--critic-score', type=float)
     a.add_argument('--critic-notes')

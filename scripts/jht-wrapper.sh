@@ -42,11 +42,16 @@ if [ -f "$HOST_ENV_FILE" ]; then
 fi
 JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
 JHT_LANG="${JHT_LANG:-en}"
+# Bug #15: timezone utente esplicita dal setup wizard. Default UTC se mai
+# configurata — niente hardcoding geografico (l'utente potrebbe stare
+# ovunque). Il container la usa via format_time skill.
+JHT_USER_TZ="${JHT_USER_TZ:-UTC}"
 # Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}` /
-# `${JHT_LANG:-}` substitution per passare i valori al container. Senza
-# export restano variabili di shell e compose non le vede.
+# `${JHT_LANG:-}` / `${JHT_USER_TZ:-}` substitution per passare i valori al
+# container. Senza export restano variabili di shell e compose non le vede.
 export JHT_HOST_TYPE
 export JHT_LANG
+export JHT_USER_TZ
 
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then

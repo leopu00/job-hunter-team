@@ -58,6 +58,74 @@ POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 
 
+# ── Commands per Telegram Bot API setMyCommands ────────────────────────
+# F-1 task #50 (bug #16): slash commands cliccabili nel menu "/" del client
+# Telegram. Bootstrap idempotente al primo boot del bridge. Le keys del
+# dict sono i 3 ruoli user-facing; ogni lista è un set di (command, desc)
+# specifico al dominio dell'agente. Senza questi, l'utente nuovo non sa
+# cosa chiedere — vede una chat vuota e cerca di indovinare.
+BOT_COMMANDS = {
+    "assistente": [
+        ("budget", "Grafico budget finestra corrente"),
+        ("budget_prev", "Grafico finestra precedente"),
+        ("budget_week", "Andamento settimanale"),
+        ("pipeline", "Stato pipeline (overview dashboard)"),
+        ("candles", "3 candle inizio/mezzo/fine ultima finestra"),
+        ("mappa", "Mappa posizioni Europa"),
+        ("mappa_it", "Mappa posizioni Italia"),
+        ("stato", "Stato rapido team (testuale)"),
+        ("help", "Lista comandi disponibili"),
+    ],
+    "capitano": [
+        ("pipeline", "Stato pipeline + bottleneck attuale"),
+        ("budget", "Consumo budget finestra corrente"),
+        ("team", "Stato agenti (chi è attivo, cosa sta facendo)"),
+        ("ready", "Lista CV pronti per apply manuale"),
+        ("triage", "Forza un triage pipeline (skill auto-triage)"),
+        ("help", "Lista comandi disponibili"),
+    ],
+    "mentor": [
+        ("digest", "Digest settimanale candidature + pattern"),
+        ("patterns", "Pattern rejection ricorrenti"),
+        ("top", "Top 3 PASS più rilevanti per il tuo profilo"),
+        ("salary", "Vista salary fit + mercato di riferimento"),
+        ("help", "Lista comandi disponibili"),
+    ],
+}
+
+
+def setup_bot_commands(token: str) -> None:
+    """Registra setMyCommands + setMyDescription per il bot corrente.
+
+    Idempotente: re-chiama OK senza side-effect. Best-effort: se l'API
+    è momentaneamente irraggiungibile non blocca il long-poll (la
+    registrazione si farà al prossimo boot).
+    """
+    cmds = BOT_COMMANDS.get(BOT_ROLE)
+    if not cmds:
+        log("setMyCommands: no command list for this role, skip")
+        return
+    payload = json.dumps({
+        "commands": [{"command": c, "description": d} for c, d in cmds]
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/setMyCommands",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+        result = json.loads(body)
+        if result.get("ok"):
+            log(f"setMyCommands: ok ({len(cmds)} cmds registered)")
+        else:
+            log(f"setMyCommands: {body}")
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError) as e:
+        log(f"setMyCommands: failed ({e}) — riprovo al prossimo boot")
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 def log(msg: str) -> None:
@@ -220,6 +288,10 @@ def main() -> None:
     token, allowed_chat = read_config()
     offset = load_offset()
     log(f"start: role={BOT_ROLE} target={TARGET_SESSION} allowed_chat={allowed_chat} offset={offset}")
+
+    # F-1.A: bootstrap commands cliccabili nel menu Telegram. Idempotente,
+    # non blocca il long-poll se l'API è temporaneamente irraggiungibile.
+    setup_bot_commands(token)
 
     # offset == -1 → ricalcola dal max attuale (skip backlog post-reset)
     if offset == -1:

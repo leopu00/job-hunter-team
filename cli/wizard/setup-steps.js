@@ -3,6 +3,7 @@
  * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team), non chiesti.
  */
 import https from 'node:https';
+import crypto from 'node:crypto';
 import {
   JHT_CONFIG_PATH,
   JHT_CONFIG_DIR,
@@ -13,6 +14,31 @@ import {
 import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
+
+// ─── Privacy suffix per bot username Telegram ──────────────────────────
+// I bot Telegram hanno username GLOBALI UNICI raggiungibili da chiunque
+// conosca il nome (Telegram non supporta "bot privati" nativamente). Il
+// nostro tg-bridge fa whitelist via chat_id, quindi un attaccante che
+// indovina lo username puo' solo SCRIVERE al bot (i messaggi vengono
+// scartati, niente effetto su LLM/DB), ma resta scopribile.
+// Forzare un suffix random nello username rende lo username unguessable:
+// con 8 char lower+digits = 36^8 ≈ 2.8 trilioni di combinazioni. Combinato
+// con la whitelist chat_id = privacy reale per la beta.
+
+/**
+ * Genera un suffix random alfanumerico lower-case, sicuro per crypto.
+ * Telegram bot username permette: [a-zA-Z0-9_], must end in 'bot', max 32 char.
+ * Usiamo solo [a-z0-9] per semplicita' di lettura nelle istruzioni.
+ */
+function generatePrivacySuffix(length = 8) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return out;
+}
 
 // ─── Telegram Bot API helpers ──────────────────────────────────────────
 // In-line fetch wrapper: niente dipendenze extra (axios/grammy), niente
@@ -91,6 +117,35 @@ async function tgWaitForFirstChat(token, deadlineMs) {
 export async function promptTelegramRequired(prompter, baseChannels) {
   const existing = baseChannels?.telegram?.bots || {};
 
+  // ── Step A: chiedi nome utente per personalizzare gli username dei bot ──
+  // Il nome utente diventa parte dello username Telegram bot, insieme a un
+  // random suffix. Risultato: `<role>_<username>_<random>_bot`. Pattern
+  // brand-meno-guessable + suffix random = privacy in pratica.
+  const userTag = await prompter.text({
+    message: 'Tag/nome utente per personalizzare i bot Telegram',
+    placeholder: 'marco',
+    initialValue: existing?.userTag,
+    validate: (v) => {
+      const trimmed = (v || '').trim().toLowerCase();
+      if (!trimmed) return 'Obbligatorio (sara\' nello username dei bot)';
+      if (!/^[a-z0-9]{2,20}$/.test(trimmed)) {
+        return 'Solo a-z e 0-9, 2-20 caratteri (no spazi, no underscore)';
+      }
+      return undefined;
+    },
+  });
+  const userTagClean = userTag.trim().toLowerCase();
+
+  // ── Step B: genera 3 suffix INDIPENDENTI (uno per bot) ──
+  // Indipendenza: se uno collide su BotFather, posso rigenerare solo
+  // quello senza toccare gli altri. Anche se l'utente ricorda 1 nome
+  // (il proprio userTag) e legge i suffix dal wizard, no carico cognitivo.
+  const suggestedUsernames = {
+    assistente: `assistente_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
+    capitano:   `capitano_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
+    mentor:     `mentor_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
+  };
+
   await prompter.note(
     'Telegram e\' obbligatorio: ogni agente user-facing ha il suo bot dedicato\n' +
     '(notifiche separate, mute selettivo, contesto pulito).\n\n' +
@@ -98,8 +153,19 @@ export async function promptTelegramRequired(prompter, baseChannels) {
     '  1. Assistente — onboarding profilo, drop-zone documenti\n' +
     '  2. Capitano   — direzione team, notifiche posizioni ready\n' +
     '  3. Mentor     — mentore di crescita, posizionamento strategico\n\n' +
+    '🔐 PRIVACY: i bot Telegram hanno username PUBBLICI. Chiunque conosca\n' +
+    '   il nome puo\' trovarli (anche se i messaggi non-whitelist vengono\n' +
+    '   scartati dal nostro filtro chat_id). Per renderli "privati in\n' +
+    '   pratica" usiamo username con nome utente + suffix random:\n\n' +
+    `      ${suggestedUsernames.assistente}\n` +
+    `      ${suggestedUsernames.capitano}\n` +
+    `      ${suggestedUsernames.mentor}\n\n` +
+    '   Se BotFather ti dice "username already taken" su uno dei tre,\n' +
+    '   nel prossimo step puoi rigenerare il suffix per quel bot.\n\n' +
     'Per ogni bot ripeti su @BotFather:\n' +
-    '  • /newbot → segui le istruzioni (nome libero + username che finisce in "bot")\n' +
+    '  • /newbot\n' +
+    '  • Nome libero (es. "Assistente JHT")\n' +
+    '  • Username con il pattern sopra (deve finire in "bot")\n' +
     '  • BotFather ti risponde con un token "123456789:ABC..."\n\n' +
     'Tieni i 3 token a portata di mano: te li chiedo uno a uno.',
     'Setup Telegram (3 bot obbligatori)',
@@ -113,21 +179,58 @@ export async function promptTelegramRequired(prompter, baseChannels) {
 
   const bots = {};
   for (const role of roles) {
-    bots[role.key] = await promptSingleTelegramBot(prompter, role, existing[role.key]);
+    bots[role.key] = await promptSingleTelegramBot(
+      prompter,
+      role,
+      existing[role.key],
+      suggestedUsernames[role.key],
+      userTagClean,
+    );
   }
-  return { bots };
+  return { bots, userTag: userTagClean };
 }
 
 /**
  * Wizard di un singolo bot Telegram: token → getMe → deep-link → wait /start.
  * Riusa la logica precedente (un solo bot) parametrizzata sul ruolo.
  */
-async function promptSingleTelegramBot(prompter, role, existing) {
-  await prompter.note(
-    `Adesso configuriamo il bot ${role.label} (${role.hint}).\n\n` +
-    `Su @BotFather: /newbot → segui le istruzioni → copia il token.`,
-    `Bot ${role.label} (${role.key})`,
-  );
+async function promptSingleTelegramBot(prompter, role, existing, suggestedUsernameInitial, userTag) {
+  // Loop: se BotFather dice "username taken", l'utente puo' chiedere di
+  // rigenerare il suffix (random nuovo) prima di provare di nuovo. Max 5
+  // regen, poi fall-through al token input (l'utente decide da solo).
+  let suggestedUsername = suggestedUsernameInitial;
+  let regenCount = 0;
+  const MAX_REGEN = 5;
+
+  while (regenCount < MAX_REGEN) {
+    await prompter.note(
+      `Adesso configuriamo il bot ${role.label} (${role.hint}).\n\n` +
+      `Su @BotFather: /newbot → segui le istruzioni → copia il token.\n\n` +
+      `🔐 Username suggerito (privacy): ${suggestedUsername}\n`,
+      `Bot ${role.label} (${role.key})`,
+    );
+
+    // Se BotFather ha accettato lo username → vai avanti.
+    // Se preso → regen il suffix e ripresenta.
+    const accepted = await prompter.confirm({
+      message: `BotFather ha accettato lo username ${suggestedUsername}?`,
+      initialValue: true,
+    });
+
+    if (accepted) break;
+
+    if (userTag) {
+      suggestedUsername = `${role.key}_${userTag}_${generatePrivacySuffix(6)}_bot`;
+      regenCount++;
+      await prompter.note(
+        `Provo con un nuovo suffix random: ${suggestedUsername}`,
+        `Regen ${regenCount}/${MAX_REGEN}`,
+      );
+    } else {
+      // No userTag (modalita' legacy): break e l'utente sceglie a mano.
+      break;
+    }
+  }
 
   const botToken = await prompter.text({
     message: `Token del bot ${role.label}`,
@@ -148,6 +251,21 @@ async function promptSingleTelegramBot(prompter, role, existing) {
   } catch (e) {
     probe.stop(`Errore su ${role.label}: ${e.message}`);
     throw new Error(`Token Telegram (${role.key}) non valido o rete irraggiungibile: ${e.message}`);
+  }
+
+  // Privacy warning: username NON contiene il userTag → bot probabilmente
+  // brand-guessable. Non blocchiamo il setup (l'utente ha gia' creato il bot),
+  // ma lo informiamo. Puo' sempre rinominarlo via @BotFather (/setusername).
+  if (userTag && !botUsername.toLowerCase().includes(userTag.toLowerCase())) {
+    await prompter.note(
+      `⚠️  Il bot @${botUsername} NON contiene il tuo tag utente (${userTag}).\n\n` +
+      `   Lo username e\' piu\' facilmente indovinabile da terzi. I messaggi\n` +
+      `   spam vengono comunque scartati dalla whitelist chat_id, quindi\n` +
+      `   NON c\'e\' rischio funzionale — solo meno privacy.\n\n` +
+      `   Se vuoi rifare: @BotFather → /deletebot → /newbot e usa pattern\n` +
+      `   "${role.key}_${userTag}_<random>_bot". Oppure prosegui cosi'.`,
+      `Privacy warning (${role.label})`,
+    );
   }
 
   const deepLink = `https://t.me/${botUsername}?start=jht`;

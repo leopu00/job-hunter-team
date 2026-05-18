@@ -21,6 +21,13 @@ SENDER="/app/agents/_tools/jht-telegram-send"
 LOG="$JHT_HOME/logs/welcome-send.log"
 mkdir -p "$(dirname "$LOG")" "$PROFILE_DIR"
 
+# i18n: carica catalogo locales (en/it/hu) — usa $JHT_LANG da host.env
+# Fallback a IT hardcoded se i18n.sh non disponibile (build legacy).
+if [ -f /app/shared/i18n.sh ]; then
+  # shellcheck disable=SC1091
+  source /app/shared/i18n.sh
+fi
+
 log() {
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -45,7 +52,15 @@ send_one() {
 }
 
 # ── Copy welcome per i 3 ruoli ──────────────────────────────────────
-ASSISTENTE_MSG="Ciao! 👋
+# Stringhe da shared/locales/<JHT_LANG>.json. Se il catalogo non c'è
+# (build legacy senza i18n.sh), fallback a IT hardcoded.
+if declare -F t >/dev/null 2>&1; then
+  ASSISTENTE_MSG="$(t welcome.assistente)"
+  CAPITANO_MSG="$(t welcome.capitano)"
+  MENTOR_MSG="$(t welcome.mentor)"
+else
+  log "WARN: shared/i18n.sh non disponibile, fallback messaggi IT hardcoded"
+  ASSISTENTE_MSG="Ciao! 👋
 
 Sono l'Assistente di Job Hunter Team — il tuo punto di contatto con il team AI che ti cercherà lavoro.
 
@@ -53,17 +68,18 @@ Per partire ho bisogno di conoscerti. Mandami qui su Telegram il tuo CV (PDF, DO
 
 Anche un draft o degli appunti grezzi vanno benissimo, non serve niente di pronto. 📄 Parto da quello che hai."
 
-CAPITANO_MSG="Sono il Capitano. 👨‍✈️
+  CAPITANO_MSG="Sono il Capitano. 👨‍✈️
 
 Coordino il team che si occuperà di te: c'è chi cerca posizioni, chi le analizza, chi calcola il match col tuo profilo, chi scrive il CV su misura, chi fa la review finale prima di candidarti.
 
 Per ora resto in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti scrivo quando ho qualcosa di concreto: un lotto di posizioni interessanti, una candidatura pronta da rivedere insieme, oppure un blocco che vale la pena segnalarti. A presto. 🎯"
 
-MENTOR_MSG="Sono il Mentor. 🧙‍♂️
+  MENTOR_MSG="Sono il Mentor. 🧙‍♂️
 
 Mi occupo del quadro generale della tua ricerca: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, ti scrivo solo quando c'è qualcosa che merita davvero la tua attenzione.
 
 Per ora resto in ascolto. Quando avrò dati abbastanza per dirti qualcosa di utile, ti scrivo. 📊"
+fi
 
 log "welcome-send start"
 

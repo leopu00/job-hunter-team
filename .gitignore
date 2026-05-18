@@ -45,6 +45,8 @@ shared/telegram/*.session
 !web/app/**/*.png
 !assets/banner.png
 !desktop/assets/icon.png
+# Session reports versionati (analisi grafici budget, throttle, ecc.)
+!docs/sessions/**/*.png
 
 # Gap report e dati analisi personali
 shared/data/gap-report.json
@@ -124,3 +126,10 @@ seriea-sandbox/
 # (IP VPS, server IDs, IPv6, account names). Spostare in repo solo
 # dopo aver redatto le info sensibili.
 screenshots/
+
+# Materiale conversazioni private utente (voice, screenshot, ecc.)
+docs/internal/conversations/
+
+# Export /export di Claude Code (chat completa, materiale privato)
+*-local-command-caveat*.txt
+2026-*-local-command-caveat*.txt

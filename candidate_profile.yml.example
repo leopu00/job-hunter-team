@@ -21,6 +21,11 @@ target_role: "Backend Developer"
 # Location preferita (usata dagli scout per filtrare)
 location: "Company EU"
 
+# Timezone IANA (bug #15) — agenti convertono UTC → fuso utente nei
+# messaggi user-facing (Telegram, grafici, dashboard). Default Europe/Rome
+# se assente. Esempi: "Europe/Rome", "Europe/Berlin", "America/New_York".
+timezone: "Europe/Rome"
+
 # Anno di nascita (opzionale — usato per calcolo eta')
 # birth_year: 2000
 

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getWorkspacePath } from "@/lib/workspace";
 import { isLocalRequest } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export const dynamic = "force-dynamic";
 //   scout      → MAX(positions.found_at)
 //   scorer     → MAX(scores.scored_at)
 //   analista   → MAX(positions.last_checked)
-//   scrittore  → MAX(positions.status_changed_at) WHERE status IN ('writing','review')
-//   critico    → MAX(positions.status_changed_at) WHERE status = 'ready'
+//   scrittore  → local: MAX(positions.status_changed_at) WHERE status IN ('writing','review')
+//                 cloud: MAX(applications.written_at)
+//   critico    → local: MAX(positions.status_changed_at) WHERE status = 'ready'
+//                 cloud: MAX(applications.critic_reviewed_at)
 //
 // `status_changed_at` è popolato da un trigger SQLite a ogni cambio di
 // `positions.status`: il trigger non sa quale agente ha fatto l'UPDATE
@@ -23,6 +26,7 @@ export const dynamic = "force-dynamic";
 // (mapping nel CASE qui sopra e in getRecentlyTouchedPositionsLocal).
 
 type Row = { ts: string | null };
+type SupabaseLike = Awaited<ReturnType<typeof createClient>>;
 
 function toUtcIso(s: string | null | undefined): string | null {
   if (typeof s !== "string" || s.length < 10) return null;
@@ -30,12 +34,51 @@ function toUtcIso(s: string | null | undefined): string | null {
   return s.replace(" ", "T") + "Z";
 }
 
+async function latestTimestamp(
+  supabase: SupabaseLike,
+  table: string,
+  column: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select(column)
+      .not(column, "is", null)
+      .order(column, { ascending: false })
+      .limit(1);
+    if (error) return null;
+    const row = Array.isArray(data)
+      ? (data[0] as Record<string, unknown>)
+      : null;
+    return toUtcIso(typeof row?.[column] === "string" ? row[column] : null);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
 
   if (!(await isLocalRequest())) {
-    return NextResponse.json({ writes: {} });
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ writes: {} });
+
+    const [scout, scorer, analista, scrittore, critico] = await Promise.all([
+      latestTimestamp(supabase, "positions", "found_at"),
+      latestTimestamp(supabase, "scores", "scored_at"),
+      latestTimestamp(supabase, "positions", "last_checked"),
+      latestTimestamp(supabase, "applications", "written_at"),
+      latestTimestamp(supabase, "applications", "critic_reviewed_at"),
+    ]);
+
+    return NextResponse.json({
+      writes: { scout, scorer, analista, scrittore, critico },
+      remote: true,
+    });
   }
   const ws = await getWorkspacePath();
   if (!ws) return NextResponse.json({ writes: {} });
