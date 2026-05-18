@@ -25,6 +25,7 @@ import {
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
+import { t, tf } from './i18n.js';
 
 // Mappa provider scelto nel wizard → ID accettato da `providers update`
 // (i providers.js usa "claude" / "codex" / "kimi" come keys).
@@ -110,12 +111,12 @@ async function waitForOauthCredentials(cmdName, startEpochSec, timeoutMs) {
  * @param {import('./prompts.js').WizardPrompter} prompter
  */
 export async function runSetupWizard(prompter) {
-  await prompter.intro('Job Hunter Team — Setup');
+  await prompter.intro(t('wizard.intro_title'));
 
   // --- Step 1: Prerequisiti ---
   const prereqOk = await checkPrerequisites(prompter);
   if (!prereqOk) {
-    await prompter.outro('Setup annullato — prerequisiti mancanti.');
+    await prompter.outro(t('wizard.aborted_prereqs'));
     return;
   }
 
@@ -125,8 +126,8 @@ export async function runSetupWizard(prompter) {
 
   if (snapshot.exists && !snapshot.config) {
     await prompter.note(
-      'Il file config esiste ma non e\' valido JSON.\nVerra\' ricreato da zero.',
-      'Config corrotta',
+      t('wizard.config_corrupt_body'),
+      t('wizard.config_corrupt_title'),
     );
     baseConfig = {};
   }
@@ -137,17 +138,17 @@ export async function runSetupWizard(prompter) {
 
   // --- Config esistente ---
   if (snapshot.exists && snapshot.config) {
-    await prompter.note(summarizeExistingConfig(baseConfig), 'Config esistente');
+    await prompter.note(summarizeExistingConfig(baseConfig), t('wizard.config_existing_title'));
     const action = await prompter.select({
-      message: 'Gestione config',
+      message: t('wizard.config_action_prompt'),
       options: [
-        { value: 'keep', label: 'Mantieni valori esistenti' },
-        { value: 'modify', label: 'Aggiorna valori' },
-        { value: 'reset', label: 'Ricomincia da zero' },
+        { value: 'keep', label: t('wizard.config_action_keep') },
+        { value: 'modify', label: t('wizard.config_action_modify') },
+        { value: 'reset', label: t('wizard.config_action_reset') },
       ],
     });
     if (action === 'keep') {
-      await prompter.outro('Configurazione mantenuta. Nessuna modifica.');
+      await prompter.outro(t('wizard.config_kept'));
       return;
     }
     if (action === 'reset') baseConfig = {};
@@ -161,35 +162,23 @@ export async function runSetupWizard(prompter) {
   const isVps = (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps';
   if (isVps) {
     await prompter.note(
-      'Apri il browser sul tuo computer e vai su:\n\n' +
-      '      https://jobhunterteam.ai\n\n' +
-      'Fai login con Google (o crea l\'account se non ce l\'hai).\n' +
-      'Lascia la pagina aperta — ti servira\' tra un attimo per il pairing.',
-      'Login web (obbligatorio)',
+      t('wizard.cloud.login_body'),
+      t('wizard.cloud.login_title'),
     );
     await prompter.note(
-      'Adesso lancio il pairing CLI ↔ web.\n\n' +
-      'Vedrai stampati un URL (jobhunterteam.ai/cli-link) e un codice.\n' +
-      'Apri l\'URL nello stesso browser dove sei loggato, digita il\n' +
-      'codice, conferma. Il wizard prosegue da solo appena il server\n' +
-      'conferma il pairing.\n\n' +
-      'Se la pagina ti chiede ancora login → torna su jobhunterteam.ai\n' +
-      'e fai login Google prima.',
-      'Pairing cloud (obbligatorio)',
+      t('wizard.cloud.pairing_body'),
+      t('wizard.cloud.pairing_title'),
     );
     const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
     if (!cloudOk) {
-      await prompter.outro(
-        'Pairing cloud fallito. Controlla che il deploy web sia OK e\n' +
-        'che tu sia loggato sul browser. Rilancia: jht setup',
-      );
+      await prompter.outro(t('wizard.cloud.pairing_failed'));
       return;
     }
   }
 
   // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   const providerChoice = await prompter.select({
-    message: 'Provider AI',
+    message: t('wizard.provider.prompt'),
     options: AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label, hint: p.hint })),
     initialValue: baseConfig.active_provider || 'claude',
   });
@@ -236,15 +225,15 @@ export async function runSetupWizard(prompter) {
   const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
   if (updateProviderId) {
     console.log('');
-    console.log(`Installo il CLI di ${selectedProvider.label}...`);
+    console.log(tf('wizard.provider.install_cli', selectedProvider.label));
     const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
     if (!ok) {
       const cont = await prompter.confirm({
-        message: 'Installazione CLI fallita. Vuoi salvare comunque la config e gestirla a mano?',
+        message: t('wizard.provider.install_failed_continue'),
         initialValue: false,
       });
       if (!cont) {
-        await prompter.outro('Setup interrotto. Riprova con: jht setup');
+        await prompter.outro(t('wizard.outro_aborted'));
         return;
       }
     }
@@ -271,46 +260,30 @@ export async function runSetupWizard(prompter) {
   const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
   const startTs = Date.now() / 1000;
   await prompter.note(
-    `Adesso apri un altro terminale sul tuo computer, fai SSH al VPS\n` +
-    `(stesso comando ssh che hai usato all'inizio), e lancia:\n\n` +
-    `      jht oauth-login\n\n` +
-    `Si apre la TUI di ${oauthCmd}:\n` +
-    `  1. apri l'URL stampato nel browser sul tuo computer\n` +
-    `  2. fai login con il tuo account ${selectedProvider.label}\n` +
-    `  3. incolla il codice e quando vedi "authenticated" esci con /quit\n\n` +
-    `Sto monitorando il filesystem: appena rilevo le credenziali\n` +
-    `proseguo da solo. Niente da premere qui.`,
-    `Login ${selectedProvider.label} (in altro terminale)`,
+    // wizard.oauth.notify_body uses %s × 2 (cli name + account label)
+    tf('wizard.oauth.notify_body', oauthCmd, selectedProvider.label),
+    tf('wizard.oauth.notify_title', selectedProvider.label),
   );
 
-  const credSpinner = prompter.progress(`In attesa del login ${oauthCmd}...`);
+  const credSpinner = prompter.progress(tf('wizard.oauth.waiting', oauthCmd));
   const credPath = await waitForOauthCredentials(oauthCmd, startTs, 30 * 60 * 1000);
   if (!credPath) {
-    credSpinner.stop('Timeout (30 min). Login non rilevato.');
-    await prompter.outro(
-      'Login non completato. Quando sei pronto rilancia: jht setup',
-    );
+    credSpinner.stop(t('wizard.oauth.timeout'));
+    await prompter.outro(t('wizard.oauth.aborted'));
     return;
   }
-  credSpinner.stop(`Login ${oauthCmd} rilevato (${credPath})`);
+  credSpinner.stop(tf('wizard.oauth.detected', oauthCmd, credPath));
 
   // ────────────────────────────────────────────────────────────────────────
   // STEP 8: avvia il team automatically (no prompt)
   // ────────────────────────────────────────────────────────────────────────
   console.log('');
-  console.log('Avvio il team (Sentinella + Bridge + Capitano)...');
+  console.log(t('wizard.team.starting'));
   const startOk = runJhtSubcommand(['team', 'start'], 'team start');
   if (!startOk) {
-    await prompter.outro(
-      'Avvio team fallito. Vedi log sopra. Riprova: jht team start',
-    );
+    await prompter.outro(t('wizard.team.start_failed'));
     return;
   }
 
-  await prompter.outro(
-    'Tutto pronto! Il team sta lavorando.\n' +
-    '  Status:  jht team status\n' +
-    '  Logs:    jht logs --tail 30\n' +
-    '  Stop:    jht team stop --all',
-  );
+  await prompter.outro(t('wizard.outro_done'));
 }
