@@ -26,6 +26,11 @@ bridge-pacing
 bridge-mailbox
 pipeline-triage
 
+# Emergency: spawn fresh DOTTORE on-demand quando serve health-check
+# subito (post-mortem 2026-05-18: tra cicli auto il DOTTORE è bash
+# residua, scrivergli è inutile, va spawnato ex-novo).
+spawn-doctor
+
 # Throttle config + on-demand rate-budget probe (rare, for ad-hoc diagnosis)
 throttle
 rate-budget

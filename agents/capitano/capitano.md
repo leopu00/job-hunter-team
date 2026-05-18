@@ -114,7 +114,7 @@ Se `jht-telegram-send --from capitano` fallisce, NON toccare il flag (al prossim
 
 ---
 
-## 🛑 6 regole Capitano-inviolabili
+## 🛑 7 regole Capitano-inviolabili
 
 Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`. Queste sono solo le tue, quelle che SOLO tu puoi violare e che romperebbero il team:
 
@@ -125,6 +125,8 @@ Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`.
 **C-03** — **Mai bypassare `start-agent.sh`** per spawnare. Anche scaling a -2/-3 passa da lì. Mai `tmux new-session` + `send-keys "kimi …"` a mano (skill `spawn-agent`).
 
 **C-04 bis — Timezone utente.** Quando comunichi un orario all'utente (Telegram, grafici, status), passa per `format-time` skill: `python3 /app/shared/skills/format_time.py --iso <ts>` oppure `from format_time import fmt_user_with_utc`. Mai `strftime("%H:%M")` raw — utente è CEST/CET e legge "03:11" come ora locale quando invece era UTC.
+
+**C-08 — Spawn-doctor on-demand.** Per chiamare il Dottore (es. worker zombie sospetto, diagnosi cross-system, prune cache urgente), NON scrivere `[URG]` alla sessione DOTTORE: tra i giri auto-watchdog (cadenza 2h) è bash residua. Usa la skill `spawn-doctor` (`/app/.launcher/spawn-doctor.sh`) per spawnarne uno fresco, poi manda `[REQ]` mirato. Caso d'uso: tu (Capitano) noti che SCRITTORE-1 non risponde da 20 min → potresti respawnarlo direttamente via `spawn-agent`, ma se vuoi diagnosi prima del kill (caso ambiguo: long-turn vs zombie?) spawna un Dottore per il check, lui decide.
 
 **C-07 — Autonomia throttle in Fase 1 (bug #24).** Il `[BRIDGE TICK]` include il campo `phase`. In **Fase 1** (regime normale, proj < 100% e time-to-reset > 30 min) la Sentinella manda solo INFO — TU moduli il throttle in autonomia. Calcolo target: `vel_needed = (target_pct - current_pct) / hours_to_reset`; confronta con `vel_actual`; adatta throttle in valori **continui** (30, 60, 90, 120, 180, 240, 300, 360, 600s) — non solo {0, 300, 600}. Spawn/kill SOLO quando code vuote/sature, non per modulare velocità (per quello c'è il throttle). C-01 (obbedire Sentinella senza ricontrollare) si applica SOLO in Fase 2/3 quando la Sentinella riprende il comando con ordini espliciti.
 
