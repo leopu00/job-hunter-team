@@ -180,23 +180,112 @@ Se proj > 150% ma usage < 70%:
   → con velocity 60%/h sono 30 min di buffer. Sufficiente per
   intervento manuale o second-tick re-evaluation.
 
-### 🟡 Medio — riscrittura logica "chirurgico vs totale"
+### 🟡 Medio — Scala throttle GRANULARE 6 livelli (proposta Leone, 2026-05-18)
 
 **File**: `agents/sentinella/sentinella.md` + `agents/_skills/rate-budget/SKILL.md`
 **Effort**: 2-3h di prompt engineering + test runtime
 **Deploy**: rebuild image
 
-Aggiungere matrix decisionale alla Sentinella:
+#### Origine
 
-| Condizione | Throttle |
-|---|---|
-| usage <50% AND proj >150% | Throttle CHIRURGICO sul top consumatore |
-| usage 50-70% AND proj >150% | Throttle TOP 2 consumatori |
-| usage 70-95% AND proj >150% | Throttle a tutti (default 600s) |
-| usage >=95% OR vero rate-limit | FREEZE totale |
+Conversazione 2026-05-18 17:00 CEST: Leone osserva che oggi il bridge
+calcola throttle PROPORZIONALI (`240s`, `360s`, `600s`) ma la Sentinella
+LLM tende a binarizzare in "leggero ↔ freeze totale (-1)". Manca il
+**middle ground**: throttle severo (es. 30 min, 1 ora) ma NON freeze.
 
-Segue il pattern del bridge pacing già implementato, ma con regole
-formalizzate per la Sentinella LLM.
+Proposta: scala granulare di 6+1 livelli, ognuno raddoppia ~ il throttle
+precedente, dove **solo L6 è freeze totale**. Permette risposta
+graduale al rischio invece di cliff.
+
+#### Scala throttle proposta
+
+| Livello | Throttle | Use case | UX impact |
+|---|---|---|---|
+| L0 | 60s | Stato sano, tick standard | ✅ Normal |
+| L1 | 300s (5 min) | usage 30-50% + proj >120% | ✅ Light |
+| L2 | 600s (10 min) | usage 50-70% + proj >150% | 🟡 Medio |
+| L3 | 1200s (20 min) | usage 70-80% + proj >150% | 🟠 Heavy |
+| L4 | 1800s (30 min) | usage 80-90% + proj >150% | 🔴 Critic |
+| L5 | 3600s (1 h) | usage 90-95% — chirurgico solo top | 🚨 Last resort |
+| L6 | FREEZE (-1 / kill) | usage >95% OR rate-limit imminente | ⛔ Emergency |
+
+#### Matrice decisionale completa
+
+```
+usage →        <30%     30-50%    50-70%    70-80%    80-90%    90-95%    >95%
+proj ↓         ─────────────────────────────────────────────────────────────────
+<100%          L0        L0        L0        L0        L1        L2        L4
+100-120%       L0        L0        L1        L1        L2        L3        L5
+120-150%       L0        L1        L1        L2        L3        L4        L5
+150-200%       L1*       L1*       L2*       L3        L4        L5        L6
+>200%          L2*       L2*       L3*       L4        L5        L6        L6
+
+* = throttle CHIRURGICO sul top consumer (1 agente), non globale
+    tutti gli altri = scala globale del team
+```
+
+#### Esempio applicato al caso del 15:28 UTC
+
+```
+usage=43%, proj=184%, velocity=60%/h
+
+POLITICA ATTUALE  (Sentinella binaria):
+   → EMERGENZA freeze tutto (L6)
+   → Pipeline ferma 15 min, 13 agenti in pausa
+   → Risultato: velocity → 0, proj scende a 156%
+
+POLITICA SCALA GRANULARE:
+   Casella matrix [proj 150-200% × usage 30-50%] = L1*
+   → Throttle 300s solo sul TOP consumer (Critico)
+   → Altri 12 agenti continuano a lavorare normalmente
+   → Velocity team scende a ~30%/h (-50%, dato che Critico era 49% del consumo)
+   → Proj rientra senza fermare la pipeline
+```
+
+#### Vantaggi
+
+- 🟢 **Pipeline mai ferma del tutto** tranne L6 (= ~95% usage = pericolo reale)
+- 🟢 **Risposta graduale** invece di cliff: 6 step + freeze finale
+- 🟢 **Auto-resume** dopo timer scaduto (agente riparte solo, no intervento)
+- 🟢 **Distinzione CHIRURGICO vs GLOBALE**: L1-L3 spesso un solo agente, L4-L6 team
+- 🟢 **Coerenza con bridge pacing** che già usa throttle proporzionali
+
+#### Trade-off / rischi
+
+- 🟡 **Complessità prompt**: +50-100 righe per matrice/regole nella Sentinella
+- 🟡 **Tuning iniziale**: soglie esatte (es. "1200s per usage 70-80%")
+  sono best-guess da calibrare con dati reali in 2-3 finestre Kimi
+- 🟡 **Reset tier post-throttle**: quando timer scade e proj ancora alta,
+  re-evaluation può tirare a livello uguale o superiore. Serve regola
+  di "rampa rilassata": se velocity scende, scala down di 1 livello
+  per tick anziché tornare a L0 di colpo
+
+#### Approccio raccomandato (iterativo)
+
+```
+Step 1: implementa SOLO 4 livelli (L1/L2/L4/L6)
+        → semplice da capire, 2 step intermedi tra normal e freeze
+        → test con 2-3 finestre Kimi reali
+        → raccogli osservazioni reali sul comportamento
+
+Step 2: se mancano step intermedi → aggiungi L3 e L5
+        → matrice 6-livelli completa
+        → test ulteriore prima di lockarsi sui valori
+
+Step 3: una volta calibrati i numeri → spostare logica nel bridge
+        Python (deterministica, no variabilità LLM)
+        → Sentinella diventa l'esecutore (formatta ordini), non il giudice
+```
+
+#### Componenti da modificare
+
+- `agents/sentinella/sentinella.md` (master EN) — matrice + regole decisionali
+- `agents/sentinella/sentinella.it.md` (override IT)
+- `agents/sentinella/sentinella.hu.md` (override HU)
+- `agents/_skills/rate-budget/SKILL.md` — funzione helper per mappare
+  (usage, proj) → livello throttle
+- (Eventualmente, Step 3) `.launcher/sentinel-bridge.py` — calcolo
+  deterministico del livello e suggested_throttle_s
 
 ### 🔴 Refactor — soglia algoritmica nel bridge (non LLM)
 
@@ -214,18 +303,33 @@ giudice.
 
 ---
 
-## 🎯 Raccomandazione
+## 🎯 Raccomandazione finale (2026-05-18, Leone)
 
-**Quick win** (`AND usage >= 70%`) per ora:
+Strategia a 2 fasi:
 
-- Risolve il caso osservato senza rifare l'architettura
-- 1 modifica prompt (`agents/sentinella/sentinella.md` + `.it.md` + `.hu.md`)
-- Deploy via rebuild :buster
-- Effort < 30 min totale
+### Fase 1 — IMMEDIATA (post-beta E2E test stasera)
+
+**Quick win**: aggiungere `AND usage >= 70%` per attivare freeze totale.
+
+- Risolve il caso osservato (proj alta + usage basso = no EMERGENZA)
+- 1 paragrafo nel prompt Sentinella (+ IT/HU)
+- Deploy < 30 min
 - Reversibile facilmente
 
-Lasciare Medio e Refactor come backlog se Quick win non risolve dopo
-qualche giorno di osservazione.
+### Fase 2 — POCO DOPO (entro 1-2 giorni)
+
+**Scala granulare 6 livelli** (proposta Leone): introduzione progressiva
+con 4 livelli inizialmente (L1/L2/L4/L6), poi se necessario L3 e L5.
+
+- Risolve a monte il problema del binarismo Sentinella
+- Effort 2-3h prompt engineering + test 2-3 finestre Kimi
+- Allinea LLM agent con bridge pacing algoritmico
+- Step 3 finale (sposta nel bridge): backlog post-beta launch
+
+### Refactor finale (post-launch)
+
+Logica algoritmica nel bridge invece che nell'LLM (vedi sezione Refactor
+sotto). Sentinella diventa esecutore, non giudice.
 
 ---
 
