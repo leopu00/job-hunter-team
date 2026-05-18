@@ -13,6 +13,65 @@ sono già stati chiusi nei commit di ieri.
 
 ---
 
+## 📋 Riepilogo stato chiusura (aggiornato 2026-05-18)
+
+Implementazione completa dei bug strategici nelle 48h 17-18 maggio. Per
+ogni bug, commit SHA + status. Vedi anche
+[`docs/sessions/2026-05-18-fix-effectiveness-review/README.md`](../sessions/2026-05-18-fix-effectiveness-review/README.md)
+per il confronto numerico pre/post-fix.
+
+| Bug | Titolo | Stato | Commit | Sessione doc |
+|---|---|---|---|---|
+| #14 | state-event log positions | ✅ FIXED | `2ceb0a17` | — |
+| #15 | timezone CEST | ✅ FIXED + setup wizard | `78004470`, `eb4cad5d` | — |
+| #16 | auto-report periodici | ✅ MERGED in F-1.D | `39169b46` | — |
+| #17 | Capitano passivo C-05 auto-triage | ✅ FIXED | `426f1865` | — |
+| #18 | Dottore mai spawnato | ✅ FIXED + zombie regression chiusa | `db2c2d47`, `dad3c94a`, `d012b75c` | `2026-05-18-capitano-zombie-night/` |
+| #19A | weekly_reset_at log | ✅ FIXED | `dca5a614` | — |
+| #19B | Capitano "indaga prima di non lo so" | ✅ FIXED in C-04 | `43cf5072` | — |
+| #20 | /reports query reali | ✅ FIXED + migration 014 | `964afc4d` | — |
+| #21 | Scrittore promuove ready (Opzione B) | ✅ FIXED | `5c9c5042` | — |
+| #22 | Hallucination msg non consegnati | 🟢 declassato a bassa, coperto da #23 | — | — |
+| #23 | Leggi fonte non memoria | ✅ FIXED A-04/C-04/M-05 | `43cf5072` | — |
+| #24 | Sentinella 3 fasi + scala continua | ✅ FIXED | `d6c1c646` | — |
+| #25 | Dedup 3 livelli + naming CV position_id | ✅ FIXED SC-05 | `22aaeb72` | — |
+| #26 | Atomic CV + filter + cv-disk-audit | ✅ FIXED + CV engine wkhtmltopdf | `b1b5145f`, `f695b503` | — |
+| #27 | salary_fit + cache locale | ✅ FIXED | `16f55be2` | — |
+| F-1 | Telegram UX completa | ✅ A+B+D FIXED, C deferred | `d019f192`, `39169b46` | — |
+| F-2 | Scout web access (5 componenti) | ✅ FIXED + LinkedIn no-login | `3b3e93eb`, `f4695cec` | — |
+| F-3 | Weekly budget distribution | ⏭️ DEFERRED (utente conferma default OK) | — | — |
+| F-4 | Expiration tracking | ✅ A+C FIXED, B deferred | `69a7c117` | — |
+
+### Bug regressioni risolte nelle 48h
+
+| ID | Causa | Fix | Commit |
+|---|---|---|---|
+| Zombie night (18/5 23:14→09:05 UTC) | agent-watchdog solo `tmux has-session`, no pane_current_command check → 6h Capitano zombie + 20 dottori a vuoto | pane check + kill+respawn + cadenza Dottore 30min→2h + spawn-doctor skill | `dad3c94a`, `d012b75c` |
+| CV "estetica semplificata" (18/5 mattina) | skill cv-structure citava `--pdf-engine=typst` non disponibile in pandoc 2.17, Scrittori fallback a fpdf2 | preflight engine + gate Producer post-render + guard pdf_gen.py refuse CV + S-05 inviolabile | `f695b503` |
+| Bridge non auto-spawn post-recreate (zombie night precursor) | pid1 spawnava solo user-facing, sentinel-bridge/pacing/SENTINELLA tmux restavano morti | startSentinelBridges + sentinella nella user-facing list | `488ff9ac` |
+| Timezone hardcoded Europe/Rome | default geografico non valido per utenti non-italiani | setup wizard chiede TZ → host.env JHT_USER_TZ + cascade format_time | `eb4cad5d` |
+
+### Effetto cumulativo confronto pre/post-fix
+
+- EMERGENZA Sentinella: **−96%** (25 → 1)
+- URG msg: **−71%** (24 → 7)
+- FREEZE menzioni: **−82%** (34 → 6)
+- CV con engine corretto: **27 → 71** (71/73 = 97%)
+- applications status='ready' visibili: **0 → 19**
+- state_transitions tracciate: **0 → 243**
+
+Dettagli numerici: [`docs/sessions/2026-05-18-fix-effectiveness-review/`](../sessions/2026-05-18-fix-effectiveness-review/).
+
+### Debt residuo
+
+- **Capitano context bloat** (83.7k tokens/turn vs 50k storico) — soluzione proposta in roadmap: refresh contesto periodico dei coordinatori (memoria sta nel DB, conversazione non critica).
+- **Scout sweep 116k tokens/turn** — cap a 8000 chars già parziale in `linkedin_access.py`, retrofit `web_scrape_robust.py`.
+- 2 CV stragglers con engine sbagliato (pre-guard).
+
+---
+
+---
+
 ## 🐛 1. Voice / Photo dal tg-bridge: niente Whisper / OCR / Vision
 
 **Sintomi**:

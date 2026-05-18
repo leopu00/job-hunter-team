@@ -9,6 +9,58 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 > 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added, **pre-launch security hardening sprint** (31/34 fix, score 30% → 74%, audit suite in `docs/security/`).
 
+### 🐛 Team strategy bugs sprint — 2026-05-17 / 2026-05-18 (19 commit, 48h)
+
+Dettaglio in
+[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
+
+**Effetto cumulativo misurato (pre/post-fix)**:
+- 🚨 EMERGENZA Sentinella **−96%** (25 → 1)
+- 🚨 URG msg **−71%** (24 → 7)
+- 🚨 FREEZE menzioni **−82%** (34 → 6)
+- ✅ applications status='ready' visibili **0 → 19** (era bug #21!)
+- ✅ state_transitions log **0 → 243** tracciate (bug #14)
+- ✅ CV con engine corretto **27/27 → 71/73** (wkhtmltopdf)
+- ✅ Dottore vivo nel team **mai → spawn ogni 2h** (bug #18)
+- ✅ Boot container **4/9 auto-start → 9/9 auto-start** (zero comandi manuali)
+
+**13 bug strategici + 3 feature chiusi**:
+- **#14** state-event log positions transitions (commit `2ceb0a17`)
+- **#15** timezone CEST/UTC — setup wizard chiede TZ + cascade format_time (commit `78004470`, `eb4cad5d`)
+- **#17** Capitano C-05 auto-triage attivo (commit `426f1865`)
+- **#18** Dottore mai spawnato — regressione storica + post-mortem zombie night chiuso (commit `db2c2d47`, `dad3c94a`, `d012b75c`)
+- **#19A** weekly_reset_at log nei tick bridge (commit `dca5a614`)
+- **#19B** Capitano "indaga prima di non lo so" — confluito in C-04 (commit `43cf5072`)
+- **#20** `/reports` query Supabase reali al posto di mock + migration 014 (commit `964afc4d`)
+- **#21** Scrittore promuove `applications.status='ready'` dopo Critic PASS (commit `5c9c5042`)
+- **#23** "Leggi fonte non memoria" — regole A-04/C-04/M-05 (commit `43cf5072`)
+- **#24** Sentinella 3 fasi + scala throttle continua 60-600s (commit `d6c1c646`)
+- **#25** Dedup gerarchica 3 livelli SC-05 + naming CV con position_id (commit `22aaeb72`)
+- **#26** Atomic CV PDF write + status gate + cv-disk-audit + engine wkhtmltopdf (commit `b1b5145f`, `f695b503`)
+- **#27** Salary cache locale + skill salary-estimate gerarchica (commit `16f55be2`)
+- **F-1** Telegram UX: setMyCommands + reply keyboard + auto-report PNG ogni 2h (commit `d019f192`, `39169b46`)
+- **F-2** Scout web access 5 componenti: anti-bot cascade L1/L2/L3, LinkedIn no-login via `/jobs/view/<id>`, email-monitor IMAP, multi-Scout workspace, freshness SC-07 (commit `3b3e93eb`, `f4695cec`)
+- **F-4** Expiration tracking: deadline parser EN/IT + alert utente idempotente (commit `69a7c117`)
+
+**2 regressioni introdotte durante lo sprint, già risolte**:
+- Zombie night 18/5 23:14→09:05 UTC — agent-watchdog non controllava pane_current_command, kimi crashato in sessione tmux viva = silent zombie 6h. Fix: pane check + kill+respawn + cadenza Dottore 30min→2h + skill `spawn-doctor` per coordinatori (commit `dad3c94a`, `d012b75c`). Post-mortem [`docs/sessions/2026-05-18-capitano-zombie-night/`](docs/sessions/2026-05-18-capitano-zombie-night/).
+- CV "estetica semplificata" 18/5 — skill cv-structure citava `--pdf-engine=typst` non disponibile in pandoc 2.17 container, Scrittori fallback a fpdf2 1-pagina spartana. Fix: 4 reti di sicurezza (preflight engine + gate Producer post-render + guard pdf_gen.py refuse CV paths + regola scrittore S-05). 31 CV brutti rigenerati retroattivamente (commit `f695b503`).
+
+**Infrastruttura altri fix correlati**:
+- `488ff9ac` — pid1.js auto-spawn `sentinella` tmux + `sentinel-bridge.py` + `pacing-bridge.py` (boot 9/9 senza intervento manuale)
+
+**Debt residuo identificato** (non blocking):
+- 🟡 Capitano context bloat (83.7k tokens/turn vs 50k storico) → soluzione proposta: refresh contesto periodico dei coordinatori (memoria nel DB, conversazione non critica)
+- 🟡 Scout sweep 116k tokens/turn — cap parziale linkedin_access.py, retrofit `web_scrape_robust.py` da fare
+- 🟡 F-3 weekly distribution (deferred — default G-spot OK)
+- 🟡 F-1.C inline keyboard show_cv:X callback (deferred)
+- 🟡 F-4.B Analista re-check periodica positions vecchie (deferred)
+
+**Analisi consumo settimanale** ([`docs/sessions/2026-05-18-weekly-budget-analysis/`](docs/sessions/2026-05-18-weekly-budget-analysis/)):
+- 1% finestra Kimi ≈ 0.20% weekly budget (+8.5% rispetto a 0.189 settimana scorsa, causa context bloat)
+- ~5 finestre piene/settimana capacità (vs 5.9 settimana scorsa)
+
 ### 🖥️ Desktop launcher
 
 - **Setup wizard rewrite** — i18n (en/it/hu), language picker, new step flow, progress UI; "Install everything" button orchestrates the full one-click setup
