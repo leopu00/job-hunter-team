@@ -722,9 +722,9 @@ async function handleDaemon(options) {
   // cloud_sync_tokens). A 30s saturavamo il Disk IO Budget Supabase con un
   // solo VPS attivo (vedi docs/sessions/2026-05-18-supabase-disk-io-investigation).
   // 60s e' un buon compromesso tra freshness dashboard e IO consumato.
-  // Override via --interval o env JHT_CLOUD_PUSH_INTERVAL_SEC.
-  const defaultInterval = parseInt(process.env.JHT_CLOUD_PUSH_INTERVAL_SEC ?? '60', 10) || 60;
-  const intervalSec = Math.max(5, parseInt(options.interval ?? String(defaultInterval), 10) || defaultInterval);
+  // Priorita: --interval CLI flag > env JHT_CLOUD_PUSH_INTERVAL_SEC > default 60s.
+  const explicit = options.interval ?? process.env.JHT_CLOUD_PUSH_INTERVAL_SEC ?? '60';
+  const intervalSec = Math.max(5, parseInt(explicit, 10) || 60);
 
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
@@ -825,11 +825,13 @@ export function registerCloudCommand(program) {
   // `daemon` e' pensato come PID 1 del container su VPS: ciclo push
   // periodico finche' non riceve SIGTERM da docker stop. Cosi' i dati
   // scritti dagli agenti appaiono su jobhunterteam.ai senza che l'utente
-  // lanci nulla a mano. Latency: <interval> secondi (default 30s).
+  // lanci nulla a mano. Latency: <interval> secondi (default 60s, vedi
+  // docs/sessions/2026-05-18-supabase-disk-io-investigation per il
+  // motivo del cambio da 30s).
   cloud
     .command('daemon')
     .description('Loop di push continuo (usato come PID 1 del container su VPS)')
-    .option('--interval <sec>', 'Secondi tra un push e il successivo', '30')
+    .option('--interval <sec>', 'Secondi tra un push e il successivo (env JHT_CLOUD_PUSH_INTERVAL_SEC)')
     .action(handleDaemon);
 
   // `realtime-listen` — long-running WebSocket subscriber su Supabase
