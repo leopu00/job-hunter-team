@@ -49,6 +49,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# i18n: shared/i18n.py sits one dir up from skills/. Import with fallback
+# so legacy installs (no catalog) still emit IT-ish strings inline.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+try:
+    from i18n import t as _i18n_t, tf as _i18n_tf  # type: ignore
+except ImportError:
+    # Fallback: identity (returns the key) — render paths stay readable in dev.
+    def _i18n_t(key: str) -> str:  # type: ignore
+        return key
+    def _i18n_tf(key: str, *args) -> str:  # type: ignore
+        return key
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 DB_PATH = JHT_HOME / "jobs.db"
@@ -217,36 +228,39 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
     lines = [
         f"📊 <b>Pipeline panorama</b> — {when}",
         "",
-        f"📥 Trovate    {total_pos}   ({pos.get('checked',0)+pos.get('new',0)} 🆕 da analizzare)",
-        f"🎯 Scored      {pos.get('scored', 0)}",
-        f"✍️ In scrittura {pos.get('writing', 0)}",
-        f"✅ Ready CV    {ready} ⭐",
-        f"📤 Inviate     {applied}",
-        f"🚫 Excluded   {pos.get('excluded', 0)}",
+        f"📥 {_i18n_t('auto_report.found')}    {total_pos}   ({pos.get('checked',0)+pos.get('new',0)} 🆕 {_i18n_t('auto_report.new_to_analyze')})",
+        f"🎯 {_i18n_t('auto_report.scored')}      {pos.get('scored', 0)}",
+        f"✍️ {_i18n_t('auto_report.writing')} {pos.get('writing', 0)}",
+        f"✅ {_i18n_t('auto_report.ready_cv')}    {ready} ⭐",
+        f"📤 {_i18n_t('auto_report.applied')}     {applied}",
+        f"🚫 {_i18n_t('auto_report.excluded')}   {pos.get('excluded', 0)}",
         "",
-        f"🩺 Team        {tmux_n} sessioni: {_html_escape(', '.join(sessions) if sessions else '—')}",
+        f"🩺 {_i18n_t('auto_report.team')}        {tmux_n} {_i18n_t('auto_report.sessions')}: {_html_escape(', '.join(sessions) if sessions else '—')}",
     ]
 
     if usage is not None:
         proj_s = f"{proj:.0f}%" if isinstance(proj, (int, float)) else "?"
-        phase_s = f"Fase {phase}" if phase else "?"
-        lines.append(f"⏱️ Budget     {usage}% (proj {proj_s} · {phase_s} · {_html_escape(str(status))})")
+        phase_label = _i18n_t("auto_report.phase_label")
+        phase_s = f"{phase_label.title()} {phase}" if phase else "?"
+        budget_label = _i18n_t("auto_report.budget_label")
+        proj_label = _i18n_t("auto_report.proj_label")
+        lines.append(f"⏱️ {budget_label}     {usage}% ({proj_label} {proj_s} · {phase_s} · {_html_escape(str(status))})")
         # Bug #15: converti reset HH:MM UTC → fuso utente.
         reset_user = _html_escape(_fmt_hhmm_user(reset_at))
-        lines.append(f"📅 Reset finestra {reset_user}")
+        lines.append(f"📅 {_i18n_t('auto_report.reset_window')} {reset_user}")
         if weekly is not None:
             wr_user = _fmt_hhmm_user(weekly_reset) if weekly_reset else ""
             wr = f" · reset {wr_user}" if wr_user else ""
-            lines.append(f"📆 Settimana  {weekly}%{_html_escape(wr)}")
+            lines.append(f"📆 {_i18n_t('auto_report.week_label')}  {weekly}%{_html_escape(wr)}")
 
     transitions = pipeline.get("transitions_24h", 0)
     if transitions:
-        lines.append(f"🔄 Transitions 24h: {transitions}")
+        lines.append(f"🔄 {_i18n_t('auto_report.transitions_24h')} {transitions}")
 
     top = pipeline.get("top_ready", [])
     if top:
         lines.append("")
-        lines.append("⭐ <b>Top CV ready (apply manuale):</b>")
+        lines.append(f"⭐ <b>{_i18n_t('auto_report.top_cv_ready')}</b>")
         for r in top:
             score = r.get("critic_score")
             sc = f"{score:.1f}/10" if isinstance(score, (int, float)) else "—"
@@ -255,7 +269,7 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
             lines.append(f"  • {comp} — {title}  ({sc})")
 
     lines.append("")
-    lines.append(f"<i>Auto-report Capitano (ogni {MIN_INTERVAL_MIN} min)</i>")
+    lines.append(f"<i>{_i18n_tf('auto_report.footer', MIN_INTERVAL_MIN)}</i>")
     return "\n".join(lines)
 
 
