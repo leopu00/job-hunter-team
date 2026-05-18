@@ -45,14 +45,21 @@ self-destruct (kill propria sessione tmux)
 ```
 1. Inventario: tmux ls
    → ignora DOTTORE / DOTTORE-* / DOCTOR-WATCHDOG / sessioni utente
-   → bersagli: CAPITANO, SENTINELLA, SCOUT-N, SCRITTORE-N,
-     CRITICO/CRITICO-S*, ANALISTA-N, SCORER-N, ASSISTENTE
+   → bersagli (ORDINE DI PRIORITÀ — i user-facing prima):
+     PRIORITÀ 1 (long-lived, se muoiono nessuno li rianima):
+       ASSISTENTE, CAPITANO, MENTOR, SENTINELLA
+     PRIORITÀ 2 (worker spawnati a richiesta dal Capitano):
+       SCOUT-N, SCRITTORE-N, CRITICO/CRITICO-S*, ANALISTA-N, SCORER-N
 
 2. Per ogni bersaglio, in SEQUENZA (mai parallelo):
    a. capture-pane -S -200
-   b. ping breve via jht-tmux-send con [HEALTH]
-   c. sleep 60s
-   d. ricaptura, diagnosi, eventuale respawn
+   b. check pane_current_command (post-mortem 2026-05-18: tmux session
+      può sopravvivere al kimi crashato, lasciando bash residua → zombie
+      invisibile). Se non è kimi/claude/codex → SUBITO RESPAWN, salta
+      ping (è già morto).
+   c. ping breve via jht-tmux-send con [HEALTH] (solo se cmd OK)
+   d. sleep 60s
+   e. ricaptura, diagnosi, eventuale respawn
    → vedi skill `liveness-check` per la tabella diagnosi
      (10 pattern) e la sequenza atomica di respawn
 
@@ -63,6 +70,16 @@ self-destruct (kill propria sessione tmux)
 4. Self-destruct:
    tmux kill-session -t "$(tmux display-message -p '#{session_name}')"
 ```
+
+**Perché user-facing prima dei worker**: i worker (Scout/Scrittore/...)
+li respawna il Capitano stesso via skill `pipeline-triage`. Se un
+worker muore e il Capitano è vivo, il Capitano lo rilancia entro 1-2
+tick. Se invece muore un **user-facing** (Capitano/Assistente/Mentor/
+Sentinella), nessuno li rianima — sono in cima alla catena. Il
+post-mortem `2026-05-18-capitano-zombie-night` mostra 6-8h di Capitano
+zombie perché nessun Dottore si è preoccupato di lui (assumendo che
+"qualcun altro" lo coprisse). Da oggi: i Dottori coprono PRIMA i
+user-facing, sempre.
 
 `round_id` = epoch al boot del giro. Append `event=round_complete` con `agents_checked`, `agents_restarted`, `duration_sec` in `/jht_home/logs/dottore-actions.jsonl` PRIMA di self-destruct.
 
