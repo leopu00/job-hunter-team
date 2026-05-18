@@ -157,6 +157,68 @@ Stesso pattern del bug #18 (regressione doctor-watchdog non spawnato): "vivo" �
 
 ---
 
+## ✅ Fix follow-up implementati 2026-05-18 (post discussione utente)
+
+Oltre al fix A (pane_current_command check nell'agent-watchdog), 3
+cambiamenti coordinati che chiudono il cerchio:
+
+### 1. Dottore copre user-facing **PRIMA** dei worker
+
+Il post-mortem ha mostrato che il Dottore non aveva preso il Capitano
+in carico perché si concentrava sui worker. Decisione utente: i
+user-facing sono **più importanti** dei worker (i worker li respawna
+il Capitano stesso; i user-facing no, nessuno li copre se non il
+Dottore).
+
+- `agents/dottore/dottore.md` § Procedura del giro: ordine espresso
+  PRIORITÀ 1 (ASSISTENTE/CAPITANO/MENTOR/SENTINELLA) → PRIORITÀ 2
+  (worker). Se il budget 10min finisce, sempre PRIORITÀ 1 prima.
+- `agents/_skills/liveness-check/SKILL.md`: nuova sezione "Priority
+  order" + Step 0 `pane_current_command` (cheap pre-check che
+  cattura il caso zombie senza fare il ping che si sarebbe perso).
+
+### 2. Skill `spawn-doctor` per i coordinatori
+
+Caso visto stamattina: l'Assistente ha mandato 2 URG a una sessione
+DOTTORE già self-distructed (bash residua). Inutile.
+
+Nuova skill `agents/_skills/spawn-doctor/SKILL.md`: i 4 coordinatori
+(Capitano, Assistente, Mentor, Sentinella) sanno spawnare un Dottore
+fresco via `/app/.launcher/spawn-doctor.sh` quando serve health-check
+on-demand, INVECE di scrivere a una sessione morta.
+
+Quando l'utente dice "fai partire il dottore" / "dottora" / "controlla
+il team", il coordinatore di turno spawna ex-novo + manda `[REQ]`
+mirato + aspetta `[RES]`. Niente più URG nel vuoto.
+
+Aggiunta a `skills.list` di tutti e 4: capitano, assistente, mentor,
+sentinella.
+
+### 3. Doctor-watchdog cadenza 30min → 2h
+
+20 spawn a vuoto in 11h notturne = ~3-5% budget Kimi bruciato per
+giri di health-check che hanno trovato tutto OK e si sono
+auto-distrutti. Decisione utente: cadenza 2h (12 spawn/giorno invece
+di 48). Per i casi urgenti c'è la skill `spawn-doctor` on-demand.
+
+- `.launcher/doctor-watchdog.sh`: `DOCTOR_WATCHDOG_INTERVAL` default
+  `1800` → `7200`.
+
+### Effetto combinato
+
+- Capitano morto a mezzanotte → entro **30s** l'agent-watchdog lo
+  rianima (Step 0 pane_current_command).
+- Se anche il watchdog fallisse per qualche motivo → al prossimo giro
+  Dottore (max 2h, PRIORITÀ 1 ASSISTENTE/CAPITANO/MENTOR/SENTINELLA)
+  viene catturato.
+- Se l'utente chiede `[TG] dottora` all'Assistente → l'Assistente
+  spawna un Dottore ex-novo (skill `spawn-doctor`) entro 10-15s,
+  niente attesa del watchdog 2h.
+- Budget: 12 spawn/giorno regolari + spawn on-demand quando serve.
+  Risparmio ~3-5% budget vs cadenza 30min.
+
+---
+
 ## 🔗 Bug collegati
 
 - **#18** (doctor-watchdog mai integrato in pid1) — stessa famiglia "regressione invisibile finché qualcuno non guarda"

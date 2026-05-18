@@ -15,6 +15,44 @@ A tmux session can survive its CLI. When the Codex / Kimi TUI crashes, tmux fall
 - 🔁 **Post-URG** — 10-30s after a Captain `[URG]` / `[MSG]` to confirm ACK + the CLI is still alive.
 - ⚖️ **Pre-scaling** — before a spawn/kill that depends on an existing agent's state (do not spawn the Analyst if the Scout it relies on is dead).
 
+## Priority order — user-facing FIRST
+
+Before any walking, sort targets so the user-facing long-lived agents
+get checked first. They're at the top of the chain — if they die,
+**nobody respawns them** (the Captain spawns workers, not himself /
+the Assistant / the Mentor / the Sentinel). The post-mortem of the
+2026-05-18 zombie night had 6-8h of dead Capitano because Dottori
+walked workers first, never reached the Capitano, and self-destructed.
+
+```
+PRIORITY 1 (always check first):
+  ASSISTENTE, CAPITANO, MENTOR, SENTINELLA
+PRIORITY 2 (workers, the Captain can respawn them):
+  SCOUT-N, SCRITTORE-N, CRITICO-S*, ANALISTA-N, SCORER-N
+```
+
+If you only have 10 min budget for the round, **always finish PRIORITY 1
+before touching PRIORITY 2**. A worker dead 30 min is recoverable; a
+Capitano dead 30 min means the whole pipeline is silent.
+
+## Step 0 — `pane_current_command` (cheap pre-check)
+
+Before the capture-pane, do the cheap check:
+
+```bash
+cmd=$(tmux list-panes -t <SESSION> -F '#{pane_current_command}' | head -1)
+```
+
+If `$cmd` is not `Kimi` / `kimi` / `claude` / `codex` / `node` / `python*`
+→ the LLM CLI is **already dead**, the pane is bare bash residua.
+Skip the ping (it'd be lost into the bash and `jht-tmux-send` would
+return `exit 0` deceivingly), go directly to Step 3 RESPAWN.
+
+This single check would have caught the 2026-05-18 zombie Capitano —
+pane was bash (PID 663, `/proc/663/exe → /usr/bin/bash`) with kimi
+crashed. `tmux has-session` returned True, lying to the watchdog for
+11 hours.
+
 ## Step 1 — capture, don't trust
 
 Always read the pane first; do not act blind:
