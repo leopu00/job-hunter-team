@@ -13,9 +13,16 @@ export interface VerifiedToken {
 
 export type VerifyResult = { ok: true; data: VerifiedToken } | { ok: false; res: NextResponse }
 
+// Throttle write su last_used_at: una sola UPDATE/ora per token, anche
+// se il cloud daemon fa decine di request/min. Il campo era usato solo
+// come "ultima volta visto" indicativo: granularità 1h è sufficiente,
+// la write su ogni request saturava il Disk IO Budget (vedi
+// docs/sessions/2026-05-18-supabase-disk-io-investigation/).
+const LAST_USED_THROTTLE_MS = 60 * 60 * 1000
+
 /**
  * Verifica un Bearer token jht_sync_... contro cloud_sync_tokens.
- * Aggiorna last_used_at fire-and-forget. Ritorna admin client per la route.
+ * Aggiorna last_used_at fire-and-forget (throttle 1h). Ritorna admin client per la route.
  */
 export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult> {
   const authHeader = req.headers.get('authorization') ?? ''
@@ -43,7 +50,7 @@ export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult>
   const hash = hashSyncToken(match[1])
   const { data, error } = await admin
     .from('cloud_sync_tokens')
-    .select('id, user_id, name, revoked_at')
+    .select('id, user_id, name, revoked_at, last_used_at')
     .eq('token_hash', hash)
     .maybeSingle()
 
@@ -57,10 +64,19 @@ export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult>
     return { ok: false, res: NextResponse.json({ error: 'token revocato' }, { status: 401 }) }
   }
 
-  await admin
-    .from('cloud_sync_tokens')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
+  const shouldUpdate =
+    !data.last_used_at ||
+    Date.now() - new Date(data.last_used_at).getTime() > LAST_USED_THROTTLE_MS
+
+  if (shouldUpdate) {
+    // Fire-and-forget vero: niente await, la request risponde senza
+    // attendere il write. L'errore viene silenziato perché non blocca.
+    void admin
+      .from('cloud_sync_tokens')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', data.id)
+      .then(() => undefined)
+  }
 
   return {
     ok: true,
