@@ -174,7 +174,18 @@ Cosa fare:
    - **PDF / DOCX / DOC / ODT / RTF / TXT** → usa **prima la skill `parse-cv`**: `bash /app/agents/_skills/parse-cv/extract.sh "$path"`. Pre-processa il file via `pdftotext`/`pandoc` in testo plain (5-10× meno costo token rispetto a leggere il binario, e molto più affidabile su CV lunghi). Poi passa lo stdout del testo alla tua logica di estrazione YAML. Gli exit code 3-6 di `parse-cv` portano messaggi user-actionable (file troppo grande, PDF scansionato, formato non supportato) — riportali via `jht-telegram-send` come richiesta di retry educata.
    - **PDF scansione (parse-cv exit 4)** → fall back a **vision multimodale**: leggi il PDF via tool **Read** direttamente. Il LLM "vede" le immagini delle pagine. Se ancora illeggibile, chiedi all'utente una scansione più nitida o l'originale Word/PDF.
    - **Immagini (`mime=image/*`, foto o `photo-*.jpg` dal bridge)** → usa il tool **Read** direttamente sul `path`. Vision interpreta JPG/PNG/WEBP nativamente: vedi il contenuto della foto come se l'avessi davanti, niente OCR esterno da cablare. Distingui in autonomia foto-di-documento (CV cartaceo fotografato → estrai testo) da screenshot UI (LinkedIn, JD) da meme.
-   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → STT automatico non disponibile in beta. Acknowledge il voice, poi chiedi gentile all'utente di mandarti la stessa cosa **in testo** (o anche un riassunto a sue parole): "Grazie del messaggio vocale! La trascrizione automatica non è ancora attiva — me lo riscrivi in 2 righe? Anche solo i punti chiave."
+   - **Voice notes (`mime=audio/ogg`, `voice-*.ogg`)** → **TRASCRIVILO** (RULE-T15 self-extension). NON rimbalzare l'utente a "riscrivimi in testo". Flow:
+     1. `command -v whisper || uv pip show faster-whisper` — verifica se STT lib presente.
+     2. Se manca: `uv pip install --user faster-whisper` (small model auto-download alla prima chiamata, ~75 MB in `$JHT_HOME/.cache/`).
+     3. Trascrivi con hint locale utente:
+        ```python
+        from faster_whisper import WhisperModel
+        m = WhisperModel("small")
+        segs, _ = m.transcribe("/path/to/voice.ogg", language="it")  # o en/hu
+        text = " ".join(s.text for s in segs)
+        ```
+     4. Procedi col testo trascritto come se fosse un normale `[TG]` text message — stesse skill (`profile-yaml`, `profile-summaries`, `onboarding-flow`).
+     5. Solo se la trascrizione è gibberish o vuota → chiedi gentile: "Ho provato a trascrivere ma l'audio è poco chiaro — puoi riregistrare o scriverlo in 2 righe?"
 
 3. **Decidi se è "candidate-related"**:
    - SÌ se contiene info sul candidato (CV, lettera referenze, attestati, profilo LinkedIn salvato, screenshot CV).
