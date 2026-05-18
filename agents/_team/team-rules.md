@@ -278,6 +278,104 @@ the **runtime safeguard**: even with an IT-baseline prompt, a user with
 
 ---
 
+## 🛠 RULE-T15 — Self-extension: install whatever you need, never refuse the user
+
+You live in a **Docker container that exists precisely to give you
+freedom**. The image ships with a baseline toolset (`pdftotext`,
+`pandoc`, `wkhtmltopdf`, `ffmpeg`, `tesseract-ocr`, `poppler-utils`,
+`ripgrep`, `jq`, …) but the universe of useful libraries is vast and
+no baseline covers everything.
+
+### The principle
+
+> **Never tell the user "I can't do that because tool X is not
+> installed." If tool X is open-source and reasonable to install in a
+> container, INSTALL IT and do the job.**
+
+This applies to **every agent** in the team — Assistente, Capitano,
+Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Dottore,
+Mentor. The user expects the team to extend itself when faced with a
+new kind of input or task, not to bounce back excuses.
+
+### What you should install (and how)
+
+| Need | Install via | Example |
+|---|---|---|
+| Python library not yet imported | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` for voice STT |
+| System package (CLI binary) | `sudo apt-get install -y <pkg>` (whitelisted) | `sudo apt-get install -y poppler-utils` |
+| Node CLI tool | `npm install -g <pkg>` to user prefix | `npm install -g yt-dlp` |
+| Pre-built binary | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | one-off LLM tools |
+| Model file (Whisper, etc.) | runtime download to `$JHT_HOME/.cache/<tool>/` | small/medium model variants |
+
+`sudo` is **passwordless** for the whitelist in `/etc/sudoers.d/jht`
+(`apt-get`, `apt`, `mkdir`, `chown`, `ln`). For Python packages, use
+`uv` per RULE-T13 (NOT `sudo pip`).
+
+### When NOT to install
+
+- 🚫 **Paid / license-locked software** (commercial models, proprietary
+  CLIs). If the user explicitly authorizes a paid tool, fine, but the
+  default is open-source only.
+- 🚫 **Tool you're not sure exists**. Search first
+  (`apt-cache search <pattern>`, `pip search`, web search via Scout
+  if you have access). If you find nothing → escalate to Capitano,
+  not to the user.
+- 🚫 **Massive downloads without permission** (>500 MB, or models
+  >2 GB). Tell the Capitano what you need first; he can authorize or
+  propose a lighter alternative.
+
+### Example: voice notes from the user
+
+User sends a `voice-*.ogg` to the Assistente's bot. Old reply
+("transcription not available, please rewrite in text") is **wrong**.
+Right flow:
+
+```
+1. Check: command -v whisper || uv pip show faster-whisper
+2. If missing: uv pip install --user faster-whisper
+   (small model auto-downloaded on first use, ~75 MB)
+3. Transcribe: python3 -c "from faster_whisper import WhisperModel;
+   m = WhisperModel('small'); segs, _ = m.transcribe('/path/voice.ogg');
+   print(' '.join(s.text for s in segs))"
+4. Proceed with the transcribed text as if it were a text message.
+5. Confirm transcription accuracy with the user only if the audio is
+   clearly noisy / unclear.
+```
+
+### Example: PDF scansionato senza text layer
+
+`parse-cv` exit 4 = no text. Fallback:
+
+```
+1. tesseract <pdf> - -l ita+eng (or user's locale)
+2. If quality bad → still try LLM multimodal Read on the PDF
+3. If still illegible → ASK the user for a clearer scan (last resort)
+```
+
+Notice: tre tentativi prima di chiedere ALL'utente. The user is the
+fallback, not the first stop.
+
+### Failure mode to AVOID
+
+```
+❌ "Mi dispiace, non posso processare i messaggi vocali in questo momento.
+    Puoi rimandarmi il messaggio in testo?"
+
+✅ (acknowledge instantly) "Got it, processing the voice note…"
+   (in background: install whisper if missing → transcribe → reply with content)
+```
+
+The first one is the failure pattern this rule eliminates.
+
+### Discovery + sharing
+
+When you install something useful, the Capitano weekly audit (RULE-T13
+inheritance) sees it in the shared `.local/` magazzino and the rest of
+the team benefits automatically. No coordination needed at install
+time — just install and move on.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:
