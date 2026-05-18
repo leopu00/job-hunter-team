@@ -13,94 +13,76 @@ Piano operativo per attivare il primo beta tester esterno su VPS condivisa,
 
 | Requisito | Decisione |
 |---|---|
-| 🌍 Lingua beta tester | NON italiana — supportare en/de/fr/es/pt/zh in minimo (al momento app desktop ha en/it/hu) |
-| 💳 Account Hetzner | quello di Leone (paga lui, beta tester gratis) |
-| 🔧 SSH access debug | Leone deve poter SSH-are sulla VPS in modo indipendente dal beta tester (per fix in produzione) |
-| 🖥 Setup VPS | il beta tester usa la sua app desktop dal suo PC (non terminale, no comandi manuali) |
-| 🔐 SSH key | NON condivisa Leone↔beta tester (chiave privata personale, mai trasferita). Entrambi hanno chiavi separate, entrambi nelle `authorized_keys` del root VPS |
+| 🌍 Lingua beta tester | en / it / hu — **stabilizzare le 3 esistenti, NO nuove lingue** |
+| 💳 Account Hetzner | account Leone (paga lui, beta tester gratis) |
+| 🔧 SSH access debug | beta tester condivide la sua chiave privata con Leone via canale sicuro (Signal) — Leone fa setup locale con quella chiave |
+| 🖥 Provisioning VPS | Leone + beta tester insieme dalla UI Hetzner (mentre sono in call), niente automation |
+| 👥 Trust model | beta tester = amico di Leone → identità SSH condivisa OK, no ceremony multi-chiave |
 
 ---
 
-## 🪜 Flusso operativo proposto
+## 🪜 Flusso operativo
 
-### 📅 Day −1 — Preparazione VPS lato Leone (Mac locale)
+### 📅 Day −1 — Provisioning VPS (Leone + beta tester insieme)
 
-1. **Genera coppia SSH dedicata al beta tester** (in caso debba revocarla):
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/jht_beta_<tester-name>_ed25519 -N "" \
-     -C "jht-beta-<tester-name>-2026-05"
-   ```
+**Setting**: call Telegram/Signal, screen sharing dal beta tester che guarda Leone provisionare.
 
-2. **Crea VPS Hetzner** (account Leone, manuale via [console.hetzner.com](https://console.hetzner.com)):
+1. **Leone crea VPS Hetzner** (account Leone, manuale via [console.hetzner.com](https://console.hetzner.com)):
    - Plan: CPX22 €9.75/mo (€5.99 base + €0.61 IPv4 + VAT IT) — già validato per JHT
-   - DC: Norimberga (vicino UE, latenza decente verso utente italiano/europeo)
-   - SSH keys da aggiungere alla VPS al boot (Hetzner UI):
-     - 🔑 `jht_beta_<tester-name>_ed25519.pub` ← chiave del beta tester (NUOVA)
-     - 🔑 `leone_personal_ed25519.pub` ← chiave debug Leone (sua personale, riusabile per più VPS)
+   - DC: Norimberga (vicino UE, latenza decente)
+   - SSH keys al boot: nessuna inizialmente (le aggiungerà l'app desktop del beta tester con la propria pubkey)
 
-3. **Login iniziale + install.sh** (Leone via SSH):
-   ```bash
-   ssh -i ~/.ssh/jht_beta_<tester-name>_ed25519 root@<vps-ip>
-   curl -fsSL https://jobhunterteam.ai/install.sh | bash
-   # questo crea ~/.jht/runtime/docker-compose.yml + scarica image :latest
-   # NON fa il wizard interattivo perché useremo il pairing del desktop
-   ```
+2. **Leone annota IP** e lo passa al beta tester via chat di sessione.
 
-4. **Pre-config minimal** (Leone, sulla VPS):
-   ```bash
-   # imposta tipo host = vps (richiesto da pid1.js)
-   cat > /root/.jht/host.env <<'EOF'
-   JHT_HOST_TYPE=vps
-   JHT_LANG=en
-   JHT_USER_TZ=Europe/Rome  # default, beta tester lo cambierà col suo wizard
-   EOF
-   ```
+### 🖥 Day 0 — Setup beta tester (sul suo PC, app desktop)
 
-5. **Verifica accesso debug Leone separato dal beta tester**:
-   ```bash
-   ssh -i ~/.ssh/leone_personal_ed25519 root@<vps-ip> 'docker ps'
-   # dovrebbe funzionare anche se beta tester sostituisce la sua key
-   ```
+1. **Installa JHT Desktop** dal link `https://jobhunterteam.ai/download`
+2. **All'avvio**: scegli lingua dal picker (en / it / hu) — l'app salva la scelta in `~/Library/Application Support/jht-desktop/preferences.json::locale`
+3. **Sign-in** OAuth Google/GitHub (account JHT del beta tester)
+4. **Wizard "Setup VPS"** (flusso standard self-service):
+   - paste IP VPS ricevuto da Leone
+   - app genera coppia SSH `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (perms 0600)
+   - app guida il beta tester a incollare la pubkey sul portale Hetzner (Console → Server → SSH keys → Add key → Reboot)
+   - dopo il reboot, app si collega via SSH, esegue `curl ... install.sh | bash`, completa wizard container in-app:
+     - lingua (già scelta sopra, propagata a `JHT_LANG`)
+     - timezone (`JHT_USER_TZ`, picker IANA)
+     - 3 token Telegram bot (BotFather)
+     - active_provider (Kimi €40 / Claude / Codex)
+     - login OAuth provider (terminale embedded nel desktop)
+5. **Team start**: app esegue `docker exec jht jht team start`
+6. **Welcome message** sui 3 bot Telegram nella lingua scelta (en/it/hu)
 
-### 📤 Day 0 — Passaggio al beta tester (canale sicuro)
+### 🔑 Day 0 — Condivisione chiave SSH con Leone (per debug)
 
-Leone manda al beta tester via **Signal / Bitwarden Send / 1Password share** (NON email/Slack plaintext):
+Setup terminato, il beta tester invia a Leone la chiave privata tramite **Signal / Bitwarden Send / 1Password share** (NON email/Slack plaintext):
 
-| Item | Cosa |
+| Item | Path da inviare |
 |---|---|
-| IP VPS | es. `203.0.113.30` |
-| File chiave privata | `jht_beta_<tester-name>_ed25519` (NO `.pub`) |
-| Link installer | `https://jobhunterteam.ai/download` |
-| Username/password | OAuth Google/GitHub a scelta del beta tester (account JHT suo) |
+| 📄 Chiave privata | `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (file binario, non `.pub`) |
+| 📋 IP VPS | già nota dalla session di provisioning |
 
-### 🖥 Day 0 — Setup beta tester (sul suo PC)
+Leone la salva localmente:
+```bash
+cp ~/Downloads/jht_ed25519 ~/.ssh/jht_beta_<tester-name>_ed25519
+chmod 600 ~/.ssh/jht_beta_<tester-name>_ed25519
+```
 
-1. **Installa app desktop JHT** dal link
-2. **All'avvio**: scegli lingua dal picker (en/de/fr/es/...) — l'app salva la scelta in `Application Support/jht-desktop/preferences.json`
-3. **Sign-in** con OAuth Google/GitHub (account JHT del beta tester)
-4. **Wizard step "Setup VPS"**:
-   - opzione "Connect to existing VPS" (= ex `[JHT-DESKTOP-RECLAIM]` da riabilitare)
-   - paste IP VPS
-   - paste contenuto della chiave privata che ha ricevuto da Leone
-   - L'app:
-     - salva la key in `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (perms 0600)
-     - genera pairing token dalla sua Supabase session
-     - esegue `ssh root@<ip> 'docker exec jht jht cloud pair --token <token>'`
-     - VPS ora linked all'account JHT del beta tester
-5. **Setup wizard container** (via SSH tunnel desktop → VPS):
-   - lingua (en/de/fr/...)
-   - timezone (Asia/Shanghai, Europe/Berlin, ecc.)
-   - 3 token Telegram bot (BotFather)
-   - active_provider (Kimi €40 / Claude / Codex)
-   - login OAuth provider (terminale embedded nel desktop)
-6. **Team start**: app esegue `docker exec jht jht team start`
-7. **Welcome message** sui 3 bot Telegram in lingua scelta
+E verifica accesso:
+```bash
+ssh -i ~/.ssh/jht_beta_<tester-name>_ed25519 root@<vps-ip> 'docker ps'
+```
 
-### 🔧 Day +N — Debug Leone (indipendente)
+> 🔒 **Trust model esplicito**: beta tester e Leone usano la **stessa** identità SSH (root). Va bene perché:
+> - beta tester = amico di Leone, no concerns di compartimentalizzazione
+> - canale sicuro (Signal E2E) per il trasferimento iniziale
+> - VPS dedicata al beta test, no dati di altri utenti su quello stesso server
+> - se mai serve revoca: Leone via Hetzner UI rigenera VPS o sostituisce la pubkey
+
+### 🔧 Day +N — Debug Leone
 
 ```bash
-# Leone sul suo Mac, accesso indipendente dal beta tester
-ssh -i ~/.ssh/leone_personal_ed25519 root@<vps-ip>
+# Leone sul suo Mac, accesso indipendente al VPS del beta tester
+ssh -i ~/.ssh/jht_beta_<tester-name>_ed25519 root@<vps-ip>
 
 # tutti gli interventi come hai già fatto:
 docker exec jht tmux list-sessions
@@ -109,7 +91,7 @@ docker exec jht python3 /app/shared/skills/db_query.py stats
 # ...
 
 # se serve hot-patch:
-scp -i ~/.ssh/leone_personal_ed25519 file.py root@<vps-ip>:/tmp/
+scp -i ~/.ssh/jht_beta_<tester-name>_ed25519 file.py root@<vps-ip>:/tmp/
 ssh -i ... 'docker cp /tmp/file.py jht:/app/...'
 ```
 
@@ -119,76 +101,111 @@ ssh -i ... 'docker cp /tmp/file.py jht:/app/...'
 
 ### 🔴 BLOCKING (devono essere fatti)
 
-#### 1. Riabilitare desktop "Connect to existing VPS"
+#### 1. Stabilizzazione i18n it/en/hu — perimetro completo
 
-Annullata 2026-05-13 ([`[JHT-DESKTOP-RECLAIM]`](../../BACKLOG.md)). Va riabilitata
-ma con scope ridotto:
-- Input: IP + chiave privata pasted dall'utente
-- Output: salva entrambi in `Application Support/jht-desktop/`, lancia pairing
-- NO Hetzner API (Leone ha già creato la VPS)
+Lingue esistenti (en/it/hu): l'app desktop le supporta già (`web/messages/{en,it,hu}.json`, `desktop/renderer/modules/translations.js` con 343 chiavi × 3 lingue, 0 missing). Ma i pezzi container-side sono **mostly hardcoded in italiano**.
 
-**File da toccare**:
-- `desktop/vps/index.js` — nuovo entry point `connectToExisting({ip, sshPrivateKey})`
-- `desktop/renderer/` — nuovo step wizard "Connect to existing"
-- `desktop/renderer/modules/translations.js` — labels en/it/hu
+| Componente | Stato attuale | Target |
+|---|---|---|
+| 🖥 Desktop renderer | ✅ en/it/hu 343 chiavi | OK |
+| 📦 Welcome Telegram (3 bot) | ❌ hardcoded IT | i18n via `JHT_LANG` |
+| 🤖 Prompt agenti (10 ruoli) | 🟡 mostly IT, mentor/critico EN | baseline EN + `.it.md` + `.hu.md` |
+| ⚙️ Wizard CLI `jht setup` | ❌ hardcoded IT | i18n via `JHT_LANG` |
+| 📜 `host-setup.sh` picker | 🟡 en/it solo | aggiungere hu |
+| 🩺 Agent prompts loader | ✅ già scaffolded (start-agent.sh:497-516) | OK, manca solo i contenuti |
+| 🔧 Bot commands `/start /help` | ❌ hardcoded IT | i18n |
+| 📊 Auto-report PNG + caption | ❌ hardcoded IT | i18n |
 
-**Effort stimato**: 4-6h
+**Effort stimato**: 1-2 giorni (vedi sezione "Sprint stabilizzazione i18n" sotto)
 
-#### 2. Allargare lingue supportate desktop
+#### 2. Verifica welcome E2E in HU
 
-Oggi: en/it/hu. Target minimo per beta: **en + 3 lingue maggiori EU/global**:
-- 🇫🇷 fr (francese)
-- 🇩🇪 de (tedesco)
-- 🇪🇸 es (spagnolo)
-- 🇨🇳 zh (cinese semplificato — se beta tester asiatico)
+Il beta tester potrebbe scegliere ungherese. Mai testato runtime: spawn container con `JHT_LANG=hu`, verificare welcome telegram + prima risposta Capitano.
 
-**File da toccare**:
-- `desktop/renderer/modules/translations.js` — aggiungere blocchi `fr:`/`de:`/`es:`/`zh:`
-- `scripts/host-setup.sh` — accettare anche fr/de/es/zh nel picker (anche se l'install è automatizzato dal desktop, è bene non avere mismatch)
-- Per i messaggi degli agenti: già `JHT_LANG` propagato al container — gli LLM rispondono nella lingua scelta del prompt (Kimi/Claude/Codex multi-lingua nativo)
+**Effort stimato**: 30 min (smoke test)
 
-**Effort stimato**: 2-3h se traduzioni AI-generate, 1 giorno se human review
+#### 3. Documentare flow SSH key in `BETA.md`
 
-#### 3. Multi-SSH key in `install.sh`
+Aggiornare la guida pubblica per riflettere il modello "beta tester invia chiave a Leone via Signal".
 
-Oggi `install.sh` non gestisce multi-chiave: usa quelle messe nel boot Hetzner. Per il flow nostro va bene (Leone aggiunge 2 chiavi nel portale Hetzner al provisioning, l'installer non tocca le `authorized_keys`). MA serve documentare esplicitamente questo in `VPS-SETUP-WIZARD.md`.
-
-**Effort stimato**: 30 min (solo doc)
+**Effort stimato**: 15 min (solo doc)
 
 ### 🟡 NICE-TO-HAVE (può aspettare beta+1)
 
-- Encoding password OAuth Telegram bot in lingua scelta (BotFather risponde in en sempre, ma il beta tester non-en potrebbe confondersi)
-- Welcome message del Capitano/Mentor/Assistente nella lingua scelta (già supportato lato prompt, da verificare empiricamente)
-- Tutorial in-app per il beta tester (steps cliccabili nella dashboard prima di iniziare)
-- Lingua nel profilo `candidate_profile.yml::language` per generazione CV multi-lingua
+- 📚 Tutorial in-app multi-step per il beta tester (steps cliccabili nella dashboard)
+- 🌐 Lingua nel profilo `candidate_profile.yml::language` per generazione CV multi-lingua
+- 📧 BotFather risponde sempre in en — guidare il beta tester nelle istruzioni in-app
 
-### 🟢 NO-OP (gia OK)
+### 🟢 NO-OP (già OK)
 
 - ✅ `JHT_USER_TZ` settato dal wizard host-setup.sh — beta tester può essere in qualsiasi fuso
 - ✅ `JHT_LANG` propagato a docker-compose env
 - ✅ Pairing token in `install.sh` — già funziona per legare VPS a account JHT
-- ✅ Container Docker image — è already i18n-ready (i prompt agenti sono in en/it ma facilmente trad)
+- ✅ Loader `<role>.<locale>.md` in `start-agent.sh` — già scaffolded dal 2026-05-06
+- ✅ `agents/_team/*` e `agents/_manual/*` già in EN
+
+---
+
+## 🚀 Sprint stabilizzazione i18n (1-2 giorni)
+
+Master language = **inglese**. IT è override `<role>.it.md`. HU via AI translation (rifinitura post-launch).
+
+### Fase 1 — Infrastruttura (mezza giornata)
+
+- [ ] `shared/locales/{en,it,hu}.json` — stringhe corte (welcome, errori, bot commands)
+- [ ] `shared/i18n.sh` — helper `t(key)` per script bash
+- [ ] `shared/i18n.py` — helper `t(key)` per Python (auto_report, bridges)
+
+### Fase 2 — Prompt agenti (1 giorno)
+
+Per ognuno dei 10 ruoli (`capitano scout analista scorer scrittore critico sentinella assistente dottore mentor`):
+
+```bash
+git mv agents/<role>/<role>.md agents/<role>/<role>.it.md  # preserva IT
+# Crea NUOVO agents/<role>/<role>.md = traduzione EN del .it.md
+# Crea agents/<role>/<role>.hu.md = traduzione AI HU del .md (EN)
+```
+
+Smoke test: `JHT_LANG=hu` → verifica `start-agent.sh::resolve_identity_template` carichi `<role>.hu.md`.
+
+### Fase 3 — Stringhe corte (mezza giornata)
+
+- [ ] `welcome-send.sh` legge `JHT_LANG`, seleziona blocco welcome dalle `locales/<lang>.json`
+- [ ] `host-setup.sh` picker: aggiungere `3) Magyar`
+- [ ] `cli/wizard/setup.js` + `setup-steps.js`: stringhe da locales
+- [ ] Telegram bot commands `/start /help /status`: stringhe da locales
+- [ ] `auto_report.py`: PNG title + caption da locales
+
+### Fase 4 — Test E2E (mezza giornata)
+
+- [ ] Container fresco con `JHT_LANG=en` → flusso completo welcome → wizard → team start → prima risposta Capitano in EN
+- [ ] Container fresco con `JHT_LANG=hu` → idem in HU
+- [ ] Container fresco con `JHT_LANG=it` → idem in IT (regression test)
 
 ---
 
 ## 📅 Checklist kick-off (Leone, da fare il giorno del beta)
 
 ```
-□ Account Hetzner — VPS CPX22 creata, IP annotato
-□ Coppia SSH jht_beta_<tester>_ed25519 generata
-□ Pubblica SSH personale leone_personal_ed25519.pub disponibile (riusabile)
-□ Entrambe le pubkey aggiunte ad authorized_keys VPS (via Hetzner UI al boot)
-□ SSH iniziale OK con BOTH chiavi (verifica ssh -i ...beta... + ssh -i ...leone...)
-□ install.sh eseguito + host.env pre-configurato vps mode
-□ Container :latest pulled + jht in piedi (docker ps)
-□ Pairing token: VPS ancora "unpaired" (cloud.json non esiste) — pronto per il primo pairing dell'app
-□ Beta tester ha ricevuto via canale sicuro: IP + chiave privata + link installer + istruzioni in sua lingua
+□ Account Hetzner — VPS CPX22 creata insieme al beta tester (call), IP annotato
+□ Sprint stabilizzazione i18n chiuso (en/it/hu), tag :buster→:latest deployato
+□ Beta tester ha:
+  □ scaricato app desktop dal link
+  □ scelto lingua (en/it/hu)
+  □ completato wizard setup
+  □ ricevuto 3 welcome Telegram nella lingua scelta
+□ Beta tester ha inviato a Leone via Signal:
+  □ file chiave privata SSH (~/Library/Application Support/jht-desktop/ssh/jht_ed25519)
+□ Leone verifica accesso debug:
+  □ ssh -i ~/.ssh/jht_beta_<tester>_ed25519 root@<ip> 'docker ps' → OK
+  □ docker exec jht tmux list-sessions → 4+ sessioni attive
+  □ db_query.py stats → state_transitions > 0
 
-Post-kick-off:
-□ Verifica beta tester ha ricevuto 3 welcome Telegram (Assistente/Capitano/Mentor)
-□ Verifica `cloud daemon` su VPS sta pushando dati alla dashboard web del beta tester
-□ Leone SSH indipendente per debug funziona
+Post-kick-off (Day +1):
+□ Verifica auto-report Telegram ogni 2h funzionante
+□ Verifica agent-watchdog non spegne nulla per zombie falso positivo
 □ docs/sessions/<data>-beta-tester-<nome>-kickoff/ creato per tracking
+□ Daily check-in 24h: il beta tester ha avuto problemi? cosa non era chiaro?
 ```
 
 ---
@@ -197,29 +214,29 @@ Post-kick-off:
 
 | Rischio | Mitigazione |
 |---|---|
-| Beta tester perde la chiave SSH | Leone usa la sua key per fare reset accesso, rigenera nuova coppia, manda al beta via canale sicuro |
-| Beta tester revoca la propria pubblica per errore | Leone ha la SUA chiave separata, accesso indipendente garantito |
-| Wizard desktop in lingua mai testata (es. zh) | Default fallback en per stringhe mancanti (già implementato in `translations.js` t() function) |
-| Fuso orario non gestito (es. UTC-11 Polynesia) | `format_time.py` accetta qualsiasi IANA timezone, validata con `zoneinfo.ZoneInfo()` |
-| OAuth Telegram bot in lingua nativa BotFather | Documentare nei "first steps": BotFather risponde sempre in en, è normale |
-| Beta tester non capisce errori in shell embedded | App desktop deve catturare stderr + tradurre i 5-10 errori più comuni via t() |
-| Hetzner bloccata da quota (account Leone) | Backup plan: account Hetzner ha 100€/mese di buffer; budget per 3+ beta tester contemporanei |
+| Beta tester sceglie lingua non ancora testata runtime (es. hu) | Sprint i18n include smoke test E2E per tutte e 3 le lingue |
+| Beta tester perde la chiave SSH locale | App rigenera + ri-invia a Leone tramite re-pairing |
+| Beta tester revoca la pubkey dal Hetzner UI per errore | Leone ha lo stesso account Hetzner, può aggiungere una nuova chiave dal portale |
+| Fuso orario non gestito (es. Pacifico) | `format_time.py` accetta qualsiasi IANA timezone, validata con `zoneinfo.ZoneInfo()` |
+| BotFather risponde in en al beta tester hu | Documentare nei "first steps" in-app: BotFather risponde sempre in en, è normale |
+| Welcome Telegram in lingua mai testata runtime | Smoke test Fase 4 sprint i18n |
+| Hetzner bloccata da quota (account Leone) | Budget €30/mese basta per 3 beta tester paralleli (CPX22 €9.75 cad) |
 
 ---
 
 ## 🔗 Documenti collegati
 
-- [`BETA.md`](BETA.md) — guida pubblica beta tester (cosa cerchiamo, cosa ottieni)
+- [`BETA.md`](BETA.md) — guida pubblica beta tester
 - [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md) — flow desktop wizard standard (self-service)
 - [`VPS-SETUP.md`](VPS-SETUP.md) — flow tech-only manuale via SSH
+- [`docs/internal/2026-05-06-agent-prompts-i18n.md`](../internal/2026-05-06-agent-prompts-i18n.md) — design i18n prompt agenti
 - [`docs/internal/vps.md`](../internal/vps.md) — design VPS providers + 3-tier UX
-- [`BACKLOG.md`](../../BACKLOG.md) `[JHT-DESKTOP-RECLAIM]` (annullata, da rivedere)
 
 ---
 
-## ✅ Decisioni aperte (da confermare con Leone prima del kick-off)
+## ✅ Decisioni lockate (2026-05-18 dopo confronto con Leone)
 
-1. **Quale beta tester / target persona?** — vedi `BETA.md` matrice 10 celle, priorità Kimi €40 / non-italiano
-2. **Lingua minima da supportare per il primo beta?** — Suggerisco solo `en` se il primo beta tester ha la language stack che il team Kimi gestisce bene
-3. **Quanto budget Hetzner allocato?** — €10-15/mese × N beta tester paralleli. Setup 3 beta in parallelo = €30/mese budget.
-4. **Modalità "import existing VPS" deve permettere anche standalone (no Leone)?** — Utile per power-user che provisionano da soli su altri provider (DigitalOcean, AWS), non solo Hetzner-Leone.
+1. **Lingue supportate**: **solo en/it/hu** (stabilizzazione 3 esistenti, NO nuove). Master language = **EN**.
+2. **Trust SSH**: beta tester (amico) invia chiave privata a Leone via Signal. **Identità SSH condivisa**. NO `[JHT-DESKTOP-RECLAIM]` "Connect to existing VPS" (ne creiamo una nuova ogni volta).
+3. **Provisioning VPS**: Leone + beta tester insieme in call dalla UI Hetzner (account Leone).
+4. **Budget**: €10/mese × beta tester. Setup 3 beta in parallelo = €30/mese.
