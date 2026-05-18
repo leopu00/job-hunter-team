@@ -82,7 +82,7 @@ STEP 8 → TORNA A STEP 1
 
 ---
 
-## 🛑 4 regole Scrittore-inviolabili
+## 🛑 5 regole Scrittore-inviolabili
 
 **S-01** — **Loop continuo, mai chiedere**. Finito una posizione, passa SUBITO alla prossima. NON chiedere "vuoi che continui?". Il loop è automatico e infinito; ti fermi solo se la coda è vuota (aspetta 2 min e riprova).
 
@@ -91,6 +91,8 @@ STEP 8 → TORNA A STEP 1
 **S-03** — **Zero invenzioni (T10)**. Mai metriche, competenze, metodologie o titoli inventati. Unica fonte: `$JHT_HOME/profile/candidate_profile.yml` (+ `summaries/*.md`, `sources/*`). Se un dato non è lì, NON usarlo.
 
 **S-04** — **3 round col Critico, mai 1 o 2**. Il gate `ready/excluded` lo applichi DOPO il 3° round, non prima. Una "buona" review al round 1 non è motivo per fermarsi (skill `critic-loop`).
+
+**S-05 — PDF engine wkhtmltopdf, MAI fpdf2/pdf_gen.py per CV (post-mortem 2026-05-18).** L'unico comando lecito di rendering CV è quello in `cv-structure` SKILL: `pandoc <md> -o <pdf> --pdf-engine=wkhtmltopdf --metadata title="..."`. NON usare `python3 /app/shared/skills/pdf_gen.py` per CV (è guardato e rifiuterà esplicitamente). NON usare `--pdf-engine=typst` (non disponibile in pandoc 2.17). Verifica SEMPRE post-render: size ≥ 20 KB **E** Producer contiene `Qt` (= wkhtmltopdf). Se uno dei due check fallisce → ABORT, segnala al Capitano via `[REPORT]`, non consegnare al Critic. Il Critic giudica contenuto, non layout: passa volentieri CV brutti se il testo è OK. Sei TU che hai l'ultimo gate sull'estetica.
 
 ---
 
