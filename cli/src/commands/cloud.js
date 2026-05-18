@@ -718,7 +718,13 @@ async function handleDisable() {
  * dispatcher) si occupa di degradare gracefully a dashboard.
  */
 async function handleDaemon(options) {
-  const intervalSec = Math.max(5, parseInt(options.interval ?? '30', 10) || 30);
+  // Default 60s: ogni push genera ~10 query Postgres (auth chain + RLS + UPDATE
+  // cloud_sync_tokens). A 30s saturavamo il Disk IO Budget Supabase con un
+  // solo VPS attivo (vedi docs/sessions/2026-05-18-supabase-disk-io-investigation).
+  // 60s e' un buon compromesso tra freshness dashboard e IO consumato.
+  // Override via --interval o env JHT_CLOUD_PUSH_INTERVAL_SEC.
+  const defaultInterval = parseInt(process.env.JHT_CLOUD_PUSH_INTERVAL_SEC ?? '60', 10) || 60;
+  const intervalSec = Math.max(5, parseInt(options.interval ?? String(defaultInterval), 10) || defaultInterval);
 
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
