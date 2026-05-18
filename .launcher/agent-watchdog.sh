@@ -58,7 +58,30 @@ PYEOF
 }
 
 is_session_alive() {
-  tmux has-session -t "$1" 2>/dev/null
+  # Bug 2026-05-18 (post-mortem capitano-zombie-night): tmux has-session
+  # ritornava 0 anche quando il process LLM dentro al pane era morto
+  # (kimi crashato, pane ridotto a bash idle). 11h di silent watchdog
+  # mentre il Capitano era zombie e l'utente attendeva risposta.
+  #
+  # Fix: verifica anche pane_current_command. Se non è un LLM CLI noto
+  # (kimi/Kimi/claude/codex/node/python/python3), la sessione è zombie
+  # e va riavviata. La whitelist include 'node'/'python*' per
+  # supportare CLI custom che usano runtime di base (rare ma possibili).
+  local session="$1"
+  tmux has-session -t "$session" 2>/dev/null || return 1
+  local cmd
+  cmd=$(tmux list-panes -t "$session" -F '#{pane_current_command}' 2>/dev/null | head -1)
+  case "$cmd" in
+    [Kk]imi|claude|Claude|codex|Codex|node|python|python3) return 0 ;;
+    *)
+      # Zombie: kill+rispawn al prossimo ensure_agent. Log a basso volume
+      # qui per audit, il messaggio "session zombie — killing" è loud
+      # apposta perché è un evento raro che vogliamo notare.
+      log "agent $session: ZOMBIE detected (pane_current_command='$cmd') — killing session"
+      tmux kill-session -t "$session" 2>/dev/null || true
+      return 1
+      ;;
+  esac
 }
 
 ensure_agent() {
