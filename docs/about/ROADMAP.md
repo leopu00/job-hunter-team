@@ -79,9 +79,10 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 ⬜ db_supabase.py wrapper — push agent results to cloud
 ⬜ Weekly window monitoring calibration (today: 5h windows)
 ✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d`)
-⬜ Kimi €40 calibration (mass-market target)
-⬜ Sentinel token consumption optimization
+✅ Kimi €40 calibration (sprint 17-18 maggio: Sentinella 3 fasi + scala continua, EMERGENZA -96%) — commit `d6c1c646`
+✅ Sentinel token consumption optimization — bug #24 chiuso (vedi BACKLOG team strategy sprint)
 ⬜ Documented test campaign matrix (provider × tier × persona)
+✅ Team strategy bugs sprint 2026-05-17/18 — 13 bug + 3 feature chiusi, vedi [BACKLOG](../../BACKLOG.md#-team-strategy-bugs-sprint-2026-05-1718-13-bug--3-feature-chiusi) e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](../sessions/2026-05-18-fix-effectiveness-review/)
 ```
 
 For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
