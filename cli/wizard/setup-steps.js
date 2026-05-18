@@ -3,6 +3,7 @@
  * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team), non chiesti.
  */
 import https from 'node:https';
+import crypto from 'node:crypto';
 import {
   JHT_CONFIG_PATH,
   JHT_CONFIG_DIR,
@@ -13,6 +14,31 @@ import {
 import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
+
+// ─── Privacy suffix per bot username Telegram ──────────────────────────
+// I bot Telegram hanno username GLOBALI UNICI raggiungibili da chiunque
+// conosca il nome (Telegram non supporta "bot privati" nativamente). Il
+// nostro tg-bridge fa whitelist via chat_id, quindi un attaccante che
+// indovina lo username puo' solo SCRIVERE al bot (i messaggi vengono
+// scartati, niente effetto su LLM/DB), ma resta scopribile.
+// Forzare un suffix random nello username rende lo username unguessable:
+// con 8 char lower+digits = 36^8 ≈ 2.8 trilioni di combinazioni. Combinato
+// con la whitelist chat_id = privacy reale per la beta.
+
+/**
+ * Genera un suffix random alfanumerico lower-case, sicuro per crypto.
+ * Telegram bot username permette: [a-zA-Z0-9_], must end in 'bot', max 32 char.
+ * Usiamo solo [a-z0-9] per semplicita' di lettura nelle istruzioni.
+ */
+function generatePrivacySuffix(length = 8) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return out;
+}
 
 // ─── Telegram Bot API helpers ──────────────────────────────────────────
 // In-line fetch wrapper: niente dipendenze extra (axios/grammy), niente
@@ -91,6 +117,11 @@ async function tgWaitForFirstChat(token, deadlineMs) {
 export async function promptTelegramRequired(prompter, baseChannels) {
   const existing = baseChannels?.telegram?.bots || {};
 
+  // Privacy: genera un suffix random condiviso fra i 3 bot. Mnemonic
+  // (un suffix solo da ricordare), unguessable (36^8 combinazioni).
+  // L'utente lo include nello username che dichiara a BotFather.
+  const privacySuffix = generatePrivacySuffix(8);
+
   await prompter.note(
     'Telegram e\' obbligatorio: ogni agente user-facing ha il suo bot dedicato\n' +
     '(notifiche separate, mute selettivo, contesto pulito).\n\n' +
@@ -98,8 +129,19 @@ export async function promptTelegramRequired(prompter, baseChannels) {
     '  1. Assistente — onboarding profilo, drop-zone documenti\n' +
     '  2. Capitano   — direzione team, notifiche posizioni ready\n' +
     '  3. Mentor     — mentore di crescita, posizionamento strategico\n\n' +
+    '🔐 PRIVACY: i bot Telegram hanno username PUBBLICI. Chiunque conosca\n' +
+    '   il nome puo\' trovarli (anche se le messaggi vengono scartati dal\n' +
+    '   nostro filtro chat_id). Per renderli "privati in pratica" usa\n' +
+    '   un suffix random NELLO USERNAME:\n\n' +
+    `      Suffix random per questa installazione:  ${privacySuffix}\n\n` +
+    '   Su @BotFather, quando ti chiede lo username, usa il pattern:\n\n' +
+    `      assistente_${privacySuffix}_bot\n` +
+    `      capitano_${privacySuffix}_bot\n` +
+    `      mentor_${privacySuffix}_bot\n\n` +
     'Per ogni bot ripeti su @BotFather:\n' +
-    '  • /newbot → segui le istruzioni (nome libero + username che finisce in "bot")\n' +
+    '  • /newbot\n' +
+    '  • Nome libero (es. "Assistente JHT")\n' +
+    '  • Username con il suffix random sopra (deve finire in "bot")\n' +
     '  • BotFather ti risponde con un token "123456789:ABC..."\n\n' +
     'Tieni i 3 token a portata di mano: te li chiedo uno a uno.',
     'Setup Telegram (3 bot obbligatori)',
@@ -113,7 +155,7 @@ export async function promptTelegramRequired(prompter, baseChannels) {
 
   const bots = {};
   for (const role of roles) {
-    bots[role.key] = await promptSingleTelegramBot(prompter, role, existing[role.key]);
+    bots[role.key] = await promptSingleTelegramBot(prompter, role, existing[role.key], privacySuffix);
   }
   return { bots };
 }
@@ -122,10 +164,17 @@ export async function promptTelegramRequired(prompter, baseChannels) {
  * Wizard di un singolo bot Telegram: token → getMe → deep-link → wait /start.
  * Riusa la logica precedente (un solo bot) parametrizzata sul ruolo.
  */
-async function promptSingleTelegramBot(prompter, role, existing) {
+async function promptSingleTelegramBot(prompter, role, existing, privacySuffix) {
+  const suggestedUsername = privacySuffix
+    ? `${role.key}_${privacySuffix}_bot`
+    : null;
+
   await prompter.note(
     `Adesso configuriamo il bot ${role.label} (${role.hint}).\n\n` +
-    `Su @BotFather: /newbot → segui le istruzioni → copia il token.`,
+    `Su @BotFather: /newbot → segui le istruzioni → copia il token.\n\n` +
+    (suggestedUsername
+      ? `🔐 Username suggerito (privacy): ${suggestedUsername}\n`
+      : ``),
     `Bot ${role.label} (${role.key})`,
   );
 
@@ -148,6 +197,22 @@ async function promptSingleTelegramBot(prompter, role, existing) {
   } catch (e) {
     probe.stop(`Errore su ${role.label}: ${e.message}`);
     throw new Error(`Token Telegram (${role.key}) non valido o rete irraggiungibile: ${e.message}`);
+  }
+
+  // Privacy warning: username NON contiene il suffix random → bot scopribile
+  // facilmente da chiunque indovini il pattern brand. Non blocchiamo il setup
+  // (l'utente ha gia' creato il bot), ma lo informiamo: puo' rinominarlo via
+  // BotFather (/setname / /setusername) oppure crearne uno nuovo.
+  if (privacySuffix && !botUsername.toLowerCase().includes(privacySuffix.toLowerCase())) {
+    await prompter.note(
+      `⚠️  Il bot @${botUsername} NON contiene il suffix random suggerito (${privacySuffix}).\n\n` +
+      `   Questo significa che lo username e\' piu\' facilmente indovinabile\n` +
+      `   da terzi. I messaggi spam vengono comunque scartati dalla whitelist\n` +
+      `   chat_id, quindi NON c\'e\' rischio funzionale — solo meno privacy.\n\n` +
+      `   Se vuoi rifare: vai su @BotFather, /deletebot, e ricrea con username\n` +
+      `   tipo "${role.key}_${privacySuffix}_bot". Oppure prosegui con questo.`,
+      `Privacy warning (${role.label})`,
+    );
   }
 
   const deepLink = `https://t.me/${botUsername}?start=jht`;
