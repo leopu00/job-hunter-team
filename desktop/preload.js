@@ -159,6 +159,10 @@ contextBridge.exposeInMainWorld('vpsApi', {
   generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
   getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
   hasKey: () => ipcRenderer.invoke('vps:has-key'),
+  // Reveal the SSH keypair folder so the user can share the private
+  // key file with a beta tester / second machine (the public key
+  // alone is NOT enough — the SSH client needs the private key).
+  openKeyFolder: () => ipcRenderer.invoke('vps:open-key-folder'),
   // SSH into the user's freshly-created VPS and stream install.sh
   // output back via onInstallLog. The token comes from authApi
   // automatically (main side) so no secret leaves the IPC boundary.
