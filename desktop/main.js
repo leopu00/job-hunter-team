@@ -753,6 +753,34 @@ app.whenReady().then(() => {
   ipcMain.handle('vps:generate-key', (_event, args = {}) => vps.generateKey(args))
   ipcMain.handle('vps:get-public-key', () => vps.getPublicKey())
   ipcMain.handle('vps:has-key', () => ({ ok: true, hasKey: vps.hasKey() }))
+  // Reveal the SSH keypair folder in Explorer/Finder/file manager.
+  // Surface for sharing the PRIVATE key with a beta tester / second
+  // PC (the public key alone is not enough to log into the VPS —
+  // the SSH client needs the private key). showItemInFolder takes
+  // a FILE path and selects it; if the file doesn't exist yet we
+  // fall back to opening the parent dir.
+  ipcMain.handle('vps:open-key-folder', () => {
+    try {
+      const priv = vps.getPrivateKeyPath()
+      const { shell, app } = require('electron')
+      const fs = require('node:fs')
+      const path = require('node:path')
+      if (fs.existsSync(priv)) {
+        shell.showItemInFolder(priv)
+        return { ok: true, path: priv }
+      }
+      const sshDir = path.dirname(priv)
+      if (fs.existsSync(sshDir)) {
+        shell.openPath(sshDir)
+        return { ok: true, path: sshDir }
+      }
+      const userData = app.getPath('userData')
+      shell.openPath(userData)
+      return { ok: true, path: userData, fallback: true }
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) }
+    }
+  })
   ipcMain.handle('vps:run-install', (event, args = {}) =>
     vps.runInstall({ ...args, sender: event.sender })
   )

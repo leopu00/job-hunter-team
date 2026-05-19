@@ -131,6 +131,9 @@ export const TRANSLATIONS = {
     'vps.step2.copy': 'Copy public key',
     'vps.step2.copied': 'Copied!',
     'vps.step2.openHetzner': 'Open Hetzner console',
+    'vps.step2.openKeyFolder': 'Open SSH key folder',
+    'vps.step2.shareKeyHint':
+      'To share VPS access with a teammate or use it from another PC, send them the private key file (jht_ed25519, without the .pub extension) from this folder.',
     'vps.step3.title': '3. Paste the server IP',
     'vps.step3.ipLabel': 'Server IPv4',
     'vps.step3.ipPlaceholder': 'e.g. 5.6.7.8',
@@ -546,6 +549,9 @@ export const TRANSLATIONS = {
     'vps.step2.copy': 'Copia chiave pubblica',
     'vps.step2.copied': 'Copiata!',
     'vps.step2.openHetzner': 'Apri console Hetzner',
+    'vps.step2.openKeyFolder': 'Apri cartella chiave SSH',
+    'vps.step2.shareKeyHint':
+      'Per condividere l\u2019accesso alla VPS con un compagno o usarlo da un altro PC, inviagli il file della chiave privata (jht_ed25519, senza estensione .pub) da questa cartella.',
     'vps.step3.title': '3. Incolla l\u2019IP del server',
     'vps.step3.ipLabel': 'IPv4 del server',
     'vps.step3.ipPlaceholder': 'es. 5.6.7.8',
@@ -961,6 +967,9 @@ export const TRANSLATIONS = {
     'vps.step2.copy': 'Publikus kulcs másolása',
     'vps.step2.copied': 'Másolva!',
     'vps.step2.openHetzner': 'Hetzner konzol megnyitása',
+    'vps.step2.openKeyFolder': 'SSH kulcs mappa megnyitása',
+    'vps.step2.shareKeyHint':
+      'Ha másnak vagy másik PC-nek szeretnél hozzáférést adni a VPS-hez, küldd el neki a privát kulcs fájlt (jht_ed25519, .pub kiterjesztés nélkül) ebből a mappából.',
     'vps.step3.title': '3. Illeszd be a szerver IP-jét',
     'vps.step3.ipLabel': 'Szerver IPv4',
     'vps.step3.ipPlaceholder': 'pl. 5.6.7.8',
