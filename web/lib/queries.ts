@@ -269,7 +269,7 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export async function getPositions(opts?: {
@@ -541,6 +541,36 @@ export async function getCriticoStats() {
   const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
   for (const row of data) { const key = row.reviewed_by!; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.critic_verdict === 'REJECT') grouped[key].reject++ }
   return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+}
+
+// ── Critic verdict aggregate totals ─────────────────────────────────
+// Per il widget "Conversion rate" della dashboard: somma PASS /
+// NEEDS_WORK / REJECT su TUTTE le applications (non spezzate per critico).
+export type CriticVerdictTotals = {
+  pass: number
+  needs_work: number
+  reject: number
+  total: number
+}
+
+export async function getCriticVerdictTotals(): Promise<CriticVerdictTotals> {
+  const w = await ws()
+  if (w) {
+    try { return local.getCriticVerdictTotalsLocal(w) } catch { return { pass: 0, needs_work: 0, reject: 0, total: 0 } }
+  }
+  if (!isSupabaseConfigured) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('applications').select('critic_verdict').not('critic_verdict', 'is', null)
+  if (error || !data) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  const out: CriticVerdictTotals = { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  for (const row of data as { critic_verdict: string | null }[]) {
+    out.total++
+    if (row.critic_verdict === 'PASS') out.pass++
+    else if (row.critic_verdict === 'NEEDS_WORK') out.needs_work++
+    else if (row.critic_verdict === 'REJECT') out.reject++
+  }
+  return out
 }
 
 // ── Pending user messages (V5) ──────────────────────────────────────
