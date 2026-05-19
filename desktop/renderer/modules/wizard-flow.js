@@ -341,7 +341,16 @@ const TG_BOTFATHER_URL = 'https://t.me/BotFather'
 function botDisplayName(role) {
   const emoji = TG_ROLE_EMOJI[role] || ''
   const name = (typeof t === 'function' && t(`telegram.agent.${role}`)) || role
-  return emoji ? `${emoji} ${name}` : name
+  // Pattern: "<emoji> JHT <Role>" — JHT prefix is brand identifier so
+  // the user's @BotFather bot list visibly groups all three JHT bots
+  // among their other Telegram bots.
+  return emoji ? `${emoji} JHT ${name}` : `JHT ${name}`
+}
+
+function roleHeader(role) {
+  // Section header: just the translated role name, no emoji. Emoji
+  // appears only in the copy-paste-into-BotFather name field below.
+  return (typeof t === 'function' && t(`telegram.agent.${role}`)) || role
 }
 
 function generatePrivacySuffix(length = 6) {
@@ -401,10 +410,10 @@ function renderTgCreateRows() {
     const row = document.createElement('div')
     row.className = 'tg-create__row'
 
-    // Section header — "<emoji> Role"
+    // Section header — translated role name only, no emoji.
     const roleLabel = document.createElement('div')
     roleLabel.className = 'tg-create__role'
-    roleLabel.textContent = botDisplayName(role)
+    roleLabel.textContent = roleHeader(role)
 
     // Field 1: display name to type into BotFather when it asks "How
     // are we going to call it?". Same string as the row header — the
@@ -461,6 +470,16 @@ export function enterTelegramCreate() {
   showStep(STEP_TELEGRAM_CREATE)
 }
 
+if (dom.tgIntroLink) {
+  // Anchor href is set to t.me/BotFather but we intercept the click to
+  // route through shell.openExternal — keeps everything in the system
+  // browser and avoids any CSP weirdness with target=_blank.
+  dom.tgIntroLink.addEventListener('click', (e) => {
+    e.preventDefault()
+    if (window.launcherApi?.openExternal) window.launcherApi.openExternal(TG_BOTFATHER_URL)
+    else window.open(TG_BOTFATHER_URL, '_blank')
+  })
+}
 if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enterSupabaseLogin())
 if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () => enterTelegramCreate())
 if (dom.btnTgCreateBack) dom.btnTgCreateBack.addEventListener('click', () => enterTelegramIntro())

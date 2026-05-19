@@ -83,6 +83,7 @@ export const TRANSLATIONS = {
     'telegram.intro.lead':
       'BotFather is the official Telegram bot that creates other bots. We will guide you through creating three small bots that the team will use to talk to you.',
     'telegram.intro.botfatherDesc': 'Telegram\u2019s official bot factory',
+    'telegram.intro.openCta': 'Open in Telegram \u2192',
     'telegram.intro.hint':
       'On the next page we will suggest three bot usernames. Then you will create them inside @BotFather and paste the tokens back here.',
     'telegram.intro.back': 'Back',
@@ -494,6 +495,7 @@ export const TRANSLATIONS = {
     'telegram.intro.lead':
       'BotFather \u00e8 il bot ufficiale di Telegram che crea altri bot. Ti guideremo nella creazione di tre piccoli bot che il team user\u00e0 per parlare con te.',
     'telegram.intro.botfatherDesc': 'Il bot ufficiale di Telegram per creare bot',
+    'telegram.intro.openCta': 'Apri in Telegram \u2192',
     'telegram.intro.hint':
       'Nella prossima pagina ti suggeriremo tre username. Poi li creerai dentro @BotFather e incollerai i token qui.',
     'telegram.intro.back': 'Indietro',
@@ -905,6 +907,7 @@ export const TRANSLATIONS = {
     'telegram.intro.lead':
       'A BotFather a Telegram hivatalos botja, amely más botokat hoz létre. Végigvezetünk három kis bot létrehozásán, amelyeket a csapat fog használni a veled való kommunikációra.',
     'telegram.intro.botfatherDesc': 'A Telegram hivatalos bot-gyára',
+    'telegram.intro.openCta': 'Megnyitás a Telegramon \u2192',
     'telegram.intro.hint':
       'A következő oldalon javasolunk három bot-felhasználónevet. Aztán létrehozod őket a @BotFather-ben, és visszamásolod ide a tokeneket.',
     'telegram.intro.back': 'Vissza',
