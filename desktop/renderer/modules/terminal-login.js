@@ -500,6 +500,25 @@ async function openLoginTerminal(providerId, displayName) {
     refreshAuthList()
   })
 
+  // Signal main that we've subscribed — main buffers stdout/stderr
+  // from the moment the child spawns until this call, then flushes
+  // the buffer so no initial output is lost (codex/claude emit the
+  // entire login TUI in one burst at startup, which would otherwise
+  // be dropped during the IPC round-trip window).
+  if (window.terminalApi.attach) {
+    try {
+      const attachRes = await window.terminalApi.attach(activeSessionId)
+      log.debug('terminal.attach.ok', {
+        sessionId: activeSessionId,
+        flushedBytes: attachRes?.flushedBytes,
+        flushedChunks: attachRes?.flushedChunks,
+        alreadyAttached: attachRes?.alreadyAttached,
+      })
+    } catch (err) {
+      log.warn('terminal.attach.failed', { err: err?.message })
+    }
+  }
+
   term.onData((data) => window.terminalApi.write(activeSessionId, data))
   term.onResize(({ cols, rows }) => {
     if (activeSessionId) window.terminalApi.resize(activeSessionId, cols, rows)
