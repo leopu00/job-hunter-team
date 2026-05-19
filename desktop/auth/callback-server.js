@@ -56,9 +56,25 @@ function startCallbackServer({ timeoutMs = 5 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
     let resolveCallback
     let rejectCallback
+    // Track whether the inner callbackPromise has been settled. Without
+    // this, calling close({ reason }) AFTER a successful callback would
+    // try to reject an already-resolved promise — and worse, calling
+    // close() with no reason wouldn't propagate at all to the awaiter
+    // (the original bug surfaced when the user clicks Cancel: close()
+    // would shut the HTTP server but leave waitForCallback() hanging
+    // forever).
+    let callbackSettled = false
     const callbackPromise = new Promise((res, rej) => {
-      resolveCallback = res
-      rejectCallback = rej
+      resolveCallback = (value) => {
+        if (callbackSettled) return
+        callbackSettled = true
+        res(value)
+      }
+      rejectCallback = (err) => {
+        if (callbackSettled) return
+        callbackSettled = true
+        rej(err)
+      }
     })
 
     const server = http.createServer((req, res) => {
@@ -99,10 +115,17 @@ function startCallbackServer({ timeoutMs = 5 * 60 * 1000 } = {}) {
     })
 
     let timeoutHandle = null
-    const close = () => {
+    const close = (options) => {
+      const reason = options && typeof options === 'object' ? options.reason : null
       if (timeoutHandle) {
         clearTimeout(timeoutHandle)
         timeoutHandle = null
+      }
+      // If the callback hasn't fired yet, reject so any awaiter (the
+      // signIn coroutine) unblocks instead of waiting on a closed
+      // server forever. Cancel button + timeout path both rely on this.
+      if (!callbackSettled) {
+        rejectCallback(new Error(reason || 'Callback server closed before receiving callback'))
       }
       try { server.close() } catch { /* ignore */ }
     }
