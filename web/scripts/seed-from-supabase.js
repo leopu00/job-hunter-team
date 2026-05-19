@@ -226,28 +226,32 @@ languages:
   - language: Ungherese
     level: native
 
-experience:
-  - role: "Apprendista Programmatore"
-    company: "Fincontinuo Spa"
-    years: "2025 - in corso"
-    location: "Roma"
-    summary: |
-      Sviluppo soluzioni software interne in Python per automatizzare processi
-      aziendali nel settore finanziario. Realizzata applicazione di gestione
-      documentale con interfaccia grafica e multiprocessing; chatbot AI che
-      traduce domande in linguaggio naturale in query SQL.
-
-education:
-  - degree: "Diploma di maturità in Informatica"
-    institution: "Liceo Artistico Waldorf"
-    location: "Prague"
-    year: 2020
-  - degree: "Specializzazione in Data Science"
-    institution: "Develhope"
-    year: "2024-2025"
-  - degree: "Certificazioni online (Advanced Python, SQL, Flask)"
-    institution: "Codecademy"
-    year: "2024-2025"
+candidate:
+  name: "Leone Emanuel Puglisi"
+  target_role: "Python Developer"
+  contacts:
+    email: "beta-user@example.com"
+  experience:
+    - role: "Apprendista Programmatore"
+      company: "Fincontinuo Spa"
+      years: "2025 - in corso"
+      location: "Roma"
+      summary: |
+        Sviluppo soluzioni software interne in Python per automatizzare processi
+        aziendali nel settore finanziario. Realizzata applicazione di gestione
+        documentale con interfaccia grafica e multiprocessing; chatbot AI che
+        traduce domande in linguaggio naturale in query SQL.
+  education:
+    - degree: "Diploma di maturità in Informatica"
+      institution: "Liceo Artistico Waldorf"
+      location: "Prague"
+      year: 2020
+    - degree: "Specializzazione in Data Science"
+      institution: "Develhope"
+      year: "2024-2025"
+    - degree: "Certificazioni online (Advanced Python, SQL, Flask)"
+      institution: "Codecademy"
+      year: "2024-2025"
 `;
   fs.writeFileSync(profilePath, yaml, 'utf8');
   console.log(`Profile YAML written: ${profilePath}`);
@@ -335,10 +339,29 @@ function main() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // Specchia il CHECK constraint di Supabase (migration 015): location
+  // > 200 char è quasi certamente un dump HTML/JD finito nel campo
+  // sbagliato (vedi incidente 2026-05-19 row a4ed4925). I dump JSON da
+  // cui leggiamo qui possono essere stale rispetto al fix su Supabase,
+  // quindi clampiamo localmente per non rivedere l'incidente a ogni
+  // re-seed. 197 + "…" = 200 (cap simbolico).
+  //
+  // Per la row nota (a4ed4925, RobertHalf "Junior Python Developer Jobs
+  // in London") forziamo "London, UK" perché il troncato a 200 char è
+  // comunque illeggibile (parte HTML "(initially 5 days onsite...").
+  const KNOWN_BAD_LOCATIONS = {
+    'a4ed4925-2e4e-4391-b565-a3af6ed29ef9': 'London, UK',
+  };
+  const sanitizeLocation = (uuid, loc) => {
+    if (KNOWN_BAD_LOCATIONS[uuid]) return KNOWN_BAD_LOCATIONS[uuid];
+    if (loc != null && loc.length > 200) return loc.slice(0, 197) + '…';
+    return loc;
+  };
+
   const insertAll = db.transaction(() => {
     for (const p of positions) {
       const r = insertPos.run(
-        p.title, p.company, p.location, p.remote_type,
+        p.title, p.company, sanitizeLocation(p.id, p.location), p.remote_type,
         p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency,
         p.salary_estimated_min, p.salary_estimated_max, p.salary_estimated_currency,
         p.salary_estimated_source,

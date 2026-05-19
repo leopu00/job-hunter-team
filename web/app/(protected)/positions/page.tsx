@@ -3,6 +3,7 @@ import { getPositions } from "@/lib/queries";
 import type { PositionWithScore, PositionStatus } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
+import PositionsTableScroller from "@/app/components/PositionsTableScroller";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -114,10 +115,21 @@ interface PageProps {
     sync?: string;
     sort?: string;
     dir?: string;
+    expand?: string;
+    page?: string;
+    pageSize?: string;
   }>;
 }
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+const DEFAULT_PAGE_SIZE = 50;
+
+// Colonne espandibili (testo libero, può eccedere). Per le altre
+// (id, score, voto, rilevata, stato) lo spazio fisso è già adeguato.
+const EXPANDABLE_COLUMNS = new Set(["title", "company", "location"]);
+
 const SORTABLE_COLUMNS = new Set([
+  "id",
   "title",
   "company",
   "source",
@@ -156,6 +168,24 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     ? params.sort!
     : "found_at";
   const sortDir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
+
+  // expand=title,location → set di colonne mostrate full-width.
+  const expandedCols = new Set(
+    (params.expand ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => EXPANDABLE_COLUMNS.has(c)),
+  );
+  const isExpanded = (col: string) => expandedCols.has(col);
+
+  // Paginazione: pageSize (whitelist), page 1-based.
+  const requestedPageSize = parseInt(params.pageSize ?? "", 10);
+  const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(
+    requestedPageSize,
+  )
+    ? requestedPageSize
+    : DEFAULT_PAGE_SIZE;
+  const requestedPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
   const tier = TIERS.find((t) => t.val === tierFilter) ?? TIERS[0];
 
@@ -201,10 +231,28 @@ export default async function PositionsPage({ searchParams }: PageProps) {
           return syncFilter === "synced" ? isSynced : !isSynced;
         });
 
+  // Pagination computed values
+  const totalResults = positions.length;
+  const pageCount = Math.max(1, Math.ceil(totalResults / pageSize));
+  const page = Math.min(requestedPage, pageCount);
+  const startIdx = (page - 1) * pageSize;
+  const visiblePositions = positions.slice(startIdx, startIdx + pageSize);
+
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
     overrides: Partial<
-      Record<"status" | "remote" | "tier" | "sync" | "sort" | "dir", string>
+      Record<
+        | "status"
+        | "remote"
+        | "tier"
+        | "sync"
+        | "sort"
+        | "dir"
+        | "expand"
+        | "page"
+        | "pageSize",
+        string
+      >
     >,
   ) => {
     const merged: Record<string, string> = {};
@@ -214,23 +262,37 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (syncFilter !== "all") merged.sync = syncFilter;
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
+    if (expandedCols.size > 0) merged.expand = Array.from(expandedCols).join(",");
+    if (page !== 1) merged.page = String(page);
+    if (pageSize !== DEFAULT_PAGE_SIZE) merged.pageSize = String(pageSize);
     Object.assign(merged, overrides);
     // Rimuovi chiavi con valore 'all' o default → URL pulito
     for (const k of Object.keys(merged)) {
       if (merged[k] === "all") delete merged[k];
       if (k === "sort" && merged[k] === "found_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
+      if (k === "expand" && merged[k] === "") delete merged[k];
+      if (k === "page" && (merged[k] === "1" || merged[k] === "")) delete merged[k];
+      if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE)) delete merged[k];
     }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
   };
 
+  // Toggle expand di una colonna: aggiunge/rimuove dalla CSV `expand`.
+  const expandHref = (col: string) => {
+    const next = new Set(expandedCols);
+    if (next.has(col)) next.delete(col);
+    else next.add(col);
+    return buildHref({ expand: next.size ? Array.from(next).join(",") : "" });
+  };
+
   // Link per ordinare cliccando un header: se la colonna è già attiva
   // toggla la direzione, altrimenti diventa la nuova attiva con dir
-  // default (desc per metriche numeriche, asc per testo).
+  // default (desc per metriche numeriche e id, asc per testo).
   const sortHref = (col: string) => {
     const isActive = sortCol === col;
-    const NUMERIC = new Set(["score", "critic", "found_at"]);
+    const NUMERIC = new Set(["id", "score", "critic", "found_at"]);
     const defaultDir = NUMERIC.has(col) ? "desc" : "asc";
     const nextDir = isActive
       ? sortDir === "asc"
@@ -242,6 +304,17 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   const sortIndicator = (col: string) =>
     sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+
+  // True se l'utente ha toccato qualsiasi filtro/sort/expand rispetto
+  // al default — usato per mostrare il bottone "Reset filtri".
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    remoteFilter !== "all" ||
+    tierFilter !== "all" ||
+    syncFilter !== "all" ||
+    sortCol !== "found_at" ||
+    sortDir !== "desc" ||
+    expandedCols.size > 0;
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
@@ -270,13 +343,23 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">
           Posizioni
         </h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {positions.length} risultati
-          {statusFilter !== "all" && ` · status: ${statusFilter}`}
-          {remoteFilter !== "all" && ` · ${remoteFilter.replace("_", " ")}`}
-          {tierFilter !== "all" && ` · ${tier.label}`}
-          {syncFilter !== "all" &&
-            ` · ${SYNC_FILTERS.find((s) => s.val === syncFilter)?.label}`}
+        <p className="text-[var(--color-muted)] text-[11px] mt-1 flex flex-wrap items-center gap-x-2">
+          <span>
+            {positions.length} risultati
+            {statusFilter !== "all" && ` · status: ${statusFilter}`}
+            {remoteFilter !== "all" && ` · ${remoteFilter.replace("_", " ")}`}
+            {tierFilter !== "all" && ` · ${tier.label}`}
+            {syncFilter !== "all" &&
+              ` · ${SYNC_FILTERS.find((s) => s.val === syncFilter)?.label}`}
+          </span>
+          {hasActiveFilters && (
+            <Link
+              href="/positions"
+              className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline border border-[var(--color-border)] hover:border-[var(--color-green)] rounded-full px-2 py-0.5"
+            >
+              ✕ Reset filtri
+            </Link>
+          )}
         </p>
       </div>
 
@@ -363,6 +446,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       </div>
 
       {/* ── Table ───────────────────────────────────────────────── */}
+      {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
+          il main è già full-width con padding 48px. La tabella prende
+          100% e ha scroll-x se eccede. */}
       <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
         <table
           className="w-full text-[12px]"
@@ -371,22 +457,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         >
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                style={{ color: "var(--color-dim)" }}
-              >
-                ID
-              </th>
               {[
+                { col: "found_at", label: "Rilevata" },
+                { col: "id", label: "ID" },
                 { col: "title", label: "Titolo" },
                 { col: "company", label: "Azienda" },
                 { col: "source", label: "Fonte" },
                 { col: "location", label: "Location" },
                 { col: "score", label: "Score" },
-                { col: "critic", label: "Voto finale" },
-                { col: "found_at", label: "Rilevata" },
                 { col: "status", label: "Stato" },
+                { col: "critic", label: "Voto finale" },
               ].map(({ col, label }) => (
                 <th
                   key={col}
@@ -399,20 +479,45 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         : "var(--color-dim)",
                   }}
                 >
-                  <Link
-                    href={sortHref(col)}
-                    className="no-underline hover:text-[var(--color-green)] transition-colors"
-                    style={{ color: "inherit" }}
-                  >
-                    {label}
-                    <span aria-hidden="true">{sortIndicator(col)}</span>
-                  </Link>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Link
+                      href={sortHref(col)}
+                      className="no-underline hover:text-[var(--color-green)] transition-colors"
+                      style={{ color: "inherit" }}
+                    >
+                      {label}
+                      <span aria-hidden="true">{sortIndicator(col)}</span>
+                    </Link>
+                    {EXPANDABLE_COLUMNS.has(col) && (
+                      <Link
+                        href={expandHref(col)}
+                        title={
+                          isExpanded(col)
+                            ? "Comprimi colonna"
+                            : "Espandi colonna"
+                        }
+                        aria-label={
+                          isExpanded(col)
+                            ? "Comprimi colonna"
+                            : "Espandi colonna"
+                        }
+                        className="no-underline text-[10px] leading-none px-1 rounded hover:bg-[var(--color-card)] hover:text-[var(--color-green)] transition-colors"
+                        style={{
+                          color: isExpanded(col)
+                            ? "var(--color-green)"
+                            : "var(--color-dim)",
+                        }}
+                      >
+                        {isExpanded(col) ? "⇲" : "⇱"}
+                      </Link>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {positions.length === 0 ? (
+            {visiblePositions.length === 0 ? (
               <tr>
                 <td
                   colSpan={9}
@@ -422,17 +527,22 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 </td>
               </tr>
             ) : (
-              positions.map((p: PositionWithScore, i: number) => (
+              visiblePositions.map((p: PositionWithScore, i: number) => (
                 <tr
                   key={p.id}
                   className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
                   style={{
                     borderBottomColor:
-                      i === positions.length - 1 ? "transparent" : undefined,
+                      i === visiblePositions.length - 1
+                        ? "transparent"
+                        : undefined,
                     background:
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                    {formatFoundAt(p.found_at)}
+                  </td>
                   <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5">
                       {p.legacy_id
@@ -453,16 +563,26 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium max-w-[220px]">
+                  <td
+                    className={`px-4 py-3 font-medium ${
+                      isExpanded("title") ? "" : "max-w-[220px]"
+                    }`}
+                  >
                     <Link
                       href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors line-clamp-2"
+                      className={`text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors ${
+                        isExpanded("title") ? "" : "line-clamp-2"
+                      }`}
                     >
                       {p.title}
                     </Link>
                   </td>
                   <td
-                    className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap max-w-[140px] truncate"
+                    className={`px-4 py-3 text-[var(--color-base)] ${
+                      isExpanded("company")
+                        ? "whitespace-normal"
+                        : "whitespace-nowrap max-w-[140px] truncate"
+                    }`}
                     title={p.company}
                   >
                     {p.company}
@@ -470,7 +590,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                   <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
                     {p.source ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                  <td
+                    className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
+                      isExpanded("location")
+                        ? "whitespace-normal"
+                        : "max-w-[200px] truncate whitespace-nowrap"
+                    }`}
+                    title={p.location ?? undefined}
+                  >
                     {p.location ?? "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -493,6 +620,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         />
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+                      style={{
+                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                        borderColor:
+                          STATUS_COLORS[p.status] ?? "var(--color-border)",
+                        background: `${STATUS_COLORS[p.status]}18`,
+                      }}
+                    >
+                      {p.status}
+                    </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {p.critic_score != null || p.critic_verdict ? (
@@ -530,27 +670,74 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       <span className="text-[var(--color-dim)] text-[11px]">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
-                    {formatFoundAt(p.found_at)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Pagination ──────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
+        <div>
+          {totalResults === 0
+            ? "0 risultati"
+            : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} di ${totalResults} · pagina ${page} / ${pageCount}`}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
+              Righe per pagina
+            </span>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <Link
+                key={size}
+                href={buildHref({ pageSize: String(size), page: "1" })}
+                className="px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors no-underline"
+                style={
+                  pageSize === size
+                    ? {
+                        color: "var(--color-bright)",
+                        borderColor: "var(--color-green)",
+                        background: "var(--color-card)",
+                      }
+                    : {
+                        color: "var(--color-dim)",
+                        borderColor: "var(--color-border)",
+                      }
+                }
+              >
+                {size}
+              </Link>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            {page > 1 ? (
+              <Link
+                href={buildHref({ page: String(page - 1) })}
+                className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
+              >
+                ← Precedenti
+              </Link>
+            ) : (
+              <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
+                ← Precedenti
+              </span>
+            )}
+            {page < pageCount ? (
+              <Link
+                href={buildHref({ page: String(page + 1) })}
+                className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
+              >
+                Successivi →
+              </Link>
+            ) : (
+              <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
+                Successivi →
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
