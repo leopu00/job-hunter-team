@@ -69,6 +69,9 @@ export const TRANSLATIONS = {
       'Required to pair this app with your VPS. Sign in with Google or GitHub.',
     // -- Telegram 3-bot tokens step (T4, only on VPS path) --
     'telegram.title': 'Telegram bots',
+    'telegram.tokens.lead':
+      'Three dedicated Telegram bots — one per user-facing agent. For each bot: copy the suggested name + username into @BotFather, then paste the token it returns here.',
+    'telegram.tokens.pasteLabel': 'Paste the token here:',
     'telegram.lead':
       'Three dedicated bots — one per user-facing agent. Create them on @BotFather and paste each token here.',
     'telegram.role.assistente': 'Profile onboarding · document drop-zone',
@@ -481,6 +484,9 @@ export const TRANSLATIONS = {
       'Obbligatorio per accoppiare questa app alla tua VPS. Accedi con Google o GitHub.',
     // -- Step bot Telegram (T4, solo path VPS) --
     'telegram.title': 'Bot Telegram',
+    'telegram.tokens.lead':
+      'Tre bot Telegram dedicati — uno per ogni agente utente-facing. Per ciascuno: copia il nome + username suggerito in @BotFather, poi incolla qui il token che ti restituisce.',
+    'telegram.tokens.pasteLabel': 'Incolla qui il token:',
     'telegram.lead':
       'Tre bot dedicati — uno per ciascun agente che parla con te. Creali su @BotFather e incolla qui ogni token.',
     'telegram.role.assistente': 'Onboarding profilo · drop-zone documenti',
@@ -893,6 +899,9 @@ export const TRANSLATIONS = {
       'Kötelező, hogy összepárosítsd ezt az alkalmazást a VPS-eddel. Lépj be Google vagy GitHub fiókkal.',
     // -- Telegram 3-bot tokens lépés (T4, csak VPS úton) --
     'telegram.title': 'Telegram botok',
+    'telegram.tokens.lead':
+      'Három dedikált Telegram bot — egy minden felhasználói ügynöknek. Mindegyikhez: másold a javasolt nevet + felhasználónevet a @BotFather-be, majd illeszd be ide a tokent, amit visszaad.',
+    'telegram.tokens.pasteLabel': 'Illeszd be ide a tokent:',
     'telegram.lead':
       'Három dedikált bot — egy minden felhasználói ügynöknek. Hozd létre őket @BotFather-en és illeszd be a tokeneket.',
     'telegram.role.assistente': 'Profil onboarding · dokumentum drop-zone',
