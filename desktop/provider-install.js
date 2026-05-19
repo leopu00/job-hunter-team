@@ -38,11 +38,24 @@ const PROVIDERS = {
   codex: {
     displayName: 'Codex',
     binary: 'codex',
-    // --yolo (alias di --dangerously-bypass-approvals-and-sandbox) salva
-    // la trust-approval per la working dir in ~/.codex al primo lancio,
-    // così gli avvii successivi dell'agente background non si bloccano
-    // sul prompt di approval (equivalente di claude --dangerously-skip-permissions).
-    loginArgs: ['--yolo'],
+    // Codex 0.131+ ha separato il login dal REPL interattivo: il login
+    // OAuth è un subcomando esplicito (`codex login`). `--yolo` era il
+    // flag corretto per il REPL di Codex 0.6 (legacy) — su 0.131 lancia
+    // il REPL che richiede di essere già loggati → schermo nero in
+    // attesa di input.
+    //
+    // `--device-auth` usa il device-code flow (analogo a `gh auth login`
+    // headless): codex stampa un URL + codice, l'utente lo incolla sul
+    // browser e autorizza. Funziona identico in VPS mode (dove il
+    // localhost del container non è raggiungibile dal browser host) e
+    // in local mode (uniformità UX + nessun port mapping su container
+    // locale).
+    //
+    // Nota: dopo il login, il REPL background degli agenti continua a
+    // usare `codex --yolo` per skip approval prompt (vedi
+    // .launcher/spawn-doctor.sh) — quel flag rimane corretto per il
+    // REPL, è solo il wizard di login che richiede `codex login`.
+    loginArgs: ['login', '--device-auth'],
     install: [{
       entrypoint: 'npm',
       args: ['install', '-g', '@openai/codex@latest'],
