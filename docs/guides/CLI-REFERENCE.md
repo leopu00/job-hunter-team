@@ -23,6 +23,36 @@ For every command below, the "Layer" column tells you which surface
 implements it. Running `jht <command>` on the host transparently routes
 to the right layer.
 
+## Coexistence with Desktop, Web, Telegram
+
+The CLI is one of four clients of the same backend (the `jht` container
+holding `jht.config.json`, `jobs.db`, and the agent tmux sessions). You
+can use them simultaneously — that's the design:
+
+| Surface          | Role                                   | Talks to the container via                |
+|------------------|----------------------------------------|-------------------------------------------|
+| Desktop launcher | Provisioning + lifecycle UI            | local Docker / SSH + `docker exec`        |
+| **CLI (`jht`)**  | Dev + AI agents + power user           | host wrapper → `docker exec`              |
+| Web dashboard    | User interaction (positions, team)     | Supabase realtime + sync API              |
+| Telegram         | Mobile chat with the agents            | bridge process inside the container       |
+
+**Safe to mix freely**: read-only ops (`jht status`, `jht logs`,
+`jht positions list`, dashboard browsing) and team lifecycle (`jht team
+start/stop`) — Desktop polls and reflects the change within seconds.
+
+**Avoid concurrent writes to `jht.config.json`**: only the Desktop
+wizard uses atomic read-merge-write; the CLI's `jht config set` and
+`jht setup` do last-write-wins. Don't run the Desktop wizard and a CLI
+setup at the same time — finish one before starting the other. Once
+setup is done, post-hoc edits to **different** config keys from
+different surfaces are fine.
+
+**Hard invariant — one team per user**: see [`docs/internal/onboarding-flow.md`](../internal/onboarding-flow.md).
+You cannot run Local (CLI on this PC) **and** VPS (Desktop pointing at
+Hetzner) at the same time — it splits the source of truth and breaks
+cloud sync. Pick one location and stick to it for the session; switch
+via wipe + re-pair, not concurrent runs.
+
 ---
 
 ## Companycycle (host wrapper)
