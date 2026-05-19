@@ -105,6 +105,22 @@
             Continue with GitHub
           </button>
         </div>
+        <div class="signin-progress" id="supabase-signin-progress" hidden>
+          <p class="step__hint" id="supabase-signin-hint" data-i18n="supabase.signin.waiting">
+            Waiting for sign-in to complete in your browser…
+          </p>
+          <p class="step__hint signin-progress__url-row" id="supabase-signin-url-row" hidden>
+            <span class="signin-progress__url" id="supabase-signin-url" title="" aria-label=""></span>
+          </p>
+          <div class="signin-progress__actions">
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-copy-url" data-i18n="supabase.signin.copyLink" hidden>
+              Copy sign-in link
+            </button>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-cancel" data-i18n="supabase.signin.cancel">
+              Cancel sign-in
+            </button>
+          </div>
+        </div>
         <p class="step__hint" id="supabase-status" hidden></p>
         <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-supabase-back" data-i18n="supabase.back">
@@ -130,6 +146,52 @@
            /getMe; chat_id captured automatically when the user presses
            Start on the deep-link. Saved on the VPS at
            /root/.jht/jht.config.json after VPS provisioning. -->
+      <!-- Step: Telegram intro — pure visual hook. The Godfather-style
+           parody image carries the introduction by itself; the user
+           recognizes the joke and moves on. No copy intentionally. -->
+      <section class="step step--centered" id="step-telegram-intro" data-step="telegram-intro" hidden>
+        <img src="./assets/botfather.jpg" alt="@BotFather" class="tg-intro__hero" />
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-intro-back" data-i18n="telegram.intro.back">Back</button>
+          <button class="btn btn--primary" id="btn-tg-intro-continue" data-i18n="telegram.intro.continue">Got it, continue</button>
+        </div>
+      </section>
+
+      <!-- Step: Telegram create — suggests three bot usernames using
+           the user's tag + a random suffix per role, so colliding on
+           one doesn't force regenerating the others. User copies each
+           suggested username into @BotFather chat. -->
+      <section class="step step--centered" id="step-telegram-create" data-step="telegram-create" hidden>
+        <div class="step__emoji" aria-hidden="true">🪪</div>
+        <h1 class="step__title" data-i18n="telegram.create.title">Create your three bots</h1>
+        <p class="step__lead" data-i18n="telegram.create.lead">
+          Open the BotFather chat, send <code>/newbot</code>, give each bot the suggested name when asked, then paste the suggested username. BotFather will return a token — keep it for the next step.
+        </p>
+        <div class="tg-create__usertag">
+          <label for="tg-create-usertag" class="tg-create__label" data-i18n="telegram.create.usertag.label">Your tag (lowercase, used inside bot usernames)</label>
+          <input
+            type="text"
+            id="tg-create-usertag"
+            class="tg-create__input"
+            placeholder="myname"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            maxlength="20"
+          />
+        </div>
+        <div class="tg-create__rows" id="tg-create-rows">
+          <!-- populated by wizard-flow.js -->
+        </div>
+        <p class="step__hint">
+          <a href="#" id="tg-create-open-botfather" data-i18n="telegram.create.openBotfather">Open @BotFather in Telegram</a>
+        </p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-create-back" data-i18n="telegram.create.back">Back</button>
+          <button class="btn btn--primary" id="btn-tg-create-continue" data-i18n="telegram.create.continue">I created the bots, continue</button>
+        </div>
+      </section>
+
       <section class="step step--centered" id="step-telegram-tokens" data-step="telegram-tokens" hidden>
         <div class="step__emoji" aria-hidden="true">💬</div>
         <h1 class="step__title" data-i18n="telegram.title">Telegram bots</h1>
@@ -141,12 +203,12 @@
         <div class="tg-rows">
           <div class="tg-row" id="tg-row-assistente" data-role="assistente" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Assistente</h2>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.assistente">Assistant</h2>
               <p class="tg-row__hint" data-i18n="telegram.role.assistente">Profile onboarding · document drop-zone</p>
             </div>
             <div class="tg-row__form">
               <input
-                type="password"
+                type="text"
                 class="tg-row__input"
                 id="tg-input-assistente"
                 placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
@@ -164,12 +226,12 @@
 
           <div class="tg-row" id="tg-row-capitano" data-role="capitano" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Capitano</h2>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.capitano">Captain</h2>
               <p class="tg-row__hint" data-i18n="telegram.role.capitano">Team direction · ready-position notifications</p>
             </div>
             <div class="tg-row__form">
               <input
-                type="password"
+                type="text"
                 class="tg-row__input"
                 id="tg-input-capitano"
                 placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
@@ -187,12 +249,12 @@
 
           <div class="tg-row" id="tg-row-mentor" data-role="mentor" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Mentor</h2>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.mentor">Mentor</h2>
               <p class="tg-row__hint" data-i18n="telegram.role.mentor">Growth coach · strategic positioning</p>
             </div>
             <div class="tg-row__form">
               <input
-                type="password"
+                type="text"
                 class="tg-row__input"
                 id="tg-input-mentor"
                 placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"

@@ -22,6 +22,8 @@ const SUPPORTED_PROVIDERS = new Set(['google', 'github'])
 const PROVIDER_LABEL = { google: 'Google', github: 'GitHub' }
 
 let inFlightSignIn = null
+let inFlightServer = null
+let inFlightCancelled = false
 
 function userFromSession(session) {
   if (!session?.user) return null
@@ -55,7 +57,7 @@ async function getStatus() {
   }
 }
 
-async function signIn(provider) {
+async function signIn(provider, { onUrlReady } = {}) {
   if (!SUPPORTED_PROVIDERS.has(provider)) {
     log.warn('signin.unsupported-provider', { provider })
     return { ok: false, error: `Unsupported provider: ${provider}` }
@@ -67,11 +69,13 @@ async function signIn(provider) {
     return inFlightSignIn
   }
   log.info('signin.start', { provider })
+  inFlightCancelled = false
   inFlightSignIn = (async () => {
     let server = null
     try {
       const client = getClient()
       server = await startCallbackServer()
+      inFlightServer = server
       log.debug('signin.callback-server.ready', { redirectUri: server.redirectUri })
       // Per-provider authorize options. Google supports prompt=
       // select_account so the user can pick which Google account
@@ -94,6 +98,12 @@ async function signIn(provider) {
         throw new Error(error?.message || 'Supabase did not return an authorize URL')
       }
       log.debug('signin.authorize-url.ready')
+      // Surface the URL to the renderer BEFORE opening the browser
+      // so the user has a "Copy link" / "Cancel" fallback even if
+      // the browser fails to open or opens with the wrong session.
+      if (typeof onUrlReady === 'function') {
+        try { onUrlReady(data.url) } catch (e) { log.warn('signin.on-url-ready.failed', { err: e?.message }) }
+      }
       // Ask the user which installed browser should receive the
       // authorize URL. The pre-flight dialog avoids the "auto-logged
       // into the wrong account" surprise that happens when the
@@ -105,6 +115,9 @@ async function signIn(provider) {
       })
       log.info('signin.browser-launched', { provider })
       const { code } = await server.waitForCallback()
+      if (inFlightCancelled) {
+        throw new Error('Sign-in cancelled by user')
+      }
       log.debug('signin.callback-received')
       const { data: exchangeData, error: exchangeError } =
         await client.auth.exchangeCodeForSession(code)
@@ -122,10 +135,24 @@ async function signIn(provider) {
       if (server) {
         try { server.close() } catch { /* ignore */ }
       }
+      inFlightServer = null
       inFlightSignIn = null
     }
   })()
   return inFlightSignIn
+}
+
+function cancelSignIn() {
+  if (!inFlightSignIn) {
+    log.debug('cancel-signin.noop')
+    return { ok: true, cancelled: false }
+  }
+  log.info('cancel-signin.request')
+  inFlightCancelled = true
+  if (inFlightServer) {
+    try { inFlightServer.close({ reason: 'Sign-in cancelled by user' }) } catch { /* ignore */ }
+  }
+  return { ok: true, cancelled: true }
 }
 
 async function signOut() {
@@ -198,4 +225,4 @@ async function getPairingToken() {
   }
 }
 
-module.exports = { getStatus, signIn, signOut, getPairingToken, SUPPORTED_PROVIDERS }
+module.exports = { getStatus, signIn, signOut, cancelSignIn, getPairingToken, SUPPORTED_PROVIDERS }
