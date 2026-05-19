@@ -166,6 +166,21 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
 
+  // In production block Ctrl+R / Ctrl+Shift+R / F5: a renderer reload
+  // resets the in-memory wizard state mid-onboarding, which is hostile
+  // UX for end users (and easy to trigger by accident). Devs still
+  // get the shortcut when running `electron .` from source.
+  if (app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const key = (input.key || '').toLowerCase()
+      const isReload =
+        (key === 'r' && (input.control || input.meta)) ||
+        key === 'f5'
+      if (isReload) event.preventDefault()
+    })
+  }
+
   // Force every link/URL open to go through the host's default browser
   // via shell.openExternal. Without this, Electron would happily spawn
   // a nested BrowserWindow for things like window.open(...) — which
@@ -701,12 +716,22 @@ app.whenReady().then(() => {
 
   // -------- Auth (Supabase OAuth via loopback PKCE) --------
   ipcMain.handle('auth:get-status', () => auth.getStatus())
-  ipcMain.handle('auth:sign-in', (_event, provider) => {
+  ipcMain.handle('auth:sign-in', (event, provider) => {
     if (typeof provider !== 'string' || !auth.SUPPORTED_PROVIDERS.has(provider)) {
       return { ok: false, error: 'invalid-provider' }
     }
-    return auth.signIn(provider)
+    const webContents = event?.sender
+    return auth.signIn(provider, {
+      onUrlReady: (url) => {
+        try {
+          if (webContents && !webContents.isDestroyed()) {
+            webContents.send('auth:url-ready', { provider, url })
+          }
+        } catch { /* ignore */ }
+      },
+    })
   })
+  ipcMain.handle('auth:cancel-sign-in', () => auth.cancelSignIn())
   ipcMain.handle('auth:sign-out', async () => {
     sync.clearAllKeys()
     return auth.signOut()
