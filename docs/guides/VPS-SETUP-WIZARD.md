@@ -271,7 +271,7 @@ jht recreate                   # restart per ricaricare config
 
 Dopo `jht providers use`, i 3 agenti user-facing (assistente/capitano/mentor)
 ripartiranno col nuovo provider al prossimo respawn (max 30s, oppure subito
-con `jht team restart`).
+con `jht team stop --all && jht team start`).
 
 ### 🤖 Ruotare i token Telegram
 
