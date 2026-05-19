@@ -11,6 +11,8 @@ import {
   STEP_WELCOME,
   STEP_LOCATION,
   STEP_SUPABASE_LOGIN,
+  STEP_TELEGRAM_INTRO,
+  STEP_TELEGRAM_CREATE,
   STEP_TELEGRAM_TOKENS,
   STEP_VPS_PROVISION,
   STEP_SETUP,
@@ -167,14 +169,59 @@ function renderSupabaseStep() {
   }
 }
 
+let currentSigninUrl = null
+let urlReadyUnsub = null
+
+function showSigninProgress() {
+  if (dom.supabaseSigninProgress) dom.supabaseSigninProgress.hidden = false
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = true
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = true
+  if (dom.btnSupabaseCopyUrl) {
+    dom.btnSupabaseCopyUrl.hidden = true
+    dom.btnSupabaseCopyUrl.textContent = t('supabase.signin.copyLink')
+  }
+  if (dom.supabaseSigninUrlRow) dom.supabaseSigninUrlRow.hidden = true
+  if (dom.supabaseSigninUrl) {
+    dom.supabaseSigninUrl.textContent = ''
+    dom.supabaseSigninUrl.title = ''
+  }
+}
+
+function hideSigninProgress() {
+  if (dom.supabaseSigninProgress) dom.supabaseSigninProgress.hidden = true
+  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = false
+  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = false
+  currentSigninUrl = null
+  if (urlReadyUnsub) {
+    try { urlReadyUnsub() } catch { /* ignore */ }
+    urlReadyUnsub = null
+  }
+}
+
 async function doSupabaseSignIn(provider) {
   log.info('supabase.signin.click', { provider })
   if (!window.authApi?.signIn) {
     log.warn('supabase.signin.no-api')
     return
   }
-  if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = true
-  if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = true
+  showSigninProgress()
+  if (window.authApi.onUrlReady) {
+    urlReadyUnsub = window.authApi.onUrlReady(({ url }) => {
+      currentSigninUrl = url || null
+      if (currentSigninUrl) {
+        if (dom.supabaseSigninUrl) {
+          // Show short preview, full URL in title + on copy.
+          const short = currentSigninUrl.length > 64
+            ? currentSigninUrl.slice(0, 64) + '…'
+            : currentSigninUrl
+          dom.supabaseSigninUrl.textContent = short
+          dom.supabaseSigninUrl.title = currentSigninUrl
+        }
+        if (dom.supabaseSigninUrlRow) dom.supabaseSigninUrlRow.hidden = false
+        if (dom.btnSupabaseCopyUrl) dom.btnSupabaseCopyUrl.hidden = false
+      }
+    })
+  }
   try {
     const res = await window.authApi.signIn(provider)
     if (!res?.ok) {
@@ -189,9 +236,34 @@ async function doSupabaseSignIn(provider) {
       state.supabaseUser = res.user || null
     }
   } finally {
-    if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.disabled = false
-    if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.disabled = false
+    hideSigninProgress()
     renderSupabaseStep()
+  }
+}
+
+async function doSupabaseCancel() {
+  if (!window.authApi?.cancelSignIn) return
+  try { await window.authApi.cancelSignIn() } catch { /* ignore */ }
+}
+
+async function doSupabaseCopyUrl() {
+  if (!currentSigninUrl) return
+  try {
+    if (window.clipboardApi?.write) {
+      await window.clipboardApi.write(currentSigninUrl)
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(currentSigninUrl)
+    }
+    if (dom.btnSupabaseCopyUrl) {
+      dom.btnSupabaseCopyUrl.textContent = t('supabase.signin.copyLink.done')
+      setTimeout(() => {
+        if (dom.btnSupabaseCopyUrl) {
+          dom.btnSupabaseCopyUrl.textContent = t('supabase.signin.copyLink')
+        }
+      }, 2500)
+    }
+  } catch (err) {
+    log.warn('supabase.signin.copy.failed', { err: err?.message })
   }
 }
 
@@ -210,6 +282,12 @@ if (dom.btnSupabaseGithub) {
 }
 if (dom.btnSupabaseSignout) {
   dom.btnSupabaseSignout.addEventListener('click', () => doSupabaseSignOut())
+}
+if (dom.btnSupabaseCancel) {
+  dom.btnSupabaseCancel.addEventListener('click', () => doSupabaseCancel())
+}
+if (dom.btnSupabaseCopyUrl) {
+  dom.btnSupabaseCopyUrl.addEventListener('click', () => doSupabaseCopyUrl())
 }
 if (dom.btnSupabaseBack) {
   dom.btnSupabaseBack.addEventListener('click', () => enterLocation())
@@ -235,10 +313,171 @@ if (dom.btnSupabaseContinue) {
 //             vive sulla VPS, niente Docker locale.
 function advanceAfterSupabase() {
   if (state.location === LOCATION_VPS) {
-    enterTelegramTokens()
+    enterTelegramIntro()
   } else {
     enterSetup()
   }
+}
+
+// ─── Telegram intro + create steps (NEW) ─────────────────────────
+// These two pages sit between Supabase login and Telegram tokens
+// in VPS mode. They walk a non-tech user through:
+//   1. What @BotFather is (telegram-intro)
+//   2. Three suggested usernames they can paste into BotFather
+//      (telegram-create), regenerable per role if collisions happen
+// Mirrors cli/wizard/setup-steps.js::promptTelegramRequired pattern
+// (b000dec5 — userTag + 3 indipendenti suffix).
+const TG_CREATE_ROLES = ['assistente', 'capitano', 'mentor']
+// Official emojis lifted from each agent prompt header (agents/<role>/<role>.md).
+// Used both as the bot display name prefix in BotFather and as the
+// section header for each row.
+const TG_ROLE_EMOJI = {
+  assistente: '\u{1F468}\u200D\u{1F4BC}', // 👨‍💼
+  capitano:   '\u{1F468}\u200D\u2708\uFE0F', // 👨‍✈️
+  mentor:     '\u{1F9D9}\u200D\u2642\uFE0F', // 🧙‍♂️
+}
+const TG_BOTFATHER_URL = 'https://t.me/BotFather'
+
+function botDisplayName(role) {
+  const emoji = TG_ROLE_EMOJI[role] || ''
+  const name = (typeof t === 'function' && t(`telegram.agent.${role}`)) || role
+  return emoji ? `${emoji} ${name}` : name
+}
+
+function generatePrivacySuffix(length = 6) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let out = ''
+  const arr = new Uint8Array(length)
+  // crypto.getRandomValues exists in the renderer (Electron exposes Web Crypto).
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(arr)
+  } else {
+    for (let i = 0; i < length; i++) arr[i] = Math.floor(Math.random() * 256)
+  }
+  for (let i = 0; i < length; i++) out += alphabet[arr[i] % alphabet.length]
+  return out
+}
+
+function defaultUserTag() {
+  const email = state.supabaseUser?.email || ''
+  const local = email.split('@')[0] || ''
+  return local.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user'
+}
+
+function ensureTgCreateState() {
+  if (!state.tgCreate) {
+    state.tgCreate = { userTag: defaultUserTag(), suffixes: {} }
+    for (const role of TG_CREATE_ROLES) state.tgCreate.suffixes[role] = generatePrivacySuffix(6)
+  }
+}
+
+function suggestedUsername(role) {
+  ensureTgCreateState()
+  const tag = (state.tgCreate.userTag || 'user').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user'
+  return `${role}_${tag}_${state.tgCreate.suffixes[role]}_bot`
+}
+
+function makeCopyBtn(getText) {
+  const btn = document.createElement('button')
+  btn.className = 'btn btn--ghost btn--small'
+  btn.type = 'button'
+  btn.textContent = t('telegram.create.copy')
+  btn.addEventListener('click', async () => {
+    try {
+      const text = getText()
+      if (window.clipboardApi?.write) await window.clipboardApi.write(text)
+      else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
+      btn.textContent = t('telegram.create.copy.done')
+      setTimeout(() => { btn.textContent = t('telegram.create.copy') }, 1800)
+    } catch { /* ignore */ }
+  })
+  return btn
+}
+
+function renderTgCreateRows() {
+  if (!dom.tgCreateRows) return
+  dom.tgCreateRows.replaceChildren()
+  for (const role of TG_CREATE_ROLES) {
+    const row = document.createElement('div')
+    row.className = 'tg-create__row'
+
+    // Section header — "<emoji> Role"
+    const roleLabel = document.createElement('div')
+    roleLabel.className = 'tg-create__role'
+    roleLabel.textContent = botDisplayName(role)
+
+    // Field 1: display name to type into BotFather when it asks "How
+    // are we going to call it?". Same string as the row header — the
+    // user copies this verbatim.
+    const nameField = document.createElement('div')
+    nameField.className = 'tg-create__field'
+    const nameLabel = document.createElement('div')
+    nameLabel.className = 'tg-create__field-label'
+    nameLabel.textContent = t('telegram.create.nameLabel')
+    const nameRow = document.createElement('div')
+    nameRow.className = 'tg-create__row-actions'
+    const nameValue = document.createElement('div')
+    nameValue.className = 'tg-create__username'
+    nameValue.textContent = botDisplayName(role)
+    nameRow.append(nameValue, makeCopyBtn(() => botDisplayName(role)))
+    nameField.append(nameLabel, nameRow)
+
+    // Field 2: username (regen-able random suffix).
+    const userField = document.createElement('div')
+    userField.className = 'tg-create__field'
+    const userLabel = document.createElement('div')
+    userLabel.className = 'tg-create__field-label'
+    userLabel.textContent = t('telegram.create.usernameLabel')
+    const userRow = document.createElement('div')
+    userRow.className = 'tg-create__row-actions'
+    const usernameEl = document.createElement('div')
+    usernameEl.className = 'tg-create__username'
+    usernameEl.textContent = '@' + suggestedUsername(role)
+    const regenBtn = document.createElement('button')
+    regenBtn.className = 'btn btn--ghost btn--small'
+    regenBtn.type = 'button'
+    regenBtn.textContent = t('telegram.create.regen')
+    regenBtn.addEventListener('click', () => {
+      ensureTgCreateState()
+      state.tgCreate.suffixes[role] = generatePrivacySuffix(6)
+      usernameEl.textContent = '@' + suggestedUsername(role)
+    })
+    userRow.append(usernameEl, makeCopyBtn(() => suggestedUsername(role)), regenBtn)
+    userField.append(userLabel, userRow)
+
+    row.append(roleLabel, nameField, userField)
+    dom.tgCreateRows.append(row)
+  }
+}
+
+export function enterTelegramIntro() {
+  showStep(STEP_TELEGRAM_INTRO)
+}
+
+export function enterTelegramCreate() {
+  ensureTgCreateState()
+  if (dom.tgCreateUsertag) dom.tgCreateUsertag.value = state.tgCreate.userTag
+  renderTgCreateRows()
+  showStep(STEP_TELEGRAM_CREATE)
+}
+
+if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enterSupabaseLogin())
+if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () => enterTelegramCreate())
+if (dom.btnTgCreateBack) dom.btnTgCreateBack.addEventListener('click', () => enterTelegramIntro())
+if (dom.btnTgCreateContinue) dom.btnTgCreateContinue.addEventListener('click', () => enterTelegramTokens())
+if (dom.tgCreateUsertag) {
+  dom.tgCreateUsertag.addEventListener('input', () => {
+    ensureTgCreateState()
+    state.tgCreate.userTag = (dom.tgCreateUsertag.value || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)
+    renderTgCreateRows()
+  })
+}
+if (dom.tgCreateOpenBotfather) {
+  dom.tgCreateOpenBotfather.addEventListener('click', (e) => {
+    e.preventDefault()
+    if (window.launcherApi?.openExternal) window.launcherApi.openExternal(TG_BOTFATHER_URL)
+    else window.open(TG_BOTFATHER_URL, '_blank')
+  })
 }
 
 dom.btnSetupBack.addEventListener('click', () => enterSupabaseLogin())
