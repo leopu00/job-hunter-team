@@ -8,6 +8,7 @@ import {
   getScoreDistribution,
   getSourceDistribution,
   getPendingMessages,
+  getCriticVerdictTotals,
 } from "@/lib/queries";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
@@ -60,25 +61,20 @@ export default async function DashboardPage() {
   const locale = getServerLocale();
   const t = getDashboardT(locale);
 
-  // Localhost bypass: when the request comes from the user's own
-  // machine (desktop launcher opens /dashboard directly on
-  // http://localhost:3000), treat it as local mode regardless of
-  // whether Supabase env is baked in. Otherwise the Supabase auth
-  // path sends unauthenticated local users into the cloud login,
-  // which is nonsense for the desktop flow.
+  // Routing precedence (vedi docs/internal/2026-05-19-dashboard-routing-cases.md):
+  //   1. demo mode  → demo data (più sotto)
+  //   2. Supabase + utente loggato → 3-way cloud routing su user_onboarding_state,
+  //      ANCHE su localhost: se l'utente ha già fatto sign-in con un account
+  //      VPS-paired, il funnel onboarding-locale (pensato per PC standalone con
+  //      container Docker) non ha senso e fallisce su WSL.
+  //   3. Supabase + no user + localhost → PC standalone: check ~/.jht/profile/.
+  //   4. Supabase + no user + remote → il middleware redirecta a /login.
+  //   5. No Supabase env → pure local deploy: check ~/.jht/profile/.
   const hdrs = await headers();
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
-  const useCloudAuth = isSupabaseConfigured && !localRequest && !demoMode;
 
-  // Cloud mode: 3-way routing in base allo stato di onboarding.
-  // Tabella user_onboarding_state (migration 011) traccia il funnel:
-  //   - vps_setup_completed_at NULL → utente loggato ma nessun pairing
-  //     → CloudDownloadLanding (incentivo a scaricare app + setup)
-  //   - profile_configured_at NULL → VPS pronta ma profilo non ancora
-  //     compilato → VpsSetupCompleteLanding (celebrazione + 2 CTA)
-  //   - entrambi settati → dashboard normale (anche se vuota, ha senso)
-  if (useCloudAuth) {
+  if (isSupabaseConfigured && !demoMode) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -95,32 +91,63 @@ export default async function DashboardPage() {
       if (!onboarding?.profile_configured_at) {
         return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
       }
+    } else if (localRequest) {
+      if (readWorkspaceProfile() === null) redirect("/onboarding");
     }
   } else if (!demoMode) {
-    // Local mode (or localhost bypass): se non esiste un profilo
-    // valido in ~/.jht/profile/, canalizza l'utente verso l'onboarding
-    // split-screen invece di una dashboard vuota.
     if (readWorkspaceProfile() === null) redirect("/onboarding");
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, sourceDist, pendingMessages] = demoData
-    ? [
-        demoData.stats,
-        demoData.positions,
-        demoData.scoreDistribution,
-        demoData.sourceDistribution,
-        demoData.pendingMessages,
-      ]
-    : await Promise.all([
-        getDashboardStats(),
-        getRecentPositions(15),
-        getScoreDistribution(),
-        getSourceDistribution(),
-        getPendingMessages(20),
-      ]);
+  const [stats, positions, scoreDist, sourceDist, pendingMessages, criticTotals] =
+    demoData
+      ? [
+          demoData.stats,
+          demoData.positions,
+          demoData.scoreDistribution,
+          demoData.sourceDistribution,
+          demoData.pendingMessages,
+          { pass: 0, needs_work: 0, reject: 0, total: 0 },
+        ]
+      : await Promise.all([
+          getDashboardStats(),
+          getRecentPositions(15),
+          getScoreDistribution(),
+          getSourceDistribution(),
+          getPendingMessages(20),
+          getCriticVerdictTotals(),
+        ]);
 
   const activeTotal = stats.total - stats.excluded;
+
+  // Conversion rate widget metrics
+  const analystExcludedPct =
+    stats.total > 0 ? Math.round((stats.excluded / stats.total) * 100) : 0;
+  const analystKeptPct = 100 - analystExcludedPct;
+  const criticRejectPct =
+    criticTotals.total > 0
+      ? Math.round((criticTotals.reject / criticTotals.total) * 100)
+      : 0;
+  const criticPassPct =
+    criticTotals.total > 0
+      ? Math.round((criticTotals.pass / criticTotals.total) * 100)
+      : 0;
+  const criticNeedsPct = Math.max(
+    0,
+    100 - criticPassPct - criticRejectPct,
+  );
+
+  // Funnel end-to-end: quante posizioni "uscite vive" dal pipeline
+  // (ready/applied/response = hanno passato Analista + Scorer + Critico)
+  // su quelle trovate. È il dato più sintetico — il throughput vero.
+  const funnelOutput = stats.ready + stats.applied + stats.response;
+  const funnelRate =
+    stats.total > 0 ? (funnelOutput / stats.total) * 100 : 0;
+  const funnelRatePct = Math.round(funnelRate);
+  // "Su 10 trovate → N arrivano pronte". 1 decimale per non perdere
+  // info quando il rate è basso (es. 1.5 su 10 — arrotondato a 2 sarebbe
+  // ottimistico, a 1 pessimistico).
+  const funnelPer10 = (funnelRate / 10).toFixed(1).replace(/\.0$/, "");
 
   // Check if profile exists for onboarding status
   let hasProfile = false;
@@ -427,6 +454,204 @@ export default async function DashboardPage() {
             </Link>
           );
         })}
+      </div>
+
+      {/* ── Conversion rate ─────────────────────────────────────── */}
+      <div className="section-label mb-4">Conversion rate</div>
+      <div
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+        style={{ animation: "fade-in 0.35s ease both" }}
+      >
+        {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Filtro analisti</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {stats.total} trovate · {stats.excluded} escluse
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{ color: "var(--color-red)" }}
+            >
+              {analystExcludedPct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              esclusioni · {analystKeptPct}% passate all'analisi
+            </span>
+          </div>
+          <div
+            className="h-2 rounded-full overflow-hidden flex"
+            style={{ background: "var(--color-border)" }}
+          >
+            <div
+              style={{
+                width: `${analystKeptPct}%`,
+                background: "var(--color-green)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${analystExcludedPct}%`,
+                background: "var(--color-red)",
+                opacity: 0.85,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+            <span style={{ color: "var(--color-green)" }}>
+              passate · {stats.total - stats.excluded}
+            </span>
+            <span style={{ color: "var(--color-red)" }}>
+              escluse · {stats.excluded}
+            </span>
+          </div>
+        </div>
+
+        {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Verdetto critici</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {criticTotals.total} revisionate
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{ color: "var(--color-green)" }}
+            >
+              {criticPassPct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              pass · {criticRejectPct}% reject · {criticNeedsPct}% needs work
+            </span>
+          </div>
+          <div
+            className="h-2 rounded-full overflow-hidden flex"
+            style={{ background: "var(--color-border)" }}
+          >
+            <div
+              style={{
+                width: `${criticPassPct}%`,
+                background: "var(--color-green)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${criticNeedsPct}%`,
+                background: "var(--color-yellow)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${criticRejectPct}%`,
+                background: "var(--color-red)",
+                opacity: 0.85,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+            <span style={{ color: "var(--color-green)" }}>
+              pass · {criticTotals.pass}
+            </span>
+            <span style={{ color: "var(--color-yellow)" }}>
+              needs · {criticTotals.needs_work}
+            </span>
+            <span style={{ color: "var(--color-red)" }}>
+              reject · {criticTotals.reject}
+            </span>
+          </div>
+        </div>
+
+        {/* Funnel end-to-end: throughput vero del team — quante posizioni
+            trovate diventano "ready" (CV pronto a partire) o oltre. */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Throughput finale</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {funnelOutput}/{stats.total} pronte
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{
+                color:
+                  funnelRatePct >= 25
+                    ? "var(--color-green)"
+                    : funnelRatePct >= 10
+                      ? "var(--color-yellow)"
+                      : "var(--color-orange)",
+              }}
+            >
+              {funnelRatePct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              su 10 trovate · {funnelPer10} arrivano pronte
+            </span>
+          </div>
+          {/* Mini-funnel: 3 step "trovate → analizzate → pronte" */}
+          <div className="space-y-2">
+            {[
+              {
+                label: "trovate",
+                n: stats.total,
+                pct: 100,
+                color: "var(--color-blue)",
+              },
+              {
+                label: "analizzate",
+                n: stats.total - stats.excluded,
+                pct:
+                  stats.total > 0
+                    ? Math.round(
+                        ((stats.total - stats.excluded) / stats.total) * 100,
+                      )
+                    : 0,
+                color: "var(--color-purple)",
+              },
+              {
+                label: "pronte",
+                n: funnelOutput,
+                pct: funnelRatePct,
+                color: "var(--color-green)",
+              },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center gap-2">
+                <span
+                  className="text-[9px] font-semibold w-20 tracking-[0.08em] uppercase"
+                  style={{ color: row.color }}
+                >
+                  {row.label}
+                </span>
+                <div
+                  className="flex-1 h-1.5 rounded-full overflow-hidden"
+                  style={{ background: "var(--color-border)" }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${row.pct}%`,
+                      background: row.color,
+                      opacity: 0.8,
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-[10px] font-semibold tabular-nums w-8 text-right"
+                  style={{ color: row.color }}
+                >
+                  {row.n}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Charts ──────────────────────────────────────────────── */}
