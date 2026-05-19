@@ -3,7 +3,6 @@ import { getPositions } from "@/lib/queries";
 import type { PositionWithScore, PositionStatus } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
-import PositionsTableScroller from "@/app/components/PositionsTableScroller";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
