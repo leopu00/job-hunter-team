@@ -98,6 +98,7 @@ export const dom = {
   vpsStep3: document.getElementById('vps-step3'),
   vpsPubkey: document.getElementById('vps-pubkey'),
   btnVpsCopyPubkey: document.getElementById('btn-vps-copy-pubkey'),
+  btnVpsOpenKeyFolder: document.getElementById('btn-vps-open-key-folder'),
   btnVpsOpenHetzner: document.getElementById('btn-vps-open-hetzner'),
   vpsIp: document.getElementById('vps-ip'),
   btnVpsConnect: document.getElementById('btn-vps-connect'),
