@@ -60,25 +60,20 @@ export default async function DashboardPage() {
   const locale = getServerLocale();
   const t = getDashboardT(locale);
 
-  // Localhost bypass: when the request comes from the user's own
-  // machine (desktop launcher opens /dashboard directly on
-  // http://localhost:3000), treat it as local mode regardless of
-  // whether Supabase env is baked in. Otherwise the Supabase auth
-  // path sends unauthenticated local users into the cloud login,
-  // which is nonsense for the desktop flow.
+  // Routing precedence (vedi docs/internal/2026-05-19-dashboard-routing-cases.md):
+  //   1. demo mode  → demo data (più sotto)
+  //   2. Supabase + utente loggato → 3-way cloud routing su user_onboarding_state,
+  //      ANCHE su localhost: se l'utente ha già fatto sign-in con un account
+  //      VPS-paired, il funnel onboarding-locale (pensato per PC standalone con
+  //      container Docker) non ha senso e fallisce su WSL.
+  //   3. Supabase + no user + localhost → PC standalone: check ~/.jht/profile/.
+  //   4. Supabase + no user + remote → il middleware redirecta a /login.
+  //   5. No Supabase env → pure local deploy: check ~/.jht/profile/.
   const hdrs = await headers();
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
-  const useCloudAuth = isSupabaseConfigured && !localRequest && !demoMode;
 
-  // Cloud mode: 3-way routing in base allo stato di onboarding.
-  // Tabella user_onboarding_state (migration 011) traccia il funnel:
-  //   - vps_setup_completed_at NULL → utente loggato ma nessun pairing
-  //     → CloudDownloadLanding (incentivo a scaricare app + setup)
-  //   - profile_configured_at NULL → VPS pronta ma profilo non ancora
-  //     compilato → VpsSetupCompleteLanding (celebrazione + 2 CTA)
-  //   - entrambi settati → dashboard normale (anche se vuota, ha senso)
-  if (useCloudAuth) {
+  if (isSupabaseConfigured && !demoMode) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -95,11 +90,10 @@ export default async function DashboardPage() {
       if (!onboarding?.profile_configured_at) {
         return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
       }
+    } else if (localRequest) {
+      if (readWorkspaceProfile() === null) redirect("/onboarding");
     }
   } else if (!demoMode) {
-    // Local mode (or localhost bypass): se non esiste un profilo
-    // valido in ~/.jht/profile/, canalizza l'utente verso l'onboarding
-    // split-screen invece di una dashboard vuota.
     if (readWorkspaceProfile() === null) redirect("/onboarding");
   }
 
